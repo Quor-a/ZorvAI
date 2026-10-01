@@ -9,7 +9,7 @@
 | 流式输出 | 云端与本地共用同一套增量回调，`assistant.ask(...)` 的 `onUpdate` 边生成边上屏（`ui/QuroChatViewModel.kt:814`、`:1006`） |
 | Markdown 渲染 | 围栏代码块、标题、引用、列表、行内 HTML，渲染器见 `ui/QuroMarkdown.kt` |
 | 代码块双 Tab | `lang` 为 `html` / `htm` / `markup`（或内容明显是 HTML 标签）时额外提供「代码 \| 预览」双标签页，`showPreview` 默认 `true`（HTML 块直接渲染）；另有复制与「运行」按钮（`ui/ChatScreen.kt:7442` 起） |
-| 围栏级 Mermaid | 对话框里写 ` ```mermaid `（或 ` ```mmd `）直接用离线 `assets/runtimes/mermaid.min.js` 渲染成可缩放矢量图；流式未闭合时也同步渲染（`ui/ChatScreen.kt:6850`、`:7015`） |
+| 围栏级 Mermaid | 用户在输入框或 AI 在回复里写 mermaid / mmd 围栏代码块，即用离线 `assets/runtimes/mermaid.min.js` 渲染成可缩放矢量图；流式未闭合时也同步渲染（`ui/ChatScreen.kt:6850`、`:7015`） |
 | 思考段可视化 | `<think>` 内容折叠进气泡内的 `ThinkBlock`（`ui/data/ChatData.kt:50`，渲染见 `ChatScreen.kt:4643`），受「深度思考」开关控制 |
 | 工具调用可视化 | `ToolCallBlock`（`ui/ChatScreen.kt:3944`）展示工具名、入参、状态（运行 / 成功 / 警告 / 失败）、执行耗时与结果；耗时 < 1000ms 显示 ms、≥ 1000ms 显示 s（`:4211`） |
 | 多轮聚合 | 相邻用户消息之间的 assistant(+隐藏 tool) 消息聚合成单个气泡连续增长（`ui/ChatScreen.kt:470` 的 `flushAgg`） |
@@ -37,7 +37,7 @@
 ### 2.2 让 AI「做」而不是「说」
 
 - 直接说需求，AI 自行调用 `run_code` 并把 HTML 产出物渲染成气泡内网页；
-- 想自己画图：在输入框写 ` ```mermaid ` 围栏，发送后即渲染成图；
+- 想自己画图：在输入框写一段 mermaid 围栏代码块，发送后即渲染成图（流程 / 时序 / 状态机 / 类图等）；
 - 想跑命令 / 看文件：输入框「+」→ 终端 / 工具箱 / 上传。
 
 ### 2.3 传文件 / 传上下文
@@ -59,7 +59,7 @@ AI 遇到缺信息时调用 `visual_question` / `visual_action`，弹出选择�
 | 文件 | 职责 |
 |---|---|
 | `app/src/main/java/.../ui/ChatScreen.kt`（9347 行） | 消息列表渲染、聚合、气泡、操作栏、Mermaid / 代码 / 卡片、附件、弹窗宿主、设置入口 |
-| `app/src/main/java/.../ui/QuroChatViewModel.kt`（2695 行） | 发消息编排、附件管理、系统提示词拼装（`buildSystemPrompt`）、开关持久化 |
+| `app/src/main/java/.../ui/QuroChatViewModel.kt`（2695 行） | 发消息编排、附件管理、系统提示词拼装（`buildSystemPrompt`，`:1608`）、开关持久化 |
 | `app/src/main/java/.../ui/QuroMarkdown.kt` | Markdown 解析与 Compose 渲染 |
 | `app/src/main/java/.../ui/data/ChatData.kt` | `Message` / `Attachment` / `ThinkBlock` / `ToolCallUi` 等 UI 侧数据模型 |
 | `app/src/main/java/.../core/cards/QuroChatCard.kt` / `QuroCardCatalog.kt` | 气泡内富卡片模型与类型目录（含 `MermaidCard` / `HtmlPreviewCard`） |

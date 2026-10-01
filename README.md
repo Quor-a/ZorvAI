@@ -245,7 +245,7 @@ flowchart TB
 | 模块 | 一句话 | 完整文档 |
 |------|--------|----------|
 | **智能对话核心** | 消息流、流式输出、思考卡、附件、对话框 IDE、可视化弹窗/询问 | [chat](./docs/features/chat/README.md) |
-| **内置技能 Skills** | 67 个内置技能（`assets/skills/zorv/manifest.json` 实测），首次启动自动注入，可注册为 `skill__{name}` 工具供 AI 调用 | [skills](./docs/features/skills/README.md) |
+| **内置技能 Skills** | 67 个内置技能（`assets/skills/zorv/manifest.json` 实测），首次启动全部播种（默认仅 design-studio 5 个启用），可注册为 `skill__{name}` 工具供 AI 调用 | [skills](./docs/features/skills/README.md) |
 | **MCP** | MCP 客户端 / 本地服务 / MCP-ACI 桥接 | [mcp](./docs/features/mcp/README.md) |
 | **离线 LLM 引擎** | MNN / llama.cpp 端侧推理，模型导入、加载、常驻会话、本地工具调用 | [offline-llm](./docs/features/offline-llm/README.md) |
 | **终端 & Linux 沙箱** | proot + Ubuntu 24.04 ARM64，多会话、SSH/VNC、息屏保活 | [terminal](./docs/features/terminal/README.md) |

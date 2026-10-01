@@ -167,11 +167,14 @@ sequenceDiagram
 | `SYSTEM_ALERT_WINDOW` | 悬浮窗 / 语音球 |
 | `POST_NOTIFICATIONS` + `USE_FULL_SCREEN_INTENT` | 全屏通知 |
 | `SCHEDULE_EXACT_ALARM` | 精确闹钟 |
-| `MANAGE_EXTERNAL_STORAGE` + `READ_MEDIA_*` | 媒体与文件管理（★高敏感） |
-| `BIND_NOTIFICATION_LISTENER_SERVICE` | 通知监听（`QuroNotificationListenerService`，★高敏感） |
 | `MANAGE_VIRTUAL_MACHINE` / `USE_CUSTOM_VIRTUAL_MACHINE` | Android 15+ 虚拟化；未授予时降级 QEMU/proot |
+| `CHANGE_WIFI_MULTICAST_STATE` | NSD 局域网发现（网页端访问本机） |
+| `MANAGE_EXTERNAL_STORAGE` + `READ_MEDIA_*` | 媒体与文件管理（★高敏感） |
 | `FOREGROUND_SERVICE_MEDIA_PROJECTION` | 录屏 |
+| `BIND_ACCESSIBILITY_SERVICE` | 无障碍服务导出保护（挂在 `QuroAccessibilityService` 节点上） |
 | `WAKE_LOCK` | 点亮屏幕 |
+
+> 已核实的两处**登记缺口**（与 README §18 项清单不一致，见 §6）：`QuroDeviceAdminReceiver` 与 `QuroNotificationListenerService` 都有源码，但全仓 Manifest 均无对应 `<receiver>` / `<service>` 注册。
 
 > 完整「用途 / 授予方式 / 隐私边界」清单见仓库根 [PERMISSIONS.md](../../PERMISSIONS.md)。
 
@@ -204,4 +207,5 @@ sequenceDiagram
 4. **受控端生态的 5 个官方 App 是外部仓库**：WeatherAci / DocAci / TermAci / Zorv 构建台（BuildAci）/ FileAci 及其版本号、能力数来自 README 表格，本仓库内查不到源码，**版本与能力数以各自仓库 Release 为准**。
 5. **旧 `lanui` 环回 HTTP 控制台已移除**：任何依赖 127.0.0.1 老接口的受控端需迁移到 SDUI。
 6. **`allowUniversalAccessFromFileURLs` 已被废弃**：3D WebView 仍依赖它加载 Draco wasm，后续 WebView 版本可能失效（详见 digital-human 文档约束）。
-7. **设备管理员能力范围受限**：自 E-5 起只保留锁屏与禁用摄像头两项，旧文档提到的擦除数据已移除。
+7. **设备管理员能力范围受限**：自 E-5 起只保留锁屏与禁用摄像头两项，旧文档提到的擦除数据已移除。策略文件 `res/xml/quro_device_admin.xml` 的注释里逐条记录了每条策略的唯一调用点与被删原因（`wipe-data` / `reset-password` 从未被调用，声明它会让系统激活页显示「可清除设备所有数据」）。
+8. **L3 / 通知监听可能存在登记缺口（待确认）**：全仓 Manifest 检索不到 `QuroDeviceAdminReceiver` 与 `QuroNotificationListenerService` 的组件注册，但两者都有源码且被 `QuroPrivilegeManager.checkDeviceAdmin()` / README §18 项清单引用。若确实未注册，`isAdminActive()` 恒为 false、L3 相关工具与通知监听均不可用。动手前请先在目标分支上用 Manifest 合并产物复核。

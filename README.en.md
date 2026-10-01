@@ -204,7 +204,7 @@ flowchart TB
 | Module | One-liner | Docs |
 |--------|-----------|------|
 | **Chat core** | Message stream, streaming output, thinking cards, attachments, in-chat IDE, visual popup/question | [chat](./docs/features/chat/README.md) |
-| **Built-in Skills** | 67 skills (verified in `assets/skills/zorv/manifest.json`) auto-injected on first launch, registered as `skill__{name}` tools | [skills](./docs/features/skills/README.md) |
+| **Built-in Skills** | 67 skills (verified in `assets/skills/zorv/manifest.json`) all seeded on first launch (only the 5 design-studio ones are enabled by default), registerable as `skill__{name}` tools | [skills](./docs/features/skills/README.md) |
 | **MCP** | MCP client / local server / MCP-ACI bridge | [mcp](./docs/features/mcp/README.md) |
 | **Offline LLM** | MNN / llama.cpp on-device inference: model import, loading, persistent sessions, local tool calling | [offline-llm](./docs/features/offline-llm/README.md) |
 | **Terminal & Linux sandbox** | proot + Ubuntu 24.04 ARM64, multi-session, SSH/VNC, screen-off survival | [terminal](./docs/features/terminal/README.md) |
