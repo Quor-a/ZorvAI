@@ -1,7 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# ── 拆分层时的三个必炸点（动手前先看这三条，都是真踩过的）───────────────
+#
+#  ① 私有嵌套类型不可在类外命名。
+#     `MnnEngine::Impl` / `LlamaEngine::Impl` 是 private 嵌套类型，类外的自由函数
+#     一旦在签名里写出它就 `error: 'Impl' is a private member of ...`。
+#     本项目出现两次（`requireReady`、`requireLl`）。自由函数只收 `Session*` 即可。
+#
+#  ② `.inc` 里只被一个 TU include 的 `inline` 函数不会发射符号。
+#     `inline int utf8CharLength(...)` 在本 TU 内没被取地址 → 编译器不发射符号
+#     → 调用方在另一个 TU → 链接期 `undefined symbol`。**必须去掉 `inline`**。
+#     （静态库不解析符号，所以编译期、归档期都看不出问题。）
+#
+#  ③ 静态库不解析符号。`libquro_llm_core.a` 里"头文件声明了但源文件没实现"，
+#     编译期与归档期都不报错，直到某个 SHARED 目标第一次真引用才链接期爆炸。
+#     **"core 单独编译通过"完全不能证明 core 是完整的。**
+#
+# 抽完请依次跑：
+#   python scripts/brace_check_mnn.py <native目录>                  # 结构完整性
+#   python scripts/check_jni_binding.py <*_jni.cpp> <Kotlin声明>      # JNI 绑定
+#   然后 ./gradlew :app:assembleFullRelease，最后产物级验收（wrapper 导出符号数 = 1）
+# ─────────────────────────────────────────────────────────────────────
 """
 从 mnnllmnative.cpp 逐字抽取「纯函数层」到 mnn_engine_logic.inc。
+
+> **注意：SRC 源文件已随本次重构从工作树删除。** 要复现抽取，先恢复源文件：
+> `git show 1e05d48^:llm/mnn/src/main/cpp/mnnllmnative.cpp > llm/mnn/src/main/cpp/mnnllmnative.cpp`
+> （llama 侧把路径换成 `llm/llama/src/main/cpp/llama_jni_stub.cpp`，commit 用 `04e6506^`）
+> 抽完记得把恢复出来的源文件删掉，别把它留在工作树里污染构建。
+
 
 为什么用抽取而不是重写：
     这些函数里每一段长注释背后都是一次真机事故（minja 依赖缺失导致恒返回空串、
