@@ -85,10 +85,30 @@ quro_prepare_git_source(
 
 add_subdirectory("${QURO_LLAMA_CPP_SOURCE_DIR}" "${QURO_LLAMA_CPP_BINARY_DIR}" EXCLUDE_FROM_ALL)
 
+# ---------------------------------------------------------------------------
+# 【L2/L3/L4 分层拆分】单文件 2074 行的 llama_jni_stub.cpp 已删除，拆为：
+#
+#   L2  llama_jni.cpp                JNI 薄层：解参 → 句柄取引擎 → 调引擎 → 回转
+#                                    **不 include llama.h**，不出现一次 llama_* 调用
+#   L3  llama_engine.cpp             Engine 契约实现（生命周期/分词/分阶段推理/统计）
+#       llama_engine_generate.cpp    一体化 generate（KV 前缀复用，行为与旧实现逐字一致）
+#       llama_engine_chat.cpp        聊天模板 / 工具调用文法 / 采样参数
+#       llama_engine_registry.cpp    自注册进 L3 引擎工厂（旧构架下此处是死代码）
+#   L4  llama_engine_logic.inc       会话级辅助逻辑（由脚本从旧实现逐字抽出，
+#                                    见 scripts/refactor_split_llama.py）
+#
+# 拆分原则（不可违反）：**搬家不改逻辑**。那些长注释背后都是一次真机事故
+#   （BOS 双补、seq_id free 栈地址 SIGABRT、llama_decode 返回 1 = 失败、
+#   KV 前缀退化的重复 cell 投毒、UTF-8 跨 token 边界…），重写必然漂移。
+# ---------------------------------------------------------------------------
 add_library(
     LlamaWrapper
     SHARED
-    src/main/cpp/llama_jni_stub.cpp
+    src/main/cpp/llama_jni.cpp
+    src/main/cpp/llama_engine.cpp
+    src/main/cpp/llama_engine_generate.cpp
+    src/main/cpp/llama_engine_chat.cpp
+    src/main/cpp/llama_engine_registry.cpp
 )
 
 target_compile_definitions(LlamaWrapper PRIVATE QURO_HAS_LLAMA_CPP=1)
