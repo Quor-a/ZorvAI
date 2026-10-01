@@ -82,15 +82,15 @@ The design spine is **Tool-first**: every capability is expressed as a `QuroTool
 | **Tool / capability layer** | **220+ built-in tools**: accessibility `input_text` / `tap_screen` / `read_screen`, file read/write, **L1–L5 privileged execution**, `cms_*` modules, agent keyboard `ai_type_text` / `ai_press_enter`, scheduled tasks, memory tools, knowledge-base RAG, document processing |
 | **Offline LLM engine** | Built-in **MNN / llama.cpp** inference (`QuroLocalEngineNative`) with streaming, live `<think>` streaming, local tool calling and persistent session reuse |
 | **Privilege tiers L1–L5** | Accessibility → Shizuku (uid 0/2000) → Device Admin → ROOT (su) → in-app Linux (proot + Ubuntu 24.04) |
-| **Terminal / Linux sandbox** | Full terminal emulator: proot + real Ubuntu 24.04 ARM64 user space; PTY (`/dev/ptmx` + `fork/exec`); foreground-service keep-alive (`specialUse`, survives screen-off and app switching); 12 ACI cross-process capabilities; 4 IPC transports (ContentProvider / Deep Link / Intent / BroadcastReceiver); multi-session management |
+| **Terminal / Linux sandbox** | Full terminal emulator: proot + real Ubuntu 24.04 ARM64 user space; PTY (`/dev/ptmx` + `fork/exec`); foreground-service keep-alive (`specialUse`, survives screen-off and app switching); 26 ACI cross-process capabilities (single terminal entry point + `action` dispatch); 4 IPC transports (ContentProvider / Deep Link / Intent / BroadcastReceiver); multi-session management |
 | **MCP** | MCP client (WebSocket / HTTP transports), in-app local MCP server deployable and callable by the AI, **MCP-ACI bridge** |
-| **Engines / runtime** | CMS shared runtime (NODE / PYTHON / SSH / JAVA / RUST / GO), CMS v2 modules, GeckoView browser (MPL-2.0), on-device STT / TTS |
+| **Engines / runtime** | CMS shared runtime (NODE / PYTHON / SSH / JAVA / RUST / GO), CMS v2 modules, built-in browser (Android WebView runtime), on-device STT / TTS |
 | **IM channels** | Feishu (WebSocket) / QQBot (official WS) / WeChat iLink (HTTP long-poll 35s) |
-| **Voice** | Multi-vendor TTS (EDGE_TTS / OPENAI_COMPAT / MINIMAX / SILICONFLOW / Alibaba Cloud …), on-device Whisper STT (`sherpa-onnx`), floating voice ball |
+| **Voice** | Multi-vendor TTS (EDGE_TTS / OPENAI_COMPAT / MINIMAX / SILICONFLOW / Alibaba Cloud …), on-device streaming STT (`sherpa-ncnn` streaming transducer, 5 bundled models 18MB-141MB), floating voice ball |
 | **Knowledge / memory / persona / bots** | Vector semantic RAG knowledge base, memory store, persona & soul config, multi-channel bots (QQ / Feishu / WeChat / local) |
 | **Visual popup & question** | **Visual popup** (`visual_popup` / `visual_custom_popup`); **Visual question** (`visual_question` / `visual_action`) — forces a choice/input dialog when a command is ambiguous or information is missing, instead of guessing |
 | **Language runner** | `QuroLanguageRunner`: detection, execution and rendering of **7 languages** (JavaScript, Python, HTML, JSON, CSS, XML, C/C++/Java) inside the chat; **Python 3.14 native engine (PyEngine)** — on-device CPython 3.14 with the full standard library, plus a scripting sandbox (`SandboxRuntime` + `HostApiDispatcher` + `GitHostApi` + `TsTranspiler`) |
-| **Generative UI (three coexisting stacks)** | ① **Web app** (`miniapp`): WebView runtime (`MiniAppEngine` + `native.*` bridge); ② **Generative UI canvas** (`genui_open`): isolated WebView rendering in-chat; ③ **Built-in GenUI Agent** (`genui_agent_open`): GenUI JSON DSL → native Compose components (530+), standalone full-screen app |
+| **Generative UI (two coexisting stacks)** | ① **Web app** (`miniapp`): WebView runtime (`MiniAppEngine` + `native.*` bridge); ② **Built-in GenUI Agent** (`genui_agent_open`): GenUI JSON DSL → native Compose components (530+), standalone full-screen app. (The former third stack, the in-chat GenUI canvas `genui_open`, was removed in v1.0.96 together with the `genui` module) |
 | **Visual components** | `ui_widget` tool: **60+ interactive components** rendered directly inside chat bubbles, with `command` syntax to trigger actions; **dynamic UI (```quro-ui fence)**: the AI writes a composable JSON DSL rendered natively as a coherent interactive screen |
 | **Visual programming** | **Offline Mermaid rendering**: flowcharts / sequence / state / class / mind maps, fullscreen preview, SVG export, five themes |
 | **AIP document layout** | **AIP layout engine** (AI Presentation Protocol): the AI emits a structured envelope (```aip fence / `aip_compose` tool) rendered natively as **long documents / slide decks / mind maps**; doc↔deck↔mindmap conversion, export to docx/pptx/md, fullscreen preview, slideshow, four-level graceful degradation |
@@ -148,8 +148,8 @@ flowchart TB
     end
     subgraph ENGINE["Engine / runtime layer"]
         E1["CMS NODE / PYTHON / SSH / JAVA / RUST / GO"]
-        E2["GeckoView browser MPL-2.0"]
-        E3["Speech sherpa-onnx STT / multi-vendor TTS"]
+        E2["Built-in browser WebView runtime"]
+        E3["Speech sherpa-ncnn streaming STT / multi-vendor TTS"]
         E4["MNN / llama.cpp offline LLM"]
     end
     subgraph IM["IM layer"]
@@ -208,7 +208,7 @@ flowchart TB
 | **MCP** | MCP client / local server / MCP-ACI bridge | [mcp](./docs/features/mcp/README.md) |
 | **Offline LLM** | MNN / llama.cpp on-device inference: model import, loading, persistent sessions, local tool calling | [offline-llm](./docs/features/offline-llm/README.md) |
 | **Terminal & Linux sandbox** | proot + Ubuntu 24.04 ARM64, multi-session, SSH/VNC, screen-off survival | [terminal](./docs/features/terminal/README.md) |
-| **Voice / media / browser / docs** | Multi-vendor TTS, on-device Whisper STT, GeckoView browser, document processing | [voice-media](./docs/features/voice-media/README.md) |
+| **Voice / media / browser / docs** | Multi-vendor TTS, on-device streaming STT (sherpa-ncnn), built-in browser (WebView), document processing | [voice-media](./docs/features/voice-media/README.md) |
 | **Device control / Shizuku / ACI** | L1–L5 privilege tiers, ACI controlled-app ecosystem, ACI console & HTTP transport | [device-control](./docs/features/device-control/README.md) |
 | **Digital human / KB / memory / persona** | 3D model viewer (GLB/glTF), vector RAG, memory store, persona config, scheduled tasks | [digital-human](./docs/features/digital-human/README.md) |
 | **APK-level plugin framework** | 14 extension points; install an APK and the AI gains capabilities | [extensibility](./docs/architecture/extensibility/README.md) |
@@ -264,8 +264,8 @@ cd ZorvAI
 | **In-app Linux (L5) won't run** | The terminal prompts "install Linux environment" on first use. `proot` ships with the APK; only the Ubuntu base rootfs needs to be downloaded (arm64 uses `ubuntu-ports`). |
 | **Terminal killed on screen-off / app switch** | Check that the notification "Zorv AI terminal running" is present. Android 14+ requires `FOREGROUND_SERVICE_SPECIAL_USE`. |
 | **Offline chat unavailable** | The offline LLM is bundled with release builds. Builds without the native engine libraries report "not available". |
-| **Web / HTML preview blank** | Confirm GeckoView (MPL-2.0) is bundled with the build. |
-| **On-device STT unavailable** | The local STT model is an ~85MB onnx file that must be downloaded / placed on first use. |
+| **Web / HTML preview blank** | The built-in browser runs on `android.webkit.WebView`: make sure the system WebView is installed and up to date (Developer options → WebView implementation). |
+| **On-device STT unavailable** | On-device STT uses `sherpa-ncnn` **streaming transducer** models (not onnx/Whisper), 5 bundled tiers: zh 22MB (recommended) / zh-en 18MB / en 37MB / zh-en 141MB / ConvEmformer 27MB; they must be downloaded and extracted on first use. Recognition runs in a dedicated `:asr` process, so a crash cannot take down the main app. |
 | **Duplicated or broken sessions** | Startup self-heal `DATA_REPAIR` de-duplicates on launch; restarting the app is enough. |
 | **Need diagnostics** | Logs are written to the public folder `Download/QuroAI_logs/` — no adb required. |
 
@@ -328,7 +328,7 @@ All releases: [Releases](https://github.com/Quor-a/ZorvAI/releases).
 Zorv AI is released under **Apache-2.0** (see [LICENSE](./LICENSE)).
 
 - **Main license**: Apache-2.0 (all application source).
-- **GeckoView (Mozilla)**: distributed under **MPL-2.0** (file-level copyleft); corresponding source is provided with the build.
+- **GeckoView (Mozilla)**: distributed under **MPL-2.0** (file-level copyleft). The dependency ships with the build (an alternative built-in browser engine; rendering currently goes through the system `android.webkit.WebView`); corresponding source is provided with the build.
 - **On-device CPython 3.14 (PyEngine / scripting sandbox)**: the interpreter itself is **PSF-2.0**; bundled OpenSSL (Apache-2.0) and SQLite (public domain) are listed in [NOTICE](./NOTICE).
 - **Other third-party dependencies** (AndroidX / Jetpack Compose, Kotlin, OkHttp, Shizuku, QuickJS, Sherpa-NCNN, Chart.js / D3 / ECharts / KaTeX, React / Recharts / Lucide …) keep their own licenses; the full list is in [NOTICE](./NOTICE).
 

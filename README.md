@@ -117,15 +117,15 @@
 | **工具 / 能力层** | **220+ 内置工具**：无障碍 `input_text` / `tap_screen` / `read_screen`、文件读写、**L1–L5 特权执行**、`cms_*` 模块、Agent 键盘 `ai_type_text` / `ai_press_enter`、定时任务、记忆工具、知识库 RAG、文档处理 |
 | **离线 LLM 引擎** | 内置 **MNN / llama.cpp** 本地推理（`QuroLocalEngineNative`），支持流式、`<think>` 思考段流式上屏、本地工具调用、会话常驻复用 |
 | **特权层 L1–L5** | 无障碍 → Shizuku（uid 0/2000）→ 设备管理员 → ROOT（su）→ 应用内 Linux（proot + Ubuntu 24.04） |
-| **终端 / Linux 沙箱** | 完整终端模拟器：proot + Ubuntu 24.04 ARM64 真实用户空间；PTY 伪终端（`/dev/ptmx` + `fork/exec`）；前台服务保活（specialUse，息屏/切 App 不被杀）；ACI 跨进程 12 个能力；4 种 IPC 接入（ContentProvider / Deep Link / Intent / BroadcastReceiver）；多会话管理 |
+| **终端 / Linux 沙箱** | 完整终端模拟器：proot + Ubuntu 24.04 ARM64 真实用户空间；PTY 伪终端（`/dev/ptmx` + `fork/exec`）；前台服务保活（specialUse，息屏/切 App 不被杀）；ACI 跨进程 26 个能力（终端服务单一入口 + `action` 分发）；4 种 IPC 接入（ContentProvider / Deep Link / Intent / BroadcastReceiver）；多会话管理 |
 | **MCP** | MCP 客户端（WebSocket / HTTP 传输）、应用内本地 MCP 服务，可由 AI 部署/调用、**MCP-ACI 桥接** |
-| **引擎 / 运行时** | CMS 引擎共享运行时（NODE / PYTHON / SSH / JAVA / RUST / GO）、CMS v2 模块、GeckoView 浏览器（MPL-2.0）、本地语音 STT / TTS |
+| **引擎 / 运行时** | CMS 引擎共享运行时（NODE / PYTHON / SSH / JAVA / RUST / GO）、CMS v2 模块、内置浏览器（Android WebView 运行时）、本地语音 STT / TTS |
 | **IM 通道** | 飞书（WebSocket）/ QQBot（官方 WS）/ 微信 iLink（HTTP 长轮询 35s） |
-| **语音** | 多供应商 TTS（EDGE_TTS / OPENAI_COMPAT / MINIMAX / SILICONFLOW / 阿里云 等）、端侧 Whisper STT（`sherpa-onnx`）、语音悬浮球 |
+| **语音** | 多供应商 TTS（EDGE_TTS / OPENAI_COMPAT / MINIMAX / SILICONFLOW / 阿里云 等）、端侧流式 STT（`sherpa-ncnn` streaming transducer，内置 5 档 18MB–141MB）、语音悬浮球 |
 | **知识 / 记忆 / 人格 / Bot** | 向量语义 RAG 知识库、记忆库、人格/灵魂配置、多通道机器人（QQ / 飞书 / 微信 / 本地） |
 | **可视化弹窗 & 询问** | **可视化弹窗**（`visual_popup` / `visual_custom_popup`）；**可视化询问**（`visual_question` / `visual_action`）：AI 遇到模糊命令或缺少信息时强制弹出选择题/输入框，禁止猜测 |
 | **多语言运行器** | `QuroLanguageRunner`：对话框内 **7 种编程语言**（JavaScript、Python、HTML、JSON、CSS、XML、C/C++/Java）的检测、运行与渲染；**Python 3.14 原生引擎（PyEngine）**：端侧 CPython 3.14 + 完整标准库，配 Scripting 沙箱（`SandboxRuntime` + `HostApiDispatcher` + `GitHostApi` + `TsTranspiler`） |
-| **生成式界面（三套并存）** | ① **Web 应用**（`miniapp`）：WebView 运行时（`MiniAppEngine` + `native.*` 原生桥）；② **生成式 UI 画布**（`genui_open`）：对话框内隔离 WebView 渲染；③ **内置 GenUI Agent**（`genui_agent_open`）：GenUI JSON DSL → 原生 Compose 组件（530+ 组件），独立全屏应用 |
+| **生成式界面（两套并存）** | ① **Web 应用**（`miniapp`）：WebView 运行时（`MiniAppEngine` + `native.*` 原生桥）；② **内置 GenUI Agent**（`genui_agent_open`）：GenUI JSON DSL → 原生 Compose 组件（530+ 组件），独立全屏应用。（旧的第三套「对话内 GenUI 画布 `genui_open`」已于 v1.0.96 随 `genui` 模块一并删除） |
 | **可视化组件** | `ui_widget` 工具：**60+ 种可交互组件**直接融进聊天气泡，支持 `command` 语法触发动作；**动态 UI（```quro-ui 围栏）**：AI 写组合式 JSON DSL，原生渲染成体系的交互界面 |
 | **可视化编程** | **Mermaid 图表离线渲染**：流程图 / 时序图 / 状态机 / 类图 / 思维导图，支持全屏预览、SVG 导出、五种主题 |
 | **AIP 对话框文档排版** | **AIP 排版引擎**（AI Presentation Protocol）：AI 输出结构化信封（```aip 围栏 / `aip_compose` 工具），对话框原生渲染**长文档 / PPT 演示 / 思维导图**卡片；支持 doc↔deck↔mindmap 互转、导出 docx/pptx/md、全屏预览、演示放映、四级容错降级 |
@@ -185,8 +185,8 @@ flowchart TB
     end
     subgraph ENGINE["引擎 / 运行时层"]
         E1["CMS 引擎 NODE / PYTHON / SSH / JAVA / RUST / GO"]
-        E2["GeckoView 浏览器 MPL-2.0"]
-        E3["语音 sherpa-onnx STT / 多供应商 TTS"]
+        E2["内置浏览器 WebView 运行时"]
+        E3["语音 sherpa-ncnn 流式 STT / 多供应商 TTS"]
         E4["MNN / llama.cpp 离线 LLM"]
     end
     subgraph IM["IM 通道层"]
@@ -249,7 +249,7 @@ flowchart TB
 | **MCP** | MCP 客户端 / 本地服务 / MCP-ACI 桥接 | [mcp](./docs/features/mcp/README.md) |
 | **离线 LLM 引擎** | MNN / llama.cpp 端侧推理，模型导入、加载、常驻会话、本地工具调用 | [offline-llm](./docs/features/offline-llm/README.md) |
 | **终端 & Linux 沙箱** | proot + Ubuntu 24.04 ARM64，多会话、SSH/VNC、息屏保活 | [terminal](./docs/features/terminal/README.md) |
-| **语音 / 媒体 / 浏览器 / 文档** | 多供应商 TTS、端侧 Whisper STT、GeckoView 浏览器、文档处理 | [voice-media](./docs/features/voice-media/README.md) |
+| **语音 / 媒体 / 浏览器 / 文档** | 多供应商 TTS、端侧流式 STT（sherpa-ncnn）、内置浏览器（WebView）、文档处理 | [voice-media](./docs/features/voice-media/README.md) |
 | **设备控制 / Shizuku / ACI** | L1–L5 特权层、ACI 受控端生态、ACI 控制台与 HTTP 传输 | [device-control](./docs/features/device-control/README.md) |
 | **数字人 / 知识库 / 记忆 / 人格** | 3D 模型查看器（GLB/glTF）、向量 RAG、记忆库、人格配置、定时任务 | [digital-human](./docs/features/digital-human/README.md) |
 | **APK 级插件框架** | 14 种扩展点，装 APK 即给 AI 加能力 | [extensibility](./docs/architecture/extensibility/README.md) |
@@ -305,8 +305,8 @@ cd ZorvAI
 | **应用内 Linux（L5）无法运行** | 首次进入终端会提示「安装 Linux 环境」；`proot` 随包内置，仅 Ubuntu base rootfs 需联网下载（arm64 走 `ubuntu-ports`）。 |
 | **终端息屏 / 切 App 后被杀** | 检查通知栏是否显示「Zorv AI 终端运行中」；Android 14+ 需要 `FOREGROUND_SERVICE_SPECIAL_USE` 权限。 |
 | **离线对话不可用** | 离线 LLM 随发布包内置；若所用构建不含离线引擎原生库则会提示未接入。 |
-| **网页 / HTML 预览不显示** | 确认已随包集成 GeckoView（MPL-2.0）运行时。 |
-| **本地语音识别不可用** | 本地 STT 模型为约 85MB 的 onnx 文件，首次使用需下载 / 放置到指定目录。 |
+| **网页 / HTML 预览不显示** | 内置浏览器基于 `android.webkit.WebView`：请确认系统 WebView 已安装且为较新版本（开发者选项 → WebView 实现）。 |
+| **本地语音识别不可用** | 本地 STT 用 `sherpa-ncnn` **流式 transducer** 模型（非 onnx/Whisper），内置 5 档：中文 22MB（推荐）/ 中英双语 18MB / 英文 37MB / 中英双语 141MB / ConvEmformer 27MB，首次使用需下载并解压到指定目录；独立 `:asr` 进程承载，崩溃不影响主进程。 |
 | **会话出现重复或异常** | 启动自愈 `DATA_REPAIR` 会在启动时去重清洗，重启 App 即可。 |
 | **需要诊断日志** | 日志写到手机公共目录 `Download/QuroAI_logs/`，无需 adb 即可取出。 |
 
@@ -369,7 +369,7 @@ cd ZorvAI
 Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICENSE)）。
 
 - **主许可**：Apache-2.0（应用全部源码）。
-- **GeckoView（Mozilla）**：以 **MPL-2.0** 分发（file-level copyleft）。对应源代码随构建提供。
+- **GeckoView（Mozilla）**：以 **MPL-2.0** 分发（file-level copyleft）。该依赖随构建引入（可选内置浏览器引擎，当前渲染实际走系统 `android.webkit.WebView`），对应源代码随构建提供。
 - **端侧 CPython 3.14（PyEngine / Scripting 沙箱）**：Python 解释器本体以 **PSF-2.0** 分发；随包链接的 OpenSSL（Apache-2.0）、SQLite（Public Domain）见 [NOTICE](./NOTICE)。
 - **其余第三方依赖**（AndroidX / Jetpack Compose、Kotlin、OkHttp、Shizuku、QuickJS、Sherpa-NCNN、Chart.js / D3 / ECharts / KaTeX、React / Recharts / Lucide 等）各自保留原有许可证，完整清单见 [NOTICE](./NOTICE)。
 
