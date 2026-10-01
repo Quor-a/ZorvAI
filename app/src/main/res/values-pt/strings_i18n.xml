@@ -3883,4 +3883,8 @@ Seus modelos configurados foram mantidos; você também pode digitar o nome do m
     <string name="qk_03902" formatted="false">Overlay permission is required to show the video call screen</string>
     <string name="qk_03903" formatted="false">Each feature can follow the main model or use a dedicated model; with a dedicated model you can also set its own base URL and API Key. Already wired to the engine and effective immediately: chat, persona incubation, UI control, image recognition, video recognition, video call.</string>
     <string name="qk_03904" formatted="false">Vision features: image recognition, video recognition and video call all require a vision-capable model (e.g. GPT-4V). Assign a dedicated model with its own base URL / API Key and visual analysis, video scene understanding and video calls will switch to it.</string>
+    <string name="qk_03905" formatted="false">Motor local em processo isolado</string>
+    <string name="qk_03906" formatted="false">Executa a inferência local num processo separado: carregar um modelo grande já não faz o sistema encerrar toda a aplicação e a interface continua disponível. Desative para voltar ao comportamento anterior.</string>
+    <string name="qk_03907" formatted="false">Agendamento térmico adaptativo</string>
+    <string name="qk_03908" formatted="false">Lê a margem térmica do SoC a cada 2 segundos durante inferências longas e reduz levemente as threads com antecedência, evitando o throttling abrupto do sistema. Desativado: nenhuma intervenção.</string>
 </resources>

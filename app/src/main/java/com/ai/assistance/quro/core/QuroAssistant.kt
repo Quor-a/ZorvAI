@@ -8,6 +8,7 @@ import com.ai.assistance.quro.core.model.QuroLocalModelRepository
 import com.ai.assistance.quro.core.network.QuroLlmClient
 import com.ai.assistance.quro.core.network.QuroLocalEngine
 import com.ai.assistance.quro.core.network.QuroLocalEnginePlaceholder
+import com.ai.assistance.quro.core.network.QuroLocalEnginePrefs
 import com.ai.assistance.quro.core.network.LocalModelLoaders
 import com.ai.assistance.quro.core.network.LocalModelLoader
 import com.ai.assistance.quro.core.network.QuroLocalToolsCodec
@@ -879,8 +880,11 @@ class QuroAssistant(
 
     /**
      * 本地离线模型路由（原创）：根据 cfg.provider（MNN / LLAMA_CPP）找到已登记的本地模型，
-     * 通过反射交给 full 风味的原生引擎 [QuroLocalEngineNative] 执行；fdroid 风味回退
+     * 通过反射交给 full 风味的原生引擎执行；fdroid 风味回退
      * [QuroLocalEnginePlaceholder]（原生运行时未编入，给出明确提示，不崩溃）。
+     *
+     * 引擎落点由 [resolveLocalEngine] 决定：默认进程内（[QuroLocalEngineNative]），
+     * 开启「本地引擎独立进程」偏好后改为跨进程（`:llm` 里的 `QuroLocalEngineRemote`）。
      */
     private fun routeLocal(
         context: Context,
@@ -905,17 +909,24 @@ class QuroAssistant(
                 "未找到已登记的本地模型（${cfg.provider}）。请到「模型配置 → 本地离线模型」添加并选择。"
             )
         }
+
+        val engine = resolveLocalEngine(context)
+
         // 🔧 修复「加载过的没常驻、进程重启后每次都要手动重新加载」：
         // 若常驻会话里没有这个模型，先自动 load（仅首次等数十秒，之后常驻复用，不再每条消息重加载）。
         // 这样用户无需每次手动点「加载」，且同一进程内后续消息直接复用常驻会话，省掉最贵的模型加载步骤。
-        if (!loader.isLoaded(local)) {
+        //
+        // ⚠️ 跨进程引擎（engine.managesOwnLoading == true）必须**跳过**这一步：
+        //    它的模型加载发生在 :llm 进程里，而这里的 loader 只操作主进程的地址空间。
+        //    照旧 load 会把权重装进主进程 —— 正是进程隔离要消除的那 3.8GB native heap。
+        if (!engine.managesOwnLoading && !loader.isLoaded(local)) {
             Log.i("QuroAssistant", "routeLocal 自动加载本地模型 | id=${local.id} | name=${local.name} | type=${local.type}")
             val lr = loader.load(local)
             if (lr is LocalModelLoader.LoadResult.Failure) {
                 return QuroLlmResult.Error("本地模型自动加载失败：${lr.message}\n请到「设置 → 模型配置 → 本地离线模型」重新加载。")
             }
         }
-        return resolveLocalEngine().run(
+        return engine.run(
             local,
             cfg.model,
             compactForLocal(messages),
@@ -1017,10 +1028,30 @@ class QuroAssistant(
     }
 
     /**
-     * 在 full 风味下通过反射实例化原生本地引擎 [QuroLocalEngineNative]；
-     * fdroid 风味未编译该类，反射失败回退 [QuroLocalEnginePlaceholder]（明确提示、不崩溃）。
+     * 本地引擎落点选择（full 风味用反射实例化，fdroid 回退 [QuroLocalEnginePlaceholder]）。
+     *
+     * 两条路径：
+     *   · **进程内**（默认）`com.ai.assistance.quro.core.network.QuroLocalEngineNative`
+     *     —— 推理跑在主进程。既有行为，真机长期验证过。
+     *   · **跨进程**（偏好开启时）`…QuroLocalEngineRemote`
+     *     —— 推理跑在 `:llm` 独立进程（硬规则第 1 条）。4GB 级模型加载后
+     *     主进程 native heap 不再膨胀，被 LMK 杀的是引擎进程而非整个界面。
+     *
+     * 跨进程类反射失败时**静默回退到进程内**，绝不让用户落到 Placeholder
+     * （那等于「开了个开关反而不能用了」——比不提供开关更糟）。
+     *
+     * fdroid 风味未编译这两个类，反射必然失败 → 回退 Placeholder（明确提示、不崩溃）。
      */
-    private fun resolveLocalEngine(): QuroLocalEngine {
+    private fun resolveLocalEngine(context: Context): QuroLocalEngine {
+        if (QuroLocalEnginePrefs.isIsolated(context)) {
+            try {
+                val clazz = Class.forName("com.ai.assistance.quro.core.network.QuroLocalEngineRemote")
+                val ctor = clazz.getDeclaredConstructor(Context::class.java)
+                return ctor.newInstance(context.applicationContext) as QuroLocalEngine
+            } catch (t: Throwable) {
+                Log.w("QuroAssistant", "跨进程本地引擎不可用，回退进程内实现", t)
+            }
+        }
         return try {
             val clazz = Class.forName("com.ai.assistance.quro.core.network.QuroLocalEngineNative")
             clazz.getDeclaredConstructor().newInstance() as QuroLocalEngine

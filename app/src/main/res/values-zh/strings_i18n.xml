@@ -3884,4 +3884,8 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_03902" formatted="false">需要悬浮窗权限才能显示视频通话界面</string>
     <string name="qk_03903" formatted="false">每个功能可「跟随主模型」或指定独立模型；指定独立模型时还可单独填写基础 URL 与 API Key。已接入引擎并实时生效：常规对话、人格孵化、UI 控制、图像识别、视频识别、视频通话。</string>
     <string name="qk_03904" formatted="false">视觉类能力：图像识别、视频识别与视频通话都需要支持视觉能力的模型（如 GPT-4V）。为它们指定独立模型并填好基础 URL / API Key 后，视觉分析、视频画面理解与视频通话即改用该模型。</string>
+    <string name="qk_03905" formatted="false">本地引擎独立进程</string>
+    <string name="qk_03906" formatted="false">在独立进程中运行本地推理：加载大模型时不会再被系统回收整个应用，界面始终可用。关闭则沿用旧版进程内行为。</string>
+    <string name="qk_03907" formatted="false">温控自适应调度</string>
+    <string name="qk_03908" formatted="false">持续推理时每 2 秒读取一次 SoC 温控余量，提前小幅下调线程数，避免被系统断崖式降频。关闭时不做任何干预。</string>
 </resources>

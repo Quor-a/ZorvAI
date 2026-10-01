@@ -72,6 +72,7 @@ import com.ai.assistance.quro.core.model.toProfile
 import com.ai.assistance.quro.core.model.localModelCapabilitySummary
 import com.ai.assistance.quro.core.network.LocalModelLoaders
 import com.ai.assistance.quro.core.network.LocalModelLoader
+import com.ai.assistance.quro.core.network.QuroLocalEnginePrefs
 import com.ai.assistance.quro.core.network.QuroModelListResult
 import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.ui.theme.Accent
@@ -295,6 +296,61 @@ fun QuroModelConfigForm(
                 }
             }
             Spacer(Modifier.height(10.dp))
+
+            // 本地引擎独立进程开关（进程隔离，硬规则第 1 条）
+            //
+            // 为什么把这个决定权交给用户而不是直接切默认值：
+            //   进程隔离是**运行期行为变更** —— 推理从主进程搬到 `:llm` 进程，
+            //   绑定、回调、取消、OOM 降级都是新的执行路径，必须真机验证过才敢做默认。
+            //   保留开关意味着某个机型上隔离路径有问题时，用户自己能切回来，
+            //   而不是只能等下一个版本。这是这类底层改造应有的退路。
+            val isolatedNow = remember { mutableStateOf(QuroLocalEnginePrefs.isIsolated(ctx)) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = isolatedNow.value,
+                    onCheckedChange = {
+                        isolatedNow.value = it
+                        QuroLocalEnginePrefs.set(ctx, it)
+                    },
+                )
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.qk_03905), style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        stringResource(R.string.qk_03906),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+
+            // L5 · 温控自适应开关。
+            //
+            // 与上面的进程隔离放在一起是有意的：两者都是「改变本地推理运行期行为」
+            // 的开关，用户要能在一个地方同时看到、同时回退。区别在于出问题的表现：
+            // 隔离失败会崩，温控失败只是变慢 —— 所以这里默认关闭。
+            val thermalNow = remember { mutableStateOf(QuroLocalEnginePrefs.isThermalAdaptive()) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = thermalNow.value,
+                    onCheckedChange = {
+                        thermalNow.value = it
+                        QuroLocalEnginePrefs.setThermalAdaptive(it)
+                    },
+                )
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.qk_03907), style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        stringResource(R.string.qk_03908),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+
             Text(stringResource(R.string.qk_02121),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

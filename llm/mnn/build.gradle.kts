@@ -30,7 +30,9 @@ android {
                     "-DANDROID_STL=c++_static",
                     "-DANDROID_PLATFORM=android-26",
                     "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
-                    "-DMNN_BUILD_SHARED_LIBS=ON",
+                    // 库类型（共享/静态）由 llm/mnn/CMakeLists.txt 决定：那里按 QURO_LLM_MONOLITHIC
+                    // 设 MNN_BUILD_SHARED_LIBS，用于 L2 符号隔离。此处不再传 -D，避免两处
+                    // 各说各话（命令行 -D 会先占住 cache，让 CMakeLists 里的设置看起来失效）。
                     "-DMNN_SEP_BUILD=OFF",
                     "-DMNN_BUILD_TOOLS=OFF",
                     // 注意：当前锁定的 MNN commit（master @ d8fe7c18）已把 LLM 引擎自带 demo 的开关

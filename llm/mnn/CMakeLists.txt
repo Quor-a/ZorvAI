@@ -17,12 +17,22 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/quro_git_source.cmake")
 
+# ⚠️ 必须钉固定 SHA，不能用 "master"。
+# 原来写的是分支名，导致每次构建都重新 ls-remote 解析一次 master：上游一有新
+# commit 就换一份全新的源码目录 + 全量重编 MNN（小时级），而且**构建不可复现** ——
+# 同一个 tag 的 APK 两次构建出来的 libMNN.so 可能来自不同上游代码，出问题无法回溯。
+# 本地已验证：master 短短几天内先后解析出 cda4a6f4 / bef71b97 / 024a946b 三个 SHA。
+#
+# 下面的 SHA 就是产出当前线上 v1.1.0 的 libMNN.so 的那一份
+# （判据：llm/mnn/.cxx/quro_deps/mnn-bef71b97…-build 下有 893 个文件在最后一次
+#  构建时被更新，另一个 cda4a6f4…-build 只有 128 个且早于它）。
+# 换版本时改这一行，并且要同步改 build.gradle.kts 注释里记的 commit 号。
 quro_prepare_git_source(
     MNN_SOURCE_DIR
     QURO_MNN_BINARY_DIR
     mnn
     "https://github.com/alibaba/MNN.git"
-    "master"
+    "bef71b9756a2c77549eddbe33eb97290e3b16602"
 )
 
 quro_prepare_git_source(
@@ -55,6 +65,27 @@ set(MNN_SUPPORT_RENDER ON CACHE BOOL "Enable render backend" FORCE)
 
 # 禁用分离编译 - 将所有后端编入 libMNN.so (解决 "Can't Find type=3 backend" 问题)
 set(MNN_SEP_BUILD OFF CACHE BOOL "Build backends separately" FORCE)
+
+# ---------------------------------------------------------------------------
+# 【L2 · 符号隔离】单 .so 收敛：上游 MNN 改为**静态**链入 wrapper。
+# 理由同 llm/llama/CMakeLists.txt —— 消掉两份 libc++abi 的 38 个重复符号。
+#
+# ⚠️ 这里**不能**改成「保留 libMNN.so 共享、只给它加 version script」：
+#    实测 MNNWrapper 从 libMNN.so 引用的 250 个符号里，有 120 个是
+#    std::__ndk1::basic_string / vector 的模板实例 —— C++ ABI 面本来就跨
+#    这个 .so 边界共享，local: * 会把它们一起隐藏，直接链接失败。
+#    静态化后两边同处一个 .so，这个矛盾自然消失。
+#
+# ⚠️ MNN 的 backend 注册器是**纯 static 构造、无外部引用**，静态链接时会被
+#    链接器按「未被引用」丢弃（症状就是老问题 "Can't Find type=3 backend"）。
+#    因此下面链接 MNN 时必须用 --whole-archive 强制全量拉入。
+# ---------------------------------------------------------------------------
+option(QURO_LLM_MONOLITHIC "把上游引擎静态链入 wrapper（单 .so 符号隔离）" ON)
+
+if(QURO_LLM_MONOLITHIC)
+    # 必须在 add_subdirectory(MNN) 之前设好，否则被 MNN 的 option() 默认值盖掉。
+    set(MNN_BUILD_SHARED_LIBS OFF CACHE BOOL "quro: static MNN for symbol isolation" FORCE)
+endif()
 
 # 禁用不需要的功能以加快编译
 set(MNN_BUILD_BENCHMARK OFF CACHE BOOL "Build benchmark" FORCE)
@@ -106,17 +137,106 @@ if(TARGET llm)
 endif()
 
 # 链接 MNN 库
+# 【L2 · 符号隔离】MNN 静态化后，backend 注册器（纯 static 构造、无外部引用）
+# 会被链接器当死代码丢掉 → 必须 --whole-archive 强制全量拉入。
+# 用「以 - 开头的列表项」而不是 target_link_options：后者会被 CMake 放到
+# 所有 -l 之前，--whole-archive 会误夹住 liblog/libandroid/libc++_static，
+# 反而把系统库整包吞进来。
 target_link_libraries(
     MNNWrapper
+    -Wl,--whole-archive
     MNN
+    -Wl,--no-whole-archive
     android
     log
     jnigraphics
 )
 
-# 如果 LLM 库存在，也链接它
-if(TARGET llm)
+# 【L2 · 符号隔离】修正 A：MNN 静态化后**不能**再显式链接 llm 对象库。
+#
+# MNN_SEP_BUILD=OFF 时 llm 是 OBJECT 库，它的对象已经通过 MNN_OBJECTS_TO_LINK
+# 进了 libMNN.a。这里再 target_link_libraries(MNNWrapper llm) 会让同一批
+# .o 在链接行上出现两次（一次显式、一次来自 --whole-archive 的 libMNN.a），
+# 直接报 duplicate symbol：MNN::Transformer::Embedding / DiskEmbedding / Llm
+# 等一长串。共享构建时两者是分开的 .so 所以看不出来，静态化后才暴露。
+# 全量静态时交给 libMNN.a 就够了，故仅保留非 monolithic 分支。
+if(TARGET llm AND NOT QURO_LLM_MONOLITHIC)
     target_link_libraries(MNNWrapper llm)
+endif()
+
+# ---------------------------------------------------------------------------
+# 【L2 · 符号隔离】接入 L2/L3/L5 共享层 + 收敛导出表
+# ---------------------------------------------------------------------------
+add_subdirectory(
+    "${CMAKE_CURRENT_LIST_DIR}/../core"
+    "${CMAKE_CURRENT_BINARY_DIR}/quro_llm_core"
+    EXCLUDE_FROM_ALL
+)
+
+target_link_libraries(MNNWrapper quro_llm_core)
+
+# 第一道闸：编译期默认隐藏（JNI_OnLoad 由 JNIEXPORT 保住 default visibility）。
+target_compile_options(MNNWrapper PRIVATE
+    -fvisibility=hidden
+    -fvisibility-inlines-hidden
+)
+
+# 第二道闸：version script。local: * 是必须的兜底 —— 只写 global 段等于没隔离。
+target_link_options(MNNWrapper PRIVATE
+    "-Wl,--version-script=${CMAKE_CURRENT_LIST_DIR}/../core/quro_llm.map"
+)
+
+# 验收（必须真跑）：
+#   llvm-nm -D --defined-only libMNNWrapper.so
+#   期望输出只有一行：JNI_OnLoad
+
+# ---------------------------------------------------------------------------
+# 【L2 · 符号隔离】修正 B：从 libMNN.a 里剔除 MNN 自带的 JNIHelper.cpp.o
+#
+# 背景：--whole-archive 是**必需**的，不能省。因为 MNN 的 Vulkan 后端是这样
+# 注册的（source/backend/vulkan/runtime/VulkanRuntime.cpp:290）：
+#
+#     static bool gResistor = []() {
+#         MNNInsertExtraRuntimeCreator(MNN_FORWARD_VULKAN, new VulkanRuntimeCreator, true);
+#         return false;
+#     }();
+#
+#   匿名静态初始化、没有任何外部引用 —— 静态链接时这个翻译单元会被链接器
+#   按「未被引用」整体丢掉，Vulkan 后端就静默消失了（症状正是老问题
+#   "Can't Find type=3 backend"）。CPU/OpenCL 那批是 Backend.cpp 里直接
+#   函数调用（registerBackend() → registerCPURuntimeCreator() …）所以不会被丢，
+#   但 Vulkan 这批必须靠 --whole-archive 兜住。
+#
+# 代价：MNN 的 source/utils/JNIHelper.cpp 自己也定义了 JNI_OnLoad
+#   （JNIHelper.cpp:58，作用是缓存 JavaVM 给 MNN 的 JNI demo 用）。
+#   --whole-archive 把它一起拉进来，就与本 wrapper 的 JNI_OnLoad 冲突。
+#
+# 为什么不干脆用 -Wl,--allow-multiple-definition：
+#   那是个全局开关，会把这个 .so 里**所有**重复强符号都变成静默取第一个。
+#   我们的目的恰恰是让符号问题暴露出来，用它等于把警报器关掉。
+#
+# 为什么可以直接删这个成员（已核实）：
+#   JNIHelper.cpp 只导出 AttachCurrentThread / DetachCurrentThread / JNI_OnLoad，
+#   三者在 MNN 全仓（source / include / express）都没有任何引用点 ——
+#   唯一的调用方 mnnportraitnative.cpp 本构建不编译。
+#   删掉它既不缺符号，也顺手去掉一段死代码。
+#
+# 若将来 MNN 把 JNIHelper 用起来了，这里会以「undefined symbol」直接报错，
+# 是安全失败模式（不会静默变成运行时崩溃）。
+# ---------------------------------------------------------------------------
+# 注意：这里必须用「自定义目标 + 依赖」而不是 add_custom_command(TARGET MNN POST_BUILD)。
+# CMake 规定 add_custom_command 的 TARGET 形式只能在**创建该目标的那个目录**里调用；
+# MNN 的目标是 add_subdirectory(${MNN_SOURCE_DIR}) 在子目录里建的，本文件里调它会直接
+# configure 失败："TARGET 'MNN' was not created in this directory."
+# 改成自定义目标后，谁依赖它谁就等它跑完 —— 让 MNNWrapper 依赖它即可。
+if(QURO_LLM_MONOLITHIC AND TARGET MNN)
+    add_custom_target(quro_strip_mnn_jnihelper
+        COMMAND "${CMAKE_AR}" d "$<TARGET_FILE:MNN>" "JNIHelper.cpp.o"
+        COMMENT "quro L2: 从 libMNN.a 剔除 JNIHelper.cpp.o（其 JNI_OnLoad 与 wrapper 冲突）"
+        VERBATIM
+    )
+    add_dependencies(quro_strip_mnn_jnihelper MNN)
+    add_dependencies(MNNWrapper quro_strip_mnn_jnihelper)
 endif()
 
 # 添加 16KB 页面大小支持（Android 15+ 要求）

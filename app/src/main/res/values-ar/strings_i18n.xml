@@ -3883,4 +3883,8 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03902" formatted="false">Overlay permission is required to show the video call screen</string>
     <string name="qk_03903" formatted="false">Each feature can follow the main model or use a dedicated model; with a dedicated model you can also set its own base URL and API Key. Already wired to the engine and effective immediately: chat, persona incubation, UI control, image recognition, video recognition, video call.</string>
     <string name="qk_03904" formatted="false">Vision features: image recognition, video recognition and video call all require a vision-capable model (e.g. GPT-4V). Assign a dedicated model with its own base URL / API Key and visual analysis, video scene understanding and video calls will switch to it.</string>
+    <string name="qk_03905" formatted="false">محرك محلي في عملية معزولة</string>
+    <string name="qk_03906" formatted="false">ينفّذ الاستدلال المحلي في عملية منفصلة: لن يؤدي تحميل نموذج كبير إلى إنهاء النظام للتطبيق بالكامل، وتبقى الواجهة قابلة للاستخدام. أوقفه للعودة إلى السلوك السابق.</string>
+    <string name="qk_03907" formatted="false">جدولة حرارية تكيفية</string>
+    <string name="qk_03908" formatted="false">يقرأ الهامش الحراري للمعالج كل ثانيتين أثناء الاستدلال الطويل ويقلّل عدد الخيوط مسبقًا لتجنّب الخفض الحاد من النظام. عند الإيقاف لا يوجد أي تدخّل.</string>
 </resources>

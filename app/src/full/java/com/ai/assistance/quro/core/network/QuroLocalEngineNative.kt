@@ -940,6 +940,8 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 nGpuLayers = if (model.gpuLayers > 0) model.gpuLayers else 99,
                 useMmap = model.useMmap,
             kvUnified = model.kvUnified,
+            // L5 · 温控自适应：0 = 关闭（默认值，由模型配置页的开关决定）。
+            thermalPollMs = QuroLocalEnginePrefs.thermalPollMs(),
         )
         QuroDiag.log(
             "LocalEngine",

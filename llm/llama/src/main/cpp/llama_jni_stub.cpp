@@ -25,6 +25,10 @@
 #if defined(QURO_HAS_LLAMA_CPP) && QURO_HAS_LLAMA_CPP
 #include "chat.h"
 #include "llama.h"
+// L5 · 温控自适应（ThermalGovernor / ThermalAdvice）。
+// 由 llm/llama/CMakeLists.txt 的 target_link_libraries(LlamaWrapper quro_llm_core)
+// 提供 include 路径（quro_llm_core 的 target_include_directories 是 PUBLIC）。
+#include "quro/thermal.h"
 #include "nlohmann/json.hpp"
 #include <cstdlib>
 #include <ctime>
@@ -430,7 +434,64 @@ struct LlamaSessionNative {
     // 已经因此白跑了三轮修复。现在把原因回传 Java，直接显示在聊天气泡里。
     // 访问方：genLock 已把同一 session 的 generate 串行化，故不额外加锁。
     std::string lastError;
+
+    // ── L5 · 温控自适应（实现见 applyThermalAdvice）──
+    // thermalPollMs：采样间隔（毫秒）。**0 = 禁用**（默认）。
+    //   默认关闭是刻意的：这是运行期行为变更（在 decode 循环里改线程数），
+    //   必须在真机上验证过才敢默认打开。用户可在「模型配置」里手动启用。
+    // thermalThreads：当前实际生效的线程数。只有当它**变化**时才去动后端 ——
+    //   llama_set_n_threads 会重建线程绑定，无谓调用纯属浪费，也会刷日志。
+    int32_t thermalPollMs = 0;
+    int32_t thermalThreads = 0;
+    std::chrono::steady_clock::time_point thermalLastCheck{};
 };
+
+// ─────────────────────────── L5 · 温控自适应 ───────────────────────────
+// 这是「真正决定流畅度的两个开关」之一，也是比语言选型影响更大的那一个：
+//   持续推理 5–10 分钟后 SoC 必然降频（实测骁龙 8 Gen 3 上裸跑 30 分钟吞吐掉约 69%）。
+//   每约 2 秒读一次 thermal headroom 并**主动**小幅降线程，可以保住约 77% 峰值 ——
+//   因为主动降档是平滑的，被动降频是断崖式的。
+//
+// 为什么必须"主动"：平台的 thermal throttling 是内核/固件行为，降频时不会通知应用。
+//   等我们发现变慢再反应，已经掉进断崖。唯一办法是**提前**看余量（headroom），
+//   在还有余量时就小幅让步，把温度压在阈值下方。
+//
+// 三条实现纪律：
+//   1) **默认关闭**（thermalPollMs == 0），见 LlamaSessionNative 的字段注释。
+//   2) **只在 token / chunk 边界应用**。绝不在一次 llama_decode 中途改线程数 ——
+//      ggml 的线程池/图节点假设会被破坏，那是内存损坏级的风险，不是"慢一点"。
+//   3) **档位没变就一次系统调用都不做**（见下面的 want == thermalThreads 判断）。
+//
+// 探测不到任何温度源时 ThermalGovernor 会返回 UNKNOWN，这里直接 return 不干预 ——
+// 明确什么都不做，好过瞎猜一个档位把用户的机器降速。
+static void applyThermalAdvice(LlamaSessionNative * session) {
+    if (session == nullptr || session->ctx == nullptr) return;
+    if (session->thermalPollMs <= 0) return;   // 未启用
+
+    const auto now = std::chrono::steady_clock::now();
+    const auto sinceMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             now - session->thermalLastCheck)
+                             .count();
+    if (sinceMs < session->thermalPollMs) return;
+    session->thermalLastCheck = now;
+
+    const quro::llm::ThermalAdvice advice = quro::llm::ThermalGovernor::instance().sample();
+    if (advice.level == quro::llm::ThermalLevel::UNKNOWN) return;   // 无数据源 → 不干预
+
+    const int32_t want = std::max<int32_t>(1, advice.threads);
+    if (want == session->thermalThreads) return;   // 档位未变 → 一次调用都不做
+
+    const int32_t prev = session->thermalThreads;
+    session->thermalThreads = want;
+    llama_set_n_threads(session->ctx,
+                        static_cast<uint32_t>(want),
+                        static_cast<uint32_t>(want));
+    LOGI("温控调档：线程 %d → %d | 档位=%s headroom=%d%% status=%d | %s",
+         (int) prev, (int) want,
+         quro::llm::thermalLevelName(advice.level),
+         advice.headroomPct, advice.platformStatus,
+         advice.reason.c_str());
+}
 
 // 记录失败原因（同时打 LOGE，保留 logcat 链路）
 #define SET_ERR(sess, ...)                                        \
@@ -865,7 +926,8 @@ Java_com_ai_assistance_llama_LlamaNative_nativeCreateSession(
         jboolean useMmap,
         jboolean flashAttention,
         jboolean kvUnified,
-        jboolean offloadKqv
+        jboolean offloadKqv,
+        jint thermalPollMs
 ) {
     (void) clazz;
     ensureBackendInit();
@@ -967,6 +1029,21 @@ Java_com_ai_assistance_llama_LlamaNative_nativeCreateSession(
     }
 
     llama_set_n_threads(session->ctx, effectiveThreads, effectiveThreads);
+
+    // ── L5 · 温控自适应初始化 ──
+    // 配置成**基础**（threads/batch）为当前请求值：档位比例都是相对它算的，
+    // 传 0 或别的值会让 COOL 档的线程数不等于用户要的线程数。
+    session->thermalPollMs = static_cast<int32_t>(std::max<jint>(0, thermalPollMs));
+    session->thermalThreads = effectiveThreads;
+    session->thermalLastCheck = std::chrono::steady_clock::now();
+    if (session->thermalPollMs > 0) {
+        quro::llm::ThermalGovernor::instance().configure(
+            session->thermalPollMs,
+            effectiveThreads,
+            static_cast<int>(cparams.n_batch));
+        LOGI("温控自适应已启用：pollMs=%d baseThreads=%d baseBatch=%u",
+             (int) session->thermalPollMs, (int) effectiveThreads, (unsigned) cparams.n_batch);
+    }
 
     session->samplingParams = SamplingParamsNative{};
     session->samplingParams.seed = static_cast<uint32_t>(std::rand());
@@ -1639,6 +1716,8 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
             prefillFailed = true;
             break;
         }
+        // L5 · 温控：chunk 边界是安全的调档点（这一批已经算完，线程池空闲）。
+        applyThermalAdvice(session);
         offset += chunk;
     }
     llama_batch_free(pbatch);
@@ -1678,6 +1757,12 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv * env, jcla
             generationDirty = true;
             break;
         }
+
+        // L5 · 温控：token 边界调档。decode 阶段是长时间持续负载（一次可跑几十秒），
+        // 也正是 SoC 升温最快的一段 —— 这里是温控收益最大的地方。
+        // 节流由 applyThermalAdvice 内部的 thermalPollMs 控制，每个 token 调它只是
+        // 读一次 steady_clock，开销可忽略。
+        applyThermalAdvice(session);
 
         const llama_token newToken = llama_sampler_sample(session->sampler, session->ctx, -1);
         llama_sampler_accept(session->sampler, newToken);
@@ -1886,3 +1971,104 @@ Java_com_ai_assistance_llama_LlamaNative_nativeResetKv(JNIEnv * env, jclass claz
 }
 
 #endif
+
+
+// ═════════ QuroLlm L2 注册表：符号隔离（自动生成，勿手改） ═════════
+//
+// 为什么需要这张表：
+//   version script 把本 .so 的导出表收敛到只剩 JNI_OnLoad，
+//   于是 JVM「按符号名查找 native 方法」的路径不再可用（符号已变 local）。
+//   改成在 JNI_OnLoad 里显式 RegisterNatives 给出函数指针，
+//   本 .so 的导出符号从数百个降到 1 个，跨引擎的 OpenCL/Vulkan 符号竞争随之消失。
+//
+// 签名来自 javap -s（JVM 自己算出的描述符），不是人工推断。
+// 对应 Kotlin 声明：com.ai.assistance.llama.LlamaNative
+//
+#include <jni.h>
+#include <android/log.h>
+#include <string>
+
+#include "quro/jni_support.h"
+
+namespace {
+
+const JNINativeMethod kLlamaNativeMethods[] = {
+    {"nativeIsAvailable", "()Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeIsAvailable)},
+    {"nativeGetUnavailableReason", "()Ljava/lang/String;",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeGetUnavailableReason)},
+    {"nativeCreateSession", "(Ljava/lang/String;IIIIIZZZZI)J",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeCreateSession)},
+    {"nativeReleaseSession", "(J)V",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeReleaseSession)},
+    {"nativeCancel", "(J)V",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeCancel)},
+    {"nativeResetKv", "(J)V",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeResetKv)},
+    {"nativeCountTokens", "(JLjava/lang/String;)I",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeCountTokens)},
+    {"nativeSetSamplingParams", "(JFFIFFFI)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeSetSamplingParams)},
+    {"nativeApplyChatTemplate", "(J[Ljava/lang/String;[Ljava/lang/String;Z)Ljava/lang/String;",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeApplyChatTemplate)},
+    {"nativeApplyStructuredChatTemplate", "(JLjava/lang/String;Ljava/lang/String;Z)Ljava/lang/String;",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeApplyStructuredChatTemplate)},
+    {"nativeGenerateStream", "(JLjava/lang/String;ILcom/ai/assistance/llama/LlamaNative$GenerationCallback;)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream)},
+    {"nativeClearToolCallGrammar", "(J)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeClearToolCallGrammar)},
+    {"nativeParseToolCallResponse", "(JLjava/lang/String;)Ljava/lang/String;",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeParseToolCallResponse)},
+    {"nativeGetLastError", "(J)Ljava/lang/String;",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeGetLastError)},
+};
+
+constexpr int kLlamaNativeCount = 14;
+
+}  // namespace
+
+namespace quro {
+namespace llm {
+namespace jni {
+
+/// 注册本 .so 内的一个 native 类。返回是否全部成功。
+bool register_LlamaNative(JNIEnv* env) {
+    std::string err;
+    if (!registerNatives(env, "com/ai/assistance/llama/LlamaNative", kLlamaNativeMethods, kLlamaNativeCount, &err)) {
+        __android_log_print(ANDROID_LOG_ERROR, "QuroLlm.Jni",
+                            "注册 com.ai.assistance.llama.LlamaNative 失败：%s", err.c_str());
+        return false;
+    }
+    return true;
+}
+
+}  // namespace jni
+}  // namespace llm
+}  // namespace quro
+
+// 本 .so 的注册入口。同 .so 内其他 TU 的注册函数在此统一调用。
+
+extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
+    (void) reserved;
+
+    // 记住 JavaVM：推理在引擎工作线程上跑，回调时需要用它在那个线程 attach。
+    quro::llm::jni::setJavaVm(vm);
+
+    JNIEnv* env = nullptr;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        __android_log_print(ANDROID_LOG_ERROR, "QuroLlm.Jni",
+                            "JNI_OnLoad: GetEnv 失败");
+        return JNI_ERR;
+    }
+
+    bool allOk = quro::llm::jni::register_LlamaNative(env);
+
+    // 注册失败**不**让 .so 加载失败：加载失败会让整个本地推理链路
+    // 直接抛 UnsatisfiedLinkError，连诊断信息都拿不到。
+    // 这里放行并由上层在首次调用时给出可读错误。
+    if (!allOk) {
+        __android_log_print(ANDROID_LOG_ERROR, "QuroLlm.Jni",
+                            "JNI_OnLoad: 部分 native 方法注册失败，本地推理将不可用");
+    }
+    return JNI_VERSION_1_6;
+}

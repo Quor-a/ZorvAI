@@ -46,6 +46,35 @@ set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 # ---------------------------------------------------------------------------
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 
+# ---------------------------------------------------------------------------
+# 【L2 · 符号隔离】单 .so 收敛：上游 llama.cpp / ggml 改为**静态**链入 wrapper
+#
+# 改造前：llm 模块产出 6 个 .so（libLlamaWrapper / libllama / libllama-common /
+#         libggml / libggml-base / libggml-cpu），合计导出 11030 个动态符号；
+#         libllama.so 一个就 5458 个，其中包含 statically-linked libc++abi 的
+#         __cxa_throw / __cxa_get_globals / operator new 等 38 个运行时符号。
+#         MNN 侧的 libMNN.so 同样导出这 38 个 —— 而 __cxa_get_globals 返回的
+#         是每线程一份的 __cxa_eh_globals；两份 libc++abi 若构造自不同 NDK
+#         （结构体布局不同），throw 与 catch 会操作到不同的全局量，异常处理
+#         直接内存损坏。崩溃栈指向 catch 侧、真因在另一个 .so，极难定位。
+#
+# 改造后：上游全部静态链入 LlamaWrapper，本 .so 由 version script 只导出
+#         JNI_OnLoad 一个符号（见 llm/core/quro_llm.map）。llama 侧贡献的
+#         跨 .so 符号面 = 0，上面那个隐患从根上消失。
+#
+# 静态链接**不需要** --whole-archive：ggml/src/ggml-backend-reg.cpp 在
+# #ifdef GGML_USE_CPU 下直接调用 ggml_backend_cpu_reg()，是真实符号引用，
+# 链接器会自动拉入 CPU 后端对象，不存在「后端注册器被丢弃」的问题。
+# （静态也是 llama.cpp 在 Android 上的默认构建方式，官方支持。）
+# ---------------------------------------------------------------------------
+option(QURO_LLM_MONOLITHIC "把上游引擎静态链入 wrapper（单 .so 符号隔离）" ON)
+
+if(QURO_LLM_MONOLITHIC)
+    # 必须在 add_subdirectory(llama.cpp) 之前设好：llama.cpp 内部用
+    # option(BUILD_SHARED_LIBS ...) 定义默认值，先占住 cache 它就不会覆盖。
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "quro: static upstream for symbol isolation" FORCE)
+endif()
+
 quro_prepare_git_source(
     QURO_LLAMA_CPP_SOURCE_DIR
     QURO_LLAMA_CPP_BINARY_DIR
@@ -75,6 +104,36 @@ target_link_libraries(
     android
     log
 )
+
+# ---------------------------------------------------------------------------
+# 【L2 · 符号隔离】接入 L2/L3/L5 共享层 + 收敛导出表
+# ---------------------------------------------------------------------------
+add_subdirectory(
+    "${CMAKE_CURRENT_LIST_DIR}/../core"
+    "${CMAKE_CURRENT_BINARY_DIR}/quro_llm_core"
+    EXCLUDE_FROM_ALL
+)
+
+target_link_libraries(LlamaWrapper quro_llm_core)
+
+# 第一道闸：编译期默认隐藏。JNI_OnLoad 由 JNIEXPORT 声明为 default
+# visibility，不受影响；其余（含 Java_xxx 原生方法与静态链入的上游符号）
+# 一律 hidden。
+target_compile_options(LlamaWrapper PRIVATE
+    -fvisibility=hidden
+    -fvisibility-inlines-hidden
+)
+
+# 第二道闸（最后一道、也是唯一作用于 .dynsym 的）：version script。
+# 注意 local: * 是必须的兜底 —— 只写 global 段的话，未列出的符号默认仍是
+# default visibility，等于没隔离。
+target_link_options(LlamaWrapper PRIVATE
+    "-Wl,--version-script=${CMAKE_CURRENT_LIST_DIR}/../core/quro_llm.map"
+)
+
+# 验收（必须真跑，不能只看配置）：
+#   llvm-nm -D --defined-only libLlamaWrapper.so
+#   期望输出只有一行：JNI_OnLoad
 
 # 16KB page size support (Android 15+ requirement)
 target_link_options(LlamaWrapper PRIVATE "-Wl,-z,max-page-size=16384")

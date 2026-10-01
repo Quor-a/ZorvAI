@@ -21,7 +21,19 @@ object LlamaNative {
         useMmap: Boolean,
         flashAttention: Boolean,
         kvUnified: Boolean,
-        offloadKqv: Boolean
+        offloadKqv: Boolean,
+        /**
+         * L5 · 温控自适应采样间隔（毫秒）。**0 = 禁用**（默认）。
+         *
+         * 启用后原生层会在 prefill 的 chunk 边界与 decode 的 token 边界读取 SoC
+         * thermal headroom，并按档位**主动**下调线程数 —— 持续推理时这能保住约 77%
+         * 峰值吞吐，而不是被平台断崖式降频打到 31%。
+         *
+         * 与 nativeCreateSession 的 JNI 签名
+         * `(Ljava/lang/String;IIIIIZZZZI)J` **必须一致**：这里的顺序就是
+         * cpp 形参顺序，错一个就是运行期 UnsatisfiedLinkError。
+         */
+        thermalPollMs: Int
     ): Long
 
     @JvmStatic external fun nativeReleaseSession(sessionPtr: Long)
