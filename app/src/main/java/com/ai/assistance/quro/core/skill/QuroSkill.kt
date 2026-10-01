@@ -4,6 +4,7 @@ import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import org.json.JSONArray
+import com.ai.assistance.quro.core.tools.QuroToolSpecGuard
 import org.json.JSONObject
 import java.util.UUID
 
@@ -90,25 +91,40 @@ data class QuroSkill(
     }
 
     companion object {
-        /** OpenAI function-calling 工具名允许字符集（整名需满足 ^[a-zA-Z0-9_-]+$，前缀 skill__ 之后也必须合法）。 */
-        private val TOOL_NAME_LEGAL = Regex("[^A-Za-z0-9_-]")
+        /** 技能工具名的固定前缀。其长度参与总长预算（见 [QuroToolSpecGuard.MAX_TOOL_NAME_LEN]）。 */
+        private const val SKILL_PREFIX = "skill__"
 
         /**
-         * 把任意技能名净化成合法的 function-calling 工具名片段：
-         * 剥掉可能误带的 skill__ 前缀 -> 非法字符（空格 / 中文 / 斜杠等）统一替换为 -
-         * -> 折叠连续 -、去首尾 -，保证非空（空则回退 "skill"）。
-         * 幂等：对已是合法名的输入返回自身，因此「原始名 <-> 工具名」可由本函数一致推导，
-         * 反向查找技能时直接比对 [toolNameOf] 即可，无需保存额外映射。
+         * 把任意技能名净化成合法的 function-calling 工具名片段。
+         *
+         * ## 为什么不能「把非法字符替换成 -」就完事（这里修了一个真 bug）
+         *
+         * 旧实现把每个非 ASCII 字符替换成 `-`、折叠连续 `-`、去首尾，空了回退 `"skill"`。
+         * 于是**全中文技能名全部坍缩成同一个 `skill`**：
+         * 「视频号账号诊断」「合同风险审查」「抖音热榜」→ 全都成了 `skill__skill`。
+         * 紧接着 `QuroTool.specs()` 的 `distinctBy { it.name }` 把它们去重到只剩**一个** ——
+         * 用户装了 N 个中文技能，AI 实际只能调用其中 1 个，**且没有任何日志**。
+         *
+         * 现委托 [QuroToolSpecGuard.sanitizeName]：一旦净化过程发生信息丢失，
+         * 就追加**原名哈希尾缀**（如 `skill__tool-1a2b3c4d`）把唯一性找回来；
+         * 同时把总长压进 64 字符内（OpenAI function name 上限，超了整段 tools 会被拒收）。
+         *
+         * ## 性质（反向查找依赖前两条，请勿破坏）
+         * - **确定性**：同一技能名永远得到同一工具名 → 反向查找
+         *   （`toolNameOf(skill.name) == call.name`）成立，无需保存额外映射。
+         * - **幂等**：对已是合法名的输入返回自身。
+         * - **长度预算**：`skill__`(7) + 片段 ≤ 64。
          */
         fun sanitizeToolName(raw: String): String {
-            val base = raw.removePrefix("skill__")
-            val cleaned = TOOL_NAME_LEGAL.replace(base) { "-" }
-                .replace(Regex("-+"), "-").trim('-')
-            return if (cleaned.isEmpty()) "skill" else cleaned
+            val base = raw.removePrefix(SKILL_PREFIX)
+            return QuroToolSpecGuard.sanitizeName(
+                base,
+                QuroToolSpecGuard.MAX_TOOL_NAME_LEN - SKILL_PREFIX.length,
+            )
         }
 
         /** 由技能名生成与工具一一对应的合法工具名（带 skill__ 前缀）。 */
-        fun toolNameOf(raw: String): String = "skill__" + sanitizeToolName(raw)
+        fun toolNameOf(raw: String): String = SKILL_PREFIX + sanitizeToolName(raw)
 
         /**
          * 工具规格 JSON → 技能（"技能转换"的反向：工具 → 技能）。

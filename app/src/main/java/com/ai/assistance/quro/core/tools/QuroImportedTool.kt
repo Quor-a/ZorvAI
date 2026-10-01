@@ -32,9 +32,14 @@ data class ImportedToolDef(
 class QuroImportedTool(private val def: ImportedToolDef) : QuroTool {
     override val name = def.name
     override val description = def.description
-    override val parametersJson = def.parametersJson.ifBlank {
-        """{"type":"object","properties":{"arg":{"type":"string","description":"可选参数"}}}"""
-    }
+    // N5：空值 → 带 arg 的默认 schema（HTTP 类工具需要 arg 才不会变哑巴）；
+    //    非空但畸形 → 退化为空对象 schema。绝不把畸形字符串原样拼进上游请求体
+    //    （那会在 QuroLlmClient 里抛异常，让整个 chat() 请求构造失败 = 所有工具不可用）。
+    override val parametersJson = QuroToolSpecGuard.normalizeParametersJson(
+        def.parametersJson.ifBlank {
+            """{"type":"object","properties":{"arg":{"type":"string","description":"可选参数"}}}"""
+        },
+    )
 
     override fun run(context: Context, arguments: String): String {
         return when (def.kind) {
@@ -138,41 +143,69 @@ object QuroImportedToolRegistry {
 
     fun load(context: Context) {
         list.clear()
-        runCatching {
-            val f = java.io.File(context.filesDir, FILE)
-            if (f.exists()) {
-                val arr = JSONArray(f.readText())
-                for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
-                    list.add(
-                        ImportedToolDef(
-                            name = o.getString("name"),
-                            description = o.optString("description", ""),
-                            parametersJson = o.optString("parametersJson", ""),
-                            kind = o.optString("kind", "http"),
-                            config = o.optString("config", "{}"),
-                        )
-                    )
-                }
+        val f = java.io.File(context.filesDir, FILE)
+        if (!f.exists()) return
+        // 🔴 N5 修复：旧实现用一个 runCatching 包住**整个循环** —— 任意一条记录畸形
+        //    （缺 name / 类型不对）都会让**后面全部**导入工具静默消失，用户只看到
+        //    「我导入的工具全没了」，而日志里连一行错误都没有。
+        //    现改为逐条容错：坏记录单独跳过并计数，好记录照常加载。
+        val arr = runCatching { JSONArray(f.readText()) }.getOrElse { e ->
+            android.util.Log.e("QuroImportedTool", "🔴 导入工具清单整体解析失败，本轮全部不可用：${e.message}")
+            return
+        }
+        var broken = 0
+        for (i in 0 until arr.length()) {
+            val def = runCatching {
+                val o = arr.getJSONObject(i)
+                ImportedToolDef(
+                    // N5：名字净化。导入工具的 name 会直接进上游 tools 数组，
+                    // 中文 / 空格 / 超长名会让上游**整段拒收**，所有工具调用一起失效。
+                    name = normalizeName(o.getString("name")),
+                    description = o.optString("description", ""),
+                    parametersJson = o.optString("parametersJson", ""),
+                    kind = o.optString("kind", "http"),
+                    config = o.optString("config", "{}"),
+                )
+            }.getOrNull()
+            if (def == null || def.name.isBlank()) {
+                broken++
+                continue
             }
+            list.add(def)
+        }
+        if (broken > 0) {
+            android.util.Log.w(
+                "QuroImportedTool",
+                "⚠️ 导入工具清单有 ${broken} 条记录畸形，已跳过（其余正常加载）",
+            )
         }
     }
+
+    /**
+     * 名字规范化（N5）。入库与查询**共用**，保证 `all()` 返回的名字、注册用的名字、
+     * 以及上游看到的 function name 三者一致。
+     * 幂等（由 [QuroToolSpecGuard.sanitizeName] 保证），对已净化的名字再调用无副作用。
+     */
+    private fun normalizeName(raw: String): String = QuroToolSpecGuard.sanitizeName(raw.trim())
 
     fun all(): List<ImportedToolDef> = list.toList()
     fun tools(): List<QuroImportedTool> = list.map { QuroImportedTool(it) }
 
     fun add(context: Context, def: ImportedToolDef) {
-        list.removeIf { it.name == def.name }
-        list.add(def)
+        // N5：入库即净化，避免非法名进入 tools 数组导致上游整段 400。
+        val d = def.copy(name = normalizeName(def.name))
+        list.removeIf { it.name == d.name }
+        list.add(d)
         save(context)
     }
 
     fun remove(context: Context, name: String) {
-        list.removeIf { it.name == name }
+        // 查询侧同样净化（幂等），保证与入库时写入的名字一致，否则删不掉。
+        list.removeIf { it.name == normalizeName(name) }
         save(context)
     }
 
-    fun contains(name: String) = list.any { it.name == name }
+    fun contains(name: String) = list.any { it.name == normalizeName(name) }
 
     private fun save(context: Context) {
         runCatching {

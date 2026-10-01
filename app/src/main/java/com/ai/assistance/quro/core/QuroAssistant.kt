@@ -6,6 +6,7 @@ import android.content.Context
 import com.ai.assistance.quro.core.model.QuroModelConfig
 import com.ai.assistance.quro.core.model.QuroLocalModelRepository
 import com.ai.assistance.quro.core.network.QuroLlmClient
+import com.ai.assistance.quro.core.network.QuroReasoningControl
 import com.ai.assistance.quro.core.network.QuroLocalEngine
 import com.ai.assistance.quro.core.network.QuroLocalEnginePlaceholder
 import com.ai.assistance.quro.core.network.QuroLocalEnginePrefs
@@ -14,6 +15,7 @@ import com.ai.assistance.quro.core.network.LocalModelLoader
 import com.ai.assistance.quro.core.network.QuroLocalToolsCodec
 import com.ai.assistance.quro.core.QuroLlmResult
 import com.ai.assistance.quro.core.tools.QuroToolEngine
+import com.ai.assistance.quro.core.tools.QuroToolFeedback
 import com.ai.assistance.quro.core.tools.QuroToolRegistry
 import com.ai.assistance.quro.core.QuroToolResult
 import com.ai.assistance.quro.core.QuroAttachment
@@ -209,9 +211,16 @@ class QuroAssistant(
     }
 
     /**
-     * 深度思考指令：仅当用户显式开启「深度思考」时注入，要求模型在回答前充分推理；
-     * 关闭时注入轻量指令，避免无谓的长篇推理。弥补此前「深度思考」开关只控制 UI 显隐、
-     * 从不真正影响模型行为的缺陷（对所有模型通用：非推理模型被引导多想，推理模型本就在想）。
+     * 深度思考指令（**自然语言兜底**，不是「深度思考」开关的全部作用）。
+     *
+     * ⚠️ 这里改的只是 system prompt 的一段文字，**请求体本身不因此变化**。
+     * 真正让开关生效的是 [QuroReasoningControl]（N1）：它把档位编译成上游认得的
+     * 协议字段（`reasoning_effort` / `thinking` / `chat_template_kwargs.enable_thinking` /
+     * 顶层 `enable_thinking`），且**关闭时一个字段都不发**（AUTO）。
+     * 本函数与它是「软+硬」两层：本函数负责引导语气，编译层负责真实协议控制。
+     * 保留本函数的原因：对**不支持任何思考字段**的普通模型，只有这层软引导能起作用。
+     *
+     * 开启：要求模型回答前充分推理；关闭：注入轻量指令，避免无谓的长篇推理。
      */
     private fun buildDeepThinkDirective(deepThink: Boolean): String = if (deepThink) {
         "\n\n## 深度思考（已开启）\n在回答前，请先进行充分、深入的内部思考（可包含逐步推理、方案权衡、自我质疑与纠错），确保回答严谨准确后再输出。简单问题轻量思考即可，复杂问题务必深入，不要为了快而草率作答。"
@@ -258,6 +267,15 @@ class QuroAssistant(
         val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
         val effTemperature = if (isLocal) cfg.localTemperature else cfg.temperature
         val effMaxTokens = if (isLocal) cfg.localMaxTokens else cfg.maxTokens
+        // ── N1：把「深度思考」开关编译成**云端请求参数** ──────────────────────
+        // 改造前该开关只往 system prompt 塞一段自然语言，请求体与关闭时**逐字节相同**（缺口 C1）。
+        // 现在由 QuroReasoningControl 按「provider + 端点 + 模型名」判定家族，产出该家族**认得**
+        // 的思考字段（reasoning_effort / thinking / chat_template_kwargs / enable_thinking）。
+        // 🔑 关闭 → AUTO（**不下发任何思考字段**，与改造前逐字节一致，而**不是** OFF ——
+        //    用户关掉「深度思考」的意思是「别额外命令模型想更深」，不是「禁止 o 系原生推理」）；
+        //    开启 → HIGH（显式下发最高档，绝不依赖各家反复变更的默认值）。
+        // 详见 docs/architecture/云端推理思考与工具调用架构.md。
+        val reasoningLevel = QuroReasoningControl.levelForDeepThink(deepThink)
         val effEnableTools = if (isLocal) cfg.localEnableTools else cfg.enableTools
         // 🔧 诊断：云模型 provider / model 打印，便于「部分模型不回复」类问题定位（结合 QuroLlm 日志的 reasoning 分支判断）。
         Log.i("QuroAssistant", "ask route: provider=${cfg.provider} model=${cfg.model} isLocal=$isLocal stream=$stream")
@@ -500,6 +518,9 @@ class QuroAssistant(
                             messages = llmMessages,
                             temperature = effTemperature,
                             maxTokens = effMaxTokens,
+                            // N1：provider 参与家族判定（同一模型名在不同网关字段不同）
+                            provider = cfg.provider,
+                            thinkingLevel = reasoningLevel,
                             tools = if (activeToolRouter != null) activeToolRouter.activeSpecs() else agentAwareSpecs,
                             stream = streaming,
                             // 注意：v384 已根除重组期重编译正则的 ANR 真凶，此处无需再用 500ms 粗节流保命。
@@ -565,12 +586,23 @@ class QuroAssistant(
                         // 🔧 #879-B3：#765 防御记录的流式累计文本适时兜底——若客户端流式正常产出、
                         // 但最终 QuroLlmResult.Text.content 却为空（与 QuroLlmClient 行为不一致，多见于
                         // 本地离线引擎边界），用 streamedContent 回退，避免正文被「(已思考完毕)」覆盖。
-                        val safeContent = sanitizeLeakedInstruction(
+                        var safeContent = sanitizeLeakedInstruction(
                             result.content.takeIf { it.isNotBlank() && !isTransientStageHint(it) }
                                 ?: streamedContent.takeIf { it.isNotBlank() && !isTransientStageHint(it) }
                                 ?: "(已思考完毕)"
                         )
                         val safeReasoning = result.reasoning?.takeIf { it.isNotBlank() }
+                        // ── N3：把「停止原因」变成用户能采取行动的信息 ─────────────────────
+                        // finish_reason=length 表示模型撞到单次输出上限、正文是**半句话**。
+                        // 旧逻辑把它当成功静默返回 → 用户只看到「AI 说一半」，既不知原因也不知能补救。
+                        if (result.meta.truncated) {
+                            Log.w("QuroAssistant", "⚠️ 本轮输出被截断 meta=${result.meta.summary()}")
+                        }
+                        if (result.meta.hasUsage) {
+                            Log.i("QuroAssistant", "📊 usage ${result.meta.summary()}")
+                        }
+                        val truncHint = result.meta.truncationHint()
+                        if (truncHint != null) safeContent = safeContent + "\n\n" + truncHint
                         lastText = safeContent
                         if (streamPlaceholderId != null) {
                             // 流式已逐字把内容写入占位气泡：这里仅补回 reasoning 字段并做终态收尾，
@@ -619,6 +651,13 @@ class QuroAssistant(
                         // 现在 reasoning 被完整保留在 assistant 消息中，回传给 LLM 时一并携带，
                         // 模型能看到自己上一步的推理并在此基础上继续决策。
                         val roundReasoning = result.reasoning?.takeIf { it.isNotBlank() }
+                        // ── N3：工具轮的元数据诊断 ───────────────────────────────────────
+                        // finish_reason=length 出现在工具轮，说明 tool_calls 的 arguments JSON 很可能
+                        // 被切在半途（sanitizeToolArguments 会把它退化成 "{}"），工具拿到空参数跑出
+                        // 无意义结果 —— 用户表现是「AI 调了工具但结果莫名其妙」。这里明确留痕。
+                        if (result.meta.hasUsage || result.meta.truncated) {
+                            Log.i("QuroAssistant", "📊 TOOLCALL round=$round meta=${result.meta.summary()}")
+                        }
                         // 先落 assistant 占位（带工具调用、结果暂空）→ UI 立即显示「🔧 调用工具…」进度。
                         // 🔑 工具调用轮保留模型给出的前缀正文（content），与 reasoning 各走各字段：
                         // 模型常先说一句「好的，我来查一下…」再发起 tool_calls——此前 content 被强制清空，
@@ -688,13 +727,29 @@ class QuroAssistant(
                             }
                             if (normalCalls.isNotEmpty()) {
                                 runCatching { engine.execute(context, normalCalls) }
-                                    .getOrElse { e -> normalCalls.map { QuroToolResult(it.name, "工具执行异常：${e.message}") } }
+                                    // N4：catch 兜底只有裸文本、没有类型，交给关键词分类补出种类与「下一步」。
+                                    .getOrElse { e ->
+                                        normalCalls.map {
+                                            QuroToolResult(it.name, QuroToolFeedback.compose(it.name, "工具执行异常：${e.message}"))
+                                        }
+                                    }
                                     .forEachIndexed { i, r -> byId[normalCalls[i].id] = r }
                             }
-                            callsWithId.map { byId[it.id] ?: QuroToolResult(it.name, "工具执行异常：无结果") }
+                            // N4：「无结果」是闭环内部的配平兜底，同样按失败回喂，避免模型收到一句
+                            // 无从下手的「无结果」后开始盲目重试。
+                            callsWithId.map {
+                                byId[it.id] ?: QuroToolResult(
+                                    it.name,
+                                    QuroToolFeedback.compose(it.name, "工具执行异常：引擎未返回该调用的结果（无结果）"),
+                                )
+                            }
                         } else {
                             runCatching { engine.execute(context, callsWithId) }
-                                .getOrElse { e -> callsWithId.map { QuroToolResult(it.name, "工具执行异常：${e.message}") } }
+                                .getOrElse { e ->
+                                    callsWithId.map {
+                                        QuroToolResult(it.name, QuroToolFeedback.compose(it.name, "工具执行异常：${e.message}"))
+                                    }
+                                }
                         }
                         val dur = System.currentTimeMillis() - t0
                         // 自动更新流体云进度：基于轮次计算进度（每轮+10%，上限90%）
@@ -719,7 +774,17 @@ class QuroAssistant(
                             } else r to null
                         }
                         val injectPathByCall = callsWithId.zip(cleanedResults.map { it.second }).toMap()
-                        val cleanedResultList = cleanedResults.map { it.first }
+                        // N3：工具轮被截断时，arguments 多半已被切坏（sanitize 退化成 "{}"）。
+                        // 把「截断」这件事写进工具结果本身 —— 既不破坏
+                        // assistant[tool_calls] → tool[] 的顺序不变式（不能插 system 消息），
+                        // 又能让模型下一轮自觉地重发一次**完整**调用。
+                        val truncNote = if (result.meta.truncated) {
+                            "\n\n⚠️ [截断] 上一轮输出达到单次上限，本次工具调用的参数可能不完整。" +
+                                "请重新、完整地发起该工具调用；必要时拆成多次小参数调用。"
+                        } else ""
+                        val cleanedResultList = cleanedResults.map { it.first }.map {
+                            if (truncNote.isEmpty()) it else it.copy(result = it.result + truncNote)
+                        }
                         val enrichedCalls = callsWithId.zip(cleanedResultList) { call, r -> call.copy(result = r.result, durationMs = dur) }
                         store.update(assistantMsg.id) { it.copy(toolCalls = enrichedCalls) }
                         emit()

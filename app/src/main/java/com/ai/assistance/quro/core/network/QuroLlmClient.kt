@@ -8,8 +8,10 @@ import android.util.Log
 import com.ai.assistance.quro.activity.QuroApplication
 import com.ai.assistance.quro.core.QuroAttachmentKit
 import com.ai.assistance.quro.core.QuroChatMessage
+import com.ai.assistance.quro.core.QuroLlmMeta
 import com.ai.assistance.quro.core.QuroLlmResult
 import com.ai.assistance.quro.core.QuroToolCall
+import com.ai.assistance.quro.core.tools.QuroToolSpecGuard
 import com.ai.assistance.quro.core.QuroToolSpec
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -92,6 +94,15 @@ class QuroLlmClient(
         stream: Boolean = false,
         onToken: ((String) -> Unit)? = null,
         onThinking: ((String) -> Unit)? = null,
+        /** 模型厂商标识（`OPENAI` / `OTHER` …）。仅作思考参数判定的弱信号。 */
+        provider: String = "OPENAI",
+        /**
+         * 思考档位。默认 [QuroReasoningControl.ThinkingLevel.AUTO] = **不干预**，
+         * 与本次改造之前的行为逐字节一致（一个思考字段都不发）。
+         *
+         * 「深度思考」开关打开时由 [QuroAssistant] 传 [QuroReasoningControl.ThinkingLevel.HIGH]。
+         */
+        thinkingLevel: QuroReasoningControl.ThinkingLevel = QuroReasoningControl.ThinkingLevel.AUTO,
     ): QuroLlmResult {
         // 🔧 云端端点兼容：用户常把裸 host
         // （如 https://api.openai.com、https://api.deepseek.com）当成 baseUrl 直接粘贴，
@@ -105,7 +116,29 @@ class QuroLlmClient(
         //  o 系列全挂，gpt-4o 系列正常）。同时 reasoning 模型**不接收 temperature**
         //  （o1 固定为 1，传非 1 也 400），统一省略由服务端取默认。
         //  通过 model 名前缀 o+数字（o1 / o3-mini / o4-mini …）识别；gpt-4o / 4.1 等普通模型不受影响。
-        val isReasoningModel = Regex("(?i)^o[0-9]").containsMatchIn(model.trim())
+        // 思考控制参数：由编译层按「provider + 端点 + 模型名」判定家族，
+        // 产出该家族**认得**的字段（OpenAI 顶层 reasoning_effort / Anthropic thinking 对象 /
+        // Qwen3 chat_template_kwargs / DashScope 顶层 enable_thinking）。
+        // 「绝不一次发出两种协议」由 QuroReasoningControlTest 的全组合穷举钉死。
+        val reasoningPlan = QuroReasoningControl.plan(
+            provider = provider,
+            baseUrl = baseUrl,
+            model = model,
+            level = thinkingLevel,
+            maxTokens = maxTokens,
+        )
+        // 🔴 这两个标志是**模型固有能力**，与思考档位无关：GPT-5 / o 系任何时候都不接受
+        //    temperature、且只认 max_completion_tokens。改造前这里只判 `^o[0-9]`，
+        //    GPT-5 全系漏网 → 用户「一选 GPT-5 就报错」。现由 plan 统一给出，覆盖全家族。
+        val isReasoningModel = reasoningPlan.useMaxCompletionTokens
+        // ── N6：reasoning 回传策略去耦合 ──────────────────────────────────────
+        // 这里**刻意不再复用 isReasoningModel**：它的语义是「该模型只认 max_completion_tokens」
+        // （请求参数**格式**问题），而「上游认不认识 reasoning_content」（字段**兼容性**问题）
+        // 是完全无关的另一件事。两者今天恰好同答案（o 系/GPT-5 都是「是」），
+        // 但共用会让「某家族将来改用新 token 字段」时**静默**关掉它的 reasoning 回传 ——
+        // 表现为 AI 突然开始失忆、多步工具编排断链，而日志里毫无线索。
+        // 现改为显式策略，见 QuroReasoningEcho 的家族结论表。
+        val echoReasoning = QuroReasoningEcho.shouldEcho(provider, baseUrl, model)
         // 🔧 toolfix8：max_tokens 硬性上限护栏。避免误配超大值被上游按「超模型输出上限」500。
         val effectiveMaxTokens = maxTokens.coerceAtMost(MAX_OUTPUT_TOKENS)
         if (effectiveMaxTokens != maxTokens) {
@@ -114,12 +147,31 @@ class QuroLlmClient(
         val body = JSONObject().apply {
             put("model", model)
             if (isReasoningModel) {
-                Log.i(TAG, ">>> reasoning model 分支：用 max_completion_tokens，省略 temperature (model=$model)")
+                Log.i(TAG, ">>> 推理系：用 max_completion_tokens (model=$model)")
                 put("max_completion_tokens", effectiveMaxTokens)
             } else {
-                put("temperature", temperature)
                 put("max_tokens", effectiveMaxTokens)
             }
+            // temperature：GPT-5/o 系不收；Claude 开启 thinking 后也不收。发了就是 400，
+            // 所以「省略」不是可选优化而是硬约束。
+            if (reasoningPlan.suppressTemperature) {
+                Log.i(TAG, ">>> 省略 temperature（${reasoningPlan.family} 在该档位下不接受）")
+            } else {
+                put("temperature", temperature)
+            }
+            // ── 思考控制参数（QuroReasoningControl 编译产出）────────────────────
+            // 四家协议字段名各不相同，且**互斥**：编译层保证一次只产出一种。
+            reasoningPlan.reasoningEffort?.let { put("reasoning_effort", it) }
+            reasoningPlan.thinkingType?.let { type ->
+                put("thinking", JSONObject().apply {
+                    put("type", type)
+                    reasoningPlan.thinkingBudgetTokens?.let { put("budget_tokens", it) }
+                })
+            }
+            reasoningPlan.chatTemplateEnableThinking?.let {
+                put("chat_template_kwargs", JSONObject().put("enable_thinking", it))
+            }
+            reasoningPlan.topLevelEnableThinking?.let { put("enable_thinking", it) }
             put("messages", JSONArray().also { arr ->
                 // 🔧 toolfix-deepseek：发送前强制 OpenAI 工具调用顺序不变式。
                 // 工具调用轮里插入的可见「⏳ 正在执行」进度占位气泡（role=assistant、无 toolCalls）
@@ -127,29 +179,59 @@ class QuroLlmClient(
                 // 触发 DeepSeek 严格校验 400：
                 //  "An assistant message with 'tool_calls' must be followed by tool messages ..."。
                 // 该占位只是 UI 提示，序列化为请求前剔除即可让 tool 结果正确贴回 assistant 之后。
-                normalizeToolCallMessages(messages).forEach { m -> arr.put(messageToJson(m, emitReasoning = !isReasoningModel)) }
+                normalizeToolCallMessages(messages).forEach { m -> arr.put(messageToJson(m, emitReasoning = echoReasoning)) }
             })
-            if (tools.isNotEmpty()) {
-                put("tools", JSONArray().also { arr ->
-                    tools.forEach { t ->
-                        arr.put(
-                            JSONObject().put("type", "function").put(
-                                "function",
-                                JSONObject()
-                                    .put("name", t.name)
-                                    .put("description", t.description)
-                                    .put("parameters", JSONObject(t.parametersJson)),
-                            ),
-                        )
-                    }
-                })
+            // ── N5：tools 下发护栏 ────────────────────────────────────────────────
+            // tools 是**一整段** JSON：只要有一个工具的 name 非法（中文 / 空格 / 超 64 字符），
+            // 或被某个坏 schema 弄成非法 JSON，严格上游就整段拒收（400）——
+            // 结果不是「少一个工具」，而是**所有工具调用一起失效**。
+            // 逐项兜底：坏 schema 退化为空对象 schema（工具仍可调用），
+            // 非法名只跳过该工具并留 error 日志（绝不因一个坏工具让整轮请求失败）。
+            val toolsJson = JSONArray()
+            val skippedTools = ArrayList<String>()
+            tools.forEach { t ->
+                if (!QuroToolSpecGuard.isLegalName(t.name)) {
+                    skippedTools.add(t.name)
+                    return@forEach
+                }
+                val schema = runCatching {
+                    JSONObject(QuroToolSpecGuard.normalizeParametersJson(t.parametersJson))
+                }.getOrElse { e ->
+                    Log.e(TAG, "⚠️ 工具「${t.name}」parameters 解析失败，退化为空对象 schema：${e.message}")
+                    JSONObject(QuroToolSpecGuard.EMPTY_SCHEMA)
+                }
+                toolsJson.put(
+                    JSONObject().put("type", "function").put(
+                        "function",
+                        JSONObject()
+                            .put("name", t.name)
+                            .put("description", t.description)
+                            .put("parameters", schema),
+                    ),
+                )
+            }
+            if (skippedTools.isNotEmpty()) {
+                Log.e(TAG, "🔴 跳过 ${skippedTools.size} 个工具名非法的工具：${skippedTools.joinToString(", ")}（上游会整段拒收 tools）")
+            }
+            // 至少存活一个才下发：空 tools 数组 + tool_choice 会被部分网关 400。
+            if (toolsJson.length() > 0) {
+                put("tools", toolsJson)
                 put("tool_choice", "auto")
+            } else if (tools.isNotEmpty()) {
+                Log.e(TAG, "🔴 ${tools.size} 个工具全部未通过护栏，本轮不下发 tools（避免空数组被上游拒收）")
             }
             if (stream) put("stream", true)
         }
         val bodyStr = body.toString()
         // ===== 调试日志：请求体概览（Logcat tag=QuroLlm）=====
         Log.i(TAG, ">>> REQUEST  model=$model url=$url messages=${messages.size} tools=${tools.size} maxTokens=$effectiveMaxTokens body=${bodyStr.length}ch")
+        // 思考控制的编译依据单列一行：线上「为什么这个模型没生效」全靠它定位。
+        Log.i(TAG, ">>> REASONING ${reasoningPlan.summary()}")
+        // N6：这个判定错了不会报错、只会让模型「失忆」，所以必须在日志里直接可见。
+        Log.i(TAG, ">>> ECHO ${QuroReasoningEcho.diagnosis(provider, baseUrl, model)}")
+        if (reasoningPlan.notes.isNotEmpty()) {
+            Log.i(TAG, "    notes: ${reasoningPlan.notes.joinToString(" / ")}")
+        }
         if (tools.isNotEmpty()) {
             Log.d(TAG, "    tool_names=[${tools.joinToString(", ") { it.name }}]")
             if (tools.size > 25) Log.w(TAG, "    ⚠️ 工具数量 ${tools.size} 偏多（内置工具+技能）！部分 API 中转可能静默丢弃 tools 字段，导致模型无法调用工具。可考虑关闭部分技能的「常驻系统提示词」或在设置关闭「完整工具集」。")
@@ -619,6 +701,9 @@ class QuroLlmClient(
         val root = JSONObject(json)
         val choice = root.getJSONArray("choices").getJSONObject(0)
         val msg = choice.getJSONObject("message")
+        // N3：停止原因 + token 用量。此前 finish_reason / usage 被逐字丢弃（缺口 C3），
+        // 导致「回复被截断却假装正常」「被风控拦截显示为空回复」「思考开销不可见」。
+        val meta = readMeta(safeString(choice, "finish_reason"), root.optJSONObject("usage"))
         // 统一提取 reasoning（无论本轮是纯文本还是工具调用，MiMo 等 reasoning 模型
         // 都可能在 tool_calls 的同时返回 reasoning_content；必须保留并在回传时携带）。
         // 兼容多种字段名：reasoning_content / reasoning / thinking。
@@ -646,7 +731,7 @@ class QuroLlmClient(
             }
             Log.i(TAG, "<<< PARSE tool_calls=${calls.size} reasoningBlank=${reasoning.isNullOrBlank()} first=${calls.firstOrNull()?.name}")
             val cm = stripThinkBlocks(safeString(msg, "content").orEmpty(), reasoning)
-            QuroLlmResult.ToolCalls(calls, cm.second, cm.first.takeIf { it.isNotBlank() })
+            buildResult(QuroLlmResult.ToolCalls(calls, cm.second, cm.first.takeIf { it.isNotBlank() }), meta)
         } else {
             // 小米 MiMo 等推理模型在 reason 模式下 content 可能为空、仅返回 reasoning_content。
             // ⚠️ 不再将 reasoning 兜底到 content！此前 content=reasoning 导致思考文本同时写入
@@ -656,7 +741,7 @@ class QuroLlmClient(
             //   reasoning 始终只走 reasoning 字段，仅在用户开启「深度思考」时展示。
             val rawContent = safeString(msg, "content")?.takeIf { it.isNotBlank() } ?: ""
             val clean = stripThinkBlocks(rawContent, reasoning)
-            QuroLlmResult.Text(clean.first, clean.second)
+            buildResult(QuroLlmResult.Text(clean.first, clean.second), meta)
         }
     } catch (e: Exception) {
         QuroLlmResult.Error(e.message ?: "parse error")
@@ -800,6 +885,12 @@ class QuroLlmClient(
             // 🔧 toolfix9：首 token 前可重试的 HTTP 状态码（5xx/429）命中时置此，循环外进入下一轮重试。
             //   在循环内声明 → 每轮重置，避免上一轮置位污染本轮成功结果导致误重试。
             var retryableHttp: Pair<Int, String>? = null
+            // ── N3：流式下捕获「停止原因」与 token 用量 ────────────────────────
+            // finish_reason 在最后一帧的 choices[0].finish_reason（**不在** delta 里），
+            // usage 在顶层 usage（部分网关仅非流式回；流式整轮没有也属正常）。
+            // 声明在重试循环**内** → 每轮天然重置，避免上一轮残留污染本轮判定。
+            var rawFinishReason: String? = null
+            var usageObj: JSONObject? = null
             if (attempt > 0) {
                 // 已吐出内容 → 不再重试，按已有内容兜底（下方统一处理）。
                 if (contentAcc.isNotEmpty() || toolAcc.isNotEmpty()) break
@@ -848,7 +939,11 @@ class QuroLlmClient(
                         }
                         runCatching {
                             val root = JSONObject(data)
-                            val delta = root.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta")
+                            // N3：finish_reason 与 usage 都和 delta 同级（都在 choices[0] 或其父层）
+                            val topChoice = root.optJSONArray("choices")?.optJSONObject(0)
+                            topChoice?.let { c -> safeString(c, "finish_reason") }?.let { rawFinishReason = it }
+                            root.optJSONObject("usage")?.let { usageObj = it }
+                            val delta = topChoice?.optJSONObject("delta")
                             if (delta != null) {
                                 val c = safeString(delta, "content")
                                 if (!c.isNullOrEmpty()) {
@@ -884,7 +979,7 @@ class QuroLlmClient(
                         }
                     }
                     // 与 parse() 一致：tool_calls 优先于 content
-                    buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc)
+                    buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc, readMeta(rawFinishReason, usageObj))
                 }
                 } finally {
                     cancelHook?.dispose()
@@ -916,7 +1011,7 @@ class QuroLlmClient(
                     return QuroLlmResult.Text(contentAcc.toString(), reasoningAcc.toString().takeIf { it.isNotBlank() })
                 }
                 if (toolAcc.isNotEmpty()) {
-                    return buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc)
+                    return buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc, readMeta(rawFinishReason, usageObj))
                 }
                 // 连接/早期失败且无内容 → 进入下一轮重试（若还有次数）。
             }
@@ -955,24 +1050,97 @@ class QuroLlmClient(
         return out.toString() to merged
     }
 
+    /**
+     * 解析 `finish_reason` 与 `usage`（N3）。
+     *
+     * 各家用量字段名不统一，这里做**容错多键探测**：
+     * - 输入：`prompt_tokens`（OpenAI）/ `input_tokens`（Anthropic）
+     * - 输出：`completion_tokens` / `output_tokens`
+     * - 思考：`completion_tokens_details.reasoning_tokens`（部分网关平铺在 usage 顶层）
+     * - 缓存：`prompt_tokens_details.cached_tokens` / `cache_read_input_tokens`
+     *
+     * 取不到的字段一律留 [QuroLlmMeta.UNKNOWN]（-1），**绝不用 0 冒充** ——
+     * 0 会让「思考占比」算出假数据（看起来像「思考没花 token」）。
+     *
+     * @param rawFinishReason 原始 finish_reason 字符串，交由 [QuroLlmMeta.normalizeFinishReason] 归一。
+     * @param usage 顶层 usage 对象；上游没回时为 null（流式属常态）。
+     */
+    private fun readMeta(rawFinishReason: String?, usage: JSONObject?): QuroLlmMeta {
+        val fr = QuroLlmMeta.normalizeFinishReason(rawFinishReason)
+        if (usage == null) return QuroLlmMeta(finishReason = fr)
+        val reasoning = intOf(usage.optJSONObject("completion_tokens_details"), "reasoning_tokens")
+            .let { if (it >= 0) it else intOf(usage, "reasoning_tokens") }
+        val cached = intOf(usage.optJSONObject("prompt_tokens_details"), "cached_tokens")
+            .let { if (it >= 0) it else intOf(usage, "cache_read_input_tokens", "cached_tokens") }
+        return QuroLlmMeta(
+            finishReason = fr,
+            promptTokens = intOf(usage, "prompt_tokens", "input_tokens"),
+            completionTokens = intOf(usage, "completion_tokens", "output_tokens"),
+            reasoningTokens = reasoning,
+            cachedTokens = cached,
+            totalTokens = intOf(usage, "total_tokens"),
+        ).withDerivedTotal()
+    }
+
+    /** 多键取整数；键不存在 / 为 JSON null / 非数字 → [QuroLlmMeta.UNKNOWN]（-1）。 */
+    private fun intOf(o: JSONObject?, vararg keys: String): Int {
+        if (o == null) return QuroLlmMeta.UNKNOWN
+        for (k in keys) {
+            if (!o.has(k) || o.isNull(k)) continue
+            val v = o.optInt(k, Int.MIN_VALUE)
+            if (v != Int.MIN_VALUE) return v
+        }
+        return QuroLlmMeta.UNKNOWN
+    }
+
+    /**
+     * 给结果挂上 meta，并把「被风控拦截且什么都没产出」的**伪成功**转成明确错误（N3）。
+     *
+     * 上游 `finish_reason=content_filter` 时 `content` 为空、`tool_calls` 也为空，
+     * 旧逻辑把它当成功返回 → 用户看到「AI 不回复 / 空回复」，完全无从归因。
+     * 现在明确报错，并在文案里说清是「上游安全策略」而非网络问题。
+     */
+    private fun buildResult(result: QuroLlmResult, meta: QuroLlmMeta): QuroLlmResult {
+        val m = meta.withDerivedTotal()
+        Log.i(TAG, "<<< META ${m.summary()}")
+        val attached = when (result) {
+            is QuroLlmResult.Text -> result.copy(meta = m)
+            is QuroLlmResult.ToolCalls -> result.copy(meta = m)
+            is QuroLlmResult.Error -> result
+        }
+        if (!m.filtered) return attached
+        val blank = when (attached) {
+            is QuroLlmResult.Text -> attached.content.isBlank() && attached.reasoning.isNullOrBlank()
+            is QuroLlmResult.ToolCalls -> attached.calls.isEmpty()
+            else -> false
+        }
+        if (!blank) return attached
+        Log.w(TAG, "<<< FILTERED finish_reason=${m.finishReason} 且无任何内容 -> 明确报错（不再假装成功）")
+        return QuroLlmResult.Error(m.filterHint() ?: "本次请求被上游内容安全策略拦截。")
+    }
+
     /** 流式累计结束后，按是否含工具调用产出 ToolCalls 或 Text（与 parse() 同语义）。 */
     private fun buildToolCallsOrText(
         toolAcc: List<StreamToolAcc>,
         contentAcc: StringBuilder,
         reasoningAcc: StringBuilder,
+        meta: QuroLlmMeta = QuroLlmMeta.EMPTY,
     ): QuroLlmResult {
         val reasoning = reasoningAcc.toString().takeIf { it.isNotBlank() }
         val clean = stripThinkBlocks(contentAcc.toString(), reasoning)
-        return if (toolAcc.isNotEmpty()) {
-            val calls = toolAcc.mapIndexed { i, t ->
-                // 🔧 同样修复流式分片拼接出的非法 JSON arguments（见 sanitizeToolArguments 说明）。
-                QuroToolCall(id = t.id ?: "call_$i", name = t.name, arguments = sanitizeToolArguments(t.arguments.ifBlank { "{}" }))
-            }
-            Log.i(TAG, "<<< STREAM tool_calls=${calls.size} reasoningBlank=${reasoning.isNullOrBlank()} first=${calls.firstOrNull()?.name}")
-            QuroLlmResult.ToolCalls(calls, clean.second, clean.first.takeIf { it.isNotBlank() })
-        } else {
-            QuroLlmResult.Text(clean.first, clean.second)
-        }
+        return buildResult(
+            if (toolAcc.isNotEmpty()) {
+                val calls = toolAcc.mapIndexed { i, t ->
+                    // 🔧 同样修复流式分片拼接出的非法 JSON arguments（见 sanitizeToolArguments 说明）。
+                    QuroToolCall(id = t.id ?: "call_$i", name = t.name, arguments = sanitizeToolArguments(t.arguments.ifBlank { "{}" }))
+                }
+                Log.i(TAG, "<<< STREAM tool_calls=${calls.size} reasoningBlank=${reasoning.isNullOrBlank()} first=${calls.firstOrNull()?.name}")
+                QuroLlmResult.ToolCalls(calls, clean.second, clean.first.takeIf { it.isNotBlank() })
+            } else {
+                QuroLlmResult.Text(clean.first, clean.second)
+            },
+            meta,
+        )
     }
 
     /** 流式 tool_calls 累计槽（name / arguments 跨 delta 分片拼接）。 */

@@ -44,7 +44,12 @@ data class QuroToolSpec(
 
 /** LLM 返回结果。 */
 sealed interface QuroLlmResult {
-    data class Text(val content: String, val reasoning: String? = null) : QuroLlmResult
+    data class Text(
+        val content: String,
+        val reasoning: String? = null,
+        /** 停止原因 + token 用量（N3）。上游未回 usage 时各字段为 -1，见 [QuroLlmMeta]。 */
+        val meta: QuroLlmMeta = QuroLlmMeta.EMPTY,
+    ) : QuroLlmResult
     /** 工具调用结果：[calls] 为本轮模型要求执行的工具列表；[reasoning] 为模型本轮的思考过程
      *  （MiMo 等 reasoning 模型会在 tool_calls 同时返回 reasoning_content，必须保留并在
      *   回传给模型时一并携带，否则模型每轮都在「失忆」状态下做下一步决策，
@@ -53,6 +58,8 @@ sealed interface QuroLlmResult {
         val calls: List<QuroToolCall>,
         val reasoning: String? = null,
         val content: String? = null,
+        /** 停止原因 + token 用量（N3）。工具轮被截断时 [QuroLlmMeta.truncated] 为真。 */
+        val meta: QuroLlmMeta = QuroLlmMeta.EMPTY,
     ) : QuroLlmResult
     data class Error(val message: String) : QuroLlmResult
 }
