@@ -144,14 +144,36 @@ struct Stats {
 //   回调可能从引擎内部工作线程触发，裸指针没有堆分配、没有异常、没有 STL 依赖，
 //   在 ABI 边界上最稳。上层（JNI）自己决定怎么把 user 转回 JavaVM/全局引用。
 using TokenFn = void (*)(void* user, const TokenChunk& chunk);
-using ProgressFn = void (*)(void* user, int percent);
+/// 进度载荷。stage 指向的缓冲**仅在该次回调有效**，与 TokenChunk 同规矩。
+struct ProgressChunk {
+    const char* stage = nullptr;   // 阶段名，如 "prefill"
+    int current = 0;               // 已处理 token 数（不是百分比）
+    int total = 0;                 // 本轮要处理的 token 总数
+};
+
+/// 不要把它压成百分比：上层要按 token 数决定「值不值得显示进度条」
+/// （多轮对话只新增几十 token 时不该弹进度），百分比反推 token 数会失真。
+using ProgressFn = void (*)(void* user, const ProgressChunk& chunk);
+/// 拉取式停止询问：返回 true 表示「不要再产出了，收尾吧」。
+/// 引擎应在每个 token / chunk 边界调用一次；为 nullptr 时视为永不停止。
+using StopFn = bool (*)(void* user);
 
 struct Callbacks {
     TokenFn onToken = nullptr;
     ProgressFn onProgress = nullptr;
+    /// 与 cancel() 的分工：
+    ///   cancel()      —— 外部单方面终止（UI 点停止、卸载模型）
+    ///   shouldStop()  —— 接收方请求终止（如 JNI 层把 token 交给 Java 后，
+    ///                    Java 返回 false 表示"我不要了"）
+    /// 两者在引擎里走**同一条 break 路径**，所以不需要在 onToken 的返回值里
+    /// 再塞一层控制流 —— 回调保持 void，语义单一。
+    StopFn shouldStop = nullptr;
     void* user = nullptr;
 
     bool valid() const { return onToken != nullptr; }
+
+    /// 接收方是否已请求停止。nullptr 安全。
+    bool stopped() const { return shouldStop != nullptr && shouldStop(user); }
 };
 
 }  // namespace llm
