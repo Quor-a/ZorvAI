@@ -3883,4 +3883,8 @@ Create a file or folder at top right</string>
     <string name="qk_03902" formatted="false">ビデオ通話画面を表示するにはオーバーレイ権限が必要です</string>
     <string name="qk_03903" formatted="false">各機能は「メインモデルに従う」か専用モデルを指定できます。専用モデルの場合はベースURLとAPIキーも個別に入力できます。エンジンに接続済みで即時有効：通常対話、ペルソナ孵化、UI制御、画像認識、映像認識、ビデオ通話。</string>
     <string name="qk_03904" formatted="false">視覚系機能：画像認識・映像認識・ビデオ通話はいずれも視覚対応モデル（GPT-4V など）が必要です。専用モデルとベースURL／APIキーを設定すると、視覚分析・映像理解・ビデオ通話がそのモデルに切り替わります。</string>
+    <string name="qk_03905" formatted="false">ローカルエンジンを別プロセス化</string>
+    <string name="qk_03906" formatted="false">ローカル推論を独立したプロセスで実行します。大きなモデルを読み込んでもアプリ全体がシステムに回収されず、画面はそのまま使えます。オフにすると従来の同一プロセス動作に戻ります。</string>
+    <string name="qk_03907" formatted="false">温度適応スケジューリング</string>
+    <string name="qk_03908" formatted="false">長時間の推論中に 2 秒ごとに SoC のサーマル余裕を読み取り、スレッド数を事前に小幅に下げることで、OS による急激なクロック制限を回避します。オフのときは一切介入しません。</string>
 </resources>

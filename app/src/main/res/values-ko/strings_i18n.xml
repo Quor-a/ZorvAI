@@ -3883,4 +3883,8 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03902" formatted="false">Overlay permission is required to show the video call screen</string>
     <string name="qk_03903" formatted="false">Each feature can follow the main model or use a dedicated model; with a dedicated model you can also set its own base URL and API Key. Already wired to the engine and effective immediately: chat, persona incubation, UI control, image recognition, video recognition, video call.</string>
     <string name="qk_03904" formatted="false">Vision features: image recognition, video recognition and video call all require a vision-capable model (e.g. GPT-4V). Assign a dedicated model with its own base URL / API Key and visual analysis, video scene understanding and video calls will switch to it.</string>
+    <string name="qk_03905" formatted="false">로컬 엔진 별도 프로세스</string>
+    <string name="qk_03906" formatted="false">로컬 추론을 별도 프로세스에서 실행합니다. 큰 모델을 로드해도 앱 전체가 시스템에 의해 종료되지 않아 화면은 계속 사용할 수 있습니다. 끄면 이전과 동일한 프로세스 내 동작으로 돌아갑니다.</string>
+    <string name="qk_03907" formatted="false">온도 적응형 스케줄링</string>
+    <string name="qk_03908" formatted="false">장시간 추론 중 2초마다 SoC 열 여유를 읽고 스레드 수를 미리 소폭 낮춰 시스템의 급격한 스로틀링을 피합니다. 끄면 아무런 개입도 하지 않습니다.</string>
 </resources>

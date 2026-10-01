@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  仅 full 风味：本地离线 LLM 引擎（:mnn + :llama）的进程隔离声明。
+
+  为什么放在 flavor 源集而不是 main：
+    `:mnn` / `:llama` 是 fullImplementation 依赖，fdroid 风味里根本不存在
+    QuroLlmService 这个类。声明在 main 里会让 fdroid 也带一个指向不存在类的
+    service 节点 —— 虽然不启动就不会崩，但属于「清单里有幽灵组件」，
+    静态扫描与代码审查都容易误判为配置错误。放 full 源集最干净。
+
+  android:process=":llm" 是硬规则第 1 条的落点：
+    4GB 级量化模型加载后 native heap 可到 3.8GB，放主进程会被 LMK 在几十秒内
+    连 UI 一起杀掉。独立进程后被杀的是引擎进程，主界面活着并能给出可读提示。
+    附带收益是 GPU delegate 的 native crash 只 kill 自己。
+
+  exported="false"：引擎进程只对本 App 开放，不暴露给任何外部应用 ——
+    它没有鉴权，暴露出去等于给任意应用一个「加载任意模型」的入口。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+        <service
+            android:name="com.ai.assistance.quro.llm.QuroLlmService"
+            android:process=":llm"
+            android:exported="false"
+            android:stopWithTask="false" />
+
+    </application>
+
+</manifest>

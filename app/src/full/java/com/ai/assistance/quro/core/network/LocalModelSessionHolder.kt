@@ -199,6 +199,8 @@ object LocalModelSessionHolder : LocalModelLoader {
                         nGpuLayers = if (model.gpuLayers > 0) model.gpuLayers else 99,
                         useMmap = model.useMmap,     // 默认 false —— 外部存储上的 GGUF 用 mmap 会卡死加载
                         kvUnified = model.kvUnified, // 默认 true  —— 单序列统一 KV，少分配、加载快
+                        // L5 · 温控自适应：0 = 关闭（默认值，由模型配置页的开关决定）。
+                        thermalPollMs = QuroLocalEnginePrefs.thermalPollMs(),
                     )
                     QuroDiag.log(
                         "LocalModel",

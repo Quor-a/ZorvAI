@@ -373,3 +373,65 @@ Java_com_ai_assistance_mnn_MNNModuleNative_nativeReleaseVar(
     }
 }
 
+
+// ═════════ QuroLlm L2 注册表：符号隔离（自动生成，勿手改） ═════════
+//
+// 为什么需要这张表：
+//   version script 把本 .so 的导出表收敛到只剩 JNI_OnLoad，
+//   于是 JVM「按符号名查找 native 方法」的路径不再可用（符号已变 local）。
+//   改成在 JNI_OnLoad 里显式 RegisterNatives 给出函数指针，
+//   本 .so 的导出符号从数百个降到 1 个，跨引擎的 OpenCL/Vulkan 符号竞争随之消失。
+//
+// 签名来自 javap -s（JVM 自己算出的描述符），不是人工推断。
+// 对应 Kotlin 声明：com.ai.assistance.mnn.MNNModuleNative
+//
+#include <jni.h>
+#include <android/log.h>
+#include <string>
+
+#include "quro/jni_support.h"
+
+namespace {
+
+const JNINativeMethod kMNNModuleNativeMethods[] = {
+    {"nativeCreateModuleFromFile", "(Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;IIII)J",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNModuleNative_nativeCreateModuleFromFile)},
+    {"nativeReleaseModule", "(J)V",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNModuleNative_nativeReleaseModule)},
+    {"nativeForward", "(J[J)[J",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNModuleNative_nativeForward)},
+    {"nativeCreateInputVar", "([III)J",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNModuleNative_nativeCreateInputVar)},
+    {"nativeSetVarFloatData", "(J[F)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNModuleNative_nativeSetVarFloatData)},
+    {"nativeSetVarIntData", "(J[I)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNModuleNative_nativeSetVarIntData)},
+    {"nativeGetVarFloatData", "(J)[F",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNModuleNative_nativeGetVarFloatData)},
+    {"nativeGetVarShape", "(J)[I",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNModuleNative_nativeGetVarShape)},
+    {"nativeReleaseVar", "(J)V",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNModuleNative_nativeReleaseVar)},
+};
+
+constexpr int kMNNModuleNativeCount = 9;
+
+}  // namespace
+
+namespace quro {
+namespace llm {
+namespace jni {
+
+bool register_MNNModuleNative(JNIEnv* env) {
+    std::string err;
+    if (!registerNatives(env, "com/ai/assistance/mnn/MNNModuleNative", kMNNModuleNativeMethods, kMNNModuleNativeCount, &err)) {
+        __android_log_print(ANDROID_LOG_ERROR, "QuroLlm.Jni",
+                            "注册 com.ai.assistance.mnn.MNNModuleNative 失败：%s", err.c_str());
+        return false;
+    }
+    return true;
+}
+
+}  // namespace jni
+}  // namespace llm
+}  // namespace quro

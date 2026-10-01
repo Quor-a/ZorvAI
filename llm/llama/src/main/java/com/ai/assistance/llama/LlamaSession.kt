@@ -25,7 +25,15 @@ class LlamaSession private constructor(
         val useMmap: Boolean = false,
         val flashAttention: Boolean = false,
         val kvUnified: Boolean = true,
-        val offloadKqv: Boolean = false
+        val offloadKqv: Boolean = false,
+        /**
+         * L5 · 温控自适应采样间隔（毫秒）。**0 = 禁用**。
+         *
+         * 语义：启用后原生层每 [thermalPollMs] 毫秒采样一次 SoC thermal headroom，
+         * 在 token / chunk 边界按下调档位主动减线程。默认禁用是刻意的 ——
+         * 这是运行期行为变更，等真机验证后再把默认值改掉。
+         */
+        val thermalPollMs: Int = 0
     )
 
     companion object {
@@ -49,7 +57,8 @@ class LlamaSession private constructor(
                 useMmap = config.useMmap,
                 flashAttention = config.flashAttention,
                 kvUnified = config.kvUnified,
-                offloadKqv = config.offloadKqv
+                offloadKqv = config.offloadKqv,
+                thermalPollMs = config.thermalPollMs
             )
             if (ptr == 0L) return null
             return LlamaSession(ptr)

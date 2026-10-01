@@ -1659,3 +1659,127 @@ Java_com_ai_assistance_mnn_MNNLlmNative_nativeGenerateWavform(
     }
 }
 
+
+// ═════════ QuroLlm L2 注册表：符号隔离（自动生成，勿手改） ═════════
+//
+// 为什么需要这张表：
+//   version script 把本 .so 的导出表收敛到只剩 JNI_OnLoad，
+//   于是 JVM「按符号名查找 native 方法」的路径不再可用（符号已变 local）。
+//   改成在 JNI_OnLoad 里显式 RegisterNatives 给出函数指针，
+//   本 .so 的导出符号从数百个降到 1 个，跨引擎的 OpenCL/Vulkan 符号竞争随之消失。
+//
+// 签名来自 javap -s（JVM 自己算出的描述符），不是人工推断。
+// 对应 Kotlin 声明：com.ai.assistance.mnn.MNNLlmNative
+//
+#include <jni.h>
+#include <android/log.h>
+#include <string>
+
+#include "quro/jni_support.h"
+
+namespace {
+
+const JNINativeMethod kMNNLlmNativeMethods[] = {
+    {"nativeCreateLlm", "(Ljava/lang/String;)J",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeCreateLlm)},
+    {"nativeLoadLlm", "(J)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeLoadLlm)},
+    {"nativeReleaseLlm", "(J)V",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeReleaseLlm)},
+    {"nativeTokenize", "(JLjava/lang/String;)[I",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeTokenize)},
+    {"nativeDetokenize", "(JI)Ljava/lang/String;",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeDetokenize)},
+    {"nativeCountTokens", "(JLjava/lang/String;)I",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeCountTokens)},
+    {"nativeGenerate", "(JLjava/lang/String;ILcom/ai/assistance/mnn/MNNLlmNative$GenerationCallback;)Ljava/lang/String;",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeGenerate)},
+    {"nativeGenerateStream", "(JLjava/util/List;ILcom/ai/assistance/mnn/MNNLlmNative$GenerationCallback;)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeGenerateStream)},
+    {"nativeGenerateStreamStructured", "(JLjava/lang/String;Ljava/lang/String;ILcom/ai/assistance/mnn/MNNLlmNative$GenerationCallback;)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeGenerateStreamStructured)},
+    {"nativeApplyChatTemplateWithHistory", "(JLjava/util/List;)Ljava/lang/String;",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeApplyChatTemplateWithHistory)},
+    {"nativeApplyChatTemplateWithStructuredMessages", "(JLjava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeApplyChatTemplateWithStructuredMessages)},
+    {"nativeCountTokensWithHistory", "(JLjava/util/List;)I",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeCountTokensWithHistory)},
+    {"nativeCountTokensWithStructuredMessages", "(JLjava/lang/String;Ljava/lang/String;)I",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeCountTokensWithStructuredMessages)},
+    {"nativeDumpConfig", "(J)Ljava/lang/String;",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeDumpConfig)},
+    {"nativeGetContextInfo", "(J)Ljava/lang/String;",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeGetContextInfo)},
+    {"nativeApplyChatTemplate", "(JLjava/lang/String;)Ljava/lang/String;",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeApplyChatTemplate)},
+    {"nativeReset", "(J)V",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeReset)},
+    {"nativeSetConfig", "(JLjava/lang/String;)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeSetConfig)},
+    {"nativeSetAudioDataCallback", "(JLcom/ai/assistance/mnn/MNNLlmNative$AudioDataCallback;)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeSetAudioDataCallback)},
+    {"nativeGenerateWavform", "(J)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeGenerateWavform)},
+    {"nativeCancel", "(J)V",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeCancel)},
+    {"nativeGetLastError", "(J)Ljava/lang/String;",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeGetLastError)},
+};
+
+constexpr int kMNNLlmNativeCount = 22;
+
+}  // namespace
+
+namespace quro {
+namespace llm {
+namespace jni {
+
+/// 注册本 .so 内的一个 native 类。返回是否全部成功。
+bool register_MNNLlmNative(JNIEnv* env) {
+    std::string err;
+    if (!registerNatives(env, "com/ai/assistance/mnn/MNNLlmNative", kMNNLlmNativeMethods, kMNNLlmNativeCount, &err)) {
+        __android_log_print(ANDROID_LOG_ERROR, "QuroLlm.Jni",
+                            "注册 com.ai.assistance.mnn.MNNLlmNative 失败：%s", err.c_str());
+        return false;
+    }
+    return true;
+}
+
+}  // namespace jni
+}  // namespace llm
+}  // namespace quro
+
+// 本 .so 的注册入口。同 .so 内其他 TU 的注册函数在此统一调用。
+namespace quro { namespace llm { namespace jni {
+bool register_MNNNetNative(JNIEnv* env);
+} } }
+namespace quro { namespace llm { namespace jni {
+bool register_MNNModuleNative(JNIEnv* env);
+} } }
+
+extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
+    (void) reserved;
+
+    // 记住 JavaVM：推理在引擎工作线程上跑，回调时需要用它在那个线程 attach。
+    quro::llm::jni::setJavaVm(vm);
+
+    JNIEnv* env = nullptr;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        __android_log_print(ANDROID_LOG_ERROR, "QuroLlm.Jni",
+                            "JNI_OnLoad: GetEnv 失败");
+        return JNI_ERR;
+    }
+
+    bool allOk = quro::llm::jni::register_MNNLlmNative(env);
+    allOk = quro::llm::jni::register_MNNNetNative(env) && allOk;
+    allOk = quro::llm::jni::register_MNNModuleNative(env) && allOk;
+
+    // 注册失败**不**让 .so 加载失败：加载失败会让整个本地推理链路
+    // 直接抛 UnsatisfiedLinkError，连诊断信息都拿不到。
+    // 这里放行并由上层在首次调用时给出可读错误。
+    if (!allOk) {
+        __android_log_print(ANDROID_LOG_ERROR, "QuroLlm.Jni",
+                            "JNI_OnLoad: 部分 native 方法注册失败，本地推理将不可用");
+    }
+    return JNI_VERSION_1_6;
+}
