@@ -5,17 +5,35 @@
 Zorv AI 是一个运行在 Android 上的**设备端 AI Agent / 智能体助手**。它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用内置工具，运行 Node / Python / SSH / Java / Rust / Go 共享运行时，并通过飞书、QQ、微信与你保持在线。内置 **ACI（Agent Capability Interface）** 开放同设备跨应用调用，任意 App 都可被 AI 编排。
 
 ## Documentation
-- [README (full)](README.md): 项目总览、功能亮点、功能构架、引擎详解、ACI、特权层、快速开始、排障、许可证、版本历程
+- [README.md](README.md): **总纲** —— 项目简介、功能亮点、架构总纲（分层图 + 各层职责 + 设计模式）、功能地图、构建、排障、下载、文档索引
+- [README.en.md](README.en.md): 英文版总纲
 - [ACI Developer Guide](docs/ACI_DEVELOPER_GUIDE.md): 受控端 5 步接入 ACI、能力定义、权限模型、真实踩坑
 - [License Compliance Remediation](docs/license-compliance-remediation.md): 第三方许可证义务与合规处置
 - [Termux Integration Plan](docs/termux_integration_plan.md): 终端能力集成规划
 
+### 架构分文档（每个模块一份完整技术架构）
+- [inference-native](docs/architecture/inference-native/README.md): 端侧推理 MNN / llama.cpp
+- [inference-cloud](docs/architecture/inference-cloud/README.md): 云端推理、思考协议、工具调用、上下文预算
+- [tool-system](docs/architecture/tool-system/README.md): 220+ 工具的注册 / 下发 / 执行 / 失败回喂
+- [agent-loop](docs/architecture/agent-loop/README.md): ReAct 循环、死循环防护、子智能体、上下文压缩
+- [terminal-sandbox](docs/architecture/terminal-sandbox/README.md): 终端与 Linux 沙箱
+- [ui-rendering](docs/architecture/ui-rendering/README.md): AIP / ui_widget / quro-ui / GenUI / MiniApp
+- [i18n](docs/architecture/i18n/README.md): 11 语言国际化
+- [extensibility](docs/architecture/extensibility/README.md): 插件框架 / ACI / MCP / Skills
+
+### 功能分文档（每个模块一份完整功能说明）
+- [chat](docs/features/chat/README.md) ｜ [skills](docs/features/skills/README.md) ｜ [mcp](docs/features/mcp/README.md)
+- [offline-llm](docs/features/offline-llm/README.md) ｜ [terminal](docs/features/terminal/README.md)
+- [voice-media](docs/features/voice-media/README.md) ｜ [device-control](docs/features/device-control/README.md)
+- [digital-human](docs/features/digital-human/README.md)
+
 ## Key facts (for retrieval)
 - 包名: `com.ai.assistance.quro`
-- 技术栈: Kotlin + Jetpack Compose，compileSdk 36 / minSdk 26 / targetSdk 34
+- 技术栈: Kotlin 2.3 + Jetpack Compose 1.10.2，AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34
 - 平台: Android 8.0+（API 26+）
+- 当前版本: `1.1.1`（versionCode 1001001）
 - 许可证: Apache-2.0（应用源码）；GeckoView 为 MPL-2.0
-- 仓库: GitHub `Quor-a/ZorvAI` ｜ Gitee `ZorvAI/ZorvAI`
+- 仓库: GitHub `Quor-a/ZorvAI` ｜ Gitee `ZorvAI/ZorvAI` ｜ GitLab `quor-a-group/ZorvAI`
 - 最新 Release: https://github.com/Quor-a/ZorvAI/releases
 - 受控端浏览器 APK: ZorvBrowser-aci-debug-v1.0.7.apk（ACI · ZorvAI 浏览器）
 - ACI 核心库 AAR: aci-core-release.aar（v1.0.6+）

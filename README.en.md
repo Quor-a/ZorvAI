@@ -1,0 +1,366 @@
+<div align="center">
+
+<img src="logo.svg" alt="Zorv AI" width="168" height="168" />
+
+# Zorv AI
+
+### On-device AI Agent for Android
+
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Android-3DDC84.svg)](https://www.android.com)
+[![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI?label=release)](https://github.com/Quor-a/ZorvAI/releases)
+[![minSdk](https://img.shields.io/badge/minSdk-26-API.svg)](https://developer.android.com/about/versions/oreo)
+[![compileSdk](https://img.shields.io/badge/compileSdk-36-API.svg)](https://developer.android.com)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF.svg)](https://kotlinlang.org)
+[![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-1.10.2-4285F4.svg)](https://developer.android.com/compose)
+
+</div>
+
+> **Package**: `com.ai.assistance.quro` ｜ **Stack**: Kotlin 2.3 + Jetpack Compose 1.10.2 (Material3 1.4.0) ｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **Current version**: `1.1.1` (`versionCode 1001001`)
+>
+> Zorv AI turns a chat assistant into an agent that can actually operate your phone. It runs on-device, drives the system through Accessibility / Shizuku / ROOT channels, calls **220+ built-in tools**, runs **MNN / llama.cpp offline LLMs**, ships a terminal with a Linux sandbox, MCP, a knowledge base, TTS/STT — and stays reachable through Feishu, QQ and WeChat.
+>
+> It is also a **self-extensible agent runtime**: an APK-level plugin framework lets a standalone APK register extension points and give the AI **new tools, new ACI capabilities, new screens and new commands** — without changing a single line of host code.
+
+**📘 Docs**: this file is the **feature & architecture overview**. Every architecture module and every feature module has its own full technical document — see [Documentation Index](#documentation-index).
+
+**🌏 中文版**: [README.md](./README.md)
+
+---
+
+## Table of Contents
+
+- [What it does](#what-it-does)
+- [Open Source](#open-source)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Feature Map](#feature-map)
+- [Build from Source](#build-from-source)
+- [Troubleshooting](#troubleshooting)
+- [Download](#download)
+- [Documentation Index](#documentation-index)
+- [License](#license)
+- [Contributing / Feedback](#contributing--feedback)
+
+---
+
+## What it does
+
+Most "phone AI assistants" are a cloud chat box in disguise — your words go to a server, the answer comes back rendered. Zorv AI is different: it keeps both **inference** and **execution** on your device, aiming to make the AI a real agent that operates your phone rather than a model that merely talks.
+
+Three things it solves:
+
+1. **The AI can act.** 220+ built-in tools cover screen reading/tapping, files, messaging, scheduling, terminal and knowledge base. Higher-privilege capabilities (Shizuku, device admin, ROOT, in-app Linux) are graded **L1–L5**, and **every tier requires your explicit grant** — when ungranted the app returns guidance instead of silently executing.
+2. **The AI works offline.** MNN and llama.cpp are compiled into the APK, together with on-device STT, on-device TTS, local RAG and an in-app Ubuntu 24.04 Linux sandbox (proot). Most tasks keep working with no network.
+3. **The AI crosses app boundaries.** Through **ACI** (Agent Capability Interface) — a same-device, AIDL Binder based, root-free local protocol — any app can expose itself as "capabilities callable by an AI", orchestrated automatically by Zorv AI's LLM.
+
+The design spine is **Tool-first**: every capability is expressed as a `QuroTool` (`name` / `description` / `parametersJson` / `run`) registered centrally in `QuroToolRegistry`. Adding a capability = implement the interface + one registration line. No rewiring.
+
+---
+
+## Open Source
+
+> **Fully open source, mirrored on multiple platforms** · GitHub: [github.com/Quor-a/ZorvAI](https://github.com/Quor-a/ZorvAI) ｜ Gitee: [gitee.com/ZorvAI/ZorvAI](https://gitee.com/ZorvAI/ZorvAI) ｜ GitLab: [jihulab.com/quor-a-group/ZorvAI](https://jihulab.com/quor-a-group/ZorvAI)
+>
+> **🔌 The controlled browser (ZorvAI Browser) is open sourced separately** · [github.com/Quor-a/ZorvBrowser](https://github.com/Quor-a/ZorvBrowser)
+>
+> **🤖 5 official ACI controlled apps** (weather / document / terminal / build / file) are open sourced separately — see [Device Control / ACI](./docs/features/device-control/README.md).
+>
+> - 📦 Latest release (no login required): [github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
+> - 🧩 ACI core AAR: shipped as `aci-core-release.aar` with each release
+> - 📖 ACI developer guide: [docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md)
+> - 🐛 Issues: [github.com/Quor-a/ZorvAI/issues](https://github.com/Quor-a/ZorvAI/issues)
+
+---
+
+## Features
+
+| Domain | What it does |
+|--------|--------------|
+| **Chat UI (Compose)** | ChatScreen, PersonaBar persona cards, PermissionModeBar ("auto-save memory" + "deep thinking" pills), **in-chat IDE entry** (code editor / terminal / toolbox / files via the input "+" menu and `ui_open_*`), **7 programming languages**, **live ```mermaid rendering**, **AI-written code execution (`run_code`) with inline HTML preview**, jump-to-bottom FAB, fullscreen preview, Markdown and code rendering |
+| **Agent core** | Multi-session isolation (`liveBuffers`), seed snapshots (`convBase`), display refresh gate (`canUpdateDisplay`), per-round `[round N]` hidden markers to prevent cross-talk, tool registry (`QuroToolRegistry`, 226 entries), skill system (`QuroSkill` → registered as `skill__{name}` tools) |
+| **Tool / capability layer** | **220+ built-in tools**: accessibility `input_text` / `tap_screen` / `read_screen`, file read/write, **L1–L5 privileged execution**, `cms_*` modules, agent keyboard `ai_type_text` / `ai_press_enter`, scheduled tasks, memory tools, knowledge-base RAG, document processing |
+| **Offline LLM engine** | Built-in **MNN / llama.cpp** inference (`QuroLocalEngineNative`) with streaming, live `<think>` streaming, local tool calling and persistent session reuse |
+| **Privilege tiers L1–L5** | Accessibility → Shizuku (uid 0/2000) → Device Admin → ROOT (su) → in-app Linux (proot + Ubuntu 24.04) |
+| **Terminal / Linux sandbox** | Full terminal emulator: proot + real Ubuntu 24.04 ARM64 user space; PTY (`/dev/ptmx` + `fork/exec`); foreground-service keep-alive (`specialUse`, survives screen-off and app switching); 12 ACI cross-process capabilities; 4 IPC transports (ContentProvider / Deep Link / Intent / BroadcastReceiver); multi-session management |
+| **MCP** | MCP client (WebSocket / HTTP transports), in-app local MCP server deployable and callable by the AI, **MCP-ACI bridge** |
+| **Engines / runtime** | CMS shared runtime (NODE / PYTHON / SSH / JAVA / RUST / GO), CMS v2 modules, GeckoView browser (MPL-2.0), on-device STT / TTS |
+| **IM channels** | Feishu (WebSocket) / QQBot (official WS) / WeChat iLink (HTTP long-poll 35s) |
+| **Voice** | Multi-vendor TTS (EDGE_TTS / OPENAI_COMPAT / MINIMAX / SILICONFLOW / Alibaba Cloud …), on-device Whisper STT (`sherpa-onnx`), floating voice ball |
+| **Knowledge / memory / persona / bots** | Vector semantic RAG knowledge base, memory store, persona & soul config, multi-channel bots (QQ / Feishu / WeChat / local) |
+| **Visual popup & question** | **Visual popup** (`visual_popup` / `visual_custom_popup`); **Visual question** (`visual_question` / `visual_action`) — forces a choice/input dialog when a command is ambiguous or information is missing, instead of guessing |
+| **Language runner** | `QuroLanguageRunner`: detection, execution and rendering of **7 languages** (JavaScript, Python, HTML, JSON, CSS, XML, C/C++/Java) inside the chat; **Python 3.14 native engine (PyEngine)** — on-device CPython 3.14 with the full standard library, plus a scripting sandbox (`SandboxRuntime` + `HostApiDispatcher` + `GitHostApi` + `TsTranspiler`) |
+| **Generative UI (three coexisting stacks)** | ① **Web app** (`miniapp`): WebView runtime (`MiniAppEngine` + `native.*` bridge); ② **Generative UI canvas** (`genui_open`): isolated WebView rendering in-chat; ③ **Built-in GenUI Agent** (`genui_agent_open`): GenUI JSON DSL → native Compose components (530+), standalone full-screen app |
+| **Visual components** | `ui_widget` tool: **60+ interactive components** rendered directly inside chat bubbles, with `command` syntax to trigger actions; **dynamic UI (```quro-ui fence)**: the AI writes a composable JSON DSL rendered natively as a coherent interactive screen |
+| **Visual programming** | **Offline Mermaid rendering**: flowcharts / sequence / state / class / mind maps, fullscreen preview, SVG export, five themes |
+| **AIP document layout** | **AIP layout engine** (AI Presentation Protocol): the AI emits a structured envelope (```aip fence / `aip_compose` tool) rendered natively as **long documents / slide decks / mind maps**; doc↔deck↔mindmap conversion, export to docx/pptx/md, fullscreen preview, slideshow, four-level graceful degradation |
+| **APK-level plugin framework** | Install an APK and the AI gains capabilities; **14 extension points** (tools / ACI capabilities / screens / commands …); the AI drives plugins through a single `apk_plugin` tool |
+| **i18n** | **11 UI languages**; reply language enforced by a unified injector covering chat (cloud + local), voice ball, video call, GenUI Agent, IM bots and sub-agents |
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph UI["UI layer · Jetpack Compose"]
+        A1["ChatScreen"]
+        A2["PersonaBar"]
+        A3["PermissionModeBar"]
+        A4["Markdown / code rendering · fullscreen preview"]
+        A5["Terminal / browser / media / docs / skills / KB screens"]
+    end
+    subgraph CORE["Agent core"]
+        B1["QuroChatViewModel · session isolation"]
+        B2["QuroAssistant · ReAct loop"]
+        B3["QuroConversation · context assembly & compaction"]
+        B4["QuroToolRegistry · 226 tools"]
+    end
+    subgraph INFER["Inference layer"]
+        I1["QuroLlmClient · cloud"]
+        I2["QuroReasoningControl · thinking protocol"]
+        I3["QuroModelContextBudget · context budget"]
+        I4["QuroLocalEngineNative · MNN / llama.cpp"]
+        I5["QuroToolCallRepair · local tolerant parser"]
+    end
+    subgraph TOOLS["Tool / capability layer · core/tools"]
+        C1["launch_app"]
+        C2["Accessibility input_text / tap_screen / read_screen"]
+        C3["cms_* modules"]
+        C4["Agent keyboard ai_type_text / press_enter"]
+        C5["scheduler"]
+        C6["memory_*"]
+        C7["knowledge_* RAG"]
+    end
+    subgraph PRIV["Privilege layer · L1–L5"]
+        D1["L1 Accessibility"]
+        D2["L2 Shizuku uid 0/2000"]
+        D3["L3 Device Admin"]
+        D4["L4 ROOT su"]
+        D5["L5 in-app Linux proot + Ubuntu 24.04"]
+    end
+    subgraph TERM["Terminal subsystem · core/terminal"]
+        T1["QuroTerminalController"]
+        T2["QuroShellSession (PTY)"]
+        T3["QuroLinuxEnv (proot + Ubuntu)"]
+        T4["KeepAlive foreground service"]
+        T5["ACI controlled side + 4 IPC transports"]
+    end
+    subgraph ENGINE["Engine / runtime layer"]
+        E1["CMS NODE / PYTHON / SSH / JAVA / RUST / GO"]
+        E2["GeckoView browser MPL-2.0"]
+        E3["Speech sherpa-onnx STT / multi-vendor TTS"]
+        E4["MNN / llama.cpp offline LLM"]
+    end
+    subgraph IM["IM layer"]
+        F1["Feishu WebSocket"]
+        F2["QQBot official WS"]
+        F3["WeChat iLink HTTP long-poll"]
+    end
+    subgraph DATA["Data / persistence"]
+        G1["QuroConversationStore"]
+        G2["Startup self-heal DATA_REPAIR"]
+        G3["Diagnostics Download/QuroAI_logs/"]
+    end
+
+    UI --> CORE
+    CORE --> INFER
+    INFER --> CORE
+    CORE --> TOOLS
+    TOOLS --> PRIV
+    TOOLS --> TERM
+    TOOLS --> ENGINE
+    PRIV --> TERM
+    TERM --> ENGINE
+    CORE --> IM
+    CORE --> DATA
+```
+
+| Layer | Entry point | Responsibility |
+|-------|-------------|----------------|
+| **UI** | `ui/ChatScreen.kt` | Chat rendering, bubbles, thinking cards, tool blocks, rich components; all secondary screens |
+| **Agent core** | `core/QuroAssistant.kt` | ReAct loop, round & loop guards, context assembly, tool dispatch, sub-agents |
+| **Inference** | `core/network/` | Cloud requests and thinking-field compilation; on-device MNN / llama.cpp engines; tool-call parsing and context budgeting |
+| **Tools** | `core/tools/` | Registration, discovery, guard-rails, execution and failure feedback for 226 tools |
+| **Privilege** | `QuroPrivilegeManager` | L1–L5 escalation with unified auditing; ungranted tiers return guidance |
+| **Terminal** | `core/terminal/` | PTY sessions, proot Linux env, foreground keep-alive, ACI and 4 IPC transports |
+| **Engines** | `cms` / `browser` / `speech` / `llm` | Runtime provisioning, web rendering, speech, offline inference |
+| **IM** | `im/` | Feishu / QQ / WeChat channels |
+
+### Design patterns
+
+- **Tool-first / Registry** — every capability is a `QuroTool`; adding one is an interface + a registration line.
+- **ReAct loop** — "think → pick tool → execute → observe → think again" until the task completes; tool results flow back into the chat as cards.
+- **Least-privilege tiers** — L1–L5 escalation where **an ungranted tier returns guidance rather than executing silently**.
+- **Strategy (swappable engines)** — cloud vendors and local MNN / llama.cpp share one `onToken` streaming interface; online/offline is transparent to upper layers.
+- **SDUI** — the ACI console renders a snapshot JSON pushed by the controlled side, fully local, zero network.
+
+> Full technical architecture per layer (layering details, key classes, sequences, design decisions and pitfalls) is in the **[architecture docs](#architecture-docs)**.
+
+---
+
+## Feature Map
+
+| Module | One-liner | Docs |
+|--------|-----------|------|
+| **Chat core** | Message stream, streaming output, thinking cards, attachments, in-chat IDE, visual popup/question | [chat](./docs/features/chat/README.md) |
+| **Built-in Skills** | 63 skills auto-injected on first launch, registered as `skill__{name}` tools | [skills](./docs/features/skills/README.md) |
+| **MCP** | MCP client / local server / MCP-ACI bridge | [mcp](./docs/features/mcp/README.md) |
+| **Offline LLM** | MNN / llama.cpp on-device inference: model import, loading, persistent sessions, local tool calling | [offline-llm](./docs/features/offline-llm/README.md) |
+| **Terminal & Linux sandbox** | proot + Ubuntu 24.04 ARM64, multi-session, SSH/VNC, screen-off survival | [terminal](./docs/features/terminal/README.md) |
+| **Voice / media / browser / docs** | Multi-vendor TTS, on-device Whisper STT, GeckoView browser, document processing | [voice-media](./docs/features/voice-media/README.md) |
+| **Device control / Shizuku / ACI** | L1–L5 privilege tiers, ACI controlled-app ecosystem, ACI console & HTTP transport | [device-control](./docs/features/device-control/README.md) |
+| **Digital human / KB / memory / persona** | 3D model viewer (GLB/glTF), vector RAG, memory store, persona config, scheduled tasks | [digital-human](./docs/features/digital-human/README.md) |
+| **APK-level plugin framework** | 14 extension points; install an APK and the AI gains capabilities | [extensibility](./docs/architecture/extensibility/README.md) |
+| **i18n (11 languages)** | String key system, reply-language injection, translation pipeline | [i18n](./docs/architecture/i18n/README.md) |
+
+---
+
+## Build from Source
+
+### Requirements
+
+- **Android 8.0+ (API 26+)** device
+- **Dev machine**: JDK **17+** (required by AGP 8.13), Android SDK (compileSdk 36 / minSdk 26 / targetSdk 34), Gradle via the bundled wrapper `./gradlew`
+- **NDK** (side-by-side) to compile the MNN / llama.cpp native libraries
+
+### Commands
+
+```bash
+# 1. Clone
+git clone https://github.com/Quor-a/ZorvAI
+cd ZorvAI
+
+# 2. Prepare
+#    - Install JDK 17+, set sdk.dir=/path/to/Android/Sdk in local.properties
+#    - Make sure the NDK is installed in the Android SDK
+
+# 3. Debug build
+./gradlew assembleDebug
+#    output: app/build/outputs/apk/*/debug/app-*-debug.apk
+
+# 4. Release build (bring your own signing config)
+./gradlew :app:assembleFullRelease
+#    output: app/build/outputs/apk/full/release/app-full-release.apk
+
+# Clean
+./gradlew clean
+```
+
+> 💡 Release signing: `keystore.properties` lives at the **project root** (not `app/`), alias `zorvai`.
+>
+> 💡 If `./gradlew` fails with "no main manifest attribute / main class not found", the wrapper jar is missing `Main-Class` in its MANIFEST — repair the wrapper before building.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| **Long build times** | The first build compiles MNN / llama.cpp native libraries — high CPU with little disk churn is normal. Incremental builds are fast once `app/.cxx` is cached. |
+| **`./gradlew` won't start** | The wrapper jar is missing `Main-Class`; repair it, or use a locally installed Gradle. |
+| **Shizuku features unavailable** | Open the Shizuku app and start its service / finish pairing first, then grant in Zorv AI. The L2 channel stays off while Shizuku is not running. |
+| **ROOT commands don't run** | ROOT mode runs through `sh -c`; confirm the device is rooted and `su` has been granted. |
+| **In-app Linux (L5) won't run** | The terminal prompts "install Linux environment" on first use. `proot` ships with the APK; only the Ubuntu base rootfs needs to be downloaded (arm64 uses `ubuntu-ports`). |
+| **Terminal killed on screen-off / app switch** | Check that the notification "Zorv AI terminal running" is present. Android 14+ requires `FOREGROUND_SERVICE_SPECIAL_USE`. |
+| **Offline chat unavailable** | The offline LLM is bundled with release builds. Builds without the native engine libraries report "not available". |
+| **Web / HTML preview blank** | Confirm GeckoView (MPL-2.0) is bundled with the build. |
+| **On-device STT unavailable** | The local STT model is an ~85MB onnx file that must be downloaded / placed on first use. |
+| **Duplicated or broken sessions** | Startup self-heal `DATA_REPAIR` de-duplicates on launch; restarting the app is enough. |
+| **Need diagnostics** | Logs are written to the public folder `Download/QuroAI_logs/` — no adb required. |
+
+---
+
+## Download
+
+[![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
+
+- 🟢 **[v1.1.1 Release](https://github.com/Quor-a/ZorvAI/releases)** (release-signed, **latest**)
+  - **Cloud context budgeting**: the budget no longer falls back to 1M when unknown. Previously, if `/models` did not report a model's context length, the budget silently became 1M — context trimming then almost never triggered, and long chats / long tool runs hit an upstream HTTP 500. The budget now resolves in three tiers: measured API value → model-family table → conservative fallback of 32768.
+  - **Key-line rescue in tool results**: truncation no longer discards the middle of an output. Build errors and stack `Caused by` lines sit in the middle, and the old head/tail-only truncation hid them — so the model retried blindly. Key lines are now rescued from the dropped segment, and a total budget shrinks the **oldest** tool results first.
+  - **Honest archiving**: the truncation message no longer promises "full log available on device" (nothing was ever written to disk — which led the model to look for a file that did not exist and then fabricate content). The full original output is now archived to `filesDir/tool_outputs/` and the message gives the real path.
+  - **Tolerant local tool-call parsing** (previous release): a custom lenient JSON parser that accepts bare keys, single quotes, trailing commas, unclosed brackets and full-width punctuation, plus multiple tag families, `name(args)` functional syntax and tool-name correction.
+  - **Local thinking display decoupled**: the "deep thinking" switch now applies to cloud models only and no longer strips thinking from local models.
+
+All releases: [Releases](https://github.com/Quor-a/ZorvAI/releases).
+
+---
+
+## Documentation Index
+
+### Architecture Docs
+
+| Module | Path |
+|--------|------|
+| **On-device inference** (MNN / llama.cpp, L0–L6) | [docs/architecture/inference-native/README.md](./docs/architecture/inference-native/README.md) |
+| **Cloud inference** (thinking protocol / tool calling / context budget) | [docs/architecture/inference-cloud/README.md](./docs/architecture/inference-cloud/README.md) |
+| **Tool system** (226 tools / registry / guard / feedback) | [docs/architecture/tool-system/README.md](./docs/architecture/tool-system/README.md) |
+| **Agent loop** (ReAct / loop guards / sub-agents / compaction) | [docs/architecture/agent-loop/README.md](./docs/architecture/agent-loop/README.md) |
+| **Terminal & Linux sandbox** | [docs/architecture/terminal-sandbox/README.md](./docs/architecture/terminal-sandbox/README.md) |
+| **UI & rendering** (AIP / ui_widget / quro-ui / GenUI / MiniApp) | [docs/architecture/ui-rendering/README.md](./docs/architecture/ui-rendering/README.md) |
+| **i18n** (11 languages) | [docs/architecture/i18n/README.md](./docs/architecture/i18n/README.md) |
+| **Extensibility** (plugin framework / ACI / MCP / Skills) | [docs/architecture/extensibility/README.md](./docs/architecture/extensibility/README.md) |
+
+### Feature Docs
+
+| Module | Path |
+|--------|------|
+| Chat core | [docs/features/chat/README.md](./docs/features/chat/README.md) |
+| Built-in Skills | [docs/features/skills/README.md](./docs/features/skills/README.md) |
+| MCP | [docs/features/mcp/README.md](./docs/features/mcp/README.md) |
+| Offline LLM engine | [docs/features/offline-llm/README.md](./docs/features/offline-llm/README.md) |
+| Terminal & Linux sandbox | [docs/features/terminal/README.md](./docs/features/terminal/README.md) |
+| Voice / media / browser / docs | [docs/features/voice-media/README.md](./docs/features/voice-media/README.md) |
+| Device control / Shizuku / ACI | [docs/features/device-control/README.md](./docs/features/device-control/README.md) |
+| Digital human / KB / memory / persona | [docs/features/digital-human/README.md](./docs/features/digital-human/README.md) |
+
+### Other existing docs
+
+- [docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md) · [docs/ACI_TECHNICAL_ARCHITECTURE.md](./docs/ACI_TECHNICAL_ARCHITECTURE.md)
+- [docs/PLUGIN_DEV_GUIDE.md](./docs/PLUGIN_DEV_GUIDE.md) · [docs/TERMINAL_ARCHITECTURE.md](./docs/TERMINAL_ARCHITECTURE.md)
+- [docs/architecture/云端推理思考与工具调用架构.md](./docs/architecture/云端推理思考与工具调用架构.md) — cloud inference implementation log (N1–N15)
+- [docs/architecture/本地推理引擎思考与工具调用架构.md](./docs/architecture/本地推理引擎思考与工具调用架构.md) — on-device engine log
+
+---
+
+## License
+
+Zorv AI is released under **Apache-2.0** (see [LICENSE](./LICENSE)).
+
+- **Main license**: Apache-2.0 (all application source).
+- **GeckoView (Mozilla)**: distributed under **MPL-2.0** (file-level copyleft); corresponding source is provided with the build.
+- **On-device CPython 3.14 (PyEngine / scripting sandbox)**: the interpreter itself is **PSF-2.0**; bundled OpenSSL (Apache-2.0) and SQLite (public domain) are listed in [NOTICE](./NOTICE).
+- **Other third-party dependencies** (AndroidX / Jetpack Compose, Kotlin, OkHttp, Shizuku, QuickJS, Sherpa-NCNN, Chart.js / D3 / ECharts / KaTeX, React / Recharts / Lucide …) keep their own licenses; the full list is in [NOTICE](./NOTICE).
+
+> License obligations are declared only for components **actually distributed with the build**; components not shipped create no additional copyleft obligations.
+> `DesktopFriends/` at the repo root is a reference/research directory; it is **not part of the APK build and not distributed**, so its license does not create any obligation for this application.
+
+---
+
+## Contributing / Feedback
+
+Contributions are welcome: core features, built-in tools, CMS modules, docs and translations.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/xxx`)
+3. Commit (`git commit -m 'feat: xxx'`)
+4. Push (`git push origin feature/xxx`)
+5. Open a Pull Request
+
+Found a bug or have an idea? Please [open an Issue](https://github.com/Quor-a/ZorvAI/issues) with a clear description, reproduction steps, device model, OS version and screenshots.
+
+If you like the project, consider leaving a ⭐!
+
+### Keywords (SEO)
+
+Zorv AI open source, Android AI assistant open source, on-device AI agent, local AI chatbot, Kotlin Jetpack Compose LLM, Android automation agent, voice AI assistant, TTS STT assistant, AI tool use, Feishu QQ WeChat AI bot
+
+> GitHub [github.com/Quor-a/ZorvAI](https://github.com/Quor-a/ZorvAI) ｜ Gitee [gitee.com/ZorvAI/ZorvAI](https://gitee.com/ZorvAI/ZorvAI) ｜ GitLab [jihulab.com/quor-a-group/ZorvAI](https://jihulab.com/quor-a-group/ZorvAI) ｜ Downloads: [Releases](https://github.com/Quor-a/ZorvAI/releases)
+
+---
+
+<div align="center">
+
+Made with ❤️ by the Zorv AI Team
+
+</div>
