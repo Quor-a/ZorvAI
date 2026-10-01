@@ -110,12 +110,38 @@ add_subdirectory(${MNN_SOURCE_DIR} ${QURO_MNN_BINARY_DIR})
 # 若未来上游再次移除，可恢复下方 stub 定义。
 
 # 包含 JNI 绑定代码（只包含我们需要的文件）
+# ---------------------------------------------------------------------------
+# 【L2/L3/L4 分层拆分】单文件 1785 行的 mnnllmnative.cpp 已删除，拆为：
+#
+#   L2  mnn_jni.cpp                  JNI 薄层：解参（含 kotlin.Pair 反射）→ 句柄取引擎
+#                                    → 调引擎 → 回转。**不 include 任何 MNN 头**，
+#                                    不出现一次 llm-> / MNN:: 调用
+#   L3  mnn_engine.cpp               生命周期 / 分词 / 配置 / 统计
+#       mnn_engine_generate.cpp      流式生成（合并了旧实现里两份 235 行的重复函数）
+#       mnn_engine_chat.cpp          聊天模板 / 结构化工具调用 / 上下文与配置导出
+#       mnn_engine_registry.cpp      自注册进 L3 引擎工厂（旧构架下此处是死代码）
+#   L4  mnn_engine_logic.inc         纯函数层（JSON 转义、LlmContext→JSON、
+#                                    ChatML 工具说明与回退渲染、结构化渲染核心），
+#                                    由脚本从旧实现逐字抽取，见 scripts/refactor_split_mnn.py
+#
+# 拆分原则（不可违反）：**搬家不改逻辑**。那些长注释背后都是真机事故
+#   （minja 依赖缺失导致恒返回空串、ChatML 缺 generation prompt 导致 0 token、
+#    set_config 注入 jinja tools 在某些构建抛异常把整链路打成 ok=false、
+#    UTF-8 跨 token 边界、`<eop>` 结束标记…），重写必然漂移。
+#
+# 附带的结构性修复：cancel / lastError / 音频回调三张**以裸 Llm* 为键的全局 map**
+#   收进引擎实例字段 —— 旧代码自己注释了"指针会被复用，残留的错误串会串味"。
+# ---------------------------------------------------------------------------
 add_library(
     MNNWrapper
     SHARED
     src/main/cpp/mnnnetnative.cpp
     src/main/cpp/mnnmodulennative.cpp
-    src/main/cpp/mnnllmnative.cpp
+    src/main/cpp/mnn_jni.cpp
+    src/main/cpp/mnn_engine.cpp
+    src/main/cpp/mnn_engine_generate.cpp
+    src/main/cpp/mnn_engine_chat.cpp
+    src/main/cpp/mnn_engine_registry.cpp
     # mnnportraitnative.cpp 使用的是不同的包名，这里不需要
 )
 
