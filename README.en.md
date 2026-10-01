@@ -81,7 +81,7 @@ The design spine is **Tool-first**: every capability is expressed as a `QuroTool
 | **Agent core** | Multi-session isolation (`liveBuffers`), seed snapshots (`convBase`), display refresh gate (`canUpdateDisplay`), per-round `[round N]` hidden markers to prevent cross-talk, tool registry (`QuroToolRegistry`, 226 entries), skill system (`QuroSkill` → registered as `skill__{name}` tools) |
 | **Tool / capability layer** | **220+ built-in tools**: accessibility `input_text` / `tap_screen` / `read_screen`, file read/write, **L1–L5 privileged execution**, `cms_*` modules, agent keyboard `ai_type_text` / `ai_press_enter`, scheduled tasks, memory tools, knowledge-base RAG, document processing |
 | **Offline LLM engine** | Built-in **MNN / llama.cpp** inference (`QuroLocalEngineNative`) with streaming, live `<think>` streaming, local tool calling and persistent session reuse |
-| **Privilege tiers L1–L5** | Accessibility → Shizuku (uid 0/2000) → Device Admin → ROOT (su) → in-app Linux (proot + Ubuntu 24.04) |
+| **Privilege tiers L1–L5** | Accessibility → Shizuku (uid 0/2000) → Device Admin → ROOT (su) → in-app Linux (proot + Ubuntu 24.04). **L1–L4 are carried by the `PrivilegeLevel` enum** (system permissions); **L5 is not part of the enum** and is gated by whether the Linux environment is ready |
 | **Terminal / Linux sandbox** | Full terminal emulator: proot + real Ubuntu 24.04 ARM64 user space; PTY (`/dev/ptmx` + `fork/exec`); foreground-service keep-alive (`specialUse`, survives screen-off and app switching); 26 ACI cross-process capabilities (single terminal entry point + `action` dispatch); 4 IPC transports (ContentProvider / Deep Link / Intent / BroadcastReceiver); multi-session management |
 | **MCP** | MCP client (WebSocket / HTTP transports), in-app local MCP server deployable and callable by the AI, **MCP-ACI bridge** |
 | **Engines / runtime** | CMS shared runtime (NODE / PYTHON / SSH / JAVA / RUST / GO), CMS v2 modules, built-in browser (Android WebView runtime), on-device STT / TTS |
@@ -182,7 +182,7 @@ flowchart TB
 | **Agent core** | `core/QuroAssistant.kt` | ReAct loop, round & loop guards, context assembly, tool dispatch, sub-agents |
 | **Inference** | `core/network/` | Cloud requests and thinking-field compilation; on-device MNN / llama.cpp engines; tool-call parsing and context budgeting |
 | **Tools** | `core/tools/` | Registration, discovery, guard-rails, execution and failure feedback for 226 tools |
-| **Privilege** | `QuroPrivilegeManager` | L1–L5 escalation with unified auditing; ungranted tiers return guidance |
+| **Privilege** | `QuroPrivilegeManager` | L1–L4 (`PrivilegeLevel` enum) escalation plus L5 (in-app Linux, gated by environment readiness), with unified auditing; ungranted tiers return guidance |
 | **Terminal** | `core/terminal/` | PTY sessions, proot Linux env, foreground keep-alive, ACI and 4 IPC transports |
 | **Engines** | `cms` / `browser` / `speech` / `llm` | Runtime provisioning, web rendering, speech, offline inference |
 | **IM** | `im/` | Feishu / QQ / WeChat channels |
@@ -204,7 +204,7 @@ flowchart TB
 | Module | One-liner | Docs |
 |--------|-----------|------|
 | **Chat core** | Message stream, streaming output, thinking cards, attachments, in-chat IDE, visual popup/question | [chat](./docs/features/chat/README.md) |
-| **Built-in Skills** | 63 skills auto-injected on first launch, registered as `skill__{name}` tools | [skills](./docs/features/skills/README.md) |
+| **Built-in Skills** | 67 skills (verified in `assets/skills/zorv/manifest.json`) auto-injected on first launch, registered as `skill__{name}` tools | [skills](./docs/features/skills/README.md) |
 | **MCP** | MCP client / local server / MCP-ACI bridge | [mcp](./docs/features/mcp/README.md) |
 | **Offline LLM** | MNN / llama.cpp on-device inference: model import, loading, persistent sessions, local tool calling | [offline-llm](./docs/features/offline-llm/README.md) |
 | **Terminal & Linux sandbox** | proot + Ubuntu 24.04 ARM64, multi-session, SSH/VNC, screen-off survival | [terminal](./docs/features/terminal/README.md) |
