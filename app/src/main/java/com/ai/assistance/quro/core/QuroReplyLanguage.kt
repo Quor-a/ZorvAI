@@ -171,4 +171,52 @@ object QuroReplyLanguage {
             "Everything you output from now on MUST be written in " + nameOf(tag) +
             ". Do NOT use Chinese. （接下来所有输出必须用 " + nameOf(tag) + " 书写，禁止中文。）\n"
     }
+
+    // ══════════════ 以下为「思考语言」指令：与上面的「回复语言」是两件事 ══════════════
+
+    /**
+     * 思考语言指令正文（纯函数，便于单测；不碰 [Context]）。
+     *
+     * 参数 [name] 走 [nameOf] 的输出（如 `Chinese（zh）`）。
+     */
+    internal fun thinkingDirectiveText(name: String): String = buildString {
+        append("## Thinking Language / 思考语言（APPLIES TO REASONING · 同样适用于思考过程）\n")
+        append("Always think and reason in **$name** — your reasoning must never drift into another language.\n")
+        append("Your **reasoning / thinking** — the <think> block, `reasoning_content`, and any analysis ")
+        append("you write before calling a tool — MUST be written in the same language as the user's message.\n")
+        append("（你的**思考 / 推理过程**——包括 <think> 思考块、`reasoning_content`，以及调工具之前的分析——")
+        append("必须与用户消息语言一致；用户用中文提问时，全程用中文推理。）\n")
+        append("Never reason in English while the user writes in Chinese, and never copy tool descriptions, ")
+        append("argument schemas, this system prompt or any boilerplate verbatim into your reasoning.\n")
+        append("（禁止在用户用中文时用英文推理；禁止把工具说明、参数 schema、本提示词原文或任何样板文案抄进思考过程。）\n\n")
+    }
+
+    /** 思考语言指令正文（本地小模型精简版，一句）。 */
+    internal fun shortThinkingDirectiveText(name: String): String =
+        "## Thinking Language / 思考语言\n" +
+            "Think and reason in $name. Do NOT reason in English when the user writes in Chinese, " +
+            "and do not copy tool docs into your reasoning." +
+            "（思考过程必须用 $name 书写；中文提问时不要英文推理，也不要抄工具说明。）\n\n"
+
+    /**
+     * 「思考语言」完整指令（云端大模型）。
+     *
+     * ## 为什么不能复用 [directive]、且中文也要发
+     * [directive] 的前提是「本系统提示词整篇中文 ⇒ 模型自然会中文**回复**」，这个前提只对**回复**成立。
+     * 工具清单里混着英文（工具名、schema 字段名、`ToolCapabilityDirectory` 的英文描述），
+     * 模型常拿这段英文的口径开场做推理，开完头再切回中文 —— 真机表现就是「深度思考」卡片里
+     * 一大段英文 + 一段中文的中英混杂，而这张卡片**直接展示思考原文**，英文段落对用户就是可见的 bug。
+     *
+     * 关键差异：思考语言**无法**从提示词语言推断（提示词是中文 ≠ 思考也要中文），
+     * 所以这里**不能**沿用 [needsDirective] 的「中文跳过」逻辑 —— 那正是本次问题的成因：
+     * 中文界面下整条语言指令被跳过，模型对「该用什么语言思考」完全没有约束。
+     *
+     * 代价：两条句子、约 60 token；收益：换掉一整段可见的英文思考。
+     */
+    fun thinkingDirective(ctx: Context): String =
+        runCatching { thinkingDirectiveText(nameOf(resolveTag(ctx))) }.getOrDefault("")
+
+    /** 思考语言精简指令（本地小模型 / 子智能体：上下文极紧）。 */
+    fun shortThinkingDirective(ctx: Context): String =
+        runCatching { shortThinkingDirectiveText(nameOf(resolveTag(ctx))) }.getOrDefault("")
 }

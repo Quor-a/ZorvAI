@@ -1650,7 +1650,9 @@ $recent
             // 「AI 回复语言」：本地极简分支此前**完全没有**语言指令（云端那句在下方、本函数早已 return，
             // 对本地永远不可达）→ 界面切英文/其他语言时，本地模型仍用中文作答。
             // 本地模型上下文极紧，只用一句话版（shortDirective），且必须放在最前面。
-            val localized = QuroReplyLanguage.shortDirective(appContext) + out
+            val localized = QuroReplyLanguage.shortDirective(appContext) +
+                QuroReplyLanguage.shortThinkingDirective(appContext) +
+                out
             QuroDiag.log(
                 "SysPrompt",
                 "built | local=true | persona-core-only | replyLang=${QuroReplyLanguage.resolveTag(appContext)}" +
@@ -1673,6 +1675,10 @@ $recent
         //      「指令语言」当成「回复语言」。
         // 现改为：开头给完整指令（点破「提示词是中文 ≠ 回复用中文」），末尾再复述一次（见本函数结尾）。
         sb.append(QuroReplyLanguage.directive(appContext))
+        // 「思考语言」必须单独注入：directive() 在中文时返回空串（提示词整篇中文 => 回复自然中文），
+        // 但思考语言推不出来 —— 工具清单里混着英文，模型常拿英文口径开场做推理，
+        // 真机表现为「深度思考」卡片一大段英文 + 一段中文。且该卡片直接展示思考原文。
+        sb.append(QuroReplyLanguage.thinkingDirective(appContext))
 
         // ══════════════ 第一优先级：身份认知（人格卡 = AI 真实身份；Zorv AI = 开发者；运行环境靠工具自行发现） ══════════════
         // ══════════════ 灵魂层（人格/标签/语音/记忆）由自写编排引擎生成 ══════════════
@@ -2154,6 +2160,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
 
         // 「AI 回复语言」结尾复述（近因强化）：系统提示词上万字中文，开头那句容易被后续内容冲淡。
         sb.append(QuroReplyLanguage.tailReminder(appContext))
+        sb.append(QuroReplyLanguage.shortThinkingDirective(appContext))
 
         val out = sb.toString().trim()
         // #1113 诊断：把 system prompt 实际规模写进日志，避免再靠猜�?
