@@ -1,58 +1,198 @@
 package com.ai.assistance.quro.core
 
 import com.ai.assistance.quro.core.cards.QuroChatCard
+import com.ai.assistance.quro.core.network.QuroModelContextBudget
 import com.ai.assistance.quro.util.QuroDiag
 import java.util.UUID
 
-/** 单条工具结果回传给模型时的最大保留字符数，超出部分就地截断（保留头+尾）。 */
+/** 单条工具结果回传给模型时的最大保留字符数，超出部分就地截断（保留头 + 关键行 + 尾）。 */
 internal const val TOOL_RESULT_CAP = 1600
 
-/** 模型硬输入上限（token）：请求总输入（system + 历史）不得超过此值，否则上游直接 500「context length exceeded」。
- *  contextWindow=0（用户设「不限制」）时本值作为安全硬顶生效，避免「全量无界发送」撑爆模型上限。 */
-internal const val MODEL_MAX_INPUT_TOKENS = 1048576
+/**
+ * 单次请求内**所有**工具结果的合计字符预算。
+ *
+ * [TOOL_RESULT_CAP] 只管单条。一次长任务动辄几十次工具调用，每条都贴到上限仍会把上下文撑爆 ——
+ * 上下文是有限资源，每多一个 token 都在消耗模型的注意力预算（Anthropic「有效上下文工程」的观点）。
+ * 超出本预算时，从**最旧**的工具结果开始做二次激进截断：最新的结果才是当前决策依据，
+ * 最旧的早已被后续推理消化掉。
+ */
+internal const val TOOL_RESULTS_TOTAL_CAP = 24_000
+
+/** 总量超预算时，二次激进截断的单条上限。 */
+private const val TOOL_RESULT_CAP_TIGHT = 400
+
+/** 关键行扫描的输入上限：极端巨型输出只扫前 200 万字符，避免 O(n) 扫描拖慢上下文组装。 */
+private const val KEY_LINE_SCAN_LIMIT = 2_000_000
+
+/** 超过此长度的单行不参与关键行抽取（避免把一整行 base64 / minified JS 当成「错误行」）。 */
+private const val KEY_LINE_MAX_SOURCE = 2_000
+
+/**
+ * 「关键行」判定词表：命中任一即认为该行值得保留。
+ *
+ * 覆盖中英双语的错误 / 异常 / 失败 / 警告词汇，外加构建与测试场景的高频词
+ * （`exit code`、`segmentation fault`、`oom` …）。宁可多留几行无关内容，
+ * 也不能把真正的错误行漏掉 —— 后者会让模型在「看不到错误」的状态下反复盲重试。
+ */
+private val KEY_LINE_MARKERS = listOf(
+    // 英文：通用错误与异常
+    "error", "exception", "failed", "failure", "fatal", "traceback", "stack trace",
+    "caused by", "cannot", "can't", "denied", "refused", "timeout", "timed out",
+    "not found", "no such file", "panic", "abort", "unable to", "invalid",
+    "warning", "missing", "conflict", "unresolved",
+    // 中文
+    "错误", "失败", "异常", "警告", "无法", "拒绝", "超时", "找不到", "不存在",
+    "缺少", "冲突", "未找到", "不支持", "不合法", "已终止", "中断",
+    // 构建 / 测试 / 运行时
+    "build failed", "compilation error", "test failed", "assertion",
+    "exit code", "exit status", "non-zero", "segmentation fault",
+    "out of memory", "oom", "killed", "permission denied", "read-only",
+)
+
+private val WHITESPACE_RUN = Regex("\\s+")
+
+/**
+ * 模型硬输入上限（token）的**绝对天花板**（= [QuroModelContextBudget.ABSOLUTE_MAX_INPUT_TOKENS]）。
+ *
+ * ⚠️ 它只用于「向上钳制」，**不再充当「未知模型的兜底预算」**。
+ * 兜底一律走 [QuroModelContextBudget.CONSERVATIVE_INPUT_TOKENS]（32768）——
+ * 把「未知」当成 1M 会让上下文裁剪永不触发，直到上游 500 才暴露，
+ * 等于这个安全网在最需要它的场景里失效。
+ */
+internal const val MODEL_MAX_INPUT_TOKENS = QuroModelContextBudget.ABSOLUTE_MAX_INPUT_TOKENS
 
 /**
  * 就地压缩超长工具结果（role=tool 的 content），防止命令类工具（terminal_exec / root_exec 等）
  * 的巨型输出在上下文裁剪时被整条丢弃，进而拆散工具轮、诱发孤儿调用与模型「跑偏 / 乱执行」。
- * 超 [TOOL_RESULT_CAP] 的结果保留「头部 + 尾部 + 长度说明」，工具轮始终 call↔result 成对。
+ *
+ * 两阶段：
+ * 1. **单条超限** → 头 + 关键行 + 尾（超 [TOOL_RESULT_CAP] 的条目）；
+ * 2. **合计超总量预算**（[TOOL_RESULTS_TOTAL_CAP]）→ 从最旧的开始二次激进截断。
+ *
+ * 工具轮始终 call↔result 成对，任何阶段都只改 content、不删消息。
+ *
+ * @param archive 归档器：把**完整**原文落盘并返回可读路径，失败返回 null。见 [truncateToolResult]。
  */
-internal fun compactToolResults(list: List<QuroChatMessage>): List<QuroChatMessage> {
-    if (list.none { it.role == "tool" && it.content.length > TOOL_RESULT_CAP }) return list
-    return list.map { m ->
-        if (m.role == "tool" && m.content.length > TOOL_RESULT_CAP) {
-            m.copy(content = truncateToolResult(m.content))
-        } else {
-            m
+internal fun compactToolResults(
+    list: List<QuroChatMessage>,
+    archive: ((String) -> String?)? = null,
+): List<QuroChatMessage> {
+    val toolIndices = list.indices.filter { list[it].role == "tool" }
+    if (toolIndices.isEmpty()) return list
+    val oversized = toolIndices.filter { list[it].content.length > TOOL_RESULT_CAP }
+    val totalChars = toolIndices.sumOf { list[it].content.length }
+    if (oversized.isEmpty() && totalChars <= TOOL_RESULTS_TOTAL_CAP) return list
+
+    val out = list.toMutableList()
+    // 阶段 1：单条超限 → 头 + 关键行 + 尾
+    oversized.forEach { i ->
+        val m = out[i]
+        out[i] = m.copy(content = truncateToolResult(m.content, TOOL_RESULT_CAP, archive))
+    }
+    // 阶段 2：合计仍超预算 → 从最旧开始激进截断（越旧越可能已被后续推理消化）
+    var running = out.indices.filter { out[it].role == "tool" }.sumOf { out[it].content.length }
+    if (running > TOOL_RESULTS_TOTAL_CAP) {
+        for (i in out.indices) {
+            if (running <= TOOL_RESULTS_TOTAL_CAP) break
+            val m = out[i]
+            if (m.role != "tool" || m.content.length <= TOOL_RESULT_CAP_TIGHT) continue
+            val shrunk = truncateToolResult(m.content, TOOL_RESULT_CAP_TIGHT, archive)
+            running -= (m.content.length - shrunk.length)
+            out[i] = m.copy(content = shrunk)
         }
+    }
+    return out
+}
+
+/**
+ * 截断超长工具结果：头部 + **被省略部分中的关键行** + 尾部。
+ *
+ * 为什么必须有「关键行」：编译错误、堆栈 `Caused by`、`FAILED` 往往出现在输出的**中间**，
+ * 而纯「头 40% + 尾 60%」恰好把它们整段丢掉 —— 模型看不到错误，就只能反复盲重试。
+ *
+ * @param cap 期望保留的字符数（头尾合计）。
+ * @param archive 归档器：把**完整**原文落盘并返回可读路径；返回 null 表示归档失败。
+ *   归档成功时文案给出**真实路径**；失败时文案引导「重新执行并缩小范围」，
+ *   **绝不**写「见本机文件」这类没有指路的承诺 —— 那会把模型引去找一个不存在的文件，
+ *   进而编造文件内容（幻觉）。
+ */
+internal fun truncateToolResult(
+    text: String,
+    cap: Int = TOOL_RESULT_CAP,
+    archive: ((String) -> String?)? = null,
+): String {
+    val head = (cap * 4 / 10).coerceAtLeast(200)
+    val tail = (cap - head).coerceAtLeast(200)
+    // 🔧 按「码点」而非 UTF-16 字符截断：原 take/takeLast 可能把 emoji / 代理对切成孤立代理项
+    // （lone surrogate）→ 该孤立代理项进入请求体后会让严格上游 JSON 解析失败 → 500。
+    val cps = text.codePoints().toArray()
+    val headStr = takeCodePoints(cps, head)
+    val tailStr = takeLastCodePoints(cps, tail)
+    // 被丢弃的中间段 —— 关键行就从这里捞回来
+    val midStart = head.coerceAtMost(cps.size)
+    val midEnd = (cps.size - tail).coerceAtLeast(midStart)
+    val middle = if (midEnd > midStart) String(cps, midStart, midEnd - midStart) else ""
+    val keyLines = extractKeyLines(middle)
+    val archivedPath = archive?.invoke(text)
+    return buildString {
+        append(headStr).append("\n")
+        if (keyLines.isNotBlank()) {
+            append("〔以上为开头；中间 ${text.length - head - tail} 字符已省略，以下是其中的关键行〕\n")
+            append(keyLines).append("\n")
+        }
+        append("〔工具输出过长已截断：原文 ${text.length} 字符，保留头 $head + 尾 $tail〕")
+        append(
+            if (archivedPath != null) {
+                "\n〔完整原文已归档到文件：$archivedPath（可用文件读取工具取回）〕"
+            } else {
+                "\n〔如需完整内容，请重新执行该工具并缩小输出范围（例如只取尾部、加过滤条件或分段读取）〕"
+            }
+        )
+        append("\n").append(tailStr)
     }
 }
 
-/** 头部 40% + 尾部 60% + 截断说明：错误 / 退出码通常在尾部，故尾部占比更大。 */
-internal fun truncateToolResult(text: String): String {
-    val head = (TOOL_RESULT_CAP * 4 / 10).coerceAtLeast(200)
-    val tail = (TOOL_RESULT_CAP - head).coerceAtLeast(200)
-    // 🔧 按「码点」而非 UTF-16 字符截断：原 take/takeLast 可能把 emoji / 代理对切成孤立代理项
-    // （lone surrogate）→ 该孤立代理项进入请求体后会让严格上游 JSON 解析失败 → 500。
-    val headStr = text.takeCodePoints(head)
-    val tailStr = text.takeLastCodePoints(tail)
-    return buildString {
-        append(headStr)
-        append("\n…\n〔工具输出过长已截断：原文 ${text.length} 字符，仅保留头 $head + 尾 $tail；完整日志见本机文件〕\n…\n")
-        append(tailStr)
+/**
+ * 从被丢弃的中间段里抽取「关键行」（错误 / 异常 / 失败 / 警告）。
+ *
+ * 按原顺序保留首个命中行、压缩行内空白、去重，并受「行数」与「字符数」双重约束。
+ * 一行都抽不到时返回空串，调用方据此不输出该段（不产生「以下是关键行：」却空着的空洞文案）。
+ */
+internal fun extractKeyLines(
+    dropped: String,
+    maxLines: Int = 12,
+    maxChars: Int = 600,
+): String {
+    if (dropped.isBlank()) return ""
+    val scan = if (dropped.length > KEY_LINE_SCAN_LIMIT) dropped.take(KEY_LINE_SCAN_LIMIT) else dropped
+    val seen = HashSet<String>()
+    val picked = ArrayList<String>()
+    var used = 0
+    for (raw in scan.lineSequence()) {
+        val line = raw.trim()
+        if (line.isEmpty() || line.length > KEY_LINE_MAX_SOURCE) continue
+        // 纯符号行（分隔线等）没有信息量
+        if (!line.any { it.isLetterOrDigit() }) continue
+        if (!KEY_LINE_MARKERS.any { line.contains(it, ignoreCase = true) }) continue
+        val compact = line.replace(WHITESPACE_RUN, " ").trim()
+        if (!seen.add(compact)) continue
+        if (picked.size >= maxLines) break
+        if (used + compact.length > maxChars) break
+        picked.add(compact)
+        used += compact.length + 1
     }
+    return picked.joinToString("\n")
 }
 
 /** 取前 n 个 Unicode 码点（避免切裂代理对）。 */
-private fun String.takeCodePoints(n: Int): String {
-    if (n <= 0) return ""
-    val cps = codePoints().limit(n.toLong()).toArray()
-    return if (cps.isEmpty()) "" else String(cps, 0, cps.size)
+private fun takeCodePoints(cps: IntArray, n: Int): String {
+    if (n <= 0 || cps.isEmpty()) return ""
+    return String(cps, 0, n.coerceAtMost(cps.size))
 }
 
 /** 取后 n 个 Unicode 码点（避免切裂代理对）。 */
-private fun String.takeLastCodePoints(n: Int): String {
-    if (n <= 0) return ""
-    val cps = codePoints().toArray()
+private fun takeLastCodePoints(cps: IntArray, n: Int): String {
+    if (n <= 0 || cps.isEmpty()) return ""
     val start = (cps.size - n).coerceAtLeast(0)
     return String(cps, start, cps.size - start)
 }
@@ -124,8 +264,18 @@ class QuroConversationStore {
      *   始终保留 system（身份/人格/工具指引），再从**最旧**的非 system 消息起裁剪历史，
      *   只丢弃过旧的聊天轮次。这样长对话不会把上下文窗口撑爆 → 避免网关/模型静默丢弃
      *   前部上下文或整个 tools 字段（表现为「丢失上下文 / 回复变水 / 工具调用失效」）。
+     *   预算值应由 [QuroModelContextBudget] 解析得出（它会按模型名推断真实上限，
+     *   不再把「未知」当成 1M 而让裁剪永不触发）。
+     * @param archive 工具结果归档器：超长结果被截断时把**完整**原文落盘并返回路径，
+     *   使截断文案能给出真实可读位置。传 null（默认）则文案引导「重新执行并缩小范围」，
+     *   两种情况下都不会出现指向不存在文件的虚假指引。
      */
-    fun toLlmMessages(system: QuroMessage? = null, contextWindow: Int = 0, historyRounds: Int = 0): List<QuroChatMessage> {
+    fun toLlmMessages(
+        system: QuroMessage? = null,
+        contextWindow: Int = 0,
+        historyRounds: Int = 0,
+        archive: ((String) -> String?)? = null,
+    ): List<QuroChatMessage> {
         val built = mutableListOf<QuroChatMessage>()
         system?.let { built.add(QuroChatMessage(it.role, it.content)) }
         // 🔧 #765：先取锁快照，后续遍历快照，避免与 IO 线程的 add/update 并发修改冲突。
@@ -153,12 +303,15 @@ class QuroConversationStore {
         // 下一轮便重发同一条命令、或把上下文碎片当成新指令 → 表现为「跑偏 / 乱执行」。
         // 这里在裁剪前先把超长工具结果就地截断（保留头 + 尾 + 长度说明），使其始终能留在上下文里，
         // 工具轮 call↔result 始终成对，从根本上消除孤儿、保住模型对工具执行的历史记忆。
-        capped = compactToolResults(capped)
+        capped = compactToolResults(capped, archive)
         // 🔧 硬输入上限安全网（toolfix7）：用户把 contextWindow 设 0（「不限制」）时，旧逻辑完全不裁剪、
         // 每轮全量发送历史；长对话 / 多工具轮后总输入超过模型硬上限（如 262144）即被上游 500
         // 「context length exceeded」。现以模型真实输入上限（262144）作为预算：平时（远小于上限）不裁
         // 你的长上下文，只在逼近上限才裁最旧轮次——既保住长上下文，又不再因溢出而 500。
-        val ceiling = if (contextWindow > 0) contextWindow.coerceAtMost(MODEL_MAX_INPUT_TOKENS) else MODEL_MAX_INPUT_TOKENS
+        // 未显式给出预算时按**保守值**兜底，而不是天花板 —— 调用方漏传预算不该等于「不设防」。
+        // （子智能体路径 toLlmMessages(system, 0, 0) 走的就是这里；其消息量远小于保守值，行为不变。）
+        val requested = if (contextWindow > 0) contextWindow else QuroModelContextBudget.CONSERVATIVE_INPUT_TOKENS
+        val ceiling = requested.coerceAtMost(MODEL_MAX_INPUT_TOKENS)
         if (ceiling <= 0) return pruneOrphanToolMessages(capped)
 
         val sysTokens = system?.let { estTokens(it.content) } ?: 0
