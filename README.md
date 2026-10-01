@@ -116,7 +116,7 @@
 | **Agent 核心** | 多会话隔离（`liveBuffers`）、种子快照（`convBase`）、显示刷新闸门（`canUpdateDisplay`）、多轮 `[第N轮]` hidden 标记防串台、工具注册表（`QuroToolRegistry`，226 项）、技能系统（`QuroSkill` → 注册为 `skill__{name}` 工具） |
 | **工具 / 能力层** | **220+ 内置工具**：无障碍 `input_text` / `tap_screen` / `read_screen`、文件读写、**L1–L5 特权执行**、`cms_*` 模块、Agent 键盘 `ai_type_text` / `ai_press_enter`、定时任务、记忆工具、知识库 RAG、文档处理 |
 | **离线 LLM 引擎** | 内置 **MNN / llama.cpp** 本地推理（`QuroLocalEngineNative`），支持流式、`<think>` 思考段流式上屏、本地工具调用、会话常驻复用 |
-| **特权层 L1–L5** | 无障碍 → Shizuku（uid 0/2000）→ 设备管理员 → ROOT（su）→ 应用内 Linux（proot + Ubuntu 24.04） |
+| **特权层 L1–L5** | 无障碍 → Shizuku（uid 0/2000）→ 设备管理员 → ROOT（su）→ 应用内 Linux（proot + Ubuntu 24.04）。其中 **L1–L4 由 `PrivilegeLevel` 枚举承载**（系统权限），**L5 不在枚举内**，由 Linux 环境是否就绪决定 |
 | **终端 / Linux 沙箱** | 完整终端模拟器：proot + Ubuntu 24.04 ARM64 真实用户空间；PTY 伪终端（`/dev/ptmx` + `fork/exec`）；前台服务保活（specialUse，息屏/切 App 不被杀）；ACI 跨进程 26 个能力（终端服务单一入口 + `action` 分发）；4 种 IPC 接入（ContentProvider / Deep Link / Intent / BroadcastReceiver）；多会话管理 |
 | **MCP** | MCP 客户端（WebSocket / HTTP 传输）、应用内本地 MCP 服务，可由 AI 部署/调用、**MCP-ACI 桥接** |
 | **引擎 / 运行时** | CMS 引擎共享运行时（NODE / PYTHON / SSH / JAVA / RUST / GO）、CMS v2 模块、内置浏览器（Android WebView 运行时）、本地语音 STT / TTS |
@@ -223,7 +223,7 @@ flowchart TB
 | **Agent 核心** | `core/QuroAssistant.kt` | ReAct 主循环、轮次与死循环防护、上下文组装、工具调度、子智能体 |
 | **推理** | `core/network/` | 云端请求与思考字段编译；端侧 MNN / llama.cpp 引擎；工具调用解析与上下文预算 |
 | **工具** | `core/tools/` | 226 个工具的注册、发现、护栏、执行与失败回喂 |
-| **特权** | `QuroPrivilegeManager` | L1–L5 分级升权，统一审计；未授权返回引导文案 |
+| **特权** | `QuroPrivilegeManager` | L1–L4（`PrivilegeLevel` 枚举）分级升权 + L5（应用内 Linux，由环境就绪状态把关），统一审计；未授权返回引导文案 |
 | **终端** | `core/terminal/` | PTY 会话、proot Linux 环境、前台保活、ACI 与 4 种 IPC |
 | **引擎** | `cms` / `browser` / `speech` / `llm` | 运行时供给、网页渲染、语音、离线推理 |
 | **IM** | `im/` | 飞书 / QQ / 微信 三条通道 |
@@ -245,7 +245,7 @@ flowchart TB
 | 模块 | 一句话 | 完整文档 |
 |------|--------|----------|
 | **智能对话核心** | 消息流、流式输出、思考卡、附件、对话框 IDE、可视化弹窗/询问 | [chat](./docs/features/chat/README.md) |
-| **内置技能 Skills** | 63 个内置技能，首次启动自动注入，可注册为 `skill__{name}` 工具供 AI 调用 | [skills](./docs/features/skills/README.md) |
+| **内置技能 Skills** | 67 个内置技能（`assets/skills/zorv/manifest.json` 实测），首次启动自动注入，可注册为 `skill__{name}` 工具供 AI 调用 | [skills](./docs/features/skills/README.md) |
 | **MCP** | MCP 客户端 / 本地服务 / MCP-ACI 桥接 | [mcp](./docs/features/mcp/README.md) |
 | **离线 LLM 引擎** | MNN / llama.cpp 端侧推理，模型导入、加载、常驻会话、本地工具调用 | [offline-llm](./docs/features/offline-llm/README.md) |
 | **终端 & Linux 沙箱** | proot + Ubuntu 24.04 ARM64，多会话、SSH/VNC、息屏保活 | [terminal](./docs/features/terminal/README.md) |
