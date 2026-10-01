@@ -13,7 +13,6 @@ import com.ai.assistance.quro.core.network.QuroLocalEnginePrefs
 import com.ai.assistance.quro.core.network.LocalModelLoaders
 import com.ai.assistance.quro.core.network.LocalModelLoader
 import com.ai.assistance.quro.core.network.QuroLocalToolsCodec
-import com.ai.assistance.quro.core.network.QuroModelContextBudget
 import com.ai.assistance.quro.core.QuroLlmResult
 import com.ai.assistance.quro.core.tools.QuroToolEngine
 import com.ai.assistance.quro.core.tools.QuroToolFeedback
@@ -245,9 +244,12 @@ class QuroAssistant(
             // 粘贴键盘 / IM 机器人）共同的出口。把语言约束压到 system 消息最末尾
             // （= 最高近因偏好），即使某个调用方自己的提示词漏了语言指令，也不会退回中文。
             // 中文（默认）时 tailReminder() 返回空串 → 零 token 成本、零行为变化。
+// 🔑 思考语言必须单独注入：tailReminder/turnNudge 在中文时返回空串（提示词整篇中文 =>
+//   回复自然中文），但**思考语言推不出来** —— 工具清单里混着英文，模型常拿英文口径
+//   开场做推理，真机表现就是「深度思考」卡片里一大段英文 + 一段中文。
             // 注：TranslateTool / WebSearchTools 直连 QuroLlmClient.chat()，不经过本函数，
             // 因此「翻译成指定语言」这类需要覆盖 UI 语言的场景不受影响。
-            val langTail = if (systemPrompt.isBlank()) "" else QuroReplyLanguage.tailReminder(context)
+            val langTail = if (systemPrompt.isBlank()) "" else QuroReplyLanguage.tailReminder(context) + QuroReplyLanguage.shortThinkingDirective(context)
             val system = QuroMessage(
                 role = "system",
                 content = systemPrompt + buildDeepThinkDirective(deepThink) + langTail,
@@ -316,12 +318,6 @@ class QuroAssistant(
             } else {
                 Log.w("QuroAssistant", "⚠️ NO aci/workspace tools in effectiveSpecs! total=${effectiveSpecs.size} names=${effectiveSpecs.map { it.name }.take(10)}")
             }
-            // ── N15：工具结果归档器（真相兑现）────────────────────────────────────
-            // 工具输出过长时只保留「头 + 关键行 + 尾」。改造前的截断文案写着「完整日志见本机文件」，
-            // 但**没有任何代码真的落盘** —— 模型据此去找一个不存在的文件，要么白跑一轮，
-            // 要么直接编造文件内容（幻觉）。这里把承诺兑现：真写盘、真给路径。
-            // 幂等（文件名 = 内容摘要），因为每轮上下文组装都会重新压缩一遍同一批工具结果。
-            val toolArchiver: (String) -> String? = toolOutputArchiver(context)
             // 工具调用轮次：0=不限制（默认），ReAct 循环持续到模型返回最终 Text 答复。
             // **不靠「低轮次封顶」防死循环**——那会直接腰斩 AI 修 bug 等合法长任务（连续多轮只发工具调用、
             // 不出文本是排查过程的常态，并非卡死）。真正的防御是下方的「死循环精确检测」：
@@ -392,33 +388,18 @@ class QuroAssistant(
                 // 「最近 N 轮」的干净上下文里作答，从源头消除无界历史导致的乱恢复。云端模型上下文窗口大、能力强，
                 // 不受影响。8 轮对 1.2B~3B 模型足够覆盖正常多轮，同时把历史长度压在模型有效注意力范围内。
                 val effHistoryRounds = if (isLocal && historyRounds <= 0) 12 else historyRounds
-                // ── N13：单次上下文预算 ─────────────────────────────────────────────
-                // 改造前：hardMax = if (modelContextLength > 0) 它 else 1048576。
-                // 问题在于 1048576 同时充当「未知兜底」——当 /models 不返回 context_length
-                // （大量第三方中转如此）时，预算被当成 1M → **裁剪几乎永不触发** →
-                // 而模型真实上限可能只有 32K → 超限直接上游 500「context length exceeded」。
-                // 也就是说，这个「安全网」恰在它最该生效的场景里等于不存在。
-                // 现在交给 QuroModelContextBudget 按「接口值 → 模型名族 → 保守值」三级取值，
-                // 未知一律保守回落，绝不再用 1M 兜底。
-                val ctxBudget = QuroModelContextBudget.resolve(
-                    modelName = cfg.model,
-                    provider = cfg.provider,
-                    apiContextLength = cfg.modelContextLength,
-                    userContextWindow = cfg.contextWindow,
-                )
-                val effContextWindow = ctxBudget.inputTokens
-                if (round == 1 && ctxBudget.inferred) {
-                    // 首轮记录一次即可，避免长任务每轮刷屏
-                    QuroDiag.log("CtxBudget", QuroModelContextBudget.describe(ctxBudget))
-                }
-                val baseMessages = runCatching {
-                    store.toLlmMessages(system, effContextWindow, effHistoryRounds, toolArchiver)
-                }.getOrElse { emptyList() }
+                // 单次上下文总开关：modelContextLength 是接口回填的模型真实上下文长度（硬上限来源），
+                // 未知时回落 1048576 安全顶；contextWindow 是用户在总开关上设的预算（≤ 硬上限，0=用硬上限）。
+                val hardMax = if (cfg.modelContextLength > 0) cfg.modelContextLength else MODEL_MAX_INPUT_TOKENS
+                val effContextWindow = if (cfg.contextWindow > 0) cfg.contextWindow.coerceAtMost(hardMax) else hardMax
+                val baseMessages = runCatching { store.toLlmMessages(system, effContextWindow, effHistoryRounds) }.getOrElse { emptyList() }
                 // 「AI 回复语言」最高近因注入：历史消息（尤其上一轮 AI 自己的回复）多为中文，
                 // 模型会顺着最近的历史继续说中文，system 提示词开头的语言指令会被稀释。
                 // 这里在本轮首次请求的 payload 末尾追加一条 system 提醒，使其成为生成前最近的一条指令。
                 // 只进 payload、不写 store → 不污染历史、不占后续轮次 token；中文时为空串 → 完全无影响。
-                val langNudge = if (round == 1) QuroReplyLanguage.turnNudge(context) else ""
+                val langNudge = if (round == 1) {
+                    QuroReplyLanguage.turnNudge(context) + QuroReplyLanguage.shortThinkingDirective(context)
+                } else ""
                 val llmMessages = if (langNudge.isBlank()) {
                     baseMessages
                 } else {
@@ -1183,7 +1164,9 @@ class QuroAssistant(
         // 同包（com.ai.assistance.quro.core），无需 import。
         val system = QuroMessage(
             role = "system",
-            content = QuroReplyLanguage.shortDirective(context) + SUBAGENT_SYSTEM_PROMPT,
+            content = QuroReplyLanguage.shortDirective(context) +
+                QuroReplyLanguage.shortThinkingDirective(context) +
+                SUBAGENT_SYSTEM_PROMPT,
         )
         subStore.add(
             QuroMessage(
@@ -1290,59 +1273,4 @@ private fun parseAttachFileResult(result: String): QuroAttachment? {
         }
         QuroAttachment(type = type, uri = path, name = name, mime = mime, size = size)
     }.getOrNull()
-}
-
-/** 工具结果归档目录（应用私有）：`filesDir/tool_outputs/`。 */
-private const val TOOL_ARCHIVE_DIR = "tool_outputs"
-
-/** 归档目录内保留的文件数上限，超出时按最后修改时间淘汰最旧的。 */
-private const val TOOL_ARCHIVE_KEEP = 60
-
-/**
- * 工具结果归档器（N15）。
- *
- * 背景：工具输出过长时只保留「头 + 关键行 + 尾」。改造前的截断文案写着
- * 「完整日志见本机文件」—— **但没有任何代码真的落盘**。模型据此去找一个不存在的文件，
- * 要么白跑一轮，要么直接编造文件内容。这里把承诺兑现：真写盘、真返回可读路径。
- *
- * 幂等：文件名取内容摘要，同一段输出重复压缩不会重复写盘
- * （每轮上下文组装都会重新压缩同一批工具结果，不幂等会迅速堆满存储）。
- *
- * 写入用「先写 .tmp 再改名」：进程中途被杀也不会留下半截文件被模型读到。
- *
- * @return 归档器；落盘失败时该次调用返回 null（文案会退化为「请重新执行并缩小范围」）。
- */
-private fun toolOutputArchiver(context: Context): (String) -> String? {
-    val dir = java.io.File(context.applicationContext.filesDir, TOOL_ARCHIVE_DIR)
-    return { full ->
-        runCatching {
-            if (!dir.exists()) dir.mkdirs()
-            val digest = java.security.MessageDigest.getInstance("MD5")
-                .digest(full.toByteArray(Charsets.UTF_8))
-                .take(8)
-                .joinToString("") { "%02x".format(it.toInt() and 0xFF) }
-            val target = java.io.File(dir, "tool_$digest.txt")
-            if (!target.exists() || target.length() == 0L) {
-                val tmp = java.io.File(dir, "tool_$digest.txt.tmp")
-                tmp.writeText(full, Charsets.UTF_8)
-                if (!tmp.renameTo(target)) {
-                    tmp.delete()
-                    return@runCatching null
-                }
-                trimToolArchive(dir)
-            }
-            target.absolutePath
-        }.getOrNull()
-    }
-}
-
-/** 归档目录容量控制：保留最近 [TOOL_ARCHIVE_KEEP] 个文件，其余按最后修改时间淘汰。 */
-private fun trimToolArchive(dir: java.io.File) {
-    runCatching {
-        val files = dir.listFiles { f -> f.isFile && f.name.startsWith("tool_") } ?: return
-        if (files.size <= TOOL_ARCHIVE_KEEP) return
-        files.sortedBy { it.lastModified() }
-            .take(files.size - TOOL_ARCHIVE_KEEP)
-            .forEach { it.delete() }
-    }
 }
