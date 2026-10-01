@@ -37,6 +37,7 @@
 #include <vector>
 
 #include "quro/engine_types.h"
+#include "quro/think_splitter.h"
 
 #include "mnn_engine.h"
 
@@ -71,6 +72,14 @@ struct Session {
     /// 取消标志。旧实现是 `std::map<jlong, bool>`（全局 + 互斥锁），
     /// 现在直接是实例字段 —— 原子布尔，任意线程可写，流式 sink 每个 chunk 读一次。
     std::atomic_bool cancel{false};
+
+    /// ── 思考段 / 正文段 分流（L4，引擎无关实现见 quro/think_splitter.h）──
+    /// 契约 `TokenChunk::isThinking` 从本重构起**真的有值**。
+    /// 此前 MNN 侧靠 Kotlin 的 StreamingThinkStripper（一百行文本状态机）+
+    /// MnnThinkContent.split + stripResidualThink 三层文本手段兜底 ——
+    /// 那些实现本身就承认只认 `<think>` 标签、对无标签明文推理完全失效。
+    /// 现在分流在引擎边界完成，上层直接消费 isThinking 标志。
+    ThinkSplitter thinkSplitter;
 
     /// 最近一次失败原因（格式：`错误码|英文补充`）。见 mnn_engine.h 的契约说明。
     std::string lastError;

@@ -38,6 +38,7 @@ add_library(quro_llm_core STATIC
     src/memory_arbiter.cpp
     src/backend_policy.cpp
     src/jni_support.cpp
+    src/think_splitter.cpp
 )
 
 target_include_directories(quro_llm_core PUBLIC

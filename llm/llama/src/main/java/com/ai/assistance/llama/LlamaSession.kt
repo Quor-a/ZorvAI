@@ -91,6 +91,14 @@ class LlamaSession private constructor(
         prompt: String,
         maxTokens: Int,
         onProgress: ((String, Int, Int) -> Unit)? = null,
+        /**
+         * 思考段增量回调（引擎侧 L4 分流器已把思考从正文里分出来，**不带标签**）。
+         *
+         * 插在 [onToken] **之前**是刻意的：Kotlin 的 trailing lambda 绑定最后一个参数，
+         * 若放最后，现有调用点的 trailing lambda 会静默改成绑定 onThinking。
+         * 插在前面 = 老调用点一行都不用改。
+         */
+        onThinking: ((String) -> Boolean)? = null,
         onToken: (String) -> Boolean,
     ): Boolean {
         val ptr: Long
@@ -105,6 +113,14 @@ class LlamaSession private constructor(
             maxTokens,
             object : LlamaNative.GenerationCallback {
                 override fun onToken(token: String): Boolean = onToken(token)
+
+                /**
+                 * 思考段上行。调用方没传 onThinking 时**直接放行**：
+                 * 思考内容只是不被展示，绝不能因此中断生成。
+                 */
+                override fun onThinking(token: String): Boolean =
+                    onThinking?.invoke(token) ?: true
+
                 override fun onProgress(stage: String, current: Int, total: Int) {
                     onProgress?.invoke(stage, current, total)
                 }

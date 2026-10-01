@@ -402,9 +402,17 @@ class MNNLlmSession private constructor(
     fun generateStream(
         history: List<Pair<String, String>>,
         maxTokens: Int = -1,
+        /**
+         * 思考段增量回调（引擎侧 L4 分流器已把思考从正文里分出来，**不带标签**）。
+         *
+         * 插在 [onToken] **之前**是刻意的：Kotlin 的 trailing lambda 绑定最后一个参数，
+         * 若放最后，现有的 `generateStream(h, m) { token -> ... }` 写法会静默改成
+         * 绑定 onThinking。插在前面 = 老调用点一行都不用改。
+         */
+        onThinking: ((String) -> Boolean)? = null,
         onToken: (String) -> Boolean
     ): Boolean {
-        val callback = guardedCallback("token callback", onToken)
+        val callback = guardedCallback("token callback", onToken, onThinking)
 
         return withActiveCall { ptr ->
             MNNLlmNative.nativeGenerateStream(ptr, history, maxTokens, callback)
@@ -430,10 +438,12 @@ class MNNLlmSession private constructor(
         messagesJson: String,
         toolsJson: String? = null,
         maxTokens: Int = -1,
+        /** 思考段增量回调。插在 [onToken] 之前，理由同 [generateStream]。 */
+        onThinking: ((String) -> Boolean)? = null,
         onToken: (String) -> Boolean
     ): Boolean {
         lastNativeError = null
-        val callback = guardedCallback("structured token callback", onToken)
+        val callback = guardedCallback("structured token callback", onToken, onThinking)
 
         return withActiveCall { ptr ->
             val ok = MNNLlmNative.nativeGenerateStreamStructured(
@@ -470,7 +480,13 @@ class MNNLlmSession private constructor(
      */
     private fun guardedCallback(
         label: String,
-        onToken: (String) -> Boolean
+        onToken: (String) -> Boolean,
+        /**
+         * 思考段回调。参数名用 onThinkingChunk 而不是 onThinking：
+         * 下面匿名对象里要 override `onThinking(...)`，同名会让人读不清
+         * "这一行出现的 onThinking 到底是参数还是方法"。
+         */
+        onThinkingChunk: ((String) -> Boolean)? = null,
     ): MNNLlmNative.GenerationCallback {
         lastDegeneration = null
         val guard = RepetitionGuard(repetitionGuardConfig)
@@ -497,6 +513,22 @@ class MNNLlmSession private constructor(
                     false
                 }
             }
+
+            /**
+             * 思考段上行。**刻意不过 RepetitionGuard**：
+             * 退化检测针对的是正文复读，而思考过程本身就可能反复推敲同一句话，
+             * 拿它做退化判定会误杀正常推理。
+             */
+            override fun onThinking(token: String): Boolean {
+                return try {
+                    onThinkingChunk?.invoke(token) ?: true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in thinking callback", e)
+                    // 思考段回调出错不终止生成：思考只是展示用，
+                    // 正文才是用户真正要的答案，不能因它丢掉整段回复。
+                    true
+                }
+            }
         }
     }
     
@@ -510,11 +542,13 @@ class MNNLlmSession private constructor(
     fun chat(
         userContent: String,
         maxTokens: Int = -1,
+        /** 思考段增量回调。插在 [onToken] 之前，理由同 [generateStream]。 */
+        onThinking: ((String) -> Boolean)? = null,
         onToken: (String) -> Boolean
     ): Boolean {
         // 将单个用户消息转换为历史记录格式
         val history = listOf("user" to userContent)
-        return generateStream(history, maxTokens, onToken)
+        return generateStream(history, maxTokens, onThinking = onThinking, onToken = onToken)
     }
     
     /**

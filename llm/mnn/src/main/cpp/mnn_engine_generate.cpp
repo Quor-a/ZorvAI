@@ -42,7 +42,12 @@ namespace mnn_detail {
 //   测试、复用到 PC 侧工具链都做不到。现在 JNI 的那一半在 mnn_jni.cpp。
 struct StreamSink {
     const Callbacks* cbs = nullptr;
-    const Session* session = nullptr;
+
+    /// **非 const**：思考段分流器是可变状态（要往里喂 token、并在收尾 finish）。
+    /// 旧实现这里是 const Session*，只读 cancel 标志；
+    /// 引入分流后必须放开 const —— 否则只能把 splitter 放别处，
+    /// 又要多一套"这些状态属于谁"的扯皮。
+    Session* session = nullptr;
 
     /// 待发送缓冲。累积到 flush 条件满足才一次性下发。
     std::string buffer;
@@ -56,6 +61,32 @@ struct StreamSink {
 
 // 字符数与旧实现一致（16 字节）—— 改小会碎成单字、改大会让首字延迟变明显。
 static constexpr size_t kFlushByteThreshold = 16;
+
+/// 把一个 ThinkSplit 的两段按归属回调出去。
+/// @return true = 接收方要求停止
+inline bool emitThinkSplit(const ThinkSplit& s, const Callbacks& cbs) {
+    if (!s.thinking.empty()) {
+        TokenChunk c;
+        c.text = s.thinking.data();
+        c.len = s.thinking.size();
+        c.isThinking = true;   // ★ 此前从未置 true 的分支：思考内容走独立通道
+        cbs.onToken(cbs.user, c);
+        if (cbs.stopped()) {
+            return true;
+        }
+    }
+    if (!s.visible.empty()) {
+        TokenChunk c;
+        c.text = s.visible.data();
+        c.len = s.visible.size();
+        c.isThinking = false;
+        cbs.onToken(cbs.user, c);
+        if (cbs.stopped()) {
+            return true;
+        }
+    }
+    return false;
+}
 
 class CallbackStreamBuf : public std::streambuf {
 public:
@@ -79,12 +110,23 @@ public:
         }
 
         if (sink_->cbs != nullptr && sink_->cbs->onToken != nullptr) {
-            TokenChunk chunk;
-            chunk.text = payload.data();
-            chunk.len = payload.size();
-            chunk.isThinking = false;
-            // 回调返回后 payload 即失效（TokenChunk 的契约）—— 上层要留存自己拷贝。
-            sink_->cbs->onToken(sink_->cbs->user, chunk);
+            // 过思考段分流器：思考增量与正文增量分别回调（**最多两次**，不是一次）。
+            // 一个 flush 窗口里完全可能同时包含思考与正文（例如 `<think>a</think>b`
+            // 落在同一个 16 字节窗口里），调用方不能假设"一次 flush 一次回调"。
+            //
+            // 生命周期：payload 在回调返回后即失效（TokenChunk 契约），
+            // 但分流器内部已把内容拷进自己的 std::string，
+            // 拆出的两段各自独立、都在本次调用期间有效。
+            if (sink_->session != nullptr) {
+                emitThinkSplit(sink_->session->thinkSplitter.feed(payload), *sink_->cbs);
+            } else {
+                // 没有 session（理论上不会发生）：退化成旧行为，不丢数据。
+                TokenChunk chunk;
+                chunk.text = payload.data();
+                chunk.len = payload.size();
+                chunk.isThinking = false;
+                sink_->cbs->onToken(sink_->cbs->user, chunk);
+            }
             // 接收方（Java 侧 onToken 返回 false）要求停止。
             if (sink_->cbs->stopped()) {
                 sink_->shouldStop = true;
@@ -208,6 +250,16 @@ bool runStreamCore(Session* session, bool resetFirst, bool doFirstCall, FirstCal
     try {
         if (resetFirst) {
             session->llm->reset();
+
+            // ── 顺带复位思考分流器，判据与 KV 完全一致 ────────────────────
+            // resetFirst=true  = 新一轮生成（prefill / generate）→ 文本流从头开始，必须复位；
+            // resetFirst=false = 同一轮的后半段（decode 接在 prefill 之后）→ 文本流连续，
+            //                    **绝不能**复位，否则会把 prefill 阶段已进入的思考段状态丢掉。
+            // 这正是"分流器状态的生命周期 = 一轮生成"这条语义的落地位置。
+            //
+            // 不复位的后果：上一轮若在思考段中途结束（未闭合 </think>），
+            // segment_ 残留为 Thinking，本轮正文被整段判成思考 → 正文通道为空。
+            session->thinkSplitter.reset();
         }
 
         if (doFirstCall) {
@@ -227,6 +279,14 @@ bool runStreamCore(Session* session, bool resetFirst, bool doFirstCall, FirstCal
         // 收尾：把不足 flush 阈值的尾巴也吐出去（否则最后一个短句永远不显示）。
         if (!sink.buffer.empty() && !sink.shouldStop) {
             buf.flushToCallbacks();
+        }
+
+        // 分流器里可能还压着暂缓的尾字节（未闭合思考段 / 不完整标签前缀）。
+        // 不吐就会静默丢字节 —— 表现为回复末尾少几个字。
+        // 判据用 cancelled 而不是 shouldStop：`<eop>` 会置 shouldStop 但那是**正常结束**，
+        // 其之前的内容仍必须吐出；只有用户主动取消才不再补发。
+        if (sink.session != nullptr && !sink.cancelled && !cbs.stopped()) {
+            emitThinkSplit(sink.session->thinkSplitter.finish(), cbs);
         }
         return true;
     } catch (const std::exception& e) {

@@ -99,7 +99,27 @@ object LlamaNative {
     external fun nativeGetLastError(sessionPtr: Long): String?
 
     interface GenerationCallback {
+        /** 正文段增量。@return true 继续生成，false 停止生成 */
         fun onToken(token: String): Boolean
+
+        /**
+         * 思考段增量（模型 `<think>…</think>` 内部内容）。
+         *
+         * 引擎侧 L4 分流器已经把思考标签吃掉、并把内容拆成两个通道，
+         * 所以这里拿到的是**不带标签的纯净思考文本**，直接送 UI 的「思考区」即可。
+         *
+         * 声明为**抽象方法**而不是给默认实现，是刻意的：
+         * 若默认实现转调 [onToken]，未升级的实现类会把不带标签的思考原文当正文
+         * 吐出去（实时上屏），而且编译期毫无提示。
+         * 抽象方法能让**所有实现类编译报错**，强制每个实现点显式处理这个通道。
+         *
+         * 原生侧按 `onThinking(Ljava/lang/String;)Z` 用 GetMethodID 探测，
+         * 探测不到时会退化成"把思考内容包回 `<think>` 标签走 onToken"，
+         * 因此这里**必须**与原生签名严格一致。
+         *
+         * @return true 继续生成，false 停止生成
+         */
+        fun onThinking(token: String): Boolean
 
         /**
          * 生成前各阶段的进度（目前只有 stage="prefill"）。

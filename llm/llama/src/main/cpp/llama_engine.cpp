@@ -312,6 +312,11 @@ void LlamaEngine::releaseResources() {
     session.kvDirty = true;
     session.weightBytes = 0;
 
+    // 思考段状态也是会话级状态：换模型/卸载后必须复位。
+    // 不复位的话，若上一个会话结束在思考段中途，新会话的第一段正文
+    // 会被错误地判成思考内容（反之亦然）—— 表现为"新会话开头几个字不见了"。
+    session.thinkSplitter.reset();
+
     // 温控是设备级状态，不随会话销毁 —— 但要把档位基线复位，
     // 否则新会话的第一段 decode 会继承上一个会话的档位判断。
     ThermalGovernor::instance().reset();
@@ -700,6 +705,10 @@ bool LlamaEngine::resetKv(std::string* err) {
     session.kvPrefix.clear();
     session.kvPast = 0;
     session.kvDirty = true;
+
+    // 同上：KV 清了就代表"上下文断了"，思考段状态也必须跟着断，
+    // 否则新一段输出会被上一段的段状态污染。
+    session.thinkSplitter.reset();
     return true;
 }
 
