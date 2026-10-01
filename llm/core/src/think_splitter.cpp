@@ -113,6 +113,13 @@ std::vector<ThinkSplitter::Marker> ThinkSplitter::defaultMarkers() {
 ThinkSplitter::ThinkSplitter() : ThinkSplitter(Config()) {}
 
 ThinkSplitter::ThinkSplitter(Config config) : config_(std::move(config)) {
+    rebuildMarkers();
+}
+
+void ThinkSplitter::rebuildMarkers() {
+    // 空 = 使用默认集（见 Config::markers 的注释）。
+    // 这一步放在这里而不是构造函数里：addMarkers/setConfig 也走同一条路，
+    // 配置为空时同样要能正确展开成默认集。
     if (config_.markers.empty()) {
         config_.markers = defaultMarkers();
     }
@@ -172,6 +179,56 @@ ThinkSplitter::ThinkSplitter(Config config) : config_(std::move(config)) {
     toolCloseIndex_ = newPos[toolCloseIndex_];
 
     // 排序之后 markers_ 永久不变 —— 这是 expected_ 存下标能长期有效的前提。
+    expectedValid_ = false;
+}
+
+void ThinkSplitter::setConfig(const Config& config) {
+    config_ = config;
+    // 先复位再重建：旧的 pending_ / segment_ 是用**旧**标记集切出来的，
+    // 换了规则还接着切，等于把两套规则的产物拼在一起 —— 那是最难查的一类错。
+    reset();
+    rebuildMarkers();
+    expectedValid_ = false;
+}
+
+void ThinkSplitter::addMarkers(const std::vector<Marker>& extra) {
+    if (extra.empty()) {
+        return;
+    }
+    // config_.markers 为空时语义是"用默认集"。并集必须建在**实际生效**的那一份上，
+    // 否则 addMarkers 会把默认集整个顶掉（默认形态全失效）。
+    if (config_.markers.empty()) {
+        config_.markers = defaultMarkers();
+    }
+
+    bool changed = false;
+    for (const Marker& m : extra) {
+        if (m.prefix.empty()) {
+            continue;   // 空 prefix 匹配阶段本来就会跳过，收进来只是污染配置
+        }
+        bool duplicate = false;
+        for (const Marker& existing : config_.markers) {
+            if (existing.prefix == m.prefix) {
+                duplicate = true;
+                break;
+            }
+        }
+        if (!duplicate) {
+            config_.markers.push_back(m);
+            changed = true;
+        }
+    }
+
+    if (!changed) {
+        // 🔴 幂等是**必须**的，不是优化：引擎每轮渲染 prompt 都会调一次
+        // （applyChatTemplate 之后注入真实标签）。若这里无条件复位，
+        // 同一轮内第二次调用就会把已经切了一半的思考段打断 —— 表现为
+        // 思考内容碎片漏进正文，而且只在多轮对话里才复现。
+        return;
+    }
+
+    reset();
+    rebuildMarkers();
     expectedValid_ = false;
 }
 

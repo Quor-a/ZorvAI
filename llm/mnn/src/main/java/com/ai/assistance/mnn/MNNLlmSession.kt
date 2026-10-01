@@ -619,6 +619,24 @@ class MNNLlmSession private constructor(
      * @param enabled 是否启用 thinking 模式
      * @return 是否设置成功
      */
+    /**
+     * 注入模型**真实**使用的思考段标签（与 llama 侧的注入同一口径）。
+     *
+     * 必须在 [setThinkingMode] **之前**调用：标签决定原生能不能切开思考段，
+     * 开关决定要不要产出思考段 —— 顺序反了会出现"开了却切不开"的窗口。
+     */
+    fun setThinkMarkers(openTags: List<String>, closeTags: List<String>): Boolean {
+        val ptr = synchronized(lock) {
+            if (llmPtr == 0L) return false
+            llmPtr
+        }
+        return MNNLlmNative.nativeSetThinkMarkers(
+            ptr,
+            openTags.toTypedArray(),
+            closeTags.toTypedArray()
+        )
+    }
+
     fun setThinkingMode(enabled: Boolean): Boolean {
         val configJson = """
         {

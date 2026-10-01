@@ -177,6 +177,152 @@ bool LlamaEngine::clearToolCallGrammar(std::string* err) {
 // ═════════════════════════════════════════════════════════════════════════
 // roles / contents 是**两条等长并行数组**（不是 map）—— 因为对话里同一角色
 // 可以连续出现多次，用 map 会把相邻的 user 消息合并掉，模板语义被破坏。
+// ═════════════════════════════════════════════════════════════════════════
+// 思考段开关（与 MNN 的 MNNLlmSession.setThinkingMode 对齐）
+// ═════════════════════════════════════════════════════════════════════════
+// 上游机制，不是自研：
+//   llama.cpp 的 common_chat_templates_inputs 自带 enable_thinking 字段，
+//   common_chat_templates_apply 会把它作为**同名 jinja 变量**注入模板上下文
+//   （common/chat.cpp: {"enable_thinking", inputs.enable_thinking}）。
+//   MNN 侧同理，只是走 set_config 的 jinja.context。
+//   于是两侧的**用户可见行为**完全一致：模板里
+//   `{%- if enable_thinking is false %}` 那一支被选中，思考段不再产出。
+//
+// 能力探测同样用上游函数（chat.h: common_chat_templates_support_enable_thinking）。
+// 它内部会把模板真渲染一次、再看 params.supports_thinking —— 比自己扫模板字符串
+// 找关键字可靠得多（变量名可能出现在注释、转义或默认值里）。
+namespace {
+
+/// 探测 + 缓存。返回模板**是否会产出思考段** —— 注意：不是"模板认识
+/// enable_thinking 这个变量"。
+/// 🔎 别被上游函数名骗了：common_chat_templates_support_enable_thinking 返回的是
+///    params.supports_thinking，它由 autoparser 解析模板得出
+///    （chat.cpp: supports_thinking = autoparser.reasoning.mode != NONE），
+///    **与 enable_thinking 的取值毫无关系**。等价于 MNN 侧的
+///    MnnModelCapabilities.emitsThinkBlock（模板里有 <think> 段），
+///    而不是 supportsThinkingToggle（模板里出现 "enable_thinking" 字面）。
+///    驱动层正是靠这个值决定要不要开思考 —— 与 MNN 路径同一口径。
+/// 探测要让上游真渲染一次模板，而模型作者写坏的模板会在 render 时抛异常 ——
+/// 异常穿过 JNI 帧就是 std::terminate（App 直接消失，没有 Java 异常可抓），
+/// 所以这里必须兜住。
+bool detectSupportsThinking(llama_detail::Session* session) {
+    if (session == nullptr) return false;
+    if (session->supportsThinking >= 0) return session->supportsThinking == 1;
+    bool ok = false;
+    if (session->chatTemplates != nullptr) {
+        try {
+            ok = common_chat_templates_support_enable_thinking(session->chatTemplates.get());
+        } catch (const std::exception& e) {
+            LOGE("探测 enable_thinking 支持失败：%s", e.what());
+            ok = false;
+        } catch (...) {
+            LOGE("探测 enable_thinking 支持失败（未知错误）。");
+            ok = false;
+        }
+    }
+    session->supportsThinking = ok ? 1 : 0;
+    return ok;
+}
+
+}  // namespace
+
+namespace {
+
+/// 去掉首尾空白（上游部分标签常量带尾空格，如 `<|channel>thought `）。
+std::string trimTag(const std::string& s) {
+    size_t b = 0;
+    size_t e = s.size();
+    while (b < e && (s[b] == ' ' || s[b] == '\t' || s[b] == '\n' || s[b] == '\r')) ++b;
+    while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\t' || s[e - 1] == '\n' || s[e - 1] == '\r')) --e;
+    return s.substr(b, e - b);
+}
+
+/// 把上游 detector / autoparser 探测到的**真实**思考标签并进分流器。
+///
+/// 为什么这一步必须有：ThinkSplitter 的默认标记集只覆盖
+/// `<think>` / `<thinking>` / 全角三种形态（见 defaultMarkers 的注释），
+/// 而 llama.cpp 的模板 detector 已经把答案写在 common_chat_params 里：
+///     [THINK] / [/THINK]
+///     <|channel|>analysis<|message|> / <|end|>
+///     <|channel>thought / <channel|>
+///     <think> / </think>
+///     （autoparser 分支则是真解析模板后动态得出）
+/// 不接这一段，用非标准标签的模型就会**思考原文直接上屏** ——
+/// 分流器认不出开标签，整段推理被当成正文。
+///
+/// 用**定长标记**（terminator 为空）而不是 `prefix + '>'`：
+/// 上游给的是完整标签串，而 `<|channel|>analysis<|message|>` 有 28 字节，
+/// 远超 maxTagLength(=16) 的保护上限 —— 定长匹配不走那条保护，因此不受限。
+///
+/// 探测不到（thinking_start_tag 为空）时**什么都不做**，保留默认集 ——
+/// 也就是行为与本改动之前完全一致，不会因为拿不到标签而退化。
+void applyDetectedThinkingTags(llama_detail::Session* session,
+                               const common_chat_params& params) {
+    if (session == nullptr || params.thinking_start_tag.empty()) {
+        return;
+    }
+    std::vector<ThinkSplitter::Marker> extra;
+
+    const std::string openTag = trimTag(params.thinking_start_tag);
+    if (!openTag.empty()) {
+        ThinkSplitter::Marker openMarker;
+        openMarker.prefix = openTag;
+        openMarker.terminator.clear();   // 定长
+        openMarker.open = true;
+        extra.push_back(std::move(openMarker));
+    }
+    for (const std::string& rawEnd : params.thinking_end_tags) {
+        const std::string endTag = trimTag(rawEnd);
+        if (endTag.empty()) {
+            continue;
+        }
+        ThinkSplitter::Marker closeMarker;
+        closeMarker.prefix = endTag;
+        closeMarker.terminator.clear();
+        closeMarker.open = false;
+        extra.push_back(std::move(closeMarker));
+    }
+    session->thinkSplitter.addMarkers(extra);
+}
+
+}  // namespace
+
+bool LlamaEngine::setThinkingMode(bool enabled, bool* supported, std::string* err) {
+    if (!impl_) {
+        if (err) *err = "引擎内部状态缺失（Impl 为空）。";
+        return false;
+    }
+    llama_detail::Session* session = &impl_->session;
+    if (session->chatTemplates == nullptr) {
+        // 刻意**不**写 lastError：与 applyStructuredChatTemplate 同一理由 ——
+        // "GGUF 没内嵌 chat template"是可预期常态（驱动层每个模型都会探测一次
+        // 思考能力），写进 lastError 会让聊天气泡冒出一条误导性的错误。
+        // 调用方拿 err 判断即可。
+        if (err) *err = "模型未就绪或该 GGUF 未内嵌聊天模板（chat template 缺失）。";
+        return false;
+    }
+    // 刻意**不**因"模板不支持"而拒绝：与 MNN 对齐 —— 配置写入成功即成功。
+    // 模板不支持时这次设置是无害的空操作，上层用 supportsThinking() 单独判断。
+    session->thinkingMode = enabled ? 1 : 0;
+    if (supported != nullptr) *supported = detectSupportsThinking(session);
+    LOGI("setThinkingMode: enabled=%d supported=%d",
+         enabled ? 1 : 0, session->supportsThinking == 1 ? 1 : 0);
+    return true;
+}
+
+bool LlamaEngine::supportsThinking(std::string* err) {
+    if (!impl_) {
+        if (err) *err = "引擎内部状态缺失（Impl 为空）。";
+        return false;
+    }
+    llama_detail::Session* session = &impl_->session;
+    if (session->chatTemplates == nullptr) {
+        if (err) *err = "模型未就绪或该 GGUF 未内嵌聊天模板（chat template 缺失）。";
+        return false;
+    }
+    return detectSupportsThinking(session);
+}
+
 bool LlamaEngine::applyChatTemplate(const std::vector<std::string>& roles,
                                     const std::vector<std::string>& contents,
                                     bool addAssistant, std::string* out, std::string* err) {
@@ -213,6 +359,11 @@ bool LlamaEngine::applyChatTemplate(const std::vector<std::string>& roles,
     inputs.messages = std::move(messages);
     inputs.add_generation_prompt = addAssistant;
     inputs.use_jinja = true;
+    // 三态：**只有上层显式设置过**才覆盖 llama.cpp 的默认值(true)。
+    // "上层没管思考"与"上层明确关掉思考"必须是两件事。
+    if (session->thinkingMode >= 0) {
+        inputs.enable_thinking = session->thinkingMode == 1;
+    }
 
     // try/catch 是必需的：jinja 模板执行由 llama.cpp 内部的模板引擎负责，
     // 模型作者写坏的模板会在 render 时抛 std::runtime_error。
@@ -224,6 +375,10 @@ bool LlamaEngine::applyChatTemplate(const std::vector<std::string>& roles,
             failWith(session, err, "聊天模板渲染结果为空（模板与消息不匹配）。");
             return false;
         }
+        // 🧠 本函数由此**不再是纯函数**：顺带把模板真正使用的思考标签并进分流器。
+        // 放这里的理由是它每轮生成前必被调用一次，而标签只有渲染时才知道；
+        // addMarkers 幂等，重复注入无副作用（见其实现注释）。
+        applyDetectedThinkingTags(session, params);
         *out = params.prompt;
         return true;
     } catch (const std::exception& e) {
@@ -288,6 +443,10 @@ bool LlamaEngine::applyStructuredChatTemplate(const std::string& messagesJson,
             : COMMON_CHAT_TOOL_CHOICE_AUTO;
         inputs.add_generation_prompt = addAssistant;
         inputs.use_jinja = true;
+        // 工具轮同样受思考开关约束（见 applyChatTemplate 处的说明）。
+        if (session->thinkingMode >= 0) {
+            inputs.enable_thinking = session->thinkingMode == 1;
+        }
 
         const common_chat_params params =
             common_chat_templates_apply(session->chatTemplates.get(), inputs);
@@ -295,6 +454,8 @@ bool LlamaEngine::applyStructuredChatTemplate(const std::string& messagesJson,
             if (err) *err = "结构化聊天模板渲染结果为空。";
             return false;
         }
+        // 🧠 与 applyChatTemplate 同一处理：工具轮的模板同样可能用非标准思考标签。
+        applyDetectedThinkingTags(session, params);
 
         session->toolCallGrammar = llama_detail::buildToolCallGrammarConfig(params);
         session->toolCallParserParams = common_chat_parser_params(params);

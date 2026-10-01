@@ -521,6 +521,36 @@ Java_com_ai_assistance_llama_LlamaNative_nativeClearToolCallGrammar(JNIEnv* env,
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 
+// ── 思考段开关（与 MNN 的 MNNLlmSession.setThinkingMode 对齐）────────────────
+// 返回的是"写入成功"（与 MNN 的 set_config 结果同义）；模板是否真的支持
+// enable_thinking 由 nativeSupportsThinking 单独回答 —— 把两件事混进一个
+// bool 会让上层无法区分"开关没生效"和"这个模型压根不支持思考"。
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_ai_assistance_llama_LlamaNative_nativeSetThinkingMode(JNIEnv* env, jclass clazz,
+                                                               jlong sessionPtr,
+                                                               jboolean enabled) {
+    (void) env;
+    (void) clazz;
+    REQUIRE_ENGINE_VAL(sessionPtr, JNI_FALSE);
+    std::string err;
+    bool supported = false;
+    const bool ok = engine->setThinkingMode(enabled == JNI_TRUE, &supported, &err);
+    if (!ok) LOGE("nativeSetThinkingMode: %s", err.c_str());
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_ai_assistance_llama_LlamaNative_nativeSupportsThinking(JNIEnv* env, jclass clazz,
+                                                                jlong sessionPtr) {
+    (void) env;
+    (void) clazz;
+    REQUIRE_ENGINE_VAL(sessionPtr, JNI_FALSE);
+    std::string err;
+    const bool ok = engine->supportsThinking(&err);
+    if (!ok && !err.empty()) LOGE("nativeSupportsThinking: %s", err.c_str());
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_ai_assistance_llama_LlamaNative_nativeApplyChatTemplate(
         JNIEnv* env,
@@ -714,15 +744,24 @@ const JNINativeMethod kLlamaNativeMethods[] = {
      reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeApplyStructuredChatTemplate)},
     {"nativeGenerateStream", "(JLjava/lang/String;ILcom/ai/assistance/llama/LlamaNative$GenerationCallback;)Z",
      reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream)},
+    // 🔴 nativeSetToolCallGrammar 此前**只存在于本文件上半部分**：
+    //    实现有、注册表没有、Kotlin 声明也没有 —— LlamaEngine::setToolCallGrammar
+    //    （完整实现）在上层根本不可达，工具调用只能靠模型自由发挥。
+    {"nativeSetToolCallGrammar", "(JLjava/lang/String;[Ljava/lang/String;)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeSetToolCallGrammar)},
     {"nativeClearToolCallGrammar", "(J)Z",
      reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeClearToolCallGrammar)},
+    {"nativeSetThinkingMode", "(JZ)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeSetThinkingMode)},
+    {"nativeSupportsThinking", "(J)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeSupportsThinking)},
     {"nativeParseToolCallResponse", "(JLjava/lang/String;)Ljava/lang/String;",
      reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeParseToolCallResponse)},
     {"nativeGetLastError", "(J)Ljava/lang/String;",
      reinterpret_cast<void*>(Java_com_ai_assistance_llama_LlamaNative_nativeGetLastError)},
 };
 
-constexpr int kLlamaNativeCount = 14;
+constexpr int kLlamaNativeCount = 17;
 
 }  // namespace
 

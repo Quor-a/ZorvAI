@@ -317,6 +317,12 @@ void LlamaEngine::releaseResources() {
     // 会被错误地判成思考内容（反之亦然）—— 表现为"新会话开头几个字不见了"。
     session.thinkSplitter.reset();
 
+    // 思考开关也绑在会话上：模板已释放 → 探测缓存必须跟着失效，
+    // 否则换成一个不支持 enable_thinking 的模型后，supportsThinking 仍返回旧结果。
+    // 开关本身回到"未设置"，让新模型走它自己模板的默认分支。
+    session.thinkingMode = -1;
+    session.supportsThinking = -1;
+
     // 温控是设备级状态，不随会话销毁 —— 但要把档位基线复位，
     // 否则新会话的第一段 decode 会继承上一个会话的档位判断。
     ThermalGovernor::instance().reset();

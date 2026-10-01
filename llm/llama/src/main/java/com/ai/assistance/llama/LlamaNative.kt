@@ -81,7 +81,32 @@ object LlamaNative {
     ): Boolean
 
     @JvmStatic
+    /**
+     * 装载工具调用文法（GBNF + 惰性触发模式）。
+     *
+     * 🔴 此前本方法**只存在于 native 侧**：llama_jni.cpp 里实现了
+     * Java_..._nativeSetToolCallGrammar，但既没进 kLlamaNativeMethods 注册表，
+     * 这里也没有声明 —— 于是 LlamaEngine::setToolCallGrammar（完整实现）在
+     * 上层**根本没有可达入口**，工具调用只能靠模型自由发挥。现已补齐。
+     *
+     * @param triggerPatterns 惰性触发模式；命中后才开始套用文法。空数组 = 全程约束。
+     */
+    external fun nativeSetToolCallGrammar(
+        sessionPtr: Long,
+        grammar: String,
+        triggerPatterns: Array<String>
+    ): Boolean
+
     external fun nativeClearToolCallGrammar(sessionPtr: Long): Boolean
+
+    /**
+     * 开关思考段。返回**写入是否成功**（与 MNN 的 setThinkingMode 同义）；
+     * 模板是否真的支持用 [nativeSupportsThinking] 单独查询。
+     */
+    external fun nativeSetThinkingMode(sessionPtr: Long, enabled: Boolean): Boolean
+
+    /** 该 GGUF 内嵌模板是否支持 enable_thinking（懒探测，结果缓存在会话里）。 */
+    external fun nativeSupportsThinking(sessionPtr: Long): Boolean
 
     @JvmStatic
     external fun nativeParseToolCallResponse(

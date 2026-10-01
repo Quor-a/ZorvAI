@@ -774,6 +774,48 @@ Java_com_ai_assistance_mnn_MNNLlmNative_nativeSetConfig(JNIEnv* env, jclass claz
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 
+namespace {
+
+/// 把 String[] 收成 vector。
+/// llama 侧有同名实现，但那是**另一个 .so**（符号隔离 + 静态库各自链接），
+/// 不共享；为它开一个公共头不划算，就地写一份。
+std::vector<std::string> collectStrings(JNIEnv* env, jobjectArray jarray) {
+    std::vector<std::string> out;
+    if (jarray == nullptr) {
+        return out;
+    }
+    const jsize count = env->GetArrayLength(jarray);
+    out.reserve(static_cast<size_t>(count));
+    for (jsize i = 0; i < count; ++i) {
+        auto item = reinterpret_cast<jstring>(env->GetObjectArrayElement(jarray, i));
+        if (item == nullptr) {
+            continue;
+        }
+        out.push_back(jstringToString(env, item));
+        env->DeleteLocalRef(item);
+    }
+    return out;
+}
+
+}  // namespace
+
+// ── 思考段真实标签（对齐 llama 侧的 applyDetectedThinkingTags）────────────
+// 默认标记集只认 <think> / <thinking> / 全角；模板用 [THINK]、<|channel|>… 的模型
+// 交给原生后**根本切不开**，整段推理会被当正文推上屏。
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_ai_assistance_mnn_MNNLlmNative_nativeSetThinkMarkers(JNIEnv* env, jclass clazz,
+                                                              jlong llmPtr,
+                                                              jobjectArray openTags,
+                                                              jobjectArray closeTags) {
+    (void) clazz;
+    REQUIRE_ENGINE_VAL(llmPtr, JNI_FALSE);
+    std::string err;
+    const bool ok = engine->setThinkMarkers(collectStrings(env, openTags),
+                                            collectStrings(env, closeTags), &err);
+    if (!ok) LOGE("nativeSetThinkMarkers: %s", err.c_str());
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_ai_assistance_mnn_MNNLlmNative_nativeCancel(JNIEnv* env, jclass clazz, jlong llmPtr) {
     (void) env;
@@ -919,9 +961,13 @@ const JNINativeMethod kMNNLlmNativeMethods[] = {
      reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeCancel)},
     {"nativeGetLastError", "(J)Ljava/lang/String;",
      reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeGetLastError)},
+    // 思考段真实标签注入：MNN 侧没有 llama 那种"模板 detector 自动给标签"的路径，
+    // 由 Kotlin 的 MnnModelCapabilities 探测后传下来（见 nativeSetThinkMarkers）。
+    {"nativeSetThinkMarkers", "(J[Ljava/lang/String;[Ljava/lang/String;)Z",
+     reinterpret_cast<void*>(Java_com_ai_assistance_mnn_MNNLlmNative_nativeSetThinkMarkers)},
 };
 
-constexpr int kMNNLlmNativeCount = 22;
+constexpr int kMNNLlmNativeCount = 23;
 
 }  // namespace
 

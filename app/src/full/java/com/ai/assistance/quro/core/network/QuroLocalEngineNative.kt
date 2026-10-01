@@ -32,7 +32,11 @@ import java.io.File
  * 增量扫描用状态机处理 token 被标签边界劈开的情况（如 `"<thi"` + `"nk>world"`），并保守地
  * 暂缓提交可能构成 `<think>` / `</think>` 前缀的尾部，避免标签泄漏。
  */
-private class StreamingThinkStripper {
+// 🔓 由 private 放开为 internal：只为让 app/src/testFull 的单测能直接锁死它的
+// 三个视图语义（rawText / visible / thinking）。它是"思考段剥离"的唯一实现，
+// 一旦 rawText() 语义被改坏，下游两处（工具调用恢复 / 是否产出判定）会**静默**
+// 失效 —— 不崩、不报错、日志正常，只能靠单测守。放宽可见性不改变任何行为。
+internal class StreamingThinkStripper {
     /** 完整原始累积文本（保留思考段），终态解析用。 */
     private val raw: StringBuilder = StringBuilder()
 
@@ -554,6 +558,14 @@ class QuroLocalEngineNative : QuroLocalEngine {
             // 🧠 1.A：流式思考剥离器——增量维护「可见文本」（剔除 <think> 块，含未闭合尾部），
             // 同时累积原始全文供终态解析。这样生成过程中用户不会实时看到思考原文。
             val stripper = StreamingThinkStripper()
+            // 🔧 N3 收尾：native 侧的 L4 分流器已把思考段拆成**独立通道**上行（不带标签），
+            // 而终态的工具调用恢复、【是否产出】判定都读 stripper.rawText() —— 它只累积
+            // onToken 的内容。若不再把思考段补回去，rawText() 就永久丢了思考段：
+            //   ① 「思考段内 <tool_call>」恢复路径失效（那正是最需要兜住的场景）；
+            //   ② 模型只吐思考不吐正文时被误判成「结构化生成未产出」，白白降级重试。
+            // 这里把标签贴回去再喂 stripper 重建完整原文；本标志用于避免与 native 的
+            // onThinking 增量双发（见 onToken 里的 thinkingText 兜底）。
+            var nativeThinkingSeen = false
             // 🔧 v1.0.52：流式阶段若检测到「明文推理导言」（Thinking Process: 等），整段抑制实时展示，
             // 避免用户实时看到推理过程刷屏；终态由 extractCleanAnswer 给出干净答案后一次性补推。
             var reasoningSuppressed = false
@@ -590,7 +602,12 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     if (!reasoningSuppressed) {
                         onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
                     }
-                    onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
+                    // native 已分流时不再重复透传（避免与 onThinking 增量双发）；
+                    // native 未分流（旧 .so / JNI 回退把思考包回标签走 onToken）时，
+                    // 这里是唯一的上行通道，不能省。
+                    if (!nativeThinkingSeen) {
+                        onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
+                    }
                     if (isCanceled()) return@generateStreamStructured false
                     true
                     },
@@ -598,7 +615,11 @@ class QuroLocalEngineNative : QuroLocalEngine {
                         // 不再经 Kotlin 的 StreamingThinkStripper —— 那层现在只作为
                         // "native 未分流时的兜底"（见 onToken 里的 thinkingText 透传）。
                         onThinking = { thinkChunk ->
+                            nativeThinkingSeen = true
                         onThinking?.let { cb -> runCatching { cb(thinkChunk) } }
+                        // 贴回 <think>…</think> 再喂剥离器，保持 rawText() 的「完整原文」语义
+                        // （visible 不受影响：剥离器会把标签内的内容归到思考段）。
+                        runCatching { stripper.accept("<think>" + thinkChunk + "</think>") }
                         true
                     },
                 )
@@ -620,12 +641,21 @@ class QuroLocalEngineNative : QuroLocalEngine {
                         tokenCount++
                         val visible = stripper.accept(token)
                         onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
-                        onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
+                        // native 已分流时不再重复透传（避免与 onThinking 增量双发）；
+                        // native 未分流（旧 .so / JNI 回退把思考包回标签走 onToken）时，
+                        // 这里是唯一的上行通道，不能省。
+                        if (!nativeThinkingSeen) {
+                            onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
+                        }
                         if (isCanceled()) return@generateStream false
                         true
                         },
                         onThinking = { thinkChunk ->
+                            nativeThinkingSeen = true
                             onThinking?.let { cb -> runCatching { cb(thinkChunk) } }
+                            // 贴回 <think>…</think> 再喂剥离器，保持 rawText() 的「完整原文」语义
+                            // （visible 不受影响：剥离器会把标签内的内容归到思考段）。
+                            runCatching { stripper.accept("<think>" + thinkChunk + "</think>") }
                             true
                         },
                     )
@@ -649,12 +679,21 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     if (!reasoningSuppressed) {
                         onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
                     }
-                    onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
+                    // native 已分流时不再重复透传（避免与 onThinking 增量双发）；
+                    // native 未分流（旧 .so / JNI 回退把思考包回标签走 onToken）时，
+                    // 这里是唯一的上行通道，不能省。
+                    if (!nativeThinkingSeen) {
+                        onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
+                    }
                     if (isCanceled()) return@generateStream false
                     true
                     },
                     onThinking = { thinkChunk ->
+                        nativeThinkingSeen = true
                         onThinking?.let { cb -> runCatching { cb(thinkChunk) } }
+                        // 贴回 <think>…</think> 再喂剥离器，保持 rawText() 的「完整原文」语义
+                        // （visible 不受影响：剥离器会把标签内的内容归到思考段）。
+                        runCatching { stripper.accept("<think>" + thinkChunk + "</think>") }
                         true
                     },
                 )
@@ -983,6 +1022,26 @@ class QuroLocalEngineNative : QuroLocalEngine {
             )
         }
 
+        // 🧠 思考开关：与 MNN 路径**同一套口径**（见 createMnnSessionStatic 里
+        // v1.0.50 那条长注释）——只有当模型模板**真的会产出思考段**时才显式打开
+        // enable_thinking，其余一律关掉，避免「开了 think 却吐明文推理」的模型
+        // 把推理独白混进正文。
+        //
+        // 判定值来自 llama.cpp 的 autoparser 真解析模板
+        // （supports_thinking = reasoning.mode != NONE），语义等价于 MNN 的
+        // MnnModelCapabilities.emitsThinkBlock —— **不是**「模板含 enable_thinking
+        // 字面」那个 toggle（那正是明文推理污染的元凶）。
+        //
+        // 这一步此前完全缺失：MNN 路径有，llama 路径没有，于是同一个模型走两条
+        // 后端时会得到不一样的思考行为。现在两端同开关、同判据、同日志措辞。
+        val emitsThinkBlock = runCatching { session.supportsThinking() }.getOrDefault(false)
+        runCatching { session.setThinkingMode(emitsThinkBlock) }
+        QuroDiag.log(
+            "LocalEngine",
+            if (emitsThinkBlock) "🧠 llama thinking 模式已开启（模板含 reasoning 段）"
+            else "· llama thinking 未开启（模板无 reasoning 段，避免明文推理污染）"
+        )
+
         return try {
             generateLlama(session, model, modelName, messages, temperature, maxTokens, onToken, toolSpecsJson, onThinking, isCanceled)
         } finally {
@@ -1088,6 +1147,14 @@ class QuroLocalEngineNative : QuroLocalEngine {
             // （"有思考但是不能用"的 CPP 侧观感）。复用 MNN 路径同款 StreamingThinkStripper，
             // 仅把剔除思考块后的可见文本推给 UI；终态再统一清洗。
             val stripper = StreamingThinkStripper()
+            // 🔧 N3 收尾：native 侧的 L4 分流器已把思考段拆成**独立通道**上行（不带标签），
+            // 而终态的工具调用恢复、【是否产出】判定都读 stripper.rawText() —— 它只累积
+            // onToken 的内容。若不再把思考段补回去，rawText() 就永久丢了思考段：
+            //   ① 「思考段内 <tool_call>」恢复路径失效（那正是最需要兜住的场景）；
+            //   ② 模型只吐思考不吐正文时被误判成「结构化生成未产出」，白白降级重试。
+            // 这里把标签贴回去再喂 stripper 重建完整原文；本标志用于避免与 native 的
+            // onThinking 增量双发（见 onToken 里的 thinkingText 兜底）。
+            var nativeThinkingSeen = false
             val ok = session.generateStream(
                 prompt,
                 effMaxTokens,
@@ -1101,7 +1168,12 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 // 🧠 流式阶段即剥离 <think> 块，避免用户实时看到思考原文（与 MNN 对齐）。
                 val visible = stripper.accept(token)
                 onToken?.let { cb -> runCatching { cb(streamDisplay(visible)) } }
-                onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
+                // native 已分流时不再重复透传（避免与 onThinking 增量双发）；
+                // native 未分流（旧 .so / JNI 回退把思考包回标签走 onToken）时，
+                // 这里是唯一的上行通道，不能省。
+                if (!nativeThinkingSeen) {
+                    onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
+                }
                 // 🔧 v454：取消信号到达 → 终止生成（与 MNN 对齐），避免原生 aborted 被包成错误气泡。
                 if (isCanceled()) {
                     QuroDiag.log("LocalEngine", "· llama 取消信号到达 | tokens=$tokenCount | 终止生成")
@@ -1110,8 +1182,12 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 true
             },
                 onThinking = { thinkChunk ->
+                    nativeThinkingSeen = true
                     // 🧠 引擎侧 L4 分流器上行的思考段：**不带标签**，直接透传。
                     onThinking?.let { cb -> runCatching { cb(thinkChunk) } }
+                    // 贴回 <think>…</think> 再喂剥离器，保持 rawText() 的「完整原文」语义
+                    // （visible 不受影响：剥离器会把标签内的内容归到思考段）。
+                    runCatching { stripper.accept("<think>" + thinkChunk + "</think>") }
                     true
                 }
             )
@@ -1431,6 +1507,15 @@ class QuroLocalEngineNative : QuroLocalEngine {
             // 完全失效。这里改用 emitsThinkBlock 作为唯一开启依据（supportsThinkingToggle 仅表示模板含
             // "enable_thinking" 字面，正是「开了却吐明文」的元凶，绝不能再作开启条件）；其余模型关掉 thinking，
             // 直接吐干净回答。非思考模型 setThinkingMode 返回 false，按普通模型继续，不污染输出。
+            // 🧠 先把模板**真实**使用的思考标签交给原生分流器，再决定要不要开思考。
+            // 顺序不能反：标签决定原生**能不能切开**思考段，开关决定要不要**产出**
+            // 思考段。默认标记集只认 <think>/<thinking>/全角，而模板可能用
+            // [THINK]、<|channel|>analysis<|message|> —— 不注入的话，那些模型的
+            // 思考段在原生根本不被识别，整段推理会被当正文推上屏，而下面的
+            // emitsThinkBlock 已经判为 true，症状就成了"开关开了、剥离却没生效"。
+            // （llama 侧同样的事由 llama.cpp 的模板 detector 自动完成。）
+            runCatching { session.setThinkMarkers(caps.thinkOpenTags, caps.thinkCloseTags) }
+
             val thinkingApplicable = caps.emitsThinkBlock
             val applied = runCatching { session.setThinkingMode(thinkingApplicable) }.getOrDefault(false)
             QuroDiag.log(

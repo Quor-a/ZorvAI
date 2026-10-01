@@ -355,6 +355,51 @@ bool MnnEngine::setConfig(const std::string& configJson, std::string* err) {
     }
 }
 
+bool MnnEngine::setThinkMarkers(const std::vector<std::string>& openTags,
+                                const std::vector<std::string>& closeTags,
+                                std::string* err) {
+    if (!impl_) {
+        if (err) *err = "引擎内部状态缺失（Impl 为空）。";
+        return false;
+    }
+
+    // 与 llama 侧 applyDetectedThinkingTags 完全相同的取舍：
+    // 用**定长标记**（terminator 为空），因为传下来的是完整标签串，而
+    // `<|channel|>analysis<|message|>` 有 28 字节、远超 maxTagLength(=16)
+    // 的保护上限 —— 定长匹配不走那条保护，因此不受限。
+    std::vector<ThinkSplitter::Marker> extra;
+    extra.reserve(openTags.size() + closeTags.size());
+    for (const std::string& tag : openTags) {
+        if (tag.empty()) continue;
+        ThinkSplitter::Marker m;
+        m.prefix = tag;
+        m.terminator.clear();
+        m.open = true;
+        extra.push_back(std::move(m));
+    }
+    for (const std::string& tag : closeTags) {
+        if (tag.empty()) continue;
+        ThinkSplitter::Marker m;
+        m.prefix = tag;
+        m.terminator.clear();
+        m.open = false;
+        extra.push_back(std::move(m));
+    }
+
+    if (extra.empty()) {
+        // 探测不到标签不是错误：保留默认标记集，行为与改动前一致。
+        return true;
+    }
+
+    // addMarkers 是幂等的：驱动层每个模型加载时调一次，重复调用**不会复位** ——
+    // 否则会把已经切了一半的思考段打断（只在多轮对话里复现的那种错）。
+    impl_->session.thinkSplitter.addMarkers(extra);
+    LOGI("setThinkMarkers: open=%d close=%d (共 %d 条注入)",
+         static_cast<int>(openTags.size()), static_cast<int>(closeTags.size()),
+         static_cast<int>(extra.size()));
+    return true;
+}
+
 void MnnEngine::setWavformCallback(WavformCallback cb) {
     if (!impl_) return;
     mnn_detail::Session& session = impl_->session;

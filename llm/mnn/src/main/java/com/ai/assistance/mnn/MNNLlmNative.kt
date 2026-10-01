@@ -164,6 +164,24 @@ object MNNLlmNative {
     external fun nativeSetConfig(llmPtr: Long, configJson: String): Boolean
 
     /**
+     * 注入模型**真实**使用的思考段标签（开 / 闭两组）。
+     *
+     * 原生分流器（ThinkSplitter）默认只认 `<think>` / `<thinking>` / 全角三种形态，
+     * 而真实模型可能用 `[THINK]`、`<|channel|>analysis<|message|>` 之类 ——
+     * 不注入的话，那些模型的思考段在原生**根本不被识别**，整段推理当正文上屏；
+     * 而 Kotlin 侧的能力探测已经判为"会产出思考段"，于是症状变成
+     * "开关开了、剥离却没生效"，极难定位。
+     *
+     * 幂等：重复调用不会打断进行中的段。
+     * @return 注入是否被接受（空数组也算成功 —— 那是"探测不到标签"的常态）
+     */
+    external fun nativeSetThinkMarkers(
+        llmPtr: Long,
+        openTags: Array<String>,
+        closeTags: Array<String>
+    ): Boolean
+
+    /**
      * 注册或清除音频数据回调。
      * @param llmPtr LLM 指针
      * @param callback 为 null 时表示清除回调
