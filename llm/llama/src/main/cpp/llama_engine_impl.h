@@ -30,6 +30,7 @@
 
 #include "quro/engine_types.h"
 #include "quro/thermal.h"
+#include "quro/think_splitter.h"
 
 // ---------------------------------------------------------------------------
 // 日志与错误宏
@@ -102,6 +103,13 @@ struct Session {
     common_chat_parser_params toolCallParserParams;
     bool hasToolCallParser = false;
     std::atomic_bool cancel{false};
+
+    /// ── 思考段 / 正文段 分流（L4，引擎无关实现见 quro/think_splitter.h）──
+    /// 契约 `TokenChunk::isThinking` 从本重构起**真的有值**：
+    /// 在此之前两栈四个发射点全部硬编码 false，害得上层在 Kotlin 里
+    /// 手写了三份文本剥离器（StreamingThinkStripper / MnnThinkContent / stripResidualThink）。
+    /// 换会话/换模型必须 reset（见 resetKv 与 load），否则状态串味。
+    ThinkSplitter thinkSplitter;
 
     // ── KV 前缀缓存（Plan A）──
     // kvPrefix : 上一轮生成结束后保留的 KV 前缀（= 上一轮最终 promptTokens）。

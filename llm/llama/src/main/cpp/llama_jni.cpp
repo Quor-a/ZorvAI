@@ -203,6 +203,11 @@ struct JavaTokenSink {
     jmethodID midOnToken = nullptr;
     jmethodID midOnProgress = nullptr;
 
+    /// 思考段上行通道（`onThinking(String):Boolean`）。
+    /// **可为 null**：Java 侧没实现该方法时保持 null，此时思考内容会带上
+    /// `<think>…</think>` 包装走 onToken 回退 —— 见 sinkOnToken 里的说明。
+    jmethodID midOnThinking = nullptr;
+
     // Java 侧要求停止的两个来源，合起来就是 shouldStop 的返回值。
     bool javaRejected = false;        // onToken 返回 false
     bool javaThrew = false;           // onToken 抛异常（已清除，但必须停）
@@ -232,13 +237,42 @@ void sinkOnToken(void* user, const quro::llm::TokenChunk& chunk) {
         return;
     }
 
-    jstring jdelta = bytesUtf8ToJstring(env, std::string(chunk.text, chunk.len));
+    // ── 思考段路由（L4 分流器 → Java 上行）────────────────────────────────
+    // 引擎侧已经把 `<think>` 标签吃掉，并把内容分成两个通道
+    // （TokenChunk::isThinking）。所以这里必须**按通道分别上行**：
+    //
+    //   首选：Java 侧实现了 onThinking(String):Boolean → 思考内容走独立通道，
+    //         上层直接送进"思考区"，不需要任何文本标签。
+    //   回退：Java 侧没有该方法（旧实现 / 未同步升级）→ 把思考内容**包回**
+    //         `<think>…</think>` 再走 onToken，让上层那套文本剥离器照常工作。
+    //
+    // 为什么回退也一定要包标签：**绝不能把思考原文裸发**。
+    // 上层剥离器只认标签；一旦标签被引擎吃掉、它又拿不到 isThinking，
+    // 思考过程就会**实时上屏** —— 这是最容易被忽略、但用户一眼就看得见的回归。
+    std::string wrapped;
+    const char* payload = chunk.text;
+    size_t payloadLen = chunk.len;
+    jmethodID mid = sink->midOnToken;
+    if (chunk.isThinking) {
+        if (sink->midOnThinking != nullptr) {
+            mid = sink->midOnThinking;
+        } else {
+            wrapped.reserve(chunk.len + 16);
+            wrapped.append("<think>");
+            wrapped.append(chunk.text, chunk.len);
+            wrapped.append("</think>");
+            payload = wrapped.data();
+            payloadLen = wrapped.size();
+        }
+    }
+
+    jstring jdelta = bytesUtf8ToJstring(env, std::string(payload, payloadLen));
     if (jdelta == nullptr || env->ExceptionCheck()) {
         env->ExceptionClear();
         return;
     }
 
-    const jboolean keepGoing = env->CallBooleanMethod(callbackObj, sink->midOnToken, jdelta);
+    const jboolean keepGoing = env->CallBooleanMethod(callbackObj, mid, jdelta);
     env->DeleteLocalRef(jdelta);
 
     if (env->ExceptionCheck()) {
@@ -593,11 +627,20 @@ Java_com_ai_assistance_llama_LlamaNative_nativeGenerateStream(JNIEnv* env, jclas
         env->ExceptionClear();
         midOnProgress = nullptr;
     }
+    // 思考段上行通道，同样是**可选**的：Java 侧没有 onThinking 时静默降级
+    // （思考内容带上 <think> 包装走 onToken），而不是让整次生成失败。
+    // 必须在 DeleteLocalRef(cbCls) **之前**取，否则 cbCls 已失效。
+    jmethodID midOnThinking = env->GetMethodID(cbCls, "onThinking", "(Ljava/lang/String;)Z");
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        midOnThinking = nullptr;
+    }
     env->DeleteLocalRef(cbCls);
 
     JavaTokenSink sink;
     sink.midOnToken = midOnToken;
     sink.midOnProgress = midOnProgress;
+    sink.midOnThinking = midOnThinking;
     // GlobalRef：回调可能从引擎工作线程触发，LocalRef 在 JNI 帧弹出后即失效。
     sink.callbackRef = quro::llm::jni::retainCallback(env, callback);
     if (sink.callbackRef == nullptr) {

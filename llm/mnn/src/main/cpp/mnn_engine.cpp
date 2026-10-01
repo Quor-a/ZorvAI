@@ -308,6 +308,10 @@ bool MnnEngine::resetKv(std::string* err) {
     try {
         impl_->session.llm->reset();
         impl_->session.cancel.store(false);
+        // KV 清了就代表"上下文断了"，思考段状态也必须跟着断 ——
+        // 否则新一段输出会被上一段的段状态污染（例如上一段落尾在思考段中途，
+        // 新一段的正文会被误判成思考内容，表现为"开头几个字不见了"）。
+        impl_->session.thinkSplitter.reset();
         return true;
     } catch (const std::exception& e) {
         LOGE("Exception in reset: %s", e.what());

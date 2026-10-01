@@ -576,7 +576,9 @@ class QuroLocalEngineNative : QuroLocalEngine {
                 // 生成结束后由 QuroLocalToolsCodec.parseDetailed 解析。
                 val messagesJson = QuroLocalToolsCodec.encodeMessages(effectiveMessages)
                 QuroDiag.log("LocalEngine", "▶ MNN generateStreamStructured | tools=${toolSpecsJson.length} chars | effMax=$effMaxTokens")
-                val structuredOk = session.generateStreamStructured(messagesJson, toolSpecsJson, effMaxTokens) { token ->
+                val structuredOk = session.generateStreamStructured(
+                    messagesJson, toolSpecsJson, effMaxTokens,
+                    onToken = { token ->
                     if (firstTokenMs == null) firstTokenMs = (System.nanoTime() - t0) / 1_000_000
                     tokenCount++
                     // 流式阶段即剥离 <think> 块，避免用户实时看到思考原文（症状 1 流式侧）。
@@ -591,7 +593,15 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
                     if (isCanceled()) return@generateStreamStructured false
                     true
-                }
+                    },
+                        // 🧠 引擎侧 L4 分流器上行的思考段：**不带标签**，直接透传。
+                        // 不再经 Kotlin 的 StreamingThinkStripper —— 那层现在只作为
+                        // "native 未分流时的兜底"（见 onToken 里的 thinkingText 透传）。
+                        onThinking = { thinkChunk ->
+                        onThinking?.let { cb -> runCatching { cb(thinkChunk) } }
+                        true
+                    },
+                )
                 if (!structuredOk || stripper.rawText().isEmpty()) {
                     // 🔧 2.B 降级兜底（健壮性）：结构化渲染失败 / 无输出（ok=false 或空）——直接卡死
                     // 比无声失败更糟。退回普通 generateStream，把已注入 system 文本的工具定义再试一次。
@@ -603,7 +613,9 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     )
                     stripper.reset()
                     val history = buildMnnHistory(effectiveMessages)
-                    val fallbackOk = session.generateStream(history, effMaxTokens) { token ->
+                    val fallbackOk = session.generateStream(
+                        history, effMaxTokens,
+                        onToken = { token ->
                         if (firstTokenMs == null) firstTokenMs = (System.nanoTime() - t0) / 1_000_000
                         tokenCount++
                         val visible = stripper.accept(token)
@@ -611,7 +623,12 @@ class QuroLocalEngineNative : QuroLocalEngine {
                         onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
                         if (isCanceled()) return@generateStream false
                         true
-                    }
+                        },
+                        onThinking = { thinkChunk ->
+                            onThinking?.let { cb -> runCatching { cb(thinkChunk) } }
+                            true
+                        },
+                    )
                     fallbackOk
                 } else {
                     structuredOk
@@ -619,7 +636,9 @@ class QuroLocalEngineNative : QuroLocalEngine {
             } else {
                 // 非结构化路径：原有 (role, content) 历史拼接。
                 val history = buildMnnHistory(effectiveMessages)
-                session.generateStream(history, effMaxTokens) { token ->
+                session.generateStream(
+                    history, effMaxTokens,
+                    onToken = { token ->
                     if (firstTokenMs == null) firstTokenMs = (System.nanoTime() - t0) / 1_000_000
                     tokenCount++
                     val visible = stripper.accept(token)
@@ -633,7 +652,12 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     onThinking?.let { cb -> runCatching { cb(stripper.thinkingText()) } }
                     if (isCanceled()) return@generateStream false
                     true
-                }
+                    },
+                    onThinking = { thinkChunk ->
+                        onThinking?.let { cb -> runCatching { cb(thinkChunk) } }
+                        true
+                    },
+                )
             }
             val ms = (System.nanoTime() - t0) / 1_000_000
             QuroDiag.log(
@@ -1084,7 +1108,12 @@ class QuroLocalEngineNative : QuroLocalEngine {
                     return@generateStream false
                 }
                 true
-            }
+            },
+                onThinking = { thinkChunk ->
+                    // 🧠 引擎侧 L4 分流器上行的思考段：**不带标签**，直接透传。
+                    onThinking?.let { cb -> runCatching { cb(thinkChunk) } }
+                    true
+                }
             )
             // 🔧 v454：生成中途被取消（用户打断/切走对话）时，把原生 aborted 当干净停止，
             // 抛 CancellationException 让上层走「⏹ 已停止生成」，而非「⚠️ llama.cpp 推理异常」错误气泡。

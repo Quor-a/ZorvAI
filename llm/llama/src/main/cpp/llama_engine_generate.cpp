@@ -29,6 +29,58 @@
 namespace quro {
 namespace llm {
 
+namespace {
+
+/// 把一个 ThinkSplit 的两段按归属回调出去。
+/// @return true = 接收方要求停止
+bool emitThinkSplit(const ThinkSplit& s, const Callbacks& cbs) {
+    if (!s.thinking.empty()) {
+        TokenChunk c;
+        c.text = s.thinking.data();
+        c.len = s.thinking.size();
+        c.isThinking = true;   // ★ 此前从未置 true 的分支：思考内容走独立通道
+        cbs.onToken(cbs.user, c);
+        if (cbs.stopped()) {
+            return true;
+        }
+    }
+    if (!s.visible.empty()) {
+        TokenChunk c;
+        c.text = s.visible.data();
+        c.len = s.visible.size();
+        c.isThinking = false;
+        cbs.onToken(cbs.user, c);
+        if (cbs.stopped()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// 把一段**已确认 UTF-8 完整**的增量过思考段分流器再回调。
+///
+/// 注意：一个 token 可能同时产出思考增量与正文增量（例如 `<think>abc</think>def`
+/// 恰好切在一个 token 里），因此这里**最多会回调两次**，不是一次。
+/// 调用方不能假设「一个 token 一次回调」。
+bool emitThroughThinkSplitter(llama_detail::Session* session, const char* data, size_t len,
+                              const Callbacks& cbs) {
+    if (session == nullptr || data == nullptr || len == 0) {
+        return false;
+    }
+    return emitThinkSplit(session->thinkSplitter.feed(data, len), cbs);
+}
+
+/// 生成结束收尾：吐出分流器里暂缓的尾字节。
+/// 未闭合的思考段按思考归属吐出、不完整的标签前缀按当前段吐出 —— **绝不丢字节**。
+void flushThinkSplitter(llama_detail::Session* session, const Callbacks& cbs) {
+    if (session == nullptr) {
+        return;
+    }
+    emitThinkSplit(session->thinkSplitter.finish(), cbs);
+}
+
+}  // namespace
+
 bool LlamaEngine::generate(const std::string& prompt, const GenParams& params,
                            const Callbacks& cbs, std::string* err) {
     if (!loaded()) {
@@ -37,6 +89,17 @@ bool LlamaEngine::generate(const std::string& prompt, const GenParams& params,
     }
 
     llama_detail::Session* session = &impl_->session;
+
+    // ── 每轮生成开始前复位思考分流器 ──────────────────────────────────────
+    // **不能省**：上一轮若在思考段中途结束（模型没吐 </think>，或被 maxTokens 截断），
+    // 分流器的 segment_ 会残留为 Thinking。本轮正文于是被整段判成思考内容 ——
+    // 上层拿到空的正文通道，用户看到的是"AI 不回复了"这种极难联想到根因的现象。
+    //
+    // 放在这里而不是别处：`generate()` 是 llama 侧**唯一**的生成入口
+    // （JNI 只有 nativeGenerateStream 一条路到这儿），所以一处即覆盖全部。
+    // Session 跨轮复用、只构造一次，所以也不能靠构造函数来复位。
+    session->thinkSplitter.reset();
+
     if (session->model == nullptr || session->ctx == nullptr || session->sampler == nullptr) {
         SET_ERR(session, "会话内部对象缺失（model/ctx/sampler 为空），模型可能已被卸载");
         if (err) *err = session->lastError;
@@ -472,14 +535,11 @@ bool LlamaEngine::generate(const std::string& prompt, const GenParams& params,
                 pendingUtf8.erase(0, ci);
             }
             if (!completeChars.empty()) {
-                TokenChunk chunk;
-                chunk.text = completeChars.data();
-                chunk.len = completeChars.size();
-                chunk.isThinking = false;
-                cbs.onToken(cbs.user, chunk);
+                // 过思考段分流器：思考增量与正文增量分别回调（最多两次）。
                 // 接收方要求停止时，本轮回合结束。这里 break 后仍会走下方收尾
                 // （与旧实现 `if (!keepGoing) break;` 的位置一致）。
-                if (cbs.stopped()) {
+                if (emitThroughThinkSplitter(session, completeChars.data(),
+                                             completeChars.size(), cbs)) {
                     break;
                 }
             }
@@ -522,13 +582,13 @@ bool LlamaEngine::generate(const std::string& prompt, const GenParams& params,
     // These bytes may be incomplete — 上层会替换成 0xFFFD，
     // which is the correct behavior for truncated output (better than silently dropping).
     if (!pendingUtf8.empty() && hasToken) {
-        TokenChunk chunk;
-        chunk.text = pendingUtf8.data();
-        chunk.len = pendingUtf8.size();
-        chunk.isThinking = false;
-        cbs.onToken(cbs.user, chunk);
+        emitThroughThinkSplitter(session, pendingUtf8.data(), pendingUtf8.size(), cbs);
         pendingUtf8.clear();
     }
+
+    // 分流器里可能还压着暂缓的尾字节（未闭合思考段、或不完整的标签前缀）。
+    // 必须在这里吐出，否则这批字节会被静默丢掉 —— 表现为回复末尾少几个字。
+    flushThinkSplitter(session, cbs);
 
     // ===================== Plan A: 生成结束后的保守尾处理 =====================
     // 生成期间 KV = promptTokens + 本轮裸 assistant token。但下一轮 prompt 是把这段回复经聊天模板
