@@ -22,6 +22,13 @@ data class QuroMemoryEntry(
     val title: String = "",       // 标题（便于检索与展示）
     val content: String = "",
     val tags: List<String> = emptyList(),
+    /**
+     * 认知分型（见 [QuroMemoryKind]）：语义 / 情节 / 程序 / 工作。
+     *
+     * 默认空串 = 「未指定」，由 [QuroMemoryKindPolicy.resolve] 按内容推断，
+     * 因此**历史记忆零迁移**、旧 JSON 缺该键也能正常加载与检索。
+     */
+    val kind: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
 )
@@ -91,6 +98,41 @@ class QuroMemoryRepository(context: Context, fileName: String = "quro_memory") {
      *     的查询可能零命中。为不丢失旧行为（如精确搜某个编号/英文片段），
      *     把「BM25 未命中但子串包含」的记忆追加在后，保证召回只增不减。
      */
+    /**
+     * 解析一条记忆的认知分型：显式 [QuroMemoryEntry.kind] 优先，缺失则按内容推断。
+     * 推不出时回落 [QuroMemoryKind.FALLBACK]（语义），绝不返回 null。
+     */
+    fun kindOf(e: QuroMemoryEntry): QuroMemoryKind =
+        QuroMemoryKindPolicy.resolve(e.kind, e.title, e.content, e.tags)
+
+    /**
+     * 按认知分型过滤。传空集合 = 不筛（保持旧行为）。
+     *
+     * 检索分派的核心入口：语义/程序型常规召回，情节型可用 [QuroMemoryKindPolicy.EPISODIC_TTL_MS]
+     * 决定是否只要新鲜条目，工作型只要 [QuroMemoryKindPolicy.WORKING_TTL_MS] 内的。
+     */
+    fun searchByKind(query: String, kinds: Set<QuroMemoryKind>): List<QuroMemoryEntry> {
+        if (kinds.isEmpty()) return search(query)
+        return search(query).filter { kindOf(it) in kinds }
+    }
+
+    /**
+     * 检索并按分型时效权重排序（过期工作记忆自动出局、过期情节记忆降权）。
+     * 稳定排序：先按加权分值降序，同分保持 BM25 原序。
+     */
+    fun searchWeighted(query: String, now: Long = System.currentTimeMillis()): List<QuroMemoryEntry> {
+        val hits = search(query)
+        val scored = hits.mapIndexed { idx, e ->
+            val age = (now - e.updatedAt).coerceAtLeast(0L)
+            val w = QuroMemoryKindPolicy.weightOf(kindOf(e), age, now)
+            Triple(e, w, idx)
+        }
+        return scored.filter { it.second > 0.0 }
+            .sortedWith(compareByDescending<Triple<QuroMemoryEntry, Double, Int>> { it.second }
+                .thenBy { it.third })
+            .map { it.first }
+    }
+
     fun search(query: String): List<QuroMemoryEntry> {
         val q = query.trim().lowercase()
         if (q.isEmpty()) return loadAll()
@@ -183,6 +225,7 @@ class QuroMemoryRepository(context: Context, fileName: String = "quro_memory") {
             title = o.optString("title", ""),
             content = o.optString("content", ""),
             tags = tags,
+            kind = o.optString("kind", ""),
             createdAt = o.optLong("createdAt", now),
             updatedAt = o.optLong("updatedAt", now),
         )
@@ -198,6 +241,9 @@ class QuroMemoryRepository(context: Context, fileName: String = "quro_memory") {
             put("title", m.title)
             put("content", m.content)
             put("tags", tagsArr)
+            // 只在「已显式分型」时落盘；未分型的条目保持文件体积不变，
+            // 且不把推断结果固化成事实（避免一次误推断永久生效）。
+            if (m.kind.isNotBlank()) put("kind", m.kind)
             put("createdAt", m.createdAt)
             put("updatedAt", m.updatedAt)
         }
