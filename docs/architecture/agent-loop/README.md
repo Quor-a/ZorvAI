@@ -152,60 +152,68 @@ const val SUBAGENT_TOOL_NAME = "spawn_subagent"
 
 **⚠️ 已修的坑**：子智能体路径 `subStore.toLlmMessages(system, 0, 0)` 传 `contextWindow = 0` 会走「完全不设防」分支（`ceiling = MODEL_MAX_INPUT_TOKENS`，即 1M）。现在 `toLlmMessages` 对 `contextWindow <= 0` 一律按 `CONSERVATIVE_INPUT_TOKENS` 兜底。
 
-### 4.6 交付闸门（默认关闭）
+### 4.6 任务级闭环：`LongHorizonOrchestrator` 接进主循环
+
+**这是 Agent 的固有环节，不是可关的开关。** 此前编排器写好了却全仓零调用（死代码），现已由 `QuroAssistant.ask()` 真正驱动。
 
 ```kotlin
-var taskPlanner: TaskPlanner? = null
-var deliverabilityJudge: DeliverabilityJudge? = null
-var deliverAttempts = 0
-```
+// QuroAssistant.kt
+val roundLimit = if (isLocal) 12 else if (cfg.maxToolRounds in 1..2000) cfg.maxToolRounds else 2000
 
-两者为 `null` 时保持旧行为（LLM 返回文本即终态交付）。启用后：首轮 `taskPlanner.plan(brief, "")` 生成「策划 / 规划 / 设计方案 / 执行步骤」作为 **hidden system** 注入；每个 `Text` 结果过 `maybeDeliver` —— `Deliverable` 返回，`NotDeliverable` 则 `deliverAttempts++`，**`>= 3` 强制放行**（避免长程任务陷入死循环），否则注入修正提示后 `continue`。
+suspend fun reactPass(): String {          // 一趟 = 一条完整 ReAct
+    var round = 0
+    while (round < roundLimit) { /* 工具执行、视觉注入、检查点落盘 */ }
+    return lastText                          // 只产出候选答复，不自判可交付
+}
 
-`HeuristicDeliverabilityJudge` 的 `BAD` 列表：`工具执行失败` / `工具执行异常` / `工具执行超时` / `未知工具` / `需要权限`；空产物或 `"(已思考完毕)"` 也判不可交付。
-
-### 4.7 上下文预算：绝不把「未知」当成 1M
-
-```kotlin
-val ctxBudget = QuroModelContextBudget.resolve(
-    modelName = cfg.model, provider = cfg.provider,
-    apiContextLength = cfg.modelContextLength, userContextWindow = cfg.contextWindow,
+val taskResult = orchestration.runTask(
+    context = context,
+    taskBrief = userBrief(),
+    planner = { brief, planCtx ->            // 🔗 包一层：拿到方案立刻注入 store
+        val plan = taskPlanner.plan(brief, planCtx)
+        store.add(QuroMessage(role = "system", content = planText, hidden = true)); emit()
+        plan
+    },
+    steps = listOf(TaskStep(REACT_PASS_STEP_ID, "执行一轮 ReAct 工具循环并给出答复")),
+    stepExecutor = { _, _ -> ToolOutcome.Success(reactPass()) },
+    judge = deliverabilityJudge,
+    maxIterations = maxDeliverAttempts,       // 默认 3
+    extraPlanContext = { recentFailureBrief()?.let { "最近工具失败：$it\n" } },
 )
 ```
 
-三级取值：① `/models` 实测值（`>= 1024` 才采信）→ ② 模型名族前缀表 → ③ provider 兜底 → ④ **保守回落 32768**。
+链路：**策划 → 执行一趟 ReAct → 交付闸门 → 不可交付则带记忆重新策划 → 再跑一趟 → 超限按最后一趟强制交付**。
 
-| 常量 | 值 | 语义 |
-|---|---|---|
-| `QuroModelContextBudget.ABSOLUTE_MAX_INPUT_TOKENS` | `1_048_576` | 绝对天花板，只用于**向上钳制** |
-| `QuroModelContextBudget.CONSERVATIVE_INPUT_TOKENS` | `32_768` | 未知时的兜底预算 |
-| `MODEL_MAX_INPUT_TOKENS`（`QuroConversation.kt:62`） | `= ABSOLUTE_MAX_INPUT_TOKENS` | 同上 |
+**职责切分**：`runTask` 负责「何时重新策划」；`ask()` 负责「把方案落成模型看得见的提示」（注入 hidden system）。编排层因此不需要认识 `QuroMessage` / `store`。
 
-**踩过的坑**：改造前 `hardMax = if (modelContextLength > 0) 它 else 1048576`。大量第三方中转不返回 `context_length` → 预算被当成 1M → 裁剪几乎永不触发 → 而真实上限可能只有 32K → 上游 `400/500 context length exceeded`。这个「安全网」恰在它最该生效的场景里等于不存在。
+**闸门唯一归属 `runTask`**：执行体内部**不得**再自判一次，否则一趟之内判两遍、白烧一轮 LLM。`ask()` 内的 `maybeDeliver()` / `lastGateReason` / 旧策划块已整体删除。
 
-族表按「先具体后宽泛」排序（`gpt-4.1` 必须在 `gpt-4` 之前），且 ≤3 字符的短关键字（`o1`/`o3`/`glm`）必须落在**词边界**上 —— 否则 `o1` 会命中 `foo1-bar`，把预算**猜大**，而猜大正是触发上游超限的那个方向。
+#### 两个会让闸门彻底失明的坑（接线时必须一起修）
 
-### 4.8 工具结果压缩：头 + 关键行 + 尾
+| 坑 | 原状 | 后果 | 现状 |
+|---|---|---|---|
+| 重规划上下文是占位符 | `planner.plan(taskBrief, context?.let { "ctx" } ?: "")` | 第二个参数**恒为字面量 `"ctx"`**，重规划 100% 是盲的 | 编排器自累积 `lastGate`（打回原因 + suggestion）+ `lastFailures`（失败步骤摘要），另开 `extraPlanContext` 出口 |
+| 闸门判的是加了前缀的摘要 | `summary = "OK: ${it.raw.take(200)}"` | `HeuristicDeliverabilityJudge` 的 `startsWith("工具执行失败")` **永远不成立** → 闸门恒判可交付、形同虚设 | 改判**产物原文**（最后一步的 `raw` / `message`），`summary` 只留给诊断 |
+
+> `extraPlanContext` 存在的理由：执行体把整趟 ReAct **压成一步**，所以工具层失败不会体现在 `ToolOutcome` 上 —— 失败明细只有 `ask()` 看得到。
+
+`HeuristicDeliverabilityJudge` 的 `BAD` 列表：`工具执行失败` / `工具执行异常` / `工具执行超时` / `未知工具` / `需要权限`；空产物或 `"(已思考完毕)"` 也判不可交付。
+
+回归由 `LongHorizonWiringTest`（12 例）钉住：判原文不被加前缀、长产物不被截断、失败步骤取 `message` 不被丢空串、首轮 planner 上下文为空串、第 2 轮拿到打回原因 + 建议 + 失败步骤且以 `\n` 收尾、`Escalated` 仍带最后一趟产物。
+
+### 4.7 工具结果压缩：头 + 尾（关键行抽取已回滚）
 
 ```kotlin
-internal const val TOOL_RESULT_CAP = 1600            // 单条上限
-internal const val TOOL_RESULTS_TOTAL_CAP = 24_000   // 合计预算
-private const val TOOL_RESULT_CAP_TIGHT = 400        // 二次激进截断的单条上限
-private const val KEY_LINE_SCAN_LIMIT = 2_000_000
-private const val KEY_LINE_MAX_SOURCE = 2_000
+internal const val TOOL_RESULT_CAP = 1600   // 单条上限
 ```
 
-两阶段：① 单条超 1600 → `truncateToolResult`（头 40% + 关键行 + 尾 60%）；② 合计仍超 24000 → **从最旧开始**二次激进截到 400。
+当前实现是**单阶段**：超 1600 字符 → 头 40% + 尾 60% + 截断说明，工具轮始终 call↔result 成对（只改 content、不删消息）。按码点而非 UTF-16 字符截断，避免把 emoji / 代理对切成孤立代理项导致严格上游 JSON 解析 500。
 
-**为什么必须有「关键行」**：编译错误、堆栈 `Caused by`、`FAILED` 常出现在输出的**中间**，纯头尾保留恰好把它们整段丢掉 → 模型看不到错误 → 反复盲重试。`extractKeyLines(dropped, maxLines = 12, maxChars = 600)` 从被丢弃的中间段按中英双语词表捞回，去重、保序、跳过超长单行（避免把整行 minified JS 当错误行）。
+> 🔴 **已回滚，不要照此文档实现**：本节此前还有「合计预算 24000 + 从最旧二次激进截到 400」与「从被丢弃的中间段按中英双语词表抽回关键行（`extractKeyLines`）」两层，以及 4.9 的真实归档落盘。commit `af5fe17` 已把这些**连同 21 例单测整体删除** —— 真机反馈是压缩后 AI 拿到的信息反而更少，回复开始答非所问 / 复读。`QuroModelContextBudget.kt` 类文件因仍被单测引用而保留，但**主链路已无任何调用**（`git grep` 确认），`MODEL_MAX_INPUT_TOKENS` 硬编码回 `1048576`。
+>
+> **当前方针：不再新增任何压缩 / 截断层。**
 
-### 4.9 归档必须「真落盘」
-
-`toolOutputArchiver(context)` 把完整原文写入 `filesDir/tool_outputs/tool_<摘要>.txt`：**原子写**（先 `.tmp` 再 `renameTo`，进程中途被杀不留半截）、**幂等**（文件名取内容 MD5 前 8 位 —— 每轮上下文组装都会重新压缩同一批结果，不幂等会迅速堆满）、**容量** `TOOL_ARCHIVE_KEEP = 60`（超出按最后修改时间淘汰最旧）。
-
-**踩过的坑**：旧文案写「完整日志见本机文件」，但**没有任何代码真的落盘** —— 模型据此去找一个不存在的文件，要么白跑一轮，要么直接编造内容（幻觉制造机）。现在归档成功给**真实路径**，失败时文案退化为「请重新执行该工具并缩小输出范围」—— 两种情况下都不会出现指向不存在文件的虚假指引。
-
-### 4.10 孤儿工具消息必须剔除
+### 4.8 孤儿工具消息必须剔除
 
 `pruneOrphanToolMessages` 在 `toLlmMessages` 收尾处成对校验：`role=tool` 且其 `tool_call_id` 在全部 `assistant.tool_calls` 的 id 集合里找不到 → 丢弃；`assistant` 且其 `toolCalls` 中任一 id 在 `role=tool` 的 `tool_call_id` 集合里找不到 → 整条丢弃。
 
@@ -213,7 +221,7 @@ private const val KEY_LINE_MAX_SOURCE = 2_000
 
 `attachToolNames` 在其后按 id 反查补全 tool 消息的 `name` 字段 —— Kimi K3 会 400 报 `tool messages need a resolvable tool name`。
 
-### 4.11 巨型消息降权，但必须按原始下标还原顺序
+### 4.9 巨型消息降权，但必须按原始下标还原顺序
 
 `GIANT_THRESHOLD = 3000`：超 3000 字符的消息（HTML / 代码 / 长文本）降为低优先级，预算紧张时率先被裁，降低「把旧任务结果当当前回复」的串台。
 
@@ -231,7 +239,9 @@ suspend fun ask(context: Context, cfg: QuroModelConfig, systemPrompt: String = "
     onUpdate: (() -> Unit)? = null): String
 ```
 
-可注入的编排点：`var taskPlanner: TaskPlanner?`、`var deliverabilityJudge: DeliverabilityJudge?`、`var deliverAttempts = 0`。
+编排相关字段：`var maxDeliverAttempts = 3`（= `runTask` 的 `maxIterations`）、`private val orchestration = LongHorizonOrchestrator()`、`private val REACT_PASS_STEP_ID = "react_pass"`；注入点 `var taskPlanner: TaskPlanner?`、`var deliverabilityJudge: DeliverabilityJudge?`。
+
+`runTask` 是 `runTask` 任务级闭环的唯一生产调用点（`QuroAssistant.kt:1023`）。
 
 ### 子智能体常量（`QuroAssistant.Companion`）
 
@@ -242,7 +252,7 @@ suspend fun ask(context: Context, cfg: QuroModelConfig, systemPrompt: String = "
 | `SUBAGENT_TOOL_PARAMS` | `{"type":"object","properties":{"task":{...}},"required":["task"]}` |
 | `SUBAGENT_SYSTEM_PROMPT` | 聚焦、克制、只产出结果的三条要求 |
 
-### 归档常量（`QuroAssistant.kt` 文件级 private）
+### 归档常量（`QuroAssistant.kt` 文件级 private · 🔴 已随 4.9 归档层回滚删除）
 
 | 常量 | 值 |
 |---|---|
@@ -252,20 +262,21 @@ suspend fun ask(context: Context, cfg: QuroModelConfig, systemPrompt: String = "
 ### `QuroConversationStore.toLlmMessages`
 
 ```kotlin
-fun toLlmMessages(system: QuroMessage? = null, contextWindow: Int = 0, historyRounds: Int = 0, archive: ((String) -> String?)? = null): List<QuroChatMessage>
+fun toLlmMessages(system: QuroMessage? = null, contextWindow: Int = 0, historyRounds: Int = 0): List<QuroChatMessage>
 ```
 
-`contextWindow <= 0` → 按 `CONSERVATIVE_INPUT_TOKENS` 兜底（**不再等于不设防**）。
+🔴 `archive` 参数已随 4.7 压缩层回滚删除。`contextWindow <= 0` → 按 `MODEL_MAX_INPUT_TOKENS`（`1048576`）兜底，**不再走 `CONSERVATIVE_INPUT_TOKENS`**。
 
 ### 压缩函数（`QuroConversation.kt`，internal）
 
 ```kotlin
-internal fun compactToolResults(list: List<QuroChatMessage>, archive: ((String) -> String?)? = null): List<QuroChatMessage>
-internal fun truncateToolResult(text: String, cap: Int = TOOL_RESULT_CAP, archive: ((String) -> String?)? = null): String
-internal fun extractKeyLines(dropped: String, maxLines: Int = 12, maxChars: Int = 600): String
+internal fun compactToolResults(list: List<QuroChatMessage>): List<QuroChatMessage>
+internal fun truncateToolResult(text: String): String
 ```
 
-### `QuroModelContextBudget`
+🔴 `extractKeyLines` 与 `archive` 回调已随回滚删除，签名中**没有** `cap` / `archive` 参数。
+
+### `QuroModelContextBudget`（🔴 主链路已无调用）
 
 ```kotlin
 object QuroModelContextBudget {
@@ -275,11 +286,9 @@ object QuroModelContextBudget {
     fun describe(budget: Budget): String
 }
 enum class Source { API_META, MODEL_TABLE, USER_SETTING, CONSERVATIVE }
-
-data class Budget(val inputTokens: Int, val hardLimit: Int, val source: Source, val familyHint: String? = null) {
-    val inferred: Boolean get() = source == Source.MODEL_TABLE || source == Source.CONSERVATIVE
-}
 ```
+
+类文件与单测仍在（`core/network/QuroModelContextBudget.kt` + 同名单测），但 `git grep` 确认**主链路（`app/src/main`）除自身定义外零调用** —— `MODEL_MAX_INPUT_TOKENS` 已改回 `QuroConversation.kt` 内的硬编码 `1048576`。保留它只是因为单测仍引用；**不要按它接线**。
 
 ---
 

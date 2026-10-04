@@ -16,9 +16,9 @@
 
 </div>
 
-> **Package**: `com.ai.assistance.quro` ｜ **Stack**: Kotlin 2.3 + Jetpack Compose 1.10.2 (Material3 1.4.0) ｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **Current version**: `1.1.1` (`versionCode 1001001`)
+> **Package**: `com.ai.assistance.quro` ｜ **Stack**: Kotlin 2.3 + Jetpack Compose 1.10.2 (Material3 1.4.0) ｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **Current version**: `1.1.2` (`versionCode 1001002`)
 >
-> Zorv AI turns a chat assistant into an agent that can actually operate your phone. It runs on-device, drives the system through Accessibility / Shizuku / ROOT channels, calls **220+ built-in tools**, runs **MNN / llama.cpp offline LLMs**, ships a terminal with a Linux sandbox, MCP, a knowledge base, TTS/STT — and stays reachable through Feishu, QQ and WeChat.
+> Zorv AI turns a chat assistant into an agent that can actually operate your phone. It runs on-device, drives the system through Accessibility / Shizuku / ROOT channels, calls **235 built-in tools**, runs **MNN / llama.cpp offline LLMs**, ships a terminal with a Linux sandbox, MCP, a knowledge base, TTS/STT — and stays reachable through Feishu, QQ and WeChat.
 >
 > It is also a **self-extensible agent runtime**: an APK-level plugin framework lets a standalone APK register extension points and give the AI **new tools, new ACI capabilities, new screens and new commands** — without changing a single line of host code.
 
@@ -50,7 +50,7 @@ Most "phone AI assistants" are a cloud chat box in disguise — your words go to
 
 Three things it solves:
 
-1. **The AI can act.** 220+ built-in tools cover screen reading/tapping, files, messaging, scheduling, terminal and knowledge base. Higher-privilege capabilities (Shizuku, device admin, ROOT, in-app Linux) are graded **L1–L5**, and **every tier requires your explicit grant** — when ungranted the app returns guidance instead of silently executing.
+1. **The AI can act.** 235 built-in tools cover screen reading/tapping, files, messaging, scheduling, terminal and knowledge base. Higher-privilege capabilities (Shizuku, device admin, ROOT, in-app Linux) are graded **L1–L5**, and **every tier requires your explicit grant** — when ungranted the app returns guidance instead of silently executing.
 2. **The AI works offline.** MNN and llama.cpp are compiled into the APK, together with on-device STT, on-device TTS, local RAG and an in-app Ubuntu 24.04 Linux sandbox (proot). Most tasks keep working with no network.
 3. **The AI crosses app boundaries.** Through **ACI** (Agent Capability Interface) — a same-device, AIDL Binder based, root-free local protocol — any app can expose itself as "capabilities callable by an AI", orchestrated automatically by Zorv AI's LLM.
 
@@ -78,8 +78,8 @@ The design spine is **Tool-first**: every capability is expressed as a `QuroTool
 | Domain | What it does |
 |--------|--------------|
 | **Chat UI (Compose)** | ChatScreen, PersonaBar persona cards, PermissionModeBar ("auto-save memory" + "deep thinking" pills), **in-chat IDE entry** (code editor / terminal / toolbox / files via the input "+" menu and `ui_open_*`), **7 programming languages**, **live ```mermaid rendering**, **AI-written code execution (`run_code`) with inline HTML preview**, jump-to-bottom FAB, fullscreen preview, Markdown and code rendering |
-| **Agent core** | Multi-session isolation (`liveBuffers`), seed snapshots (`convBase`), display refresh gate (`canUpdateDisplay`), per-round `[round N]` hidden markers to prevent cross-talk, tool registry (`QuroToolRegistry`, 226 entries), skill system (`QuroSkill` → registered as `skill__{name}` tools) |
-| **Tool / capability layer** | **220+ built-in tools**: accessibility `input_text` / `tap_screen` / `read_screen`, file read/write, **L1–L5 privileged execution**, `cms_*` modules, agent keyboard `ai_type_text` / `ai_press_enter`, scheduled tasks, memory tools, knowledge-base RAG, document processing |
+| **Agent core** | Multi-session isolation (`liveBuffers`), seed snapshots (`convBase`), display refresh gate (`canUpdateDisplay`), per-round `[round N]` hidden markers to prevent cross-talk, tool registry (`QuroToolRegistry`, 235 registered / 151 always-on per round), skill system (`QuroSkill` → registered as `skill__{name}` tools) |
+| **Tool / capability layer** | **235 built-in tools** (151 always-on, the rest on demand via `tool_router` `get_schema`): accessibility `input_text` / `tap_screen` / `read_screen`, file read/write, **L1–L5 privileged execution**, `cms_*` modules, agent keyboard `ai_type_text` / `ai_press_enter`, scheduled tasks, memory tools, knowledge-base RAG, document processing |
 | **Offline LLM engine** | Built-in **MNN / llama.cpp** inference (`QuroLocalEngineNative`) with streaming, live `<think>` streaming, local tool calling and persistent session reuse |
 | **Privilege tiers L1–L5** | Accessibility → Shizuku (uid 0/2000) → Device Admin → ROOT (su) → in-app Linux (proot + Ubuntu 24.04). **L1–L4 are carried by the `PrivilegeLevel` enum** (system permissions); **L5 is not part of the enum** and is gated by whether the Linux environment is ready |
 | **Terminal / Linux sandbox** | Full terminal emulator: proot + real Ubuntu 24.04 ARM64 user space; PTY (`/dev/ptmx` + `fork/exec`); foreground-service keep-alive (`specialUse`, survives screen-off and app switching); 26 ACI cross-process capabilities (single terminal entry point + `action` dispatch); 4 IPC transports (ContentProvider / Deep Link / Intent / BroadcastReceiver); multi-session management |
@@ -112,16 +112,17 @@ flowchart TB
     end
     subgraph CORE["Agent core"]
         B1["QuroChatViewModel · session isolation"]
-        B2["QuroAssistant · ReAct loop"]
+        B2["QuroAssistant · ReAct loop (one pass = one full ReAct)"]
         B3["QuroConversation · context assembly & compaction"]
-        B4["QuroToolRegistry · 226 tools"]
+        B4["QuroToolRegistry · 235 registered / 151 always-on"]
+        B5["LongHorizonOrchestrator · plan → gate → replan with memory"]
+        B6["QuroRunCheckpoint · per-round tool-call persistence"]
     end
     subgraph INFER["Inference layer"]
-        I1["QuroLlmClient · cloud"]
+        I1["QuroLlmClient · cloud (upstream rejection normalization)"]
         I2["QuroReasoningControl · thinking protocol"]
-        I3["QuroModelContextBudget · context budget"]
+        I3["QuroToolCallRepair · local tolerant parser"]
         I4["QuroLocalEngineNative · MNN / llama.cpp"]
-        I5["QuroToolCallRepair · local tolerant parser"]
     end
     subgraph TOOLS["Tool / capability layer · core/tools"]
         C1["launch_app"]
@@ -176,12 +177,26 @@ flowchart TB
     CORE --> DATA
 ```
 
+The core is not "a ReAct loop" but a **task-level closed loop** wrapped around it. `QuroAssistant` extracts a whole ReAct pass into `reactPass()` and hands it to `LongHorizonOrchestrator.runTask` as the `stepExecutor`:
+
+```
+plan (TaskPlanner) → run one ReAct pass → deliverability gate (judges the raw artifact)
+      ↑                                                  │
+      └── not deliverable: replan with the rejection reason, suggestion and failed steps ──┘
+                        (past maxIterations, force-deliver the last pass)
+```
+
+The gate judges the **raw artifact**, not a summary — otherwise heuristics like `startsWith("工具执行失败")` can never fire and the gate degrades to "always deliverable". Replanning context is accumulated by the orchestrator itself (rejection reason, suggestion, failed steps, external tool-failure detail), not a placeholder.
+
 | Layer | Entry point | Responsibility |
 |-------|-------------|----------------|
 | **UI** | `ui/ChatScreen.kt` | Chat rendering, bubbles, thinking cards, tool blocks, rich components; all secondary screens |
-| **Agent core** | `core/QuroAssistant.kt` | ReAct loop, round & loop guards, context assembly, tool dispatch, sub-agents |
-| **Inference** | `core/network/` | Cloud requests and thinking-field compilation; on-device MNN / llama.cpp engines; tool-call parsing and context budgeting |
-| **Tools** | `core/tools/` | Registration, discovery, guard-rails, execution and failure feedback for 226 tools |
+| **Agent core** | `core/QuroAssistant.kt` | ReAct loop (one pass = one full ReAct), round & loop guards, context assembly, tool dispatch, sub-agents; **true tool-result envelope** (`QuroToolResult`) unifying returned text |
+| **Task orchestration** | `core/agent/orchestration/` | `LongHorizonOrchestrator` drives "plan → execute → deliverability gate → replan with memory"; `DefaultTaskPlanner` produces the plan; `HeuristicDeliverabilityJudge` plus model judging. **The gate and planning are inherent Agent stages, not a toggle** |
+| **Inference** | `core/network/` | Cloud requests, mutually-exclusive thinking-field compilation across four vendors, on-device MNN / llama.cpp engines, tolerant tool-call parsing, upstream rejection normalization (no more surfacing `The request was rejected…` verbatim) |
+| **Tools** | `core/tools/` | Registration, discovery, guard-rails, execution and failure feedback for 235 tools; **read-only tools run concurrently, side-effecting tools stay strictly serial**; `QuroToolRouter.PROGRESSIVE` progressive disclosure switch (off by default — see KDoc for the cost) |
+| **Fault tolerance** | `core/tools/` | `QuroRunCheckpoint` persists every tool round (previously written but never wired); `onModelCorrect` correction channel (`CORRECT` / `ROLLBACK` / `ESCALATE`); `FailurePolicy` decides whether a failure is fed back for retry or terminates the run |
+| **Memory** | `core/memory/` | Cognitive memory typing: **semantic / episodic / procedural / working**, each with its own retrieval and write strategy |
 | **Privilege** | `QuroPrivilegeManager` | L1–L4 (`PrivilegeLevel` enum) escalation plus L5 (in-app Linux, gated by environment readiness), with unified auditing; ungranted tiers return guidance |
 | **Terminal** | `core/terminal/` | PTY sessions, proot Linux env, foreground keep-alive, ACI and 4 IPC transports |
 | **Engines** | `cms` / `browser` / `speech` / `llm` | Runtime provisioning, web rendering, speech, offline inference |
@@ -191,7 +206,10 @@ flowchart TB
 
 - **Tool-first / Registry** — every capability is a `QuroTool`; adding one is an interface + a registration line.
 - **ReAct loop** — "think → pick tool → execute → observe → think again" until the task completes; tool results flow back into the chat as cards.
+- **Deliverability gate** — after the model produces a candidate answer, judge whether it can actually be delivered; if not, **replan with memory** and run another pass, instead of dumping the failure receipt at the user. The gate reads the raw artifact, not a summary.
 - **Least-privilege tiers** — L1–L5 escalation where **an ungranted tier returns guidance rather than executing silently**.
+- **Concurrent reads, serial writes** — `QuroTool.readOnly` defaults to `false`; the 14-tool read-only allowlist executes concurrently within a round to cut latency, while side-effecting tools stay strictly serial to preserve ordering.
+- **Cognitive memory typing** — semantic / episodic / procedural / working memories are stored and retrieved separately, so procedural knowledge no longer shares a retrieval pool with episodic notes.
 - **Strategy (swappable engines)** — cloud vendors and local MNN / llama.cpp share one `onToken` streaming interface; online/offline is transparent to upper layers.
 - **SDUI** — the ACI console renders a snapshot JSON pushed by the controlled side, fully local, zero network.
 
@@ -275,12 +293,24 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[v1.1.1 Release](https://github.com/Quor-a/ZorvAI/releases)** (release-signed, **latest**)
-  - **Cloud context budgeting**: the budget no longer falls back to 1M when unknown. Previously, if `/models` did not report a model's context length, the budget silently became 1M — context trimming then almost never triggered, and long chats / long tool runs hit an upstream HTTP 500. The budget now resolves in three tiers: measured API value → model-family table → conservative fallback of 32768.
-  - **Key-line rescue in tool results**: truncation no longer discards the middle of an output. Build errors and stack `Caused by` lines sit in the middle, and the old head/tail-only truncation hid them — so the model retried blindly. Key lines are now rescued from the dropped segment, and a total budget shrinks the **oldest** tool results first.
-  - **Honest archiving**: the truncation message no longer promises "full log available on device" (nothing was ever written to disk — which led the model to look for a file that did not exist and then fabricate content). The full original output is now archived to `filesDir/tool_outputs/` and the message gives the real path.
-  - **Tolerant local tool-call parsing** (previous release): a custom lenient JSON parser that accepts bare keys, single quotes, trailing commas, unclosed brackets and full-width punctuation, plus multiple tag families, `name(args)` functional syntax and tool-name correction.
-  - **Local thinking display decoupled**: the "deep thinking" switch now applies to cloud models only and no longer strips thinking from local models.
+- 🟢 **[v1.1.2 Release](https://github.com/Quor-a/ZorvAI/releases)** (release-signed, **latest**)
+
+  **The task-level closed loop is now actually wired into the main loop**
+
+  - **`LongHorizonOrchestrator.runTask` went from dead code to backbone**: the orchestrator existed but had zero call sites repo-wide. This release extracts `QuroAssistant`'s ReAct loop into a local `reactPass()` and hands it to `runTask` as the `stepExecutor` — one pass = one full ReAct, and the chain becomes "plan → execute → deliverability gate → replan with memory if undeliverable → run another pass → force-deliver the last pass past the limit".
+  - **The deliverability gate and task planning are inherent Agent stages**, no longer a switch that can be turned off: after the model produces a candidate answer, judge deliverability and replan with memory instead of dumping the failure receipt at the user.
+  - **Two real "gate blindness" bugs fixed along the way**: ① the replanning context was the literal string `"ctx"`, making replanning 100% blind — the orchestrator now accumulates the rejection reason, suggestion and failed steps itself, plus a new `extraPlanContext` outlet for tool-layer failure detail; ② the gate judged a summary prefixed with `OK: ` and truncated to 200 chars, so `startsWith("工具执行失败")` could never hold and the gate always judged "deliverable" — it now judges the **raw artifact**.
+
+  **Reliability**
+
+  - **Read-only tools run concurrently**: `QuroTool.readOnly` defaults to `false`; a 14-tool read-only allowlist executes concurrently within a round to cut latency, while side-effecting tools stay strictly serial to preserve ordering.
+  - **True tool-result envelope** (`QuroToolResult`): unified tool return text; successful results are no longer wrapped in failure packaging.
+  - **`QuroRunCheckpoint` wired into the tool loop**: previously written but never connected — every tool round is now persisted.
+  - **`onModelCorrect` correction channel**: the `CORRECT` / `ROLLBACK` / `ESCALATE` three-tier collapse is resolved; a `CORRECT` hit returns control to the upper layer.
+  - **Upstream rejection normalization**: `The request was rejected…` is no longer surfaced verbatim to the user.
+  - **Cognitive memory typing**: semantic / episodic / procedural / working, each with its own retrieval and write strategy.
+
+  > ⚠️ **The v1.1.1 release notes are obsolete**: the three layers advertised there (three-tier cloud context budgeting / key-line rescue in tool results / honest archiving) were **fully rolled back** in `af5fe17` before v1.1.2 — real-device feedback showed the AI received *less* information after compression, producing off-topic answers and parroting. The rollback restored the tree to its pre-change state; no further compression/truncation layer is being added.
 
 All releases: [Releases](https://github.com/Quor-a/ZorvAI/releases).
 
@@ -294,8 +324,8 @@ All releases: [Releases](https://github.com/Quor-a/ZorvAI/releases).
 |--------|------|
 | **On-device inference** (MNN / llama.cpp, L0–L6) | [docs/architecture/inference-native/README.md](./docs/architecture/inference-native/README.md) |
 | **Cloud inference** (thinking protocol / tool calling / context budget) | [docs/architecture/inference-cloud/README.md](./docs/architecture/inference-cloud/README.md) |
-| **Tool system** (226 tools / registry / guard / feedback) | [docs/architecture/tool-system/README.md](./docs/architecture/tool-system/README.md) |
-| **Agent loop** (ReAct / loop guards / sub-agents / compaction) | [docs/architecture/agent-loop/README.md](./docs/architecture/agent-loop/README.md) |
+| **Tool system** (235 tools / registry / guard / feedback / read-only concurrency) | [docs/architecture/tool-system/README.md](./docs/architecture/tool-system/README.md) |
+| **Agent loop** (ReAct / task-level closed-loop orchestration / deliverability gate / loop guards / sub-agents) | [docs/architecture/agent-loop/README.md](./docs/architecture/agent-loop/README.md) |
 | **Terminal & Linux sandbox** | [docs/architecture/terminal-sandbox/README.md](./docs/architecture/terminal-sandbox/README.md) |
 | **UI & rendering** (AIP / ui_widget / quro-ui / GenUI / MiniApp) | [docs/architecture/ui-rendering/README.md](./docs/architecture/ui-rendering/README.md) |
 | **i18n** (11 languages) | [docs/architecture/i18n/README.md](./docs/architecture/i18n/README.md) |
