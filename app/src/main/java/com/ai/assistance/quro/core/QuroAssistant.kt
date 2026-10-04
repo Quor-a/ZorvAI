@@ -735,7 +735,10 @@ class QuroAssistant(
                                     // N4：catch 兜底只有裸文本、没有类型，交给关键词分类补出种类与「下一步」。
                                     .getOrElse { e ->
                                         normalCalls.map {
-                                            QuroToolResult(it.name, QuroToolFeedback.compose(it.name, "工具执行异常：${e.message}"))
+                                            QuroToolResult.Failed(
+                                            "tool_error",
+                                            QuroToolFeedback.compose(it.name, "工具执行异常：${e.message}")
+                                        )
                                         }
                                     }
                                     .forEachIndexed { i, r -> byId[normalCalls[i].id] = r }
@@ -743,8 +746,8 @@ class QuroAssistant(
                             // N4：「无结果」是闭环内部的配平兜底，同样按失败回喂，避免模型收到一句
                             // 无从下手的「无结果」后开始盲目重试。
                             callsWithId.map {
-                                byId[it.id] ?: QuroToolResult(
-                                    it.name,
+                                byId[it.id] ?: QuroToolResult.Failed(
+                                    "tool_no_result",
                                     QuroToolFeedback.compose(it.name, "工具执行异常：引擎未返回该调用的结果（无结果）"),
                                 )
                             }
@@ -752,7 +755,10 @@ class QuroAssistant(
                             runCatching { engine.execute(context, callsWithId) }
                                 .getOrElse { e ->
                                     callsWithId.map {
-                                        QuroToolResult(it.name, QuroToolFeedback.compose(it.name, "工具执行异常：${e.message}"))
+                                        QuroToolResult.Failed(
+                                            "tool_error",
+                                            QuroToolFeedback.compose(it.name, "工具执行异常：${e.message}")
+                                        )
                                     }
                                 }
                         }
@@ -798,7 +804,9 @@ class QuroAssistant(
                             store.add(
                                 QuroMessage(
                                     role = "tool",
-                                    content = r.result,
+                                    // 工具与环境层出口：模型看到的统一信封；
+                                    // 头部工具名取 call.name（Error 工厂把 r.name 写成了 "error"）
+                                    content = QuroToolEnvelope.of(call.name, r),
                                     toolCallId = call.id,
                                     toolLabel = r.name,
                                     hidden = true,
@@ -871,7 +879,9 @@ class QuroAssistant(
             if (!result.content.isNullOrBlank()) loopSegmentHadText = true
             if (sig == prevCallSig) {
                 // 仅当本次重复调用的工具结果确为「失败」（高置信判定，避免正文提到失败/错误字样就误判）时，才视为失败重试：
-                val anyFailed = results.any { toolResultLooksFailed(it.result) }
+                                                // 失败判定「结构优先 + 关键词兜底」：显式 Failed/Error 先判，
+                                // 再让 toolResultLooksFailed 兜住个别仍返回裸文本的工具。
+                                val anyFailed = results.any { !it.ok || toolResultLooksFailed(it.result) }
                 if (anyFailed) {
                     repeatStreak++
                     // 同一失败签名只提示一次，避免每条重复失败都再灌一条 [系统提示] 污染上下文/打扰模型
@@ -1224,7 +1234,7 @@ class QuroAssistant(
                         subStore.add(
                             QuroMessage(
                                 role = "tool",
-                                content = r.result,
+                                content = QuroToolEnvelope.of(c.name, r),
                                 toolCallId = c.id,
                                 toolLabel = r.name,
                                 hidden = true,
