@@ -6,6 +6,7 @@ import android.content.Context
 import com.ai.assistance.quro.core.model.QuroModelConfig
 import com.ai.assistance.quro.core.model.QuroLocalModelRepository
 import com.ai.assistance.quro.core.network.QuroLlmClient
+import com.ai.assistance.quro.core.runtime.QuroRunCheckpoint
 import com.ai.assistance.quro.core.network.QuroReasoningControl
 import com.ai.assistance.quro.core.network.QuroLocalEngine
 import com.ai.assistance.quro.core.network.QuroLocalEnginePlaceholder
@@ -261,6 +262,33 @@ class QuroAssistant(
             var lastStreamEmitMs = 0L
             // 🔧 #765 防御：记录流式累计文本，终态 result.content 异常空白时回退到此，避免正文被截断覆盖。
             var streamedContent: String = ""
+            // 🔑 编排与容错层：本次运行的检查点。
+            //   QuroRunCheckpoint 此前 API 完整但**全仓零调用**（死代码），
+            //   于是「多轮 Agent 运行中途进程被杀 / 被后台回收」时前面几轮工具全白跑、
+            //   token 全白烧，用户还得把问题重新描述一遍。
+            //   这里把它接上：每轮工具执行后落盘，正常结束清除，中断时保留供恢复。
+            val runId = java.util.UUID.randomUUID().toString()
+            val checkpoint = QuroRunCheckpoint(context)
+            val cpRounds = mutableListOf<QuroRunCheckpoint.ToolRound>()
+            val cpSave: (String) -> Unit = { partial ->
+                runCatching {
+                    checkpoint.save(
+                        QuroRunCheckpoint.Snapshot(
+                            runId = runId,
+                            conversationId = store.all().firstOrNull()?.id ?: runId,
+                            userMessage = userBrief(),
+                            modelId = cfg.model,
+                            rounds = cpRounds.toList(),
+                            partialOutput = partial,
+                            promptTokens = 0,
+                            completionTokens = 0,
+                            startedAt = 0L,
+                            updatedAt = 0L,
+                        ),
+                    )
+                }
+            }
+            val cpClear: () -> Unit = { runCatching { checkpoint.clear(runId) } }
             val emit = { onUpdate?.invoke() }
             QuroAgentTrace.status("assistant", "AI 开始响应")
             // 自动触发流体云通知：AI 开始处理时创建胶囊
@@ -784,6 +812,22 @@ class QuroAssistant(
                                     (if (p.isNotBlank()) p else null)
                             } else r to null
                         }
+                        // 📦 编排与容错层：把本轮工具调用并入检查点。
+                        //   记成功/失败都要记 —— 恢复时才知道「哪几步已经不必重跑」。
+                        //   参数用 callsWithId 里同名那次调用的实参（结果与调用按序一一对应）
+                        cleanedResults.forEachIndexed { idx, (r, _) ->
+                            cpRounds.add(
+                                QuroRunCheckpoint.ToolRound(
+                                    round = round,
+                                    toolName = r.name,
+                                    arguments = callsWithId.getOrNull(idx)?.arguments?.take(1000) ?: "",
+                                    result = r.result.take(2000),
+                                    success = r.ok,
+                                    elapsedMs = dur,
+                                ),
+                            )
+                        }
+                        cpSave("")
                         val injectPathByCall = callsWithId.zip(cleanedResults.map { it.second }).toMap()
                         // N3：工具轮被截断时，arguments 多半已被切坏（sanitize 退化成 "{}"）。
                         // 把「截断」这件事写进工具结果本身 —— 既不破坏
@@ -904,6 +948,7 @@ class QuroAssistant(
                         emit()
                         // 自动结束流体云通知
                         finishFluidCloudSafe(context)
+                        cpClear()
                         return@withContext lastText
                     }
                 } else {
@@ -932,6 +977,7 @@ class QuroAssistant(
                         emit()
                         // 自动结束流体云通知
                         finishFluidCloudSafe(context)
+                        cpClear()
                         return@withContext lastText
                     }
                 }
@@ -955,6 +1001,9 @@ class QuroAssistant(
             }
             // 自动结束流体云通知
             finishFluidCloudSafe(context)
+            // ✅ 本次运行正常收尾：清检查点，避免 filesDir/quro_runs 堆积
+            //   （findInterrupted 靠 mtime 判「中断」，留着会被误报成待恢复任务）
+            cpClear()
             lastText
         }
 
