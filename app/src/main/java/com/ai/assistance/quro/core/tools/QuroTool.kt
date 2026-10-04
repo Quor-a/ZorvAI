@@ -13,7 +13,10 @@ import com.ai.assistance.quro.core.agent.loop.FailureType
 import com.ai.assistance.quro.core.agent.loop.ToolOutcome
 import com.ai.assistance.quro.core.mcp.DroidMcp
 import com.ai.assistance.quro.core.mcp.McpTool
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
 /**
@@ -30,6 +33,22 @@ interface QuroTool {
 
     /** 该工具运行前需确保已授予的危险权限（运行时申请）。默认无。 */
     val requiredPermissions: List<String> get() = emptyList()
+
+    /**
+     * 该工具是否为**只读**（不改变任何持久状态）。
+     *
+     * ## 为什么默认 false 而不是 true
+     * 宁可**漏并发**也不可**错并发**：并发前提是「两个调用互不影响」，
+     * 而漏并发的代价只是慢一点，错并发的代价是数据丢失 / 重复扣款 / 两条重复消息。
+     * 因此未显式声明的工具一律按「可能有副作用」处理，走原串行路径。
+     *
+     * ## 判定标准（实现者自己把关）
+     *  - true：纯读 —— 读文件、查状态、搜索、列表、计算、getter 类。
+     *  - false：任何写、删、发、启停、支付、装卸、授权、发通知，
+     *    以及**任何读依赖某个可被并发改写的可变状态**的情况。
+     * 拿不准就填 false。
+     */
+    val readOnly: Boolean get() = false
 }
 
 /** 工具注册表（持有全部原创工具）。 */
@@ -334,6 +353,31 @@ class QuroToolRegistry {
 class QuroToolEngine(private val registry: QuroToolRegistry) {
     private var appContext: Context? = null
 
+    companion object {
+        /**
+         * 允许并发的工具名白名单（人工审过的保守集）。
+         *
+         * 收录标准（三条全满足）：
+         *  1. 纯读，不写任何持久状态；
+         *  2. 不发外部消息、不启停任何东西、不触发授权弹窗；
+         *  3. 实现类已显式声明 `override val readOnly = true`（两处都成立才并发）。
+         *
+         * 🔴 刻意**不收录**的：`browse_files`（大目录遍历抢 IO，会拖慢同批其他读）、
+         * `web_search` / `http_request` / `read_url`（网络并发易触发限流）、
+         * `list_installed_apps`（包管理查询在部分 ROM 上非线程安全）、
+         * `terminal_status`（读的是被其他工具写的共享终端会话状态）。
+         * 想要这些并发，先确认线程安全再加进来。
+         */
+        val CONCURRENT_SAFE: Set<String> = setOf(
+            "get_current_time", "get_device_info", "get_battery",
+            "get_wifi_info", "get_network_info", "get_sensors",
+            "calculate",
+            "file_info", "find_files",
+            "get_package_name", "get_active_notifications", "get_bluetooth_status",
+            "root_status", "shizuku_status",
+        )
+    }
+
     private val droidMcp: DroidMcp = DroidMcp.builder()
         .addTools(registry.all().map { it.toMcpTool(this) })
         .build()
@@ -372,21 +416,81 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
      */
     suspend fun execute(context: Context, calls: List<QuroToolCall>): List<QuroToolResult> {
         appContext = context
-        return calls.map { call ->
-            closedLoop.dispatch(
-                context = context,
-                scenario = scenarioFor(call),
-                name = call.name,
-                arguments = call.arguments,
-                execOnce = { attempt -> execOnce(call, context, attempt) },
-                onModelCorrect = { failure ->
-                    // 只把「可修正」与「已耗尽预算」两种情况标记为需要模型介入。
-                    // PERMISSION 类在策略表里就是 ESCALATE（弹窗/问用户），
-                    // 让模型自己重试没有意义，因此返回 true 表示「已按可修正处理」。
-                    correctionHint(call, failure) != null
-                },
-            ).toToolResult(call.name, call)
+        if (calls.size == 1) return listOf(runOne(context, calls[0]))
+
+        // 🔑 只读调用并发，有副作用的调用仍**严格串行**。
+        // 此前是 calls.map { dispatch } 全串行：一轮 8 个只读查询（读 3 个文件 +
+        // 查 2 个应用状态 + 搜 2 次）要等 8 倍时间，而它们彼此毫无依赖 ——
+        // 这是端侧延迟最大的一块无谓浪费（模型一轮经常并发给出十几个调用）。
+        //
+        // 为什么不全并发：工具里大量是写/发/启停（send_sms、delete_file、
+        // launch_app、apk_plugin 装卸）。并发这些会导致重复发送、竞态删除。
+        // 所以判据是 [QuroTool.readOnly]，未声明的一律 false（保守）。
+        val results = arrayOfNulls<QuroToolResult>(calls.size)
+        val serial = mutableListOf<Int>()
+        val parallel = mutableListOf<Int>()
+        calls.forEachIndexed { i, c ->
+            if (isReadOnlyCall(c)) parallel += i else serial += i
         }
+
+        // 有副作用的先按原顺序跑完（顺序必须与模型给出的调用序一致）。
+        for (i in serial) results[i] = runOne(context, calls[i])
+        // 只读的并发跑；协程里 try/catch 兜底，绝不让一个失败带走整批。
+        if (parallel.size > 1) {
+            coroutineScope {
+                parallel.forEach { i ->
+                    launch(Dispatchers.IO) {
+                        results[i] = runCatching { runOne(context, calls[i]) }
+                            .getOrElse { e ->
+                                QuroToolResult.Failed(
+                                    "tool_error",
+                                    QuroToolFeedback.compose(calls[i].name, "工具执行异常：${e.message}"),
+                                )
+                            }
+                    }
+                }
+            }
+        } else {
+            for (i in parallel) results[i] = runOne(context, calls[i])
+        }
+        // 🔴 结果必须按调用原序返回：assistant[tool_calls] 与 tool[] 靠下标配对，
+        // 顺序错了模型会拿到张冠李戴的结果（与「按序 await 改并发」时最容易踩的坑）。
+        return results.map { it ?: QuroToolResult.Failed("tool_no_result", "工具未返回结果") }
+    }
+
+    /**
+     * 单个调用走完整闭环。
+     * 抽出来是为了让「串行分支」与「并发分支」复用同一段逻辑，避免两条路径行为漂移。
+     */
+    private suspend fun runOne(context: Context, call: QuroToolCall): QuroToolResult =
+        closedLoop.dispatch(
+            context = context,
+            scenario = scenarioFor(call),
+            name = call.name,
+            arguments = call.arguments,
+            execOnce = { attempt -> execOnce(call, context, attempt) },
+            onModelCorrect = { failure ->
+                // 闭环判 CORRECT 时把「该改什么」回灌给模型。
+                // PERMISSION 类在策略表里就是 ESCALATE（弹窗/问用户），
+                // 让模型自己重试没有意义，因此返回 true 表示「已按可修正处理」。
+                correctionHint(call, failure) != null
+            },
+        ).toToolResult(call.name, call)
+
+    /**
+     * 该调用是否可并发。
+     *
+     * 判据是「工具实现声明了 [QuroTool.readOnly]」**且**「名字在 [CONCURRENT_SAFE] 白名单里」。
+     * 双重条件是刻意的冗余：白名单是人工审过的保守集，`readOnly` 是实现者的自述，
+     * 两者都成立才并发。新增工具想进白名单必须显式改 [CONCURRENT_SAFE] ——
+     * 宁可漏并发（只是慢），不可错并发（重复发送 / 竞态删除）。
+     *
+     * 技能类（skill__）一律不并发：技能指令由用户自定义，无法保证只读。
+     */
+    private fun isReadOnlyCall(call: QuroToolCall): Boolean {
+        if (call.name.startsWith("skill__")) return false
+        if (call.name !in CONCURRENT_SAFE) return false
+        return runCatching { registry.get(call.name)?.readOnly == true }.getOrDefault(false)
     }
 
     /**

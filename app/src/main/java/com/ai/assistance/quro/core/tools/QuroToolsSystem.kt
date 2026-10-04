@@ -33,6 +33,7 @@ import org.json.JSONObject
 /** 电量与充电状态（无权限）。 */
 class GetBatteryTool : QuroTool {
     override val name = "get_battery"
+    override val readOnly = true
     override val description = "获取设备电量百分比与充电状态，参数为空 {}。"
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String {
@@ -44,6 +45,7 @@ class GetBatteryTool : QuroTool {
 /** 当前 Wi-Fi 信息（ACCESS_WIFI_STATE 为普通权限，安装即授予）。 */
 class GetWifiTool : QuroTool {
     override val name = "get_wifi_info"
+    override val readOnly = true
     override val description = "获取当前连接的 Wi-Fi 名称(SSID)与连接状态，参数为空 {}。"
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String {
@@ -57,6 +59,7 @@ class GetWifiTool : QuroTool {
 /** 网络连通性与类型（无权限）。 */
 class GetNetworkTool : QuroTool {
     override val name = "get_network_info"
+    override val readOnly = true
     override val description = "获取网络类型与是否联网，参数为空 {}。"
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String {
@@ -75,6 +78,7 @@ class GetNetworkTool : QuroTool {
 /** 设备传感器列表（无权限）。 */
 class GetSensorsTool : QuroTool {
     override val name = "get_sensors"
+    override val readOnly = true
     override val description = "列出设备可用传感器名称与类型，参数为空 {}。"
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String {
@@ -246,6 +250,7 @@ private fun findAppByName(ctx: Context, name: String): AppMatch? {
 /** 查询应用的精确包名（通过应用显示名反查）。 */
 class GetPackageNameTool : QuroTool {
     override val name = "get_package_name"
+    override val readOnly = true
     override val description = "根据应用显示名查询其精确包名。参数 {\"app_name\":\"应用名\"}。当需要精确包名做高级操作时使用。"
     override val parametersJson = """{
         "type":"object",
@@ -265,6 +270,7 @@ class GetPackageNameTool : QuroTool {
 /** 活跃通知（无权限）。 */
 class GetNotificationsTool : QuroTool {
     override val name = "get_active_notifications"
+    override val readOnly = true
     override val description = "读取当前活跃通知(标题+文本)，参数为空 {}。"
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String {
@@ -282,6 +288,7 @@ class GetNotificationsTool : QuroTool {
     /** 蓝牙状态（API 31+ 用 BLUETOOTH_CONNECT；API 30- 用 legacy BLUETOOTH）。 */
     class GetBluetoothTool : QuroTool {
         override val name = "get_bluetooth_status"
+    override val readOnly = true
         override val description = "获取蓝牙开关状态与已配对设备，参数为空 {}。"
         override val parametersJson = """{"type":"object","properties":{}}"""
         // 🔧 #768 修复：原 listOf(BLUETOOTH, BLUETOOTH_CONNECT) 在 API 31+ 上 BLUETOOTH 是 legacy 权限

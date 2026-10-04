@@ -59,6 +59,7 @@ class RootExecTool : QuroTool {
 /** 检测 ROOT 状态与类型。 */
 class RootStatusTool : QuroTool {
     override val name = "root_status"
+    override val readOnly = true
     override val description = "检测设备是否已 ROOT 及 ROOT 类型（Magisk / KernelSU / KSU / 传统 su），无需参数 {}。"
     override val parametersJson = """{"type":"object","properties":{}}"""
 

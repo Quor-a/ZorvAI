@@ -84,6 +84,7 @@ import java.util.Locale
 /** 返回当前时间。 */
 class QuroClockTool : QuroTool {
     override val name = "get_current_time"
+    override val readOnly = true
     override val description = "获取当前日期与时间，参数为空 {}。"
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String {
@@ -95,6 +96,7 @@ class QuroClockTool : QuroTool {
 /** 返回设备基础信息。 */
 class QuroDeviceInfoTool : QuroTool {
     override val name = "get_device_info"
+    override val readOnly = true
     override val description = "获取设备型号与系统版本，参数为空 {}。"
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String =
@@ -104,6 +106,7 @@ class QuroDeviceInfoTool : QuroTool {
 /** 四则运算计算器（安全递归下降求值，不支持函数/变量）。 */
 class QuroCalculatorTool : QuroTool {
     override val name = "calculate"
+    override val readOnly = true
     override val description = "计算一个算术表达式，支持 + - * / 和括号，参数为 {\"expr\":\"1+2*3\"}。"
     override val parametersJson = """{
         "type":"object",
