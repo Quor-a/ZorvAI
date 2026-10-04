@@ -105,6 +105,7 @@ class CopyFileTool : QuroTool {
 
 class FindFilesTool : QuroTool {
     override val name = "find_files"
+    override val readOnly = true
     override val description = "在应用专属目录按名称子串搜索文件，参数 {\"query\":\"log\",\"limit\":50}。"
     override val parametersJson = """{"type":"object","properties":{"query":{"type":"string","description":"名称包含的子串"},"limit":{"type":"integer","description":"返回条数默认50"}},"required":["query"]}"""
     override fun run(context: Context, arguments: String): String {
@@ -124,6 +125,7 @@ class FindFilesTool : QuroTool {
 
 class FileInfoTool : QuroTool {
     override val name = "file_info"
+    override val readOnly = true
     override val description = "查看应用专属目录文件信息（大小/修改时间/类型），参数 {\"path\":\"sub/a.txt\"}。"
     override val parametersJson = """{"type":"object","properties":{"path":{"type":"string","description":"相对路径"}},"required":["path"]}"""
     override fun run(context: Context, arguments: String): String {

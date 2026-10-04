@@ -118,6 +118,7 @@ class InstallAppTool : QuroTool {
 /** 查询 Shizuku 状态信息。 */
 class ShizukuStatusTool : QuroTool {
     override val name = "shizuku_status"
+    override val readOnly = true
     override val description = "查询 Shizuku 服务状态（是否安装/授权/运行中/版本信息），无需参数 {}。"
     override val parametersJson = """{"type":"object","properties":{}}"""
     override fun run(context: Context, arguments: String): String =
