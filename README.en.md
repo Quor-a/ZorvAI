@@ -67,6 +67,7 @@ The design spine is **Tool-first**: every capability is expressed as a `QuroTool
 > **🤖 5 official ACI controlled apps** (weather / document / terminal / build / file) are open sourced separately — see [Device Control / ACI](./docs/features/device-control/README.md).
 >
 > - 📦 Latest release (no login required): [github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
+> - 🧩 **[APK plugin developer guide](./docs/PLUGIN_DEV_GUIDE.md)** — start here to add new tools / ACI capabilities / UI surfaces / commands to Zorv AI
 > - 🧩 ACI core AAR: shipped as `aci-core-release.aar` with each release
 > - 📖 ACI developer guide: [docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md)
 > - 🐛 Issues: [github.com/Quor-a/ZorvAI/issues](https://github.com/Quor-a/ZorvAI/issues)
@@ -228,7 +229,7 @@ The gate judges the **raw artifact**, not a summary — otherwise heuristics lik
 | **Terminal & Linux sandbox** | proot + Ubuntu 24.04 ARM64, multi-session, SSH/VNC, screen-off survival | [terminal](./docs/features/terminal/README.md) |
 | **Voice / media / browser / docs** | Multi-vendor TTS, on-device streaming STT (sherpa-ncnn), built-in browser (WebView), document processing | [voice-media](./docs/features/voice-media/README.md) |
 | **Device control / Shizuku / ACI** | L1–L5 privilege tiers, ACI controlled-app ecosystem, ACI console & HTTP transport | [device-control](./docs/features/device-control/README.md) |
-| **Digital human / KB / memory / persona** | 3D model viewer (GLB/glTF), vector RAG, memory store, persona config, scheduled tasks | [digital-human](./docs/features/digital-human/README.md) |
+| **KB / memory / persona / scheduling** | Vector-semantic RAG knowledge base, memory store (semantic / episodic / procedural / working), persona config, scheduled tasks & calendar | [knowledge-memory-persona](./docs/features/digital-human/README.md) |
 | **APK-level plugin framework** | 14 extension points; install an APK and the AI gains capabilities | [extensibility](./docs/architecture/extensibility/README.md) |
 | **i18n (11 languages)** | String key system, reply-language injection, translation pipeline | [i18n](./docs/architecture/i18n/README.md) |
 
@@ -342,12 +343,19 @@ All releases: [Releases](https://github.com/Quor-a/ZorvAI/releases).
 | Terminal & Linux sandbox | [docs/features/terminal/README.md](./docs/features/terminal/README.md) |
 | Voice / media / browser / docs | [docs/features/voice-media/README.md](./docs/features/voice-media/README.md) |
 | Device control / Shizuku / ACI | [docs/features/device-control/README.md](./docs/features/device-control/README.md) |
-| Digital human / KB / memory / persona | [docs/features/digital-human/README.md](./docs/features/digital-human/README.md) |
+| KB / memory / persona / scheduling | [docs/features/digital-human/README.md](./docs/features/digital-human/README.md) |
+
+### Developer Guides
+
+| Guide | Audience | Path |
+|-------|----------|------|
+| **APK plugin development** | Adding new tools / ACI capabilities / UI surfaces / commands to the AI: 30-second framework, one-command skeleton, extension-point list, `apk_plugin` management tools, pitfalls and on-device verification | [docs/PLUGIN_DEV_GUIDE.md](./docs/PLUGIN_DEV_GUIDE.md) |
+| **ACI controlled-app development** | Exposing your own app as an AI-callable capability | [docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md) |
+| **ACI technical architecture** | ACI protocol and implementation details | [docs/ACI_TECHNICAL_ARCHITECTURE.md](./docs/ACI_TECHNICAL_ARCHITECTURE.md) |
+| **Terminal architecture** | PTY / proot / foreground keep-alive / IPC | [docs/TERMINAL_ARCHITECTURE.md](./docs/TERMINAL_ARCHITECTURE.md) |
 
 ### Other existing docs
 
-- [docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md) · [docs/ACI_TECHNICAL_ARCHITECTURE.md](./docs/ACI_TECHNICAL_ARCHITECTURE.md)
-- [docs/PLUGIN_DEV_GUIDE.md](./docs/PLUGIN_DEV_GUIDE.md) · [docs/TERMINAL_ARCHITECTURE.md](./docs/TERMINAL_ARCHITECTURE.md)
 - [docs/architecture/云端推理思考与工具调用架构.md](./docs/architecture/云端推理思考与工具调用架构.md) — cloud inference implementation log (N1–N15)
 - [docs/architecture/本地推理引擎思考与工具调用架构.md](./docs/architecture/本地推理引擎思考与工具调用架构.md) — on-device engine log
 
