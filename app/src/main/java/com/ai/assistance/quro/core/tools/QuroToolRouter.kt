@@ -20,7 +20,22 @@ import com.ai.assistance.quro.core.QuroToolSpec
 class QuroToolRouter(allSpecs: List<QuroToolSpec>) {
 
     companion object {
-        /** 渐进式披露总开关。false=退回旧行为（全量下发，对齐 v1.0.64 已知良好基线）。 */
+        /**
+         * 渐进式披露总开关。false=全量下发（对齐 v1.0.64 已知良好基线）；true=只下发
+         * 【路由目录 + 常驻核心 + 已加载】，其余工具需模型先 `get_schema` 加载。
+         *
+         * ## 🔴 为什么默认仍是 false（要开需先拍板，别盲开）
+         * 打开能省掉约 95 份工具 schema 对上下文的碾压，但代价是**行为变更**：
+         *  - [ALWAYS_ON] 现有 150 个（总注册 235）。剩下的工具模型**看不见也调不到**，
+         *    必须先 `tool_router.get_schema(name=...)`，而这依赖模型**主动**去查；
+         *    小模型 / 弱模型经常不查就直接回答「我没有这个能力」——
+         *    表现为「明明装了却说自己不会」，比上下文长更致命。
+         *  - 跨轮累积的 `loaded` 集合挂在 [com.ai.assistance.quro.core.QuroAssistant]
+         *    的 toolRouters 上，进程被杀后丢失，用户感知为「同样的问题这次会了、下次又不会了」。
+         *
+         * 所以这是**产品取舍**不是纯技术开关：开 = 省 token 但要求模型更主动；
+         * 关 = 稳定但每轮都带全量 schema。
+         */
         @Volatile var PROGRESSIVE: Boolean = false
 
         /**
@@ -77,6 +92,14 @@ class QuroToolRouter(allSpecs: List<QuroToolSpec>) {
             "sandbox", "private_db",
             // ★ APK 级插件框架总控：组件扩展与插件生态的唯一入口（装/卸/重载/调用插件工具/开插件界面）
             "apk_plugin",
+            // 记忆工程五件套：用户显式说「记住/回忆/导出记忆」时不该先逼模型去查目录
+            "memory_space", "memory_rebuild", "memory_autosave", "memory_window_plan", "memory_export",
+            // 多智能体：spawn_subagent 是「拆解复杂任务」的默认路径
+            "spawn_subagent",
+            // 可视化弹窗与询问（ui_card / ui_widget / ui_control 之外的另两个入口）
+            "visual_popup", "visual_ask",
+            // 确定性编排（WorkflowEngine 三件套，已接 RunStore 与依赖解析）
+            "wf_create", "wf_trigger", "wf_run_status",
         )
 
         private val CATALOG_PARAMS_JSON = """{

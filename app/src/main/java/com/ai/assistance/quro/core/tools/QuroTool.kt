@@ -350,7 +350,26 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
     /** 统一闭环执行器：把"感知-判断-执行-反馈-校验-修正"闭环推广到所有工具调用。 */
     private val closedLoop = ClosedLoopExecutor()
 
-    /** 按 LLM 返回的 tool_calls 逐一执行（经闭环执行器派发）。 */
+    /**
+     * 按 LLM 返回的 tool_calls 逐一执行（经闭环执行器派发）。
+     *
+     * ## 🔴 [onModelCorrect] 通道（此前完全没接，本轮补上）
+     * [ClosedLoopExecutor] 的失败策略表里 [RecoveryAction.CORRECT] / [ROLLBACK] 是
+     * 「让上层修正后重试」与「不应用本次结果」两档。此前这里**不传 onModelCorrect**，
+     * 于是 [ClosedLoopExecutor.handleFailure] 的 CORRECT 分支永远走 else：
+     * 「模型修正通道不可用 → 升级」，而 ROLLBACK 与 ESCALATE 返回的又是同一个
+     * [ToolOutcome.Failure]。**三档塌成一档，按场景自愈的设计等于没生效**——
+     * 实际行为只剩「裸重试到 maxAttempts 就失败」。
+     *
+     * 现在接上：闭环判定需要修正时，把失败类型 + 可执行的修正方向回灌进工具结果，
+     * 模型下一轮能看到「这类错重试没用，该改什么」。
+     *
+     * ### 刻意不做「自动改参数」
+     * 闭环在**引擎侧**无法安全地自动改 LLM 传的参数 —— 猜错字段名会变成更隐蔽的错。
+     * 所以这里的修正是**指令式**的（把该改什么告诉模型），由模型重发一次完整调用；
+     * 真正落地的是 [QuroToolFeedback.compose] 那套「重试有没有用」的词汇，
+     * 它按 [FailureType] 穷尽映射，不做宽泛猜测。
+     */
     suspend fun execute(context: Context, calls: List<QuroToolCall>): List<QuroToolResult> {
         appContext = context
         return calls.map { call ->
@@ -360,8 +379,47 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
                 name = call.name,
                 arguments = call.arguments,
                 execOnce = { attempt -> execOnce(call, context, attempt) },
-            ).toToolResult(call.name)
+                onModelCorrect = { failure ->
+                    // 只把「可修正」与「已耗尽预算」两种情况标记为需要模型介入。
+                    // PERMISSION 类在策略表里就是 ESCALATE（弹窗/问用户），
+                    // 让模型自己重试没有意义，因此返回 true 表示「已按可修正处理」。
+                    correctionHint(call, failure) != null
+                },
+            ).toToolResult(call.name, call)
         }
+    }
+
+    /**
+     * 修正方向提示：该失败类型下，模型**该改什么**才能成功。
+     * 返回 null 表示这条失败无需模型修正（直接升级给用户更合适）。
+     *
+     * 纯函数、无副作用，可直接单测。
+     */
+    internal fun correctionHint(
+        call: QuroToolCall,
+        failure: ToolOutcome.Failure,
+    ): String? {
+        val kind = QuroToolFeedback.kindOf(failure.failureType)
+        return when (kind) {
+            ToolFailureKind.INVALID_ARGS ->
+                "参数不合法导致失败。重发这次调用时按工具 schema 修正：必填字段不能缺、字段名要与 schema 完全一致、JSON 必须完整（不要截断）。"
+            ToolFailureKind.NOT_FOUND ->
+                "目标不存在。先用 list/find 类工具确认真实名称或路径，再重发；不要用猜的路径重试。"
+            ToolFailureKind.PERMISSION ->
+                "缺权限，重试无用。改为告知用户需要开启哪项权限，或改用不依赖该权限的替代方案。"
+            ToolFailureKind.ENV_MISSING ->
+                "环境不具备该能力（工具未安装/未配置/依赖缺失/设备不支持）。重试无用：先告知用户缺什么，或改用不依赖它的方案。"
+            ToolFailureKind.CANCELLED ->
+                "调用被取消（用户停止或切换了会话）。**不要重试**，直接按用户当前真实意图重新作答。"
+            ToolFailureKind.TIMEOUT ->
+                "已超时。缩小请求范围（更小的分页/更短的输出/更窄的路径）后重发，不要原样重试。"
+            ToolFailureKind.TRANSPORT ->
+                "网络或传输失败。若工具支持重试参数请开启，否则稍后重发；不要连续快速重复同一调用。"
+            ToolFailureKind.BUSINESS ->
+                "业务条件不满足。重发前先确认前置条件（如文件/应用/权限/服务是否就绪），必要时先执行准备步骤。"
+            ToolFailureKind.UNKNOWN ->
+                "失败原因未归类。重发前先缩小范围或补一次探测（如列出可用项），确认工具与参数都存在再调用。"
+        }.let { "[correct] ${call.name}: $it" }
     }
 
     /** 把工具名归类到闭环场景键，供 [FailurePolicyRegistry] 查专属策略。 */
@@ -383,11 +441,22 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
      * ⚠️ 成功结果**原样返回**、绝不包装：工具正常输出里可能恰好含 "not found"
      * （例如搜索类工具的「no matches found」），把成功染上失败标记会凭空制造假故障。
      */
-    private fun ToolOutcome.toToolResult(toolName: String): QuroToolResult = when (this) {
+    private fun ToolOutcome.toToolResult(
+        toolName: String,
+        call: QuroToolCall? = null,
+    ): QuroToolResult = when (this) {
         is ToolOutcome.Success -> QuroToolResult.Success(raw)
-        is ToolOutcome.Failure -> QuroToolResult.Error(
-            QuroToolFeedback.compose(toolName, message, QuroToolFeedback.kindOf(failureType)),
-        )
+        is ToolOutcome.Failure -> {
+            val base = QuroToolFeedback.compose(toolName, message, QuroToolFeedback.kindOf(failureType))
+            // 修正方向仅在「闭环确实判定需要模型修正」时附加；
+            // PERMISSION 类不附加（重试无用，直接告知用户更省一轮）。
+            val hint = call?.let { correctionHint(it, this) }
+            if (hint == null || QuroToolFeedback.kindOf(failureType) == ToolFailureKind.PERMISSION) {
+                QuroToolResult.Error(base)
+            } else {
+                QuroToolResult.Error(base + "\n\n" + hint)
+            }
+        }
     }
 
     /**
