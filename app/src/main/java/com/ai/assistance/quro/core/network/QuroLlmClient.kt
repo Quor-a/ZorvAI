@@ -11,6 +11,7 @@ import com.ai.assistance.quro.core.QuroChatMessage
 import com.ai.assistance.quro.core.QuroLlmMeta
 import com.ai.assistance.quro.core.QuroLlmResult
 import com.ai.assistance.quro.core.QuroToolCall
+import com.ai.assistance.quro.core.QuroUpstreamRefusal
 import com.ai.assistance.quro.core.tools.QuroToolSpecGuard
 import com.ai.assistance.quro.core.QuroToolSpec
 import okhttp3.MediaType.Companion.toMediaType
@@ -1107,6 +1108,13 @@ class QuroLlmClient(
             is QuroLlmResult.Text -> result.copy(meta = m)
             is QuroLlmResult.ToolCalls -> result.copy(meta = m)
             is QuroLlmResult.Error -> result
+        }
+        // 上游 refusal 兜底：不少网关不走 finish_reason=content_filter，而是把拒答
+        // **写进 content**、finish_reason 照常是 stop。这类原生英文回执此前原样糊给用户，
+        // 还会被当成正常回复存进历史、下一轮继续喂给模型。出口先归一化成中文。
+        if (attached is QuroLlmResult.Text && QuroUpstreamRefusal.detect(attached.content)) {
+            Log.w(TAG, "<<< UPSTREAM REFUSAL 归一化，原文：${attached.content.take(80)}")
+            return QuroLlmResult.Text(QuroUpstreamRefusal.normalize(attached.content), attached.reasoning)
         }
         if (!m.filtered) return attached
         val blank = when (attached) {
