@@ -125,7 +125,12 @@ class ClosedLoopExecutor(
                 if (onModelCorrect != null && onModelCorrect(failure)) {
                     trace.correct(name, "决策·模型修正", "已压回模型修正指令")
                     history.add("a$attempt ${failure.failureType}→模型修正")
-                    null
+                    // 🔴 本轮**立即终止**并把失败交还上层，而不是 continue 空转：
+                    //   修正需要模型改参数后**重发一次完整调用**，引擎侧拿不到新参数，
+                    //   继续循环只会用同一份错参数重试到 maxAttempts，纯浪费预算。
+                    //   上层（QuroTool.execute）会把修正方向拼进 tool result，
+                    //   模型下一轮据此重发 —— 那才是「修正」真正发生的地方。
+                    return failure
                 } else {
                     // 没有模型修正通道（如纯工具批处理）：退化为升级。
                     trace.status(name, "决策·升级", "模型修正通道不可用，升级")

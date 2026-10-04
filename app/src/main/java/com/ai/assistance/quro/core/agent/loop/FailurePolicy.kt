@@ -6,7 +6,14 @@ package com.ai.assistance.quro.core.agent.loop
 enum class RecoveryAction {
     /** 用相同参数立即重试。 */
     RETRY,
-    /** 让模型/上层修正参数或指令后重试（本引擎内若无修正通道则退化为升级）。 */
+    /**
+     * 让模型/上层修正参数或指令后重试。
+     *
+     * 🔴 语义（2026-10-04 修正）：修正**必然终止本轮**并把失败交还上层，
+     * 由上层把修正方向压回模型、模型重发一次完整调用。引擎侧拿不到新参数，
+     * 继续循环只会用同一份错参数空转到 [ScenarioFailurePolicy.maxAttempts]。
+     * 无修正通道时退化为升级。
+     */
     CORRECT,
     /** 回滚到执行前状态，不应用本次结果。 */
     ROLLBACK,
