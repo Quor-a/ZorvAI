@@ -28,6 +28,8 @@ import java.util.IdentityHashMap
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import com.ai.assistance.quro.core.agent.orchestration.TaskPlanner
 import com.ai.assistance.quro.core.agent.orchestration.DeliverabilityJudge
+import com.ai.assistance.quro.core.agent.orchestration.DefaultTaskPlanner
+import com.ai.assistance.quro.core.agent.orchestration.HeuristicDeliverabilityJudge
 import com.ai.assistance.quro.core.agent.orchestration.OrchestrationTrace
 import com.ai.assistance.quro.core.agent.orchestration.Deliverability
 import com.ai.assistance.quro.util.QuroDiag
@@ -54,12 +56,27 @@ class QuroAssistant(
     private val engine = QuroToolEngine(registry)
 
     /**
-     * 长程任务编排（可选，默认关闭）：调用方显式注入 [taskPlanner] / [deliverabilityJudge] 时启用。
-     * 两者均为 null 时保持旧行为——LLM 返回文本即终态交付，不注入策划/规划/设计方案、也不过交付闸门。
+     * 任务策划：**Agent 的一环，不是可选功能**。
+     *
+     * 默认走 [QuroAssistant] 内置的轻量策划（[DefaultTaskPlanner]）：把用户指令拆成
+     * 「要做什么 / 依赖什么 / 怎么验证」三问，作为隐藏 system 提示在首轮注入。
+     * 调用方仍可注入自己的 [TaskPlanner] 覆盖（多 Agent 流水线场景会这么做）。
+     *
+     * 之所以不是开关：策划 + 交付闸门是 Agent 区别于「一问一答」的根本，
+     * 做成可关的开关等于「默认退化成聊天机器人」。
      */
-    var taskPlanner: TaskPlanner? = null
-    var deliverabilityJudge: DeliverabilityJudge? = null
-    /** 长程交付闸门：不可交付后允许继续编排的最大次数，超阈值强制交付避免死循环。 */
+    var taskPlanner: TaskPlanner = DefaultTaskPlanner
+
+    /**
+     * 交付闸门：**Agent 的一环，不是可选功能**。
+     *
+     * 默认 [HeuristicDeliverabilityJudge]：产物为空或含失败标记时**不直接交付**，
+     * 而是把不可交付原因压回 Agent 让它继续修正，直到可交付或超阈值。
+     * 调用方可注入更严格的实现（如多 Agent 委员会共同判定）。
+     */
+    var deliverabilityJudge: DeliverabilityJudge = HeuristicDeliverabilityJudge
+
+    /** 不可交付后允许继续编排的最大次数，超阈值强制交付避免死循环。 */
     var deliverAttempts = 0
 
     /**
@@ -101,13 +118,18 @@ class QuroAssistant(
     }
 
     /**
-     * 交付闸门（可选，默认关闭）：[deliverabilityJudge] 为 null 时直接放行，保持旧行为。
+     * 交付闸门（**常驻**）：判定产物能否直接交回用户。
+     *
+     * 这是 Agent 的一环，不是可关功能——所以这里**没有 null 短路**。
+     * 判不可交付时不直接交付，而是把 [Deliverability.NotDeliverable.reason]/
+     * [suggestion] 作为修正指令压回 Agent，让它继续编排（重新规划/执行）。
+     *
      * @return null = 可交付（调用方应 return 最终文本）；
      *         非 null = 不可交付的提示文案（调用方应注入该提示后 continue，让 LLM 继续修正）。
-     * 超过上限次数仍不可交付则强制放行，避免长程任务陷入死循环。
+     * 超过 [deliverAttempts] 上限仍不可交付则强制放行，避免长程任务陷入死循环。
      */
     private fun maybeDeliver(candidate: String, context: String): String? {
-        val judge = deliverabilityJudge ?: return null
+        val judge = deliverabilityJudge
         if (candidate.isBlank()) return null
         val brief = userBrief()
         return when (val verdict = runCatching { judge.judge(brief, candidate, context) }.getOrElse { return null }) {
@@ -372,11 +394,11 @@ class QuroAssistant(
                 coroutineContext[Job]?.ensureActive()
                 round++
                 // 长程编排（可选，默认关闭）：首轮把策划/规划/设计方案作为隐藏 system 提示注入。
-                if (round == 1 && taskPlanner != null) {
+                if (round == 1) {
                     val brief = userBrief()
                     if (brief.isNotBlank()) {
                         runCatching {
-                            val plan = taskPlanner!!.plan(brief, "")
+                            val plan = taskPlanner.plan(brief, "")
                             OrchestrationTrace.strategize("assistant", "已生成任务方案")
                             val planText = buildString {
                                 appendLine("【任务方案】")
