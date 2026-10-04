@@ -80,6 +80,33 @@ class QuroAssistant(
     var deliverAttempts = 0
 
     /**
+     * 最近一次交付闸门的打回原因（null = 本次运行尚未被打回过）。
+     * 供重规划读取，见 [maybeDeliver] 与 ask() 内 round == 1 || gateReason != null 分支。
+     */
+    private var lastGateReason: Deliverability.NotDeliverable? = null
+
+    /**
+     * 提取最近若干条工具失败的一句话摘要，供策划阶段判断「哪一步卡住了」。
+     * 只取失败、只取尾部、不做截断之外的加工 —— 策划需要的是事实不是评价。
+     */
+    private fun recentFailureBrief(limit: Int = 3): String? {
+        val fails = runCatching {
+            store.all()
+                .filter { it.role == "tool" }
+                .takeLast(limit * 2)
+                .mapNotNull { m ->
+                    val r = m.content
+                    if (r == null) return@mapNotNull null
+                    if (!toolResultLooksFailed(r)) return@mapNotNull null
+                    r.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
+                }
+                .takeLast(limit)
+                .toList()
+        }.getOrDefault(emptyList())
+        return fails.takeIf { it.isNotEmpty() }?.joinToString(" | ")
+    }
+
+    /**
      * 渐进式工具披露：每个会话（store）一个 router 实例，跨轮次保留「已加载」工具集。
      * 新会话用新 store → 自动拿到干净的 router。
      */
@@ -144,6 +171,8 @@ class QuroAssistant(
                     null
                 } else {
                     OrchestrationTrace.deliver("assistant", "不可交付：${verdict.reason}")
+                    // 记下打回原因：下一轮 plan() 会读到它，重规划才有记忆。
+                    lastGateReason = verdict
                     buildString {
                         append("[系统提示] 你刚才的答复尚不可直接交付：")
                         append(verdict.reason)
@@ -278,6 +307,10 @@ class QuroAssistant(
                 content = systemPrompt + buildDeepThinkDirective(deepThink) + langTail,
             )
             var lastText = ""
+            // 🔑 每次运行重置闸门状态：否则上一次任务被判不可交付的原因会污染
+            //   下一次运行的策划（表现为「一开口就在纠正一件早就不相关的事」）。
+            deliverAttempts = 0
+            lastGateReason = null
             // 流式占位：首个 token 到达时创建可见气泡，后续 token 增量更新其内容。
             // 工具调用轮不会触发 content token，因此不会误建气泡。
             var streamPlaceholderId: String? = null
@@ -376,7 +409,6 @@ class QuroAssistant(
             // 仅保留一个极高的安全天花板作最后兜底（云端 2000 / 离线 12）；真实多步任务远不会触及。
             val roundLimit = if (isLocal) 12 else if (cfg.maxToolRounds in 1..2000) cfg.maxToolRounds else 2000
             var round = 0
-            deliverAttempts = 0  // 长程交付闸门计数：每个任务重置
             var prevCallSig: String? = null   // 上一轮工具调用签名，用于死循环检测
             var repeatStreak = 0
             var warnedForSig: String? = null  // 同一失败签名只提示一次，避免每条重复失败都再灌一条 [系统提示]
@@ -393,12 +425,18 @@ class QuroAssistant(
                 // 避免生成协程在「思考中」卡死无法中断（配合下方 client.chat 的取消透传）。
                 coroutineContext[Job]?.ensureActive()
                 round++
-                // 长程编排（可选，默认关闭）：首轮把策划/规划/设计方案作为隐藏 system 提示注入。
-                if (round == 1) {
+                // 任务策划：把策划/规划/设计方案作为隐藏 system 提示注入。
+                // 🔴 触发时机不止首轮 —— 交付闸门把不可交付的答复打回时**重新规划**（round > 1），
+                //   且此时 plan 的 context 必须带上「上一轮为什么被判不可交付」+ 最近工具失败，
+                //   否则重规划就是盲的：模型不知道哪里错了，只会换个说法再答一遍同样的错。
+                //   这正是「重规划不带记忆」这个缺陷的落点修复。
+                val gateReason = lastGateReason
+                if (round == 1 || gateReason != null) {
                     val brief = userBrief()
                     if (brief.isNotBlank()) {
                         runCatching {
-                            val plan = taskPlanner.plan(brief, "")
+                            val planCtx = buildPlanContext(gateReason, recentFailureBrief())
+                            val plan = taskPlanner.plan(brief, planCtx)
                             OrchestrationTrace.strategize("assistant", "已生成任务方案")
                             val planText = buildString {
                                 appendLine("【任务方案】")
@@ -1334,6 +1372,36 @@ class QuroAssistant(
         /** 子智能体的系统提示词（聚焦、克制、只产出结果）。 */
         const val SUBAGENT_SYSTEM_PROMPT: String =
             "你是 ZorvAI 主智能体派发的「子智能体」。你的职责是独立、聚焦地完成一个明确的子任务，并向主智能体返回精炼、可直接使用的结果（结论、草稿、清单、分析或代码片段）。要求：1) 不寒暄、不向用户反问、不重复主任务整体目标；2) 若需要事实或资料，自行调用可用的只读工具（联网搜索、读取知识库与文件、计算等）；3) 结果务必简洁、结构清晰，便于主智能体直接采用。"
+
+        /**
+         * 构造**重规划上下文**：把「上一轮为什么被判不可交付」+「最近工具失败」
+         * 拼成传给 [TaskPlanner.plan] 的 context。
+         *
+         * 🔴 这是「重规划不带记忆」缺陷的修复核心：此前 `plan(brief, "")` 的
+         * context 恒为空串，重规划等于盲的 —— 模型不知道哪里错了，
+         * 只会换个说法再答一遍同样的错。
+         *
+         * @param gate     最近一次交付闸门打回原因（null = 本次运行尚未被打回）
+         * @param failures 最近工具失败的一句话摘要（可空）
+         * @return 供策划参考的上下文；两者皆空时返回**空串**（首轮零噪声）
+         */
+        fun buildPlanContext(
+            gate: Deliverability.NotDeliverable?,
+            failures: String?,
+        ): String {
+            if (gate == null && failures.isNullOrBlank()) return ""
+            return buildString {
+                if (gate != null) {
+                    append("上一轮答复被交付闸门判为不可交付：")
+                    append(gate.reason)
+                    gate.suggestion?.takeIf { it.isNotBlank() }?.let { append("。建议：").append(it) }
+                    append('\n')
+                }
+                if (!failures.isNullOrBlank()) {
+                    append("最近工具失败：").append(failures).append('\n')
+                }
+            }
+        }
     }
 }
 
