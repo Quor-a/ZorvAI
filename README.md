@@ -102,6 +102,7 @@
 > **🤖 5 个官方 ACI 受控端 App（天气 / 文档 / 终端 / 构建 / 文件）已独立开源**，能力清单见 [设备控制 / ACI](./docs/features/device-control/README.md)。
 >
 > - 📦 最新 Release（免登录下载）：[github.com/Quor-a/ZorvAI/releases](https://github.com/Quor-a/ZorvAI/releases)
+> - 🧩 **[APK 级插件开发手册](./docs/PLUGIN_DEV_GUIDE.md)** —— 要给 Zorv AI 加新工具 / 新 ACI 能力 / 新界面 / 新指令，从这里开始
 > - 🧩 ACI 核心库 AAR：随 Release 提供 `aci-core-release.aar`
 > - 📖 ACI 开发者手册：[docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md)
 > - 🐛 问题反馈：[github.com/Quor-a/ZorvAI/issues](https://github.com/Quor-a/ZorvAI/issues)
@@ -269,7 +270,7 @@ flowchart TB
 | **终端 & Linux 沙箱** | proot + Ubuntu 24.04 ARM64，多会话、SSH/VNC、息屏保活 | [terminal](./docs/features/terminal/README.md) |
 | **语音 / 媒体 / 浏览器 / 文档** | 多供应商 TTS、端侧流式 STT（sherpa-ncnn）、内置浏览器（WebView）、文档处理 | [voice-media](./docs/features/voice-media/README.md) |
 | **设备控制 / Shizuku / ACI** | L1–L5 特权层、ACI 受控端生态、ACI 控制台与 HTTP 传输 | [device-control](./docs/features/device-control/README.md) |
-| **数字人 / 知识库 / 记忆 / 人格** | 3D 模型查看器（GLB/glTF）、向量 RAG、记忆库、人格配置、定时任务 | [digital-human](./docs/features/digital-human/README.md) |
+| **知识库 / 记忆 / 人格 / 定时** | 向量语义 RAG 知识库、记忆库（语义/情节/程序/工作四类）、人格/灵魂配置、定时任务与日程 | [knowledge-memory-persona](./docs/features/digital-human/README.md) |
 | **APK 级插件框架** | 14 种扩展点，装 APK 即给 AI 加能力 | [extensibility](./docs/architecture/extensibility/README.md) |
 | **国际化（11 语言）** | 字符串键体系、AI 回复语言注入、翻译流水线 | [i18n](./docs/architecture/i18n/README.md) |
 
@@ -383,12 +384,19 @@ cd ZorvAI
 | 终端 & Linux 沙箱 | [docs/features/terminal/README.md](./docs/features/terminal/README.md) |
 | 语音 / 媒体 / 浏览器 / 文档 | [docs/features/voice-media/README.md](./docs/features/voice-media/README.md) |
 | 设备控制 / Shizuku / ACI | [docs/features/device-control/README.md](./docs/features/device-control/README.md) |
-| 数字人 / 知识库 / 记忆 / 人格 | [docs/features/digital-human/README.md](./docs/features/digital-human/README.md) |
+| 知识库 / 记忆 / 人格 / 定时 | [docs/features/digital-human/README.md](./docs/features/digital-human/README.md) |
+
+### 开发手册（Developer Guides）
+
+| 手册 | 面向 | 路径 |
+|------|------|------|
+| **APK 级插件开发** | 要给 AI 加新工具 / 新 ACI 能力 / 新界面 / 新指令：30 秒理解框架、一条命令生成骨架、扩展点清单、`apk_plugin` 管理工具、踩坑与真机验证 | [docs/PLUGIN_DEV_GUIDE.md](./docs/PLUGIN_DEV_GUIDE.md) |
+| **ACI 受控端开发** | 要把自己的 App 暴露成 AI 可调用的能力 | [docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md) |
+| **ACI 技术架构** | ACI 协议与实现细节 | [docs/ACI_TECHNICAL_ARCHITECTURE.md](./docs/ACI_TECHNICAL_ARCHITECTURE.md) |
+| **终端架构** | PTY / proot / 前台保活 / IPC | [docs/TERMINAL_ARCHITECTURE.md](./docs/TERMINAL_ARCHITECTURE.md) |
 
 ### 其他既有文档
 
-- [docs/ACI_DEVELOPER_GUIDE.md](./docs/ACI_DEVELOPER_GUIDE.md) · [docs/ACI_TECHNICAL_ARCHITECTURE.md](./docs/ACI_TECHNICAL_ARCHITECTURE.md)
-- [docs/PLUGIN_DEV_GUIDE.md](./docs/PLUGIN_DEV_GUIDE.md) · [docs/TERMINAL_ARCHITECTURE.md](./docs/TERMINAL_ARCHITECTURE.md)
 - [docs/architecture/云端推理思考与工具调用架构.md](./docs/architecture/云端推理思考与工具调用架构.md)（N1–N15 实施记录）
 - [docs/architecture/本地推理引擎思考与工具调用架构.md](./docs/architecture/本地推理引擎思考与工具调用架构.md)
 
