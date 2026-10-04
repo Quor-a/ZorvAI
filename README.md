@@ -53,9 +53,9 @@
 
 </div>
 
-> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.1.1`（`versionCode 1001001`）
+> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.1.2`（`versionCode 1001002`）
 >
-> Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **220+ 内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
+> Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **235 个内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
 >
 > 它还是一套**可自我扩展的 Agent 运行时**：APK 级插件框架让「独立 APK」注册扩展点，就能给 AI 加**新工具 / 新 ACI 能力 / 新界面 / 新指令** —— 宿主不用改一行代码。
 
@@ -65,17 +65,17 @@
 
 ## 目录 · Table of Contents
 
-- [项目简介 · What it does](#项目简介-what-it-does)
-- [开源地址 · Open Source](#开源地址-open-source)
-- [功能亮点 · Features](#功能亮点-features)
-- [架构总纲 · Architecture](#架构总纲-architecture)
-- [功能地图 · Feature Map](#功能地图-feature-map)
+- [项目简介 · What it does](#项目简介--what-it-does)
+- [开源地址 · Open Source](#开源地址--open-source)
+- [功能亮点 · Features](#功能亮点--features)
+- [架构总纲 · Architecture](#架构总纲--architecture)
+- [功能地图 · Feature Map](#功能地图--feature-map)
 - [系统要求与从源码构建](#系统要求与从源码构建)
-- [排查与故障处理 · Troubleshooting](#排查与故障处理-troubleshooting)
-- [下载 / APK · Download](#下载-apk-download)
+- [排查与故障处理 · Troubleshooting](#排查与故障处理--troubleshooting)
+- [下载 / APK · Download](#下载--apk--download)
 - [文档索引 · Documentation Index](#文档索引--documentation-index)
-- [许可证 · License](#许可证-license)
-- [贡献 / 反馈 / 关键词](#贡献-contributing)
+- [许可证 · License](#许可证--license)
+- [贡献 / 反馈 / 关键词](#贡献--contributing)
 
 ---
 
@@ -85,7 +85,7 @@
 
 从全局看，Zorv AI 解决了三件事：
 
-1. **让 AI 能动手**。内置 220+ 工具，覆盖读屏/点按、文件、通信、定时、终端、知识库等；更高权限的能力（Shizuku、设备管理员、ROOT、应用内 Linux）按 **L1–L5** 分级，**每一级都要你显式授权**，未授权即返回引导文案而非静默执行。
+1. **让 AI 能动手**。内置 235 个工具，覆盖读屏/点按、文件、通信、定时、终端、知识库等；更高权限的能力（Shizuku、设备管理员、ROOT、应用内 Linux）按 **L1–L5** 分级，**每一级都要你显式授权**，未授权即返回引导文案而非静默执行。
 2. **让 AI 能离线**。MNN / llama.cpp 两个本地推理引擎编译进 APK，配合本地 STT、本地 TTS、本地 RAG 与应用内 Ubuntu 24.04 Linux 沙箱（proot），断网也能完成大部分任务。
 3. **让 AI 能跨应用**。通过 **ACI**（Agent Capability Interface）—— 一套同设备、基于 AIDL Binder、无 Root 的本地协议 —— 任意 App 都能把自己暴露成「可被 AI 调用的能力」，由 Zorv AI 的 LLM 自动编排。
 
@@ -113,8 +113,8 @@
 | 能力域 | 关键能力 |
 |--------|----------|
 | **对话 UI（Compose）** | ChatScreen 对话框、PersonaBar 人格卡、PermissionModeBar（「AI 自动保存记忆」+「深度思考」并排胶囊）、对话框内 **IDE 能力入口**（代码编辑器 / 终端 / 工具箱 / 文件，经输入框「+」菜单与 `ui_open_*` 唤起）、**支持 7 种编程语言**、**```mermaid 围栏即画即渲染**、**AI 自写代码运行（`run_code`，html 网页工件内联预览）**、回到底部浮动按钮、全屏预览、Markdown 与代码块渲染 |
-| **Agent 核心** | 多会话隔离（`liveBuffers`）、种子快照（`convBase`）、显示刷新闸门（`canUpdateDisplay`）、多轮 `[第N轮]` hidden 标记防串台、工具注册表（`QuroToolRegistry`，226 项）、技能系统（`QuroSkill` → 注册为 `skill__{name}` 工具） |
-| **工具 / 能力层** | **220+ 内置工具**：无障碍 `input_text` / `tap_screen` / `read_screen`、文件读写、**L1–L5 特权执行**、`cms_*` 模块、Agent 键盘 `ai_type_text` / `ai_press_enter`、定时任务、记忆工具、知识库 RAG、文档处理 |
+| **Agent 核心** | 多会话隔离（`liveBuffers`）、种子快照（`convBase`）、显示刷新闸门（`canUpdateDisplay`）、多轮 `[第N轮]` hidden 标记防串台、工具注册表（`QuroToolRegistry`，总注册 235 / 每轮常驻下发 151）、技能系统（`QuroSkill` → 注册为 `skill__{name}` 工具） |
+| **工具 / 能力层** | **235 个内置工具**（常驻下发 151，其余经 `tool_router` 按需 `get_schema`）：无障碍 `input_text` / `tap_screen` / `read_screen`、文件读写、**L1–L5 特权执行**、`cms_*` 模块、Agent 键盘 `ai_type_text` / `ai_press_enter`、定时任务、记忆工具、知识库 RAG、文档处理 |
 | **离线 LLM 引擎** | 内置 **MNN / llama.cpp** 本地推理（`QuroLocalEngineNative`），支持流式、`<think>` 思考段流式上屏、本地工具调用、会话常驻复用 |
 | **特权层 L1–L5** | 无障碍 → Shizuku（uid 0/2000）→ 设备管理员 → ROOT（su）→ 应用内 Linux（proot + Ubuntu 24.04）。其中 **L1–L4 由 `PrivilegeLevel` 枚举承载**（系统权限），**L5 不在枚举内**，由 Linux 环境是否就绪决定 |
 | **终端 / Linux 沙箱** | 完整终端模拟器：proot + Ubuntu 24.04 ARM64 真实用户空间；PTY 伪终端（`/dev/ptmx` + `fork/exec`）；前台服务保活（specialUse，息屏/切 App 不被杀）；ACI 跨进程 26 个能力（终端服务单一入口 + `action` 分发）；4 种 IPC 接入（ContentProvider / Deep Link / Intent / BroadcastReceiver）；多会话管理 |
@@ -149,16 +149,17 @@ flowchart TB
     end
     subgraph CORE["Agent 核心"]
         B1["QuroChatViewModel · 多会话隔离"]
-        B2["QuroAssistant · ReAct 主循环"]
+        B2["QuroAssistant · ReAct 主循环（一趟 = 一条完整 ReAct）"]
         B3["QuroConversation · 上下文组装与压缩"]
-        B4["QuroToolRegistry · 226 工具"]
+        B4["QuroToolRegistry · 总注册 235 / 常驻下发 151"]
+        B5["LongHorizonOrchestrator · 策划→闸门→带记忆重规划"]
+        B6["QuroRunCheckpoint · 每轮工具调用落盘"]
     end
     subgraph INFER["推理层"]
-        I1["QuroLlmClient · 云端"]
+        I1["QuroLlmClient · 云端（含上游拒答回执归一化）"]
         I2["QuroReasoningControl · 思考协议编译"]
-        I3["QuroModelContextBudget · 上下文预算"]
+        I3["QuroToolCallRepair · 端侧容错解析"]
         I4["QuroLocalEngineNative · MNN / llama.cpp"]
-        I5["QuroToolCallRepair · 端侧容错解析"]
     end
     subgraph TOOLS["工具 / 能力层 · core/tools"]
         C1["launch_app"]
@@ -215,14 +216,28 @@ flowchart TB
 
 数据流自上而下：UI 委托给 Agent 核心，核心调用推理层；推理层返回文本或工具调用，工具按合适的特权层级或引擎运行时执行；结果回流进上下文，直到模型给出最终答复。持久化与 IM 通道作为独立子系统并行存在。
 
+核心不是「一条 ReAct 循环」，而是套在 ReAct 外面的一层**任务级闭环**：`QuroAssistant` 把一整趟 ReAct 抽成 `reactPass()`，交给 `LongHorizonOrchestrator.runTask` 驱动 ——
+
+```
+策划（TaskPlanner）→ 执行一趟 ReAct → 交付闸门（DeliverabilityJudge 判产物原文）
+      ↑                                        │
+      └──── 不可交付：带打回原因 + 建议 + 失败步骤重新策划 ←┘
+                        （超 maxIterations 按最后一趟强制交付）
+```
+
+闸门判定读的是**产物原文**而非摘要，`startsWith("工具执行失败")` 这类启发式才真正成立；重规划上下文由编排器自己累积（打回原因、失败步骤、外部工具失败明细），不是占位符。持久化与 IM 通道作为独立子系统并行存在。
+
 ### 各层职责
 
 | 层 | 入口 | 职责 |
 |----|------|------|
 | **UI** | `ui/ChatScreen.kt` 等 | 渲染对话、气泡、思考卡、工具块、富组件；所有二级功能屏 |
-| **Agent 核心** | `core/QuroAssistant.kt` | ReAct 主循环、轮次与死循环防护、上下文组装、工具调度、子智能体 |
-| **推理** | `core/network/` | 云端请求与思考字段编译；端侧 MNN / llama.cpp 引擎；工具调用解析与上下文预算 |
-| **工具** | `core/tools/` | 226 个工具的注册、发现、护栏、执行与失败回喂 |
+| **Agent 核心** | `core/QuroAssistant.kt` | ReAct 主循环（一趟 = 一条完整 ReAct）、轮次与死循环防护、上下文组装、工具调度、子智能体；**工具结果真信封**（`QuroToolResult`）统一返回文本 |
+| **任务级编排** | `core/agent/orchestration/` | `LongHorizonOrchestrator` 驱动「策划 → 执行 → 交付闸门 → 带记忆重规划」；`DefaultTaskPlanner` 出方案；`HeuristicDeliverabilityJudge` + 模型判可交付性。**闸门与策划是 Agent 固有环节，不是可关开关** |
+| **推理** | `core/network/` | 云端请求、四家思考字段互斥编译、端侧 MNN / llama.cpp 引擎、工具调用容错解析、上游拒答回执归一化（不再把 `The request was rejected…` 原样糊给用户） |
+| **工具** | `core/tools/` | 235 个工具的注册、发现、护栏、执行与失败回喂；**只读工具并发执行，有副作用的严格串行**；`QuroToolRouter.PROGRESSIVE` 渐进式披露开关（默认关，见 KDoc 代价） |
+| **容错** | `core/tools/` | `QuroRunCheckpoint` 每轮落盘（已接进工具轮）；`onModelCorrect` 修正通道（`CORRECT` / `ROLLBACK` / `ESCALATE` 三档）；`FailurePolicy` 决定失败是回喂重试还是直接终止 |
+| **记忆** | `core/memory/` | 记忆认知分型：**语义 / 情节 / 程序 / 工作**四类，不同类型走不同检索与写入策略 |
 | **特权** | `QuroPrivilegeManager` | L1–L4（`PrivilegeLevel` 枚举）分级升权 + L5（应用内 Linux，由环境就绪状态把关），统一审计；未授权返回引导文案 |
 | **终端** | `core/terminal/` | PTY 会话、proot Linux 环境、前台保活、ACI 与 4 种 IPC |
 | **引擎** | `cms` / `browser` / `speech` / `llm` | 运行时供给、网页渲染、语音、离线推理 |
@@ -232,11 +247,14 @@ flowchart TB
 
 - **Tool-first / Registry（一切皆工具）**：所有能力统一为 `QuroTool`，新增能力 = 实现接口 + 一行注册。
 - **ReAct Loop（推理-行动循环）**：「LLM 思考 → 选工具 → 执行 → 观察 → 再思考」直到任务完成；工具结果以卡片回流对话。
+- **Deliverability Gate（交付闸门）**：模型给出候选答复后先判「能不能交付」，不可交付则**带记忆重新策划**再跑一趟，而不是把失败回执直接抛给用户。闸门判定输入是产物原文，不是摘要。
 - **Least-Privilege Tiers（最小特权分层）**：L1–L5 逐级升权，**未授权即返回引导文案而非静默执行**。
+- **Concurrent Reads, Serial Writes（只读并发，有副作用串行）**：`QuroTool.readOnly` 默认 `false`；只读工具（14 个白名单）在一轮内并发执行以压缩延迟，有副作用的工具严格串行保序。
+- **Cognitive Memory Typing（记忆认知分型）**：语义 / 情节 / 程序 / 工作四类分型存储，程序性记忆不与情景性记忆混在一个检索池里。
 - **Strategy（引擎可替换）**：云端多供应商与本地 MNN / llama.cpp 共用一套 `onToken` 流式接口，离线/在线对上层透明。
 - **SDUI（Server-Driven UI）**：ACI 控制台由受控端下发快照 JSON、控制端纯本地渲染，零网络依赖。
 
-> 每层的完整技术架构（分层细节、关键类、时序、设计决策与踩坑）见 **[架构分文档](#架构文档-architecture-docs)**。
+> 每层的完整技术架构（分层细节、关键类、时序、设计决策与踩坑）见 **[架构分文档](#架构文档architecture-docs)**。
 
 ---
 
@@ -316,12 +334,24 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[v1.1.1 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
-  - **云端上下文预算**：上下文预算不再「未知即 1M」。`/models` 未回填模型上下文长度时，旧逻辑把预算当成 1M → 上下文裁剪几乎永不触发 → 长对话/多工具轮直接上游 500。现按「接口实测值 → 模型名族表 → 保守回落 32768」三级取值。
-  - **工具结果关键行保留**：截断不再整段丢弃中间部分。编译错误 / 堆栈 `Caused by` 恰在输出中间，旧逻辑只留头尾 → 模型看不到错误 → 反复盲重试。现从被丢弃段抽回关键行，并新增合计预算，超限时从最旧的工具结果开始削。
-  - **归档诚实化**：截断文案不再承诺「完整日志见本机文件」（此前没有任何代码落盘，等于引导模型去找不存在的文件 → 编造内容）。现完整原文真实归档到 `filesDir/tool_outputs/`，文案给出真实路径。
-  - **端侧工具调用容错解析**（上一版）：自研宽松 JSON 解析器，容忍裸键名 / 单引号 / 尾随逗号 / 缺闭合 / 全角标点，支持多标签族、`name(args)` 函数式写法与工具名纠错。
-  - **端侧思考展示解耦**：「深度思考」开关只对云端生效，不再误剔除本地模型的思考过程。
+- 🟢 **[v1.1.2 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
+
+  **任务级闭环真正接进主循环**
+
+  - **`LongHorizonOrchestrator.runTask` 从死代码变成主干**：此前编排器写好了却全仓零调用。此版本把 `QuroAssistant` 的 ReAct 循环抽成局部 `reactPass()`，交给 `runTask` 作为 `stepExecutor` —— 一趟 = 一条完整 ReAct，链路变为「策划 → 执行 → 交付闸门 → 不可交付则带记忆重新策划 → 再跑一趟 → 超限按最后一趟强制交付」。
+  - **交付闸门与任务策划是 Agent 固有环节**，不再是可关的开关：模型给出候选答复后先判可交付性，不可交付就带记忆重新策划，而不是把失败回执直接抛给用户。
+  - **顺带修掉闸门「失明」的两个真问题**：① 重规划上下文原本恒为字面量 `"ctx"`，重规划 100% 是盲的 —— 改为编排器自累积打回原因 + 建议 + 失败步骤，另开 `extraPlanContext` 出口喂入工具层失败明细；② 闸门判定输入原本是加了 `OK: ` 前缀并截断到 200 字的摘要，导致 `startsWith("工具执行失败")` 永远不成立、闸门恒判可交付、形同虚设 —— 改为判**产物原文**。
+
+  **可靠性**
+
+  - **只读工具并发执行**：`QuroTool.readOnly` 默认 `false`；14 个只读工具白名单在一轮内并发执行以压缩延迟，有副作用的工具严格串行保序。
+  - **工具结果真信封**（`QuroToolResult`）：统一工具返回文本，成功结果不再被套上失败包装。
+  - **`QuroRunCheckpoint` 接入工具轮**：此前已存在但零接线，现在每轮工具调用落盘。
+  - **`onModelCorrect` 修正通道**：`CORRECT` / `ROLLBACK` / `ESCALATE` 三档塌缩已解除，`CORRECT` 命中即交还上层。
+  - **上游拒答回执归一化**：不再把 `The request was rejected…` 原样糊给用户。
+  - **记忆认知分型**：语义 / 情节 / 程序 / 工作四类，不同类型走不同检索与写入策略。
+
+  > ⚠️ **v1.1.1 的更新说明已作废**：那一版宣传的「云端上下文预算三级取值 / 工具结果关键行保留 / 归档诚实化」三层已在 v1.1.2 前的 `af5fe17` **整体回滚** —— 真机反馈显示压缩后 AI 拿到的信息反而更少，出现答非所问与复读。回滚按「先恢复到你动手之前」处理，不再新增任何压缩/截断层。
 
 完整历史版本见 [Releases](https://github.com/Quor-a/ZorvAI/releases)。
 
@@ -335,8 +365,8 @@ cd ZorvAI
 |------|------|
 | **端侧推理**（MNN / llama.cpp 分层 L0–L6） | [docs/architecture/inference-native/README.md](./docs/architecture/inference-native/README.md) |
 | **云端推理**（思考协议 / 工具调用 / 上下文预算） | [docs/architecture/inference-cloud/README.md](./docs/architecture/inference-cloud/README.md) |
-| **工具系统**（226 工具 / 注册表 / 护栏 / 回喂） | [docs/architecture/tool-system/README.md](./docs/architecture/tool-system/README.md) |
-| **Agent 循环**（ReAct / 死循环防护 / 子智能体 / 压缩） | [docs/architecture/agent-loop/README.md](./docs/architecture/agent-loop/README.md) |
+| **工具系统**（235 工具 / 注册表 / 护栏 / 回喂 / 只读并发） | [docs/architecture/tool-system/README.md](./docs/architecture/tool-system/README.md) |
+| **Agent 循环**（ReAct / 任务级闭环编排 / 交付闸门 / 死循环防护 / 子智能体） | [docs/architecture/agent-loop/README.md](./docs/architecture/agent-loop/README.md) |
 | **终端与 Linux 沙箱** | [docs/architecture/terminal-sandbox/README.md](./docs/architecture/terminal-sandbox/README.md) |
 | **UI 与渲染**（AIP / ui_widget / quro-ui / GenUI / MiniApp） | [docs/architecture/ui-rendering/README.md](./docs/architecture/ui-rendering/README.md) |
 | **国际化**（11 语言） | [docs/architecture/i18n/README.md](./docs/architecture/i18n/README.md) |
