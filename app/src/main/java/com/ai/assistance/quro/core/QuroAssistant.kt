@@ -32,6 +32,10 @@ import com.ai.assistance.quro.core.agent.orchestration.DefaultTaskPlanner
 import com.ai.assistance.quro.core.agent.orchestration.HeuristicDeliverabilityJudge
 import com.ai.assistance.quro.core.agent.orchestration.OrchestrationTrace
 import com.ai.assistance.quro.core.agent.orchestration.Deliverability
+import com.ai.assistance.quro.core.agent.orchestration.LongHorizonOrchestrator
+import com.ai.assistance.quro.core.agent.orchestration.TaskResult
+import com.ai.assistance.quro.core.agent.orchestration.TaskStep
+import com.ai.assistance.quro.core.agent.loop.ToolOutcome
 import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.util.QuroStageHints
 import com.ai.assistance.quro.core.fluidcloud.FluidCloudBridge
@@ -76,14 +80,22 @@ class QuroAssistant(
      */
     var deliverabilityJudge: DeliverabilityJudge = HeuristicDeliverabilityJudge
 
-    /** 不可交付后允许继续编排的最大次数，超阈值强制交付避免死循环。 */
-    var deliverAttempts = 0
+    /**
+     * 交付闸门最多允许打回几次（= [LongHorizonOrchestrator.runTask] 的 maxIterations）。
+     * 超阈值按最后一趟产物强制交付，避免长程任务陷入死循环。
+     */
+    var maxDeliverAttempts = 3
 
     /**
-     * 最近一次交付闸门的打回原因（null = 本次运行尚未被打回过）。
-     * 供重规划读取，见 [maybeDeliver] 与 ask() 内 round == 1 || gateReason != null 分支。
+     * 任务级闭环编排器：策划 → 执行 → 交付闸门 → 不可交付则带记忆重新策划。
+     *
+     * 🔗 这是此前「写了没接线」的那一半落点：runTask 此前全仓零调用（死代码），
+     *   闸门与重规划只在 ask() 内自己实现了一套补丁式重试。现在它由 [ask] 直接驱动。
      */
-    private var lastGateReason: Deliverability.NotDeliverable? = null
+    private val orchestration = LongHorizonOrchestrator()
+
+    /** 一趟 ReAct 在编排器里的步骤 id（仅用于轨迹展示）。 */
+    private val REACT_PASS_STEP_ID = "react_pass"
 
     /**
      * 提取最近若干条工具失败的一句话摘要，供策划阶段判断「哪一步卡住了」。
@@ -142,46 +154,6 @@ class QuroAssistant(
                 .lastOrNull { it.role == "user" && !it.hidden && it.content.isNotBlank() }
                 ?.content ?: ""
         }.getOrDefault("")
-    }
-
-    /**
-     * 交付闸门（**常驻**）：判定产物能否直接交回用户。
-     *
-     * 这是 Agent 的一环，不是可关功能——所以这里**没有 null 短路**。
-     * 判不可交付时不直接交付，而是把 [Deliverability.NotDeliverable.reason]/
-     * [suggestion] 作为修正指令压回 Agent，让它继续编排（重新规划/执行）。
-     *
-     * @return null = 可交付（调用方应 return 最终文本）；
-     *         非 null = 不可交付的提示文案（调用方应注入该提示后 continue，让 LLM 继续修正）。
-     * 超过 [deliverAttempts] 上限仍不可交付则强制放行，避免长程任务陷入死循环。
-     */
-    private fun maybeDeliver(candidate: String, context: String): String? {
-        val judge = deliverabilityJudge
-        if (candidate.isBlank()) return null
-        val brief = userBrief()
-        return when (val verdict = runCatching { judge.judge(brief, candidate, context) }.getOrElse { return null }) {
-            is Deliverability.Deliverable -> {
-                OrchestrationTrace.deliver("assistant", "可交付")
-                null
-            }
-            is Deliverability.NotDeliverable -> {
-                deliverAttempts++
-                if (deliverAttempts >= 3) {
-                    OrchestrationTrace.deliver("assistant", "超阈值强制交付")
-                    null
-                } else {
-                    OrchestrationTrace.deliver("assistant", "不可交付：${verdict.reason}")
-                    // 记下打回原因：下一轮 plan() 会读到它，重规划才有记忆。
-                    lastGateReason = verdict
-                    buildString {
-                        append("[系统提示] 你刚才的答复尚不可直接交付：")
-                        append(verdict.reason)
-                        verdict.suggestion?.takeIf { it.isNotBlank() }?.let { append("。建议：$it") }
-                        append("。请基于已有上下文修正并重新给出可交付的答复。")
-                    }
-                }
-            }
-        }
     }
 
     /**
@@ -307,12 +279,14 @@ class QuroAssistant(
                 content = systemPrompt + buildDeepThinkDirective(deepThink) + langTail,
             )
             var lastText = ""
-            // 🔑 每次运行重置闸门状态：否则上一次任务被判不可交付的原因会污染
-            //   下一次运行的策划（表现为「一开口就在纠正一件早就不相关的事」）。
-            deliverAttempts = 0
-            lastGateReason = null
-            // 流式占位：首个 token 到达时创建可见气泡，后续 token 增量更新其内容。
-            // 工具调用轮不会触发 content token，因此不会误建气泡。
+            // 🔗 编排接线（本轮落点）：此前 LongHorizonOrchestrator.runTask 全仓零调用（死代码），
+            //   「策划 + 交付闸门 + 重规划」只在 ask() 内自己实现了一套补丁式重试。
+            //   现在把 ReAct 循环抽成**一趟执行体**（reactPass），交给 runTask 作为任务级闭环驱动：
+            //   策划 → 执行 → 交付闸门 → 不可交付则带记忆重新策划并再跑一趟。
+            //   🔴 执行体内部**不再自己判可交付**：闸门唯一归 runTask，
+            //   否则一趟之内会先自判一次、回来再判一次，白烧一轮 LLM。
+            //   注意 streamPlaceholderId / streamedContent 等流式状态仍留在 ask()作用域，
+            //   多趟之间共用同一个占位气泡（用户视角是「同一条回答被续写」，而非刷出多条气泡）。
             var streamPlaceholderId: String? = null
             var lastStreamEmitMs = 0L
             // 🔧 #765 防御：记录流式累计文本，终态 result.content 异常空白时回退到此，避免正文被截断覆盖。
@@ -407,7 +381,11 @@ class QuroAssistant(
             // 用滑动窗口捕获「签名原地重复（循环）」与「完全相同调用且失败」，仅在模型确属打转时才停，
             // 合法多步探索（不断发出新调用）不受影响。
             // 仅保留一个极高的安全天花板作最后兜底（云端 2000 / 离线 12）；真实多步任务远不会触及。
+            // 🔐 一趟 ReAct = 编排器的一个执行步骤。轮次上限按趟重置：
+            //   闸门打回后重新策划再跑一趟，每趟都该有完整预算（共用一个计数器会让第二趟直接被腰斩）。
             val roundLimit = if (isLocal) 12 else if (cfg.maxToolRounds in 1..2000) cfg.maxToolRounds else 2000
+
+            suspend fun reactPass(): String {
             var round = 0
             var prevCallSig: String? = null   // 上一轮工具调用签名，用于死循环检测
             var repeatStreak = 0
@@ -425,34 +403,6 @@ class QuroAssistant(
                 // 避免生成协程在「思考中」卡死无法中断（配合下方 client.chat 的取消透传）。
                 coroutineContext[Job]?.ensureActive()
                 round++
-                // 任务策划：把策划/规划/设计方案作为隐藏 system 提示注入。
-                // 🔴 触发时机不止首轮 —— 交付闸门把不可交付的答复打回时**重新规划**（round > 1），
-                //   且此时 plan 的 context 必须带上「上一轮为什么被判不可交付」+ 最近工具失败，
-                //   否则重规划就是盲的：模型不知道哪里错了，只会换个说法再答一遍同样的错。
-                //   这正是「重规划不带记忆」这个缺陷的落点修复。
-                val gateReason = lastGateReason
-                if (round == 1 || gateReason != null) {
-                    val brief = userBrief()
-                    if (brief.isNotBlank()) {
-                        runCatching {
-                            val planCtx = buildPlanContext(gateReason, recentFailureBrief())
-                            val plan = taskPlanner.plan(brief, planCtx)
-                            OrchestrationTrace.strategize("assistant", "已生成任务方案")
-                            val planText = buildString {
-                                appendLine("【任务方案】")
-                                plan.strategy.takeIf { it.isNotBlank() }?.let { appendLine("· 策划方案：$it") }
-                                plan.plan.takeIf { it.isNotBlank() }?.let { appendLine("· 规划方案：$it") }
-                                plan.design.takeIf { it.isNotBlank() }?.let { appendLine("· 设计方案：$it") }
-                                if (plan.steps.isNotEmpty()) {
-                                    appendLine("· 执行步骤：")
-                                    plan.steps.forEachIndexed { i, st -> appendLine("  ${i + 1}. ${st.description}") }
-                                }
-                            }
-                            store.add(QuroMessage(role = "system", content = planText, hidden = true))
-                            emit()
-                        }
-                    }
-                }
                 // 🔧 #loop-guard：连续多轮纯工具调用保护。终端/排查类任务下，模型易反复发起
                 // 全新探测命令（签名各不相同）而永不归结结论，跑到 roundLimit（云端 2000）仍不停、
                 // 对话框持续重复「测试终端」式文本。round 达阈值后注入一次隐藏系统提示要求收尾；
@@ -704,11 +654,10 @@ class QuroAssistant(
                             emit()
                             // 自动结束流体云通知
                             finishFluidCloudSafe(context)
-                            val nudge = maybeDeliver(lastText, "")
-                            if (nudge == null) return@withContext lastText
-                            store.add(QuroMessage(role = "system", content = nudge, hidden = true))
-                            emit()
-                            continue
+                            // 🔴 闸门已上移到 LongHorizonOrchestrator（任务级闭环唯一归属）：
+                            // 这里**只产出本趟候选答复**并返回，由编排器判可交付性。
+                            // 若在此处再自判一次，一趟之内会判两遍、白烧一轮 LLM。
+                            return lastText
                         }
                         // 非流式（或流式未触发任何 content token，如纯 reasoning 的 MiMo reason 模式）：
                         // 按原逻辑落一条新气泡。
@@ -722,11 +671,10 @@ class QuroAssistant(
                         emit()
                         // 自动结束流体云通知
                         finishFluidCloudSafe(context)
-                        val nudge = maybeDeliver(lastText, "")
-                        if (nudge == null) return@withContext lastText
-                        store.add(QuroMessage(role = "system", content = nudge, hidden = true))
-                        emit()
-                        continue
+                        // 🔴 闸门已上移到 LongHorizonOrchestrator（任务级闭环唯一归属）：
+                        // 这里**只产出本趟候选答复**并返回，由编排器判可交付性。
+                        // 若在此处再自判一次，一趟之内会判两遍、白烧一轮 LLM。
+                        return lastText
                     }
                     is QuroLlmResult.ToolCalls -> {
                         // 死循环检测在下方 sig 计算处与 while 末尾统一处理（按「签名是否原地重复」判定，
@@ -1009,7 +957,7 @@ class QuroAssistant(
                         // 自动结束流体云通知
                         finishFluidCloudSafe(context)
                         cpClear()
-                        return@withContext lastText
+                        return lastText
                     }
                 } else {
                     // 结果正常：合法的「成功重复调用」，完全不干预，重置计数避免误累积
@@ -1038,7 +986,7 @@ class QuroAssistant(
                         // 自动结束流体云通知
                         finishFluidCloudSafe(context)
                         cpClear()
-                        return@withContext lastText
+                        return lastText
                     }
                 }
             }
@@ -1051,7 +999,7 @@ class QuroAssistant(
                 else store.add(QuroMessage(role = "assistant", content = lastText))
                 emit()
                 finishFluidCloudSafe(context)
-                return@withContext lastText
+                return lastText
             }
             if (lastText.isEmpty()) {
                 lastText = if (cfg.maxToolRounds <= 0)
@@ -1063,6 +1011,61 @@ class QuroAssistant(
             finishFluidCloudSafe(context)
             // ✅ 本次运行正常收尾：清检查点，避免 filesDir/quro_runs 堆积
             //   （findInterrupted 靠 mtime 判「中断」，留着会被误报成待恢复任务）
+            cpClear()
+            return lastText
+            }
+
+            // 🔗 任务级闭环：策划 → 执行 → 交付闸门 → 不可交付则带记忆重新策划并再跑一趟。
+            //   一趟 = 一条 [reactPass] 里的完整 ReAct 工具循环（含工具执行、视觉注入、检查点落盘）。
+            //   闸门打回时编排器会带着「为什么不可交付 + 建议 + 最近工具失败」重新 plan()，
+            //   再跑一趟完整的 ReAct —— 这就是此前缺失的「重规划带记忆」。
+            //   maxIterations 复用 deliverAttempts 语义（默认 3趟），超限则按最后一趟产物强制交付。
+            val taskResult = orchestration.runTask(
+                context = context,
+                taskBrief = userBrief(),
+                // 🔗 包一层：拿到策划产物就立刻注入 store。
+                //   runTask 只负责「什么时候该重新策划」，把方案落成模型看得见的隐藏 system
+                //   提示是ask() 的职责（编排层不该认识 QuroMessage / store）。
+                //   ↳ 每一趟策划都会注入一条；第2 趟起context 里带着「上一轮为什么不可交付」，
+                //   模型据此修正——这就是「重规划带记忆」真正落到模型眼前的那一步。
+                planner = { brief, planCtx ->
+                    val plan = taskPlanner.plan(brief, planCtx)
+                    runCatching {
+                        OrchestrationTrace.strategize("assistant", "已生成任务方案")
+                        val planText = buildString {
+                            appendLine("【任务方案】")
+                            plan.strategy.takeIf { it.isNotBlank() }?.let { appendLine("· 策划方案：$it") }
+                            plan.plan.takeIf { it.isNotBlank() }?.let { appendLine("· 规划方案：$it") }
+                            plan.design.takeIf { it.isNotBlank() }?.let { appendLine("· 设计方案：$it") }
+                            if (plan.steps.isNotEmpty()) {
+                                appendLine("· 执行步骤：")
+                                plan.steps.forEachIndexed { i, st -> appendLine("  ${i + 1}. ${st.description}") }
+                            }
+                        }
+                        store.add(QuroMessage(role = "system", content = planText, hidden = true))
+                        emit()
+                    }
+                    plan
+                },
+                steps = listOf(TaskStep(REACT_PASS_STEP_ID, "执行一轮 ReAct 工具循环并给出答复")),
+                stepExecutor = { _, _ -> ToolOutcome.Success(reactPass()) },
+                judge = deliverabilityJudge,
+                maxIterations = maxDeliverAttempts,
+                // 🔴 工具层失败明细只有这里看得到（执行体把整趟 ReAct 压成一步，
+                //   工具失败不会体现在 [ToolOutcome] 上），故经extraPlanContext 喂给策划。
+                extraPlanContext = { recentFailureBrief()?.let { briefs -> "最近工具失败：" + briefs + "\n" } },
+            )
+            // 策划产物注入 store：runTask 只负责「调plan 拿方案」，把方案落成模型看得见的
+            //   隐藏 system 提示仍需由 ask() 做（编排层不该认识 QuroMessage）。
+            //   ↳ 注入时机在 reactPass 之前已完成（见下方 plan 回调），此处只取最终产物。
+            when (taskResult) {
+                is TaskResult.Delivered -> lastText = taskResult.finalSummary
+                is TaskResult.Escalated -> {
+                    // 超预算：交回最后一趟产物，并附上不可交付原因（用户有权知道为什么没做得更好）。
+                    OrchestrationTrace.deliver("assistant", "超预算·按最后一趟交付", taskResult.reason)
+                    lastText = taskResult.finalSummary.ifBlank { lastText }
+                }
+            }
             cpClear()
             lastText
         }
@@ -1374,34 +1377,23 @@ class QuroAssistant(
             "你是 ZorvAI 主智能体派发的「子智能体」。你的职责是独立、聚焦地完成一个明确的子任务，并向主智能体返回精炼、可直接使用的结果（结论、草稿、清单、分析或代码片段）。要求：1) 不寒暄、不向用户反问、不重复主任务整体目标；2) 若需要事实或资料，自行调用可用的只读工具（联网搜索、读取知识库与文件、计算等）；3) 结果务必简洁、结构清晰，便于主智能体直接采用。"
 
         /**
-         * 构造**重规划上下文**：把「上一轮为什么被判不可交付」+「最近工具失败」
-         * 拼成传给 [TaskPlanner.plan] 的 context。
+         * 构造**重规划上下文**（转发到编排层）。
          *
-         * 🔴 这是「重规划不带记忆」缺陷的修复核心：此前 `plan(brief, "")` 的
-         * context 恒为空串，重规划等于盲的 —— 模型不知道哪里错了，
-         * 只会换个说法再答一遍同样的错。
+         * 🔗 真正的实现在 [LongHorizonOrchestrator]：重规划记忆由编排器自己累积
+         *   （闸门打回原因 + 失败步骤），因为**只有它知道闸门在哪一轮判的**。
+         *   这里保留转发是为了不改动既有单测入口与外部调用方。
          *
          * @param gate     最近一次交付闸门打回原因（null = 本次运行尚未被打回）
          * @param failures 最近工具失败的一句话摘要（可空）
-         * @return 供策划参考的上下文；两者皆空时返回**空串**（首轮零噪声）
+         * @param external 调用方追加的外部记忆（可空，如工具层失败明细）
+         * @return 供策划参考的上下文；全部为空时返回**空串**（首轮零噪声）
          */
         fun buildPlanContext(
             gate: Deliverability.NotDeliverable?,
             failures: String?,
-        ): String {
-            if (gate == null && failures.isNullOrBlank()) return ""
-            return buildString {
-                if (gate != null) {
-                    append("上一轮答复被交付闸门判为不可交付：")
-                    append(gate.reason)
-                    gate.suggestion?.takeIf { it.isNotBlank() }?.let { append("。建议：").append(it) }
-                    append('\n')
-                }
-                if (!failures.isNullOrBlank()) {
-                    append("最近工具失败：").append(failures).append('\n')
-                }
-            }
-        }
+            external: String? = null,
+        ): String = LongHorizonOrchestrator.buildPlanContext(gate, failures, external)
+
     }
 }
 
