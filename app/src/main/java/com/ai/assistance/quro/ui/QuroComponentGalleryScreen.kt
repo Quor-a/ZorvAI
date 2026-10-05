@@ -1,40 +1,70 @@
 package com.ai.assistance.quro.ui
-import androidx.compose.ui.res.stringResource
-import com.ai.assistance.quro.R
-import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.ai.assistance.quro.core.tools.QuroTool
-import com.ai.assistance.quro.core.tools.UiCardTool
+import androidx.compose.ui.unit.sp
+import com.ai.assistance.quro.R
+import com.ai.assistance.quro.core.cards.CardSdk
+import com.ai.assistance.quro.core.cards.CardTemplate
 import com.ai.assistance.quro.core.tools.UiWidgetTool
+import com.ai.assistance.quro.util.qstr
 
 /**
- * Quro 可视化组件库（v-rewrite 重构版）
+ * Quro 可视化组件库（v1400 · 名册自动驱动版）
  *
- * 旧版的「内置组件」Demo（卡片/按钮/输入框/展示/交互/覆盖层 6 类写死的预览）已移除。
- * 现统一融合真实能力：
- *  - 富组件（ui_widget）：stat/progress/list/pie/rating/table/alert/tabs/steps/timeline …
- *  - 富卡片（ui_card）：todo/note/actions …
- *  - AI 自写（mermaid / miniapp）：AI 下发的流程图与 Web 应用
- * 点击任意样例，即通过真实工具把组件发送到对话卡片栏（回归全局卡片栏兜底），所见即所得。
+ * 目录页**不再手抄样例**：整份清单由 [CardSdk.catalog()] 单一真源生成（当前 80 种，
+ * 输入交互 / 数据展示 / 布局容器 / 操作动作 / 媒体 / 导航 / 流程 / 装饰 / AI 自写 9 类）。
+ *
+ * ## 为什么必须这么改
+ *
+ * 旧版把「富组件 / 富卡片 / AI 自写」三组样例写死在 UI 里，而这一轮新增的 34 种卡片
+ * （keyvalue / ring / stackedbar / treetimeline …）**一个都没进目录页** ——
+ * 用户在组件库里根本看不到它们，等于新能力「能解析、能渲染，但没人知道它存在」。
+ * 名册驱动之后，以后再加卡片，UI 一行都不用改，目录页自动长出来。
+ *
+ * ## 下端通道
+ *
+ * 点任意 chip 走真实工具 [UiWidgetTool] 把样例 JSON 发到对话卡片栏，所见即所得；
+ * 页面底部同时列出正文围栏通道（```card / ```cards / ```cardui），
+ * 与工具调用通道等价，但允许模型「边说边画」。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,31 +74,29 @@ fun QuroComponentGalleryScreen(
 ) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
+    var query by remember { mutableStateOf("") }
 
-    // 富组件（ui_widget）样例：标签 -> spec
-    val widgetSamples = listOf(
-        "统计卡" to """{"type":"stat","title":"今日访问","value":"12847","unit":"次","delta":"+12.3%"}""",
-        "进度卡" to """{"type":"progress","title":"项目进度","value":68,"suffix":"%","label":"开发阶段"}""",
-        "列表卡" to """{"type":"list","title":"今日待办","items":[{"text":"完成报告","selected":true},{"text":"回复邮件"}]}""",
-        "饼图" to """{"type":"pie","title":"时间分配","segments":[{"name":"工作","value":8,"color":"#FF6384"},{"name":"睡眠","value":7,"color":"#36A2EB"}]}""",
-        "评分" to """{"type":"rating","label":"满意度","max":5,"value":4}""",
-        "表格" to """{"type":"table","headers":["名称","数量"],"rows":[["苹果","3"],["香蕉","5"]]}""",
-        "提醒" to """{"type":"alert","severity":"warning","text":"磁盘空间不足"}""",
-        "标签页" to """{"type":"tabs","tabs":[{"title":"概览","body":"内容A"},{"title":"详情","body":"内容B"}]}""",
-        "步骤" to """{"type":"steps","steps":[{"title":"下单","status":"done"},{"title":"发货","status":"active"},{"title":"签收"}],"current":1}""",
-        "时间线" to """{"type":"timeline","events":[{"time":"09:00","title":"晨会"},{"time":"14:00","title":"评审"}]}""",
-    )
-    // 富卡片（ui_card）样例：标签 -> spec
-    val cardSamples = listOf(
-        "待办卡" to """{"kind":"todo","title":"任务","items":[{"text":"写文档","done":true},{"text":"发邮件"}]}""",
-        "笔记卡" to """{"kind":"note","title":"读书笔记","body":"这是一段 Markdown 笔记内容。"}""",
-        "动作卡" to """{"kind":"actions","title":"可用操作","actions":[{"label":"打开终端","command":"ui_open_terminal"}]}""",
-    )
-    // AI 自写（mermaid / miniapp）样例：标签 -> spec
-    val aiSamples = listOf(
-        "Mermaid 流程图" to """{"type":"mermaid","title":"登录流程","source":"flowchart TD\nA[开始] --> B{已登录?}\nB -- 否 --> C[跳登录页]\nB -- 是 --> D[进首页]"}""",
-        "Web 应用 MiniApp" to """{"type":"miniapp","title":"示例卡片","html":"<div style='padding:16px'><h3>AI 自写 Web 应用</h3><p>这段 HTML/CSS/JS 由 AI 生成并在对话框内实时渲染。</p></div>"}""",
-    )
+    // 名册快照：进程内不变，直接读单一真源，不复制一份进 UI。
+    val catalog = remember { CardSdk.catalog() }
+    val total = catalog.size
+    // 过滤 + 按类目分组。过滤命中 type / description / category 任一。
+    val grouped = remember(catalog, query) {
+        val q = query.trim()
+        val hit = if (q.isEmpty()) catalog else catalog.filter {
+            it.type.contains(q, ignoreCase = true) ||
+                it.description.contains(q, ignoreCase = true) ||
+                it.category.contains(q, ignoreCase = true)
+        }
+        val out = ArrayList<Pair<String, List<CardTemplate>>>()
+        CATEGORY_ORDER.forEach { c ->
+            val list = hit.filter { it.category == c }
+            if (list.isNotEmpty()) out.add(c to list)
+        }
+        val rest = hit.filter { it.category !in CATEGORY_ORDER }
+        if (rest.isNotEmpty()) out.add(CATEGORY_FALLBACK to rest)
+        out
+    }
+    val shown = grouped.sumOf { it.second.size }
 
     Scaffold(
         topBar = {
@@ -80,54 +108,97 @@ fun QuroComponentGalleryScreen(
     ) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item { SectionTitle(stringResource(R.string.qk_01679), cs) }
             item {
-                FlowRow(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    widgetSamples.forEach { (label, spec) ->
-                        FilterChip(
-                            selected = false,
-                            onClick = { launchSpec(context, UiWidgetTool(), spec, label) },
-                            label = { Text(label) },
-                        )
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "组件名册 " + total.toString() + " 种 · 当前显示 " + shown.toString() + " 种",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = cs.onSurface,
+                    )
+                    Text(
+                        "清单由 CardSdk 名册自动生成，新增卡片自动出现；点任意组件即通过 ui_widget 真实下发到对话卡片栏。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        singleLine = true,
+                        placeholder = { Text("搜索组件类型 / 说明", fontSize = 13.sp) },
+                        leadingIcon = { Icon(Icons.Filled.Search, null, Modifier.padding(end = 8.dp)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodySmall,
+                    )
                 }
             }
 
-            item { SectionTitle(stringResource(R.string.qk_01680), cs) }
-            item {
-                FlowRow(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    cardSamples.forEach { (label, spec) ->
-                        FilterChip(
-                            selected = false,
-                            onClick = { launchSpec(context, UiCardTool(), spec, label) },
-                            label = { Text(label) },
-                        )
+            grouped.forEach { (category, specs) ->
+                item {
+                    SectionTitle(
+                        (CATEGORY_LABELS[category] ?: category) + " · " + specs.size.toString() + " 种",
+                    )
+                }
+                item {
+                    FlowRow(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        specs.forEach { spec ->
+                            FilterChip(
+                                selected = false,
+                                onClick = {
+                                    launchSpec(context, UiWidgetTool(), spec.sampleJson, spec.type)
+                                    onComponentSelected?.invoke(spec.type)
+                                },
+                                label = { Text(spec.type, fontSize = 12.sp) },
+                            )
+                        }
                     }
+                }
+                // 说明行：把本组所有 description 并成一段，截两行 —— 81 个 chip 也看得懂每组是干嘛的。
+                item {
+                    Text(
+                        specs.joinToString("；") { it.description },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
 
-            item { SectionTitle(stringResource(R.string.qk_01681), cs) }
+            if (grouped.isEmpty()) {
+                item {
+                    Text(
+                        "没有匹配的组件。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                }
+            }
+
             item {
-                FlowRow(
+                SectionTitle("正文围栏通道 · 3 种")
+            }
+            item {
+                Surface(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    color = cs.surfaceVariant.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(10.dp),
                 ) {
-                    aiSamples.forEach { (label, spec) ->
-                        FilterChip(
-                            selected = false,
-                            onClick = { launchSpec(context, UiWidgetTool(), spec, label) },
-                            label = { Text(label) },
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FenceHint("card", "单组件：一段 JSON 对象")
+                        FenceHint("cards", "多组件：JSON 数组，或含 layout/children 的对象合成一张组合卡")
+                        FenceHint("cardui", "A2UI 风格邻接表：扁平 id + children 引用，自动还原成一棵树")
+                        Text(
+                            "与 ui_widget 工具调用通道等价，但允许模型在正文里「边说边画」；"
+                                + "围栏未闭合（流式生成中）时也会逐帧解析，JSON 合法即渲染。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = cs.onSurfaceVariant,
                         )
                     }
                 }
@@ -145,7 +216,8 @@ fun QuroComponentGalleryScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(Icons.Filled.Info, null, tint = cs.onPrimaryContainer)
-                        Text(stringResource(R.string.qk_01682),
+                        Text(
+                            stringResource(R.string.qk_01682),
                             color = cs.onPrimaryContainer,
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -158,14 +230,50 @@ fun QuroComponentGalleryScreen(
     }
 }
 
+/** 围栏通道说明行：```card 这样的反引号在字符串里写成三个单引号包起来的原文。 */
+@Composable
+private fun FenceHint(name: String, desc: String) {
+    Text(
+        "```" + name + "  ——  " + desc,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/** 类目展示顺序（与名册里的 category 字符串一一对应，新增类目落到末尾「其它」组）。 */
+private val CATEGORY_ORDER = listOf("input", "data", "layout", "action", "media", "nav", "flow", "decoration", "aiwrite")
+
+/** 未登记在顺序表里的类目归到这一组。 */
+private const val CATEGORY_FALLBACK = "other"
+
+private val CATEGORY_LABELS = mapOf(
+    "input" to "输入交互",
+    "data" to "数据展示",
+    "layout" to "布局容器",
+    "action" to "操作动作",
+    "media" to "媒体展示",
+    "nav" to "导航链接",
+    "flow" to "流程状态",
+    "decoration" to "装饰提示",
+    "aiwrite" to "AI 自写",
+    "other" to "其它",
+)
+
 /** 用真实工具把组件 spec 发送到对话卡片栏（桥未连接时回落全局卡片栏） */
-private fun launchSpec(context: Context, tool: QuroTool, spec: String, label: String) {
+private fun launchSpec(context: Context, tool: com.ai.assistance.quro.core.tools.QuroTool, spec: String, label: String) {
     val result = runCatching { tool.run(context, spec) }.getOrElse { """{"error":"$it"}""" }
     val ok = result.contains("\"ok\":true") || !result.contains("\"error\"")
-    Toast.makeText(context, if (ok) qstr(R.string.qk_01683, (label).toString()) else qstr(R.string.qk_01684, (label).toString()), Toast.LENGTH_SHORT).show()
+    Toast.makeText(
+        context,
+        if (ok) qstr(R.string.qk_01683, label) else qstr(R.string.qk_01684, label),
+        Toast.LENGTH_SHORT,
+    ).show()
 }
 
 @Composable
-private fun SectionTitle(text: String, cs: ColorScheme) {
-    Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = cs.onSurface)
+private fun SectionTitle(text: String) {
+    Text(
+        text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+    )
 }
