@@ -13,6 +13,8 @@ import com.ai.assistance.quro.core.QuroToolSpec
 import com.ai.assistance.quro.core.memory.QuroMemoryRepository
 import com.ai.assistance.quro.core.model.QuroModelConfig
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
+import com.ai.assistance.quro.core.network.QuroModelContextBudget
+import com.ai.assistance.quro.core.skill.QuroSkill
 import com.ai.assistance.quro.core.skill.QuroSkillStore
 import com.ai.assistance.quro.core.soul.QuroSoulPromptEngine
 import com.ai.assistance.quro.core.soul.SoulContext
@@ -116,9 +118,59 @@ class ZorvBrain(private val context: Context) {
         // 一旦被关掉 GenUI 就裸奔（这正是「GenUI 没用 skills」的根因）；GenUI 强制带这套规范。
         val skills = runCatching { QuroSkillStore.designSkillsForGenUI(appCtx) }.getOrNull()
         if (skills.isNullOrEmpty()) return
+
+        // 按模型真实窗口决定注几份（修「所有类型界面都画不出来 / 有时模型不通」）。
+        //
+        // 背景：GenUiRules.RULES 本身就有 3.8 万中文字符，design-studio 再全量注入 5 份
+        // （实测 24 KB），单轮输入轻易冲到 6 万字符以上。后果是同一个原因两种表现：
+        //   · 小上下文模型（32K/64K）→ 上游 400 context_length_exceeded →「模型不通」；
+        //   · 大窗口模型（1M）→ 输入塞得下但输出预算被挤 → 吐不完整 genui 围栏 →「画不出界面」。
+        // 这不是渲染层的 bug（解析/桥接/注册表全链路都有兜底），而是提示词体积问题。
+        //
+        // 注意：这里只减少注入的技能份数，不裁剪任何单份技能的内容 ——
+        // 「把已有信息压缩掉」正是 N13–N15 被真机反馈打回的做法（压缩后 AI 拿到的信息更少、
+        // 答非所问与复读），已随 af5fe17 整体回滚，勿再引入。超限时优先丢整份、绝不截半份。
+        val cfg = runCatching { modelConfig() }.getOrNull()
+        val budget = runCatching {
+            QuroModelContextBudget.resolve(
+                modelName = cfg?.model.orEmpty(),
+                provider = cfg?.provider.orEmpty(),
+                apiContextLength = cfg?.modelContextLength ?: 0,
+                userContextWindow = cfg?.contextWindow ?: 0,
+            )
+        }.getOrNull()
+
+        // 换算成「能给设计层的字符数」：设计层最多占窗口的 1/4，
+        // 剩下的留给组件清单 / 历史 / 输出，避免把输出预算吃光。
+        val windowTokens = budget?.inputTokens ?: 0
+        val allowedChars = if (windowTokens <= 0) {
+            Int.MAX_VALUE
+        } else {
+            // 1 token 约 1.7 个中文字符
+            ((windowTokens * 0.25) * 1.7).toInt().coerceAtLeast(MIN_DESIGN_SKILL_CHARS)
+        }
+
+        val kept = ArrayList<QuroSkill>(skills.size)
+        var used = 0
+        for (sk in skills) {
+            val cost = sk.prompt.trim().length
+            if (used + cost > allowedChars) {
+                android.util.Log.w(
+                    "ZorvBrain",
+                    "设计技能层按窗口预算注到 ${kept.size}/${skills.size} 份：已注 ${used}字符、"
+                        + "允许 ${allowedChars}字符（窗口 ${windowTokens}tok），"
+                        + "跳过「${sk.name}」(${cost}字符)。界面规范会变简，但至少能生成。"
+                )
+                break
+            }
+            kept.add(sk)
+            used += cost
+        }
+        if (kept.isEmpty()) return
+
         sb.append("\n\n## 设计技能层（宿主技能库 · 默认启用）\n")
         sb.append("下面是若干份设计规范，生成界面时按其执行；与上文冲突时，以本层为准。\n\n")
-        skills.forEach { s ->
+        kept.forEach { s ->
             sb.append("### 技能：").append(s.name).append("\n")
             sb.append(s.prompt.trim()).append("\n\n")
         }
@@ -176,6 +228,8 @@ class ZorvBrain(private val context: Context) {
 
     private companion object {
         private val LOCK = Any()
+        /** 设计技能层的最小预算（字符）：低于此值连一份技能都放不下，宁可不注入。 */
+        private const val MIN_DESIGN_SKILL_CHARS = 2_000
         @Volatile private var cachedRegistry: QuroToolRegistry? = null
         @Volatile private var cachedEngine: QuroToolEngine? = null
     }

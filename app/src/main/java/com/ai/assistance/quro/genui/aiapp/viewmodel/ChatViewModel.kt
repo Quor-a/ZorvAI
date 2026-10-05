@@ -826,11 +826,37 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
          */
         const val MAX_VERIFY_ITERATIONS = 5
 
-        /** 自校验返修提示词：把发现的问题退回给模型，要求按设计规范针对性修正后重新输出完整界面 */
+        /**
+         * 自校验返修提示词（修「第一次没问题、强制写第二次就出问题」）。
+         *
+         * ## 旧版的病根
+         * 旧文案是「只做针对性修改（不要推倒重来）」+「输出修正后的**完整**闭合 JSON」——
+         * **自相矛盾**：前半句说别重写，后半句要求输出完整件。模型只能服从后半句 → 整篇重写。
+         * 更糟的是 `handleTextResult` 出于「防模型模仿历史里的残缺格式」的考虑，
+         * **故意不把上一轮界面原文写进 conversationHistory**（见该函数注释），
+         * 于是返修轮模型**手上根本没有原文**，无从「修改」，只能凭问题清单重猜一遍。
+         * 结果就是：第一版本来没问题 → 被自校验判失败 → 强制重写 → 新版引入新问题 →
+         * 再判失败 → …烧满 5 轮后交付第 5 版残次界面。真机表现即「第一次写的没问题，
+         * AI 强制写第二次就有问题」。
+         *
+         * ## 现在的做法
+         * ① **把原文还给模型**：返修时把当前这份 JSON 作为 assistant 消息带进历史（仅返修轮，
+         *    不进 works、不影响回放），让「针对性修改」有据可依；
+         * ② **文案不再要求「完整重写」**，改为「以这份原文为基础，只改被点名的部分，
+         *    其余节点逐字保留」；
+         * ③ **保留输出完整闭合 JSON 的要求** —— 这条不能删：GenUI 无增量 patch 通道，
+         *    渲染层每次都吃全量 JSON。措辞上从「重写一整份」改成「基于原文输出修改后的全量」，
+         *    把「全量」和「重写」明确区分开。
+         */
         const val GENUI_VERIFY_FIX_PROMPT =
-            "你刚生成的 GenUI 界面自检未通过。请严格按《界面手艺规范》《设计系统速查》《界面自检评分》修复，只做针对性修改（不要推倒重来、不要引入新的空白/叠印/同色问题）、不要输出任何解释文字，" +
-            "第一行直接输出 ```genui 代码块，内容是修正后的【完整且闭合】的 JSON（从 {\"id\" 开始到收尾括号），" +
-            "确保以下问题全部解决：\n"
+            "你上一轮生成的 GenUI 界面自检发现问题。**下面会先给出你刚生成的那份原文**，请基于它修改。\n" +
+            "规则：\n" +
+            "1. **保留原文的结构、文案、数据与配色**，只修改下面点名的问题；\n" +
+            "2. 没被点名的节点一律**逐字保留**，不要重新设计、不要换布局、不要换措辞；\n" +
+            "3. 修改后仍需输出**全量完整且闭合**的 JSON（从 {\"id\" 到收尾括号）——这是渲染要求，\n" +
+            "   不是让你推倒重来，只是一份「改完的完整件」；\n" +
+            "4. 不要输出任何解释文字，第一行直接是 ```genui 代码块。\n" +
+            "需要修复的问题：\n"
     }
 
     /** 判断文本中的 genui 代码块是否未闭合（输出被截断） */
@@ -872,12 +898,33 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         }
         verifyIteration++
         val issueBlock = issues.joinToString(separator = "\n- ", prefix = "- ")
+        // 🔴 把上一轮原文还给模型（修「第一次没问题、强制写第二次就出问题」）。
+        //
+        // 为什么必须回灌：`handleTextResult` 为了防「模型模仿历史里的残缺格式」，
+        // 平时**故意不把界面原文写进 conversationHistory`。但返修轮不一样 ——
+        // 模型手上没有原文，却被要求「只做针对性修改」，只能凭问题清单重猜一遍，
+        // 于是整篇重写并引入新问题（用户真机：「第一次写的没问题，AI 强制写第二次有问题」）。
+        //
+        // 为什么只在返修轮回灌、且不受控：
+        //  · 只回灌**最后一次**原文，不累积每一轮的历史，避免历史膨胀；
+        //  · 只对自校验返修生效，正常轮次的历史策略（只留人话）保持不变 ——
+        //    那个策略防的是「残缺 DSL 被模仿」，而返修轮要的是「原文可比对」，两者目标相反。
+        // works 仍存原始围栏用于回放，不受此处影响。
+        val currentJson = st.currentGenUI
         _state.update {
+            val withSource = if (currentJson.isNotBlank()) {
+                it.conversationHistory + GenUIChatMessage(
+                    role = "assistant",
+                    content = "```genui\n$currentJson\n```"
+                )
+            } else {
+                it.conversationHistory
+            }
             it.copy(
                 isStreaming = true,
                 streamingText = "",
                 streamingReasoning = "",
-                conversationHistory = it.conversationHistory + GenUIChatMessage(
+                conversationHistory = withSource + GenUIChatMessage(
                     role = "user",
                     content = GENUI_VERIFY_FIX_PROMPT + issueBlock
                 )
@@ -917,9 +964,19 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             val text = props?.optString("text") ?: props?.optString("label")
                 ?: props?.optString("title")
             if (!text.isNullOrBlank()) textCount++
+            // 子树里有文字也算（text 节点常挂在 children 里，见 hasTextInSubtree 说明）
+            else if (hasTextInSubtree(node)) textCount++
             // 标题类节点却没有任何文字 → 标题不可见（GenUI 的 heading/title 必须有文字内容）
+            //
+            // 🔴 「有文字」的判定必须把 children 里的文本节点算进去（修「第一次没问题却被逼重写」）：
+            // GenUI 的 heading1..heading6 / title **主流写法就是把文本放在 children 里**，
+            // properties 不带 text。旧实现只查 properties → 这种完全正常的界面被判
+            // 「标题将不可见」→ 触发返修 → 模型被迫整篇重写 → 反而引入新问题。
+            // 这就是用户真机看到的「第一次写的没问题，AI 强制写第二次就有问题」的另一半原因。
             val t = type.lowercase()
-            if ((t == "heading" || t == "title" || t.contains("heading")) && text.isNullOrBlank()) {
+            if ((t == "heading" || t == "title" || t.contains("heading")) &&
+                text.isNullOrBlank() && !hasTextInSubtree(node)
+            ) {
                 issues += "标题节点（type=$type）没有任何文字内容，标题将不可见，请补上 text/label/title。"
             }
             val style = node.optJSONObject("style")
@@ -949,6 +1006,37 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         }
         return issues.distinct()
     }
+
+    /**
+     * 子树里是否存在任何可见文字（properties.text/label/title 或嵌套的 text 节点）。
+     *
+     * 用于「标题类节点是否真的没有文字」的判定：GenUI 里 heading1..6 / title 既可以自带
+     * text，也可以把文本放进 children 的 text 节点。只查自身 properties 会把后者误判为空标题。
+     * 深度上限 12 层，防止异常深的树导致递归过深。
+     */
+    private fun hasTextInSubtree(node: org.json.JSONObject, depth: Int = 0): Boolean {
+        if (depth > 12) return false
+        val props = node.optJSONObject("properties")
+        for (k in TEXT_KEYS) {
+            if (!props?.optString(k).isNullOrBlank()) return true
+        }
+        // 直接写在节点上的 body/content 等字段也算有内容
+        for (k in INLINE_TEXT_KEYS) {
+            if (!node.optString(k).isNullOrBlank()) return true
+        }
+        val kids = node.optJSONArray("children") ?: return false
+        for (i in 0 until kids.length()) {
+            val c = kids.optJSONObject(i) ?: continue
+            if (hasTextInSubtree(c, depth + 1)) return true
+        }
+        return false
+    }
+
+    /** properties 里承载可见文字的键名。 */
+    private val TEXT_KEYS = arrayOf("text", "label", "title", "content", "body", "value", "caption")
+
+    /** 节点顶层可能直接放的文字键名（部分 DSL 变体这么写）。 */
+    private val INLINE_TEXT_KEYS = arrayOf("text", "label", "content")
 
     /** 递归遍历 GenUI 节点树；inheritedBg 为最近祖先的背景色（用于跨节点对比度检测）。 */
     private fun walkGenUi(node: org.json.JSONObject, inheritedBg: String? = null,
