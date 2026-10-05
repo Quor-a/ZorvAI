@@ -78,9 +78,6 @@ object CardCodec {
                 } })
                 put("xLabel", card.xLabel); put("yLabel", card.yLabel)
             }
-            is FunnelCard -> o.put("steps", JSONArray().also { a -> card.steps.forEach { s ->
-                a.put(JSONObject().apply { put("name", s.name); put("value", s.value); put("color", s.color) })
-            } })
             is CandlestickCard -> o.put("candles", JSONArray().also { a -> card.candles.forEach { c ->
                 a.put(JSONObject().apply { put("o", c.o); put("h", c.h); put("l", c.l); put("c", c.c); put("t", c.t) })
             } })
@@ -290,6 +287,103 @@ object CardCodec {
             }
             is BarcodeCard -> {
                 o.put("code", card.code); o.put("format", card.format); o.put("caption", card.caption)
+            }
+            is DecisionCard -> {
+                o.put("question", card.question)
+                o.put("allowCustom", card.allowCustom); o.put("required", card.required)
+                o.put("customHint", card.customHint); o.put("context", card.context)
+                o.put("options", JSONArray().also { a ->
+                    card.options.forEach { op -> a.put(JSONObject().apply {
+                        put("label", op.label); put("value", op.value)
+                        put("detail", op.detail); put("recommended", op.recommended)
+                    }) }
+                })
+            }
+            is ConfirmCard -> {
+                o.put("message", card.message); o.put("confirmLabel", card.confirmLabel)
+                o.put("cancelLabel", card.cancelLabel); o.put("danger", card.danger); o.put("detail", card.detail)
+            }
+            is SankeyCard -> {
+                o.put("unit", card.unit)
+                o.put("nodes", JSONArray().also { a ->
+                    card.nodes.forEach { n -> a.put(JSONObject().apply {
+                        put("id", n.id); put("label", n.label)
+                    }) }
+                })
+                o.put("links", JSONArray().also { a ->
+                    card.links.forEach { l -> a.put(JSONObject().apply {
+                        put("from", l.from); put("to", l.to); put("value", l.value)
+                    }) }
+                })
+            }
+            is FunnelCard -> {
+                o.put("showRate", card.showRate); o.put("unit", card.unit)
+                o.put("steps", JSONArray().also { a ->
+                    card.steps.forEach { st -> a.put(JSONObject().apply {
+                        put("name", st.name); put("value", st.value)
+                        put("color", st.color); put("hint", st.hint)
+                    }) }
+                })
+            }
+            is WaterfallCard -> {
+                o.put("start", card.start); o.put("unit", card.unit)
+                o.put("steps", JSONArray().also { a ->
+                    card.steps.forEach { st -> a.put(JSONObject().apply {
+                        put("label", st.label); put("delta", st.delta)
+                        put("value", st.value); put("isTotal", st.isTotal)
+                    }) }
+                })
+            }
+            is QuadrantCard -> {
+                o.put("xLabel", card.xLabel); o.put("yLabel", card.yLabel); o.put("axisMax", card.axisMax)
+                o.put("quadrants", JSONArray(card.quadrants))
+                o.put("items", JSONArray().also { a ->
+                    card.items.forEach { it -> a.put(JSONObject().apply {
+                        put("label", it.label); put("x", it.x); put("y", it.y); put("tag", it.tag)
+                    }) }
+                })
+            }
+            is MatrixCard -> {
+                o.put("leftLabel", card.leftLabel); o.put("rightLabel", card.rightLabel)
+                o.put("showDiff", card.showDiff); o.put("unit", card.unit)
+                o.put("rows", JSONArray().also { a ->
+                    card.rows.forEach { r -> a.put(JSONObject().apply {
+                        put("label", r.label); put("left", r.left); put("right", r.right); put("better", r.better)
+                    }) }
+                })
+            }
+            is FeedCard -> {
+                o.put("source", card.source)
+                o.put("items", JSONArray().also { a ->
+                    card.items.forEach { it -> a.put(JSONObject().apply {
+                        put("time", it.time); put("text", it.text)
+                        put("level", it.level); put("actor", it.actor)
+                    }) }
+                })
+            }
+            is GraphCard -> {
+                o.put("nodes", JSONArray().also { a ->
+                    card.nodes.forEach { n -> a.put(JSONObject().apply {
+                        put("label", n.label); put("col", n.col); put("row", n.row); put("shape", n.shape)
+                    }) }
+                })
+                o.put("edges", JSONArray().also { a ->
+                    card.edges.forEach { e -> a.put(JSONObject().apply {
+                        put("from", e.from); put("to", e.to); put("label", e.label); put("kind", e.kind)
+                    }) }
+                })
+            }
+            is SectionCard -> {
+                o.put("sections", JSONArray().also { a ->
+                    card.sections.forEach { sec -> a.put(JSONObject().apply {
+                        put("title", sec.title)
+                        put("rows", JSONArray().also { ra ->
+                            sec.rows.forEach { (k, v) -> ra.put(JSONObject().apply {
+                                put("k", k); put("v", v)
+                            }) }
+                        })
+                    }) }
+                })
             }
             else -> Unit
         }

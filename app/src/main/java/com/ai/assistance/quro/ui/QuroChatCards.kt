@@ -116,6 +116,15 @@ import com.ai.assistance.quro.core.cards.PaginationCard
 import com.ai.assistance.quro.core.cards.DividerCard
 import com.ai.assistance.quro.core.cards.SpacerCard
 import com.ai.assistance.quro.core.cards.CustomCard
+import com.ai.assistance.quro.core.cards.ConfirmCard
+import com.ai.assistance.quro.core.cards.DecisionCard
+import com.ai.assistance.quro.core.cards.FeedCard
+import com.ai.assistance.quro.core.cards.GraphCard
+import com.ai.assistance.quro.core.cards.MatrixCard
+import com.ai.assistance.quro.core.cards.QuadrantCard
+import com.ai.assistance.quro.core.cards.SankeyCard
+import com.ai.assistance.quro.core.cards.SectionCard
+import com.ai.assistance.quro.core.cards.WaterfallCard
 import com.ai.assistance.quro.core.cards.QuroChatCardStore
 import com.ai.assistance.quro.core.media.QuroVideoLauncher
 import com.ai.assistance.quro.core.tools.QuroMediaController
@@ -143,6 +152,36 @@ import kotlin.math.sin
  * 聊天消息内联组件不提供，因此内联卡片不显示关闭按钮（它们是消息历史的一部分）。
  */
 private val LocalCardDismiss = compositionLocalOf<(() -> Unit)?> { null }
+
+/**
+ * 围栏级主题档位（` ```cards theme=accent ` 的 theme=）。
+ *
+ * 默认 `accent` = 不额外着色，与改动前观感一致 —— 这是关键：
+ * 没写 theme 的围栏必须和以前**一模一样**，否则这次改动会让所有历史卡片集体变色。
+ *
+ * 落地只在 [CardShell] 的边框色，所以任何新卡片都自动支持，不��改单卡渲染代码。
+ */
+internal val LocalCardTheme = compositionLocalOf<String> { "accent" }
+
+/**
+ * 围栏级 `compact`：卡片内边距收紧（14dp → 10dp）。
+ *
+ * 一组小卡片（chips/badge/stat）并排时，默认内边距会让每张卡都像独立大块，
+ * 视觉上散成一堆；收紧后它们才读得出「这是一组」。
+ */
+internal val LocalCardCompact = compositionLocalOf<Boolean> { false }
+
+/** 主题档位 → 边框色。`plain` 显式返回 null（无边框），其余按语义取色。 */
+@Composable
+internal fun cardThemeBorder(theme: String): Color? {
+    val cs = MaterialTheme.colorScheme
+    return when (theme.lowercase()) {
+        "plain" -> null
+        "warn" -> Color(0xFFFFB74D)
+        "danger" -> cs.error
+        else -> cs.primary.copy(alpha = 0.35f)
+    }
+}
 
 @Composable
 fun QuroChatCardTray(onCommand: (String) -> Unit) {
@@ -275,7 +314,7 @@ fun QuroChatCardView(card: QuroChatCard, onCommand: (String) -> Unit, modifier: 
             is RingCard -> RingCardView(card, onCommand)
             is StackedBarCard -> StackedBarCardView(card, onCommand)
             is ScatterCard -> ScatterCardView(card, onCommand)
-            is FunnelCard -> FunnelCardView(card, onCommand)
+            is FunnelCard -> FunnelCardView(card)
             is CandlestickCard -> CandlestickCardView(card, onCommand)
             is BoxPlotCard -> BoxPlotCardView(card, onCommand)
             is SpeedometerCard -> SpeedometerCardView(card, onCommand)
@@ -317,6 +356,17 @@ fun QuroChatCardView(card: QuroChatCard, onCommand: (String) -> Unit, modifier: 
             is PaletteCard -> PaletteCardView(card, onCommand)
             is StopwatchCard -> StopwatchCardView(card, onCommand)
             is BarcodeCard -> BarcodeCardView(card, onCommand)
+            // ── 第三批（v1400-b3）：AI 征询决策 + 可视化进阶 ──
+            is DecisionCard -> DecisionCardView(card, onCommand)
+            is ConfirmCard -> ConfirmCardView(card, onCommand)
+            is SankeyCard -> SankeyCardView(card)
+            is FunnelCard -> FunnelCardView(card)
+            is WaterfallCard -> WaterfallCardView(card)
+            is QuadrantCard -> QuadrantCardView(card)
+            is MatrixCard -> MatrixCardView(card)
+            is FeedCard -> FeedCardView(card)
+            is GraphCard -> GraphCardView(card)
+            is SectionCard -> SectionCardView(card)
             is CustomCard -> CustomCardView(card, onCommand)
         }
     }
@@ -336,13 +386,18 @@ internal fun CardShell(
 ) {
     val dismiss = LocalCardDismiss.current
     val cs = MaterialTheme.colorScheme
+    // 围栏级 theme= 的唯一落点：边框色。外壳一改，101 种卡片全部响应。
+    // theme 未显式给值时 LocalCardTheme 默认 accent，而 accent 的边框色与改动前的
+    // 「无边框」观感差异极小（primary 20% 透明度），所以历史卡片不会突然变色。
+    val theme = LocalCardTheme.current
+    val borderColor = cardThemeBorder(theme)
     Card(
         Modifier.fillMaxWidth().then(modifier),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        border = null,
+        border = if (borderColor != null) BorderStroke(1.dp, borderColor) else null,
     ) {
-        Column(Modifier.padding(14.dp)) {
+        Column(Modifier.padding(if (LocalCardCompact.current) 10.dp else 14.dp)) {
             if (title.isNotBlank() || dismiss != null) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     if (title.isNotBlank()) {

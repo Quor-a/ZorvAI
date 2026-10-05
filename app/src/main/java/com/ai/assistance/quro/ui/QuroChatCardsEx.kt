@@ -329,41 +329,9 @@ internal fun ScatterCardView(card: ScatterCard, onCommand: (String) -> Unit) {
     }
 }
 
-/** 漏斗图：层宽按 value/max 收窄，层间画下箭头。 */
-@Composable
-internal fun FunnelCardView(card: FunnelCard, onCommand: (String) -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    if (card.steps.isEmpty()) return
-    val maxV = max(card.steps.maxOf { it.value }, 1f)
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        card.steps.forEachIndexed { i, s ->
-            val w = (s.value / maxV).coerceIn(0.18f, 1f)
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    Modifier
-                        .fillMaxWidth(w)
-                        .height(34.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(ExCardPalette.color(s.color).copy(alpha = 0.85f))
-                        .clickable { onCommand("ai:${s.name}") },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "${s.name} · %.0f".format(s.value),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = cs.onSurface,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                if (i < card.steps.size - 1) {
-                    Spacer(Modifier.height(2.dp))
-                    Text("↓", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
-                    Spacer(Modifier.height(2.dp))
-                }
-            }
-        }
-    }
-}
+// 漏斗图渲染已迁到 QuroChatCardsEx3.kt 的 FunnelCardView（v1400 第三批增强版：
+// 多了留存率、单位、每级流失原因，且 value 放宽为 Double 以免小数被截断）。
+// 旧实现只画「层宽 + 箭头」，能力是新版子集，故直接删除而非并存。
 
 /** K 线图：每根烛台画 open/high/low/close。 */
 @Composable
@@ -1601,4 +1569,4 @@ internal fun parseCardTogglePayload(data: String): Pair<Int, Int>? {
 /** 一张卡发联动：本地先更新，再广播给同 id 的其他实例。 */
 internal fun emitCardToggle(cardId: String, index: Int, v: Int, onCommand: (String) -> Unit) {
     onCommand(CardAction.emit(cardId, cardTogglePayload(index, v)).toCommand())
-}
+}

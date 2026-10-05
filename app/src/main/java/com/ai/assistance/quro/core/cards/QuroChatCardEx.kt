@@ -86,13 +86,35 @@ data class ScatterCard(
     data class Point(val x: Float, val y: Float, val label: String? = null)
 }
 
-/** 漏斗图：转化率分析。 */
+/**
+ * 漏斗图：转化率分析。
+ *
+ * v1400 第三批扩展（**只加带默认值的可选字段，不改存量字段名与顺序**）：
+ *  - [showRate] 每级是否显示相对首级的留存率；
+ *  - [unit] 数值单位（如「人」「元」）；
+ *  - [Step.hint] 本级流失原因等补充说明。
+ *
+ * 老存档里的 `{"steps":[{"name":..,"value":..}]}` 三个新字段全走默认值，解析行为不变。
+ */
 data class FunnelCard(
     override val id: String,
     override val title: String,
     val steps: List<Step>,
+    val showRate: Boolean = true,
+    val unit: String = "",
 ) : QuroChatCard {
-    data class Step(val name: String, val value: Float, val color: String = "")
+    /**
+     * @param value 用 Double 而非 Float：第三批的样例会出现小数（如 4.1），
+     *             Float 会静默截断成 4.1f 后参与运算出现精度毛刺。
+     *             JSON 反序列化对数字字面量两种类型都能读，老数据不受影响。
+     */
+    data class Step(
+        val name: String,
+        val value: Double,
+        val color: String = "",
+        /** 流失原因等补充（v1400-b3 新增，缺省空串） */
+        val hint: String = "",
+    )
 }
 
 /** K线图：金融行情。 */
