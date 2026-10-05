@@ -35,7 +35,8 @@ class CardCatalogTool : QuroTool {
             "（本工具即 card_catalog；ui_widget / ui_card 的描述里已带一份紧凑清单，" +
             "样例太大故不在描述里常驻。）" +
             "参数：category（类目名，可空表示全部）/ types（type 名列表，可空）/ detail（是否回完整样例，默认 true）" +
-            " / normalize（是否顺带做 A2UI 组件名归一化，如 GanttChart→gantt，默认 false）。"
+            " / normalize（是否顺带做 A2UI 组件名归一化，如 GanttChart→gantt，默认 false）" +
+            " / fence（是否改为返回正文围栏的 4 种头与属性语法 title=/theme=/compact，默认 false）。"
 
     /**
      * 参数 schema 用 [JSONObject] 运行时构造，而不是拼字符串。
@@ -64,6 +65,10 @@ class CardCatalogTool : QuroTool {
                 put("type", "boolean")
                 put("description", "true 时同时返回 A2UI 别名归一化结果，默认 false")
             })
+            put("fence", JSONObject().apply {
+                put("type", "boolean")
+                put("description", "true 时改为返回正文围栏的 4 种头与属性语法（title=/theme=/compact），默认 false")
+            })
         })
         put("required", JSONArray())
     }.toString()
@@ -89,6 +94,11 @@ class CardCatalogTool : QuroTool {
                 }
                 val detail = jo.optBoolean("detail", true)
                 val normalize = jo.optBoolean("normalize", false)
+                val fence = jo.optBoolean("fence", false)
+
+                // fence 模式：模型问的是「围栏怎么写」，与组件目录无关，
+                // 所以完全独立返回 —— 混进 items 会让模型在一堆组件里找围栏语法。
+                if (fence) return fenceSyntaxJson()
 
                 val cat = category?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
                 val want = types?.map { it.trim().lowercase() }?.filter { it.isNotEmpty() }?.toSet().orEmpty()
@@ -133,5 +143,81 @@ class CardCatalogTool : QuroTool {
                 "❌ card_catalog 失败：${e.message}"
             }
         }
+
+        /**
+         * 围栏语法说明（`fence=true`）。
+         *
+         * 从 [CardFence] 现读而不是写死一份文案 —— 属性语法是**会变的**
+         * （新增开关、改主题档位名），写死就会出现「工具说的和解析器认的不是一套」，
+         * 而这种不一致只在模型真按错误文案下发时才暴露。
+         */
+        private fun fenceSyntaxJson(): String = JSONObject().apply {
+            put("fences", JSONArray(CardFence.ALL_FENCES))
+            put("usage", "```<围栏头> [属性...]\\n<JSON>\\n```")
+            put(
+                "switches",
+                JSONArray().apply {
+                    put(
+                        JSONObject().apply {
+                            put("name", "compact")
+                            put("effect", "卡片内边距收紧（14dp→10dp）；一组小卡片并排时必给，否则散成一堆")
+                        }
+                    )
+                    put(
+                        JSONObject().apply {
+                            put("name", "scroll")
+                            put("effect", "内容超高时卡片内部滚动，而不是把气泡撑长")
+                        }
+                    )
+                }
+            )
+            put(
+                "valueAttrs",
+                JSONArray().apply {
+                    put(
+                        JSONObject().apply {
+                            put("name", "title")
+                            put("syntax", "title=Q3 复盘")
+                            put("effect", "组级标题；各卡自己带 title 时以卡的为准")
+                        }
+                    )
+                    put(
+                        JSONObject().apply {
+                            put("name", "theme")
+                            put("syntax", "theme=accent")
+                            put("allowed", JSONArray(CardFence.THEME_PRESETS))
+                            put("effect", "主题档位；不在白名单内一律降级为 accent")
+                        }
+                    )
+                }
+            )
+            put(
+                "examples",
+                JSONArray().apply {
+                    put(
+                        JSONObject().apply {
+                            put("note", "一组带统一标题与主题的小卡片")
+                            put(
+                                "text",
+                                "```cards title=Q3 复盘 theme=accent compact\\n" +
+                                    "[{\"type\":\"stat\",\"label\":\"营收\",\"value\":\"1.2M\",\"trend\":\"up\"}]\\n```"
+                            )
+                        }
+                    )
+                    put(
+                        JSONObject().apply {
+                            put("note", "流式友好：一行一个 JSON，已写完的行立刻出卡")
+                            put(
+                                "text",
+                                "```cardjson title=日志\\n" +
+                                    "{\"type\":\"stat\",\"label\":\"A\",\"value\":\"1\"}\\n" +
+                                    "{\"type\":\"stat\",\"label\":\"B\",\"value\":\"2\"}\\n```"
+                            )
+                        }
+                    )
+                }
+            )
+            put("note", "属性只在围栏头上、JSON 之前；组合卡（含 children）请用 cards，逐行容器请用 cardjson")
+        }.toString()
     }
 }

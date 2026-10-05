@@ -24,14 +24,39 @@ import org.json.JSONObject
  * 还需要看明细吗？
  * ```
  *
- * ## 三种围栏头
+ * ## 四种围栏头
  *
  * - [FENCE_CARD]  `card`   —— 单组件，一个 JSON 对象
  * - [FENCE_CARDS] `cards`  —— 多组件，JSON 数组，或 `{"layout":..,"children":[..]}`
  * - [FENCE_CARDUI] `cardui` —— A2UI 风格邻接表（扁平 `id` + `children` 引用）
  * - [FENCE_CARDJSON] `cardjson` —— 逐行 JSON（一行一个卡片，流式友好）
  *
- * 围栏头后面允许跟属性（空格分隔），如 `card compact scroll`。
+ * ## 围栏属性
+ *
+ * 围栏头之后可跟属性（空格分隔），分**开关**与**带值**两类：
+ *
+ * | 属性 | 类型 | 含义 |
+ * |---|---|---|
+ * | `compact` | 开关 | 内边距收紧（14dp → 10dp）。一组小卡片并排时必给，否则散成一堆 |
+ * | `scroll` | 开关 | 内容超高时卡片内部滚动，而非把气泡撑长 |
+ * | `bordered` / `flat` / `dense` | 开关 | 预留，渲染层当前按默认处理 |
+ * | `title=` | 带值 | **组级标题**。各卡自己没标题时用它兜底，省 token 也免得三个标题 |
+ * | `theme=` | 带值 | 主题档位：`accent`(默认) / `warn` / `danger` / `plain` |
+ *
+ * 例：
+ * ```
+ * ```cards title=Q3 复盘 theme=accent compact
+ * [{"type":"stat","label":"营收","value":"1.2M","trend":"up"}]
+ * ```
+ * ```
+ *
+ * 带值属性的键必须是 [KNOWN_VALUE_ATTRS] 里的，`theme` 的值还必须在 [THEME_PRESETS] 内，
+ * 否则**原样丢弃并降级为默认**（主题值则降级为 `accent`）——
+ * 宁可主题不生效，也不要让模型写 `theme=rainbow` 时得到一张不明不白的卡。
+ *
+ * 属性的动因之一是 A2UI v0.9 把 `theme` 更名为 `surfaceProperties` 并提到协议级一等公民：
+ * 「卡片长什么样」应该是可枚举的少数几档，而不是模型每次现编的颜色值。
+ *
  *
  * ## 🔴 未闭合围栏必须能解析
  *
@@ -97,8 +122,59 @@ object CardFence {
     /** 单张卡允许的节点总数（含所有层）。深度管得住"套娃"，总量管得住"铺满屏"。 */
     const val MAX_TOTAL_NODES = 64
 
-    /** 围栏属性里能识别的开关。未识别的属性一律保留在 [CardFenceSlice.attrs] 里但不生效。 */
+    /** 围栏属性里能识别的开关（无值）。未识别的属性一律保留在 [CardFenceSlice.attrs] 里但不生效。 */
     private val KNOWN_ATTRS = setOf("compact", "scroll", "bordered", "flat", "dense")
+
+    /**
+     * 围栏属性里能识别的**带值**属性（`name=value` 或 `name:"value"`）。
+     *
+     * ## 为什么要有带值属性
+     *
+     * 早期围栏属性全是开关（`card compact scroll`），能表达的东西只有「要不要」，
+     * 表达不了「是什么」。而卡片最需要的两类信息恰好都是「是什么」：
+     *  - `title=`：**一组卡的共同标题**。围栏体里每张卡各写一个 title 既费 token，
+     *    又会出现「三个标题」这种视觉噪音；写在围栏头上就是一个标题管一组。
+     *  - `theme=`：配色（`accent` / `warn` / `danger` / `plain`）。
+     *    A2UI v0.9 把 `theme` 更名为 `surfaceProperties` 并把它提到协议级一等公民，
+     *    就是因为「卡片长什么样」不该由模型每次现编，而应是**可枚举的少数几档**。
+     *
+     * 所以取值一律走 [THEME_PRESETS] / `KNOWN_SWITCHES` 白名单，不认识的原样丢弃 ——
+     * 宁可主题不生效，也不要让模型写 `theme=rainbow` 时得到一张不明不白的卡。
+     */
+    private val KNOWN_VALUE_ATTRS = setOf("title", "theme")
+
+    /** 可选主题档位（对应渲染层的语义色）。 */
+    val THEME_PRESETS: List<String> = listOf("accent", "warn", "danger", "plain")
+
+    /**
+     * 解析**带值**围栏属性：`title=xxx` / `theme:xxx` 两种写法都吃。
+     *
+     * 两种写法都收是因为模型会照着样例里的 JSON 习惯写冒号。
+     * 返回键统一小写；值保留原样（主题值另在 [theme] 里归一）。
+     */
+    fun parseValueAttrs(attrText: String): Map<String, String> {
+        if (attrText.isBlank()) return emptyMap()
+        val out = LinkedHashMap<String, String>()
+        for (tok in attrText.split(Regex("[\\s,]+"))) {
+            val t = tok.trim()
+            if (t.isEmpty()) continue
+            val eq = t.indexOf('=')
+            val colon = t.indexOf(':')
+            val cut = when {
+                eq >= 0 && (colon < 0 || eq < colon) -> eq
+                colon >= 0 -> colon
+                else -> -1
+            }
+            if (cut <= 0) continue
+            val k = t.substring(0, cut).trim().lowercase()
+            if (k !in KNOWN_VALUE_ATTRS) continue
+            // 属性值可能带引号（模型常写 theme="danger"），去掉包裹引号
+            var v = t.substring(cut + 1).trim().trim('"', '\'')
+            if (v.isEmpty()) continue
+            out[k] = v
+        }
+        return out
+    }
 
     /**
      * 一段围栏切片。
@@ -119,6 +195,8 @@ object CardFence {
         val end: Int,
         val closed: Boolean,
         val raw: String,
+        /** 带值属性（`title=` / `theme=`），由 [parseValueAttrs] 从围栏头解析。 */
+        val valueAttrs: Map<String, String> = emptyMap(),
     ) {
         /** 是否为多组件围栏。 */
         val isMulti: Boolean get() = fence == FENCE_CARDS || fence == FENCE_CARDUI
@@ -135,6 +213,23 @@ object CardFence {
 
         /** 可滚动：内容超高时卡片内部滚动而非把气泡撑长。 */
         val scroll: Boolean get() = "scroll" in attrs
+
+        /** 围栏级标题：一组卡的共同标题（各卡自己的 title 优先）。空串 = 不覆盖。 */
+        val title: String get() = valueAttrs["title"].orEmpty()
+
+        /**
+         * 主题档位，取值限定在 [THEME_PRESETS]。
+         *
+         * 认不出来的值**降级为 plain**而不是保留原字符串 ——
+         * 未知值若原样传下去，渲染层要么找不到对应色（整张卡无色）
+         * 要么按未知分支硬套默认（看起来像生效了，其实不是）。
+         * 降级成 plain 至少视觉上稳定，且 [themeRaw] 仍留着原值可供排查。
+         */
+        val theme: String
+            get() = valueAttrs["theme"]?.lowercase()?.takeIf { it in THEME_PRESETS } ?: "accent"
+
+        /** 模型原始写下的主题值（未校验），供「为什么没生效」的排查用。空串 = 没写。 */
+        val themeRaw: String get() = valueAttrs["theme"].orEmpty()
     }
 
     /**
@@ -187,6 +282,7 @@ object CardFence {
                     end = end,
                     closed = closed,
                     raw = text.substring(m.range.first, end),
+                    valueAttrs = parseValueAttrs(attrText),
                 )
             )
             cursor = if (end > cursor) end else m.range.last + 1
@@ -216,12 +312,16 @@ object CardFence {
         return null
     }
 
-    /** 围栏属性 → 键集合。空属性返回空集合。 */
+    /** 围栏属性 → 键集合。空属性返回空集合。**只收无值开关**，带值的（`title=`/`theme=`）归 [parseValueAttrs]。 */
     fun parseAttrs(attrText: String): Set<String> {
         if (attrText.isBlank()) return emptySet()
         return attrText.split(Regex("[\\s,]+"))
             .map { it.trim().lowercase() }
             .filter { it.isNotEmpty() }
+            // 🔴 带值属性绝不能混进开关集合：`title=季度报表` 若当成开关名塞进 attrs，
+            // `title=季度报表` 就成了一个谁也匹配不上的假开关，而真正的 title 无人读取 ——
+            // 表现为「写了 title= 完全没反应」，且没有任何报错。
+            .filter { !it.contains('=') && !it.contains(':') }
             .toSet()
     }
 
@@ -274,6 +374,29 @@ object CardFence {
             val cards = toCards(s.fence, s.body)
             if (cards.isEmpty()) null else s to cards
         }
+
+    /**
+     * 一组卡片 + 该围栏的效果属性（渲染层用）。
+     *
+     * ## 为什么要保留「组」这个概念
+     *
+     * `theme=` / `compact=` 是**组级**语义：` ```cards theme=danger ` 表示
+     * 「这一组都用危险基调」，而不是「这一堆卡片各自碰巧同色」。
+     * 所以渲染层不能只拿 `List<QuroChatCard>` —— flatten 之后卡片就不知道
+     * 该跟哪一组的主题走了。解析层只负责忠实带出属性，**怎么用交给渲染层**
+     * （本文件不引 Android 依赖，保持可 JVM 单测）。
+     */
+    data class Grouped(
+        val cards: List<QuroChatCard>,
+        /** 围栏级标题（`title=`）。空串 = 无标题。 */
+        val title: String,
+        /** 主题档位，必在 [THEME_PRESETS] 内；未写时为 `accent`。 */
+        val theme: String,
+        /** 紧凑模式（`compact`）。 */
+        val compact: Boolean,
+        /** 是否渲染围栏标题。逐行围栏流式时为 false，避免每帧闪标题。 */
+        val showTitle: Boolean = true,
+    )
 
     /**
      * 把 [protected] 区间内的花括号就地抹成空格（**长度与下标完全不变**）。

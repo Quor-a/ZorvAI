@@ -115,4 +115,37 @@ class CardCatalogToolTest {
         assertEquals(1, arr.length())
         assertTrue(arr.getJSONObject(0).has("error"))
     }
+
+    // ── fence=true：围栏语法说明（属性是组级语义，不会出现在组件目录里）──
+
+    @Test
+    fun `fence 模式回 4 种围栏头与属性说明`() {
+        val o = JSONObject(CardCatalogTool.query("""{"fence":true}"""))
+        val fences = o.getJSONArray("fences")
+        assertEquals(4, fences.length())
+        CardFence.ALL_FENCES.forEach { f ->
+            assertTrue("围栏头 $f 应在说明里", fences.toString().contains(f))
+        }
+        assertTrue("应有开关说明", o.getJSONArray("switches").toString().contains("compact"))
+        val va = o.getJSONArray("valueAttrs").toString()
+        assertTrue("应有 title 属性", va.contains("title"))
+        assertTrue("应有 theme 属性", va.contains("theme"))
+    }
+
+    @Test
+    fun `fence 模式的主题白名单与实现同源`() {
+        // 白名单写死就会出现「工具说的档位和解析器认的不是一套」，
+        // 而这种不一致只在模型真按错误文案下发时才暴露
+        val o = JSONObject(CardCatalogTool.query("""{"fence":true}"""))
+        val allowed = o.getJSONArray("valueAttrs").toString()
+        CardFence.THEME_PRESETS.forEach { t -> assertTrue("主题档位 $t 应在白名单里", allowed.contains(t)) }
+    }
+
+    @Test
+    fun `fence 模式不混入组件目录`() {
+        // 混进 items 会让模型在一堆组件里找围栏语法
+        val raw = CardCatalogTool.query("""{"fence":true}""")
+        assertFalse("不应回 items 数组", JSONObject(raw).has("items"))
+        assertFalse("不该出现组件样例", raw.contains("\"chart_type\""))
+    }
 }

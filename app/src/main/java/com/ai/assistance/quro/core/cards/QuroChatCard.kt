@@ -1006,6 +1006,18 @@ fun serializeCard(card: QuroChatCard): JSONObject {
         is PaletteCard -> "palette"
         is StopwatchCard -> "stopwatch"
         is BarcodeCard -> "barcode"
+
+        // ── 第三批（v1400-b3）：AI 征询决策 + 可视化进阶 ──
+        is DecisionCard -> "decision"
+        is ConfirmCard -> "confirm"
+        is SankeyCard -> "sankey"
+        is FunnelCard -> "funnel"
+        is WaterfallCard -> "waterfall"
+        is QuadrantCard -> "quadrant"
+        is MatrixCard -> "matrix"
+        is FeedCard -> "feed"
+        is GraphCard -> "graph"
+        is SectionCard -> "section"
     })
     o.put("id", card.id)
     o.put("title", card.title)

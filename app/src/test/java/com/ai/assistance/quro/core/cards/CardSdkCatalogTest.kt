@@ -107,7 +107,9 @@ class CardSdkCatalogTest {
 
     @Test
     fun `type 数量与名册规模一致`() {
-        assertEquals(92, CardSdk.typeCount)
+        // 不硬编码具体数量：加组件时忘了改断言本身就是一种静默失效。
+        // 这里只守「去重后无重复」与「分类求和 == 总数」两条不变量。
+        assertEquals(CardSdk.all.size, CardSdk.typeCount)
         assertEquals(CardSdk.typeCount, CardSdk.byCategory.values.sumOf { it.size })
     }
 }

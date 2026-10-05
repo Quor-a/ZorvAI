@@ -177,6 +177,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -3625,30 +3626,58 @@ private fun MessageRow(
         //    与动态 UI / 自研卡片同源机制：不在 280dp 气泡里渲染，撑满对话框宽度。
         //    围栏内容走 CardFence.toCards 单一解码层；流式未闭合、JSON 还没合法时暂不显示，
         //    JSON 补全后下一帧重解析自然产出（不闪空卡、不落回源码代码块）。
-        val fenceCards = remember(blocks) {
-            blocks.filterIsInstance<MsgBlock.Card>()
-                .mapNotNull { blk -> runCatching { CardFence.toCards(blk.fence, blk.source) }.getOrNull() }
-                .flatten()
-                // 流式防护：数据还没写完（表格/饼图/图表/热力图/雷达空数据）时不显示，
-                // 下一帧数据到齐重解析就会产出完整卡片，避免闪一下「（无数据）」。
-                .filter { c -> !cardHasNoData(c) }
+        // 按围栏分组保留（而不是直接 flatten）：theme/compact 是**组级**属性，
+        // flatten 之后卡片就不知道该跟哪一组的主题走了。
+        val fenceGroups = remember(blocks) {
+            blocks.filterIsInstance<MsgBlock.Card>().mapNotNull { blk ->
+                val cards = runCatching { CardFence.toCards(blk.fence, blk.source) }.getOrNull()
+                    // 流式防护：数据还没写完（表格/饼图/图表/热力图/雷达空数据）时不显示，
+                    // 下一帧数据到齐重解析就会产出完整卡片，避免闪一下「（无数据）」。
+                    ?.filter { c -> !cardHasNoData(c) }
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: return@mapNotNull null
+                CardFence.Grouped(
+                    cards = cards,
+                    title = CardFence.parseValueAttrs(blk.attrs)["title"].orEmpty(),
+                    theme = CardFence.parseValueAttrs(blk.attrs)["theme"]?.lowercase()?.takeIf { it in CardFence.THEME_PRESETS } ?: "accent",
+                    compact = CardFence.parseAttrs(blk.attrs).contains("compact"),
+                    // 逐行围栏流式时会反复重解析，标题只在闭合后给，避免每帧闪标题
+                    showTitle = blk.fence != CardFence.FENCE_CARDJSON || blk.closed,
+                )
+            }
         }
-        if (fenceCards.isNotEmpty()) {
+        if (fenceGroups.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Box(Modifier.fillMaxWidth().clipToBounds()) {
-                FlowRow(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    maxItemsInEachRow = Int.MAX_VALUE,
+            for (grp in fenceGroups) {
+                if (grp.showTitle && grp.title.isNotBlank()) {
+                    Text(
+                        grp.title,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+                    )
+                }
+                CompositionLocalProvider(
+                    LocalCardTheme provides grp.theme,
+                    LocalCardCompact provides grp.compact,
                 ) {
-                    for (c in fenceCards) {
-                        key(c.id) {
-                            QuroChatCardView(
-                                c,
-                                onCommand,
-                                modifier = if (isCompactQuroCard(c)) Modifier.wrapContentWidth() else Modifier.fillMaxWidth(),
-                            )
+                    Box(Modifier.fillMaxWidth().clipToBounds()) {
+                        FlowRow(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            maxItemsInEachRow = Int.MAX_VALUE,
+                        ) {
+                            for (c in grp.cards) {
+                                key(c.id) {
+                                    QuroChatCardView(
+                                        c,
+                                        onCommand,
+                                        modifier = if (isCompactQuroCard(c)) Modifier.wrapContentWidth() else Modifier.fillMaxWidth(),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -6722,8 +6751,15 @@ private sealed class MsgBlock {
      * @param fence 围栏头（card / cards / cardui / cardjson），交给 [CardFence.toCards] 复用同一解码层
      * @param source 围栏内容（未 trim）
      * @param closed 是否已闭合。false = 流式中间态，JSON 合法即自动出现
+     * @param attrs 围栏属性串（`compact scroll title=季度 theme=accent`），渲染层据此调外观。
+     *   存原始串而不是解析好的集合：解析规则只存在于 [CardFence]，这里不重复实现一遍。
      */
-    data class Card(val fence: String = CardFence.FENCE_CARD, val source: String = "", val closed: Boolean = true) : MsgBlock()
+    data class Card(
+        val fence: String = CardFence.FENCE_CARD,
+        val source: String = "",
+        val closed: Boolean = true,
+        val attrs: String = "",
+    ) : MsgBlock()
     data class Heading(val level: Int, val text: String) : MsgBlock()
     data class Quote(val text: String) : MsgBlock()
     data class Rule(val text: String = "") : MsgBlock()
@@ -6860,7 +6896,7 @@ private fun findBalancedBrace(text: String, start: Int): Int {
 // 修复：AI 在正文里用反引号内联代码引用围栏语法（如「我用 ` ```aip ` 围栏」）时，
 // 若无行首锚定，RE_FENCE 会从内联代码的 ``` 开始匹配、非贪婪吞到真正围栏起始的 ``` 即停，
 // 导致真正的 AIP/quro-ui/mermaid 信封围栏被吞掉、code 变成说明文字 → 该渲染的块全部降级为纯文本。
-private val RE_FENCE = Regex("(?m)^```([\\w+#-]*)\\n?([\\s\\S]*?)```")
+private val RE_FENCE = Regex("(?m)^```([^\\n`]*)\\n?([\\s\\S]*?)```")
 private val RE_BLOCK = Regex("(?is)<h([1-6])>(.*?)</h\\1>|<blockquote>(.*?)</blockquote>|<hr\\s*/?>|<table>(.*?)</table>|<(ul|ol)>(.*?)</\\6>")
 private val RE_HR = Regex("(?i)<hr")
 private val RE_LI = Regex("(?is)<li>(.*?)</li>")
@@ -6905,7 +6941,27 @@ private fun isFullHtmlDocument(text: String): Boolean {
 }
 
 /** 仅匹配「开围栏」（` ```lang ` 行首），用于流式生成中围栏尚未闭合的情况。 */
-private val RE_FENCE_OPEN = Regex("""(?m)^```([a-zA-Z0-9_+#-]*)[ \t]*\n""")
+private val RE_FENCE_OPEN = Regex("""(?m)^```([^\n`]*?)[ \t]*\n""")
+
+/**
+ * 把围栏头切成「语言标签」与「属性串」。
+ *
+ * ## 为什么必须切
+ *
+ * 历史正则 `^```([\w+#-]*)` 只吃非空白字符，于是 ` ```card compact title=季度 ` 的
+ * `lang` 只匹配到 `card`，`" compact title=季度\n{...}"` 整段被当成**围栏体**。
+ * 结果是带属性的卡片围栏一律解析失败（body 不是合法 JSON）→ **整组卡片不显示**。
+ * 也就是说围栏属性在这条路径上从来没生效过，且症状是「卡片凭空消失」，极难归因。
+ *
+ * 切分点取**首个空白或行尾**：语言标签是围栏头里唯一不允许含空白的部分（语言名本来就没有空格），
+ * 其后的一切都归属性，与 [CardFence] 的属性语法一致。
+ */
+private fun splitFenceHead(raw: String): Pair<String, String> {
+    val t = raw.trim()
+    if (t.isEmpty()) return "" to ""
+    val i = t.indexOfFirst { it == ' ' || it == '\t' || it == '\n' || it == '\r' }
+    return if (i < 0) t to "" else t.substring(0, i) to t.substring(i + 1).trim()
+}
 
 /** 解析 ```lang ... ``` 围栏代码块；其余文本走 HTML/Markdown 块级解析。 */
 private fun parseBlocks(text: String, selfCard: Boolean = true): List<MsgBlock> {
@@ -6964,12 +7020,13 @@ private fun parseBlocks(text: String, selfCard: Boolean = true): List<MsgBlock> 
     val fences = RE_FENCE.findAll(text).toList()
     for (m in fences) {
         if (m.range.first > last) blocks.addAll(parseTail(text.substring(last, m.range.first)))
-        val lang = m.groupValues[1].trim()
+        val (langRaw, fenceAttrs) = splitFenceHead(m.groupValues[1])
+        val lang = langRaw
         val code = m.groupValues[2].removeSuffix("\n")
         when {
-            // 可视化组件围栏（正文第二通道）：card / cards / cardui → MsgBlock.Card，
+            // 可视化组件围栏（正文第二通道）：card / cards / cardui / cardjson → MsgBlock.Card，
             // 内容交给 CardFence 单一解码层，气泡里不再当代码块显示源码。
-            isCardFenceLang(lang) -> blocks.add(MsgBlock.Card(lang.lowercase(), code, true))
+            isCardFenceLang(lang) -> blocks.add(MsgBlock.Card(lang.lowercase(), code, true, fenceAttrs))
             // 自研卡片渲染（feat_self_card）：独立围栏 ```quro-card，先于动态 UI 判定，避免被劫持。
             // 内容转成 MsgBlock.SelfCard 从气泡剔除，交给消息底部 CardSurface 全宽内联渲染。
             // 开关关闭（selfCard=false）时降级为普通代码块，内容不丢。
@@ -7143,14 +7200,15 @@ private fun parseTail(seg: String): List<MsgBlock> {
     if (open != null) {
         val before = seg.substring(0, open.range.first)
         val after = seg.substring(open.range.last + 1)
-        val lang = open.groupValues[1].trim()
+        val (langRaw, fenceAttrs) = splitFenceHead(open.groupValues[1])
+        val lang = langRaw
         // 语言非空，或虽为空但有后续内容 → 视为开围栏（流式未闭合，而非孤立的闭合围栏）
         if (lang.isNotBlank() || after.trim().isNotEmpty()) {
             val out = mutableListOf<MsgBlock>()
             if (before.isNotBlank()) out.addAll(parseSegments(before))
             when {
                 // 可视化组件围栏流式未闭合：闭口前就当卡片解析（边写边出卡，JSON 合法即显示）
-                isCardFenceLang(lang) -> out.add(MsgBlock.Card(lang.lowercase(), after, false))
+                isCardFenceLang(lang) -> out.add(MsgBlock.Card(lang.lowercase(), after, false, fenceAttrs))
                 // 自研卡片渲染（feat_self_card）流式未闭合围栏：同样转 SelfCard 块（边写边出卡片）
                 isSelfCardLang(lang) -> out.add(MsgBlock.SelfCard(after))
                 // 生成式 UI 流式未闭合围栏：已废弃的 GenUI WebView 路径，跳过

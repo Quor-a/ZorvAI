@@ -34,7 +34,9 @@ class UiCardTool : QuroTool {
         "以及 v221 新增的 open:<url>（内置浏览器打开）/ copy:<文本>（复制剪贴板）/ ai:<提示词>（直接发给 AI）/ screen:<名称>（界面导航）。" +
         "与 ui_widget 共用同一份名册，共 ${CardSdk.typeCount} 种：${CardSdk.compactCatalog()}。" +
         "要完整字段与样例先调 card_catalog。" +
-        "正文围栏同样支持 card / cards / cardui / cardjson（cardjson 为一行一个 JSON，流式友好）。"
+        "正文围栏同样支持 card / cards / cardui / cardjson（cardjson 为一行一个 JSON，流式友好）。" +
+        "围栏头后可跟属性（空格分隔）：开关 compact（一组小卡片必给）/ scroll（超高内部滚动）；" +
+        "带值 title=组级标题（各卡自带标题时以卡为准）/ theme=主题档位，只认 accent(默认)/warn/danger/plain。"
     override val parametersJson = """{"type":"object","properties":{"spec":{"type":"string","description":"卡片 JSON 规格，见工具说明"}}},"required":["spec"]}"""
 
     override fun run(context: Context, arguments: String): String {
