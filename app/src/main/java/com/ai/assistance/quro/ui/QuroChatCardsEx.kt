@@ -139,7 +139,9 @@ import kotlin.math.min
 // ═══════════════════ 调色板 ═══════════════════
 
 /** 语义色。AI 下发的是 `#RRGGBB` 字符串，这里做兜底映射，解析不出来走语义色而非白字。 */
-private object ExCardPalette {
+// palette 做成 internal：第二批 12 种卡片（QuroChatCardsEx2.kt）复用同一支调色板，
+// 免得两批卡片出现「同一语义两种蓝」。
+internal object ExCardPalette {
     val SUCCESS = Color(0xFF7BE0A0)
     val WARNING = Color(0xFFFFB74D)
     val ERROR = Color(0xFFFF8A80)
@@ -1568,8 +1570,8 @@ internal fun CustomCardView(card: CustomCard, onCommand: (String) -> Unit) {
     }
 }
 
-/** 写系统剪贴板（各渲染器共用这段胶水，别重复）。 */
-private fun exCopy(ctx: Context, text: String) {
+/** 写系统剪贴板（各渲染器共用这段胶水，别重复）。第二批卡片同样复用它。 */
+internal fun exCopy(ctx: Context, text: String) {
     val mgr = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
     mgr?.setPrimaryClip(ClipData.newPlainText("card", text))
 }

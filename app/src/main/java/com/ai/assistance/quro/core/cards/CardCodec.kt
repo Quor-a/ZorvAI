@@ -219,6 +219,78 @@ object CardCodec {
                     o.put("children", JSONArray().also { a -> card.children.forEach { c -> a.put(serializeCard(c)) } })
                 }
             }
+            is GanttCard -> {
+                o.put("unit", card.unit); o.put("total", card.total); o.put("axisStart", card.axisStart)
+                o.put("tasks", JSONArray().also { a -> card.tasks.forEach { t ->
+                    a.put(JSONObject().apply {
+                        put("name", t.name); put("start", t.start); put("duration", t.duration)
+                        put("progress", t.progress); put("color", t.color); put("owner", t.owner)
+                    })
+                } })
+            }
+            is InvoiceCard -> {
+                o.put("merchant", card.merchant); o.put("currency", card.currency)
+                o.put("items", JSONArray().also { a -> card.items.forEach { it ->
+                    a.put(JSONObject().apply {
+                        put("name", it.name); put("qty", it.qty); put("price", it.price); put("amount", it.amount)
+                    })
+                } })
+                o.put("subtotal", card.subtotal); o.put("discount", card.discount)
+                o.put("total", card.total); o.put("note", card.note); o.put("paid", card.paid)
+                o.put("command", card.command)
+            }
+            is CurrencyCard -> {
+                o.put("base", card.base); o.put("value", card.value); o.put("updated", card.updated)
+                o.put("rates", JSONArray().also { a -> card.rates.forEach { r ->
+                    a.put(JSONObject().apply { put("code", r.code); put("symbol", r.symbol); put("rate", r.rate); put("change", r.change) })
+                } })
+            }
+            is ClockCard -> {
+                o.put("current", card.current); o.put("format", card.format)
+                o.put("zones", JSONArray().also { a -> card.zones.forEach { z ->
+                    a.put(JSONObject().apply { put("city", z.city); put("offset", z.offset); put("diff", z.diff) })
+                } })
+            }
+            is TrackerCard -> {
+                o.put("name", card.name); o.put("days", sArr(card.days))
+                o.put("target", card.target); o.put("streak", card.streak); o.put("unit", card.unit)
+            }
+            is ScoreboardCard -> {
+                o.put("home", card.home); o.put("homeScore", card.homeScore)
+                o.put("away", card.away); o.put("awayScore", card.awayScore)
+                o.put("period", card.period); o.put("time", card.time); o.put("status", card.status)
+            }
+            is VocabCard -> {
+                o.put("word", card.word); o.put("phonetic", card.phonetic)
+                o.put("pos", card.pos); o.put("meaning", card.meaning)
+                o.put("examples", JSONArray().also { a -> card.examples.forEach { e ->
+                    a.put(JSONObject().apply { put("en", e.en); put("zh", e.zh) })
+                } })
+                o.put("tags", sArr(card.tags))
+            }
+            is FormulaCard -> {
+                o.put("expr", card.expr); o.put("note", card.note)
+                o.put("vars", JSONArray().also { a -> card.vars.forEach { v ->
+                    a.put(JSONObject().apply { put("name", v.name); put("desc", v.desc) })
+                } })
+            }
+            is TranslateCard -> {
+                o.put("srcLang", card.srcLang); o.put("dstLang", card.dstLang)
+                o.put("src", card.src); o.put("dst", card.dst)
+                o.put("alt", sArr(card.alt)); o.put("audio", card.audio)
+            }
+            is PaletteCard -> {
+                o.put("name", card.name); o.put("copyable", card.copyable)
+                o.put("colors", JSONArray().also { a -> card.colors.forEach { c ->
+                    a.put(JSONObject().apply { put("name", c.name); put("hex", c.hex) })
+                } })
+            }
+            is StopwatchCard -> {
+                o.put("label", card.label); o.put("seconds", card.seconds); o.put("command", card.command)
+            }
+            is BarcodeCard -> {
+                o.put("code", card.code); o.put("format", card.format); o.put("caption", card.caption)
+            }
             else -> Unit
         }
     }

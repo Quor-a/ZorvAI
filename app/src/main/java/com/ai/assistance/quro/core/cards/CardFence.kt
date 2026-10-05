@@ -29,6 +29,7 @@ import org.json.JSONObject
  * - [FENCE_CARD]  `card`   —— 单组件，一个 JSON 对象
  * - [FENCE_CARDS] `cards`  —— 多组件，JSON 数组，或 `{"layout":..,"children":[..]}`
  * - [FENCE_CARDUI] `cardui` —— A2UI 风格邻接表（扁平 `id` + `children` 引用）
+ * - [FENCE_CARDJSON] `cardjson` —— 逐行 JSON（一行一个卡片，流式友好）
  *
  * 围栏头后面允许跟属性（空格分隔），如 `card compact scroll`。
  *
@@ -53,8 +54,20 @@ object CardFence {
     /** A2UI 风格扁平邻接表围栏头。 */
     const val FENCE_CARDUI = "cardui"
 
+    /**
+     * 逐行 JSON 围栏头：**一行一个独立卡片 JSON**。
+     *
+     * ## 为什么再加一种围栏
+     *
+     * [FENCE_CARD] / [FENCE_CARDS] 的围栏体是一整段 JSON，流式时必须等整段收全才能解析，
+     * 而模型实际经常是一行一个卡片地陆续吐 —— 这段时间用户只能看到代码块。
+     * 逐行约定让每行独立解析：已完整的行立刻出卡片，末尾没收全的那行等闭合后自然补上，
+     * 且某一行脏数据不会连累其余各行（整段 JSON 坏一处就整卡全废）。
+     */
+    const val FENCE_CARDJSON = "cardjson"
+
     /** 全部受支持的围栏头。顺序即匹配优先级。 */
-    val ALL_FENCES: List<String> = listOf(FENCE_CARD, FENCE_CARDS, FENCE_CARDUI)
+    val ALL_FENCES: List<String> = listOf(FENCE_CARD, FENCE_CARDS, FENCE_CARDUI, FENCE_CARDJSON)
 
     /**
      * 围栏起始行正则。
@@ -72,6 +85,17 @@ object CardFence {
 
     /** 单独一行（可带缩进）的闭合围栏 —— 任意语言都算闭合标记。 */
     private val CLOSE_RE = Regex("^[ \\t]*```+[ \\t]*$")
+
+    /**
+     * 组合卡最大嵌套深度。
+     *
+     * 模型偶尔会把 `children` 自引用（自己指向自己），没有上限就是递归到 StackOverflow，
+     * 而崩溃发生在渲染线程上 —— 整条消息都跟着没了。
+     */
+    const val MAX_COMPOSITE_DEPTH = 6
+
+    /** 单张卡允许的节点总数（含所有层）。深度管得住"套娃"，总量管得住"铺满屏"。 */
+    const val MAX_TOTAL_NODES = 64
 
     /** 围栏属性里能识别的开关。未识别的属性一律保留在 [CardFenceSlice.attrs] 里但不生效。 */
     private val KNOWN_ATTRS = setOf("compact", "scroll", "bordered", "flat", "dense")
@@ -98,6 +122,13 @@ object CardFence {
     ) {
         /** 是否为多组件围栏。 */
         val isMulti: Boolean get() = fence == FENCE_CARDS || fence == FENCE_CARDUI
+
+        /**
+         * 逐行卡片围栏：调用方应**边收边渲染**，不要等 [closed] 为 true。
+         *
+         * 未闭合不等于不可用 —— 这正是它存在的理由。
+         */
+        val isStreaming: Boolean get() = fence == FENCE_CARDJSON
 
         /** 紧凑模式：卡片内边距收紧。 */
         val compact: Boolean get() = "compact" in attrs
@@ -212,8 +243,29 @@ object CardFence {
             FENCE_CARD -> listOfNotNull(safeParse(t))
             FENCE_CARDS -> parseCardsBlock(t)
             FENCE_CARDUI -> parseA2uiBlock(t)
+            FENCE_CARDJSON -> parseLineJsonBlock(t)
             else -> emptyList()
         }
+    }
+
+    /**
+     * 逐行 JSON 围栏体解析：**一行一个独立卡片**。
+     *
+     * 与整段解析的关键差别在容错粒度 —— 逐行的代价是失去跨行的组合卡语法
+     * （`cards` 的数组 / `composite` 的 children 都得跨行才写得下），
+     * 换来的是单行脏数据不连累其余各行、以及流式可增量渲染。
+     * 所以组合卡请继续用 [FENCE_CARDS]。
+     *
+     * 未闭合围栏（`closed=false`）的最后一行通常还没收全，解析不出来属正常，
+     * 直接跳过即可；等闭合后重新解析自然会补上。
+     */
+    fun parseLineJsonBlock(body: String): List<QuroChatCard> {
+        if (body.isBlank()) return emptyList()
+        return body.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it.startsWith("{") }
+            .mapNotNull { safeParse(it) }
+            .toList()
     }
 
     /** 解析围栏 + 转卡片，一步到位。 */
@@ -247,36 +299,51 @@ object CardFence {
     private fun safeParse(json: String): QuroChatCard? = runCatching { parseComponentSpec(json) }.getOrNull()
 
     /** `cards` 围栏体。 */
-    private fun parseCardsBlock(t: String): List<QuroChatCard> {
-        // 形态 A：{"layout":..,"children":[..]} → 合成组合卡
-        if (t.startsWith("{")) {
-            runCatching { JSONObject(t) }.getOrNull()?.let { o ->
-                val children = o.optJSONArray("children")
-                if (children != null) {
-                    val kids = children.objects().mapNotNull { safeParse(it.toString()) }
-                    if (kids.isNotEmpty()) {
-                        return listOf(
-                            QuroChatCard.CompositeCard(
-                                id = o.optString("id", QuroChatCardStore.newId()),
-                                title = o.optString("title", "").ifBlank { "" },
-                                layout = o.optString("layout", "stack"),
-                                children = kids,
-                                description = o.optString("description", "").ifBlank { null },
-                            )
-                        )
-                    }
-                    return emptyList()
-                }
-            }
-            // 形态 B：单个对象也允许（模型常偷懒）
-            return listOfNotNull(safeParse(t))
-        }
-        // 形态 C：数组
+    private fun parseCardsBlock(t: String): List<QuroChatCard> = parseNodes(t)
+
+    /**
+     * `cards` 围栏体 → 卡片列表（**递归**）。
+     *
+     * 三种形态都吃：
+     *  1. 数组 → 逐项递归（数组套数组也行）；
+     *  2. 对象带 `children` → 合成 [QuroChatCard.CompositeCard]，子项继续递归，
+     *     所以「组合卡里再套组合卡」是真支持的，不是只认第一层；
+     *  3. 普通对象 → 交给 [safeParse]。
+     *
+     * 为什么"名册认识"的优先于"有 children"：像 `{"type":"kanban","children":[...]}`
+     * 这种，children 是看板自己的列语义，应该由它自己的 builder 去读；
+     * 只有名册不认识、且又带了 children 的对象，才当组合容器拆开。
+     */
+    private fun parseNodes(text: String): List<QuroChatCard> =
+        parseNodes(text, 0, IntArray(1) { MAX_TOTAL_NODES })
+
+    private fun parseNodes(text: String, depth: Int, budget: IntArray): List<QuroChatCard> {
+        val t = text.trim()
+        if (t.isEmpty() || depth > MAX_COMPOSITE_DEPTH || budget[0] <= 0) return emptyList()
         if (t.startsWith("[")) {
             val arr = runCatching { JSONArray(t) }.getOrNull() ?: return emptyList()
-            return arr.objects().mapNotNull { safeParse(it.toString()) }
+            return arr.objects().flatMap { parseNodes(it.toString(), depth + 1, budget) }
         }
-        return emptyList()
+        val o = runCatching { JSONObject(t) }.getOrNull() ?: return emptyList()
+        val direct = safeParse(t)
+        if (direct != null && direct !is QuroChatCard.CompositeCard && direct !is CustomCard) {
+            return listOf(direct)
+        }
+        val children = o.optJSONArray("children")?.let { kids ->
+            kids.objects().flatMap { parseNodes(it.toString(), depth + 1, budget) }
+        }.orEmpty()
+        if (children.isNotEmpty()) {
+            return listOf(
+                QuroChatCard.CompositeCard(
+                    id = o.optString("id", QuroChatCardStore.newId()),
+                    title = o.optString("title", "").ifBlank { "" },
+                    layout = o.optString("layout", "stack"),
+                    children = children,
+                    description = o.optString("description", "").ifBlank { null },
+                )
+            )
+        }
+        return listOfNotNull(direct)
     }
 
     /**
@@ -331,7 +398,7 @@ object CardFence {
             else -> null
         } ?: return emptyList()
 
-        return listOfNotNull(buildFrom(rootId!!, nodes, mutableSetOf(), 0))
+        return listOfNotNull(buildFrom(rootId!!, nodes))
     }
 
     /**
@@ -365,109 +432,183 @@ object CardFence {
         return nodes.keys.firstOrNull() ?: ""
     }
 
-    /** 邻接表 → 树。深度上限防环（A/B 互相引用会无限递归）。 */
-    private fun buildFrom(
-        id: String,
-        nodes: Map<String, JSONObject>,
-        visiting: MutableSet<String>,
-        depth: Int,
-    ): QuroChatCard? {
-        if (depth > 24 || id in visiting) return null
-        val node = nodes[id] ?: return null
-        visiting.add(id)
+    /**
+     * 邻接表 → 树（两阶段：**先给每个 id 建卡并缓存，再按引用装配 children**）。
+     *
+     * 为什么不是"边建边往下钻"的旧写法：
+     *  - 共享子节点（A、B 都引用 C）时旧逻辑会把 C 建两次，而 `visiting` 集合
+     *    让第二次直接返回 null —— 一棵树上凭空少一整根枝；
+     *  - 只有一条 `visiting` 时，同一个 id 在**同一条子树路径上**出现两次就断。
+     *
+     * 现在用 memo：引用几遍都取同一个对象，环也一并断掉（在建中的 id 在 memo 里
+     * 存着 null，回头读到它就是"这条边先放着，别再深入了"）。
+     */
+    private fun buildFrom(rootId: String, nodes: Map<String, JSONObject>): QuroChatCard? {
+        val memo = LinkedHashMap<String, QuroChatCard?>()
+        var budget = MAX_TOTAL_NODES
 
-        // A2UI 用 component/children；本 SDK 用 type/children
-        val compName = node.optString("component", "").ifBlank { node.optString("type", "") }
-        val type = normalizeType(compName)
+        fun walk(id: String, depth: Int): QuroChatCard? {
+            if (id in memo) return memo[id]
+            if (depth > MAX_COMPOSITE_DEPTH || budget <= 0) return null
+            val node = nodes[id] ?: return null
+            budget--
+            memo[id] = null
 
-        val childIds = buildList {
-            node.optJSONArray("children")?.let { arr ->
-                for (i in 0 until arr.length()) {
-                    // 两种写法都吃：{"children":[{"id":"a"}]} 与 {"children":["a"]}
-                    val cid = when (val c = arr.opt(i)) {
-                        is String -> c
-                        is JSONObject -> c.optString("id", "").ifBlank { c.optString("component", "") }
-                        else -> ""
+            // A2UI 用 component/children；本 SDK 用 type/children
+            val compName = node.optString("component", "").ifBlank { node.optString("type", "") }
+            val type = normalizeType(compName)
+
+            val childIds = buildList {
+                node.optJSONArray("children")?.let { arr ->
+                    for (i in 0 until arr.length()) {
+                        // 两种写法都吃：{"children":[{"id":"a"}]} 与 {"children":["a"]}
+                        val cid = when (val c = arr.opt(i)) {
+                            is String -> c
+                            is JSONObject -> c.optString("id", "").ifBlank { c.optString("component", "") }
+                            else -> ""
+                        }
+                        if (cid.isNotBlank() && cid != id) add(cid)
                     }
-                    if (cid.isNotBlank() && cid != id) add(cid)
                 }
             }
-        }
-        val kids = childIds.mapNotNull { buildFrom(it, nodes, visiting, depth + 1) }
-        visiting.remove(id)
+            val kids = childIds.mapNotNull { walk(it, depth + 1) }
 
-        // props / properties 合并成一张扁平 JSON，让 parseComponentSpec 能吃
-        val spec = JSONObject().apply {
-            put("type", type)
-            val nid = node.optString("id", "").ifBlank { QuroChatCardStore.newId() }
-            put("id", nid)
-            val ntitle = node.optString("title", "").ifBlank { "" }
-            put("title", ntitle)
-            val props = node.optJSONObject("properties") ?: node.optJSONObject("props")
-            if (props != null) {
-                val keys = props.keys()
-                while (keys.hasNext()) {
-                    val k = keys.next()
-                    put(k, props.get(k))
+            // props / properties 合并成一张扁平 JSON，让 parseComponentSpec 能吃
+            val spec = JSONObject().apply {
+                put("type", type)
+                val nid = node.optString("id", "").ifBlank { QuroChatCardStore.newId() }
+                put("id", nid)
+                val ntitle = node.optString("title", "").ifBlank { "" }
+                put("title", ntitle)
+                val props = node.optJSONObject("properties") ?: node.optJSONObject("props")
+                if (props != null) {
+                    val keys = props.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        put(k, props.get(k))
+                    }
+                }
+                // 容器语义：容器组件把子节点塞进 children
+                if (kids.isNotEmpty()) {
+                    put("children", JSONArray().also { a -> kids.forEach { a.put(serializeCard(it)) } })
                 }
             }
-            // 容器语义：容器组件把子节点塞进 children
-            if (kids.isNotEmpty()) {
-                put("children", JSONArray().also { a -> kids.forEach { a.put(serializeCard(it)) } })
-            }
-        }
 
-        // 有子节点时优先走组合卡，保留结构
-        if (kids.isNotEmpty() && type in CONTAINER_TYPES) {
-            return QuroChatCard.CompositeCard(
+            // 有子节点时优先走组合卡，保留结构
+            if (kids.isNotEmpty() && type in CONTAINER_TYPES) {
+                val composite = QuroChatCard.CompositeCard(
+                    id = node.optString("id", QuroChatCardStore.newId()),
+                    title = node.optString("title", "").ifBlank { "" },
+                    layout = "stack",
+                    children = kids,
+                    description = null,
+                )
+                memo[id] = composite
+                return composite
+            }
+
+            // type 已是哨兵 custom 时**不能再喂给解析层**：parseObj 查不到名册会再兜一个
+        // kind="custom" 的卡，AI 写的原始组件名就被冲掉了。
+        val parsed = if (type == "custom") null else runCatching { parseComponentSpec(spec.toString()) }.getOrNull()
+            if (parsed != null) {
+                memo[id] = parsed
+                return parsed
+            }
+
+            // 映射不到 → 原样保留，附上原始组件名，别让 AI 的意图凭空消失
+            val fallback = CustomCard(
                 id = node.optString("id", QuroChatCardStore.newId()),
-                title = node.optString("title", "").ifBlank { "" },
-                layout = if (type == "row") "stack" else "stack",
+                title = node.optString("title", "").ifBlank { compName },
+                kind = if (type == "custom" && compName.isNotBlank()) compName else type,
+                payload = spec.toString(),
                 children = kids,
-                description = null,
             )
+            memo[id] = fallback
+            return fallback
         }
 
-        val parsed = safeParse(spec.toString())
-        if (parsed != null) return parsed
-
-        // 映射不到 → 原样保留，附上原始组件名，别让 AI 的意图凭空消失
-        return CustomCard(
-            id = node.optString("id", QuroChatCardStore.newId()),
-            title = node.optString("title", "").ifBlank { compName },
-            kind = compName,
-            payload = spec.toString(),
-            children = kids,
-        )
+        return walk(rootId, 0)
     }
 
     /** 容器型 type：子节点需要挂进 children 而不是被 props 吞掉。 */
-    private val CONTAINER_TYPES = setOf("stack", "column", "row", "card", "container", "list", "grid", "tabs")
+    /**
+     * 容器型 type：子节点要挂进 children 而不是被 props 吞掉。
+     *
+     * 末尾那个 `custom` 是**识别不出来的容器**：model 写了 `{"component":"Whatever","children":[...]}`
+     * 这种，它带的 children 显然还是子卡，当成容器组一层组合卡，比丢一堆孤儿子节点有用。
+     */
+    private val CONTAINER_TYPES = setOf(
+        "stack", "column", "row", "card", "container", "list", "grid", "tabs", "composite", "custom",
+    )
 
     /**
-     * A2UI / 常见 PascalCase 组件名 → 本 SDK 的 snake_case type。
+     * A2UI / 常见组件名 → 本 SDK 的 type。
      *
-     * 覆盖 A2UI basic catalog 里的高频组件 + 业界常见别名。
-     * 未命中的原样返回（小写化），交给上层走 CustomCard 兜底。
+     * 三段式，按顺序：
+     *  1. 精确匹配别名表（`Text` → `info`）；
+     *  2. 小写后匹配别名表（`text` / `TEXT` 也算）；
+     *  3. PascalCase → snake_case 通用转换，**且要求目标在名册里**。
+     *
+     * 🔴 第 3 步的"必须在名册里"是有意为之：以前会把认不出来的名字 snake_case 化后
+     * 照返回，下游 parseObj 查不到又落 CustomCard —— 白绕一圈，还把"这名字我们没做"
+     * 这件事藏起来了。现在直接返回 `custom`，让 CustomCard 里原样保留 AI 写的组件名，
+     * 用户反馈时一眼知道是哪个组件没接上。
+     *
+     * 映射不到 → `"custom"`（不是"原样返回"），交给 [parseA2uiBlock] 进兜底卡。
      */
     fun normalizeType(name: String): String {
         val n = name.trim()
         if (n.isEmpty()) return "custom"
-        val lower = n.lowercase()
-        // 已是本 SDK 的 snake_case
-        if (lower in KNOWN_SNAKE) return lower
-        return COMPONENT_ALIASES[n] ?: lower.replace(Regex("([a-z])([A-Z])"), "$1_$2").lowercase()
+        COMPONENT_ALIASES[n]?.let { return it }
+        ALIASES_LOWER[n.lowercase()]?.let { return it }
+        val snake = pascalToSnake(n)
+        return if (snake in CardSdk.types) snake else "custom"
     }
 
-    /** 本 SDK 已知的 type 集合（解析失败时也用它做一次兜底判断）。 */
-    private val KNOWN_SNAKE: Set<String> = setOf(
-        "button", "toggle", "slider", "progress", "stat", "alert", "table", "list", "segmented",
-        "pie", "rating", "countdown", "tabs", "expandable", "form", "chips", "steps", "gauge",
-        "media", "info", "toolcall", "stream", "mediaplay", "quickreply", "quickaction",
-        "timeline", "heatmap", "compare", "radar", "timer", "carousel", "kanban", "yuanbao",
-        "color", "counter", "breadcrumb", "tagcloud", "badge", "avatargroup", "mermaid",
-        "htmlpreview", "miniapp", "composite", "todo", "chart", "note", "actions", "custom",
-    )
+    /**
+     * 该组件名**能否**映射到名册里的某个 type（供调用方先判断再决定要不要保留原文）。
+     *
+     * 注意语义：返回 false 不代表"这个组件不存在"，只代表"客户端没有它的渲染器"。
+     */
+    fun isKnownType(name: String): Boolean = normalizeType(name) != "custom"
+
+    /**
+     * PascalCase / camelCase → snake_case（`TextInput` → `text_input`，`QRCode` → `qr_code`）。
+     *
+     * 🔴 替换串必须写成 `${g1}_${g2}` 而不是 `"$1_$2"`：Kotlin 的模板会把 `$1_$2`
+     * 解析成 `$1` + `$2` 两个引用，中间那个下划线被吞掉（实测 QRCode 直接退化成 qrcode，
+     * 与 roster 的 `qrcode` 撞巧能对上，但 HTMLPreview 这类就悄悄错成 htmlpreview）。
+     *
+     * 做成 internal 是为了能直接单测这条纯函数 —— 它错了不会报错，只会让组件名映射悄悄失效。
+     */
+    internal fun pascalToSnake(n: String): String {
+        val a = Regex("([a-z0-9])([A-Z])")
+        val b = Regex("([A-Z]+)([A-Z][a-z])")
+        var s = a.replace(n) { m -> "${m.groupValues[1]}_${m.groupValues[2]}" }
+        s = b.replace(s) { m ->
+            val head = m.groupValues[0].dropLast(2)   // 前一段全大写
+            val tail = m.groupValues[0].takeLast(2)   // 最后一个大写 + 后面那个小写
+            "${head}_$tail"
+        }
+        return s.lowercase()
+    }
+
+    /**
+     * 别名表自检：每条映射的目标都必须是**名册里真实存在**的 type。
+     *
+     * 映射到不存在的 type 不会报错、不会崩溃，运行期只是静默变成一张 CustomCard
+     * —— 表现为"AI 明明说画了个 XX，界面上什么都没有"。所以这条必须能被测试抓到。
+     */
+    fun lintAliases(): List<String> {
+        val bad = ArrayList<String>()
+        COMPONENT_ALIASES.forEach { (k, v) ->
+            // `custom` 是 normalizeType 的哨兵值（表示"这组件我们没做"），不是名册里的 type，放行
+            if (v != "custom" && v !in CardSdk.types) bad += "别名 $k → $v 不在名册里"
+        }
+        return bad
+    }
+
+
 
     /** 跨 SDK 组件名映射。键为 A2UI/业界写法，值为本 SDK type。 */
     private val COMPONENT_ALIASES: Map<String, String> = mapOf(
@@ -476,14 +617,86 @@ object CardFence {
         "Chips" to "chips", "Toggle" to "toggle", "Switch" to "toggle", "Checkbox" to "toggle",
         "RadioButton" to "toggle", "Slider" to "slider", "Rating" to "rating", "Stepper" to "counter",
         "TextField" to "form", "TextBox" to "form", "Select" to "segmented", "Dropdown" to "segmented",
-        "Column" to "stack", "Row" to "stack", "Stack" to "stack", "Card" to "stack",
-        "Container" to "stack", "List" to "list", "Grid" to "list", "Tabs" to "tabs",
+        "Column" to "composite", "Row" to "composite", "Stack" to "composite", "Card" to "composite",
+        "Container" to "composite", "List" to "list", "Grid" to "list", "Tabs" to "tabs",
         "Accordion" to "expandable", "Divider" to "info", "Image" to "media", "Video" to "mediaplay",
         "Audio" to "mediaplay", "ProgressBar" to "progress", "Progress" to "progress",
         "CircularProgress" to "ring", "Table" to "table", "BarChart" to "chart", "LineChart" to "chart",
         "PieChart" to "pie", "RadarChart" to "radar", "Gauge" to "gauge", "Heatmap" to "heatmap",
         "Mermaid" to "mermaid", "Markdown" to "note", "Custom" to "custom",
+        // ── A2UI basic catalog（第二批补齐）──
+        "TextInput" to "form", "TextArea" to "form", "Input" to "form", "TextBox" to "form",
+        "SearchBox" to "searchbox", "SearchBar" to "searchbox", "Search" to "searchbox",
+        "CheckboxGroup" to "toggle", "RadioGroup" to "toggle", "Switch" to "toggle",
+        "Stepper" to "counter", "IncDec" to "counter",
+        "Tag" to "tagcloud", "Tags" to "tagcloud", "Label" to "tagcloud",
+        "Avatar" to "avatargroup", "AvatarGroup" to "avatargroup",
+        "Panel" to "composite", "Group" to "composite", "Flex" to "composite",
+        "ScrollView" to "composite", "Section" to "composite", "Box" to "composite",
+        "GridView" to "groupedlist", "List" to "list",
+        "TabBar" to "tabs",
+        "Collapse" to "expandable", "Disclosure" to "expandable",
+        "LinearProgress" to "progress", "BarChart" to "chart", "Bars" to "chart", "Plot" to "chart",
+        "Donut" to "pie", "Doughnut" to "pie",
+        "GaugeChart" to "gauge", "Speedometer" to "speedometer", "Tachometer" to "speedometer",
+        "Sparkline" to "sparkline", "TrendLine" to "sparkline",
+        "ScatterChart" to "scatter", "ScatterPlot" to "scatter",
+        "FunnelChart" to "funnel",
+        "CandlestickChart" to "candlestick", "OHLC" to "candlestick",
+        "BoxPlotChart" to "boxplot",
+        "StackedBar" to "stackedbar", "StackedBarChart" to "stackedbar",
+        "Comparison" to "compare",
+        "CountdownTimer" to "countdown",
+        "Stopwatch" to "stopwatch",
+        "Clock" to "clock",
+        "Invoice" to "invoice", "Bill" to "invoice", "Receipt" to "invoice",
+        "Gantt" to "gantt", "GanttChart" to "gantt",
+        "Steps" to "steps",
+        "Board" to "kanban", "Trello" to "kanban",
+        "TodoList" to "checklist", "TaskList" to "checklist", "CheckList" to "checklist",
+        "Vote" to "poll", "Quiz" to "poll",
+        "Blockquote" to "quote",
+        "CodeDiff" to "diff", "Patch" to "diff",
+        "FlowChart" to "flow", "Graph" to "flow", "DirectedGraph" to "flow",
+        "OrgChart" to "hierarchy", "Organization" to "hierarchy",
+        "VCard" to "contact",
+        "Commodity" to "product",
+        "Event" to "schedule", "Agenda" to "schedule",
+        "Attachment" to "filecard", "Document" to "filecard",
+        "Picture" to "media", "Photo" to "media",
+        "Player" to "mediaplay",
+        "Swiper" to "carousel", "SliderView" to "carousel",
+        "Console" to "terminal",
+        "Hyperlink" to "linklist",
+        "Pager" to "pagination", "Paginator" to "pagination",
+        "Swatch" to "color", "Colors" to "color",
+        "StarRating" to "rating",
+        "Metric" to "stat", "KPI" to "stat",
+        "Banner" to "alert", "Notice" to "alert",
+        "ToolCallStatus" to "toolcall",
+        "Logs" to "stream",
+        "MiniProgram" to "miniapp",
+        "WebView" to "htmlpreview",
+        "Equation" to "formula", "Math" to "formula",
+        "Translation" to "translate",
+        "Vocabulary" to "vocab", "WordCard" to "vocab",
+        "Habit" to "tracker", "HabitTrack" to "tracker",
+        "Score" to "scoreboard", "Match" to "scoreboard", "Game" to "scoreboard",
+        "ColorPalette" to "palette", "Theme" to "palette",
+        "QRCode" to "qrcode", "Qrcode" to "qrcode",
+        "ImageGrid" to "gallery", "Photos" to "gallery",
+        "Link" to "linklist",
     )
+
+    /**
+     * 别名表的小写索引。
+     *
+     * 表本身按 A2UI 原样写（Text / TextInput），但模型也会写成 TEXT 或 text。
+     * 逐次 lowercase 查原表等于没有大小写不敏感，所以这里一次性建索引。
+     */
+    private val ALIASES_LOWER: Map<String, String> by lazy {
+        COMPONENT_ALIASES.entries.associate { it.key.lowercase() to it.value }
+    }
 
     /** 扩展 JSONArray 遍历：只取对象元素，字符串/null/数字一律跳过。 */
     private fun JSONArray.objects(): List<JSONObject> {

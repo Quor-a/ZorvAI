@@ -499,6 +499,9 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(UiCardTool())
     // 对话框富卡片工具（ui_widget）：可视化组件库（与 ui_control / quro-ui / visual_popup / 小卡片围栏互不相关）
     r.register(UiWidgetTool())
+    // 可视化组件目录查询（card_catalog）：92 种组件的常驻清单在两个下发工具的描述里，
+    // 完整样例按需来此拉 —— 避免把十几 KB 样例常驻进系统提示词。
+    r.register(CardCatalogTool())
     // MCP 客户端工具：让 AI 调用外部 MCP 服务器暴露的工具（#402）
     r.register(McpServersTool())
     r.register(McpListToolsTool())

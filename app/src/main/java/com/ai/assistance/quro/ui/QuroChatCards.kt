@@ -98,6 +98,19 @@ import com.ai.assistance.quro.core.cards.MapCard
 import com.ai.assistance.quro.core.cards.QrCodeCard
 import com.ai.assistance.quro.core.cards.GalleryCard
 import com.ai.assistance.quro.core.cards.TerminalCard
+// 第二批增强组件（渲染在 ui/QuroChatCardsEx2.kt，分派仍收口在这里）
+import com.ai.assistance.quro.core.cards.BarcodeCard
+import com.ai.assistance.quro.core.cards.ClockCard
+import com.ai.assistance.quro.core.cards.CurrencyCard
+import com.ai.assistance.quro.core.cards.FormulaCard
+import com.ai.assistance.quro.core.cards.GanttCard
+import com.ai.assistance.quro.core.cards.InvoiceCard
+import com.ai.assistance.quro.core.cards.PaletteCard
+import com.ai.assistance.quro.core.cards.ScoreboardCard
+import com.ai.assistance.quro.core.cards.StopwatchCard
+import com.ai.assistance.quro.core.cards.TrackerCard
+import com.ai.assistance.quro.core.cards.TranslateCard
+import com.ai.assistance.quro.core.cards.VocabCard
 import com.ai.assistance.quro.core.cards.LinkListCard
 import com.ai.assistance.quro.core.cards.PaginationCard
 import com.ai.assistance.quro.core.cards.DividerCard
@@ -291,6 +304,19 @@ fun QuroChatCardView(card: QuroChatCard, onCommand: (String) -> Unit, modifier: 
             is PaginationCard -> PaginationCardView(card, onCommand)
             is DividerCard -> DividerCardView(card, onCommand)
             is SpacerCard -> SpacerCardView(card, onCommand)
+            // ── v1400 第二批增强组件（sealed 子类在 QuroChatCardEx2.kt，渲染在 QuroChatCardsEx2.kt）──
+            is GanttCard -> GanttCardView(card, onCommand)
+            is InvoiceCard -> InvoiceCardView(card, onCommand)
+            is CurrencyCard -> CurrencyCardView(card, onCommand)
+            is ClockCard -> ClockCardView(card, onCommand)
+            is TrackerCard -> TrackerCardView(card, onCommand)
+            is ScoreboardCard -> ScoreboardCardView(card, onCommand)
+            is VocabCard -> VocabCardView(card, onCommand)
+            is FormulaCard -> FormulaCardView(card, onCommand)
+            is TranslateCard -> TranslateCardView(card, onCommand)
+            is PaletteCard -> PaletteCardView(card, onCommand)
+            is StopwatchCard -> StopwatchCardView(card, onCommand)
+            is BarcodeCard -> BarcodeCardView(card, onCommand)
             is CustomCard -> CustomCardView(card, onCommand)
         }
     }

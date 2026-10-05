@@ -3,6 +3,7 @@ package com.ai.assistance.quro.core.tools
 import android.content.Context
 import androidx.compose.runtime.snapshots.Snapshot
 import com.ai.assistance.quro.core.cards.QuroChatCard
+import com.ai.assistance.quro.core.cards.CardSdk
 import com.ai.assistance.quro.core.cards.QuroChatCardStore
 import com.ai.assistance.quro.core.cards.parseComponentSpec
 import org.json.JSONObject
@@ -25,6 +26,8 @@ import org.json.JSONObject
  */
 class UiWidgetTool : QuroTool {
     override val name = "ui_widget"
+    // 组件清单不手抄：从 CardSdk 名册运行时生成（92 种），名册一扩这里自动同步。
+    // 完整样例用 card_catalog 按需拉，避免十几 KB 样例常驻进系统提示词。
     override val description = "在对话框内直接渲染一张可交互 UI 组件。用于把结构化结果以可视化、可操作的方式呈现在对话框里，而非纯文本或仅打开界面。参数 spec 为 JSON 字符串（type + 各类型字段）。" +
         "完整类型与样例见 CARD_CATALOG 卡片目录（含 input/data/media/layout/action/nav/decoration 七大归类，可据此生成上百款卡片）。" +
         "type 取值与关键字段：" +
@@ -44,7 +47,10 @@ class UiWidgetTool : QuroTool {
 "composite{layout(stack|tabs|accordion),children:[<组件spec数组>],description?}：多语言组合卡——把多个子卡聚合成一个整体一起展示，同时支持「只渲染其中一个」；layout=stack 时各子卡顺序堆叠且可点「单独」单独全宽渲染，layout=tabs 时子卡以标签页呈现一次只显示一个，layout=accordion 时各子卡独立折叠；children 内每个元素都是完整的组件 spec（可嵌套 composite），用于「Web 应用后端+前端组合完成」「可视化弹窗+可视化编程+多语言渲染」等需要组合且互不干扰的产物；" +
 "legacy: todo{items:[{text,done}]}; chart{chart_type,series:[{label,value}]}; note{body,lang?}; actions{actions:[{label,command}]}。" +
         "command 语法：ui_open_* / ui_toggle_* / linux:install / run:<命令> / widget:<任意自定义>，" +
-        "以及 v221 新增 open:<url>（内置浏览器打开）/ copy:<文本>（复制剪贴板）/ ai:<提示词>（直接发给 AI）/ screen:<名称>（界面导航）。"
+        "以及 v221 新增 open:<url>（内置浏览器打开）/ copy:<文本>（复制剪贴板）/ ai:<提示词>（直接发给 AI）/ screen:<名称>（界面导航）。" +
+        "可用组件共 ${CardSdk.typeCount} 种，按类目：${CardSdk.compactCatalog()}。" +
+        "要写某类的完整字段与样例，先调 card_catalog（参数 category 或 types），别凭空猜字段名。" +
+        "也可以直接在正文里下发卡片围栏：card（单个 JSON 对象）、cards（数组或组合卡）、cardui（A2UI 邻接表）、cardjson（**一行一个 JSON**，流式友好，逐行独立容错；组合卡请用 cards）。"
     override val parametersJson = """{"type":"object","properties":{"spec":{"type":"string","description":"组件 JSON 规格，见工具说明"}}},"required":["spec"]}"""
 
     override fun run(context: Context, arguments: String): String {
@@ -52,7 +58,7 @@ class UiWidgetTool : QuroTool {
             val jo = JSONObject(arguments)
             val spec = jo.optString("spec", "").ifBlank { arguments }
             val card = parseComponentSpec(spec)
-                ?: return "❌ 未知组件类型或 spec 解析失败（请检查 type 与字段，支持 button/toggle/slider/progress/stat/alert/table/list/segmented/pie/rating/countdown/tabs/expandable/form/chips/steps/gauge/media/info/toolcall/stream/mediaplay/quickreply/quickaction/timeline/heatmap/compare/radar/timer/carousel/kanban 及 v221 新增 color/counter/breadcrumb/tagcloud/badge/avatargroup 与 v300 新增 mermaid（AI 自写 Mermaid 图表）与 v1057 新增 miniapp（AI Web 应用）与 v1068 新增 composite（多语言组合卡，可组合可单渲染）与 yuanbao（链接回答卡）/ htmlpreview（HTML 预览卡）详见 CARD_CATALOG；legacy 仍支持 todo/chart/note/actions；链接 yb.tencent.com 会自动生成预览卡）"
+                ?: return "❌ 未知组件类型或 spec 解析失败。可用 type 共 ${CardSdk.typeCount} 种：${CardSdk.compactCatalog()}。调 card_catalog 可取完整样例。"
             // 优先挂进聊天气泡（onCard 桥 → 当前助手消息）；桥未连接时退回全局卡片栏兜底
             val bridge = QuroUiActionBridge.onCard
             if (bridge != null) {

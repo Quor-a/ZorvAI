@@ -6719,7 +6719,7 @@ private sealed class MsgBlock {
     /**
      * 可视化组件围栏（正文第二通道）：```card（单组件）/ ```cards（多组件）/ ```cardui（A2UI 邻接表）。
      * 与 DynamicUi / SelfCard 同源机制——从气泡剔除，改在消息底部全宽内联渲染。
-     * @param fence 围栏头（card / cards / cardui），交给 [CardFence.toCards] 复用同一解码层
+     * @param fence 围栏头（card / cards / cardui / cardjson），交给 [CardFence.toCards] 复用同一解码层
      * @param source 围栏内容（未 trim）
      * @param closed 是否已闭合。false = 流式中间态，JSON 合法即自动出现
      */

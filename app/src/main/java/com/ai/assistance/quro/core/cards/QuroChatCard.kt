@@ -994,6 +994,18 @@ fun serializeCard(card: QuroChatCard): JSONObject {
         is DividerCard -> "divider"
         is SpacerCard -> "spacer"
         is CustomCard -> "custom"
+        is GanttCard -> "gantt"
+        is InvoiceCard -> "invoice"
+        is CurrencyCard -> "currency"
+        is ClockCard -> "clock"
+        is TrackerCard -> "tracker"
+        is ScoreboardCard -> "scoreboard"
+        is VocabCard -> "vocab"
+        is FormulaCard -> "formula"
+        is TranslateCard -> "translate"
+        is PaletteCard -> "palette"
+        is StopwatchCard -> "stopwatch"
+        is BarcodeCard -> "barcode"
     })
     o.put("id", card.id)
     o.put("title", card.title)
