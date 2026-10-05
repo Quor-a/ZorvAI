@@ -347,7 +347,13 @@ class GenUILlmClient(
                                     if (!isReasoning) isReasoning = true
                                     reasoningAcc.append(reasoningContent)
                                     onThinking?.invoke(reasoningAcc.toString())
-                                    continue
+                                    // ⚠️ 这里**不能** continue。
+                                    // 部分模型（混思考的推理型网关、以及 reasoning 结束时与正文
+                                    // 交接的那一帧）会在**同一个 delta 里同时**给 reasoning_content 和
+                                    // content。旧代码 `continue` 直接把该帧的 content 丢掉 →
+                                    // 正文凭空少一截（常见是围栏起始 ``` 那一帧）→
+                                    // detectChannel 认不到围栏 → 界面显示成代码块源码。
+                                    // 所以下面继续正常处理 content / tool_calls。
                                 }
 
                                 val content = delta.optString("content", null)

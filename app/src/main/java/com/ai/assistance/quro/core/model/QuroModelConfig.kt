@@ -26,7 +26,7 @@ data class QuroModelConfig(
     val modelContextLength: Int = 0,       // 当前所选模型的真实上下文长度（token），来自 /models 接口的 context_length；0=未知（回落 1048576 安全顶）。这是「单次上下文总开关」的真正硬上限来源，选中模型时由接口回填，不再硬编码。
     val customProviderName: String = "",   // 自定义厂商展示名（provider=="OTHER" 时有效）
     val localModelPath: String = "",       // 本地离线模型路径（provider 为 MNN/LLAMA_CPP 时有效）
-    val useFullTools: Boolean = true,      // 完整工具集开关：默认开启（全面开放，下发 fullSpecs ~50 个）；设置入口已移除，由默认全开保证工具可用
+    val useFullTools: Boolean = true,      // 完整工具集开关：默认开启（全面开放）。// 🔴 实测 fullSpecs =258 个 / 129,351 字符（不是早期注释说的「~50 个」），coreSpecs = 201 个 / 86,506 字符；GenUI Agent 侧另有一套按窗口预算的收敛（ZorvPromptBudget.fitTools），丢整份工具、不裁内容。设置入口已移除，由默认全开保证工具可用
     val skillToolsEnabled: Boolean = true, // 技能可调用（function calling）总开关：true=将用户技能注册为 AI 可调用工具；false=技能仅注入系统提示词、不可被调用
     val maxSkillTools: Int = 16,           // 最多下发的技能工具数量（避免工具集过大被 API 中转静默丢弃）
 

@@ -116,9 +116,14 @@ class QuroToolRegistry {
      * 短信/联系人、手电筒、闹钟、运行代码、屏幕控制、TTS 等），
      * 将 token 开销降到 ~2,100 以内，确保绝大多数 API 中转能正常透传。
      *
+     * 🔴 **实测与本注释已严重脱节（2026-10-05 实测）**：coreSpecs 实为 **201 个 / 86,506 字符**，
+     * 不是「~23 个 / ~1,200 tokens」的十几倍；fullSpecs 实为 **258 个 / 129,351 字符**，
+     * 不是「~226 个」。所谓「精简集」只省 33%，达不到本注释宣称的降 token 目标。
+     * 需要真正控制工具层体积时，走 ZorvPromptBudget.fitTools（按输入预算整份取舍，不裁内容）。
+     *
      * 若你的 API 代理支持完整工具（如直连 OpenAI / DeepSeek / SiliconFlow），
      * 可在 [com.ai.assistance.quro.core.QuroAssistant.ask] 中将
-     * `registry.coreSpecs()` 改为 `registry.fullSpecs()` 解锁全部 ~47 个工具。
+     * `registry.coreSpecs()` 改为 `registry.fullSpecs()` 解锁全部工具（实测 258 个）。
      */
     fun coreSpecs(): List<QuroToolSpec> {
         // 精简核心集：仅保留口语指令最高频、且依赖链最短的动作。
@@ -126,7 +131,8 @@ class QuroToolRegistry {
         // 确保绝大多数 API 中转（含对「工具数 / 总 token」有上限的代理）能正常透传，
         // 不再静默丢弃整个 tools 字段（那是此前「纯问答、不执行动作」的根因）。
         // 若你的代理确认支持完整工具（直连 OpenAI / DeepSeek / SiliconFlow 等），
-        // 可在 QuroAssistant.ask 中将 registry.coreSpecs() 改为 registry.fullSpecs() 解锁全部 ~226 个。
+        // 可在 QuroAssistant.ask 中将 registry.coreSpecs() 改为 registry.fullSpecs()
+        // 解锁全部工具（实测 258 个 / 129,351 字符 —— 见上方「实测与本注释已严重脱节」）。
         // 扩展核心集：覆盖 95%+ 日常口语指令，让模型「知道有什么工具、该用哪个」。
         // 默认（useFullTools=false）即下发此集；fullSpecs 在其基础上再并入其余高级/小众工具。
         // 注意：菜单（appendCapabilityAwareness）与 tools 字段都由此集生成，二者严格一致，
