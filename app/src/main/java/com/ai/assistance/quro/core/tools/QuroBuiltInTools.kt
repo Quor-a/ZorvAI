@@ -535,7 +535,14 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // UI 导航工具集：让 AI 能操控自己的界面（ui_* 命名规范）
     registerUiTools(r)
     // 流体云工具：控制OPPO流体云，显示状态栏胶囊和卡片
-    r.register(FluidCloudTool(context!!))
+    //
+    // 🔴 这里原来写的是 `FluidCloudTool(context!!)` —— 全文件唯一一处 context 强解包
+    // （紧随其后的多批工具、以及下面的 attach/mergeSkills 全部用 `context?.let {}` 安全包裹）。
+    // 后果：`buildQuroRegistry(null)` 直接 NPE，而单测 / 工具清单体检 / 任何无 Context 的
+    // 装配路径都会踩到 —— QuroToolRegistryTest 的 6 个基线失败全部源于此，
+    // 也让「实测工具体积」这类无 Android 依赖的回归测试根本写不出来。
+    // 改成与其余工具一致的 `?.let`：无 Context 时跳过该工具（而不是整份注册表崩掉）。
+    context?.let { r.register(FluidCloudTool(it)) }
     // 对话框文档工具：AI在对话框内直接写文档并渲染显示
     r.register(ChatDocTool())          // 对话框文档（Markdown/HTML/代码/文本）
     // 并入「导入工具」（AI 自写 / 用户粘贴 JSON 导入），使其可被 AI 调用

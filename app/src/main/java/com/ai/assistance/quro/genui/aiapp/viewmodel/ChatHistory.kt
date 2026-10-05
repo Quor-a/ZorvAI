@@ -78,7 +78,25 @@ internal object ChatHistory {
             flat.removeAt(0)
         }
 
-        return system + flat
+        // 🔴 system 必须**收敛成一条**且在开头。
+     //
+  // 旧实现 `return system + flat`，而 system 是 `history.filter { role == "system" }`
+        // —— 若历史里存在多条 system（老版本把渲染规则/语言指令当作独立 system 塞进来过，
+    // 或 restoreSession 读回了旧存档），就会一次性发出多条 system。
+        // OpenAI 兼容网关要么 400，要么静默只认其中一条 → 模型拿不到完整指令。
+        // 现在把多条 system 的内容按原顺序拼进**第一条**，其余丢弃。
+   val merged = if (system.isEmpty()) {
+       emptyList()
+    } else if (system.size == 1) {
+            system
+        } else {
+       listOf(
+        system.first().copy(
+          content = system.joinToString("\n\n") { it.content }.trim()
+       )
+     )
+        }
+        return merged + flat
     }
 
     /** 压缩一条历史消息（仅用于较老的轮次）。 */
@@ -128,10 +146,41 @@ internal object ChatHistory {
         "[系统折叠提示：此处原有 $kind 共 $length 字符，已从上下文中移除；" +
             "不要在任何回复或界面里复述本提示]"
 
-    /** 折叠 ```lang … ``` 代码围栏。 */
-    fun foldFences(content: String): String = FENCE_REGEX.replace(content) { mr ->
-        foldNote(mr.groupValues[1].ifBlank { "code" }, mr.value.length)
+    /**
+     * 折叠 ```lang … ``` 代码围栏。
+     *
+     * ## 🔴 为什么必须额外处理「未闭合」围栏（单测 GenUiHistoryAnchorTest 实测抓出来的）
+     *
+     * [FENCE_REGEX] 要求**结尾也有** ``` ```，所以**未闭合的围栏会整段逃逸**：
+     * ```
+     * <generate>```genui
+     * {"id":"todo","root":{"type":"column","children":[
+     *   {"type":"text","properties":{"text":"今天做三件事"}},
+     *   {"type":"button","properties":{"label":"添        ← 被 max_tokens 截断
+     * ```
+     * 而未闭合的 JSON 同样躲过 `stripJsonBlobs`（平衡扫描找不到配对的括号）。
+     *
+     * 后果正是 `78bebff` 想防的「残缺格式被模型模仿并放大」——
+     * 那条路当时是靠「把所有输出都剥光」侥幸躲过的，**防线本身从来没生效**。
+     * 现在本轮改成「完整输出留原文」，就必须把这道防线真的补上，
+     * 否则残缺输出又会以「格式样本」的身份回到历史里。
+     *
+     * 修法：先折叠已闭合围栏，再把**剩余的每一个孤立 ``` 及其之后的内容**整段折叠。
+     */
+    fun foldFences(content: String): String {
+        val closed = FENCE_REGEX.replace(content) { mr ->
+            foldNote(mr.groupValues[1].ifBlank { "code" }, mr.value.length)
+        }
+        // 未闭合：从第一个孤立 ``` 起，把余下全部折叠（末尾那处多半就是模型没写完的位置）
+        val open = closed.indexOf("```")
+        if (open < 0) return closed
+        val len = closed.length - open
+        return closed.substring(0, open) +
+            foldNote(if (len > OPEN_FENCE_MIN_CHARS) "未闭合代码块" else "code", len)
     }
+
+    /** 未闭合围栏后剩余内容短于这个长度就当噪声，不值得专门打折叠提示。 */
+    private const val OPEN_FENCE_MIN_CHARS = 24
 
     /**
      * 把文本里**最长的平衡 JSON 片段**换成占位符（`{…}` 与 `[…]` 都认，跳过字符串与转义）。
@@ -207,4 +256,41 @@ internal object ChatHistory {
     private const val MIN_JSON_SPAN = 200
 
     private const val MAX_FOLD_ROUNDS = 8
+
+    /**
+     * 把「本轮附加指令」合并进**唯一那条** system 消息，保证 system 有且只有一条、且在最开头。
+     *
+     * 🔴 对应线上事故「所有类型界面都画不出来 / 有时模型不通」：
+     * 消息列表第 0 位本来就有 brain 的完整 system 提示词，若把渲染规则/语言指令
+     * **另外起一条** system 顶到最前，列表里就成了两条 system 并列 ——
+     * 部分 OpenAI 兼容网关直接 400，部分只认其中一条，约束照样丢。
+     * 而更早的版本（5021bbe）是把这几条 system `+` 在 `toApiMessages(...)` **之后**，
+     * 塞到对话中间/末尾，同样违反「system 只能在开头」的硬要求。
+     * 三种形态都错，唯一正确形态就是本函数：**追加到已有那条 system 的末尾**。
+     *
+     * 追加到末尾而非开头是刻意的：末尾是近因区，模型对排在最后的指令遵循度更高。
+     *
+     * @param extra 本轮附加段（渲染规则 + 语言指令），不写入会话历史
+     * @return system 恒为 1 条的列表；extra 为空时原样返回
+     */
+    fun mergeIntoSingleSystem(
+        messages: List<GenUIChatMessage>,
+        extra: String
+    ): List<GenUIChatMessage> {
+        if (extra.isBlank()) return messages
+        val idx = messages.indexOfFirst { it.role == "system" }
+        // 历史里一条 system 都没有（理论上不会，见 rebuildSystemMessage / restoreSession）
+        if (idx < 0) {
+            return listOf(GenUIChatMessage("system", extra.trim())) + messages
+        }
+        val out = ArrayList<GenUIChatMessage>(messages.size)
+        val base = messages[idx]
+        out.add(base.copy(content = base.content + "\n\n" + extra.trim()))
+        for (i in messages.indices) {
+            // 跳过原 system（已合并），并丢弃可能存在的多余 system，确保唯一
+            if (i == idx || messages[i].role == "system") continue
+            out.add(messages[i])
+        }
+        return out
+    }
 }

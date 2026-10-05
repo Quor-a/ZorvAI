@@ -276,8 +276,23 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         // 不做这层兜底时 detectChannel 会直接返回 null，整篇 JSON 掉进 GenUI 提取管线，
         // 画布上就又是一屏源码（用户报的「A2UI 还是老样子」有一半是这种情况）。
         if (forced == "a2ui") a2uiFallback(text)?.let { return it }
-        val fences = Regex("```(a2ui|markdown|md|html)\\s*\\n?([\\s\\S]*?)```", RegexOption.IGNORE_CASE)
+        // 🔴 围栏收集必须容忍「未闭合」（修所有通道一律显示源码）。
+        //
+        // 旧正则要求结尾也有 ```：模型一旦被 max_tokens 截断、或末尾多打一个反引号，
+        // findAll 就**一条都匹配不到** → detectChannel 返回 null → 整篇掉进
+        // markdown 兜底 → 用户看到的是等宽字体灰底的代码块源码（截图实证：
+        // <!DOCTYPE html> / <title>算个账</title> 全被当代码块显示）。
+        // 且这与「html 通道坏了」无关：**a2ui / markdown / html 三个围栏全中同一招**，
+        // 所以真机表现是「所有通道都画不出来」。
+        //
+        // 修法：先按闭合围栏匹配；一条都没认到时，退化为「认到开头就算」，
+        // body 取到文本末尾（截断的半截 HTML/JSON 后面还有续写与流式兜底接着救）。
+        var fences = Regex("```(a2ui|markdown|md|html)\\s*\\n?([\\s\\S]*?)```", RegexOption.IGNORE_CASE)
             .findAll(text).toList()
+        if (fences.isEmpty()) {
+            fences = Regex("```(a2ui|markdown|md|html)\\s*\\n?([\\s\\S]*)", RegexOption.IGNORE_CASE)
+                .findAll(text).toList()
+        }
         if (fences.isEmpty()) return null
         // 用户点名通道 → 只考虑该通道的围栏（其他围栏一律忽略，防模型黏住旧通道）
         val considered = if (forced != null) {
@@ -318,7 +333,67 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 "```json\n" + body + "\n```"
             ) to raw
         }
+        // 🔴 裸文档兜底：模型**完全不带围栏**、直接吐文档时（修「所有通道都显示源码」）。
+        //
+        // 上一条只认围栏；但模型被截断、或写成 `html\n<!DOCTYPE html>`（围栏只剩语言标签）
+        // 时，文本里根本没有成对的 ```，围栏路径全落空 → 整篇按 markdown 渲染 →
+        // 用户看到 HTML/JSON 源码。真机截图就是这个形态（首行孤零零一个 html 标签，
+        // 下面全是 <!DOCTYPE html>…）。
+        // 这里只认「足够像文档」的裸文本，绝不把普通聊天误判成界面。
+        bareDocumentPage(text)?.let { return it }
         return null
+    }
+
+    /**
+     * 裸文档识别：不经围栏、直接以文档形态出现的 HTML / JSON 界面。
+     *
+     * 门槛刻意很严（避免把正常聊天当界面）：必须出现硬特征，且长度够大。
+     *  - HTML：`<!DOCTYPE html>` / `<html` / `<head` / `<body` 之一，且有 `</html>`
+     *  - JSON：`{` 开头且 `"root"` 在文本里（GenUI DSL 的根键），能交给现有解析链
+     * 返回 null 表示不像文档，调用方继续走原兜底。
+     */
+    private fun bareDocumentPage(text: String): Pair<ChannelPage, String>? {
+        val t = text.trim()
+        if (t.length < 80) return null
+
+        val lower = t.lowercase()
+        val looksHtml = (lower.contains("<!doctype html") || lower.contains("<html") ||
+            lower.contains("<head") || lower.contains("<body")) &&
+            (lower.contains("</html>") || lower.contains("</body>"))
+        if (looksHtml) {
+            val body = extractHtmlBody(t) ?: return null
+            if (body.length < 40) return null
+            val title = Regex("<title[^>]*>([\\s\\S]*?)</title>", RegexOption.IGNORE_CASE)
+                .find(body)?.groupValues?.get(1)?.trim()
+            return ChannelPage.HtmlPage(
+                title?.takeIf { it.isNotBlank() } ?: channelTitle(text, 0) ?: qstr(R.string.qk_02288),
+                body
+            ) to ("```html\n$body\n```")
+        }
+
+        // 裸 JSON 界面：带 root 键才认，交给 FlatDoc/GenUI 那条既有解析链
+        if (t.startsWith("{") && t.contains("\"root\"")) {
+            return ChannelPage.MarkdownPage(
+                (channelTitle(text, 1) ?: qstr(R.string.qk_00399)) + "（裸 JSON，原文）",
+                "```json\n$t\n```"
+            ) to ("```json\n$t\n```")
+        }
+        return null
+    }
+
+    /** 从裸文本里抽出完整 HTML 文档（含 doctype 或任一标签起点，截断时取到末尾）。 */
+    private fun extractHtmlBody(t: String): String? {
+        val lower = t.lowercase()
+        val start = listOf("<!doctype html", "<html", "<head", "<body")
+            .map { lower.indexOf(it) }
+            .filter { it >= 0 }
+            .minOrNull() ?: return null
+        // 有完整闭合标签就取到闭合处（截断则取末尾，WebView 能容错渲染半截文档）
+        val endHtml = lower.lastIndexOf("</html>")
+        val endBody = lower.lastIndexOf("</body>")
+        val end = maxOf(endHtml, endBody)
+        return if (end > start) t.substring(start, end + (if (end == endHtml) 7 else 7))
+            else t.substring(start)
     }
 
     /**
@@ -630,40 +705,48 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * 画布渲染规则（画图轮专用系统提示词，注入在对话历史之后）。
-     * 目的：从源头约束 AI 输出结构，替代事后清洗。
+     * 本轮要放在**消息列表最开头**的 system 消息（合并成一条）。
+     *
+     * 🔴 为什么必须合并并前置：OpenAI 兼容协议要求 system 只出现在开头。
+     * 旧实现把渲染规则与语言指令 `+` 在 `toApiMessages(...)` 结果之后，等于把 system
+     * 塞到对话中间/末尾 → 网关 400 或丢消息 → 模型输出残缺 → 围栏闭合不上 →
+     * 通道识别失败 → 所有通道都显示成代码块源码（详见调用处注释）。
+     *
+     * 合并顺序：渲染规则在前、语言指令在后（语言约束放最末尾近因，模型遵循度更高）。
+     * 两者都是纯提示、只进本次 payload、**不写入会话历史**，行为与旧版一致。
      */
-    private fun renderRulesMessage(forced: String?): GenUIChatMessage = GenUIChatMessage(
-        role = "system",
-        content = "# 上下文用法（每轮都读）\n" +
-            "上面的历史消息只是背景资料。你只执行【最后一条】用户消息。\n" +
-            "禁止把历史里的旧指令重新执行、复述、编号或汇总成清单；" +
-            "禁止回复「您发出了很多条指令」「我来逐条理解」这类元话术。\n" +
-            "用户这一轮没提的事就不要提，直接用 UI 回应最后那条消息。\n\n"
-        + (if (forced == "genui")
-            "# 本轮通道已锁定：GenUI SDK（用户已在询问弹窗里确认，最高优先级）\n" +
-            "用户本轮选的是 GenUI SDK 原生通道，必须走 GenUI 流程，按下面的输出格式生成界面。\n" +
-            "绝对禁止输出 markdown / a2ui / html 围栏；不许用一篇文章代替界面。\n"
-        else if (forced != null)
-            "# 本轮通道已由用户锁定（最高优先级）\n" +
-            "用户明确指定本轮必须使用三反引号" + forced + "围栏输出。\n" +
-            "绝对禁止输出任何其他围栏（markdown/a2ui/html/genui 都不行）；\n" +
-            "不要输出 intent/plan/generate 结构；围栏外不得有任何文字。\n"
-        else
-            "# 输出通道选择（第一优先级）\n" +
-            "- GenUI SDK 通道是主力默认：生成式界面/交互应用一律走 GenUI 流程\n" +
-            "- 用户点名要某通道（用 markdown/a2ui/html 写）→ 必须按用户指定的通道输出\n" +
-            "- 用户未点名时，按内容类型自选：纯文章/攻略/新闻/长文 → markdown 围栏；" +
-            "独立网页/复杂样式/可玩小游戏 → html 围栏；简单结构化展示/省 token → a2ui 围栏\n" +
-            "选择非 GenUI 通道时：直接输出对应围栏，围栏外不得输出任何文字，不要输出 intent/plan/generate。\n"
-        ) + "\n"
-        // GenUI 输出格式只在「走 GenUI 流程」时下发：锁了 markdown/a2ui/html 还塞这段，
-        // 等于一边禁 intent/plan/generate 一边教它怎么写，模型会两头打架。
-        + (if (forced == null || forced == "genui")
-            "# GenUI 流程输出格式（生成式界面时适用）\n" +
-            "1. content 通道结构固定：<intent>简短思考</intent> → <plan>规划</plan> → <generate>```genui\n{完整 JSON}\n```</generate>"
-        else "")
-    )
+    /**
+     * 把本轮的「渲染规则 + 回复语言」合并进 **唯一那条** system 消息，返回 system 恒为 1 条的列表。
+     *
+     * 🔴🔴 这是「所有通道都显示源码 / 模型有时不通」的第二层根因（第一层是 system 排到末尾，
+     * 由 5021bbe 引入；上一层修复把它顶到最前，却与 history 里已有的 system 撞成两条 ——
+     * 两条 system 并列，部分 OpenAI 兼容网关直接 400、部分只认一条，约束照样丢）。
+     *
+     * 正确形态：把这两段**追加到已有那条 system 的末尾**（末尾即近因，模型遵循度更高），
+     * 最终列表里 system 仍然只有 1 条，且位于最开头。历史中若一条 system 都没有
+     * （理论上不会发生，见 `rebuildSystemMessage` / `restoreSession`），则退化为新建一条。
+     *
+     * 这两段都是纯提示、只进本次 payload、**不写入会话历史**，行为与旧版一致。
+     */
+    private fun replaceBaseSystem(
+        messages: List<GenUIChatMessage>,
+        forced: String?
+    ): List<GenUIChatMessage> {
+        val extra = StringBuilder()
+        extra.append(renderRulesMessage(forced).content)
+        replyLanguageMessage()?.let { extra.append("\n\n").append(it.content) }
+        return ChatHistory.mergeIntoSingleSystem(messages, extra.toString())
+    }
+
+    /**
+     * 画布渲染规则（画图轮专用系统提示词，合并进唯一那条 system 的末尾）。
+     * 目的：从源头约束 AI 输出结构，替代事后清洗。
+     *
+     * 🔴 正文实现在 [GenUiPromptProbe.renderRulesContent]（与单测断言**同源**，
+     * 保证「测的就是发的」）。这里只负责包成消息对象。
+     */
+    private fun renderRulesMessage(forced: String?): GenUIChatMessage =
+        GenUIChatMessage(role = "system", content = GenUiPromptProbe.renderRulesContent(forced))
 
     /**
      * 「AI 回复语言」最高近因注入（GenUI Agent 独立消息列表）。
@@ -705,10 +788,25 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 baseUrl = config.baseUrl,
                 apiKey = config.apiKey,
                 model = config.model,
+                // 🔴🔴 system 消息必须**有且只有一条**、且在列表最开头（修「所有通道都显示源码 / 模型不通」）。
+                //
+                // 旧写法（5021bbe 引入）把两条 system 直接 `+` 在 toApiMessages 结果之后：
+                //   toApiMessages(...) + renderRulesMessage(...) + listOfNotNull(replyLanguageMessage())
+                // toApiMessages 内部（ChatHistory.kt:81 `return system + flat`）只把 **history 里**
+                // 的 system 提到最前，这两条是它之后拼的 → payload 变成
+                //   [system…] + [user/assistant…] + [renderRules(system)] + [语言(system)]
+                // OpenAI 兼容网关的硬要求是 system 只能出现在开头，夹在对话中间 / 排在末尾
+                // 会被中转直接 400 或静默丢弃 → 模型拿不到完整指令、输出残缺 →
+                // 围栏闭合不上 → detectChannel 认不到 → 整篇按 markdown 显示成代码块源码。
+                //
+                // 🔴 但**不能**简单地把合并后的 system 顶到列表最前：history 第 0 位本来就有
+                // 一条 system（brain 的完整提示词），那样会变成两条 system 并列 —— 部分网关 400、
+                // 部分只认其中一条，约束照样丢。正确做法是 **replaceBaseSystem**：
+                // 把渲染规则/语言指令追加到那唯一一条 system 的末尾，再作为唯一首条。
                 messages = ChatHistory.toApiMessages(
                     currentState.conversationHistory,
                     maxTurns = maxHistoryTurns
-                ) + renderRulesMessage(forcedChannel) + listOfNotNull(replyLanguageMessage()),
+                ).let { rest -> replaceBaseSystem(rest, forcedChannel) },
                 temperature = config.temperature,
                 maxTokens = config.maxTokens,
                 tools = tools.ifEmpty { null },
@@ -1121,7 +1219,17 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     // 同样只留人话，DSL/JSON 原文交给 works 存（见 historyNote 的说明）。
                     conversationHistory = it.conversationHistory + GenUIChatMessage(
                         role = "assistant",
-                        content = historyNote(fullText, page.title.ifBlank { "内容页" }),
+                        // 同主通道：通道轮也保留原文。
+                        // `detectChannel` 认定即意味着围栏**已闭合**（未闭合时正则退化认开头，
+                        // 但那种情况已在主通道的 usedFallbackCard 分支之外），
+                        // 完整输出留在历史里正是主对话框一直有效的做法，
+                        // 模型能延续格式 —— 而「所有通道都画不出来」正是缺这个锚点。
+                        // 旧注释「同样只留人话，DSL/JSON 原文交给 works 存」已作废。
+                        content = historyAssistant(
+                            fullText = fullText,
+                            label = page.title.ifBlank { "内容页" },
+                            complete = true,
+                        ),
                         reasoning = result.reasoning
                     ),
                     works = (listOf(com.ai.assistance.quro.genui.aiapp.data.GenUISessionStore.WorkItem(
@@ -1195,8 +1303,13 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-        // 策略 5：所有提取都失败 — 生成默认 UI（绝不显示"生成失败"）
+        // 策略 5：所有提取都失败 — 生成默认UI（绝不显示"生成失败"）
+        // usedFallbackCard：这一位决定写进历史的是原文还是 prose。
+        // 走到这里 = 模型自己也没写出完整 JSON（围栏截断/格式乱/压根没写），
+        // 这种输出**绝不能**留在历史里当格式样本 —— 那正是 78bebff 要防的场景。
+        var usedFallbackCard = false
         if (genuiJson == null) {
+            usedFallbackCard = true
             // 最后尝试：用 fullText 生成一个简单的文本卡片
             // 展示前剥离思考标签与代码块围栏，避免原始标签泄露到画布
             val cleanedDisplay = stripThinkingTags(fullText)
@@ -1248,12 +1361,22 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 debugInfo = debugInfo,
                 conversationHistory = it.conversationHistory + GenUIChatMessage(
                     role = "assistant",
-                    // ⚠️ 只写人话，不写 DSL 原文：把生成好的 JSON 留在 works 里（回放用）。
-                    // 历史里塞原始 DSL 有两个后果，实测都发生了：
-                    //   ① 历史膨胀，每轮几千字符 × 10 轮；
-                    //   ② 模型下一轮会**模仿自己历史里的格式**，上一轮的残缺/混杂输出会被继承放大，
-                    //      越写越乱（用户看到的 a2ui 与 <row>/<spacer> 标签糊在一起就是这个后果）。
-                    content = historyNote(fullText, currentState.currentRequest.ifBlank { qstr(R.string.qk_00476) }),
+                    // 🔴 本轮真机对照查出的根因修复（对照主对话框：那边原文完整进历史）。
+                    //
+                    // 旧行为（78bebff / 09-23）：无条件「只写人话，不写 DSL 原文」。
+                    // 动机是防「模型模仿历史里的残缺格式」——动机对，手段错：
+                    // 它把**完整输出也一起剥掉了**，于是历史里只剩一句「〔已生成：xxx〕」，
+                    // 模型**不知道自己上一轮写对了什么** → 每轮都在盲猜围栏格式 →
+                    // 「所有类型界面都画不出来」+「有时候模型都不通」。
+                    //
+                    // 现在：只有**提取失败退到兜底卡片**（= 模型自己也没写完）才降级成 prose；
+                    // 成功解析出来的原文照存，作为最strong的格式锚点。
+                    // 体积由 ChatHistory.FULL_TURNS=2 / MAX_TURNS=10 有界，不会膨胀。
+                    content = historyAssistant(
+                        fullText = fullText,
+                        label = currentState.currentRequest.ifBlank { qstr(R.string.qk_00476) },
+                        complete = !usedFallbackCard,
+                    ),
                     reasoning = result.reasoning
                 )
             )
@@ -1509,53 +1632,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
      *
      * @return 未闭合标签的起始位置，如果没有未闭合标签返回 null
      */
-    private fun findUnclosedThinkingTag(text: String): Int? {
-        val thinkingTags = listOf(
-            "thinking", "reasoning", "thought", "intent", "intention", "intint",
-            "retrieve", "retrieval", "search",
-            "plan", "planning",
-            "tool_call", "toolcall", "tool", "tool_result", "toolResult",
-            "decision", "decide",
-            "self_correct", "self_correction", "selfcorrect", "self-correct",
-            "journal", "log",
-            "analysis", "analyze", "analyse",
-            "reflection", "reflect",
-            "observation", "observe",
-            "action", "step",
-            "context", "memory",
-            "clarify", "question",
-            "draft", "outline",
-            "verify", "validation", "validate", "check",
-            "debug", "trace", "inspect",
-            "component_check", "type_check", "schema_check"
-        )
-
-        var earliestOpen: Int? = null
-
-        for (tag in thinkingTags) {
-            // 找所有开标签 <tag> 或 <tag ...>
-            val openRegex = Regex("<$tag(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
-            val closeRegex = Regex("</$tag\\s*>", RegexOption.IGNORE_CASE)
-
-            val openMatches = openRegex.findAll(text).map { it.range.first }.toList()
-            val closeMatches = closeRegex.findAll(text).map { it.range.first }.toList()
-
-            // 如果开标签数量 > 闭标签数量，说明有未闭合的
-            if (openMatches.size > closeMatches.size) {
-                // 找到最后一个未闭合的开标签位置
-                val lastOpen = openMatches.last()
-                // 确认这个开标签之后没有对应的闭标签
-                val hasCloseAfter = closeMatches.any { it > lastOpen }
-                if (!hasCloseAfter) {
-                    if (earliestOpen == null || lastOpen < earliestOpen) {
-                        earliestOpen = lastOpen
-                    }
-                }
-            }
-        }
-
-        return earliestOpen
-    }
+    private fun findUnclosedThinkingTag(text: String): Int? =
+        // 委托探针：与 GenUiRenderPipelineTest 断言**同源**的实现（可 JVM 单测）。
+        GenUiPromptProbe.findUnclosedThinkingTag(text)
 
     /**
      * 从 AI 返回的文本中提取 GenUI DSL JSON
@@ -2027,16 +2106,49 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         ChatHistory.compressAssistant(stripThinkingTags(text))
 
     /**
-     * 写进对话历史时用的 assistant 内容：**只留人话**。
+     * 写进对话历史时用的 assistant 内容。
      *
-     * 为什么不能直接把 `fullText` 存进历史（旧行为）：
-     * 模型每轮都会输出整套界面 JSON/DSL（几千字符），把它原样留在历史里，
-     * 下一轮模型会**照着自己历史里的格式继续写**。上一轮一旦出现混杂/残缺
-     * （实测：A2UI 与自造的 `<row>/<spacer>` 标签糊在一起、`type` 里塞进颜色值），
-     * 这个坏格式就会被继承并放大，越滚越乱 —— 这是"越生成越离谱"的主因。
+     * ## 🔴 为什么不能一刀切「只留人话」（本轮真机对照查出的根因）
      *
-     * 界面本体不会丢：它已经存进 `works`（`GenUISessionStore`），回放走 works，不依赖历史。
-     * 历史只需要让模型知道"上一轮我做了什么"。
+     * `78bebff`（09-23）把它改成「剥思考标签 → 折围栏 → 折整段 JSON，只留 400 字人话」，
+     * 动机是防「模型模仿自己历史里的残缺格式」。**动机对，手段错**：
+     * 它把**完整输出也一起剥掉了**。
+     *
+     * 对照主对话框（`QuroChatViewModel`）：那边是 `QuroMessage(role="assistant",
+     * content=replyText)` —— **模型自己写的原文完整进历史**，所以它能延续格式、能自我修正；
+     * 而 GenUI 历史里只有一句「〔已生成：xxx〕」，模型**根本不知道自己上一轮写对了什么**。
+     *
+     * 这解释了用户全部症状，且与「主对话体量更大却能跑通」完全自洽（体量不是关键，
+     * **历史里有没有自己的正确样本**才是）：
+     * · 「所有类型界面都画不出来」→ 没有格式锚点，模型每轮都在猜围栏格式；
+     * · 「有时候模型都不通」→ 工具调用同样没有锚点，参数结构越写越飘；
+     * · 「第一次没问题、强制写第二次就有问题」→ 返修轮我们把原文还给了模型（本轮已修），
+     *   但**正常轮之间**的原文仍被剥掉，所以每轮都是「盲写」。
+     *
+     * ## 现在的做法：按「是否完整」分流，而不是按「是不是界面」分流
+     *
+     * · **完整**（本轮已成功渲染 / 围栏已闭合）→ 原文照存。这是最强的格式锚点，
+     *   也是主对话框一直有效的做法；体积由 [ChatHistory] 的 `FULL_TURNS=2` 与
+     *   `MAX_TURNS=10` 有界，不会膨胀。
+     * · **残缺**（围栏未闭合 / JSON 解析失败，即模型自己也没写完）→ 才退回 prose。
+     *   这正是 `78bebff` 真正想防的场景，一例都没丢。
+     *
+     * 另：历史里的原文只保留到 [ChatHistory.FULL_TURNS] 轮，更早的轮次仍由
+     * `compressAssistant` 折叠（那条路径仍走 `stripJsonBlobs`，不会被这里污染）。
+     */
+    private fun historyAssistant(fullText: String, label: String, complete: Boolean): String =
+        GenUiPromptProbe.historyAssistant(fullText, label, complete) { historyNote(it, label) }
+
+    /**
+     * 残缺输出的历史替身：剥思考标签 → 折围栏 → 折整段 JSON，只留人话。
+     *
+     * 为什么残缺时必须降级：模型会照着自己历史里的格式继续写，
+     * 上一轮一旦出现混杂/残缺（实测：A2UI 与自造的 `<row>/<spacer>` 标签糊在一起、
+     * `type` 里塞进颜色值），这个坏格式就会被继承并放大，越滚越乱。
+     *
+     * 措辞要① 不像正文（方括号 +「系统提示」）② 明确叫它不要复述 ——
+     * 早先用「〔genui 内容 96 字符已省略〕」这种中性描述，模型会把它当上一轮的界面内容
+     * 原样复述到画布上（用户截图里画布孤零零一行就是这么来的）。
      */
     private fun historyNote(fullText: String, label: String): String {
         val prose = ChatHistory.stripJsonBlobs(ChatHistory.foldFences(stripThinkingTags(fullText)))
@@ -2050,10 +2162,20 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         var result = text
 
         // ── 0. 紧急拦截：检测是否处于思考标签内部（流式场景） ──
-        //    如果文本中包含未闭合的思考标签，直接截断到标签开始位置之前。
+        //    如果文本中包含未闭合的思考标签，截断到标签开始位置之前。
         //    这是流式场景下最重要的防护——防止思考过程内容泄露进画布。
+        //
+        // 🔴🔴 但「截断」不能无条件做：模型被 renderRulesMessage 教着输出
+        // `<intent>…</intent> → <plan>…</plan> → <generate>```genui {…} ```</generate>`，
+        // 只要它少闭合一个标签（流式被 max_tokens 截断时最常见），截断点之后的
+        // **围栏与整份 JSON 会被一起丢掉** → 画布拿不到任何东西 → 「界面画不出来」。
+        // 这正是「所有通道同时失效」的直接机制：这条链路是四条通道共用的。
+        //
+        // 所以判据改成：**只有当截断点之后确实没有任何可渲染内容时才截断**。
+        // 判「有可渲染内容」用与 detectChannel/提取管线一致的硬特征：
+        // 存在围栏（```）或存在 JSON 根键（"root" / "properties"）。
         val unclosedTag = findUnclosedThinkingTag(result)
-        if (unclosedTag != null) {
+        if (unclosedTag != null && !GenUiPromptProbe.tailHasRenderablePayload(result, unclosedTag)) {
             result = result.substring(0, unclosedTag).trim()
             // 如果截断后为空，直接返回（没有有效内容）
             if (result.isBlank()) return ""
@@ -2119,7 +2241,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 val firstClose = closeMatches.first().range.first
                 // 移除从文本开头到闭合标签末尾的所有内容
                 val closeEnd = closeMatches.first().range.last + 1
-                result = result.substring(closeEnd).trim()
+                // 🔴 护栏：若「孤立闭合标签之前」那段里已经有可渲染内容（围栏 / JSON 根键），
+                // 说明模型把正式输出放在思考内容**前面**（content 与 reasoning 混排的模型常见），
+                // 这时再截就会把界面本体丢掉。跳过这一步，交给下面的残留标签清理。
+                if (!GenUiPromptProbe.headHasRenderablePayload(result, closeEnd)) {
+                    result = result.substring(closeEnd).trim()
+                }
                 break  // 只需处理一次，后面重新进入循环
             }
         }
