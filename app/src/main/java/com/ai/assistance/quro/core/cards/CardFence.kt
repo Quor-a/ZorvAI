@@ -334,14 +334,29 @@ object CardFence {
      *  - `[多组件]` `{"layout":..,"children":[..]}` → 合成 1 张 [QuroChatCard.CompositeCard]
      *  - `[A2UI]` `{"surface":..,"components":{id:..}}` → 邻接表还原为树
      *  - 数组里混入非对象元素（字符串/null）→ 跳过，不整体失败
+     *  - 元素**漏了 `type`** → 交给 [CardShapeFallback] 按字段形状推断（见该文件说明）
      *  - 一个都解不出来 → 返回空列表，由调用方决定是否降级显示源码
+     *
+     * @param hintTitle 围栏属性里的 `title=`，传给形状推断当组级标题用。
+     *   推断出来的卡来自「裸数组项」，项本身没有标题位置；没有它的话
+     *   一排推断出的按钮卡全无标题，用户认不出哪张是哪张。
      */
-    fun toCards(fence: String, body: String): List<QuroChatCard> {
+    fun toCards(fence: String, body: String, hintTitle: String = ""): List<QuroChatCard> {
         val t = body.trim()
         if (t.isEmpty()) return emptyList()
         return when (fence) {
-            FENCE_CARD -> listOfNotNull(safeParse(t))
-            FENCE_CARDS -> parseCardsBlock(t)
+            // 🔴 `card` 围栏也收数组：模型写 `card` 却塞了一个数组是极常见的错手，
+            // 而原实现只走 safeParse（单对象）→ 整组返回空。真机截图那一类若用
+            // ```card 下发，表现同样是「什么都没发生」。故先试数组解析。
+            FENCE_CARD -> {
+                val single = safeParse(t)
+                when {
+                    single != null -> listOf(single)
+                    t.startsWith("[") -> parseNodes(t, 0, IntArray(1) { MAX_TOTAL_NODES }, hintTitle)
+                    else -> emptyList()
+                }
+            }
+            FENCE_CARDS -> parseCardsBlock(t, hintTitle)
             FENCE_CARDUI -> parseA2uiBlock(t)
             FENCE_CARDJSON -> parseLineJsonBlock(t)
             else -> emptyList()
@@ -420,15 +435,17 @@ object CardFence {
     }
 
     private fun safeParse(json: String): QuroChatCard? = runCatching { parseComponentSpec(json) }.getOrNull()
-
     /** `cards` 围栏体。 */
-    private fun parseCardsBlock(t: String): List<QuroChatCard> = parseNodes(t)
+    private fun parseCardsBlock(t: String, hintTitle: String = ""): List<QuroChatCard> =
+        parseNodes(t, 0, IntArray(1) { MAX_TOTAL_NODES }, hintTitle)
 
     /**
      * `cards` 围栏体 → 卡片列表（**递归**）。
      *
-     * 三种形态都吃：
+     * 四种形态都吃：
      *  1. 数组 → 逐项递归（数组套数组也行）；
+     *  1b. 数组里全是**漏了 type 的裸项** → 走 [CardShapeFallback.guessArray] 合成容器卡
+     *     （截图那类：`[{"label":"继续测试","command":"ai:…"},…]` 原本整组返回 0 张卡）；
      *  2. 对象带 `children` → 合成 [QuroChatCard.CompositeCard]，子项继续递归，
      *     所以「组合卡里再套组合卡」是真支持的，不是只认第一层；
      *  3. 普通对象 → 交给 [safeParse]。
@@ -437,15 +454,25 @@ object CardFence {
      * 这种，children 是看板自己的列语义，应该由它自己的 builder 去读；
      * 只有名册不认识、且又带了 children 的对象，才当组合容器拆开。
      */
-    private fun parseNodes(text: String): List<QuroChatCard> =
-        parseNodes(text, 0, IntArray(1) { MAX_TOTAL_NODES })
-
-    private fun parseNodes(text: String, depth: Int, budget: IntArray): List<QuroChatCard> {
+    private fun parseNodes(text: String, depth: Int, budget: IntArray, hintTitle: String): List<QuroChatCard> {
         val t = text.trim()
         if (t.isEmpty() || depth > MAX_COMPOSITE_DEPTH || budget[0] <= 0) return emptyList()
         if (t.startsWith("[")) {
             val arr = runCatching { JSONArray(t) }.getOrNull() ?: return emptyList()
-            return arr.objects().flatMap { parseNodes(it.toString(), depth + 1, budget) }
+            // 🔴 先整组试一次形状推断：模型下发裸数组项（漏 type）时，
+            // 逐项 safeParse 会全部返回 null，整组凭空消失（真机截图里的现象）。
+            // 推断要求「每一项都命中特异形状」，所以先试整组不会误伤正常的混合数组。
+            if (arr.length() > 0) {
+                val objs = arr.objects()
+                if (objs.size == arr.length() && objs.all { CardShapeFallback.guess(it, hintTitle) != null }) {
+                    val guessed = CardShapeFallback.guessArray(arr, hintTitle)
+                    if (guessed.isNotEmpty()) {
+                        budget[0] -= guessed.size
+                        return guessed
+                    }
+                }
+            }
+            return arr.objects().flatMap { parseNodes(it.toString(), depth + 1, budget, hintTitle) }
         }
         val o = runCatching { JSONObject(t) }.getOrNull() ?: return emptyList()
         val direct = safeParse(t)
@@ -453,7 +480,7 @@ object CardFence {
             return listOf(direct)
         }
         val children = o.optJSONArray("children")?.let { kids ->
-            kids.objects().flatMap { parseNodes(it.toString(), depth + 1, budget) }
+            kids.objects().flatMap { parseNodes(it.toString(), depth + 1, budget, hintTitle) }
         }.orEmpty()
         if (children.isNotEmpty()) {
             return listOf(

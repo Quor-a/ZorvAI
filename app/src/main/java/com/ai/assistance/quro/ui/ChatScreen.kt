@@ -3672,7 +3672,10 @@ private fun MessageRow(
         // flatten 之后卡片就不知道该跟哪一组的主题走了。
         val fenceGroups = remember(blocks) {
             blocks.filterIsInstance<MsgBlock.Card>().mapNotNull { blk ->
-                val cards = runCatching { CardFence.toCards(blk.fence, blk.source) }.getOrNull()
+                val groupTitle = CardFence.parseValueAttrs(blk.attrs)["title"].orEmpty()
+                // title= 要透传给 toCards：模型漏写 type 而被形状推断救回的卡来自「裸数组项」，
+                // 项本身没有标题位置，没有组标题兜底的话一排按钮卡全无标题、认不出是哪组的。
+                val cards = runCatching { CardFence.toCards(blk.fence, blk.source, groupTitle) }.getOrNull()
                     // 流式防护：数据还没写完（表格/饼图/图表/热力图/雷达空数据）时不显示，
                     // 下一帧数据到齐重解析就会产出完整卡片，避免闪一下「（无数据）」。
                     ?.filter { c -> !cardHasNoData(c) }
@@ -3680,7 +3683,7 @@ private fun MessageRow(
                     ?: return@mapNotNull null
                 CardFence.Grouped(
                     cards = cards,
-                    title = CardFence.parseValueAttrs(blk.attrs)["title"].orEmpty(),
+                    title = groupTitle,
                     theme = CardFence.parseValueAttrs(blk.attrs)["theme"]?.lowercase()?.takeIf { it in CardFence.THEME_PRESETS } ?: "accent",
                     compact = CardFence.parseAttrs(blk.attrs).contains("compact"),
                     // 逐行围栏流式时会反复重解析，标题只在闭合后给，避免每帧闪标题

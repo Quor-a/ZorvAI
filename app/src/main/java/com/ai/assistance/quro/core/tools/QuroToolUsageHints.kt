@@ -127,8 +127,17 @@ object QuroToolUsageHints {
         // ── 文档生成 ──
         "aiwps_create" to "「帮我生成一份 Word 周报」「做个 Excel 表格」「出个 PPT 关于 XX」都调用（本地生成 Office 兼容文件）",
 
+        // ── 可视化组件（富卡片）──
+        // 🔴 这四个是「在对话框里直接把结果画出来」的唯一正路。
+        // 历史提示词里把卡片挂在 ui_control(action="card"/"widget") 名下，
+        // 与真实工具不符 → 模型会调一个不存在的 action，卡片静默不出现。
+        "ui_widget" to "在对话框里展示单个可视化组件时调用（按钮/开关/滑块/进度/仪表/统计/表格/列表/分段控件/饼图/评分/倒计时/标签页/折叠/表单/筹码/步骤条/甘特/热力/雷达/对比/看板/轮播/时间线/里程碑/文件/代码/终端/日志/二维码/条码/颜色/计数器/面包屑/标签云/徽章/头像组/mermaid 图表/miniapp 网页……）。凡是「结果适合画出来而不是写成文字」都优先用它，别退化成一堆纯文本。",
+        "ui_card" to "一次要出多张富卡片时调用（传组件数组）；只出单张就用 ui_widget。",
+        "card_catalog" to "不记得某个卡片类型的字段名时调用，拉该类目的完整样例与字段说明（也可查围栏 4 种头、card_patch 补丁语法、组件名归一化）。别凭印象编字段——字段写错会静默渲染成兜底卡。",
+        "card_patch" to "已下发过的卡片要改内容时调用（进度刷新、倒计时走字、勾掉待办、改表格单元格、更新统计数字、列表追加），只发改动的字段而不重发整张卡；建议先 describe 拿合法路径。",
+
         // ── 统一UI控制工具 ──
-        "ui_control" to "统一UI控制工具：操控界面每个角落。常见用法：「打开编辑器/终端/工具箱」→ ui_control(action=\"open\", target=\"editor\")；「切换深度思考」→ ui_control(action=\"toggle\", target=\"deepthink\")；「打开模型选择」→ ui_control(action=\"sheet\", target=\"model\")；「新建对话」→ ui_control(action=\"chat\", action_type=\"new\")；「渲染卡片/组件」→ ui_control(action=\"card\"/\"widget\")；「查询状态/更新属性/滚动/聚焦/隐藏/显示/导航/权限控制」→ ui_control(action=\"status\"/\"update\"/\"scroll\"/\"focus\"/\"hide\"/\"show\"/\"navigate\"/\"permission\")。可用 target（action=open 直达界面/能力）：editor/terminal/toolbox/knowledge/cms/aci/about/appearance/soul/memory/permission/model_config/voice/settings/tool_center（工具中心总览）/vispro（可视化编程：Mermaid 源码编辑+实时渲染+导出 SVG）/node_editor（节点编辑器：拖拽节点流，导出 Mermaid）/miniapp（Web 应用：渲染 AI 生成的 HTML/JS Web 应用）； Web 应用也可直接在对话框渲染——优先用 ```miniapp 围栏或 ui_control(action=\"widget\", type=\"miniapp\", value=\"<html>\")",
+        "ui_control" to "统一UI控制工具：操控界面每个角落。常见用法：「打开编辑器/终端/工具箱」→ ui_control(action=\"open\", target=\"editor\")；「切换深度思考」→ ui_control(action=\"toggle\", target=\"deepthink\")；「打开模型选择」→ ui_control(action=\"sheet\", target=\"model\")；「新建对话」→ ui_control(action=\"chat\", action_type=\"new\")；「查询状态/更新属性/滚动/聚焦/隐藏/显示/导航/权限控制」→ ui_control(action=\"status\"/\"update\"/\"scroll\"/\"focus\"/\"hide\"/\"show\"/\"navigate\"/\"permission\")。可用 target（action=open 直达界面/能力）：editor/terminal/toolbox/knowledge/cms/aci/about/appearance/soul/memory/permission/model_config/voice/settings/tool_center（工具中心总览）/vispro（可视化编程：Mermaid 源码编辑+实时渲染+导出 SVG）/node_editor（节点编辑器：拖拽节点流，导出 Mermaid）/miniapp（Web 应用：渲染 AI 生成的 HTML/JS Web 应用）； Web 应用也可直接在对话框渲染——优先用 ```miniapp 围栏或 ui_widget(type=\"miniapp\")",
 
         // ── MCP 客户端 ──
         "mcp_servers" to "「看看连了哪些 MCP 服务器」「MCP 服务列表」都调用",

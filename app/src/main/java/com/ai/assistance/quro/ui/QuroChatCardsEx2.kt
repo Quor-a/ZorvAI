@@ -648,16 +648,30 @@ internal fun BarcodeCardView(card: BarcodeCard, onCommand: (String) -> Unit) {
     CardShell(card.title) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Canvas(Modifier.fillMaxWidth().height(64.dp)) {
-                val barW = size.width / 90f
-                var x = 0f
-                var i = 0
-                while (x < size.width - barW) {
-                    val w = barW * (1f + ((seed + i * 37) % 4))
-                    if (i % 2 == 0) {
-                        drawRect(color = cs.onSurface, topLeft = Offset(x, 0f), size = Size(minOf(w, size.width - x), size.height))
+                //🔴 条宽必须由**条数**反推，不能由宽度平分。
+                // 旧写法 `barW = width/90` + 步进 `barW*(1..4)`：目标 90 组但每组占
+                // 4~7 倍barW，一屏只排得下十几组 —— 真机截图里就是一排**粗黑柱**，
+                // 完全没有"条码"的观感（窄屏上尤其明显）。
+                // 现在：先定死总条数，再把总宽平分成 unit，一根不浪费。
+                val modules = 64
+                val gap = size.width / (modules * 2.6f)   // 条:隙 ≈ 1:1.6
+                val barW = (size.width - gap * (modules - 1)) / modules
+                if (barW > 0.4f) {
+                    var x = 0f
+                    var i = 0
+                    while (i < modules && x < size.width) {
+                        // 伪随机只用于"看得出是条纹"，宽度在 1~3 个模块之间起伏
+                        val w = barW * (1f + ((seed + i * 37) % 3))
+                        if (i % 2 == 0) {
+                            drawRect(
+                                color = cs.onSurface,
+                                topLeft = Offset(x, 0f),
+                                size = Size(minOf(w, size.width - x), size.height),
+                            )
+                        }
+                        x += w + gap
+                        i++
                     }
-                    x += w + barW
-                    i++
                 }
             }
             Spacer(Modifier.height(6.dp))

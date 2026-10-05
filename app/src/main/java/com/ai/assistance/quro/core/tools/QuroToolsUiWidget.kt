@@ -26,11 +26,14 @@ import org.json.JSONObject
  */
 class UiWidgetTool : QuroTool {
     override val name = "ui_widget"
-    // 组件清单不手抄：从 CardSdk 名册运行时生成（92 种），名册一扩这里自动同步。
+    // 组件清单不手抄：从 CardSdk 名册运行时生成（数量见 CardSdk.typeCount），名册一扩这里自动同步。
+    // 上面那段「常用几类字段」是手写的，只覆盖早期二十来种，**故意保留**：它是唯一常驻的字段写法来源，
+    // 删了模型就只能靠card_catalog 现查现写（多一轮工具调用）。但必须标明它不是全量，否则模型会以为
+    // 清单就这些 —— 末尾的 compactCatalog 才是全量。
     // 完整样例用 card_catalog 按需拉，避免十几 KB 样例常驻进系统提示词。
     override val description = "在对话框内直接渲染一张可交互 UI 组件。用于把结构化结果以可视化、可操作的方式呈现在对话框里，而非纯文本或仅打开界面。参数 spec 为 JSON 字符串（type + 各类型字段）。" +
-        "完整类型与样例见 CARD_CATALOG 卡片目录（含 input/data/media/layout/action/nav/decoration 七大归类，可据此生成上百款卡片）。" +
-        "type 取值与关键字段：" +
+        "完整类型与样例见 card_catalog 卡片目录工具（可传 category 或 types 过滤；归类共 9 个：input/data/layout/action/nav/media/flow/decoration/aiwrite）。" +
+        "常用几类的 type 与关键字段（**这不是全量**，全量清单见本描述末尾的类目列表与 card_catalog）：" +
         "button{label,command,variant?}; toggle{label,checked,command?}; slider{label,value,min,max,step,unit?,command?}; " +
         "progress{label,value,max?,suffix?}; stat{label,value,unit?,delta?,trend?}; alert{severity,text}; " +
         "table{headers:[],rows:[[]]}; list{items:[{text,sub?,selected?}],selectable?,command?}; segmented{label,options:[],selectedIndex,command?}; " +

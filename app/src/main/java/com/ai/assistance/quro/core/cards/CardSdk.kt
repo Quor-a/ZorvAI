@@ -927,12 +927,34 @@ object CardSdk {
         return parseObj(s)
     }
 
-    /** 解析 [JSONObject]。 */
+    /**
+     * 解析 [JSONObject]。
+     *
+     * 🔴 `type` 缺失时**不直接丢**，先交给 [CardShapeFallback] 按字段形状猜一次
+     * （`{"label":"继续测试","command":"ai:继续下一类组件"}` 这种极常见，
+     * 丢掉的实际表现是「AI 明明写了按钮，界面上什么都没出现」且无任何日志）。
+     * 猜不出来才返回 null —— 宁可丢，也不要把用户的 schema 当成卡片渲染。
+     */
     fun parseObj(s: JSONObject): QuroChatCard? {
         val type = s.optString("type", "").trim().lowercase()
-        if (type.isEmpty()) return null
-        val b = byType[type]?.builder ?: return fallbackCard(type, s)
-        return runCatching { b(s) }.getOrNull() ?: fallbackCard(type, s)
+        if (type.isEmpty()) {
+            val g = CardShapeFallback.guess(s) ?: return null
+            val built = runCatching { byType[g.type]?.builder?.invoke(g.spec) }.getOrNull()
+            return built ?: fallbackCard(g.type, g.spec)
+        }
+        val b = byType[type]?.builder
+        if (b != null) return runCatching { b(s) }.getOrNull() ?: fallbackCard(type, s)
+        // type 存在但名册没收录：先按形状认一次（`{"type":"md","name":…,"path":…}`
+        // 本来要落「未识别组件」，认对了就是一张正常文件卡，认错了还是原来那张兜底卡 ——
+        // 这条路没有「篡改用户内容」的风险，与无 type 乱猜不同）。
+        val u = CardShapeFallback.resolveUnknown(s)
+        if (u != null) {
+            val ub = byType[u.type]?.builder
+            if (ub != null) {
+                runCatching { ub(u.spec) }.getOrNull()?.let { return it }
+            }
+        }
+        return fallbackCard(type, s)
     }
 
     /**
@@ -954,7 +976,7 @@ object CardSdk {
      *
      * ## 为什么要紧凑而不是把 [catalogJson] 整份塞进工具描述
      *
-     * 92 种组件的完整样例加起来十几 KB，每轮对话都带进系统提示词会实打实吃掉上下文预算，
+     * 上百种组件的完整样例加起来十几 KB，每轮对话都带进系统提示词会实打实吃掉上下文预算，
      * 而模型大多数时候只需要知道「有没有这种卡」；真要写复杂卡时再按需拉样例即可。
      * 所以拆成两级：
      *  - 常驻：compactCatalog()，约 2KB，进 ui_widget / ui_card 的工具描述；
@@ -962,7 +984,7 @@ object CardSdk {
      *
      * ## 为什么这个函数以前不存在是个真缺口
      *
-     * 名册扩到 92 种，但工具描述里那份手写清单还停在 v1068 的四十来种 ——
+     * 名册扩到上百种，但工具描述里那份手写清单还停在 v1068 的四十来种 ——
      * 模型看不见新增的组件，只能靠围栏里撞见样例去猜。加组件而不接这一环，
      * 等于新组件只对「已经知道它存在」的模型有效，这正是要避免的静默失效。
      */
@@ -1092,6 +1114,8 @@ object CardSdk {
                 }
             }
         }
+        // 兜底推断的目标必须在名册里，否则「兜底本身也成了兜底」且零报错
+        issues += CardShapeFallback.lintUnknownTargets()
         if (catalog().size != all.size) issues += "catalog 数量 ≠ all 数量"
 
         // 补丁链路自检：serialize → 空补丁 → 必须原样返回。
@@ -1147,14 +1171,118 @@ object CardSdk {
     /** 从另一个对象取字符串 → 空串归一为 null。 */
     fun JSONObject.strOrNull2(src: JSONObject, key: String): String? = src.optString(key, "").ifBlank { null }
 
-    /** 数组长度，缺省 0。 */
-    fun JSONObject.arrLen(key: String): Int = optJSONArray(key)?.length() ?: 0
+    /**
+     * 数组长度，缺省 0。**带键名容错** —— 见 [looseArray]。
+     *
+     * 🔴 为什么容错收口在这两个最底层的 getter 里、而不是让 60 多个 builder
+     * 各自改调 `arrLenLoose`：逐个改正是「改多处、漏一处就留个静默坑」的病根
+     * （本 SDK 反复栽过同款）。收口在这里，新增组件天生继承容错，**不可能漏**。
+     */
+    fun JSONObject.arrLen(key: String): Int = looseArray(key)?.length() ?: 0
 
-    /** 数组第 i 项，缺省返回空对象（调用方用 optString 会拿到默认值，安全）。 */
-    fun JSONObject.objAt(key: String, i: Int): JSONObject = optJSONArray(key)?.optJSONObject(i) ?: JSONObject()
+    /** 数组第 i 项，缺省返回空对象（调用方用 optString 会拿到默认值，安全）。**带键名容错**。 */
+    fun JSONObject.objAt(key: String, i: Int): JSONObject = looseArray(key)?.optJSONObject(i) ?: JSONObject()
+
+    /**
+     * **键名容错**的数组读取：命中 [ARRAY_KEY_ALIASES] 里的近义键。
+     *
+     * ## 为什么需要
+     *
+     * 实测过一个真机故障：`{"type":"actions","action":[...]}` —— 少写一个 s。
+     * `arrLen("actions")` 返回 0，于是 [parseObj] 照样构造出一张 [QuroChatCard.ActionCard]
+     * **成功**，但 `actions` 是空的：用户看到一张空的按钮组卡片，
+     * 没有报错、没有兜底提示，比整组丢卡更难查（丢卡至少「什么都没发生」是明显的）。
+     *
+     * 所以凡「数组内容决定这张卡长什么样」的地方都必须容错 ——
+     * 空数组会让卡片**看起来正常但内容全丢**，这类静默失效最费时间。
+     *
+     * 覆盖的写法：单复数（action/actions）、近义词（items/rows/options/buttons）、
+     * 单对象包一层（`"actions":{…}` 当成单项）。
+     */
+    fun JSONObject.arrLenLoose(key: String): Int = arrLen(key)
+
+    /** 同 [arrLenLoose]，第 i 项。 */
+    fun JSONObject.objAtLoose(key: String, i: Int): JSONObject = objAt(key, i)
+
+    /** 同 [arrLenLoose]，取全部对象项。 */
+    fun JSONObject.objListLoose(key: String): List<JSONObject> {
+        val a = looseArray(key) ?: return emptyList()
+        val out = ArrayList<JSONObject>(a.length())
+        for (i in 0 until a.length()) a.optJSONObject(i)?.let { out.add(it) }
+        return out
+    }
+
+    /**
+     * 按原键 → 别名键的顺序找第一个**存在的**数组。
+     *
+     * 还要吃「单对象当数组」：模型写 `"options": {"0": "A", "1": "B"}` 或
+     * `"actions": {"label":"A","command":"ai:1"}` 时，前者是 map 形态的数组，
+     * 后者是单对象 —— 都按单项数组处理。
+     */
+    private fun JSONObject.looseArray(key: String): JSONArray? {
+        optJSONArray(key)?.let { return it }
+        for (alt in ARRAY_KEY_ALIASES[key].orEmpty()) {
+            optJSONArray(alt)?.let { return it }
+        }
+        // 单对象 / map 形态：能解析出对象就包成单项数组
+        val single = when {
+            optJSONObject(key) != null -> optJSONObject(key)
+            else -> collectMapToJsonObject(key)
+        } ?: return null
+        return JSONArray().put(single)
+    }
+
+    /** `{"0":{…},"1":{…}}` 这类 map 形态数组 → 真数组。键名能转成下标才收。 */
+    private fun JSONObject.collectMapToJsonObject(key: String): JSONObject? {
+        if (!has(key)) return null
+        val v = opt(key) ?: return null
+        if (v !is JSONObject) return null
+        val m = v as JSONObject
+        val keys = m.keys()
+        val numeric = ArrayList<String>()
+        while (keys.hasNext()) {
+            val k = keys.next()
+            if (k.toIntOrNull() == null) return null   // 有一项不是下标 → 不是 map 形态数组
+            numeric.add(k)
+        }
+        if (numeric.isEmpty()) return null
+        return m
+    }
+
+    /**
+     * 数组键的近义名表。
+     *
+     * 只收「语义等价、且模型真会写错」的：单复数与常见简写。
+     * 不收语义相近但**含义不同**的（那会把内容接到错误的字段上）。
+     *
+     * 🔴 用 `by lazy` 而不是普通 `val`：这个 `object` 里的 `all` / `byType` 初始化
+     * 时会回调 [parseObj] → [looseArray] → 读本表，而本表的声明位置在文件后段。
+     * `object` 成员按声明顺序初始化，普通 `val` 在被提前读到时还是 null，
+     * 于是「别名表看起来配了但永远不生效」——静默失效，编译与测试日志都不报错。
+     * `by lazy` 把顺序依赖彻底断掉。
+     */
+    private val ARRAY_KEY_ALIASES: Map<String, List<String>> by lazy {
+        mapOf(
+            "actions" to listOf("action", "buttons", "items"),
+            "items" to listOf("item", "rows", "options", "list"),
+            "options" to listOf("option", "items", "values"),
+            "buttons" to listOf("button", "actions"),
+            "badges" to listOf("badge", "items"),
+            "tags" to listOf("tag", "items"),
+            "crumbs" to listOf("crumb", "items"),
+            "avatars" to listOf("avatar", "members", "member", "people", "items"),
+            "nodes" to listOf("node", "items"),
+            "edges" to listOf("edge", "links", "items"),
+            "sections" to listOf("section", "groups", "items"),
+            "replies" to listOf("reply", "suggestions", "options"),
+            "chips" to listOf("chip", "values", "options"),
+            "lines" to listOf("line", "rows"),
+            "steps" to listOf("step", "items"),
+        )
+    }
 
     /** 数组第 i 项，可为 null。 */
-    fun JSONObject.objOrNull(key: String, i: Int): JSONObject? = optJSONArray(key)?.optJSONObject(i)
+    fun JSONObject.objOrNull(key: String, i: Int): JSONObject? = looseArray(key)?.optJSONObject(i)
 
     /**
      * **双形态**字符串数组：`["快赢","战略"]` 与 `[{"value":"快赢"},…]` 都吃。
@@ -1177,17 +1305,17 @@ object CardSdk {
         return out
     }
 
-    /** 字符串数组。 */
+    /** 字符串数组。**带键名容错**（`options` 写成 `option`/`values` 也能读出来）。 */
     fun JSONObject.strArr(key: String): List<String> {
-        val a = optJSONArray(key) ?: return emptyList()
+        val a = looseArray(key) ?: return emptyList()
         val out = ArrayList<String>(a.length())
         for (i in 0 until a.length()) if (a.isNull(i)) out += "" else out += a.optString(i, "")
         return out
     }
 
-    /** Float 数组。 */
+    /** Float 数组。**带键名容错**。 */
     fun JSONObject.floatArr(key: String): List<Float> {
-        val a = optJSONArray(key) ?: return emptyList()
+        val a = looseArray(key) ?: return emptyList()
         val out = ArrayList<Float>(a.length())
         for (i in 0 until a.length()) out += a.optDouble(i, 0.0).toFloat()
         return out

@@ -28,7 +28,18 @@ data class CardTemplate(
     val sampleJson: String,
 )
 
-/** 完整卡片目录：覆盖全部历史类型 + v221 新增 6 款富事件卡片。 */
+/**
+ * 🔴 **已废弃，请勿再当提示词来源。**
+ *
+ * 这份静态目录只有 47 条，而真源 [CardSdk] 已扩到上百种；两者不一致，且
+ * [cardCatalogJson] 无人调用。历史上工具描述里写「详见 CARD_CATALOG」——
+ * 但 CARD_CATALOG 是个 Kotlin val，**模型根本无法调它**，那句话等于把模型
+ * 引到一个不存在的入口上（真正的入口是 `card_catalog` **工具**）。
+ *
+ * 保留本文件只为不破坏潜在引用（删了要动 CardTemplate 与 catalog() 的注释契约）。
+ * 新增组件一律加到 [CardSdk]，提示词一律现读 [CardSdk.compactCatalog]。
+ */
+@Deprecated("静态目录已过时，真源是 CardSdk；仅保留兼容，勿用于提示词")
 val CARD_CATALOG: List<CardTemplate> = listOf(
     // ── 输入交互 ──
     CardTemplate("button", "input", "单个按钮，点击触发 command", """{"type":"button","title":"开始","label":"点击我","command":"reply:你好","variant":"filled"}"""),
@@ -86,7 +97,11 @@ val CARD_CATALOG: List<CardTemplate> = listOf(
     CardTemplate("composite", "aiwrite", "组合卡：多子卡聚合成整体（stack 堆叠可单渲染 / tabs 标签页 / accordion 折叠）", """{"type":"composite","layout":"stack","children":[{"type":"stat","label":"内存","value":"6G"},{"type":"progress","label":"下载","value":60}],"description":"系统概览"}"""),
 )
 
-/** 把目录序列化为紧凑 JSON，便于注入 AI 系统提示词/工具说明。 */
+/**
+ * 🔴 同 [CARD_CATALOG]：已废弃，无人调用。
+ * 提示词要目录请用 `card_catalog` 工具（[CardCatalogTool]），它按类目/类型过滤且带长度上限。
+ */
+@Deprecated("改用 card_catalog 工具；本函数注入的是已过时的 47 条静态目录")
 fun cardCatalogJson(): String = org.json.JSONArray().also { a ->
     CARD_CATALOG.forEach { t ->
         a.put(org.json.JSONObject().apply {
