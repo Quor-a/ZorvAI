@@ -42,6 +42,9 @@ import com.ai.assistance.quro.ui.QuroChatCardView
 import com.ai.assistance.quro.ui.VisualDialogs
 import com.ai.assistance.quro.ui.VisualPopupDialog
 import com.ai.assistance.quro.ui.VisualCustomPopupDialog
+import com.ai.assistance.quro.core.cards.CardAction
+import com.ai.assistance.quro.core.cards.CardActionRouter
+import com.ai.assistance.quro.core.cards.CardFence
 import com.ai.assistance.quro.core.cards.QuroChatCard
 import com.ai.assistance.quro.core.cards.parseComponentSpec
 import com.ai.assistance.quro.ui.QuroShareBridge
@@ -1171,8 +1174,83 @@ fun ChatScreen(
         com.ai.assistance.quro.core.skill.QuroSkillStore.load(ctx).count { it.enabled }
     ) }
 
-    // 卡片动作命令分发：ui_* 走 UI 桥；linux:install 触发沙箱安装；run:<cmd> 喂给终端。
+    // ───────── 结构化动作协议（core/cards/CardAction） ─────────
+    //
+    // 老链路是一串 `startsWith` 裸串：渲染层拼 `"ai:${x}"`、这里再拆字符串，
+    // 两边各写一套方言，改个动词要动七八处。协议是**加在前面**的，
+    // 下面那条老 `when` 一个字都没删 —— 协议没覆盖的族照样从它走，所以接协议零行为变化。
+
+    /** 写剪贴板 + 已复制提示。协议与老链路共用一份，别两边各写一遍。 */
+    fun copyToClipboard(text: String) {
+        if (text.isEmpty()) return
+        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("Zorv", text))
+        Toast.makeText(ctx, qstr(R.string.qk_00023), Toast.LENGTH_SHORT).show()
+    }
+
+    /** 结构化动作分支。返回 true = 已处理；false = 交回老链路。 */
+    fun handleCardAction(action: CardAction.Action): Boolean {
+        return when (action.kind) {
+            CardAction.Kind.REPLY, CardAction.Kind.AI -> {
+                val t = action.payload()
+                if (t.isNotEmpty()) {
+                    vm.send(t, emptyList(), cfg)
+                    true
+                } else {
+                    false
+                }
+            }
+            CardAction.Kind.UI, CardAction.Kind.SCREEN -> {
+                QuroUiActionBridge.dispatch?.invoke(action.payload())
+                true
+            }
+            CardAction.Kind.INSTALL -> {
+                QuroLinuxEnv.setup(ctx)
+                true
+            }
+            CardAction.Kind.RUN -> {
+                showTerminal = true
+                true
+            }
+            CardAction.Kind.OPEN -> {
+                QuroBrowserBridge.open(action.payload())
+                true
+            }
+            CardAction.Kind.COPY -> {
+                copyToClipboard(action.payload())
+                true
+            }
+            // 页面内导航：交 UiNavigationBus（ChatScreen 自己消费 NavigateTo）
+            CardAction.Kind.NAVIGATE -> {
+                val t = action.payload()
+                if (t.isNotEmpty()) {
+                    UiNavigationBus.navEvent = UiNavigationEvent.NavigateTo(t)
+                    true
+                } else {
+                    false
+                }
+            }
+            CardAction.Kind.TOAST -> {
+                val t = action.payload()
+                if (t.isNotEmpty()) {
+                    Toast.makeText(ctx, t, Toast.LENGTH_SHORT).show()
+                    true
+                } else {
+                    false
+                }
+            }
+            // EMIT 只走进程内总线；走到这里说明没人订阅（AI 发了个空响），
+            // 返回 false 让老链路兜底时自然不做事，别抛、别刷屏。
+            CardAction.Kind.EMIT -> false
+            CardAction.Kind.UNKNOWN -> false
+        }
+    }
+
+    /** 卡片动作命令分发：ui_* 走 UI 桥；linux:install 触发沙箱安装；run:<cmd> 喂给终端。 */
     fun handleCardCommand(cmd: String) {
+        val action = CardAction.parse(cmd)
+        if (CardActionRouter.dispatch(action) { a -> handleCardAction(a) }) return
+        // 老链路兜底（一字未改）
         when {
             cmd.startsWith("reply:") -> {
                 val t = cmd.removePrefix("reply:").trim()
@@ -1187,10 +1265,7 @@ fun ChatScreen(
             // ── v221 富事件命令：open / copy / ai / screen ──
             cmd.startsWith("open:") -> QuroBrowserBridge.open(cmd.removePrefix("open:").trim())
             cmd.startsWith("copy:") -> {
-                val text = cmd.removePrefix("copy:").trim()
-                val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                cm.setPrimaryClip(android.content.ClipData.newPlainText("Zorv", text))
-                Toast.makeText(ctx, qstr(R.string.qk_00023), Toast.LENGTH_SHORT).show()
+                copyToClipboard(cmd.removePrefix("copy:").trim())
             }
             cmd.startsWith("ai:") -> {
                 val t = cmd.removePrefix("ai:").trim()
@@ -3002,7 +3077,12 @@ private fun MessageRow(
     // 正文文本与「内联组件 JSON」抽离结果：供气泡正文与气泡外全宽卡片共用同一份，避免重复解析。
     // 卡片从气泡里拎出来，在下方「全宽内联」区块渲染，不再被 280dp 气泡压窄、移动端看不全。
     val displayText = QuroVoiceStyle.strip(msg.text ?: "")
-    val (cleanText, inlineCards) = remember(displayText) { extractInlineComponents(displayText) }
+    // 可视化组件围栏（正文第二通道）区间：先定位，供下面的内联扫描「护住」围栏 JSON，
+    // 避免围栏通道与内联通道把同一张卡各渲染一遍。
+    val cardFenceSpans = remember(displayText) {
+        runCatching { CardFence.parse(displayText).map { it.start..it.end } }.getOrElse { emptyList<IntRange>() }
+    }
+    val (cleanText, inlineCards) = remember(displayText, cardFenceSpans) { extractInlineComponents(displayText, cardFenceSpans) }
     // 「动态对话框UI」判定：AI 消息且【几乎整条都是】quro-ui 围栏（剥离围栏后无其余正文）→
     // 动态 UI 本身就是消息内容（对话框本身），撑满屏幕宽度、贴边、零内边距、无卡片背景；
     // 普通消息（含正文/思考/工具、仅夹带动态 UI 区块）仍走正常气泡布局，保留左右留白与「思考/工具」胶囊。
@@ -3352,7 +3432,7 @@ private fun MessageRow(
                     SelectionContainer {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         // 动态 UI 区块不在气泡内渲染（会被 280dp 压窄 / 输入条遮挡），改在消息底部全宽内联渲染。
-                        val bubbleRenderBlocks = blocks.filter { it !is MsgBlock.DynamicUi && it !is MsgBlock.SelfCard }
+                        val bubbleRenderBlocks = blocks.filter { it !is MsgBlock.DynamicUi && it !is MsgBlock.SelfCard && it !is MsgBlock.Card }
                         // v1089：每条块用稳定 key 渲染，避免流式/recomposition 时 Compose 按槽位复用
                         // AndroidView/WebView，导致两条 html 预览被合并成一个框（两个渲染框融合成一）。
                         for (bIdx in bubbleRenderBlocks.indices) {
@@ -3430,6 +3510,9 @@ private fun MessageRow(
                                 is MsgBlock.Aip -> {}
                                 // 自研卡片围栏已在消息底部全宽内联渲染，气泡内不再重复渲染（与动态 UI 同源机制）。
                                 is MsgBlock.SelfCard -> {}
+                                // 可视化组件围栏（card / cards / cardui）已在消息底部全宽内联渲染，
+                                // 气泡里不重复渲染（280dp 会把它压窄）。
+                                is MsgBlock.Card -> {}
                             }
                             }
                         }
@@ -3534,6 +3617,39 @@ private fun MessageRow(
                             source = blk.source,
                             onLinkClick = onOpenLink,
                         )
+                    }
+                }
+            }
+        }
+        // ── 可视化组件围栏（正文第二通道 ```card / ```cards / ```cardui）：全宽内联渲染。
+        //    与动态 UI / 自研卡片同源机制：不在 280dp 气泡里渲染，撑满对话框宽度。
+        //    围栏内容走 CardFence.toCards 单一解码层；流式未闭合、JSON 还没合法时暂不显示，
+        //    JSON 补全后下一帧重解析自然产出（不闪空卡、不落回源码代码块）。
+        val fenceCards = remember(blocks) {
+            blocks.filterIsInstance<MsgBlock.Card>()
+                .mapNotNull { blk -> runCatching { CardFence.toCards(blk.fence, blk.source) }.getOrNull() }
+                .flatten()
+                // 流式防护：数据还没写完（表格/饼图/图表/热力图/雷达空数据）时不显示，
+                // 下一帧数据到齐重解析就会产出完整卡片，避免闪一下「（无数据）」。
+                .filter { c -> !cardHasNoData(c) }
+        }
+        if (fenceCards.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.fillMaxWidth().clipToBounds()) {
+                FlowRow(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    maxItemsInEachRow = Int.MAX_VALUE,
+                ) {
+                    for (c in fenceCards) {
+                        key(c.id) {
+                            QuroChatCardView(
+                                c,
+                                onCommand,
+                                modifier = if (isCompactQuroCard(c)) Modifier.wrapContentWidth() else Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 }
             }
@@ -6600,6 +6716,14 @@ private sealed class MsgBlock {
     data class SelfCard(val source: String) : MsgBlock()
     /** AIP 排版引擎（Canvas，B 通道）：```aip 围栏或裸信封 JSON → 原生富排版（长文档/导图/PPT）。 */
     data class Aip(val source: String) : MsgBlock()
+    /**
+     * 可视化组件围栏（正文第二通道）：```card（单组件）/ ```cards（多组件）/ ```cardui（A2UI 邻接表）。
+     * 与 DynamicUi / SelfCard 同源机制——从气泡剔除，改在消息底部全宽内联渲染。
+     * @param fence 围栏头（card / cards / cardui），交给 [CardFence.toCards] 复用同一解码层
+     * @param source 围栏内容（未 trim）
+     * @param closed 是否已闭合。false = 流式中间态，JSON 合法即自动出现
+     */
+    data class Card(val fence: String = CardFence.FENCE_CARD, val source: String = "", val closed: Boolean = true) : MsgBlock()
     data class Heading(val level: Int, val text: String) : MsgBlock()
     data class Quote(val text: String) : MsgBlock()
     data class Rule(val text: String = "") : MsgBlock()
@@ -6625,18 +6749,22 @@ private fun cardHasNoData(card: QuroChatCard): Boolean = when (card) {
  * - 只有 type 属于已知组件类型才会被抽离并渲染，其它 JSON（如代码块里的 schema）原样保留；
  * - 抽离时连同 JSON 前后的多余空行一起裁掉，避免气泡里留下大段空白。
  */
-private fun extractInlineComponents(text: String): Pair<String, List<QuroChatCard>> {
+private fun extractInlineComponents(text: String, protected: List<IntRange> = emptyList()): Pair<String, List<QuroChatCard>> {
     if (text.isBlank()) return text to emptyList()
+    // 受保护区间（可视化组件围栏 ```card / ```cards / ```cardui）内的花括号就地抹成空格。
+    // 长度与下标完全不变 —— 下面所有扫描逻辑一行都不用改；效果是围栏里的 JSON 不会被
+    // 再当成「内联组件」抽走，否则围栏通道与内联通道会把同一张卡渲染两遍。
+    val scan = CardFence.blankBraces(text, protected)
     val cards = mutableListOf<QuroChatCard>()
     val sb = StringBuilder()
     var i = 0
     while (i < text.length) {
-        val brace = text.indexOf('{', i)
-        if (brace < 0) { sb.append(text.substring(i)); break }
-        sb.append(text.substring(i, brace))
-        val end = findBalancedBrace(text, brace)
-        if (end < 0) { sb.append(text.substring(brace)); break }
-        val candidate = text.substring(brace, end + 1)
+        val brace = scan.indexOf('{', i)
+        if (brace < 0) { sb.append(scan.substring(i)); break }
+        sb.append(scan.substring(i, brace))
+        val end = findBalancedBrace(scan, brace)
+        if (end < 0) { sb.append(scan.substring(brace)); break }
+        val candidate = scan.substring(brace, end + 1)
         // v1.0.81 修复：动态 UI 的 JSON 节点树绝不能被当成「内联组件」抽走。
         // 否则根节点类型与内联卡片类型同名（button/form/list/tabs/slider/progress/badge…）时，
         // 动态 UI 会被劫持成内联卡片、原围栏被拆烂，表现为「围栏残留气泡里 / 动态 UI 不渲染」。
@@ -6839,6 +6967,9 @@ private fun parseBlocks(text: String, selfCard: Boolean = true): List<MsgBlock> 
         val lang = m.groupValues[1].trim()
         val code = m.groupValues[2].removeSuffix("\n")
         when {
+            // 可视化组件围栏（正文第二通道）：card / cards / cardui → MsgBlock.Card，
+            // 内容交给 CardFence 单一解码层，气泡里不再当代码块显示源码。
+            isCardFenceLang(lang) -> blocks.add(MsgBlock.Card(lang.lowercase(), code, true))
             // 自研卡片渲染（feat_self_card）：独立围栏 ```quro-card，先于动态 UI 判定，避免被劫持。
             // 内容转成 MsgBlock.SelfCard 从气泡剔除，交给消息底部 CardSurface 全宽内联渲染。
             // 开关关闭（selfCard=false）时降级为普通代码块，内容不丢。
@@ -6912,6 +7043,16 @@ private fun isDynamicUiLang(lang: String): Boolean {
 private fun isSelfCardLang(lang: String): Boolean {
     val l = lang.trim().lowercase()
     return l == "quro-card" || l == "quro_card" || l == "zorv-card" || l == "zorv_card"
+}
+
+/**
+ * 判定是否为「可视化组件围栏」（正文第二通道）：card / cards / cardui。
+ * 直接复用 [CardFence.ALL_FENCES] 单一真源：围栏头改名时解析层与渲染层不会各改各的
+ * （历史教训：quro-ui / quro-card 都曾因两边判定不一致，出现「能解析却渲染成代码块」）。
+ */
+private fun isCardFenceLang(lang: String): Boolean {
+    val l = lang.trim().lowercase()
+    return CardFence.ALL_FENCES.any { l == it || l == it.replace('-', '_') }
 }
 
 /** 判断一段 JSON 是否为自研卡片节点（含 data.kind 结构，与内联组件 JSON 区分）。 */
@@ -7008,6 +7149,8 @@ private fun parseTail(seg: String): List<MsgBlock> {
             val out = mutableListOf<MsgBlock>()
             if (before.isNotBlank()) out.addAll(parseSegments(before))
             when {
+                // 可视化组件围栏流式未闭合：闭口前就当卡片解析（边写边出卡，JSON 合法即显示）
+                isCardFenceLang(lang) -> out.add(MsgBlock.Card(lang.lowercase(), after, false))
                 // 自研卡片渲染（feat_self_card）流式未闭合围栏：同样转 SelfCard 块（边写边出卡片）
                 isSelfCardLang(lang) -> out.add(MsgBlock.SelfCard(after))
                 // 生成式 UI 流式未闭合围栏：已废弃的 GenUI WebView 路径，跳过

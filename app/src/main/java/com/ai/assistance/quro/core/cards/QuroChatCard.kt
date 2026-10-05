@@ -888,7 +888,8 @@ fun parseComponentSpec(spec: String): QuroChatCard? {
             "htmlpreview" -> QuroChatCard.HtmlPreviewCard(
                 id, title, s.optString("html", ""),
             )
-            else -> null
+            // ── v1400 增强组件：未知 type 交给 [CardSdk.parseObj]（唯一解析层），未知落 CustomCard 而非丢弃 ──
+            else -> CardSdk.parseObj(s)
         }
     } catch (e: Exception) {
         null
@@ -958,6 +959,41 @@ fun serializeCard(card: QuroChatCard): JSONObject {
         is QuroChatCard.HtmlPreviewCard -> "htmlpreview"
         is QuroChatCard.MiniAppCard -> "miniapp"
         is QuroChatCard.CompositeCard -> "composite"
+        // ── v1400 增强组件（sealed 子类在 QuroChatCardEx.kt，wire type 必须登记在此，否则 when 不穷尽）──
+        is KeyValueCard -> "keyvalue"
+        is RingCard -> "ring"
+        is StackedBarCard -> "stackedbar"
+        is ScatterCard -> "scatter"
+        is FunnelCard -> "funnel"
+        is CandlestickCard -> "candlestick"
+        is BoxPlotCard -> "boxplot"
+        is SpeedometerCard -> "speedometer"
+        is SparklineCard -> "sparkline"
+        is SearchBoxCard -> "searchbox"
+        is PollCard -> "poll"
+        is CheckListCard -> "checklist"
+        is AccordionCard -> "accordion"
+        is GroupedListCard -> "groupedlist"
+        is TreeCard -> "tree"
+        is QuoteCard -> "quote"
+        is DiffCard -> "diff"
+        is FlowCard -> "flow"
+        is HierarchyCard -> "hierarchy"
+        is ContactCard -> "contact"
+        is ProductCard -> "product"
+        is ScheduleCard -> "schedule"
+        is FileCard -> "filecard"
+        is AchievementCard -> "achievement"
+        is WeatherCard -> "weather"
+        is MapCard -> "map"
+        is QrCodeCard -> "qrcode"
+        is GalleryCard -> "gallery"
+        is TerminalCard -> "terminal"
+        is LinkListCard -> "linklist"
+        is PaginationCard -> "pagination"
+        is DividerCard -> "divider"
+        is SpacerCard -> "spacer"
+        is CustomCard -> "custom"
     })
     o.put("id", card.id)
     o.put("title", card.title)
@@ -1125,6 +1161,9 @@ fun serializeCard(card: QuroChatCard): JSONObject {
                 card.children.forEach { child -> a.put(serializeCard(child)) }
             })
         }
+        // v1400 增弱组件：字段写盘统一交给 CardCodec（编码单一实现）
+        else -> CardCodec.encode(card, o)
+
     }
     return o
 }
@@ -1294,7 +1333,11 @@ fun parseCard(o: JSONObject): QuroChatCard? {
                 } ?: emptyList()
                 QuroChatCard.CompositeCard(id, title, layout, children, description)
             }
-            else -> null
+            // ── v1400 增强组件：解析层只有这一份（与工具下发共用 [CardSdk.parseObj]）──
+            else -> runCatching {
+                val s = JSONObject(o.toString()).apply { put("type", t) }
+                CardSdk.parseObj(s)
+            }.getOrNull()
         }
     }.getOrNull()
 }

@@ -1,12 +1,27 @@
-package com.ai.assistance.quro.ui
+# -*- coding: utf-8 -*-
+"""Task #126：把可视化组件库改由 CardSdk 名册（80 种）自动驱动。
+
+旧版是手抄 3 组样例（富组件 / 富卡片 / AI 自写），加了 34 种新卡片却一个都没进目录页 ——
+等于新组件「能解析、能渲染，但用户和 AI 都不知道它存在」。
+现在目录页只从 CardSdk.catalog() 读，以后加卡片 UI 一行都不用改。
+"""
+import io
+import os
+import sys
+
+P = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "app", "src", "main", "java", "com", "ai", "assistance", "quro", "ui",
+    "QuroComponentGalleryScreen.kt",
+)
+
+CODE = '''package com.ai.assistance.quro.ui
 
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -80,21 +95,19 @@ fun QuroComponentGalleryScreen(
     val catalog = remember { CardSdk.catalog() }
     val total = catalog.size
     // 过滤 + 按类目分组。过滤命中 type / description / category 任一。
-    val grouped = remember(catalog, query) {
+    val grouped: List<Pair<String, List<CardTemplate>>> = remember(catalog, query) {
         val q = query.trim()
         val hit = if (q.isEmpty()) catalog else catalog.filter {
             it.type.contains(q, ignoreCase = true) ||
                 it.description.contains(q, ignoreCase = true) ||
                 it.category.contains(q, ignoreCase = true)
         }
-        val out = ArrayList<Pair<String, List<CardTemplate>>>()
-        CATEGORY_ORDER.forEach { c ->
+        CATEGORY_ORDER.mapNotNull { c ->
             val list = hit.filter { it.category == c }
-            if (list.isNotEmpty()) out.add(c to list)
-        }
-        val rest = hit.filter { it.category !in CATEGORY_ORDER }
-        if (rest.isNotEmpty()) out.add(CATEGORY_FALLBACK to rest)
-        out
+            if (list.isEmpty()) null else c to list
+        } + (hit.filter { it.category !in CATEGORY_ORDER }.let { rest ->
+            if (rest.isEmpty()) null else CATEGORY_FALLBACK to rest
+        })
     }
     val shown = grouped.sumOf { it.second.size }
 
@@ -128,7 +141,7 @@ fun QuroComponentGalleryScreen(
                         onValueChange = { query = it },
                         singleLine = true,
                         placeholder = { Text("搜索组件类型 / 说明", fontSize = 13.sp) },
-                        leadingIcon = { Icon(Icons.Filled.Search, null, Modifier.padding(end = 8.dp)) },
+                        leadingIcon = { Icon(Icons.Filled.Search, null, Modifier.size(16.dp)) },
                         modifier = Modifier.fillMaxWidth(),
                         textStyle = MaterialTheme.typography.bodySmall,
                     )
@@ -139,6 +152,7 @@ fun QuroComponentGalleryScreen(
                 item {
                     SectionTitle(
                         (CATEGORY_LABELS[category] ?: category) + " · " + specs.size.toString() + " 种",
+                        cs,
                     )
                 }
                 item {
@@ -151,7 +165,7 @@ fun QuroComponentGalleryScreen(
                             FilterChip(
                                 selected = false,
                                 onClick = {
-                                    launchSpec(context, UiWidgetTool(), spec.sampleJson, spec.type)
+                                    launchSpec(context, UiWidgetTool(), spec.sample, spec.type)
                                     onComponentSelected?.invoke(spec.type)
                                 },
                                 label = { Text(spec.type, fontSize = 12.sp) },
@@ -182,7 +196,7 @@ fun QuroComponentGalleryScreen(
             }
 
             item {
-                SectionTitle("正文围栏通道 · 3 种")
+                SectionTitle("正文围栏通道 · 3 种", cs)
             }
             item {
                 Surface(
@@ -192,7 +206,7 @@ fun QuroComponentGalleryScreen(
                 ) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         FenceHint("card", "单组件：一段 JSON 对象")
-                        FenceHint("cards", "多组件：JSON 数组，或含 layout/children 的对象合成一张组合卡")
+                        FenceHint("cards", "多组件：JSON 数组，或 {\"layout\":..,\"children\":[..]} 合成一张组合卡")
                         FenceHint("cardui", "A2UI 风格邻接表：扁平 id + children 引用，自动还原成一棵树")
                         Text(
                             "与 ui_widget 工具调用通道等价，但允许模型在正文里「边说边画」；"
@@ -262,7 +276,7 @@ private val CATEGORY_LABELS = mapOf(
 /** 用真实工具把组件 spec 发送到对话卡片栏（桥未连接时回落全局卡片栏） */
 private fun launchSpec(context: Context, tool: com.ai.assistance.quro.core.tools.QuroTool, spec: String, label: String) {
     val result = runCatching { tool.run(context, spec) }.getOrElse { """{"error":"$it"}""" }
-    val ok = result.contains("\"ok\":true") || !result.contains("\"error\"")
+    val ok = result.contains("\\"ok\\":true") || !result.contains("\\"error\\"")
     Toast.makeText(
         context,
         if (ok) qstr(R.string.qk_01683, label) else qstr(R.string.qk_01684, label),
@@ -271,9 +285,19 @@ private fun launchSpec(context: Context, tool: com.ai.assistance.quro.core.tools
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-    )
+private fun SectionTitle(text: String, cs: Color) {
+    Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = cs)
 }
+'''
+
+with io.open(P, "r", encoding="utf-8", newline="") as f:
+    raw = f.read()
+crlf = "\r\n" in raw
+# 文件原用 CRLF，保持一致，避免整份文件换行符被 IDE 判成改动
+if crlf:
+    CODE = CODE.replace("\n", "\r\n")
+
+with io.open(P + ".tmp", "w", encoding="utf-8", newline="") as f:
+    f.write(CODE)
+os.replace(P + ".tmp", P)
+print("written: %s (crlf=%s)" % (P, crlf))

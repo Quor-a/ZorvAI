@@ -69,6 +69,40 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.yuanbao.miniapp.core.MiniAppEngine as NativeMiniAppEngine
 import com.ai.assistance.quro.core.QuroBrowserBridge
 import com.ai.assistance.quro.core.cards.QuroChatCard
+import com.ai.assistance.quro.core.cards.KeyValueCard
+import com.ai.assistance.quro.core.cards.RingCard
+import com.ai.assistance.quro.core.cards.StackedBarCard
+import com.ai.assistance.quro.core.cards.ScatterCard
+import com.ai.assistance.quro.core.cards.FunnelCard
+import com.ai.assistance.quro.core.cards.CandlestickCard
+import com.ai.assistance.quro.core.cards.BoxPlotCard
+import com.ai.assistance.quro.core.cards.SpeedometerCard
+import com.ai.assistance.quro.core.cards.SparklineCard
+import com.ai.assistance.quro.core.cards.SearchBoxCard
+import com.ai.assistance.quro.core.cards.PollCard
+import com.ai.assistance.quro.core.cards.CheckListCard
+import com.ai.assistance.quro.core.cards.AccordionCard
+import com.ai.assistance.quro.core.cards.GroupedListCard
+import com.ai.assistance.quro.core.cards.TreeCard
+import com.ai.assistance.quro.core.cards.QuoteCard
+import com.ai.assistance.quro.core.cards.DiffCard
+import com.ai.assistance.quro.core.cards.FlowCard
+import com.ai.assistance.quro.core.cards.HierarchyCard
+import com.ai.assistance.quro.core.cards.ContactCard
+import com.ai.assistance.quro.core.cards.ProductCard
+import com.ai.assistance.quro.core.cards.ScheduleCard
+import com.ai.assistance.quro.core.cards.FileCard
+import com.ai.assistance.quro.core.cards.AchievementCard
+import com.ai.assistance.quro.core.cards.WeatherCard
+import com.ai.assistance.quro.core.cards.MapCard
+import com.ai.assistance.quro.core.cards.QrCodeCard
+import com.ai.assistance.quro.core.cards.GalleryCard
+import com.ai.assistance.quro.core.cards.TerminalCard
+import com.ai.assistance.quro.core.cards.LinkListCard
+import com.ai.assistance.quro.core.cards.PaginationCard
+import com.ai.assistance.quro.core.cards.DividerCard
+import com.ai.assistance.quro.core.cards.SpacerCard
+import com.ai.assistance.quro.core.cards.CustomCard
 import com.ai.assistance.quro.core.cards.QuroChatCardStore
 import com.ai.assistance.quro.core.media.QuroVideoLauncher
 import com.ai.assistance.quro.core.tools.QuroMediaController
@@ -224,12 +258,51 @@ fun QuroChatCardView(card: QuroChatCard, onCommand: (String) -> Unit, modifier: 
             is QuroChatCard.HtmlPreviewCard -> HtmlPreviewCardView(card)
             is QuroChatCard.MiniAppCard -> MiniAppCardView(card)
             is QuroChatCard.CompositeCard -> CompositeCardView(card, onCommand)
+            is KeyValueCard -> KeyValueCardView(card, onCommand)
+            is RingCard -> RingCardView(card, onCommand)
+            is StackedBarCard -> StackedBarCardView(card, onCommand)
+            is ScatterCard -> ScatterCardView(card, onCommand)
+            is FunnelCard -> FunnelCardView(card, onCommand)
+            is CandlestickCard -> CandlestickCardView(card, onCommand)
+            is BoxPlotCard -> BoxPlotCardView(card, onCommand)
+            is SpeedometerCard -> SpeedometerCardView(card, onCommand)
+            is SparklineCard -> SparklineCardView(card, onCommand)
+            is SearchBoxCard -> SearchBoxCardView(card, onCommand)
+            is PollCard -> PollCardView(card, onCommand)
+            is CheckListCard -> CheckListCardView(card, onCommand)
+            is AccordionCard -> AccordionCardView(card, onCommand)
+            is GroupedListCard -> GroupedListCardView(card, onCommand)
+            is TreeCard -> TreeCardView(card, onCommand)
+            is QuoteCard -> QuoteCardView(card, onCommand)
+            is DiffCard -> DiffCardView(card, onCommand)
+            is FlowCard -> FlowCardView(card, onCommand)
+            is HierarchyCard -> HierarchyCardView(card, onCommand)
+            is ContactCard -> ContactCardView(card, onCommand)
+            is ProductCard -> ProductCardView(card, onCommand)
+            is ScheduleCard -> ScheduleCardView(card, onCommand)
+            is FileCard -> FileCardView(card, onCommand)
+            is AchievementCard -> AchievementCardView(card, onCommand)
+            is WeatherCard -> WeatherCardView(card, onCommand)
+            is MapCard -> MapCardView(card, onCommand)
+            is QrCodeCard -> QrCodeCardView(card, onCommand)
+            is GalleryCard -> GalleryCardView(card, onCommand)
+            is TerminalCard -> TerminalCardView(card, onCommand)
+            is LinkListCard -> LinkListCardView(card, onCommand)
+            is PaginationCard -> PaginationCardView(card, onCommand)
+            is DividerCard -> DividerCardView(card, onCommand)
+            is SpacerCard -> SpacerCardView(card, onCommand)
+            is CustomCard -> CustomCardView(card, onCommand)
         }
     }
 }
 
+/**
+ * 卡片外壳（标题栏 + 可选关闭按钮 + 内容）。
+ * v1400 起改为 **internal**：34 种增强卡片的渲染在 [QuroChatCardsEx]，
+ * 同一套外壳才不会被两处画出两种观感。
+ */
 @Composable
-private fun CardShell(
+internal fun CardShell(
     title: String,
     modifier: Modifier = Modifier,
     headerEnd: @Composable RowScope.() -> Unit = {},
