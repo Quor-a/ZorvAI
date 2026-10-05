@@ -178,3 +178,7 @@ genui_errors.txt
 overview_*.md
 browser_act_test_prompt.md
 *_resp.json
+
+# Python 字节码缓存（4fd0c78 误提交过一批）
+__pycache__/
+*.pyc

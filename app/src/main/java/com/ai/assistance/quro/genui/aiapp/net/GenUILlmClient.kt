@@ -37,6 +37,16 @@ private const val NET_CALL_TIMEOUT_MS = 90_000L
 private const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 
 /**
+ * 提示词体积告警线（字符，含 system + 历史 + tools 描述）。
+ *
+ * GenUI 的 system prompt 天然偏大（GenUiRules 组件清单 + design-studio 技能 + 宿主工具集），
+ * 实测单轮输入可轻易冲到 6 万字符以上。小上下文模型（32K/64K）会直接 400，
+ * 大窗口模型则被挤掉输出预算导致「画不出界面」。此阈值只用于**告警与诊断**，
+ * 不做任何裁剪——裁剪已随 N13–N15 回滚，真机反馈显示压缩反而让 AI 答非所问。
+ */
+private const val PROMPT_WARN_CHARS = 60_000
+
+/**
  * LLM 客户端（稳定方案）
  *
  * 设计取舍：
@@ -125,7 +135,17 @@ class GenUILlmClient(
         }
 
         val bodyStr = body.toString()
+        // 诊断：真实字符数 / tools 体积一并打出。
+        // 为什么加：此前只打 messages.size（消息**条数**），提示词超限时日志完全无痕，
+        // 真机只能看到「界面一直空白」，无从判断是提示词过大还是模型不通。
+        val promptChars = messages.sumOf { it.content.length }
+        val toolsChars = tools?.sumOf { it.description.length + it.parametersJson.length } ?: 0
         Log.i(TAG, ">>> REQUEST model=$model url=$url messages=${messages.size} tools=${tools?.size ?: 0} maxTokens=$effectiveMaxTokens")
+        Log.i(TAG, ">>> SIZE promptChars=$promptChars toolsChars=$toolsChars totalChars=${promptChars + toolsChars} (≈${(promptChars + toolsChars) / 2}tok)")
+        if (promptChars + toolsChars > PROMPT_WARN_CHARS) {
+            Log.w(TAG, ">>> SIZE 提示词体积偏大（${promptChars + toolsChars} 字符），小上下文模型可能直接 400；"
+                + "当前模型：$model")
+        }
 
         val req = Request.Builder().url(url)
             .apply {
@@ -564,6 +584,18 @@ class GenUILlmClient(
     /**
      * HTTP 错误转友好提示
      */
+    /** 识别「上下文超限」类 400（中英文/各中转写法都覆盖）。 */
+    private fun looksLikeContextOverflow(msg: String): Boolean {
+        val m = msg.lowercase()
+        return m.contains("maximum context length") ||
+            m.contains("context_length_exceeded") ||
+            m.contains("context length") && (m.contains("exceed") || m.contains("too long") || m.contains("exceeds")) ||
+            m.contains("prompt is too long") ||
+            m.contains("input is too long") ||
+            m.contains("reduce the length") ||
+            m.contains("上下文") && (m.contains("超") || m.contains("过长"))
+    }
+
     private fun friendlyHttpError(code: Int, raw: String): String {
         val plain = raw.replace(Regex("<[^>]+>"), " ")
             .replace(Regex("""\s+"""), " ")
@@ -588,7 +620,15 @@ class GenUILlmClient(
                 "请求的模型或端点不存在（404），请检查模型名和 Base URL 是否正确"
             plain.contains("400") || plain.contains("Bad Request", ignoreCase = true) -> {
                 val msg = extractJsonErrorMessage(plain) ?: plain.take(200)
-                "请求参数错误（400）：$msg"
+                // 上下文超限是 GenUI 最常见的 400，且错误文案（"maximum context length" /
+                // "context_length_exceeded"）对普通用户毫无意义 —— 换成能照做的说法。
+                if (looksLikeContextOverflow(msg)) {
+                    "输入内容超出该模型的上下文窗口（$msg）。" +
+                        "GenUI 每次生成界面的系统提示词较长，请换用上下文更大的模型，" +
+                        "或到「模型配置」调大上下文窗口后重试。"
+                } else {
+                    "请求参数错误（400）：$msg"
+                }
             }
             else -> {
                 val msg = extractJsonErrorMessage(plain) ?: plain.take(200)
