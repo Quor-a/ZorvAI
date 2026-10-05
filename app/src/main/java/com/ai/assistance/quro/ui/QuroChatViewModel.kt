@@ -1,4 +1,6 @@
 package com.ai.assistance.quro.ui
+
+import com.ai.assistance.quro.core.cards.CardSdk
 import com.ai.assistance.quro.R
 import com.ai.assistance.quro.util.qstr
 
@@ -2475,21 +2477,26 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         sb.append("\n### 在对话框里「展示」UI（重要）\n")
         sb.append(
             "本节讲的是**对话内嵌**展示通道的详细用法（富卡片组件/mermaid/网页预览/Web 应用），通道选择先看上方「可视化输出功能总览」路由表。\n" +
-            "- `ui_control(action=\"widget\")`：当你想给用户**可视化、可交互**的结果时，调用它在对话框内直接渲染组件，而不是只发纯文本。" +
-            "支持几十种类型：button（按钮触发动作）/ toggle（开关）/ slider（滑块）/ progress（进度条）/ stat（统计数字）/ alert（提醒条）/" +
-            "table（表格）/ list（可选项列表）/ segmented（分段选择）/ pie（饼图）/ rating（星级评分）/ countdown（倒计时）/" +
-            "tabs（标签页）/ expandable（折叠块）/ form（表单）/ chips（标签组，单选或多选）/ steps（步骤条）/ gauge（仪表盘）/ media（图片/音频/视频链接）/ info（信息块）/" +
-            "以及 legacy 的 todo / chart / note / actions。" +
-            "每个组件带丰富属性，组合即可产出「几百款」不同的 UI 输出。" +
-            "组件会在对话框底部卡片栏即时渲染、随用户操作（勾选/拖动/切换）实时变化。示例：发一张待办清单、一个带图表的统计卡、一组可点选的标签、一个提交表单。" +
-            "需要用户在对话框里看到可点的东西时，优先用 ui_control(action=\"widget\")，而不是只写文字。\n"
-        )
+            // 🔴 旧段是手写死的 20 个 legacy 类型 + todo/chart/note/actions，
+            // 名册从 40 种扩到 101 种它一个字没跟着变 —— 模型按提示词只会写那二十来种，
+            // 新组件对「只读提示词」的模型等于不存在。改为**现读名册**。
+            "- **富卡片（ui_widget / ui_card）**：当你想给用户**可视化、可交互**的结果时，调用它在对话框内直接渲染组件，而不是只发纯文本。" +
+            "当前名册共 " + CardSdk.typeCount + " 种，按类目：" +
+            CardSdk.compactCatalog() + "\n" +
+            "  · `ui_widget` 传单个组件对象；`ui_card` 传组件数组（一次出多张卡）。两者都是工具调用，参数就是组件 JSON。" +
+            "  · **不会写某个组件的字段？先调 `card_catalog`**（可传 type 或 category 过滤）拉完整样例与字段说明，别凭印象编字段。" +
+            "  · 组件会在对话框底部卡片栏即时渲染、随用户操作（勾选/拖动/切换）实时变化。" +
+            "  · `card_patch`：已渲染的卡片要改内容时用它**局部更新**（JSON Pointer 六操作 set/append/remove/merge/inc/replace），别为改一个数字重发整张卡。" +
+            "  · **写组件的硬规则**（照做就不会出现「AI 明明写了组件、界面上却是一坨裸 JSON」）：" +
+            "① 每张卡**必须**带 `type`（漏了会被当成无效卡丢弃）；" +
+            "② 数组键要与类型对应（按钮组用 `actions`，行用 `rows`/`items`，日志用 `lines`）；" +
+            "③ `type` 写错会落「未识别组件」兜底 —— 拿不准先查 `card_catalog`。\n"        )
         sb.append(
-            "- **可视化编程 / AI 自写图表（mermaid，重要）**：当用户要你「画流程图 / 架构图 / 时序图 / 状态机 / 类图 / 思维导图 / git 图 / 饼图 / 时间线 / 甘特图 / 关系图」等任何可视化图形，或说「可视化」「画个图」「用图展示」「做个架构图 / 流程图 / 脑图」时，**必须用 `ui_control(action=\"widget\", type=\"mermaid\")` 下发一个 mermaid 组件**，把图用 Mermaid 语法写在 `source` 字段（多行字符串，换行用 \n），客户端会用离线 Mermaid.js 在对话框里直接渲染出可缩放的真图——这是真正的「可视化编程」能力：你要画的图自己用 Mermaid 写出来，客户端只负责渲染，不内置任何固定图形。" +
-            "示例：用户说「画个登录流程」→ 调用 ui_control({ \"action\": \"widget\", \"type\": \"mermaid\", \"id\": \"login-flow\", \"label\": \"登录流程\", \"value\": \"flowchart TD\nA[开始] --> B{已登录?}\nB -- 是 --> C[跳登录页]\nB -- 否 --> D[进首页]\" })。" +
+            "- **可视化编程 / AI 自写图表（mermaid，重要）**：当用户要你「画流程图 / 架构图 / 时序图 / 状态机 / 类图 / 思维导图 / git 图 / 饼图 / 时间线 / 甘特图 / 关系图」等任何可视化图形，或说「可视化」「画个图」「用图展示」「做个架构图 / 流程图 / 脑图」时，**必须用 `ui_widget`（或 `ui_card`）下发一个 `type=mermaid` 的组件**，把图用 Mermaid 语法写在 `source` 字段（多行字符串，换行用 \n），客户端会用离线 Mermaid.js 在对话框里直接渲染出可缩放的真图——这是真正的「可视化编程」能力：你要画的图自己用 Mermaid 写出来，客户端只负责渲染，不内置任何固定图形。" +
+            "示例：用户说「画个登录流程」→ 调用 ui_widget({ \"type\": \"mermaid\", \"id\": \"login-flow\", \"label\": \"登录流程\", \"value\": \"flowchart TD\nA[开始] --> B{已登录?}\nB -- 是 --> C[跳登录页]\nB -- 否 --> D[进首页]\" })。" +
             "支持的图类型：flowchart / sequenceDiagram / stateDiagram-v2 / classDiagram / mindmap / gitGraph / pie / timeline 等（Mermaid 全量语法）。可选 `theme`：default/dark/forest/neutral/base，缺省按系统深浅色自动选择。" +
             "注意：不要只写纯文本或 Markdown 伪图——要图就用 mermaid 组件，用户才能在对话框里看到真渲染的图。\n" +
-            "补充：除了 `ui_control` 的 mermaid 组件，**直接写 ```mermaid 围栏代码块也会被对话框渲染成图**，两种方式等效；而且用户自己也能用 mermaid 围栏画图，对话框同样会渲染——可视化编程对人和 AI 都开放。\n"
+            "补充：除了 mermaid 组件，**直接写 ```mermaid 围栏代码块也会被对话框渲染成图**，两种方式等效；而且用户自己也能用 mermaid 围栏画图，对话框同样会渲染——可视化编程对人和 AI 都开放。\n"
         )
         sb.append(
             "- **代码块与 HTML 可视化渲染（重要）**：对话框内置代码块渲染能力，你**应当主动使用围栏格式输出代码**，让结果以精美卡片呈现，而不是甩一大坨纯文本。" +
@@ -2512,12 +2519,12 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "  · **组合拳（全栈）**：例如「抓数据(python) → 算指标(python) → 画看板(html 工件)」整条链路你一个人完成，全部在对话框里呈现；或「写 Three.js 三维场景(html) → 对话框里实时旋转预览」。\n" +
             "  **工作流口诀**：要「算 / 转 / 分析」→ `run_code(python)`；要「画网页 / 图表 / 游戏 / 三维」→ 返回 `html` 工件（或 ```html 围栏，二者等效）；要「画流程图 / 架构图」→ mermaid。可视化产出全部融入对话框内容区。\n" +
             "  注意：你跑出来的网页/图表是**给你向用户展示的成果**，优先用 html 工件或 ```html 围栏让它真正渲染出来，而不是只回一段源码文字。\n" +
-            "  · **Web 应用开发（MiniApp，重要）**：你（AI）可以生成**Web 应用代码**并在对话框中实时渲染成可交互页面。 Web 应用支持完整 Page/Component 生命周期、数据绑定（data-bind）、事件绑定（data-action）。**正确下发方法（必须是这个）**：调用 `ui_control(action=\"widget\", type=\"miniapp\", value=\"<完整 HTML 源码>\")`，把 Web 应用 HTML 代码**直接放进 `value` 字段**（不要包 JSON、不要当普通文本、不要写进 `html` 子字段）。示例：\n" +
+            "  · **Web 应用开发（MiniApp，重要）**：你（AI）可以生成**Web 应用代码**并在对话框中实时渲染成可交互页面。 Web 应用支持完整 Page/Component 生命周期、数据绑定（data-bind）、事件绑定（data-action）。**正确下发方法（必须是这个）**：调用 `ui_widget` 下发 `type=miniapp` 的组件（HTML 源码放 `value` 字段），把 Web 应用 HTML 代码**直接放进 `value` 字段**（不要包 JSON、不要当普通文本、不要写进 `html` 子字段）。示例：\n" +
             "    ```json\n" +
-            "    ui_control({ \"action\": \"widget\", \"type\": \"miniapp\", \"title\": \"Zorv AI 个人主页\", \"value\": \"<div data-bind='count'>0</div><button data-action='increment'>+1</button><script>Page({data:{count:0},increment(){this.setData({count:this.data.count+1})}})</script>\" })\n" +
+            "    ui_widget({ \"type\": \"miniapp\", \"title\": \"Zorv AI 个人主页\", \"value\": \"<div data-bind='count'>0</div><button data-action='increment'>+1</button><script>Page({data:{count:0},increment(){this.setData({count:this.data.count+1})}})</script>\" })\n" +
             "    ```\n" +
-            "  **硬性规则（最重要）**：生成 Web 应用时**严禁只把代码作为纯文本或普通代码块发出**——用户会看到一坨源码、看不到可交互页面。必须用以下两种之一渲染：①**首选** `ui_control(action=\"widget\", type=\"miniapp\", value=\"<html>\")`（`value` 直接放 HTML 源码，客户端用 bridge.js 运行时渲染成真 Web 应用）；或 ②把 Web 应用源码包进 **` ```miniapp ` 围栏代码块**（与 mermaid 围栏同理自动渲染）。两种等价。\n" +
-            "  补充：除 `ui_control` 的 miniapp 组件外，**直接写 ` ```miniapp ` 围栏代码块也会被对话框渲染成 Web 应用**（等价）；用户自己也能用 ` ```miniapp ` 围栏发 Web 应用。 Web 应用能力对人 / AI 都开放。\n" +
+            "  **硬性规则（最重要）**：生成 Web 应用时**严禁只把代码作为纯文本或普通代码块发出**——用户会看到一坨源码、看不到可交互页面。必须用以下两种之一渲染：①**首选** `ui_widget` 下发 `type=miniapp`（HTML 放 `value`）（`value` 直接放 HTML 源码，客户端用 bridge.js 运行时渲染成真 Web 应用）；或 ②把 Web 应用源码包进 **` ```miniapp ` 围栏代码块**（与 mermaid 围栏同理自动渲染）。两种等价。\n" +
+            "  补充：除 miniapp 组件外，**直接写 ` ```miniapp ` 围栏代码块也会被对话框渲染成 Web 应用**（等价）；用户自己也能用 ` ```miniapp ` 围栏发 Web 应用。 Web 应用能力对人 / AI 都开放。\n" +
             "  识别要点： Web 应用 HTML 必含 bridge 运行时入口 `Page({...})` 与数据/事件绑定（`data-bind` / `data-action` / `setData`）；凡带这些标记的 HTML 一律走 miniapp 渲染，不要当普通 ` ```html ` 代码块处理。\n" +
             "  · **工具中心能力对 AI 开放（重要）**：以下能力你都能用 `ui_control(action=\"open\", target=...)` 直接拉起，无需用户手动点：① `target=\"tool_center\"` 打开工具中心总览；② `target=\"vispro\"` 打开**可视化编程**（Mermaid 源码编辑 + 离线实时渲染 + 导出 SVG）——你要画架构图/流程图时，除了 ` ```mermaid ` 围栏，也能直接打开这个工作台编辑/导出；③ `target=\"node_editor\"` 打开**节点编辑器**（拖拽节点流编程，导出 Mermaid）；④ `target=\"miniapp\"` 打开**Web 应用**（渲染 AI 生成的 HTML/JS Web 应用）。当用户说「打开可视化编程 / 节点编辑器 / 工具中心 / Web 应用」或要做可视化/流程图/节点编排时，直接调对应 ui_control 即可。\n" +
             "  · **广义 IDE 集成**：当用户提到图形/视频/音频/3D/游戏/低代码等创作需求时，使用 `creative_studio` 工具获取完整的广义 IDE 知识库和调用能力。该工具可以：列出所有广义 IDE 分类、推荐适合用户需求的工具、启动已安装的创作工具、生成可直接在对话框渲染的 HTML/CSS/JS 内容。\n"

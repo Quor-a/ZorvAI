@@ -526,8 +526,10 @@ private fun ProgressCardView(card: QuroChatCard.ProgressCard) {
             Text("${card.value.toInt()}${card.suffix}", color = SUCCESS, fontSize = 12.sp)
         }
         Spacer(Modifier.height(6.dp))
+        // 同gauge：max 可能是 0（模型显式写 "max":0），除零得 NaN 会让进度条整条消失
+        val pMax = if (card.max > 0f) card.max else 100f
         LinearProgressIndicator(
-            progress = (card.value / card.max).coerceIn(0f, 1f),
+            progress = (card.value / pMax).coerceIn(0f, 1f),
             modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
             color = cs.primary, trackColor = cs.outlineVariant,
         )
@@ -894,16 +896,24 @@ private fun StepsCardView(card: QuroChatCard.StepsCard) {
 private fun GaugeCardView(card: QuroChatCard.GaugeCard) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
+        // gauge 的 max 可能是 0 或负数（模型漏写 max）→ 除零得 NaN，
+        // coerceIn 对 NaN 不生效，sweepAngle 变 NaN 会让整条弧消失。
+        val gMax = if (card.max > 0f) card.max else 100f
+        val frac = (card.value / gMax).coerceIn(0f, 1f)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Canvas(Modifier.size(96.dp)) {
-                val r = size.minDimension / 2
+                // 🔴 topLeft/size 描述的是弧**中心线**的包围盒，Stroke 会向内外各扩 sw/2。
+                // 旧写法让包围盒等于整个 Canvas（topLeft=(0,0)），外侧半个笔宽正好被裁掉 ——
+                // 真机截图上表现为「圆弧起点被切掉一截」。必须留 pad（同 RingCardView 的做法）。
+                val sw = 10.dp.toPx()
+                val pad = sw / 2f
+                val r = (size.minDimension - pad * 2) / 2
+                val tl = Offset(size.width / 2 - r, size.height / 2 - r)
+                val sz = Size(r * 2, r * 2)
                 drawArc(color = cs.outlineVariant, startAngle = 135f, sweepAngle = 270f, useCenter = false,
-                    topLeft = Offset(size.width / 2 - r, size.height / 2 - r), size = Size(r * 2, r * 2),
-                    style = Stroke(width = 10.dp.toPx()))
-                val frac = (card.value / card.max).coerceIn(0f, 1f)
+                    topLeft = tl, size = sz, style = Stroke(width = sw))
                 drawArc(color = cs.primary, startAngle = 135f, sweepAngle = 270f * frac, useCenter = false,
-                    topLeft = Offset(size.width / 2 - r, size.height / 2 - r), size = Size(r * 2, r * 2),
-                    style = Stroke(width = 10.dp.toPx()))
+                    topLeft = tl, size = sz, style = Stroke(width = sw))
             }
             Spacer(Modifier.width(12.dp))
             Column {

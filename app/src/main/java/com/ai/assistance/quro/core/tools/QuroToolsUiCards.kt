@@ -14,10 +14,17 @@ import org.json.JSONObject
  *
  * 参数 `spec` 为 JSON 字符串。类型判别字段兼容两种写法：
  * - `kind`（历史习惯）：todo / chart / note / actions 四种基础卡；
- * - `type`（与 ui_widget / CARD_CATALOG 完全一致）：button/toggle/slider/progress/stat/alert/table/
+ * - `type`（与 ui_widget / card_catalog 完全一致）：button/toggle/slider/progress/stat/alert/table/
  *   list/segmented/pie/rating/countdown/tabs/expandable/form/chips/steps/gauge/media/info/toolcall/
  *   stream/mediaplay/quickreply/quickaction/timeline/heatmap/compare/radar/timer/carousel/kanban/
  *   color/counter/breadcrumb/tagcloud/badge/avatargroup/mermaid/miniapp/composite/yuanbao/htmlpreview 全量类型。
+ *
+ * 🔴 描述里**不再手抄 type 清单**：手抄那份停在四十来种，名册扩到上百种后它就成了
+ * 「模型只写得出旧组件」的原因。改为现读 [CardSdk.compactCatalog]（见下方description），
+ * 完整样例走card_catalog 按需拉。
+ *
+ * ⚠️ 同包里的 `CARD_CATALOG`（[QuroCardCatalog]）是**历史遗留的静态目录**，只47 条、
+ * 且没人调用了。真正的真源是 [CardSdk]。它留着只为不破坏潜在引用，**不要**再拿它当提示词来源。
  *
  * 解析统一走 [parseComponentSpec]，与 ui_widget 完全同源——两个工具只是入口不同，
  * 渲染、持久化、command 语法全部一致。command 支持：ui_open_* / ui_toggle_* / "linux:install" /
@@ -29,7 +36,7 @@ class UiCardTool : QuroTool {
         "用于把结构化结果以可视化、可操作的方式呈现给用户，而非纯文本。参数 spec 为 JSON 字符串。" +
         "kind 取值：todo（items:[{text,done}]）、chart（chart_type:bar|line, series:[{label,value}]）、" +
         "note（body, lang 可选）、actions（actions:[{label,command}]）。" +
-        "也可用 type 字段下发与 ui_widget 完全一致的全量类型（button/toggle/slider/progress/stat/alert/table/list/segmented/pie/rating/countdown/tabs/expandable/form/chips/steps/gauge/media/info/quickreply/quickaction/timeline/heatmap/compare/radar/timer/carousel/kanban/color/counter/breadcrumb/tagcloud/badge/avatargroup/mermaid/miniapp/composite 等，详见 CARD_CATALOG 卡片目录）。" +
+        "也可用 type 字段下发与 ui_widget 完全一致的**全量类型**（不必局限上面那四种 kind；全量清单见本描述末尾的名册列表，完整字段与样例用 card_catalog 工具查）。" +
         "command 语法：ui_open_* / ui_toggle_* / linux:install / run:<命令>，" +
         "以及 v221 新增的 open:<url>（内置浏览器打开）/ copy:<文本>（复制剪贴板）/ ai:<提示词>（直接发给 AI）/ screen:<名称>（界面导航）。" +
         "与 ui_widget 共用同一份名册，共 ${CardSdk.typeCount} 种：${CardSdk.compactCatalog()}。" +
