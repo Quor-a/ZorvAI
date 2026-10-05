@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import com.ai.assistance.quro.core.cards.CardFence
+import com.ai.assistance.quro.core.cards.CardPatch
 import com.ai.assistance.quro.core.cards.CardSdk
 import org.json.JSONArray
 import org.json.JSONObject
@@ -36,7 +37,8 @@ class CardCatalogTool : QuroTool {
             "样例太大故不在描述里常驻。）" +
             "参数：category（类目名，可空表示全部）/ types（type 名列表，可空）/ detail（是否回完整样例，默认 true）" +
             " / normalize（是否顺带做 A2UI 组件名归一化，如 GanttChart→gantt，默认 false）" +
-            " / fence（是否改为返回正文围栏的 4 种头与属性语法 title=/theme=/compact，默认 false）。"
+            " / fence（是否改为返回正文围栏的 4 种头与属性语法 title=/theme=/compact，默认 false）" +
+            " / patch（是否改为返回 card_patch 增量更新的补丁语法，默认 false）。"
 
     /**
      * 参数 schema 用 [JSONObject] 运行时构造，而不是拼字符串。
@@ -69,6 +71,10 @@ class CardCatalogTool : QuroTool {
                 put("type", "boolean")
                 put("description", "true 时改为返回正文围栏的 4 种头与属性语法（title=/theme=/compact），默认 false")
             })
+            put("patch", JSONObject().apply {
+                put("type", "boolean")
+                put("description", "true 时改为返回 card_patch 的 JSON Pointer 增量补丁语法，默认 false")
+            })
         })
         put("required", JSONArray())
     }.toString()
@@ -95,9 +101,11 @@ class CardCatalogTool : QuroTool {
                 val detail = jo.optBoolean("detail", true)
                 val normalize = jo.optBoolean("normalize", false)
                 val fence = jo.optBoolean("fence", false)
+                val patchMode = jo.optBoolean("patch", false)
 
-                // fence 模式：模型问的是「围栏怎么写」，与组件目录无关，
-                // 所以完全独立返回 —— 混进 items 会让模型在一堆组件里找围栏语法。
+                // fence / patch 模式：模型问的是「围栏怎么写」或「补丁怎么写」，
+                // 与组件目录无关，所以完全独立返回 —— 混进 items 会让模型在一堆组件里找语法。
+                if (patchMode) return CardPatch.syntaxJson()
                 if (fence) return fenceSyntaxJson()
 
                 val cat = category?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }

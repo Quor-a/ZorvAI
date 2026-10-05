@@ -1093,6 +1093,25 @@ object CardSdk {
             }
         }
         if (catalog().size != all.size) issues += "catalog 数量 ≠ all 数量"
+
+        // 补丁链路自检：serialize → 空补丁 → 必须原样返回。
+        // 🔴 这条守的是 [CardPatch] 的「零操作零副作用」承诺：补丁引擎走
+        //   serialize→改 JSON→parse 往返，若某张卡的序列化结果**自己就不可回读**
+        //   （encode 少写字段、往返丢数据），那么对它下任何补丁都会被
+        //   「补丁后无法解析」这条保护整个挡掉 —— 表现为「这张卡永远 patch 不动」，
+        //   且没有任何报错指向真正的原因。这条不变量把原因提前到构建期。
+        all.forEach { spec ->
+            val c = spec.builder?.let { b -> runCatching { b(JSONObject(spec.sample)) }.getOrNull() }
+                ?: return@forEach
+            val before = runCatching { serializeCard(c).toString() }.getOrNull() ?: return@forEach
+            val r = CardPatch.apply(c, JSONObject())
+            when {
+                r.changed -> issues += "${spec.type}：空补丁却报告已改动"
+                r.card !== c -> issues += "${spec.type}：空补丁却替换了卡片实例"
+                serializeCard(c).toString() != before ->
+                    issues += "${spec.type}：空补丁却改了内容（该卡不可安全往返，补丁会被整条挡下）"
+            }
+        }
         return issues
     }
 

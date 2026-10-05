@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.tools
 
 import com.ai.assistance.quro.core.cards.CardFence
+import com.ai.assistance.quro.core.cards.CardPatch
 import com.ai.assistance.quro.core.cards.CardSdk
 import org.json.JSONArray
 import org.json.JSONObject
@@ -147,5 +148,39 @@ class CardCatalogToolTest {
         val raw = CardCatalogTool.query("""{"fence":true}""")
         assertFalse("不应回 items 数组", JSONObject(raw).has("items"))
         assertFalse("不该出现组件样例", raw.contains("\"chart_type\""))
+    }
+
+    // ═══════════════ patch 模式 ═══════════════
+
+    @Test
+    fun `patch 模式返回补丁语法`() {
+        val o = JSONObject(CardCatalogTool.query("""{"patch":true}"""))
+        val ops = o.getJSONArray("ops")
+        assertEquals(CardPatch.OPS.size, ops.length())
+        // 与实现同源：名册/操作表改了这里自动跟着变，不会说一套做一套
+        CardPatch.OPS.forEach { assertTrue("操作 $it 应在返回里", ops.toString().contains("\"$it\"")) }
+    }
+
+    @Test
+    fun `patch 模式说明保护键与原子性`() {
+        val raw = CardCatalogTool.query("""{"patch":true}""")
+        assertTrue("必须说明 id 不可改：$raw", raw.contains("id"))
+        assertTrue("必须说明原子性：$raw", raw.contains("原子") || raw.contains("全成功"))
+    }
+
+    @Test
+    fun `patch 模式不混入组件目录`() {
+        val raw = CardCatalogTool.query("""{"patch":true}""")
+        assertFalse("不应回 items 数组", JSONObject(raw).has("items"))
+        assertFalse("不该出现组件样例", raw.contains("\"chart_type\""))
+    }
+
+    @Test
+    fun `patch 模式与 fence 模式互不干扰`() {
+        val a = CardCatalogTool.query("""{"patch":true}""")
+        val b = CardCatalogTool.query("""{"fence":true}""")
+        assertTrue("patch 应讲补丁", a.contains("JSON Pointer"))
+        assertTrue("fence 应讲围栏", b.contains("围栏"))
+        assertFalse("两者不该串味：patch=$a", a.contains("围栏头"))
     }
 }

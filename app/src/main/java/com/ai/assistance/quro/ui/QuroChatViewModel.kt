@@ -17,6 +17,7 @@ import com.ai.assistance.quro.core.QuroAttachmentKit
 import com.ai.assistance.quro.core.turn.QuroTurnController
 import com.ai.assistance.quro.core.vision.QuroVisionLoop
 import com.ai.assistance.quro.core.cards.QuroChatCard
+import com.ai.assistance.quro.core.cards.CardPatch
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import com.ai.assistance.quro.core.QuroConversationMeta
 import com.ai.assistance.quro.core.QuroConversationRepository
@@ -1150,6 +1151,83 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             // 显示源必须与卡片载体一致：生成中用 liveBuffer（含正在流的实时内容），否则�? store�?
             _messages.value = if (live != null) live.all() else store.all()
         }
+    }
+
+    /**
+     * 对**已渲染在气泡里**的卡片应用增量补丁（[CardPatch]）。
+     *
+     * ## 为什么不能只靠 [QuroChatCardStore.patch]
+     *
+     * 卡片有两条互不相干的载体：
+     *  - [QuroChatCardStore]：底部独立卡片栏；
+     *  - [QuroMessage.cards]（本方法）：**合体进气泡的可视化组件**——也就是
+     *    `ui_widget` / `ui_card` / 围栏卡片真正的落点。
+     *
+     * 本 SDK 的可视化组件走的是后者，所以只补 store 等于「工具成功了但屏幕上没变」——
+     * 正是最该避免的静默失效。
+     *
+     * ## 归属规则与 attachCardToLastAssistant 一致
+     *
+     * 刻意复用同一套判定（liveBuffer 优先 / 后台会话不碰共享 store）：
+     * 两处若各写一套，迟早出现「卡片挂在 A 会话、补丁打进 B 会话」——
+     * 表现为补丁偶尔生效偶尔不生效，且完全无法复现。
+     *
+     * 与 attach 的另一处差异：attach 是**追加**，只找最后一条消息；
+     * 补丁是**按 id 定位**，必须扫全部消息 —— 卡片可能挂在几条消息之前的位置上。
+     */
+    fun patchCard(cardId: String, spec: JSONObject): CardPatch.Result {
+        val ownerId = activeConversationId.ifBlank { _currentId.value }
+        val visible = (_currentId.value == ownerId)
+        val live = liveBuffers[ownerId]
+        // 同 attach 的防污染：后台会话且 liveBuffer 已回收 → 宁可不改，不污染当前会话
+        if (live == null && !visible) {
+            return CardPatch.Result(
+                card = null, changed = false, applied = emptyList(),
+                errors = listOf("当前是后台会话且实时缓冲已回收，为避免串台已放弃补丁（ownerId=$ownerId）")
+            )
+        }
+        val storeForCard: QuroConversationStore = live ?: store
+        val msgs = storeForCard.all()
+
+        // 先定位：找到承载这张卡的那条消息
+        val hit = msgs.firstOrNull { m -> m.cards.any { it.id == cardId } }
+            ?: return CardPatch.Result(
+                card = null, changed = false, applied = emptyList(),
+                errors = listOf(
+                    "气泡里没有 id=$cardId 的卡片。当前会话共 ${msgs.size} 条消息、" +
+                        "${msgs.sumOf { it.cards.size }} 张卡片；" +
+                        "卡片 id 在 ui_widget / 围栏下发时指定，补丁必须用**同一个 id**。"
+                )
+            )
+
+        val old = hit.cards.first { it.id == cardId }
+        val r = CardPatch.apply(old, spec)
+        // 🔴 收进局部变量：r.card 是可空属性，在 lambda 里 smart cast 不成立（跨闭包）
+        val patched = r.card
+        if (!r.changed || patched == null) return r
+
+        storeForCard.update(hit.id) { m -> m.copy(cards = m.cards.map { if (it.id == cardId) patched else it }) }
+        if (visible) {
+            _messages.value = if (live != null) live.all() else store.all()
+        }
+        QuroDiag.log("CARD", "patchCard id=$cardId ops=${r.applied.size} ownerId=$ownerId visible=$visible")
+        return r
+    }
+
+    /**
+     * 列出某张气泡卡片当前可改的合法路径（供模型 patch 前先探路）。
+     *
+     * 走 [QuroChatCardStore] 之外单独查消息，理由同 [patchCard]。
+     */
+    fun describeCard(cardId: String): List<String> {
+        val ownerId = activeConversationId.ifBlank { _currentId.value }
+        val live = liveBuffers[ownerId]
+        val storeForCard: QuroConversationStore = live ?: store
+        val card = storeForCard.all()
+            .firstOrNull { m -> m.cards.any { it.id == cardId } }
+            ?.cards?.firstOrNull { it.id == cardId }
+            ?: return emptyList()
+        return CardPatch.describe(card)
     }
 
     private fun emitMeta() {
