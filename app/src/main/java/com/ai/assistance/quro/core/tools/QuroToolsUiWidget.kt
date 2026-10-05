@@ -52,7 +52,10 @@ class UiWidgetTool : QuroTool {
         "要写某类的完整字段与样例，先调 card_catalog（参数 category 或 types），别凭空猜字段名。" +
         "也可以直接在正文里下发卡片围栏：card（单个 JSON 对象）、cards（数组或组合卡）、cardui（A2UI 邻接表）、cardjson（**一行一个 JSON**，流式友好，逐行独立容错；组合卡请用 cards）。" +
         "围栏头后可跟属性（空格分隔）：开关 compact（内边距收紧，一组小卡片必给）/ scroll（超高内部滚动）/ bordered / flat / dense；带值 title=组级标题（各卡自带标题时以卡为准）/ theme=主题档位，只认 accent(默认)/warn/danger/plain，其它值一律降级为默认。" +
-        "例：```cards title=Q3 复盘 theme=accent compact\n[{\"type\":\"stat\",...}]\n```"
+        "例：```cards title=Q3 复盘 theme=accent compact\n[{\"type\":\"stat\",...}]\n```" +
+        "🔴 下发后要改这张卡（刷新进度、勾掉一项、改单元格、走字倒计时），用 card_patch " +
+        "按 JSON Pointer 改字段，**不要重发整张卡**：重发既费 token 又容易把想保留的字段改掉。" +
+        "不确定该改哪个路径时先 card_patch(describe=true, cardId=<下发时的 id>) 看合法路径清单。id 建议自己指定（如 order_1），否则无法后续 patch。"
     override val parametersJson = """{"type":"object","properties":{"spec":{"type":"string","description":"组件 JSON 规格，见工具说明"}}},"required":["spec"]}"""
 
     override fun run(context: Context, arguments: String): String {

@@ -1521,5 +1521,30 @@ object QuroChatCardStore {
         _cards[idx] = c.copy(lines = c.lines + line)
     }
 
+    /**
+     * 对卡片应用一批增量补丁（[CardPatch]），就地替换。
+     *
+     * 与上面 14 个 `setXxx` 的区别是**通用性**：那些是「一种卡片一个方法」，
+     * 覆盖面受限于当初写的时候覆盖到了哪几种卡；本方法是数据驱动的，
+     * 对全部 101 种组件一视同仁，且新增组件**不需要在这里加任何代码**。
+     *
+     * 🔴 失败时**原样保留旧卡**、不写回 —— 半张卡（改了标题没改数据）比不改更糟。
+     * 返回值让调用方能把 [CardPatch.Result.feedback] 直接呈现给模型自我纠正。
+     */
+    fun patch(cardId: String, spec: JSONObject): CardPatch.Result {
+        val idx = _cards.indexOfFirst { it.id == cardId }
+        if (idx < 0) {
+            return CardPatch.Result(
+                card = null,
+                changed = false,
+                applied = emptyList(),
+                errors = listOf("卡片 id=$cardId 不在卡片栏里（可能已在气泡内渲染，或 id 写错）")
+            )
+        }
+        val r = CardPatch.apply(_cards[idx], spec)
+        if (r.changed && r.card != null) _cards[idx] = r.card!!
+        return r
+    }
+
     fun newId(): String = "card_" + UUID.randomUUID().toString().take(8)
 }

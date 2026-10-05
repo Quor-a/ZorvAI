@@ -36,7 +36,10 @@ class UiCardTool : QuroTool {
         "要完整字段与样例先调 card_catalog。" +
         "正文围栏同样支持 card / cards / cardui / cardjson（cardjson 为一行一个 JSON，流式友好）。" +
         "围栏头后可跟属性（空格分隔）：开关 compact（一组小卡片必给）/ scroll（超高内部滚动）；" +
-        "带值 title=组级标题（各卡自带标题时以卡为准）/ theme=主题档位，只认 accent(默认)/warn/danger/plain。"
+        "带值 title=组级标题（各卡自带标题时以卡为准）/ theme=主题档位，只认 accent(默认)/warn/danger/plain。" +
+        "🔴 下发后若要改这张卡（刷新进度、勾掉一项、改个单元格），用 card_patch 按 JSON Pointer " +
+        "改字段即可，**不要重发整张卡**：重发既费 token 又容易把想保留的字段改掉。" +
+        "patch 前建议先 card_patch(describe=true, cardId) 看该卡当前有哪些合法路径。cardId 就是这里下发的 id。"
     override val parametersJson = """{"type":"object","properties":{"spec":{"type":"string","description":"卡片 JSON 规格，见工具说明"}}},"required":["spec"]}"""
 
     override fun run(context: Context, arguments: String): String {

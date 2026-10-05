@@ -45,6 +45,8 @@ import com.ai.assistance.quro.ui.VisualCustomPopupDialog
 import com.ai.assistance.quro.core.cards.CardAction
 import com.ai.assistance.quro.core.cards.CardActionRouter
 import com.ai.assistance.quro.core.cards.CardFence
+import com.ai.assistance.quro.core.cards.CardPatch
+import com.ai.assistance.quro.core.cards.CardPatchBridge
 import com.ai.assistance.quro.core.cards.QuroChatCard
 import com.ai.assistance.quro.core.cards.parseComponentSpec
 import com.ai.assistance.quro.ui.QuroShareBridge
@@ -869,6 +871,30 @@ fun ChatScreen(
         }
     }
 
+    // ═══ 卡片补丁宿主桥：card_patch 工具 → 真正持有卡片的 vm ═══
+    // 工具是全局单例、拿不到 ViewModel（见 CardPatchBridge 的 KDoc），
+    // 所以在这里注册一个处理器，让工具能同步拿到回执（成功条数 / 失败原因 + 合法路径）。
+    // 装在 UI 控制事件桥旁边：两处都是「AI 意图 → 界面执行」的入口，放一起便于对照。
+    DisposableEffect(vm) {
+        CardPatchBridge.install(
+            host = CardPatchBridge.Host { cardId, patchJson ->
+                val spec = runCatching { org.json.JSONObject(patchJson) }.getOrNull()
+                if (spec == null) {
+                    CardPatch.Result(
+                        card = null, changed = false, applied = emptyList(),
+                        errors = listOf("补丁不是合法 JSON")
+                    )
+                } else {
+                    vm.patchCard(cardId, spec)
+                }
+            },
+            describer = { cardId -> vm.describeCard(cardId) },
+        )
+        // 🔴 必须注销：切会话后 vm 会换新，旧处理器若留着会让工具把补丁打进
+        //   上一条会话的卡片 —— 表现为「补丁偶尔改错地方」，且完全无法复现。
+        onDispose { CardPatchBridge.install(null, null) }
+    }
+
     // ═══ UI 控制事件桥：AI 调用 ui_control 工具时，通过 UiNavigationBus 通知 ChatScreen 执行界面操作 ═══
     LaunchedEffect(Unit) {
         // 修复：原 navEvent 是单槽 @Volatile var，连发两个事件时后者覆盖前者 → 事件丢失。
@@ -1011,7 +1037,23 @@ fun ChatScreen(
 
                     // ─── 更新组件属性 ───
                     is UiNavigationEvent.UpdateComponent -> {
-                        // TODO: 实现组件属性更新逻辑
+                        // 旧通路（ui_control action:"update"）：props 是扁平的 key→value 串。
+                        // 🔴 这里曾长期是 TODO —— 模型调 update 工具时**静默无效**，
+                        //   表现为「工具返回成功、卡片却毫无变化」，没有任何报错可查。
+                        // 现在转成 merge 补丁走同一条真通路：旧调用方式不必改，
+                        // 新代码直接用 card_patch（支持数组下标 / inc / append）。
+                        // 代价是 props 的值都是字符串，数值字段靠 merge 的整体覆盖
+                        // —— 这是旧格式本身的信息损失，不在补丁层弥补（会掩盖问题）。
+                        val jo = org.json.JSONObject().apply {
+                            put("patches", org.json.JSONArray().apply {
+                                event.props.forEach { (k, v) ->
+                                    put(org.json.JSONObject().put("op", "merge").put("value",
+                                        org.json.JSONObject().put(k, v)))
+                                }
+                            })
+                        }
+                        val r = vm.patchCard(event.component, jo)
+                        if (!r.ok) QuroDiag.log("CARD", "UpdateComponent 失败：${r.errors.joinToString("; ")}")
                     }
 
                     // ─── 滚动 ───
