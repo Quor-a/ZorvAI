@@ -271,6 +271,7 @@ flowchart TB
 | **语音 / 媒体 / 浏览器 / 文档** | 多供应商 TTS、端侧流式 STT（sherpa-ncnn）、内置浏览器（WebView）、文档处理 | [voice-media](./docs/features/voice-media/README.md) |
 | **设备控制 / Shizuku / ACI** | L1–L5 特权层、ACI 受控端生态、ACI 控制台与 HTTP 传输 | [device-control](./docs/features/device-control/README.md) |
 | **知识库 / 记忆 / 人格 / 定时** | 向量语义 RAG 知识库、记忆库（语义/情节/程序/工作四类）、人格/灵魂配置、定时任务与日程 | [knowledge-memory-persona](./docs/features/digital-human/README.md) |
+| **多角色集群** | 一个不可替换的「主持」驱动多角色协作：定验收 → 拆解 → 点名 → 产出 → 裁决 → 收敛。集群即 9 个 `cluster_*` 工具（`cluster_start` / `cluster_status` / `cluster_roles` / `cluster_models` / `cluster_enroll` / `cluster_remove_role` / `cluster_bind_model` / `cluster_host_config` / `cluster_abort`），各角色可绑**不同厂商的模型、各走自己的 API 通道**；角色发言实时投影进本对话框。配置入口：设置 → 多角色集群 | [cluster](./docs/features/cluster/README.md) |
 | **APK 级插件框架** | 14 种扩展点，装 APK 即给 AI 加能力 | [extensibility](./docs/architecture/extensibility/README.md) |
 | **国际化（11 语言）** | 字符串键体系、AI 回复语言注入、翻译流水线 | [i18n](./docs/architecture/i18n/README.md) |
 
