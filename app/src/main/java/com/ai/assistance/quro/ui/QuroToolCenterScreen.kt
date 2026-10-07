@@ -77,6 +77,7 @@ import com.ai.assistance.quro.kaleidobox.samples.PluginScaffold
 // "真 Android 组件"：独立承载插件的 Activity + 共享契约
 import com.ai.assistance.quro.kaleidobox.KaleidoActivity
 import com.ai.assistance.quro.kaleidobox.android.KaleidoAppContract
+import androidx.compose.ui.text.style.TextOverflow
 
 /**
  * 工具中心（能力聚合入口）。
@@ -810,6 +811,66 @@ private fun NodeEditorPanel(
 // Web 应用：完整移植 MiniAppFramework，AI 用 miniapp 工具写入的工程在此渲染
 // ---------------------------------------------------------------------------
 
+/**
+ * Web 应用 / 小程序详情页的紧凑顶栏。
+ *
+ * 🔴 为什么不用一排 TextButton（2026-10-06 真机截图的根因）：
+ * TextButton 自带 8~12dp 水平内边距与最小高度，窄屏上一行放不下 4 个就换行，
+ * 换行后每个独占一行垂直空间 —— 顶栏从 48dp 膨胀到 100dp+，
+ * 底下的渲染区被压到只剩一条边（截图里正是「只露底边一条蓝」）。
+ *
+ * 布局：`(返回图标) (标题 weight=1 单行省略) (溢出图标) (删除图标)`，
+ * 整行恒定 48dp，标题再长也不会顶高。
+ *
+ * @param overflowItems 次要操作（label → onClick），收进 ⋮ 菜单。传空则不显示该按钮。
+ */
+@Composable
+private fun MiniAppDetailBar(
+    title: String,
+    onBack: () -> Unit,
+    overflowItems: List<Pair<String, () -> Unit>> = emptyList(),
+) {
+    val cs = MaterialTheme.colorScheme
+    var menuOpen by remember { mutableStateOf(false) }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .padding(start = 4.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onBack) {
+            LucideIcon("chevron_left", stringResource(R.string.qk_00143), Modifier.size(22.dp), tint = cs.onBackground)
+        }
+        Text(
+            title.ifBlank { "—" },
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.titleMedium,
+            color = cs.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (overflowItems.isNotEmpty()) {
+            // 次要操作收进溢出菜单。用 Material3 DropdownMenu（本仓既有用法）：
+            // 它走 Popup 通道，不受父 Row 固定高度裁剪的影响。
+            Box {
+                IconButton(onClick = { menuOpen = true }) {
+                    LucideIcon("menu", stringResource(R.string.qk_03909), Modifier.size(20.dp), tint = cs.onBackground)
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    overflowItems.forEach { (label, act) ->
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = { menuOpen = false; act() },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun MiniAppPanel(
     context: Context,
@@ -895,22 +956,27 @@ private fun MiniAppPanel(
                 }
             }
         } else {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { current = null; engineRef.value = null }) { Text(stringResource(R.string.qk_02767)) }
-                Text(current ?: "", Modifier.weight(1f).padding(12.dp), color = Muted)
-                TextButton(onClick = {
-                    scope.launch(Dispatchers.IO) {
-                        val html = MiniAppTool().run(context, JSONObject().put("action", "run").put("name", current).toString())
-                        withContext(Dispatchers.Main) {
-                            if (html.startsWith("❌")) Toast.makeText(context, html, Toast.LENGTH_SHORT).show()
-                            else { onRenderInChat("miniapp", html, current ?: qstr(R.string.qk_02775)); Toast.makeText(context, qstr(R.string.qk_02843), Toast.LENGTH_SHORT).show() }
+            // 🔴 顶栏紧凑化（2026-10-06 真机截图：原来一行平铺 4 个 TextButton，
+            // 窄屏上 TextButton 换行后每个占满整行垂直空间，把渲染区挤到只剩一条边）。
+            // 现在：返回用图标、标题单行省略、次要操作收进溢出菜单 —— 整行恒定 48dp。
+            MiniAppDetailBar(
+                title = current ?: "",
+                onBack = { current = null; engineRef.value = null },
+                overflowItems = listOf(
+                    qstr(R.string.qk_02844) to {
+                        scope.launch(Dispatchers.IO) {
+                            val html = MiniAppTool().run(context, JSONObject().put("action", "run").put("name", current).toString())
+                            withContext(Dispatchers.Main) {
+                                if (html.startsWith("❌")) Toast.makeText(context, html, Toast.LENGTH_SHORT).show()
+                                else { onRenderInChat("miniapp", html, current ?: qstr(R.string.qk_02775)); Toast.makeText(context, qstr(R.string.qk_02843), Toast.LENGTH_SHORT).show() }
+                            }
                         }
-                    }
-                }) { Text(qstr(R.string.qk_02844)) }
-                TextButton(onClick = {
-                    if (current != null && File(root, current!!).deleteRecursively()) { refreshKey++; current = null; Toast.makeText(context, qstr(R.string.qk_02845), Toast.LENGTH_SHORT).show() }
-                }) { Text(qstr(R.string.qk_00091)) }
-            }
+                    },
+                    qstr(R.string.qk_00091) to {
+                        if (current != null && File(root, current!!).deleteRecursively()) { refreshKey++; current = null; Toast.makeText(context, qstr(R.string.qk_02845), Toast.LENGTH_SHORT).show() }
+                    },
+                ),
+            )
             AndroidView(
                 modifier = Modifier.fillMaxSize().weight(1f),
                 factory = { ctx ->
@@ -1003,13 +1069,8 @@ private fun MiniAppSdkPanel(
                 }
             }
         } else {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(onClick = { current = null }) { Text(stringResource(R.string.qk_02767)) }
-                Text(current ?: "", Modifier.weight(1f).padding(12.dp), color = Muted)
-            }
+            // 同上：顶栏恒定 48dp，把剩余高度全给渲染区。
+            MiniAppDetailBar(title = current ?: "", onBack = { current = null }, overflowItems = emptyList())
             AndroidView(
                 modifier = Modifier.fillMaxSize().weight(1f),
                 factory = { ctx ->

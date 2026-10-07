@@ -54,6 +54,21 @@ fun UIComponent.propFloat(key: String, default: Float = 0f): Float {
 }
 
 /**
+ * 从组件属性中获取浮点数值，**未提供时返回 null**（区别于「提供了 0」）。
+ *
+ * 🔴 为什么需要这个（2026-10-06）：`spacing` 这类属性有两种「零」语义 ——
+ * 模型没写 `spacing`（该给 8pt 网格默认间距），和模型明确写 `spacing: 0`
+ * （它就是想要紧贴）。`propFloat(key, 8f)` 两种情况都返回同一个值，
+ * 于是「模型忘了写」被当成「模型要求贴在一起」，元素糊成一片 ——
+ * 这正是用户说的「组件虽然多但是不齐」。
+ */
+fun UIComponent.propFloatOrNull(key: String): Float? {
+    val value = properties[key]
+    val primitive = value as? JsonPrimitive ?: return null
+    return primitive.floatOrNull
+}
+
+/**
  * 从组件属性中获取字符串列表
  */
 fun UIComponent.propStringList(key: String): List<String> {

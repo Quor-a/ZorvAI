@@ -3736,7 +3736,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03756" formatted="false">Модель для перевода текста</string>
     <string name="qk_03757" formatted="false">Модель для поиска по коду</string>
     <string name="qk_03758" formatted="false">Модель для создания и дистилляции карт души</string>
-    <string name="qk_03759" formatted="false">Модель для понимания изображений (нужна поддержка зрения)</string>
+    <string name="qk_03759" formatted="false">Модель для понимания изображений (нужна поддержка зрения); также резервная зрительная модель для понимания сцены в видеозвонке</string>
     <string name="qk_03760" formatted="false">Модель для понимания аудио</string>
     <string name="qk_03761" formatted="false">Модель для понимания видео и кадров видеозвонка (нужна поддержка зрения)</string>
     <string name="qk_03762" formatted="false">Модель генерации изображений, вызываемая ИИ напрямую</string>
@@ -3851,7 +3851,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03870" formatted="false">Sign in to manage repos / issues / stars / notifications; search GitHub inside the chat</string>
     <string name="qk_03871" formatted="false">When on, dangerous commands (rm -rf / dd / mkfs) require a second send or confirm</string>
     <string name="qk_03872" formatted="false">Follow system</string>
-    <string name="qk_03873" formatted="false">Model used for the live conversation and scene understanding in a video call (must support vision)</string>
+    <string name="qk_03873" formatted="false">Модель живого диалога в видеозвонке; также читает кадр с камеры, если основная модель чата не поддерживает зрение (нужна поддержка зрения)</string>
     <string name="qk_03874" formatted="false">Tap to start the video call</string>
     <string name="qk_03875" formatted="false">Video call on standby</string>
     <string name="qk_03876" formatted="false">Camera on · tap the mic to speak</string>
@@ -3887,4 +3887,19 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03906" formatted="false">Выполняет локальный вывод в отдельном процессе: загрузка большой модели больше не приводит к завершению всего приложения системой, интерфейс остаётся доступным. Отключите, чтобы вернуться к прежнему поведению.</string>
     <string name="qk_03907" formatted="false">Адаптивное тепловое планирование</string>
     <string name="qk_03908" formatted="false">Каждые 2 секунды считывает тепловой запас SoC при длительном выводе и заранее немного снижает число потоков, избегая резкого троттлинга со стороны системы. Выключено — без вмешательства.</string>
+
+    <string name="qk_03909" formatted="false">Действия</string>
+
+    <!-- ⋮ 视频通话启动失败原因（静默自停改为可读提示） -->
+    <string name="qk_03910" formatted="false">Не удалось начать видеозвонок. Откройте его снова с главного экрана</string>
+    <string name="qk_03911" formatted="false">Видеозвонку нужно разрешение «отображать поверх других приложений»</string>
+    <string name="qk_03912" formatted="false">Не удалось показать экран видеозвонка. Проверьте разрешения и повторите</string>
+    <string name="qk_03913" formatted="false">Нет разрешения на камеру</string>
+    <string name="qk_03914" formatted="false">Нет разрешения на микрофон</string>
+    <string name="qk_03915">Содержимое длинное, показаны первые %1$s из %2$s строк</string>
+
+    <string name="qk_03916">Удалено элементов: %1$d, освобождено %2$s</string>
+    <string name="qk_03917">Очистка не удалась: нет доступа к некоторым файлам. Предоставьте разрешение на хранилище и повторите</string>
+    <string name="qk_03918">Каталог пуст или недоступен</string>
+    <string name="qk_04065">Нанять роли, привязать модели, настроить лимиты хоста</string>
 </resources>

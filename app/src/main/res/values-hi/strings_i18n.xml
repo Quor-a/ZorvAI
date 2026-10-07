@@ -3736,7 +3736,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03756" formatted="false">पाठ अनुवाद के लिए मॉडल</string>
     <string name="qk_03757" formatted="false">कोड खोज और पुनर्प्राप्ति योजना के लिए मॉडल</string>
     <string name="qk_03758" formatted="false">सोल कार्ड बनाने और डिस्टिल करने वाला मॉडल</string>
-    <string name="qk_03759" formatted="false">छवि सामग्री समझने वाला मॉडल (विज़न समर्थन आवश्यक)</string>
+    <string name="qk_03759" formatted="false">चित्र समझने के लिए उपयोगिता मॉडल (दृष्टि समर्थन आवश्यक); वीडियो कॉल में दृश्य समझ का रिज़र्व दृष्टि मॉडल भी</string>
     <string name="qk_03760" formatted="false">ऑडियो सामग्री समझने वाला मॉडल</string>
     <string name="qk_03761" formatted="false">वीडियो और वीडियो कॉल के लाइव फ़्रेम समझने वाला मॉडल (विज़न आवश्यक)</string>
     <string name="qk_03762" formatted="false">छवि निर्माण मॉडल जिसे AI सीधे कॉल कर सकता है</string>
@@ -3851,7 +3851,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03870" formatted="false">Sign in to manage repos / issues / stars / notifications; search GitHub inside the chat</string>
     <string name="qk_03871" formatted="false">When on, dangerous commands (rm -rf / dd / mkfs) require a second send or confirm</string>
     <string name="qk_03872" formatted="false">Follow system</string>
-    <string name="qk_03873" formatted="false">Model used for the live conversation and scene understanding in a video call (must support vision)</string>
+    <string name="qk_03873" formatted="false">वीडियो कॉल में लाइव बातचीत का मॉडल; मुख्य चैट मॉडल में दृष्टि न होने पर यह कैमरा फ़्रेम भी पढ़ता है (दृष्टि समर्थन आवश्यक)</string>
     <string name="qk_03874" formatted="false">Tap to start the video call</string>
     <string name="qk_03875" formatted="false">Video call on standby</string>
     <string name="qk_03876" formatted="false">Camera on · tap the mic to speak</string>
@@ -3887,4 +3887,21 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03906" formatted="false">स्थानीय अनुमान को अलग प्रक्रिया में चलाता है: बड़ा मॉडल लोड करने पर सिस्टम पूरे ऐप को बंद नहीं करेगा और इंटरफ़ेस उपलब्ध रहेगा। बंद करने पर पुराना व्यवहार बना रहेगा।</string>
     <string name="qk_03907" formatted="false">ताप-अनुकूली शेड्यूलिंग</string>
     <string name="qk_03908" formatted="false">लंबे अनुमान के दौरान हर 2 सेकंड में SoC का थर्मल बफ़र पढ़ता है और थ्रेड संख्या पहले से थोड़ी घटा देता है, जिससे सिस्टम की अचानक थ्रॉटलिंग से बचा जा सके। बंद होने पर कोई हस्तक्षेप नहीं।</string>
+
+    <string name="qk_03909" formatted="false">और क्रियाएँ</string>
+
+    <!-- ⋮ 视频通话启动失败原因（静默自停改为可读提示） -->
+    <string name="qk_03910" formatted="false">वीडियो कॉल शुरू नहीं हो सकी। कृपया मुख्य स्क्रीन से इसे फिर से खोलें</string>
+    <string name="qk_03911" formatted="false">वीडियो कॉल को कॉल स्क्रीन दिखाने के लिए अन्य ऐप्स पर प्रदर्शित करने की अनुमति चाहिए</string>
+    <string name="qk_03912" formatted="false">वीडियो कॉल स्क्रीन नहीं दिख सकी। अनुमतियाँ जाँचें और पुनः प्रयास करें</string>
+    <string name="qk_03913" formatted="false">कैमरा अनुमति नहीं है</string>
+    <string name="qk_03914" formatted="false">माइक्रोफ़ोन अनुमति नहीं है</string>
+    <string name="qk_03915">सामग्री लंबी है, %2$s में से पहली %1$s पंक्तियाँ दिखाई जा रही हैं</string>
+
+    <string name="qk_03916">%1$d आइटम साफ़ किए, %2$s मुक्त</string>
+    <string name="qk_03917">सफाई विफल: कुछ फ़ाइलों तक पहुँच अस्वीकार्य। स्टोरेज अनुमति दें और पुनः प्रयास करें</string>
+    <string name="qk_03918">निर्देशिका खाली या अनुपलब्ध</string>
+    <string name="qk_04060">表格列数较多，可左右滑动查看 →</string>
+    <string name="qk_04061">集群 · %1$s</string>
+    <string name="qk_04065">भूमिकाएँ भर्ती करें, मॉडल बाइंड करें, होस्ट सीमाएँ समायोजित करें</string>
 </resources>

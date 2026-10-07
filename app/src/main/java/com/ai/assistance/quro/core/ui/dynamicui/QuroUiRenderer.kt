@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
@@ -244,13 +245,13 @@ private fun RenderNode(
         is QuroStepsNode -> RenderSteps(node, styled)
         is QuroTimelineNode -> RenderTimeline(node, styled)
         is QuroTodoNode -> RenderTodo(node, styled)
-        is QuroExpandableNode -> RenderExpandable(node, styled)
+        is QuroExpandableNode -> RenderExpandable(node, state, hidden, onAction, styled)
         is QuroPieNode -> RenderPie(node, styled)
         is QuroCompareNode -> RenderCompare(node, styled)
         is QuroRadarNode -> RenderRadar(node, styled)
         is QuroHeatmapNode -> RenderHeatmap(node, styled)
         is QuroKanbanNode -> RenderKanban(node, styled)
-        is QuroCarouselNode -> RenderCarousel(node, styled)
+        is QuroCarouselNode -> RenderCarousel(node, state, hidden, onAction, styled)
         is QuroTimerNode -> RenderTimer(node, styled)
         is QuroTagCloudNode -> RenderTagCloud(node, styled)
         is QuroAvatarGroupNode -> RenderAvatarGroup(node, styled)
@@ -376,7 +377,7 @@ private fun RenderStat(node: QuroStatNode, modifier: Modifier) {
     }
 }
 
-/** 表格：表头加粗 + 斑马纹，过宽横向滚动。 */
+/** 表格：表头加粗 + 斑马纹，列宽自适应容器，过宽才横向滚动。 */
 @Composable
 private fun RenderTable(node: QuroTableNode, modifier: Modifier) {
     if (node.headers.isEmpty() && node.rows.isEmpty()) return
@@ -385,26 +386,70 @@ private fun RenderTable(node: QuroTableNode, modifier: Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
     }
     val colCount = maxOf(node.headers.size, node.rows.maxOfOrNull { it.size } ?: 0)
-    Column(modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-        Row(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant)) {
-            for (i in 0 until colCount)
-                Text(text = node.headers.getOrNull(i) ?: "", style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.widthIn(min = 80.dp, max = 240.dp).padding(8.dp))
-        }
-        HorizontalDivider()
-        node.rows.forEachIndexed { ri, row ->
-            Row(modifier = Modifier.background(
-                if (ri % 2 == 0) MaterialTheme.colorScheme.surface
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))) {
-                for (i in 0 until colCount)
-                    Text(text = row.getOrNull(i) ?: "", style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.widthIn(min = 80.dp, max = 240.dp).padding(8.dp))
+    // 🔴🔴 列宽自适应（用户实测「表格列被裁掉，排版不准」的根因修复）。
+    //
+    // 旧实现每格 `widthIn(min = 80.dp, max = 240.dp)`：列数一多（如 5 列）总宽 400dp+
+    // 就超出 360dp 设计稿，整块被 SurfaceHost 的 clipToBounds 裁掉右侧，
+    // 而 horizontalScroll 只能让内容**可滚**、并不能让它在静态截图里就完整可见 ——
+    // 用户看到的就是「右边几列没了」。
+    //
+    // 现在按**容器实际可用宽度**均分：
+    //   · 列少（≤4）→ 每列铺满整宽，一屏看全，不需要横滑；
+    //   · 列多（>4）→ 每列收到 [TABLE_MIN_COL_DP]，装不下时才允许横滑（有边界提示）。
+    // 两端各留 TABLE_MIN_COL_DP ~ TABLE_MAX_COL_DP，既不撑爆也不挤成竖条。
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val availDp = if (maxWidth.value.isFinite() && maxWidth.value > 0f) maxWidth.value else 360f
+        val evenDp = availDp / colCount
+        val colDp = evenDp.coerceIn(TABLE_MIN_COL_DP, TABLE_MAX_COL_DP)
+        val totalDp = colDp * colCount
+        val overflow = totalDp > availDp + 0.5f
+        Column(Modifier.fillMaxWidth()) {
+            if (overflow) {
+                // 溢出必须**明说**：否则用户以为右边被吞了，不会想到能滑
+                Text(
+                    text = stringResource(R.string.qk_04060),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 2.dp),
+                )
             }
-            if (ri < node.rows.size - 1) HorizontalDivider()
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .then(if (overflow) Modifier.horizontalScroll(rememberScrollState()) else Modifier)
+                    .clipToBounds()
+            ) {
+                Row(Modifier.background(MaterialTheme.colorScheme.surfaceVariant)) {
+                    for (i in 0 until colCount)
+                        Text(
+                            text = node.headers.getOrNull(i) ?: "",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.width(colDp.dp).padding(horizontal = 6.dp, vertical = 8.dp),
+                        )
+                }
+                HorizontalDivider()
+                node.rows.forEachIndexed { ri, row ->
+                    Row(Modifier.background(
+                        if (ri % 2 == 0) MaterialTheme.colorScheme.surface
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))) {
+                        for (i in 0 until colCount)
+                            Text(
+                                text = row.getOrNull(i) ?: "",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.width(colDp.dp).padding(horizontal = 6.dp, vertical = 6.dp),
+                            )
+                    }
+                    if (ri < node.rows.size - 1) HorizontalDivider()
+                }
+            }
         }
     }
 }
+
+/** 表格列宽下限/上限（dp）。下限保证单元格里至少能放下 1~2 个汉字，上限防止宽表一列占满整屏。 */
+private const val TABLE_MIN_COL_DP = 64f
+private const val TABLE_MAX_COL_DP = 240f
 
 /** 提醒条。 */
 @Composable
@@ -570,7 +615,13 @@ private fun RenderTodo(node: QuroTodoNode, modifier: Modifier) {
 
 /** 折叠面板。 */
 @Composable
-private fun RenderExpandable(node: QuroExpandableNode, modifier: Modifier) {
+private fun RenderExpandable(
+    node: QuroExpandableNode,
+    state: MutableMap<String, Any>,
+    hidden: MutableMap<String, Boolean>,
+    onAction: (QuroUiAction, Map<String, String>) -> Unit,
+    modifier: Modifier,
+) {
     var expanded by remember(node.id) { mutableStateOf(node.expanded) }
     Column(modifier = modifier.fillMaxWidth()) {
         Surface(modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
@@ -581,8 +632,16 @@ private fun RenderExpandable(node: QuroExpandableNode, modifier: Modifier) {
                 Text(text = if (expanded) "▲" else "▼", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (expanded && node.body.isNotBlank()) {
-            Text(text = node.body, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(12.dp))
+        if (expanded) {
+            // 🔴 修复：原来只在 `node.body.isNotBlank()` 时渲染，body 为空就什么都不画 →
+            // 用户点开折叠面板看到一片空白。AI 常把内容写成组件对象，此时 body 必为空。
+            // 现在优先渲染富内容节点，其次文本，都没有才给显式提示。
+            when {
+                node.node != null -> RenderNode(node.node, state, hidden, onAction, Modifier.padding(12.dp))
+                node.body.isNotBlank() ->
+                    Text(text = node.body, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(12.dp))
+                else -> EmptySlotHint("「${node.title.ifBlank { "折叠面板" }}」暂无内容")
+            }
         }
     }
 }
@@ -769,20 +828,38 @@ private fun RenderKanban(node: QuroKanbanNode, modifier: Modifier) {
 
 /** 轮播（简化：左右切换 + 圆点指示）。 */
 @Composable
-private fun RenderCarousel(node: QuroCarouselNode, modifier: Modifier) {
-    val slides = node.slides.mapNotNull { s ->
-        val o = jsonObjOrNull(s) ?: return@mapNotNull null
-        Pair(o.optString("title"), o.optString("body"))
+private fun RenderCarousel(
+    node: QuroCarouselNode,
+    state: MutableMap<String, Any>,
+    hidden: MutableMap<String, Boolean>,
+    onAction: (QuroUiAction, Map<String, String>) -> Unit,
+    modifier: Modifier,
+) {
+    // 🔴 修复：原来每项 slide 是 JSON 字符串，只取 title/body 两个字符串字段；
+    // body 是组件对象时 optString 拿不到文本 → 每张只剩标题，「切换过去看不到内容」。
+    val slides = node.slides
+    if (slides.isEmpty()) {
+        EmptySlotHint("轮播页未解析出内容")
+        return
     }
-    if (slides.isEmpty()) return
     var idx by remember(node.id) { mutableStateOf(0) }
     Column(modifier = modifier.fillMaxWidth()) {
         Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(12.dp)) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                val (t, b) = slides[idx]
-                if (t.isNotBlank()) Text(text = t, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                if (b.isNotBlank())
-                    Text(text = b, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
+                val slide = slides[idx]
+                if (slide.title.isNotBlank())
+                    Text(text = slide.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                if (slide.body.isNotBlank())
+                    Text(text = slide.body, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
+                // 富内容优先：AI 把这一页写成组件/排版时，这里渲染真正的组件。
+                // 用显式 when 而不是 `?.let{} ?: if{}`：后者作为表达式时 if 缺 else 分支编不过，
+                // 且三态（富内容 / 纯文本 / 空）挤在一个 Elvis 里可读性差。
+                val slideNode = slide.node
+                when {
+                    slideNode != null -> RenderNode(slideNode, state, hidden, onAction)
+                    slide.title.isBlank() && slide.body.isBlank() ->
+                        EmptySlotHint("「第 ${idx + 1} 页」暂无内容")
+                }
             }
         }
         Spacer(Modifier.height(6.dp))
@@ -1056,11 +1133,26 @@ private fun RenderUnknown(
             listField(f, "slides")?.let { RenderStringList(it, "slides") }
             listField(f, "fields")?.let { RenderStringList(it, "fields") }
             listField(f, "steps")?.let { RenderStringList(it, "steps") }
+            // 🔴🔴🔴 图表类字段（#181「漏斗没有数据」的真凶）。
+            //
+            // RAG 教模型写的规格来自 [CardSdk]：漏斗的数据字段就叫 `data`，
+            // 每项 `{name, value, color, hint}`（见 CardSdk 的 funnel spec）。
+            // 而这一段原先只认 items/rows/segments/axes... —— **`data` 一个都不认**，
+            // 于是它掉进下面的标量兜底，被 `Text("$k: $v")` 原样打印成
+            // `data: [{"name":"曝光","value":1000}]` 这种 Java 对象串（用户截图：漏斗没有数据）。
+            //
+            // 同族字段一并补齐，否则「AI 明明按RAG 写了却渲染不出来」会换个名字重演：
+            //   data / stages / series / values / bars / lines / points / nodes / datasets
+            for (k in CHART_DATA_KEYS) {
+                kvListField(f, k)?.let { RenderKvList(it, k) }
+            }
             // 其余标量字段（已上屏的除外）
+            // 🔴 `shown` 必须把新加的图表字段列进来，否则同一个 data 会被上面渲染一次、
+            //   再被这里的标量兜底打印一次（用户会看到重复两遍内容）。
             val shown = setOf("value", "text", "content", "title", "label", "name", "description", "body", "detail",
                 "subtitle", "source", "code", "html", "markdown", "md", "lang", "language", "items", "rows",
                 "segments", "events", "tags", "crumbs", "axes", "columns", "avatars", "slides", "fields", "steps",
-                "action", "on_click", "onClick")
+                "action", "on_click", "onClick") + CHART_DATA_KEYS
             f.filterKeys { it !in shown }.forEach { (k, v) ->
                 if (v != null) Text(text = "$k: ${v}", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1070,6 +1162,94 @@ private fun RenderUnknown(
                 Spacer(Modifier.height(4.dp))
                 node.children.forEach { child ->
                     RenderNode(child, state, hidden, onAction, Modifier.fillMaxWidth(), isRoot = false)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 图表/列表类数据字段名（#181）。
+ *
+ * 🔴 口径：**这些字段的值是「数据」，不是「文案」**。
+ * 漏斗走 `data`，桑基走 `nodes`+`links`，折线柱状走 `series`/`values`，
+ * 漏斗分级还有人会写 `stages`。RAG 按 CardSdk 规格教模型输出，
+ * 渲染层就必须认同一批名字 —— 两边不一致就是「AI 写了但渲染不出来」的直接成因。
+ */
+private val CHART_DATA_KEYS = listOf(
+    "data", "stages", "series", "values", "bars", "lines", "points", "datasets", "links",
+)
+
+/** 一行「名称 · 数值」。 */
+private data class KvRow(val label: String, val value: String?)
+
+/**
+ * 把「对象数组」形态的图表数据解析成可读行（#181）。
+ *
+ * 🔴 为什么不能直接用 [listField]：它对元素做 `it.toString()`，
+ * 遇���**对象**（漏斗的 `{name,value}`）会得到 Java 字面量串
+ * `{name=曝光, value=1000.0}` —— 这种东西显示在屏幕上等于乱码。
+ *
+ * 口径：
+ *  - 纯字符串/数字数组 → 原样透出（`data: ["A","B"]` 这种也要看得见）；
+ *  - 对象数组 → 取 `label/name/title/stage/step/key/text` 作标题，
+ *    取 `value/num/count/amount/y/size` 作数值；两个都取不到就把整个对象 toString 兜出，
+ *    **绝不静默丢弃条目**（丢条目 = 又变回「没有数据」）。
+ *
+ * @return null 表示该 key 不存在或为空（不是空数组壳）—— 空壳交给下面的标量兜底，
+ *   让用户看见「字段存在但内容为空」这个事实，而不是凭空消失。
+ */
+private fun kvListField(f: Map<String, Any?>, key: String): List<KvRow>? {
+    val v = f[key] ?: return null
+    val list = when (v) {
+        is List<*> -> v
+        is Array<*> -> v.toList()
+        else -> return null
+    }
+    if (list.isEmpty()) return null
+    return list.mapNotNull { item ->
+        when (item) {
+            null -> null
+            is String -> item.takeIf { it.isNotBlank() }?.let { KvRow(it, null) }
+            is Map<*, *> -> {
+                fun pick(vararg keys: String): String? = keys.firstNotNullOfOrNull { k ->
+                    item[k]?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+                }
+                val label = pick("label", "name", "title", "stage", "step", "key", "text", "category")
+                val val2 = pick("value", "num", "count", "amount", "y", "size", "total", "rate", "percent")
+                // 🔴 两个都取不到也要保留这条 —— 宁可显示原始串，也不能让条目凭空消失
+                when {
+                    label != null && val2 != null -> KvRow(label, val2)
+                    label != null -> KvRow(label, null)
+                    val2 != null -> KvRow(val2, null)
+                    else -> KvRow(item.toString(), null)
+                }
+            }
+            else -> item.toString().takeIf { it.isNotBlank() }?.let { KvRow(it, null) }
+        }
+    }.takeIf { it.isNotEmpty() }
+}
+
+/** 渲染 [KvRow] 列表：标题 + 数值（数值用等宽偏粗，像数据而不是像文案）。 */
+@Composable
+private fun RenderKvList(rows: List<KvRow>, key: String) {
+    if (rows.isEmpty()) return
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        rows.forEach { r ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = r.label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f),
+                )
+                r.value?.let { v ->
+                    Text(
+                        text = v,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                 }
             }
         }
@@ -2316,6 +2496,41 @@ private fun RenderList(
     }
 }
 
+/**
+ * 空内容占位提示。
+ *
+ * 🔴 存在的唯一理由：**静默失败比报错更坏**。切换类容器（tabs / accordion / carousel）
+ * 取不到子内容时，如果什么都不画，用户看到的是一片空白 —— 他无法区分
+ * 「模型没下发这部分内容」和「客户端渲染坏了」，只能反复让模型重试。
+ * 显式写出来之后，用户一眼就知道该让模型补哪一块。
+ *
+ * 复用既有 i18n 键 qk_00053「（无内容）」，**不新增键**。
+ */
+@Composable
+private fun EmptySlotHint(detail: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        shape = RoundedCornerShape(8.dp),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text(
+                text = stringResource(R.string.qk_00053),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (detail.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun RenderTabs(
     node: QuroTabsNode,
@@ -2324,7 +2539,12 @@ private fun RenderTabs(
     onAction: (QuroUiAction, Map<String, String>) -> Unit,
     modifier: Modifier,
 ) {
-    if (node.tabs.isEmpty()) return
+    // 🔴 修复：原来 `if (node.tabs.isEmpty()) return` 直接什么都不画，
+    // tabs 为空时用户只看到一条空白，连"标签页都没解析出来"都不知道。
+    if (node.tabs.isEmpty()) {
+        EmptySlotHint("标签页未解析出内容")
+        return
+    }
     // 修复：原 remember{} 无 key，AI updateComponents 把 tabs 从 3 个换成 1 个时，
     // selectedTabIndex=2 越界传给 TabRow 导致指示器 tabPositions[2] 崩溃。
     // 用 coerceIn 钳制在合法范围；remember(node.id) 让 id 变化时回到 0。
@@ -2357,8 +2577,14 @@ private fun RenderTabs(
             }
         }
         Spacer(Modifier.height(12.dp))
-        node.tabs.getOrNull(clampedIndex)?.node?.let { content ->
+        // 🔴 修复：原来是 `?.node?.let { RenderNode(it) }`，node 为 null 时**什么都不渲染且零提示**
+        // → 用户看到 TabRow + 下方一片空白，完全无法判断是模型没给内容还是客户端渲染坏了。
+        // 现在显式区分两种情况：解析器确实没抽出内容 → 给出可读的空态说明。
+        val content = node.tabs.getOrNull(clampedIndex)?.node
+        if (content != null) {
             RenderNode(content, state, hidden, onAction)
+        } else {
+            EmptySlotHint("「${node.tabs[clampedIndex].title}」暂无内容")
         }
     }
 }

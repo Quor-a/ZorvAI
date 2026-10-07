@@ -3736,7 +3736,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03756" formatted="false">Modèle utilisé pour la traduction de texte</string>
     <string name="qk_03757" formatted="false">Modèle utilisé pour la recherche de code</string>
     <string name="qk_03758" formatted="false">Modèle utilisé pour générer et distiller les cartes d’âme</string>
-    <string name="qk_03759" formatted="false">Modèle utilisé pour comprendre les images (vision requise)</string>
+    <string name="qk_03759" formatted="false">Modèle de compréhension des images (doit prendre en charge la vision) ; sert aussi de modèle de vision de secours pour l\'appel vidéo</string>
     <string name="qk_03760" formatted="false">Modèle utilisé pour comprendre l’audio</string>
     <string name="qk_03761" formatted="false">Modèle utilisé pour comprendre la vidéo et les images d’appel en direct (vision requise)</string>
     <string name="qk_03762" formatted="false">Modèle de génération d’image appelable directement par l’IA</string>
@@ -3851,7 +3851,7 @@ Vos modèles configurés sont conservés ; vous pouvez aussi saisir un nom de mo
     <string name="qk_03870" formatted="false">Sign in to manage repos / issues / stars / notifications; search GitHub inside the chat</string>
     <string name="qk_03871" formatted="false">When on, dangerous commands (rm -rf / dd / mkfs) require a second send or confirm</string>
     <string name="qk_03872" formatted="false">Follow system</string>
-    <string name="qk_03873" formatted="false">Model used for the live conversation and scene understanding in a video call (must support vision)</string>
+    <string name="qk_03873" formatted="false">Modèle pour la conversation en appel vidéo ; sert aussi à lire l\'image de la caméra lorsque le modèle de chat principal n\'a pas de vision (doit prendre en charge la vision)</string>
     <string name="qk_03874" formatted="false">Tap to start the video call</string>
     <string name="qk_03875" formatted="false">Video call on standby</string>
     <string name="qk_03876" formatted="false">Camera on · tap the mic to speak</string>
@@ -3887,4 +3887,21 @@ Vos modèles configurés sont conservés ; vous pouvez aussi saisir un nom de mo
     <string name="qk_03906" formatted="false">Exécute l\'inférence locale dans un processus séparé : charger un grand modèle ne peut plus faire tuer toute l\'application par le système, l\'interface reste utilisable. Désactivez pour revenir au comportement précédent.</string>
     <string name="qk_03907" formatted="false">Ordonnancement thermique adaptatif</string>
     <string name="qk_03908" formatted="false">Lit la marge thermique du SoC toutes les 2 secondes pendant les inférences longues et réduit légèrement le nombre de threads par anticipation, ce qui évite un bridage brutal du système. Désactivé : aucune intervention.</string>
+
+    <string name="qk_03909" formatted="false">Plus d\'actions</string>
+
+    <!-- ⋮ 视频通话启动失败原因（静默自停改为可读提示） -->
+    <string name="qk_03910" formatted="false">Échec du démarrage de l\'appel vidéo. Veuillez le rouvrir depuis l\'écran principal</string>
+    <string name="qk_03911" formatted="false">L\'appel vidéo nécessite l\'autorisation d\'afficher par-dessus les autres applications</string>
+    <string name="qk_03912" formatted="false">Impossible d\'afficher l\'écran d\'appel vidéo. Vérifiez les autorisations et réessayez</string>
+    <string name="qk_03913" formatted="false">Autorisation de la caméra manquante</string>
+    <string name="qk_03914" formatted="false">Autorisation du microphone manquante</string>
+    <string name="qk_03915">Contenu long, affichage des %1$s premières lignes sur %2$s</string>
+
+    <string name="qk_03916">%1$d éléments supprimés, %2$s libérés</string>
+    <string name="qk_03917">Échec du nettoyage : accès refusé à certains fichiers. Accordez la permission de stockage et réessayez</string>
+    <string name="qk_03918">Répertoire vide ou inaccessible</string>
+    <string name="qk_04060">表格列数较多，可左右滑动查看 →</string>
+    <string name="qk_04061">集群 · %1$s</string>
+    <string name="qk_04065">Recruter des rôles, lier des modèles, ajuster les limites de l’hôte</string>
 </resources>

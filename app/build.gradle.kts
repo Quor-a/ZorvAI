@@ -165,6 +165,13 @@ kotlin {
 }
 
 dependencies {
+    // 多角色集群编排（去品牌化移植的 cluster-* 六模块）。
+    // ui/engine/model 走 api 暴露类型；storage 需进包才能读写 qurocluster.db；
+    // SQLCipher 由 :cluster-storage 以 implementation 传递，App 侧无需直接依赖。
+    implementation(project(":cluster-ui"))
+    implementation(project(":cluster-engine"))
+    implementation(project(":cluster-storage"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.annotation)
     implementation(libs.androidx.appcompat)
@@ -234,6 +241,21 @@ dependencies {
     // 定位：AI 生成 GenUI JSON DSL → SDK 直接渲染成**原生 Compose 组件**（530+ 组件、样式/动画/交互/
     // 状态/技能），并通过 collectFrom 把表单输入聚合回 AI。SDK 自身不调用 LLM、无网络依赖。
     implementation(project(":genuiagent-sdk"))
+
+    // ── CodeCanvas 出图 SDK（codecanvas/ 目录，纯端侧渲染，无服务器依赖）──
+    // 定位：脚本 → 绘图指令 → 位图/SVG。4 引擎 × 4 后端的中间层设计，
+    // 脚本只产指令不碰 Android API，后端只消费指令不关心脚本来源。
+    // 只引真正用得上的：core 是抽象层必引；kotlin-dsl 引擎零体积增量；
+    // Canvas 后端零依赖最快；SVG 后端用于矢量输出。
+    // 🔴 不引 renderer-webview：它依赖 highlight.js 资源与 WebView 预热，
+    //    而宿主已有 miniapp-sdk / GenUI 的 WebView 通道，重复引入只增首启耗时。
+    //    因此 codecanvas_onscreen_markup 在无 WebView 后端时会明确告知并给出替代路径。
+    implementation(project(":codecanvas-core"))
+    implementation(project(":engine-kotlindsl"))   // 自研行式 DSL：0 体积兜底引擎
+    implementation(project(":renderer-canvas"))    // 原生 Bitmap：默认后端，最快
+    implementation(project(":renderer-svg"))       // 矢量输出：流程图/印刷
+    implementation(project(":renderer-compose"))   // Compose 内联展示
+    implementation(project(":llm-connector"))      // OpenAI 兼容流式 + 代码块抽取
 
     // ── 内置 GenUI-Agent 应用层（app/.../genui/aiapp/）所需依赖 ──
     // 来源同上（上游 app/ 模块）：上游为独立 App，其依赖不继承宿主，故在此显式补齐。
@@ -321,4 +343,7 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation(libs.org.json)
+    // 集群端到端测试需要 Android Context（RoleRegistry / QuroPersonaRepository）。
+    // 本工程单测原未挂 Robolectric —— 仅给新集群测试用，不影响其它未标注 runner 的用例。
+    testImplementation("org.robolectric:robolectric:4.12.2")
 }

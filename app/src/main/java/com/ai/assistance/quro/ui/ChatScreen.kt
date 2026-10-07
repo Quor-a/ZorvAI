@@ -163,8 +163,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-
-import androidx.compose.material3.Button
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.IconButtonDefaults
@@ -242,6 +240,16 @@ import com.ai.assistance.quro.core.QuroPersona
 import com.ai.assistance.quro.core.QuroCrashLogger
 import com.ai.assistance.quro.ui.QuroChatViewModel
 import com.ai.assistance.quro.ui.dialog.RichText
+import com.ai.assistance.quro.ui.dialog.messageContentMaxWidth
+import com.ai.assistance.quro.ui.dialog.bodyTopInsetDp
+import com.ai.assistance.quro.ui.dialog.nameRowCenterOffsetDp
+import com.ai.assistance.quro.core.experience.QuroMemoryInfo
+import com.ai.assistance.quro.core.experience.QuroStorageStats
+import com.ai.assistance.quro.core.experience.measureDirOrNull
+import com.ai.assistance.quro.core.experience.measureExternalAppDirs
+import com.ai.assistance.quro.core.experience.readProcessMemory
+import com.ai.assistance.quro.core.experience.readStorageStats
+import com.ai.assistance.quro.core.experience.requestMemoryTrim
 import com.ai.assistance.quro.core.tools.QuroVoiceStyle
 import com.ai.assistance.quro.core.tools.QuroSttHolder
 import com.ai.assistance.quro.core.tools.QuroSttPrefs
@@ -309,6 +317,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.MusicNote
@@ -322,6 +331,11 @@ import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.DataUsage
+import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.DeveloperBoard
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Videocam
@@ -480,20 +494,28 @@ fun ChatScreen(
         val aggText = StringBuilder()
         val aggCards = mutableListOf<QuroChatCard>()
         val aggAttach = mutableListOf<Attachment>()
+        // 🔴 当前聚合段的发言人（集群/子智能体的角色名）。null = 普通助手消息。
+        // 见下方 else 分支：**发言人不同就 flush**，绝不把不同角色的话并进同一个气泡。
+        var aggSpeaker: String? = null
 
         fun flushAgg() {
             if (!hasAgg) return
             val think = if (aggThinkLines.isNotEmpty()) ThinkBlock(aggThinkLines.toList()) else null
             val text = aggText.toString().takeIf { it.isNotBlank() }
             if (think != null || aggTools.isNotEmpty() || text != null || aggCards.isNotEmpty() || aggAttach.isNotEmpty()) {
+                // 🔴 发言人优先用聚合段自己的 senderName（集群/子智能体按角色分段后才非空），
+                // 没有才回退人格名。头像同理：集群角色用首字符当头像，
+                // 否则 8 个角色顶着同一张脸，用户根本分不清谁在说话。
+                val speaker = aggSpeaker
                 out.add(
                     Message(
                         id = aggId,
                         uids = aggIds.toList(),
                         mine = false,
-                        author = selectedPersona.name,
-                        avatar = selectedPersona.ava,
-                        avatarUri = selectedPersona.avatarUri,
+                        author = if (speaker.isNullOrBlank()) selectedPersona.name else speaker,
+                        avatar = if (speaker.isNullOrBlank()) selectedPersona.ava else speaker.take(1),
+                        avatarUri = if (speaker.isNullOrBlank()) selectedPersona.avatarUri else "",
+                        isClusterSpeaker = !speaker.isNullOrBlank(),
                         time = aggTime,
                         text = text,
                         attachments = aggAttach.toList(),
@@ -505,6 +527,7 @@ fun ChatScreen(
             }
             hasAgg = false
             aggThinkLines.clear(); aggTools.clear(); aggText.clear(); aggCards.clear(); aggAttach.clear(); aggIds.clear()
+            aggSpeaker = null
         }
 
         for (m in messages) {
@@ -520,11 +543,29 @@ fun ChatScreen(
                     if (m.role == "system" && m.hidden) { flushAgg(); continue }
                     // 隐藏且无任何可见内容的纯管道占位 → 跳过；否则参与聚合（含隐藏但有工具/推理/文本/卡片）
                     if (m.hidden && m.toolCalls.isNullOrEmpty() && m.reasoning.isNullOrBlank() && m.content.isBlank() && m.cards.isEmpty()) continue
+                    // 🔴🔴 集群/子智能体：发言人不同就**另起一个气泡**。
+                    //
+                    // 旧实现把连续的 assistant 消息全部并进一个气泡、且 author 硬编码成人格名，
+                    // 于是 8 个角色的发言变成一段没人能认领的自言自语 ——
+                    // 这就是用户报的「集群像黑盒，不知道他们在干什么、讨论了什么」。
+                    // 气泡名字行会显示 [qk_04061] 渲染出的「集群 · 角色名」，
+                    // 每个角色一个气泡，先后顺序即发言顺序，参与感由此而来。
+                    val sp = m.senderName?.trim()?.takeIf { it.isNotEmpty() && it != selectedPersona.name }
+                    if (hasAgg && sp != null && sp != aggSpeaker) flushAgg()
                     aggIds.add(m.id)
                     if (!hasAgg) {
                         hasAgg = true
                         aggId = m.id.hashCode()
                         aggTime = formatChatTime(m.createdAt)
+                    }
+                    if (sp != null) aggSpeaker = sp
+                    // 集群工具调用：投影器把工具名放在 toolLabel（它不是 toolCalls），
+                    // 这里补成一条 ToolCallUi，让对话框的「N 工具」胶囊能展开看到。
+                    if (sp != null) {
+                        m.toolLabel?.takeIf { it.isNotBlank() }?.let { lbl ->
+                            val args = m.content.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+                            aggTools.add(ToolCallUi(lbl, args, "（集群角色 $sp 调用）", 0L))
+                        }
                     }
                     m.reasoning?.takeIf { it.isNotBlank() }?.lineSequence()
                         ?.filter { it.isNotBlank() }?.forEach { aggThinkLines.add(it) }
@@ -660,6 +701,7 @@ fun ChatScreen(
     var showWorkspaceSelector by remember { mutableStateOf(false) }
     // 工作区代码编辑器（写代码 / 浏览代码）全屏页
     var showCodeWorkspace by remember { mutableStateOf(false) }
+    // 集群配置页入口：🔴 纯配置，**不承担对话**（见 QuroClusterSettingsScreen）
     // 功能模型配置屏（从设置「功能模型配置」进入）：为 5 类 AI 子能力各自绑定模型
     var showFeatureModelConfig by remember { mutableStateOf(false) }
     var showAppearance by remember { mutableStateOf(false) }
@@ -714,6 +756,8 @@ fun ChatScreen(
     var showTerminal by remember { mutableStateOf(false) }
     var showBrowser by remember { mutableStateOf(false) }
     var showMcp by remember { mutableStateOf(false) }
+    // 多角色集群设置（招人 / 绑模型 / 主持熔断 / 发起任务）
+    var showClusterSettings by remember { mutableStateOf(false) }
     // 聚合式「系统状态」浏览界面（设备 / 权限 / 模块运行态 / 人格心跳）
     var showSystemStatus by remember { mutableStateOf(false) }
     // 可视化组件画廊
@@ -1205,6 +1249,7 @@ fun ChatScreen(
     // 应用上下文：提前声明，供 handleUiAction / handleCardCommand 等局部函数捕获
     val ctx = LocalContext.current
     quroDiagCtx = ctx
+
     // 系统级悬浮窗（TYPE_APPLICATION_OVERLAY）权限：已授权时化小窗走 QuroMiniWindowManager，
     // 即使 App 退后台也浮于其他 App 之上；未授权降级为应用内 Compose 浮层。提前声明供下方条件判断使用。
     val useSystemOverlay = remember { QuroMiniWindowManager.hasOverlayPermission(ctx) }
@@ -1290,6 +1335,12 @@ fun ChatScreen(
     }
 
     /** 卡片动作命令分发：ui_* 走 UI 桥；linux:install 触发沙箱安装；run:<cmd> 喂给终端。 */
+    // 🔴 [send] 定义在本函数**之后**，Kotlin 局部函数不能前向引用。
+    // 用一个引用持有者把两者接起来：组件点击（ui_reply:）必须走真正的 send()，
+    // 而不是退化成 vm.send() —— 只有 send() 才会带上附件/上下文标记，
+    // 并且在集群模式下把这次操作交给集群（用户「参与集群」的前提）。
+    var sendRef: ((String) -> Unit)? = null
+
     fun handleCardCommand(cmd: String) {
         val action = CardAction.parse(cmd)
         if (CardActionRouter.dispatch(action) { a -> handleCardAction(a) }) return
@@ -1315,6 +1366,19 @@ fun ChatScreen(
                 if (t.isNotEmpty()) vm.send(t, emptyList(), cfg)
             }
             cmd.startsWith("screen:") -> QuroUiActionBridge.dispatch?.invoke(cmd.removePrefix("screen:").trim())
+            // 🔴🔴 动态 UI / 互动游戏组件的交互回发（点棋盘格、选选项、点按钮…）。
+            //   这一条曾经**根本不存在**：组件点一下，onCommand 收到
+            //   `【ttt_move】\nrow: 0...` 这样的裸串，老 when 一个分支都不匹配 →
+            //   静默丢弃 → 用户报「组件点不了」，AI 也永远收不到操作。
+            //   现在显式成一条真·用户消息（走 send()，集群模式下自动交给集群参与）。
+            cmd.startsWith(UI_REPLY_PREFIX) -> {
+                val t = cmd.removePrefix(UI_REPLY_PREFIX).trim()
+                if (t.isNotEmpty()) {
+                    val f = sendRef
+                    if (f != null) f(t)
+                    else vm.send(t, emptyList(), cfg)
+                }
+            }
             // 打开全屏音乐播放器（工具 / 卡片触发）
             cmd == "ui_open_music_player" -> showMusicPlayer = true
             // 点击 AI 头像 → 编辑当前激活灵魂卡（v232 修复：此前 __edit_soul_card__ 无对应分支，点击无反应进不去）
@@ -1448,9 +1512,17 @@ fun ChatScreen(
             ctxParts.add("已启用技能(${enabledSkillsCount}个): ${enabledSkills.joinToString("、")}")
         }
         val contextStr = ctxParts.joinToString("\n").ifBlank { null }
+
         vm.send(t, attachments.toList(), cfg, contextMessage = contextStr)
         attachments.clear()
     }
+
+    // 🔴 回填 send 引用（供 [UI_REPLY_PREFIX] 分支使用）。
+    // 必须在 send 定义之后赋值：Kotlin 局部函数不能前向引用，
+    // 而 send 又必须定义在 handleCardCommand 之后（它用到了后面才声明的变量）。
+    // 组件点击 → ui_reply: → handleCardCommand → 这里 → send()，
+    // 这样动态 UI / 互动游戏的交互才会真正变成一条用户消息（集群模式下自动交给集群）。
+    sendRef = { t -> send(t) }
 
     @Composable
     fun ChatOverlays() {
@@ -1684,6 +1756,7 @@ fun ChatScreen(
             onOpenFileManager = { showFileManager = true },
             onOpenAci = { showAci = true },
             onOpenMcp = { showMcp = true },
+            onOpenCluster = { showClusterSettings = true },
             onOpenSystemStatus = { showSystemStatus = true },
             onOpenComponentGallery = { showComponentGallery = true },
             onOpenAppearance = { showAppearance = true },
@@ -1885,6 +1958,14 @@ fun ChatScreen(
             }
         }
 
+        // 多角色集群设置页：全屏覆盖层（从设置「多角色集群」进入）
+        if (showClusterSettings) {
+            BackHandler { showClusterSettings = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
+                QuroClusterSettingsScreen(onBack = { showClusterSettings = false })
+            }
+        }
+
         // ACI 管理中心页：全屏覆盖层（从设置「功能 → ACI 管理中心」进入，AI 工具 ui_open_aci 亦可打开）
         if (showAci) {
             BackHandler { showAci = false }
@@ -1946,6 +2027,13 @@ fun ChatScreen(
                 )
             }
         }
+
+        // 多角色集群面板：这里只做「编排控制」（建角色 / 下目标 / 看进度），
+        // 集群的发言经 ClusterChatBridge 投影进**本对话框的消息流**（绑定在
+        // QuroChatViewModel.init，与助手消息走同一套渲染）。
+        //
+        // 编排控制在「设置 → 多角色集群」页。
+
 
         // 技能选择对话框（从输入框工具菜单 / 上下文标识栏进入）
         if (showSkillSelector) {
@@ -2926,7 +3014,7 @@ private fun MessageList(
             Text(dateLabel, fontSize = scaled(12), color = Muted, modifier = Modifier.padding(start = 2.dp, bottom = 2.dp))
         }
         // 执行轨迹已「融和升级」进工具调用输出：
-        // 轨迹不再作为底部独立面板，而是内嵌到最近一次助手工具调用卡内（见 ToolsInlineContent）。
+        // 轨迹不再作为底部独立面板，而是内嵌到最近一次助手工具调用卡内（见 ToolCallGroup）。
         // 纯文本（无工具卡可融）回复不再渲染独立追踪卡，避免与工具卡重复 /「旧 UI 重显」。
         val visibleTraces = traceLines.filter { it.kind != QuroAgentTrace.TraceKind.STATUS }
         // 稳定 key：每条消息的 Message.id 来自 QuroMessage.id（UUID）的 hashCode，唯一且流式更新时不变，
@@ -2978,7 +3066,7 @@ private fun MessageList(
 }
 
 /**
- * 执行追踪已从「底部独立面板」迁移为「内嵌到工具调用卡」：见 MessageRow / ToolsInlineContent。
+ * 执行追踪已从「底部独立面板」迁移为「内嵌到工具调用卡」：见 MessageRow / ToolCallGroup。
  * 旧 AgentTracePanel 已删除，避免与工具卡重复渲染 / 旧 UI 重显。
  */
 
@@ -3214,37 +3302,121 @@ private fun MessageRow(
         // AIP 排版引擎（B 通道）解析前置：统一解析一次，供气泡过滤与【全宽内联】AIP 块共用。
         // 声明上提到 280dp 内容列之外（消息 else 块作用域），使 AIP 全宽内联块能复用，避免重复解析。
         val blocks = remember(cleanText) { parseBlocks(cleanText, selfCard = true) }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = if (msg.mine) Arrangement.End else Arrangement.Start) {
-        if (!msg.mine) {
-            // AI 头像可点击 → 编辑灵魂卡
-            var showAvatarMenu by remember { mutableStateOf(false) }
-            Box(Modifier.clickable { showAvatarMenu = true }) {
+        // 🔴🔴 头像是**浮在左上角**的，不是流式兄弟节点（用户实机截图「左边留那么大空间干什么」）。
+        //
+        // 旧结构 `Row { [AI头像][Spacer 10][内容列 weight] [用户头像] }` 里，头像带实打实占掉
+        // `avatarSize + 10 = 38dp` 的横向空间，于是**正文整块右推**。真机实测（360dp 屏）：
+        //   头像行左边界 11.0dp / 正文左边界 46.0dp / 正文右边界 345.7dp
+        //   → 正文可用宽度仅 299.7dp（每行约 20 字），而右边界到屏幕边只剩 11dp —— 左右严重不对称。
+        //
+        // 改成Box 后：内容列占满整宽（可用 337.7dp，每行多约 3 字），头像叠在左上角，
+        // 名字行用 `avatarIndentDp` 给它留出避让位，视觉上头像仍"挂在名字前面"但不挤压正文。
+        Box(Modifier.fillMaxWidth()) {
+        var aiAvatarMenu by remember { mutableStateOf(false) }
+        if (msg.mine) {
+            // 🔴 用户头像：与 AI **同在左上角**。
+            // 曾经浮在右上角（TopEnd），但用户明确反馈「用户的头像、消息、名称还是和 AI 一起在
+            // 左边审美更好，重新改右边有点奇怪」—— 两侧统一靠左，视线不必来回扫。
+            // 名字行的 start 避让位（avatarIndentDp）对两侧同样生效，名字挂在头像后面。
+            Box(Modifier.align(Alignment.TopStart)) {
                 AvatarContent(msg.avatarUri, msg.avatar, avatarSize)
-                DropdownMenu(expanded = showAvatarMenu, onDismissRequest = { showAvatarMenu = false }) {
+            }
+        } else {
+            // AI 头像可点击 → 编辑灵魂卡
+            Box(Modifier.clickable { aiAvatarMenu = true }) {
+                AvatarContent(msg.avatarUri, msg.avatar, avatarSize)
+                DropdownMenu(expanded = aiAvatarMenu, onDismissRequest = { aiAvatarMenu = false }) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.qk_00087), fontSize = 14.sp) },
-                        onClick = { showAvatarMenu = false; onCommand("__edit_soul_card__") },
+                        onClick = { aiAvatarMenu = false; onCommand("__edit_soul_card__") },
                         leadingIcon = { Icon(Icons.Filled.Edit, null, Modifier.size(18.dp)) }
                     )
                 }
             }
-            Spacer(Modifier.width(10.dp))
         }
-        Column(Modifier.widthIn(max = if (narrow) 260.dp else 280.dp)) {
+        // 🔴 正文宽度上限：**按屏宽动态取满剩余空间**，不再写死 260/280dp。
+        //    旧实现给整个消息内容列（含名字行/思考胶囊/工具胶囊/正文气泡）套了
+        //    `widthIn(max = 280.dp)` 硬上限，而它当初只是为了把「动态 UI / AIP 卡片」
+        //    那些重内容挤出气泡、改到下方全宽渲染 —— 结果**顺带把纯文本正文也压窄了**：
+        //    右侧整块留白没人用，每行只排下十几个字，中文观感就是「又窄又碎」。
+        //    口径与理由见 RichText.kt 的 messageContentMaxWidth（含下限/上限的理由）。
+        //    bubblePaddingDp = 0：气泡壳已删除（见下方「已删除聊天气泡」），
+        //    正文不再被气泡内边距吃掉 20~24dp；列表本身已有水平内边距，不会贴边。
+        //
+        // 🔴🔴 avatarSizeDp **两边都要传 avatarSize**，不能对 msg.mine 传 0：
+        //    头像布局是「AI 在左（上方 if (!msg.mine)）、用户在右（下方 if (msg.mine)）」，
+        //    两侧都实打实占掉 avatarSize + 10dp 间距。曾误写成 `if (msg.mine) 0 else avatarSize`，
+        //    算出的上限大于 Row 可用宽度 → 内部 fillMaxWidth 把内容列撑满 →
+        //    ① `Arrangement.End` 对满宽子项失效，用户消息看起来跑到左边；
+        //    ② Spacer + 右侧头像被推出可视区，头像整个消失。
+        //    这是「宽度上限必须留够兄弟节点空间」的典型坑：上限算大了不只是「更宽」，
+        //    而会连带把对齐与相邻节点一起废掉。
+        // 名字行左侧的头像避让宽度：头像边长 + 与文字的间距（与悬浮头像尺寸保持一致）
+        val avatarIndentDp = (avatarSize + 10).dp
+        // 🔴🔴 名字+正文两块**分别**相对悬浮头像做垂直对齐（两段互补，不是重复计算）
+        //
+        // 头像 align(TopStart/TopEnd) 悬浮在 Box 顶端，名字行也在顶端 → 顶边平齐，名字只占
+        // 头像上半截。R7-12 两轮反复的教训：
+        //   ·「名字行下移」→ 名字贴头像中线（nameRowCenterOffsetDp 管这个）
+        //   ·「正文下移」→ 正文从头像底部之下开始排（bodyTopInsetDp 管这个）
+        // 名字行是正文**上方**的兄弟，名字行下移会**连带**正文也下移同等距离，
+        // 所以 bodyTopInsetDp 只补剩余缺口：28dp 头像 = 名字行 3dp + 正文 7dp = 10dp 总下移。
+        //   （正文那7dp 此前被 MAX_BODY_TOP_INSET_DP=4 砍半，实测偏紧，本轮放宽到 10）
+        //
+        // 🔴 **不要再动 avatarIndentDp** —— 水平方向实测无重叠，改它是误判。
+        //   实测（R7-12 裁剪图 426px 宽）：头像占x≈336..378，名字行灰字止于 x≈300，
+        //   水平净空约 36px，方向正确且不重叠。
+        val nameRowCenterOffset = nameRowCenterOffsetDp(avatarSize).dp
+        val bodyTopInset = bodyTopInsetDp(avatarSize).dp
+        val contentMaxWidth = messageContentMaxWidth(
+            screenWidthDp = LocalConfiguration.current.screenWidthDp,
+            avatarSizeDp = avatarSize,
+            listPaddingDp = if (narrow) 16 else 32,
+            bubblePaddingDp = 0,
+        ).dp
+        // 内容列占满整宽（父已是 Box，不再需要 weight）；widthIn 只保留"宽屏行长封顶"这一个职责。
+        Column(Modifier.fillMaxWidth().widthIn(max = contentMaxWidth)) {
             // ── 名字行 + 思考/工具小按钮 ──────────────────────────────
             // 状态提升到 Column 作用域（展开内容在 Row 外渲染）
             // 🔧 用户诉求（toolfix8 修正）：思考过程默认【折叠】，不手动点永远不展开。
             //   即使生成中最后一条也保持折叠；点击下方「思考过程 · N步」胶囊才展开。
             var showThink by remember { mutableStateOf(false) }
             // 🔧 用户诉求（toolfix8 修正）：工具调用默认【折叠】，不手动点永远不展开。
-            //   点击「· N 工具」胶囊才展开；内层每个工具块默认也折叠（见 ToolCallBlock expanded 默认 false）。
+            //   点击「· N 工具」胶囊才展开；内层每个工具卡默认折叠（见 ToolCallRichCard defaultExpanded=false）。
             var showTools by remember { mutableStateOf(false) }
             val hasThinkOrTools = !msg.mine && (msg.think != null || !msg.tools.isNullOrEmpty())
 
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, bottom = if (hasThinkOrTools && (showThink || showTools)) 2.dp else 4.dp)) {
+            Row(
+                // 🔴 两侧统一靠左：头像、名称、消息全部对齐到左边，与用户诉求一致
+                //（旧实现在这里按 msg.mine 分End / Start，右边看着别扭）。
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // AI 行左侧空出头像宽度（头像已改为悬浮，这里只做视觉避让，不再挤压正文）；
+                    // 右侧留出用户头像的悬浮位，让"名称与头像同在右上角"符合直觉。
+                    .padding(
+                        // 两侧都要让出头像宽度 —— 用户头像也回到左边了。
+                        start = avatarIndentDp,
+                        end = 0.dp,
+                        // 把名字压到与头像同一条中线上（28dp 头像 → 3dp）
+                        top = nameRowCenterOffset,
+                        bottom = if (hasThinkOrTools && (showThink || showTools)) 2.dp else 4.dp,
+                    ),
+            ) {
+                // 🔴 集群 / 子智能体的角色名加「集群 · 」前缀并换强调色：
+                // 聚合层已把不同发言人的消息拆成独立气泡（见 uiMessages 聚合逻辑），
+                // 这里再标注归属，用户才能确认「这是集群里某个角色在说话」，
+                // 而不是主助手自言自语 —— 这正是「集群要能在对话框里被看见和参与」的前提。
+                val isClusterSpeaker = msg.isClusterSpeaker
                 Text(
-                    "${msg.author} · ${msg.time}",
-                    fontSize = scaled(11), color = Muted,
+                    text = if (isClusterSpeaker) {
+                        "${qstr(R.string.qk_04061, (msg.author).toString())} · ${msg.time}"
+                    } else {
+                        "${msg.author} · ${msg.time}"
+                    },
+                    fontSize = scaled(11),
+                    color = if (isClusterSpeaker) Accent else Muted,
                 )
                 // 仅 AI 消息且含有思考/工具数据时显示小按钮
                 if (hasThinkOrTools) {
@@ -3264,13 +3436,26 @@ private fun MessageRow(
                     // 工具调用按钮（紧凑胶囊）
                     if (!msg.tools.isNullOrEmpty()) {
                         Spacer(Modifier.width(4.dp))
+                        // 🔴 执行中（结果尚未回填）时胶囊高亮，让用户知道 AI 还在动手
+                        val toolsRunning = msg.tools.any { it.result.isNullOrBlank() }
                         TinyChip(
                             onClick = { showTools = !showTools },
-                            containerColor = cs.primary.copy(alpha = 0.1f),
+                            containerColor = if (toolsRunning) Color(0xFF3B82F6).copy(alpha = 0.14f)
+                            else cs.primary.copy(alpha = 0.1f),
                         ) {
-                            LucideIcon("wrench", null, Modifier.size(10.dp), tint = cs.primary.copy(alpha = 0.7f))
+                            // 🔴 旧图标名 "wrench" 在本仓 drawable 里不存在 → 一直显示成 X
+                            LucideIcon(
+                                if (toolsRunning) "qic_running" else "qic_other",
+                                null,
+                                Modifier.size(10.dp),
+                                tint = if (toolsRunning) Color(0xFF3B82F6) else cs.primary.copy(alpha = 0.7f),
+                            )
                             Spacer(Modifier.width(3.dp))
-                            Text(stringResource(R.string.qk_00095, (msg.tools.size).toString()), fontSize = 9.sp, color = cs.primary.copy(alpha = 0.7f))
+                            Text(
+                                stringResource(R.string.qk_00095, msg.tools.size.toString()),
+                                fontSize = 9.sp,
+                                color = if (toolsRunning) Color(0xFF3B82F6) else cs.primary.copy(alpha = 0.7f),
+                            )
                         }
                     }
                 }
@@ -3293,7 +3478,22 @@ private fun MessageRow(
             }
             // 展开的工具卡片
             if (showTools && !msg.tools.isNullOrEmpty()) {
-                ToolsInlineContent(msg.tools, scaled, embeddedTrace = embeddedTrace)
+                // 🔴 走新版 [ToolCallGroup]：族图标 + 目标物副标题 + 指标徽标 + 耗时 + 状态，
+                //    展开给全文。旧的 ToolsInlineContent 只显示 57 字符截断 JSON（已下线）。
+                ToolCallGroup(msg.tools) {
+                    // 执行轨迹沿用旧组件，保持行为不变
+                    if (embeddedTrace.isNotEmpty()) {
+                        Spacer(Modifier.height(6.dp))
+                        HorizontalDivider(color = Line.copy(alpha = 0.25f))
+                        Spacer(Modifier.height(4.dp))
+                        Column {
+                            embeddedTrace.forEach { ev ->
+                                TraceRow(ev)
+                                Spacer(Modifier.height(2.dp))
+                            }
+                        }
+                    }
+                }
                 Spacer(Modifier.height(6.dp))
             }
             // ═══ 可视化弹窗/自定义弹窗小卡片：独立于工具区域显示 ═══
@@ -3446,29 +3646,26 @@ private fun MessageRow(
             // AIP 排版引擎（B 通道）解析前置：气泡内不再渲染 AIP，改在消息底部全宽内联
             // （与动态 UI / 生成式 UI 同源机制，避免 280dp 气泡压窄、文字重叠一个盖一个），
             // 故在此统一解析一次，供气泡过滤与内联渲染共用（blocks 声明已上提到消息 else 块作用域，见上方）。
-            // ── 正文气泡（思考/工具已移至名字行小按钮）────────────
+            // ── 正文（🔴 已删除聊天气泡，正文直接走 Markdown 渲染）─────────────
             if (!msg.text.isNullOrBlank()) {
                 // 去掉 LLM 回复里的语音风格标记 (风格)，仅用于显示与复制，不影响朗读
                 val isMine = msg.mine
-                val bubbleShape = RoundedCornerShape(16.dp, if (isMine) 4.dp else 16.dp, 16.dp, 16.dp)
-                val bubbleColor = if (isMine) AccentSoft else cs.surface
-                val borderColor = if (isMine) Color(android.graphics.Color.parseColor("#EAD3C8")) else Line
                 val textColor = if (isMine) Color(android.graphics.Color.parseColor("#5A3322")) else cs.onBackground
-                // [v382] AI 输出（非 mine）不渲染聊天气泡：仅保留内边距，无背景/边框；用户消息保留气泡。
-                val bubbleModifier = if (isMine) {
-                    Modifier
-                        .clip(bubbleShape)
-                        .border(1.dp, borderColor, bubbleShape)
-                        .background(bubbleColor)
-                        .padding(if (narrow) 10.dp else 12.dp, if (narrow) 8.dp else 10.dp)
-                } else {
-                    Modifier.padding(if (narrow) 10.dp else 12.dp, if (narrow) 8.dp else 10.dp)
-                }
-                // 自由复制修复：此前父 Box 挂了 combinedClickable(onClick=copyPlain)，
+                // 🔴 用户要求「删除气泡直接走 Markdown」：此前这里给每条消息套一层
+                //    `clip + border + background(AccentSoft)` 的圆角气泡壳，AI 侧虽在 v382
+                //    去掉了背景，但**壳本身还在**——它带来三个副作用：
+                //      1. 用户消息是浅粉底 + 边框，AI 消息是透明底，同屏两种视觉语言割裂；
+                //      2. 气泡内边距(narrow 10/非 12dp)在本来就窄的内容列里又吃掉 20~24dp
+                //         可用宽度，直接加剧「每行只排十几个字」；
+                //      3. 复制成功提示要靠 `align(BottomEnd)` 贴在气泡右下角，气泡没了
+                //         这个定位基准也就不成立了。
+                //    现在整层气泡壳移除：颜色只保留文字本身的区分（用户暖褐 / AI 主题色），
+                //    版式完全交给 [RichText] 的 Markdown 渲染，正文宽度按整列可用空间取满。
+                //自由复制修复：此前父 Box 挂了 combinedClickable(onClick=copyPlain)，
                 // 其长按手势会吞掉 SelectionContainer 的文本选区手势，且单击即整段复制，
                 // 导致「长按自由选词复制」失效。移除此点击处理，让 SelectionContainer 接管选区；
                 // 整段复制仍由下方「复制」操作按钮提供。
-                Box(bubbleModifier) {
+                Box(Modifier.padding(top = bodyTopInset)) {
                     // 开关为提示词级（主动/被动），渲染管线常开——用户提醒后 AI 输出的围栏仍渲染为卡片。
                     // blocks 已前置解析（消息级），此处直接复用；气泡内仅渲染文本/图表等，
                     // AIP 排版引擎移出到消息底部全宽内联渲染。
@@ -3490,9 +3687,25 @@ private fun MessageRow(
                                         baseStyle = TextStyle(fontSize = scaled(15), color = textColor, lineHeight = scaled(23)),
                                         onLinkClick = onOpenLink,
                                         modifier = Modifier.fillMaxWidth(),
+                                        // 🔴🔴 两侧正文**统一靠左**，与头像、名字行三者对齐。
+                                        //
+                                        // 这里是 #181 用户报的「用户名字、头像过去了发的消息还在右边」的真凶：
+                                        // 上一轮只把头像（TopEnd→TopStart）和名字行（Arrangement.End→Start）
+                                        // 挪到了左边，**唯独漏了这个 textAlign**，
+                                        // 于是同一条消息被劈成两半 —— 名字在左、正文在右，看起来像两个人在说话。
+                                        //
+                                        // 注释里当年写「不显式下发 textAlign 用户那条短消息就会贴左边（真机截图证实）」
+                        // 说的是**另一种排版**（气泡内右对齐的旧版式），那个版式连同气泡壳早已删除；
+                                        //    留着这条分支只会让三者的对齐互相矛盾。左右分栏靠 Column 排列实现，
+                                        //    不再由 textAlign 承担。
+                                        textAlign = TextAlign.Start,
                                     )
                                 }
                                 is MsgBlock.Heading -> {
+                                    // 🔴 注意：这里的 Heading/Quote/Table **只来自 HTML 块**
+                                    // （RE_BLOCK 匹配 `<h1>`/`<blockquote>`/`<table>`），Markdown 的
+                                    // 标题/引用/表格已全部下放给 [RichText] 的块级解析处理。
+                                    // 所以这里保留旧 buildRich 是对的 —— 不要以为漏改了。
                                     val size = when (blk.level) {
                                         1 -> scaled(22); 2 -> scaled(19); 3 -> scaled(17)
                                         4 -> scaled(16); 5 -> scaled(15); else -> scaled(14)
@@ -3641,11 +3854,7 @@ private fun MessageRow(
                 }
             }
         }
-        if (msg.mine) {
-            Spacer(Modifier.width(10.dp))
-            AvatarContent(msg.avatarUri, msg.avatar, avatarSize)
-        }
-        }   // 闭合内层 Row（头像 + 气泡）
+        }   // 闭合内层 Box（悬浮头像 + 满宽内容列）
         // ── AIP 排版引擎（B 通道）全宽内联：已移出 280dp 内容列，撑满对话框宽度渲染，
         //    与动态 UI / 生成式 UI / 富组件同源机制，避免 280dp 气泡压窄与"文字被覆盖一个盖一个"。
         if (!msg.mine && blocks.any { it is MsgBlock.Aip }) {
@@ -4127,702 +4336,6 @@ private fun fileMimeByExt(ext: String): String = when (ext.lowercase()) {
     else -> "*/*"
 }
 
-@Composable
-/**
- * 升级版工具调用输出块 —— 结构化卡片 + 分类图标 + 解析参数/结果 + 风险徽标 + 时间线轨迹。
- */
-private fun ToolCallBlock(
-    tools: List<ToolCallUi>,
-    scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
-    withTrace: Boolean = false,
-    traceLines: SnapshotStateList<QuroAgentTrace.AgentTraceEvent> = mutableStateListOf(),
-) {
-    val cs = MaterialTheme.colorScheme
-    var expanded by remember { mutableStateOf(false) }
-
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(cs.surfaceContainerLow.copy(alpha = 0.7f))
-            .border(0.7.dp, cs.outlineVariant.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
-            .then(
-                if (expanded) Modifier.padding(14.dp)
-                else Modifier.padding(horizontal = 14.dp, vertical = 11.dp)
-            )
-    ) {
-        // ═══ 标题栏 ═══
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { expanded = !expanded },
-        ) {
-            if (tools.size == 1) {
-                val cat = toolCategory(tools.first().name)
-                Box(Modifier.size(22.dp).clip(CircleShape).background(cat.color.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                    LucideIcon(cat.icon, null, Modifier.size(13.dp), tint = cat.color)
-                }
-            } else {
-                Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).background(cs.primary.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                    LucideIcon("blocks", null, Modifier.size(13.dp), tint = cs.primary)
-                }
-            }
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = if (tools.size == 1) tools.first().name else qstr(R.string.qk_00116, (tools.size).toString()),
-                fontSize = scaled(12), color = cs.onSurface, fontWeight = FontWeight.SemiBold,
-            )
-            if (tools.size > 1) {
-                Spacer(Modifier.width(6.dp))
-                Text("${tools.size}", fontSize = 9.sp, color = cs.onSurface.copy(alpha = 0.5f),
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(cs.primaryContainer.copy(alpha = 0.4f))
-                        .padding(horizontal = 5.dp, vertical = 1.dp))
-            }
-            // 🔧 #879-B5：折叠态标题栏也显示工具结果状态色点（失败红/警告黄/成功绿），
-            // 不必展开即可一眼识别异常（此前必须展开 SingleToolCard 才看得到）。
-            val aggStatus = run {
-                val statuses = tools.mapNotNull { t -> t.result?.let { detectResultStatus(it) } }
-                when {
-                    statuses.contains(ResultStatus.ERROR) -> ResultStatus.ERROR
-                    statuses.contains(ResultStatus.WARNING) -> ResultStatus.WARNING
-                    statuses.any { it == ResultStatus.SUCCESS } -> ResultStatus.SUCCESS
-                    else -> null
-                }
-            }
-            aggStatus?.let { st ->
-                val dotColor = when (st) {
-                    ResultStatus.ERROR -> Color(0xFFEF4444)
-                    ResultStatus.WARNING -> Color(0xFFF59E0B)
-                    else -> Color(0xFF22C55E)
-                }
-                Box(Modifier.size(8.dp).clip(CircleShape).background(dotColor))
-                Spacer(Modifier.width(8.dp))
-            }
-            // 🔧 执行中：存在尚未回填结果的工具调用 → 标题栏显示脉冲点 + 执行中（多轮循环期间持续可见）。
-            if (tools.any { it.result.isNullOrBlank() }) {
-                val pulse by rememberInfiniteTransition().animateFloat(0.35f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse))
-                Box(Modifier.size(8.dp).clip(CircleShape).background(cs.primary.copy(alpha = pulse)))
-                Spacer(Modifier.width(6.dp))
-                Text(qstr(R.string.qk_00117), fontSize = 10.sp, color = cs.primary, fontWeight = FontWeight.Medium)
-            }
-            Spacer(Modifier.weight(1f))
-            LucideIcon(if (expanded) "chevron_up" else "chevron_down", null, Modifier.size(14.dp), tint = Muted)
-        }
-
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically(tween(200)) + fadeIn(tween(150)),
-            exit = shrinkVertically(tween(180)) + fadeOut(tween(120)),
-        ) {
-            Column {
-                Spacer(Modifier.height(10.dp))
-                HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.25f))
-                Spacer(Modifier.height(10.dp))
-
-                tools.forEachIndexed { idx, t ->
-                    SingleToolCard(t, scaled, index = idx)
-                    if (idx < tools.size - 1) Spacer(Modifier.height(8.dp))
-                }
-
-                // ═══ 执行轨迹（时间线风格） ═══
-                if (withTrace) {
-                    Spacer(Modifier.height(10.dp))
-                    HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.25f))
-                    Spacer(Modifier.height(8.dp))
-
-                    var traceExpanded by remember { mutableStateOf(true) }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { traceExpanded = !traceExpanded },
-                    ) {
-                        Box(Modifier.size(16.dp).clip(RoundedCornerShape(4.dp)).background(cs.primary.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                            LucideIcon("git-branch", qstr(R.string.qk_00118), Modifier.size(10.dp), tint = cs.primary)
-                        }
-                        Spacer(Modifier.width(6.dp))
-                        Text(qstr(R.string.qk_00118), fontSize = scaled(11), color = cs.primary, fontWeight = FontWeight.SemiBold)
-                        Text(qstr(R.string.qk_00119), fontSize = 10.sp, color = Muted)
-                        Spacer(Modifier.weight(1f))
-                        LucideIcon(if (traceExpanded) "chevron_up" else "chevron_down", null, Modifier.size(13.dp), tint = Muted)
-                    }
-                    AnimatedVisibility(
-                        visible = traceExpanded,
-                        enter = expandVertically() + fadeIn(),
-                        exit = shrinkVertically() + fadeOut(),
-                    ) {
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 220.dp)
-                                .verticalScroll(rememberScrollState())
-                                .padding(top = 6.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(cs.surfaceContainerLowest)
-                                .padding(8.dp)
-                        ) {
-                            if (traceLines.isEmpty()) {
-                                Row(Modifier.padding(vertical = 8.dp)) {
-                                    Text("⏳ ", fontSize = 11.sp)
-                                    Text(qstr(R.string.qk_00120), fontSize = 11.sp, color = Muted)
-                                }
-                            } else {
-                                // 封顶渲染最近 100 条，避免几百条事件全量重组打爆主线程
-                            traceLines.takeLast(100).forEach { ev -> TraceRow(ev) }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ──── 工具调用输出：辅助函数（分类 / 解析 / 格式化） ────
-
-data class ToolCategory(val icon: String, val color: Color, val label: String)
-
-private fun toolCategory(name: String): ToolCategory = when {
-    name == "aip_compose" || name == "aiwps_create" || name == "enhanced_doc_create" || name.contains("doc") ->
-        ToolCategory("file_text", Color(0xFF0EA5E9), qstr(R.string.qk_00121))
-
-    name.startsWith("read_screen") || name.startsWith("tap") || name.startsWith("swipe") ||
-    name.startsWith("input_text") || name.startsWith("scroll") || name.startsWith("global_action") ||
-    name.startsWith("get_foreground") || name.startsWith("get_screen_state") ->
-        ToolCategory("monitor-smartphone", Color(0xFF6366F1), qstr(R.string.qk_00122))
-
-    name.contains("shizuku") || name.contains("root_exec") || name.contains("root_status") ||
-    name.contains("device_admin") || name.contains("lock_screen") || name.contains("set_camera") ->
-        ToolCategory("shield-check", Color(0xFFEF4444), qstr(R.string.qk_00123))
-
-    name.contains("terminal") || name.contains("run_shell") || name.startsWith("linux_") ||
-    name.startsWith("open_12306") || name == "home" || name == "open_app" ->
-        ToolCategory("terminal", Color(0xFFF59E0B), qstr(R.string.qk_00124))
-
-    name == "cms_list" || name == "cms_call" || name == "priv_status" ||
-    name == "get_device_info" || name.contains("draw_qwen") ||
-    name == "open_repo" || name == "open_calendar" || name == "set_alarm" ->
-        ToolCategory("cpu", Color(0xFF06B6D4), qstr(R.string.qk_00125))
-
-    name.contains("list_dir") || name.contains("read_file") || name.contains("write_file") ||
-    name.contains("file_") || name.contains("download") ->
-        ToolCategory("folder-open", Color(0xFF8B5CF6), qstr(R.string.qk_00126))
-
-    name.contains("web_search") || name.contains("open_url") || name.startsWith("web_") ->
-        ToolCategory("globe", Color(0xFF10B981), qstr(R.string.qk_00127))
-
-    name == "echo_step" || name == "open_calendar" || name == "set_alarm" ->
-        ToolCategory("bell-ring", Color(0xFFEC4899), qstr(R.string.qk_00128))
-
-    name.startsWith("ui_open_") || name.startsWith("ui_toggle_") ||
-    name.startsWith("ui_clear_") || name.startsWith("ui_new_") ->
-        ToolCategory("layout-panel", Color(0xFF14B8A6), qstr(R.string.qk_00129))
-
-    name.contains("image_gen") || name.contains("generate_image") || name.contains("text_to_image") ->
-        ToolCategory("image", Color(0xFFEC4899), qstr(R.string.qk_00130))
-
-    name.contains("video_gen") || name.contains("generate_video") ->
-        ToolCategory("video", Color(0xFF8B5CF6), qstr(R.string.qk_00131))
-
-    name.contains("memory_save") || name.contains("memory_list") || name.contains("memory_search") || name.contains("memory_delete") ->
-        ToolCategory("brain", Color(0xFF06B6D4), qstr(R.string.qk_00132))
-
-    name.contains("summary") || name.contains("context") ->
-        ToolCategory("file-text", Color(0xFF14B8A6), qstr(R.string.qk_00133))
-
-    name.contains("incubate") || name == "persona_hatch" ->
-        ToolCategory("user-round", Color(0xFFF59E0B), qstr(R.string.qk_00134))
-
-    else -> ToolCategory("wrench", Color(0xFF64748B), qstr(R.string.qk_00135))
-}
-
-data class RiskLevel(val label: String, val color: Color, val bgAlpha: Float)
-
-private fun parseRiskLevel(text: String): RiskLevel? {
-    val regex = RE_RISK_LEVEL
-    val match = regex.find(text) ?: return null
-    return when (match.groupValues[1].lowercase()) {
-        "critical", qstr(R.string.qk_00136) -> RiskLevel(qstr(R.string.qk_00136), Color(0xFFEF4444), 0.18f)
-        "warning", qstr(R.string.qk_00137) -> RiskLevel(qstr(R.string.qk_00137), Color(0xFFF59E0B), 0.16f)
-        "normal", "low", "normal" -> RiskLevel("Normal", Color(0xFF22C55E), 0.14f)
-        "safe", qstr(R.string.qk_00138) -> RiskLevel(qstr(R.string.qk_00138), Color(0xFF06B6D4), 0.14f)
-        else -> RiskLevel(match.groupValues[1], Muted, 0.12f)
-    }
-}
-
-enum class ResultStatus { SUCCESS, ERROR, WARNING, INFO }
-
-private fun detectResultStatus(result: String): ResultStatus {
-    // 🔧 #879-B5：仅扫描前 200 字符判定状态，避免正文里偶然出现「失败/error」字样（如"本操作不会失败"）
-    // 的成功结果被误标红。显式 ❌/✗ 前缀优先，仍兜底关键词。
-    val head = result.take(200)
-    return when {
-        result.startsWith("\u274C") || result.startsWith("\u2717") || head.contains("失败") || head.contains("error", ignoreCase = true) -> ResultStatus.ERROR
-        result.startsWith("\u26A0\uFE0F") || result.startsWith("\u26A0") || head.contains("警告") || head.contains("warning", ignoreCase = true) -> ResultStatus.WARNING
-        result.startsWith("\u2705") || result.startsWith("\u2714") || head.contains("成功") -> ResultStatus.SUCCESS
-        else -> ResultStatus.INFO
-    }
-}
-
-/** 单个工具的渲染卡片 */
-@Composable
-private fun SingleToolCard(t: ToolCallUi, scaled: (Int) -> androidx.compose.ui.unit.TextUnit, index: Int) {
-    val cs = MaterialTheme.colorScheme
-    val cat = toolCategory(t.name)
-    val status = t.result?.let { detectResultStatus(it) } ?: ResultStatus.INFO
-    // 执行中标记：工具结果尚未回填（正卡在 engine.execute 慢任务）→ 头部与边框显示「进行中」强调态。
-    val pending = t.result.isNullOrBlank()
-    var cardExpanded by remember { mutableStateOf(false) }
-
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (pending) cs.primary.copy(alpha = 0.06f) else cs.surface.copy(alpha = 0.5f))
-            .border(0.5.dp, if (pending) cs.primary.copy(alpha = 0.5f) else cs.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-            .then(if (cardExpanded) Modifier.padding(12.dp) else Modifier.padding(horizontal = 10.dp, vertical = 8.dp))
-    ) {
-        // ── 卡片头部 ──
-        Row(verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { cardExpanded = !cardExpanded }) {
-            Box(Modifier.size(16.dp).clip(CircleShape).background(cat.color.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center) {
-                LucideIcon(cat.icon, cat.label, Modifier.size(9.dp), tint = cat.color)
-            }
-            Spacer(Modifier.width(6.dp))
-            Text(t.name, fontSize = scaled(12), fontWeight = FontWeight.Medium, color = cs.onSurface)
-            Spacer(Modifier.width(6.dp))
-            Text(cat.label, fontSize = 9.sp, color = cat.color.copy(alpha = 0.75f),
-                modifier = Modifier
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(cat.color.copy(alpha = 0.1f))
-                    .padding(horizontal = 4.dp, vertical = 1.dp))
-            Spacer(Modifier.weight(1f))
-            // 🔧 #879：工具执行耗时（仅当 >0 时显示）
-            if (t.durationMs > 0) {
-                Text(
-                    text = if (t.durationMs >= 1000) "%.1fs".format(t.durationMs / 1000.0) else "${t.durationMs}ms",
-                    fontSize = 9.sp, color = Muted, fontWeight = FontWeight.Medium,
-                )
-                Spacer(Modifier.width(6.dp))
-            }
-            if (!t.result.isNullOrBlank()) {
-                val statusColor = when (status) {
-                    ResultStatus.SUCCESS -> Color(0xFF22C55E)
-                    ResultStatus.ERROR -> Color(0xFFEF4444)
-                    ResultStatus.WARNING -> Color(0xFFF59E0B)
-                    ResultStatus.INFO -> Muted
-                }
-                val statusIcon = when (status) {
-                    ResultStatus.SUCCESS -> "check-circle-2"
-                    ResultStatus.ERROR -> "x-circle"
-                    ResultStatus.WARNING -> "alert-triangle"
-                    ResultStatus.INFO -> "info"
-                }
-                LucideIcon(statusIcon, stringResource(R.string.qk_00085), Modifier.size(13.dp), tint = statusColor)
-            } else {
-                // 🔧 执行中指示：结果尚未回填 → 脉冲点 + 「执行中…」，让慢任务在对话框里有明确「进行中」展示。
-                val pulse by rememberInfiniteTransition().animateFloat(0.35f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse))
-                Box(Modifier.size(9.dp).clip(CircleShape).background(cs.primary.copy(alpha = pulse)))
-                Spacer(Modifier.width(4.dp))
-                Text(stringResource(R.string.qk_00117), fontSize = 9.sp, color = cs.primary, fontWeight = FontWeight.Medium)
-            }
-            Spacer(Modifier.width(4.dp))
-            LucideIcon(if (cardExpanded) "chevron_down" else "chevron_right", null,
-                Modifier.size(12.dp), tint = Muted)
-        }
-
-        // ── 展开内容 ──
-        AnimatedVisibility(visible = cardExpanded,
-            enter = expandVertically(tween(200)) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-            Column {
-                Spacer(Modifier.height(8.dp))
-                HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.2f))
-                Spacer(Modifier.height(8.dp))
-
-                if (t.args.isNotBlank() && t.args != "{}") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        LucideIcon("sliders-horizontal", stringResource(R.string.qk_00142), Modifier.size(11.dp), tint = Muted)
-                        Spacer(Modifier.width(4.dp))
-                        Text(stringResource(R.string.qk_00142), fontSize = 10.sp, color = Muted, fontWeight = FontWeight.Medium)
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    ParsedArgsContent(t.args, scaled)
-                    Spacer(Modifier.height(8.dp))
-                }
-
-                if (!t.result.isNullOrBlank()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val sIcon = when (detectResultStatus(t.result)) {
-                            ResultStatus.SUCCESS -> "check-circle"
-                            ResultStatus.ERROR -> "x-circle"
-                            ResultStatus.WARNING -> "alert-triangle"
-                            ResultStatus.INFO -> "arrow-right-circle"
-                        }
-                        val sColor = when (detectResultStatus(t.result)) {
-                            ResultStatus.SUCCESS -> Color(0xFF22C55E)
-                            ResultStatus.ERROR -> Color(0xFFEF4444)
-                            ResultStatus.WARNING -> Color(0xFFF59E0B)
-                            ResultStatus.INFO -> Muted
-                        }
-                        LucideIcon(sIcon, stringResource(R.string.qk_00084), Modifier.size(11.dp), tint = sColor)
-                        Spacer(Modifier.width(4.dp))
-                        Text(stringResource(R.string.qk_00143), fontSize = 10.sp, color = Muted, fontWeight = FontWeight.Medium)
-                        val risk = parseRiskLevel(t.result)
-                        if (risk != null) {
-                            Spacer(Modifier.width(6.dp))
-                            Text(risk.label, fontSize = 8.sp, color = risk.color, fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(risk.color.copy(risk.bgAlpha))
-                                    .padding(horizontal = 4.dp, vertical = 1.dp))
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    // 后台 AIP 排版：任何发出 AIP 信封的工具结果（aip_compose 或工具箱-文档类工具
-                    // chat_doc / workspace_doc / enhanced_doc_create 发出的 kind=doc 信封）都在对话框内
-                    // 用 Canvas 引擎渲染成完整 AIP 文档（"工具调用形式，最后渲染在对话框"）。
-                    val aipJson = t.result!!.substringBefore(stringResource(R.string.qk_00144))
-                    if (com.ai.assistance.quro.core.canvas.Aip.looksLikeAip(aipJson)) {
-                        AipCanvas(source = aipJson)
-                        val exportNote = t.result!!.substringAfter(stringResource(R.string.qk_00144), "")
-                        if (exportNote.isNotBlank()) {
-                            Spacer(Modifier.height(6.dp))
-                            Text(exportNote, fontSize = scaled(11), color = Muted)
-                        }
-                    } else {
-                        FormattedResultContent(t.result!!, scaled)
-                    }
-                }
-
-                if (t.name.startsWith("ui_")) {
-                    Spacer(Modifier.height(8.dp))
-                    val actLabel = if (t.name.startsWith("ui_open_")) stringResource(R.string.qk_00145) else stringResource(R.string.qk_00146)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { QuroUiActionBridge.dispatch?.invoke(t.name) }) {
-                            LucideIcon("external-link", null, Modifier.size(12.dp), tint = cs.primary)
-                            Spacer(Modifier.width(4.dp))
-                            Text(actLabel, fontSize = 10.sp, color = cs.primary)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** 将 JSON 参数字符串解析为 key-value 对并美化展示 */
-@Composable
-private fun ParsedArgsContent(argsJson: String, scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
-    val cs = MaterialTheme.colorScheme
-    val pairs = remember(argsJson) {
-        runCatching {
-            org.json.JSONObject(argsJson).keys().asSequence().associateWith { key ->
-                org.json.JSONObject(argsJson).optString(key, "").take(80)
-            }.toList()
-        }.getOrDefault(emptyList())
-    }
-
-    if (pairs.isEmpty()) {
-        Box(Modifier.fillMaxWidth().heightIn(max = 100.dp).verticalScroll(rememberScrollState())) {
-            Text(argsJson, fontSize = scaled(11), fontFamily = FontFamily.Monospace,
-                color = InkSoft, lineHeight = scaled(16))
-        }
-        return
-    }
-
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        pairs.forEach { (key, value) ->
-            Row(
-                Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(cs.primaryContainer.copy(alpha = 0.35f))
-                    .padding(horizontal = 7.dp, vertical = 3.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(key, fontSize = 10.sp, fontWeight = FontWeight.Medium, color = cs.primary)
-                Text(":", fontSize = 10.sp, color = Muted)
-                Text(value.ifEmpty { "\u2014" }, fontSize = 10.sp, color = cs.onSurfaceVariant, maxLines = 1)
-            }
-        }
-    }
-}
-
-/** 渲染卡片数据结构 */
-private data class RenderCard(
-    val type: String,
-    val title: String,
-    val content: String,
-    val path: String? = null,
-    val language: String? = null
-)
-
-/** 解析工具结果中的渲染卡片标签 */
-private fun parseRenderCards(result: String): List<RenderCard> {
-    val cards = mutableListOf<RenderCard>()
-    val regex = Regex("""\[渲染卡片\]\s*\n类型：(.+?)\s*\n标题：(.+?)\s*\n(路径：(.+?)\s*\n)?(语言：(.+?)\s*\n)?内容：\s*\n([\s\S]*?)\[/渲染卡片\]""")
-    regex.findAll(result).forEach { match ->
-        val type = match.groupValues[1].trim()
-        val title = match.groupValues[2].trim()
-        val path = match.groupValues[4].trim().ifBlank { null }
-        val language = match.groupValues[6].trim().ifBlank { null }
-        val content = match.groupValues[7].trim()
-        cards.add(RenderCard(type, title, content, path, language))
-    }
-    return cards
-}
-
-/** 格式化输出结果 */
-@Composable
-private fun FormattedResultContent(result: String, scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
-    val cs = MaterialTheme.colorScheme
-    
-    // 首先检查是否有渲染卡片
-    val renderCards = remember(result) { parseRenderCards(result) }
-    if (renderCards.isNotEmpty()) {
-        // 渲染卡片模式
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 400.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(cs.surfaceContainerLowest)
-                .verticalScroll(rememberScrollState())
-                .padding(8.dp)
-        ) {
-            renderCards.forEach { card ->
-                RenderCardView(card, scaled)
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-        }
-        return
-    }
-    
-    // 原有的格式化逻辑
-    val lines = result.lines()
-    val isListLike = lines.size > 1 && lines.count { it.trimStart().startsWith("- ") || it.trimStart().startsWith("\u2192 ") } >= lines.size / 2
-    val isJson = runCatching { org.json.JSONObject(result); true }.getOrElse { false }
-
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(max = if (isListLike || isJson) 280.dp else 160.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(cs.surfaceContainerLowest)
-            .verticalScroll(rememberScrollState())
-            .padding(10.dp)
-    ) {
-        when {
-            isJson -> JsonFormattedText(result, scaled)
-            isListLike -> {
-                Column {
-                    lines.filter { it.isNotBlank() }.forEach { line ->
-                        val trimmed = line.trim()
-                        val isBullet = trimmed.startsWith("- ") || trimmed.startsWith("\u2192 ")
-                        Row(Modifier.padding(vertical = 0.5.dp)) {
-                            if (isBullet) {
-                                Text("\u2022 ", fontSize = scaled(11), color = cs.primary, fontWeight = FontWeight.Bold)
-                                val content = trimmed.removePrefix("- ").removePrefix("\u2192 ")
-                                renderInlineFormatted(content, scaled, cs)
-                            } else {
-                                Text("  ", fontSize = scaled(11))
-                                renderInlineFormatted(trimmed, scaled, cs)
-                            }
-                        }
-                    }
-                }
-            }
-            else -> {
-                Column {
-                    lines.filterIndexed { i, s -> s.isNotBlank() || i < lines.lastIndex }.forEach { line ->
-                        if (line.isBlank()) { Spacer(Modifier.height(4.dp)) }
-                        else {
-                            renderInlineFormatted(line.trim(), scaled, cs)
-                            Spacer(Modifier.height(1.dp))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** 渲染单个渲染卡片 */
-@Composable
-private fun RenderCardView(card: RenderCard, scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
-    val cs = MaterialTheme.colorScheme
-    
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = cs.surfaceContainerHigh
-        ),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp)
-        ) {
-            // 卡片标题
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // 类型图标
-                val icon = when (card.type) {
-                    "HTML" -> Icons.Filled.Code
-                    "Markdown" -> Icons.Filled.Description
-                    stringResource(R.string.qk_00148) -> Icons.Filled.Code
-                    stringResource(R.string.qk_00149) -> Icons.Filled.Description // 使用描述图标作为图片占位
-                    "PDF" -> Icons.Filled.Description // 使用描述图标作为PDF占位
-                    else -> Icons.Filled.Description
-                }
-                Icon(icon, null, tint = cs.primary, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(card.title, fontWeight = FontWeight.Bold, fontSize = scaled(13))
-                Spacer(modifier = Modifier.weight(1f))
-                Text(card.type, fontSize = 9.sp, color = cs.onSurfaceVariant)
-            }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // 根据类型渲染内容
-            when (card.type) {
-                "HTML" -> {
-                    // HTML 渲染
-                    AndroidView(
-                        factory = { context ->
-                            android.webkit.WebView(context).apply {
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                loadDataWithBaseURL(null, card.content, "text/html", "UTF-8", null)
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                    )
-                }
-                "Markdown" -> {
-                    // Markdown 渲染（简单实现：保留格式）
-                    Text(
-                        text = card.content,
-                        fontSize = scaled(11),
-                        color = cs.onSurfaceVariant,
-                        lineHeight = scaled(16),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-                stringResource(R.string.qk_00148) -> {
-                    // 代码渲染
-                    Surface(
-                        color = cs.surfaceContainerLowest,
-                        shape = RoundedCornerShape(4.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = card.content,
-                            fontSize = scaled(10),
-                            fontFamily = FontFamily.Monospace,
-                            color = cs.onSurface,
-                            lineHeight = scaled(14),
-                            modifier = Modifier.padding(8.dp)
-                        )
-                    }
-                }
-                stringResource(R.string.qk_00149) -> {
-                    // 图片渲染（如果路径有效）
-                    card.path?.let { path ->
-                        AndroidView(
-                            factory = { context ->
-                                android.widget.ImageView(context).apply {
-                                    setImageURI(android.net.Uri.parse(path))
-                                    scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(150.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                        )
-                    }
-                }
-                "PDF" -> {
-                    // PDF 说明
-                    Text(text = stringResource(R.string.qk_00150),
-                        fontSize = scaled(11),
-                        color = cs.onSurfaceVariant,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-                else -> {
-                    // 文本渲染
-                    Text(
-                        text = card.content,
-                        fontSize = scaled(11),
-                        color = cs.onSurfaceVariant,
-                        lineHeight = scaled(16),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** 渲染带 [方括号] 标签的内联文本 */
-@Composable
-private fun renderInlineFormatted(text: String, scaled: (Int) -> androidx.compose.ui.unit.TextUnit, cs: androidx.compose.material3.ColorScheme) {
-    val bracketPattern = RE_BRACKET
-    val match = bracketPattern.matchEntire(text)
-    if (match != null) {
-        val tag = match.groupValues[1]
-        val rest = match.groupValues[2]
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("[", fontSize = scaled(11), color = Muted)
-            Text(tag, fontSize = scaled(11), color = Accent, fontWeight = FontWeight.Medium)
-            Text("]", fontSize = scaled(11), color = Muted)
-            if (rest.isNotBlank()) {
-                Spacer(Modifier.width(3.dp))
-                Text(rest, fontSize = scaled(11), color = cs.onSurfaceVariant)
-            }
-        }
-    } else {
-        Text(text, fontSize = scaled(11), color = cs.onSurfaceVariant, lineHeight = scaled(17))
-    }
-}
-
-@Composable
-private fun JsonFormattedText(jsonStr: String, scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
-    val cs = MaterialTheme.colorScheme
-    // JSON 解析在 remember 中完成（非 Composable 树内 try-catch）
-    val jsonPairs = remember(jsonStr) {
-        runCatching {
-            org.json.JSONObject(jsonStr).keys().asSequence().map { key ->
-                key to org.json.JSONObject(jsonStr).optString(key, "").take(120)
-            }.toList()
-        }.getOrDefault(null)
-    }
-
-    if (jsonPairs != null) {
-        Column {
-            jsonPairs.forEachIndexed { idx, (key, value) ->
-                Row(Modifier.padding(vertical = 1.dp), verticalAlignment = Alignment.Top) {
-                    Text("$key", fontSize = scaled(11), color = Accent, fontWeight = FontWeight.Medium,
-                        fontFamily = FontFamily.Monospace)
-                    Text(": ", fontSize = scaled(11), color = Muted, fontFamily = FontFamily.Monospace)
-                    Text(formatJsonValue(value), fontSize = scaled(11),
-                        color = cs.onSurfaceVariant, fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.weight(1f))
-                }
-                if (idx < jsonPairs.size - 1) Spacer(Modifier.height(2.dp))
-            }
-        }
-    } else {
-        Text(jsonStr, fontSize = scaled(11), fontFamily = FontFamily.Monospace,
-            color = InkSoft, lineHeight = scaled(17))
-    }
-}
-
 private fun formatJsonValue(v: String): String = when {
     v.length > 60 -> "${v.take(57)}\u2026"
     v.isEmpty() -> "\"\""
@@ -4953,9 +4466,10 @@ private fun ThinkingWithToolsBubble(
                     Spacer(Modifier.height(8.dp))
                     HorizontalDivider(color = Line2.copy(alpha = 0.3f))
                     Spacer(Modifier.height(6.dp))
-                    tools.forEachIndexed { idx, t ->
-                        SingleToolCard(t, scaled, index = idx)
-                        if (idx < tools.size - 1) Spacer(Modifier.height(6.dp))
+                    // 🔴 走新版 [ToolCallGroup]（族图标 + 目标物 + 指标 + 耗时 + 状态）
+                    tools.forEach { t ->
+                        ToolCallRichCard(t, defaultExpanded = false)
+                        Spacer(Modifier.height(4.dp))
                     }
                     // 执行轨迹（如果启用）
                     if (withTrace) {
@@ -5099,68 +4613,6 @@ private fun ThinkInlineContent(think: ThinkBlock, scaled: (Int) -> androidx.comp
     }
 }
 
-/**
- * 紧凑型工具调用展开区：点击名字行「·N 工具」按钮后显示在按钮下方。
- */
-@Composable
-private fun ToolsInlineContent(
-    tools: List<ToolCallUi>,
-    scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
-    embeddedTrace: List<QuroAgentTrace.AgentTraceEvent> = emptyList(),
-) {
-    val cs = MaterialTheme.colorScheme
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(cs.surfaceVariant.copy(alpha = 0.5f))
-            .border(1.dp, Line.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
-            .padding(10.dp, 8.dp)
-    ) {
-        tools.forEachIndexed { idx, t ->
-            val cat = toolCategory(t.name)
-            val status = t.result?.let { detectResultStatus(it) } ?: ResultStatus.INFO
-            val statusColor = when (status) {
-                ResultStatus.SUCCESS -> Color(0xFF22C55E)
-                ResultStatus.ERROR -> Color(0xFFEF4444)
-                ResultStatus.WARNING -> Color(0xFFF59E0B)
-                else -> Muted
-            }
-            Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                LucideIcon(cat.icon, null, Modifier.size(13.dp), tint = cat.color)
-                Spacer(Modifier.width(5.dp))
-                Text(t.name, fontSize = scaled(11), color = cs.primary, fontWeight = FontWeight.Medium)
-                Spacer(Modifier.weight(1f))
-                Box(Modifier.size(8.dp).clip(CircleShape).background(statusColor))
-            }
-            if (t.args.isNotBlank()) {
-                Text(qstr(R.string.qk_00154, (formatJsonValue(t.args)).toString()),
-                    fontSize = scaled(9), color = Muted, fontFamily = FontFamily.Monospace)
-            }
-            if (!t.result.isNullOrBlank()) {
-                Text(qstr(R.string.qk_00155, (formatJsonValue(t.result)).toString()),
-                    fontSize = scaled(9), color = Muted, fontFamily = FontFamily.Monospace)
-            }
-            if (idx < tools.size - 1) {
-                Spacer(Modifier.height(4.dp))
-                HorizontalDivider(color = Line.copy(alpha = 0.2f))
-            }
-        }
-        // ── 执行轨迹（内嵌到工具卡，作为本次工具调用的「过程轨迹」，不再独立浮层）──
-        if (embeddedTrace.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            HorizontalDivider(color = Line.copy(alpha = 0.25f))
-            Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                LucideIcon("sparkles", null, Modifier.size(13.dp), tint = cs.primary)
-                Spacer(Modifier.width(5.dp))
-                Text(stringResource(R.string.qk_00118), fontSize = scaled(11), color = cs.primary, fontWeight = FontWeight.Medium)
-            }
-            Spacer(Modifier.height(4.dp))
-            embeddedTrace.forEach { ev -> TraceRow(ev) }
-        }
-    }
-}
 
 // ---------------- 输入区 ----------------
 
@@ -5250,6 +4702,17 @@ private fun Composer(
     currentWorkspace: String? = null,
     onOpenWorkspaceSelector: () -> Unit = {},
     onOpenCodeBrowser: () -> Unit = {},
+    /** 打开多角色集群面板（主持编排 + 多角色分工）。 */
+    /** 🔴 集群模式是否开启（对话框的一种模式，与「深度思考」平级）。 */
+    clusterMode: Boolean = false,
+    /** 集群是否有任务在跑：发送键切成「停止」，并显示协作中状态。 */
+    clusterRunning: Boolean = false,
+    /** 🔴 #183：引擎正在后台安装中（建 Room 库 + 注册 258 个宿主工具），期间显示忙碌态并禁用连点。 */
+    clusterEnabling: Boolean = false,
+    onToggleClusterMode: () -> Unit = {},
+    onStopCluster: () -> Unit = {},
+    /** 集群配置面板（角色/工具/授权），纯配置。 */
+    onOpenClusterConfig: () -> Unit = {},
     currentAciName: String? = null,
     enabledSkillsCount: Int = 0,
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
@@ -5337,6 +4800,51 @@ private fun Composer(
                         LucideIcon("sparkles", null, Modifier.size(12.dp), tint = cs.tertiary)
                         Spacer(Modifier.width(4.dp))
                         Text(stringResource(R.string.qk_00160, (enabledSkillsCount).toString()), fontSize = scaled(11), color = cs.onTertiaryContainer)
+                    }
+                }
+            }
+        }
+        // 🔴 集群模式横幅：模式开着、任务在跑，都必须在输入框附近明说。
+        // 否则用户在对话框里发了消息没回应，只能以为「集群是壳」——
+        // 这正是上一版最大的问题：开关开了却没有任何可见反馈。
+        // 放在**输入条之上**：输入条本身是 Row（横向排列控件），塞不进整行横幅。
+        if (clusterMode || clusterRunning || clusterEnabling) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 6.dp, end = 6.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (clusterRunning || clusterEnabling) {
+                    CircularProgressIndicator(
+                        Modifier.size(12.dp),
+                        strokeWidth = 2.dp,
+                        color = cs.primary,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text(
+                    stringResource(
+                        // 🔴 #183：装引擎期间 enabled 还是 false，光靠 clusterMode 判不出来，
+                        // 不单独处理的话用户点了开关会看到「什么都没有」—— 那就是上一版的卡死观感来源。
+                        when {
+                            clusterEnabling -> R.string.qk_04064
+                            clusterRunning -> R.string.qk_04056
+                            else -> R.string.qk_04054
+                        }
+                    ),
+                    fontSize = scaled(11),
+                    color = cs.primary,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.weight(1f))
+                // 运行中给一个显式停止：任务卡住时用户不至于只能杀进程
+                if (clusterRunning) {
+                    TextButton(
+                        onClick = onStopCluster,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    ) {
+                        Text(stringResource(R.string.qk_04057), fontSize = scaled(11), color = cs.primary)
                     }
                 }
             }
@@ -5810,6 +5318,7 @@ private fun SheetOverlay(
     onOpenFileManager: () -> Unit,
     onOpenAci: () -> Unit,
     onOpenMcp: () -> Unit,
+    onOpenCluster: () -> Unit,
     onOpenSystemStatus: () -> Unit,
     onOpenComponentGallery: () -> Unit,
     onOpenAppearance: () -> Unit,
@@ -5883,7 +5392,7 @@ private fun SheetOverlay(
                         onManagePersona, onOpenVoiceService,
                         onClearChat, settingsVoiceBallEnabled, onSettingsToggleVoiceBall,
                     settingsAiReplyNotify, onSettingsToggleAiReplyNotify,
-                        onOpenAbout, onOpenAci, onOpenMcp, onOpenSystemStatus, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenFileManager,
+                        onOpenAbout, onOpenAci, onOpenMcp, onOpenCluster, onOpenSystemStatus, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenFileManager,
                         onOpenGitHub = onOpenGitHub, onOpenModelHub = onOpenModelHub, scaled
                     )
                     else -> {}
@@ -5934,6 +5443,7 @@ private fun SettingsSheetContent(
     onOpenAbout: () -> Unit,
     onOpenAci: () -> Unit,
     onOpenMcp: () -> Unit,
+    onOpenCluster: () -> Unit,
     onOpenSystemStatus: () -> Unit,
     onOpenComponentGallery: () -> Unit,
     onOpenAppearance: () -> Unit,
@@ -5989,6 +5499,8 @@ private fun SettingsSheetContent(
             SetRowClickable(Icons.Filled.Person, stringResource(R.string.qk_02449), stringResource(R.string.qk_03854), "", onManagePersona, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Hub, stringResource(R.string.qk_02058), stringResource(R.string.qk_03858), "", onOpenMcp, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRowClickable(Icons.Filled.AccountTree, stringResource(R.string.qk_03946), stringResource(R.string.qk_04065), "", onOpenCluster, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Public, stringResource(R.string.qk_03843), stringResource(R.string.qk_03866), "", onOpenAci, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
@@ -7330,49 +6842,35 @@ private fun parseRichBlocks(seg: String): List<MsgBlock> {
     return out.ifEmpty { listOf(MsgBlock.Text(seg)) }
 }
 
-/** 普通段落 / Markdown 块切分：识别 # 标题、> 引用、无序列表；其余按空行分段，保留行内 HTML。 */
+/**
+ * 把一段非围栏文本作为**单个** [MsgBlock.Text] 交出去，不再在此处预先切碎 Markdown。
+ *
+ * ## 🔴 为什么取消预切分（本轮修复的核心）
+ * 旧实现在这里就把 `#` 标题 / `>` 引用 / 列表**提前吃掉并降级**：
+ *  - 标题 → [MsgBlock.Heading]，丢掉了行内 `**粗体**` 与列表嵌套
+ *  - 引用 → [MsgBlock.Quote]，多行被拍平成一行
+ *  - 列表 → `joinToString("\n") { "• $it" }`，**有序列表序号、任务列表 `[ ]`、缩进层级全部丢失**，
+ *    还会把同一列表里的项和上下文段落粘在一起
+ * 更糟的是切完之后传给渲染器的是**单行文本**，
+ * 于是渲染器自己的块级分支（标题/围栏/引用/分隔线/列表）永远命中不到 —— 结构性地成为死代码。
+ *
+ * 现在整段原样下传，由 [com.ai.assistance.quro.ui.dialog.RichText] 的
+ * [com.ai.assistance.quro.ui.dialog.parseMarkdown] 一次性完成块级 + 行内解析：
+ * 空行断段、行内换行作为软换行保留，这才是 Markdown 的真实语义
+ * （用户反馈的"排版被限制死"正是段落语义塌陷成行语义造成的）。
+ *
+ * 仍然保留的预处理只有两项**非 Markdown** 的历史包袱：
+ *  - `</?p>` / `<br>` → 换行（AI 有时仍会输出 HTML 段落标签）
+ *  - 去掉行尾空白
+ *
+ * 注意：围栏代码 / mermaid / AIP / 动态 UI / 卡片都在 [parseBlocks] 更早的分支里已被摘走，
+ * 走到这里的都是纯正文，交给 Markdown 渲染器是安全的。
+ */
 private fun parseParagraphs(s: String): List<MsgBlock> {
-    val lines = s.replace(RE_P, "\n").replace(RE_BR, "\n").split("\n")
-    val out = mutableListOf<MsgBlock>()
-    var i = 0
-    while (i < lines.size) {
-        val line = lines[i]
-        when {
-            line.matches(RE_HEADING_LINE) -> {
-                val level = line.takeWhile { it == '#' }.length
-                out.add(MsgBlock.Heading(level, line.replaceFirst(RE_HEADING_STRIP, "").trim()))
-                i++
-            }
-            line.matches(RE_QUOTE_LINE) -> {
-                val sb = StringBuilder()
-                while (i < lines.size && lines[i].matches(RE_QUOTE_LINE)) {
-                    sb.appendLine(lines[i].replaceFirst(RE_QUOTE_STRIP, "")); i++
-                }
-                out.add(MsgBlock.Quote(sb.toString().trimEnd()))
-            }
-            line.matches(RE_LIST_LINE) -> {
-                val items = mutableListOf<String>()
-                while (i < lines.size && lines[i].matches(RE_LIST_LINE)) {
-                    items.add(lines[i].replaceFirst(RE_LIST_STRIP, "")); i++
-                }
-                out.add(MsgBlock.Text(items.joinToString("\n") { "• $it" }))
-            }
-            line.isBlank() -> i++
-            else -> {
-                val sb = StringBuilder()
-                while (i < lines.size && lines[i].isNotBlank()
-                    && !lines[i].matches(RE_HEADING_LINE)
-                    && !lines[i].matches(RE_QUOTE_LINE)
-                    && !lines[i].matches(RE_LIST_LINE)
-                ) {
-                    sb.appendLine(lines[i]); i++
-                }
-                val para = sb.toString().trimEnd()
-                if (para.isNotBlank()) out.add(MsgBlock.Text(para))
-            }
-        }
-    }
-    return out.ifEmpty { listOf(MsgBlock.Text(s)) }
+    val normalized = s.replace(RE_P, "\n").replace(RE_BR, "\n")
+    val t = normalized.trim()
+    if (t.isEmpty()) return emptyList()
+    return listOf(MsgBlock.Text(t))
 }
 
 /** 解析 <table>：每行 <tr>，单元格 <td>/<th>；首行作为表头。 */
@@ -7501,6 +6999,20 @@ private fun DynamicUiBlock(
 }
 
 /**
+ * 动态 UI 交互事件回发的**命令前缀**。
+ *
+ * 🔴 这不是随意的命名，而是一条链路的生死线：
+ * 组件点击 → [QuroUiRenderer] `dispatch` → [handleDynamicUiAction] → `onCommand(prefix+payload)`
+ * → ChatScreen 的 `handleCardCommand` 老 `when` 链路 → `send()`。
+ *
+ * 历史上这里发的是**裸串**（`【ttt_move】\nrow: 0...`），而老链路只认
+ * `reply:` / `ai:` / `ui_` 等固定前缀，于是每一次点击都被静默丢弃 ——
+ * 用户看到的就是「组件点不了、互动游戏玩不下去」。
+ * 前缀化既复用了零新增结构的老链路，又保证不会与内部控制串（`__edit_soul_card__`）混淆。
+ */
+private const val UI_REPLY_PREFIX = "ui_reply:"
+
+/**
  * 把动态 UI 的交互动作翻译成「ZorvAI 内部功能」的真实调用。
  *
  * 此前这里是「假动作」——所有动作都只是把一句提示文本发回模型、让模型二次解析再 tool_call，
@@ -7523,6 +7035,12 @@ fun handleDynamicUiAction(
 ) {
     when (action) {
         // 回传事件给模型：把用户填的值 + data 作为一条用户消息发回，让模型继续对话。
+        //
+        // 🔴🔴 必须带 `ui_reply:` 前缀走onCommand（见 [UI_REPLY_PREFIX] 说明）：
+        // 旧实现发的是裸串 `【ttt_move】\nrow: 0...`，而 onCommand 终端是
+        // handleCardCommand 的 `when { cmd.startsWith(...) }` 老链路 ——
+        // 裸串**一个分支都不匹配**，于是用户的每一次点击都被静默丢弃，
+        // 表现就是「组件点不了 / 互动游戏玩不下去 / AI 收不到操作」。
         is QuroCallbackAction -> {
             val merged = LinkedHashMap<String, String>(values).apply { putAll(action.data) }
             val body = if (merged.isNotEmpty()) {
@@ -7530,7 +7048,12 @@ fun handleDynamicUiAction(
             } else {
                 action.event
             }
-            onCommand(if (action.event.isNotBlank()) "【${action.event}】\n$body" else body)
+            val payload = if (action.event.isNotBlank()) {
+                "【${action.event}】\n$body"
+            } else {
+                body
+            }
+            onCommand(UI_REPLY_PREFIX + payload)
         }
 
         // 复制文本：真写系统剪贴板（ZorvAI 自带能力）。
@@ -9373,31 +8896,166 @@ private fun CleanupScreen(
 ) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
-    // 各类真实写盘路径（与运行时一致，不再写死不存在的目录）
+    // 🔴🔴🔴 R7-14 主修：清理页的数据源从「递归遍历文件系统」换成**系统记账**。
+    //
+    // 参考开源清理类 App（清浊 / SuperCleanMaster / Fulldive Full Cleaner）的通行做法：
+    // 它们**不靠 `listFiles()` 逐个累加 `File.length()`**，而是读内核维护的记账 ——
+    // `StorageStatsManager.queryStatsForPackage()` 拿 appData/cache，
+    // `StorageManager.getCacheSizeBytes()` 拿官方口径的缓存总量。O(1)、零权限。
+    //
+    // 旧实现为什么必须换：`linux-sandbox` 是整个 Ubuntu rootfs（数万文件），
+    // 递归 stat 要几十秒，于是页面长期「应用数据出数字、其余 4 项永远扫描中」——
+    // 用户看到的就是「功能不可用」。
+    //
+    // 现在分工：
+    // - **总大小 / 缓存 / 存储压力** → 系统记账（[readStorageStats]），瞬间出数；
+    // - **各分类明细** → 仍按目录递归（开源 App 同样要做细分），但**逐项并发 + 限时**，
+    //   慢的那项只拖它自己，不再阻塞其他项，也不再阻塞总览。
+    var storageStats by remember { mutableStateOf<QuroStorageStats?>(null) }
     val ext = context.getExternalFilesDir(null)
     val paths = remember {
         mapOf(
             "appdata" to File(context.filesDir, "quro_data"),
             "sandbox" to File(context.filesDir, "linux-sandbox"), // Ubuntu rootfs + tmp，体积最大
-            "logs" to File(
-                android.os.Environment.getExternalStoragePublicDirectory(
-                    android.os.Environment.DIRECTORY_DOWNLOADS
-                ), "QuroAI_logs"
-            ), // 诊断日志（公共 Download，需 MANAGE_EXTERNAL_STORAGE 才能删）
+            "logs" to (ext?.let { File(it, "QuroAI_logs") }
+                // 极端情况下拿不到外部目录（存储未挂载），退回 app 内部同名目录，
+                // 那里 QuroLlmClient 也有兜底写入（QuroLlmClient.kt:441 的 ?: filesDir 分支）。
+                ?: File(context.filesDir, "QuroAI_logs")),
             "exports" to (ext?.let { File(it, "quro_exports") } ?: File(context.filesDir, "quro_exports")),
             "backups" to (ext?.let { File(it, "quro_backups") } ?: File(context.filesDir, "quro_backups")),
             "cache" to context.cacheDir,
         )
     }
-    var sizes by remember { mutableStateOf(mapOf<String, Long>()) }
+    // 🔴🔴 sizes 的值语义（这是「真实 vs 假实现」的分界线）：
+    //    `null` = **读不到**（无权限 / IO 失败）→ UI 必须显示「无权限」，绝不能显示 0 B；
+    //    `0L`   = 确实读到了且为空；
+    //    >0    = 真实体积。
+    //    旧实现用 `calculateDirSize` 把「无权限」一律压成 0，等于编造数据。
+    var sizes by remember { mutableStateOf(mapOf<String, Long?>()) }
     var showCleanupDialog by remember { mutableStateOf(false) }
     var cleanupType by remember { mutableStateOf("") }
 
-    fun total() = sizes.values.sum()
+    // 只累加「真实读到」的值；读不到的项不参与求和，避免把未知说成 0。
+    fun total() = sizes.values.filterNotNull().sum()
 
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            sizes = paths.mapValues { (_, f) -> calculateDirSize(f) }
+    // 🔴 可访问但非空的分类：用于告诉用户「这里确实有东西可清」，
+    //    避免全部显示 0 B 时误以为清理页坏了。
+    var readable by remember { mutableStateOf(mapOf<String, Boolean>()) }
+
+    // 🔴 扫描中状态：linux-sandbox 是整个 Ubuntu rootfs（数万文件），
+    //    递归统计要几十秒。旧实现等**全部算完**才一次性刷新 UI，
+    //    期间页面一直显示 0 B —— 用户看到的就是「进页面不自动扫描 / 扫描没反应」。
+    //    现在改为逐项扫完立即回填，大目录还没算完时小目录已经显示真实体积。
+    var scanning by remember { mutableStateOf(true) }
+
+    // 🔴 已完成的扫描项数（配合逐项并发）：scanning = doneCount < paths.size。
+    //    不用单一 Boolean —— 串行时只有"全完成"那一刻才能置 false，
+    //    那正是用户截图里「4 项永远扫描中」的成因。
+    var doneCount by remember { mutableStateOf(0) }
+
+    // 🔴 单项遍历的软预算（毫秒）。超时即视为「只量到一部分」。
+    //    开源清理 App 普遍用「快速/深度」两档扫描来规避rootfs 全遍历卡 UI，
+    //    这里用同一个思路的简化版：给每一项一个上限，绝不无限等。
+    var partials by remember { mutableStateOf(mapOf<String, Boolean>()) }
+
+    // 🔴 真实进程内存快照（PSS / Java 堆 / Native 堆），进页面即采一次。
+    var memInfo by remember { mutableStateOf<QuroMemoryInfo?>(null) }
+
+    val cleanupScope = rememberCoroutineScope()
+    // 🔴🔴 扫描必须**逐项并发 + 单项限时**，不能串行（用户实测截图：只有第1 项「应用数据」出数字，
+    //后面 4 项永远停在「扫描中…」）。
+    //
+    // 原因：`paths` 是 LinkedHashMap（appdata → sandbox → logs → exports → backups → cache），
+    // 旧实现 `paths.forEach { measureDirOrNull(it) }` **串行**执行，而第 2 项 `sandbox`
+    // 是整个 Ubuntu rootfs（数万文件），递归统计要几十秒 —— 它没算完，
+    // 后面 4 项就一个都轮不到，UI 永远显示「扫描中…」。
+    //
+    // 现在：
+    // 1. 先取**系统记账**（[readStorageStats]，O(1)）→ 总览立刻有数，不再等任何遍历；
+    // 2. 各分类明细逐项 `launch` 并发，谁先算完谁先回填；
+    // 3. 每项加 [DETAIL_SCAN_BUDGET_MS] 软预算，超时就用「已量到的部分 + 标记不完整」，
+    //    宁可显示「≥ xx MB」也不让整页卡在「扫描中」——
+    //    这正是开源清理 App「快速扫描 vs 深度扫描」的分级思路（清浊的快扫只扫 2~3 层）。
+    suspend fun scanAll() = withContext(Dispatchers.IO) {
+        // ① 系统记账：瞬间出数，是总览的唯一数据来源。
+        val st = readStorageStats(context, ext?.absolutePath)
+        withContext(Dispatchers.Main) { storageStats = st }
+
+        // ② 外部私有目录（官方 API 覆盖不到 data 分区以外）——三个小目录，秒回。
+        val extSizes = measureExternalAppDirs(context)
+        withContext(Dispatchers.Main) {
+            sizes = sizes + extSizes
+            readable = readable + extSizes.mapValues { it.value != null }
+            doneCount += extSizes.size
+        }
+
+        withContext(Dispatchers.Main) { memInfo = readProcessMemory(context) }
+
+        // ③ data 分区内的分类明细，逐项并发 + 软预算。
+        val detailKeys = paths.keys - extSizes.keys
+        detailKeys.forEach { key ->
+            val dir = paths.getValue(key)
+            cleanupScope.launch(Dispatchers.IO) {
+                val budget = System.currentTimeMillis() + DETAIL_SCAN_BUDGET_MS
+                var sum = 0L
+                var partial = false
+                // 迭代式 walk（非递归），逐目录查一次预算；超时就停，把已量的当**下界**。
+                val queue = ArrayDeque<File>()
+                queue.addLast(dir)
+                while (queue.isNotEmpty()) {
+                    if (System.currentTimeMillis() > budget) { partial = true; break }
+                    val cur = queue.removeFirst()
+                    val children = cur.listFiles() ?: continue
+                    for (f in children) {
+                        if (f.isDirectory) queue.addLast(f) else sum += f.length()
+                    }
+                }
+                val ok = dir.exists() && dir.canRead()
+                withContext(Dispatchers.Main) {
+                    // 🔴 超时项写进 sizes 但同时打 partial 标记（UI 显示「≥ xx MB」）：
+                    //    拿一个偏小的数字**冒充最终值**才是假实现；标出「这是下界」才是诚实的。
+                    sizes = sizes + (key to sum)
+                    readable = readable + (key to ok)
+                    partials = partials + (key to partial)
+                    doneCount += 1
+                }
+            }
+        }
+    }
+    fun refresh() {
+        cleanupScope.launch {
+            doneCount = 0
+            scanAll()
+        }
+    }
+
+    // 进页面自动扫描（含从清理页返回后的重新统计）
+    LaunchedEffect(Unit) { refresh() }
+
+    // 🔴 全部项都算完才结束「扫描中」——由计数器驱动，与并发扫描配套。
+    //    单靠 refresh() 里的 `scanning = false` 会在 scanAll刚返回时就置false（那一刻子协程还在跑），
+    //    导致「已算完的项显示 0 B、没算完的项也显示 0 B」—— 又是假数据。
+    LaunchedEffect(doneCount) {
+        scanning = doneCount < paths.size
+    }
+
+    // 尚未算完的项显示「扫描中…」而不是 0 B —— 后者会被理解为「这里没东西可清」
+    val scanningLabel = stringResource(R.string.qk_03920)
+    // 🔴 无权限文案：宁可说「读不到」，也不能编一个体积出来。
+    val deniedLabel = stringResource(R.string.qk_03921)
+    // 🔴 「≥」前缀：该项只量了一部分（超出 DETAIL_SCAN_BUDGET_MS 被截断），
+    //    显示为下界而不是最终值 —— 诚实标注未知，好过给个小数字冒充准确。
+    val partialPrefix = stringResource(R.string.qk_03940)
+    fun sizeText(key: String): String {
+        // 🔴 只要该项还没回填就是「扫描中」，**不看 scanning 全局标志**：
+        //    旧写法 `!sizes.containsKey(key) && scanning` 在扫描全部结束后
+        //    对未回填项会掉到 `v == null` 分支显示「无权限」—— 明明是没扫完，不是没权限。
+        if (!sizes.containsKey(key)) return scanningLabel
+        val v = sizes[key]
+        return when {
+            v == null -> deniedLabel
+            partials[key] == true -> partialPrefix + formatFileSize(v)
+            else -> formatFileSize(v)
         }
     }
 
@@ -9412,51 +9070,213 @@ private fun CleanupScreen(
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
         ) {
+            // ════════════════════════════════════════════════════════════════════
+            // 🔴🔴 真实进程内存（PSS / Java 堆 / Native 堆）—— 真数据，非估算
+            //
+            // 用户诉求：「清理内存不要搞假实现，要真实的功能」。
+            // 此前本页只有磁盘目录清理，却顶着「清理内存」的名头，一个字节内存都没读。
+            // 现在这里直接展示 Android 系统统计的真实内存指标，并提供真实的释放动作。
+            // ════════════════════════════════════════════════════════════════════
+            GroupCaption(stringResource(R.string.qk_03922))
+            SetGroup {
+                val m = memInfo
+                if (m == null) {
+                    SetRowClickable(
+                        icon = Icons.Filled.Memory,
+                        name = stringResource(R.string.qk_03922),
+                        sub = stringResource(R.string.qk_03935),
+                        value = scanningLabel,
+                        onClick = { },
+                        scaled = scaled,
+                    )
+                } else {
+                    // PSS：系统认为本进程真实占用的物理内存，最权威的一项。
+                    SetRowClickable(
+                        icon = Icons.Filled.Memory,
+                        name = stringResource(R.string.qk_03922),
+                        sub = stringResource(R.string.qk_03923),
+                        value = formatFileSize(m.pssTotal),
+                        onClick = { },
+                        scaled = scaled,
+                    )
+                    HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                    SetRowClickable(
+                        icon = Icons.Filled.DataUsage,
+                        name = stringResource(R.string.qk_03924),
+                        sub = stringResource(R.string.qk_03925),
+                        value = formatFileSize(m.javaHeapUsed),
+                        onClick = { },
+                        scaled = scaled,
+                    )
+                    HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                    // 🔴 只有这一项是「真正能被清掉」的量：已分配但未被对象使用的部分。
+                    //    不标它的话，页面上其余数字都会被误读成「可释放」。
+                    SetRowClickable(
+                        icon = Icons.Filled.CleaningServices,
+                        name = stringResource(R.string.qk_03926),
+                        sub = stringResource(R.string.qk_03927),
+                        value = formatFileSize(m.collectibleHeap),
+                        onClick = { },
+                        scaled = scaled,
+                    )
+                    HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                    // Native 堆：端侧推理（MNN/llama）主要占这里，Java 堆管不到。
+                    SetRowClickable(
+                        icon = Icons.Filled.DeveloperBoard,
+                        name = stringResource(R.string.qk_03928),
+                        sub = stringResource(R.string.qk_03929),
+                        value = formatFileSize(m.nativeHeap),
+                        onClick = { },
+                        scaled = scaled,
+                    )
+                    HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                    SetRowClickable(
+                        icon = Icons.Filled.PhoneAndroid,
+                        name = stringResource(R.string.qk_03930),
+                        sub = stringResource(R.string.qk_03931),
+                        value = formatFileSize(m.systemAvailable),
+                        onClick = { },
+                        scaled = scaled,
+                    )
+                }
+            }
+
+            // ── 释放内存（真实动作）────────────────────────────────────
+ Spacer(Modifier.height(10.dp))
+            // 🔴 用 state 而不是 Job.isActive：Job 一次性启动后不可重启，
+            //    且 isActive 在协程体执行期间才为 true，用它做按钮 enable 会闪烁/失效。
+            var trimming by remember { mutableStateOf(false) }
+            Button(
+                onClick = {
+                    if (trimming) return@Button
+                    trimming = true
+                    cleanupScope.launch {
+                        val before = memInfo ?: readProcessMemory(context)
+                        memInfo = before
+                        // 🔴 Android 没有「一键清空内存」API。这里做的是系统认可的
+                        //    onTrimMemory(UI_HIDDEN) + 主动 GC，并**用实测 PSS 差值**播报，
+                        //    绝不预报一个编造的「已释放 xx MB」。
+                        val after = withContext(Dispatchers.IO) { requestMemoryTrim(context, before) }
+                        memInfo = after
+                        val freed = (before.pssTotal - after.pssTotal).coerceAtLeast(0L)
+                        val msg = if (freed > 0L) {
+                            context.getString(R.string.qk_03933, formatFileSize(freed))
+                        } else {
+                            // 如实告知「没释放到」——这正是旧实现最会骗人的地方。
+                            context.getString(R.string.qk_03934)
+                        }
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        trimming = false
+                    }
+                },
+                enabled = memInfo != null && !trimming,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            ) {
+                Text(stringResource(R.string.qk_03932))
+            }
+
             GroupCaption(stringResource(R.string.qk_00348))
             SetGroup {
+                // 🔴🔴🔴 总览改用**系统记账**（StorageStatsManager / StorageManager），
+                //    不再靠「把 6 个目录挨个stat 完再相加」。
+                //
+                // 旧实现的两个致命问题：
+                // 1. `sandbox`（Ubuntu rootfs）没算完 → 合计永远停在「扫描中…」；
+                // 2. 即使算完，`sum(我们自己stat的几项)` 也不等于系统设置里显示的「应用占用」——
+                //    漏掉 WebView 库、CodeCache、no_backup、art/Dex 等系统认定的数据，
+                //    用户对照系统设置一看就知道数字是编的。
+                //
+                // 现在三层口径，逐层如实降级，**任何一层拿不到就说拿不到**：
+                //   ① 官方记账（appData+cache+externalCache）→ 与系统设置同源，最权威；
+                //   ② 官方缓存总量（getCacheSizeBytes）→ 对应设置里的「清除缓存」；
+                //   ③ 兜底：我们逐项 stat 出来的合计（可能因限时截断偏小，标「≥」）。
+                val st = storageStats
+                val allDone = sizes.size >= paths.size
+                val anyPartial = partials.values.any { it }
+                val prefix = if (anyPartial) partialPrefix else ""
+                // 🔴 先把可空 getter 落到局部 val，Kotlin 才允许 smart cast。
+                val accounted = st?.accountedBytes
                 SetRowClickable(
-                    Icons.Filled.Info,
-                    stringResource(R.string.qk_00349),
-                    formatFileSize(total()),
-                    stringResource(R.string.qk_00350),
-                    { },
-                    scaled
+                    icon = Icons.Filled.Info,
+                    name = stringResource(R.string.qk_00349),
+                    sub = stringResource(R.string.qk_00350),
+                    // 官方记账拿不到时不回落到 0，而是继续显示「扫描中…」，
+                    // 因为 0 会被理解成「应用一点数据都没有」—— 又一个假实现。
+                    value = when {
+                        accounted != null -> formatFileSize(accounted)
+                        allDone -> prefix + formatFileSize(total())
+                        else -> scanningLabel
+                    },
+                    onClick = { },
+                    scaled = scaled,
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                // 🔴 官方口径的缓存总量 —— 这才是系统设置里「清除缓存」会释放的那部分。
+                //    旧页只有「可清理总大小」，没告诉用户「缓存到底多少」，缺了这一维。
+                SetRowClickable(
+                    icon = Icons.Filled.CleaningServices,
+                    name = stringResource(R.string.qk_03941),
+                    sub = stringResource(R.string.qk_03942),
+                    value = st?.cacheSizeBytes?.let { formatFileSize(it) } ?: deniedLabel,
+                    onClick = { cleanupType = "cache"; showCleanupDialog = true },
+                    scaled = scaled,
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                // 🔴 存储压力：剩余可用 / 总量。算不出就不是「0%」而是「读不到」。
+                val freeB = st?.freeBytes
+                val totalB = st?.totalBytes
+                SetRowClickable(
+                    icon = Icons.Filled.FormatSize,
+                    name = stringResource(R.string.qk_03943),
+                    sub = stringResource(R.string.qk_03944),
+                    value = if (freeB != null && totalB != null && totalB > 0) {
+                        stringResource(
+                            R.string.qk_03945,
+                            formatFileSize(freeB),
+                            formatFileSize(totalB),
+                        )
+                    } else deniedLabel,
+                    onClick = { },
+                    scaled = scaled,
                 )
             }
 
             GroupCaption(stringResource(R.string.qk_00351))
             SetGroup {
-                CleanupRow(Icons.Filled.List, stringResource(R.string.qk_00352), formatFileSize(sizes["appdata"] ?: 0),
+                CleanupRow(Icons.Filled.List, stringResource(R.string.qk_00352), sizeText("appdata"),
                     stringResource(R.string.qk_00353), scaled) { cleanupType = "appdata"; showCleanupDialog = true }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                CleanupRow(Icons.Filled.Folder, stringResource(R.string.qk_00354), formatFileSize(sizes["sandbox"] ?: 0),
+                CleanupRow(Icons.Filled.Folder, stringResource(R.string.qk_00354), sizeText("sandbox"),
                     stringResource(R.string.qk_00355), scaled) { cleanupType = "sandbox"; showCleanupDialog = true }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                CleanupRow(Icons.Filled.Description, stringResource(R.string.qk_00356), formatFileSize(sizes["logs"] ?: 0),
-                    stringResource(R.string.qk_00357), scaled) { cleanupType = "logs"; showCleanupDialog = true }
+                // 🔴 副标题用新键 qk_03936（"应用私有目录 QuroAI_logs"）——
+                //    旧键 qk_00357 写的是「手机 Download/QuroAI_logs」，那是错的（见 paths 注释），
+                //    但 i18n 既有键只能追加不能改，故在此换用新键显示，旧键保留在 xml 里不动。
+                CleanupRow(Icons.Filled.Description, stringResource(R.string.qk_00356), sizeText("logs"),
+                    stringResource(R.string.qk_03936), scaled) { cleanupType = "logs"; showCleanupDialog = true }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                CleanupRow(Icons.Filled.Folder, stringResource(R.string.qk_00358), formatFileSize(sizes["exports"] ?: 0),
+                CleanupRow(Icons.Filled.Folder, stringResource(R.string.qk_00358), sizeText("exports"),
                     stringResource(R.string.qk_00359), scaled) { cleanupType = "exports"; showCleanupDialog = true }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                CleanupRow(Icons.Filled.Build, stringResource(R.string.qk_00360), formatFileSize(sizes["backups"] ?: 0),
+                CleanupRow(Icons.Filled.Build, stringResource(R.string.qk_00360), sizeText("backups"),
                     stringResource(R.string.qk_00361), scaled) { cleanupType = "backups"; showCleanupDialog = true }
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                CleanupRow(Icons.Filled.Delete, stringResource(R.string.qk_00362), formatFileSize(sizes["cache"] ?: 0),
+                CleanupRow(Icons.Filled.Delete, stringResource(R.string.qk_00362), sizeText("cache"),
                     stringResource(R.string.qk_00363), scaled) { cleanupType = "cache"; showCleanupDialog = true }
             }
 
             GroupCaption(stringResource(R.string.qk_00364))
             SetGroup {
                 SetRowClickable(
-                    Icons.Filled.DeleteSweep,
-                    stringResource(R.string.qk_00365),
-                    stringResource(R.string.qk_00366),
-                    "",
-                    {
+                    icon = Icons.Filled.DeleteSweep,
+                    name = stringResource(R.string.qk_00365),
+                    sub = stringResource(R.string.qk_00366),
+                    value = "",
+                    onClick = {
                         cleanupType = "all"
                         showCleanupDialog = true
                     },
-                    scaled,
+                    scaled = scaled,
                     danger = true
                 )
             }
@@ -9493,10 +9313,68 @@ private fun CleanupScreen(
                 TextButton(
                     onClick = {
                         showCleanupDialog = false
+                        val ctx = context
                         CoroutineScope(Dispatchers.IO).launch {
-                            val targets = if (cleanupType == "all") paths else mapOf(cleanupType to (paths[cleanupType] ?: File("/dev/null")))
-                            targets.forEach { (_, f) -> deleteDir(f) }
-                            sizes = paths.mapValues { (_, f) -> calculateDirSize(f) }
+                            // 🔴 旧实现只 delete() 不看结果、也不刷新，用户点了像没反应。
+                            //   现在：先记录清理前体积 → 逐项删除并统计成功数 → 重新统计 →
+                            //   给出明确的成功/失败 Toast。
+                            val targets = if (cleanupType == "all") paths
+                            else mapOf(cleanupType to (paths[cleanupType] ?: File("/dev/null")))
+
+                            // 🔴🔴 权限前置判断：现在所有目标都在 **app 私有目录**
+                            //   （filesDir / cacheDir / getExternalFilesDir），
+                            //   **不需要 MANAGE_EXTERNAL_STORAGE**。
+                            //   旧判断 `absolutePath.contains(DIRECTORY_DOWNLOADS)` 是配着
+                            //   旧的公共 Download 日志路径写的；路径改对之后这个判断已经**永远为假**，
+                            //   但留着会误导后来人以为还有外部目录要授权。
+                            //   现在改为**实测**能否列出内容：列不出（listFiles()==null）才算真读不到。
+                            //
+                            //   🔴 读不到时**不再跳「所有文件访问权限」设置页**：
+                            //   app 私有目录本就不在 MANAGE_EXTERNAL_STORAGE 管辖范围内，
+                            //   跳过去用户授权完依然删不掉 —— 这正是「点了没反应 / 假实现」的观感来源。
+                            //   私有目录 listFiles()==null 只能是目录已被并发移除或IO 异常，
+                            //   如实告知失败即可，不给无效的下一步。
+                            val unreadable = targets.values.filter { it.exists() && it.listFiles() == null }
+                            if (unreadable.isNotEmpty()) {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(ctx, qstr(R.string.qk_03938), Toast.LENGTH_LONG).show()
+                                }
+                                return@launch
+                            }
+
+                            // 🔴 「释放了多少」必须用**删除后实测的差值**，不能拿删除前的体积累加 ——
+                            //    旧实现无论 delete 成功与否都把 before 算进 freed，
+                            //    于是无权限/文件被占用时仍提示「已释放 xx MB」，用户点第二次发现体积没动，
+                            //    就此认定功能是坏的。实测差值为 0 时如实告知「未释放」。
+                            var beforeTotal = 0L
+                            var afterTotal = 0L
+                            // 🔴 失败计数改为**整棵树的删不掉条目数**（含内层），
+                            //    旧版只在顶层 `deleteDir(f) < 0` 时计数，内层失败全被吞掉。
+                            val failed = IntArray(1)
+                            targets.forEach { (_, f) ->
+                                beforeTotal += calculateDirSize(f)
+                                deleteDir(f, failed)
+                                afterTotal += calculateDirSize(f)
+                            }
+                            val denied = failed[0]
+                            val freed = (beforeTotal - afterTotal).coerceAtLeast(0L)
+                            refresh()
+                            withContext(Dispatchers.Main) {
+                                val msg = when {
+                                    denied > 0 && freed == 0L ->
+                                        ctx.getString(R.string.qk_03938)
+                                    freed == 0L ->
+                                        // 目录本来就是空的，如实说明而不是谎报释放量
+                                        ctx.getString(R.string.qk_03919)
+                                    denied > 0 ->
+                                        // 🔴 部分成功也**必须说出来**：旧实现一律弹成功文案，
+                                        //    用户清第二次发现体积没降就认定功能是假的。
+                                        ctx.getString(R.string.qk_03939, targets.size, formatFileSize(freed))
+                                    else ->
+                                        ctx.getString(R.string.qk_03916, targets.size, formatFileSize(freed))
+                                }
+                                Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 ) { Text(stringResource(R.string.qk_00382)) }
@@ -9520,16 +9398,27 @@ private fun CleanupRow(
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
     onClick: () -> Unit,
 ) {
-    SetRowClickable(icon, title, size, sub, onClick, scaled)
+    // 🔴 参数顺序必须与 SetRowClickable(icon, name, sub, value) 一致：
+    //    旧实现传成 (icon, title, size, sub) → 体积被当成副标题、说明被当成右侧值，
+    //    于是界面上出现「诊断日志 / 0 B / 手机 Download/QuroAI_logs」这种错位排版。
+    SetRowClickable(icon = icon, name = title, sub = sub, value = size, onClick = onClick, scaled = scaled)
 }
 
 /**
  * 计算目录大小（递归）。
+ *
+ * 🔴 `listFiles()` 在无权限时返回 **null**（不是空数组）。旧实现直接 `?.forEach` 跳过，
+ * 于是「无权限」被当成「目录为空」→ 页面显示 0 B → 用户以为功能坏了。
+ *
+ * 🔴 同样的假实现已下沉到 [measureDirOrNull]（能区分 null=无权限 / 0=真空），
+ *    本函数保留是因为清理流程需要「拿不到就当0、绝不崩」的语义，
+ *    UI 层展示一律走 [measureDirOrNull]。
  */
 private fun calculateDirSize(dir: File): Long {
     if (!dir.exists()) return 0
+    val children = dir.listFiles() ?: return 0
     var size = 0L
-    dir.listFiles()?.forEach { file ->
+    children.forEach { file ->
         size += if (file.isDirectory) {
             calculateDirSize(file)
         } else {
@@ -9539,19 +9428,55 @@ private fun calculateDirSize(dir: File): Long {
     return size
 }
 
+/** 目录是否可读（可列出内容）。用于区分「真的是空的」与「没权限看」。 */
+private fun isReadable(dir: File): Boolean = dir.exists() && dir.canRead()
+
 /**
- * 删除目录（保留顶层目录本身，仅清空内容，避免后续写入因目录缺失而报错）。
+ * 删除目录内容（保留顶层目录本身，仅清空内容，避免后续写入因目录缺失而报错）。
+ *
+ * ## 🔴 为什么改成有返回值（这是「清理点了没反应」的真凶）
+ * 旧实现 `file.delete()` 的**返回值被直接丢弃**：无权限 / 文件被占用 / 只读时
+ * `delete()` 返回 false，而界面上没有任何提示 —— 用户点了就像功能根本没实现。
+ * 现在返回「成功删除的文件数」，由调用方据此给出明确反馈。
+ *
+ * @return 成功删除的文件/目录数；无权限读不到时返回 -1（调用方应提示授权）。
  */
-private fun deleteDir(dir: File) {
-    if (!dir.exists()) return
-    dir.listFiles()?.forEach { file ->
+private fun deleteDir(dir: File): Int = deleteDir(dir, null)
+
+/**
+ * 🔴 [failed] 是**可变出参**，用来把「某一层删不掉」这件事层层上报到顶层。
+ *
+ * 旧实现只有顶层能返回 -1（listFiles()==null）；内层 `delete()` 返回 false
+ * （文件被占用 / 只读）时**静默丢弃**，于是顶层返回 >=0，调用方
+ * `if (deleteDir(f) < 0) denied++` 完全看不出部分失败 → 界面照样弹「已清理 N 项，释放 xx MB」，
+ * 而实际有一堆文件没删掉。又一处「看起来成功、其实没成」的假实现。
+ */
+private fun deleteDir(dir: File, failed: IntArray?): Int {
+    if (!dir.exists()) return 0
+    val children = dir.listFiles() ?: run {
+        if (failed != null) failed[0] += 1
+        return -1
+    }
+    var deleted = 0
+    children.forEach { file ->
+        // 目录要先递归清空再删自身。
+        // 🔴 旧实现只递归、不 delete 子目录本身，返回值还只当计数用 ——
+        //    结果是「内容清空了但空目录还在」，反复清理时目录层级只增不减，
+        //    用户看到体积没降就以为功能没实现。
         if (file.isDirectory) {
-            deleteDir(file)
-            file.delete()
-        } else {
-            file.delete()
+            val inner = deleteDir(file, failed)
+            // inner == -1 表示这层读不到内容（无权限），不能算成功
+            if (inner >= 0) {
+                if (file.delete()) deleted++
+                else if (failed != null) failed[0] += 1
+            }
+        } else if (file.delete()) {
+            deleted++
+        } else if (failed != null) {
+            failed[0] += 1
         }
     }
+    return deleted
 }
 
 /**
@@ -9591,3 +9516,17 @@ private fun startVideoCall(ctx: Context) {
         else ctx.startService(i)
     }
 }
+
+/**
+ * 🔴 清理页「分类明细」单项遍历的**软预算**（毫秒）。
+ *
+ * 背景：`linux-sandbox` 是整个 Ubuntu rootfs，数万文件，全量`stat` 要几十秒。
+ * 开源清理 App（清浊等）普遍用「快速扫描 / 深度扫描」两档来规避这个问题——
+ * 快速档只扫 2~3 层，深档在系统空闲时再跑。这里取其简化版：
+ * **每一项**给一个上限，超时就把已量到的当**下界**展示（UI 加「≥」前缀），
+ * 绝不让整页卡在「扫描中…」。
+ *
+ * 取 6s 的理由：常规目录（quro_data / cache / 日志）都在百毫秒级，
+ * 6s 足够任何正常目录跑完；只有 rootfs 这种超大目录才会触发降级。
+ */
+private const val DETAIL_SCAN_BUDGET_MS = 6_000L

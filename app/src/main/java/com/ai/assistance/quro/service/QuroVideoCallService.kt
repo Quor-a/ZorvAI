@@ -31,20 +31,23 @@ import android.view.Gravity
 import android.view.Surface
 import android.view.TextureView
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -64,7 +67,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -80,8 +82,12 @@ import com.ai.assistance.quro.core.QuroConversationStore
 import com.ai.assistance.quro.core.QuroMessage
 import com.ai.assistance.quro.core.QuroPlatformManifest
 import com.ai.assistance.quro.core.QuroReplyLanguage
+import com.ai.assistance.quro.core.model.QuroFrameVisionOption
+import com.ai.assistance.quro.core.model.QuroFrameVisionRouter
+import com.ai.assistance.quro.core.model.QuroFrameVisionSource
 import com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository
 import com.ai.assistance.quro.core.model.QuroFunctionType
+import com.ai.assistance.quro.core.model.QuroModelConfig
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
 import com.ai.assistance.quro.core.network.QuroLlmClient
 import com.ai.assistance.quro.core.tools.QuroSttHolder
@@ -107,23 +113,30 @@ import java.util.concurrent.TimeUnit
 /**
  * 视频通话服务（参考 QuroVoiceBallService 语音球实现）。
  *
- * 悬浮窗里是一套**完整的通话界面**：顶部状态条（可拖动）+ 实时摄像头预览 + 字幕 + 底部三键控制
- * （麦克风开关 / 前后摄切换 / 挂断），并在语音对话之上叠加两层画面理解：
- *  - 视觉识别层：把实时摄像头画面作为图片直接喂给「当前多模态模型」，让模型亲眼看到用户环境
- *    （与 visual_analysis 的 Level1 同源；当前模型不支持视觉时退化为视频识别层）。
- *  - 视频识别层：当前模型非视觉时，调用「功能模型配置 → 视频通话 / 视频识别」绑定的模型描述画面，
- *    把文字结果作为上下文注入对话。
+ * **全屏**通话界面：顶部状态条 + **铺满整屏**的实时摄像头预览 + 字幕 + 底部三键控制
+ * （麦克风开关 / 前后摄切换 / 挂断）。窗口已是 [WindowManager.LayoutParams.MATCH_PARENT] 全屏，
+ * 因此界面不再有圆角与拖拽把手，改用 [WindowInsets.safeDrawing] 让内容避开状态栏/导航栏/刘海。
+ *
+ * ## 画面理解降级链（本轮重构）
+ * 优先级由纯函数 [QuroFrameVisionRouter.plan] 固化（可单测钉死），本服务只负责执行：
+ *  1. **主模型自带视觉** → 直接把实时帧喂给它「亲眼」看，零额外远程调用；
+ *  2. **主模型无视觉 + 「功能模型配置 → 视频通话」指定了独立模型** → 直接用**视频通话模型**做视觉识别；
+ *  3. 上面都没有 → 用**「功能模型配置 → 图像识别」**作为**保底**视觉模型；
+ *  4. 全都没有 → 本轮不注入画面上下文，退化为纯语音对话。
+ *
+ * 🔴 「视频识别」（[QuroFunctionType.VIDEO_RECOGNITION]）是**另一个工具**（`video_understanding`，
+ * 面向用户主动发起的整段视频文件分析），与本链路的**实时单帧**理解不是一回事，这里刻意不用它。
  *
  * 模型来源：对话走「功能模型配置 → 视频通话」的绑定（[QuroFunctionType.VIDEO_CALL]），
  * 未指定独立模型时跟随主模型。
  *
  * 摄像头走框架 Camera2（无需新增依赖）；对话/STT/TTS 复用语音球的成熟链路。
  *
- * ## 关键修复（本轮）
+ * ## 历史修复
  * 原实现的 [textureView] 从未被赋值 —— [VideoCallScreen] 里只有状态文字与两个按钮，
  * 没有任何视图承载 [surfaceTextureListener]，于是：① 用户看不到摄像头画面（黑框）；
  * ② [captureFrame] 因 `textureView == null` 恒返回 null，画面理解层等于完全失效。
- * 现在用 [AndroidView] 把 [TextureView] 真正挂进悬浮窗，预览与截帧链路同时打通。
+ * 现用 [AndroidView] 把 [TextureView] 真正挂进通话窗，预览与截帧链路同时打通。
  */
 class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatchers.Main + SupervisorJob()) {
 
@@ -167,22 +180,44 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         super.onCreate()
         try {
             windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Android 14+ 要求声明的前台服务类型必须与「已授予的运行时权限」匹配，
-                // 否则 startForeground 直接抛 SecurityException。按实际授权拼类型。
-                var t = 0
-                if (checkSelfPermission(android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-                    t = t or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
-                if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
-                    t = t or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-                if (t == 0) t = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-                startForeground(NOTIF_ID, buildNotification(), t)
+            val types = resolveForegroundTypes()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && types != 0) {
+                // Android 14+：前台服务类型必须与「已授予的运行时权限」一一对应，
+                // 多声明一个没授权的类型就直接抛 SecurityException。
+                startForeground(NOTIF_ID, buildNotification(), types)
             } else {
+                // 🔴 types==0（相机与麦克风都没授权）时走不带类型的重载。
+                // 旧实现在这里反向兜底成 FOREGROUND_SERVICE_TYPE_MICROPHONE —— 而麦克风权限
+                // 恰恰是没有的，于是 Android 14+ 必抛 SecurityException，被下面的 catch 吞掉后
+                // stopSelf()，表现为「视频通话打开马上关闭」且全程无任何提示。
                 startForeground(NOTIF_ID, buildNotification())
             }
         } catch (e: Throwable) {
-            Log.e(TAG, "VideoCall onCreate failed", e)
+            Log.e(TAG, "VideoCall onCreate failed: startForeground", e)
+            toast(getString(R.string.qk_03910))
             stopSelf(); return
+        }
+    }
+
+    /**
+     * 按**实际已授予的运行时权限**拼出前台服务类型集合。
+     *
+     * 🔴 绝不能在没有对应权限时声明该类型（Android 14+ 会抛 SecurityException）。
+     * 返回 0 表示相机与麦克风都未授权，调用方须走不带类型的 [Service.startForeground] 重载。
+     */
+    private fun resolveForegroundTypes(): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return 0
+        var t = 0
+        if (checkSelfPermission(android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+            t = t or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+            t = t or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        return t
+    }
+
+    private fun toast(msg: String) {
+        runCatching {
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -231,8 +266,17 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         muted = false
         subtitle = ""
         if (!addCallView()) {
+            // 🔴 旧实现在这里只改了个 status 字符串 —— 但悬浮窗根本没挂上，界面不存在，
+            // 没有任何地方能显示这个 status，用户只看到「闪一下就没了」，完全不知道原因。
+            // 现在必须显式提示，并补齐权限缺失这一最常见原因。
             callActive = false
-            status = qstr(R.string.qk_03878)
+            val reason = when {
+                !Settings.canDrawOverlays(this) -> getString(R.string.qk_03911)
+                else -> getString(R.string.qk_03912)
+            }
+            status = reason
+            toast(reason)
+            Log.w(TAG, "startCall aborted: addCallView failed ($reason)")
             return
         }
         status = qstr(R.string.qk_03876)
@@ -286,12 +330,12 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                 context = this,
                 language = QuroSttPrefs.getLanguage(this),
                 partialResults = QuroSttPrefs.getPartial(this),
-                onPartial = { t -> if (t.isNotBlank()) status = qstr(R.string.qk_03879, (t).toString()) },
+                onPartial = { t -> if (t.isNotBlank()) status = qstr(R.string.qk_03879, t) },
                 onFinal = { text ->
                     if (!callActive) return@startListening
                     listening = false
                     if (text.isNotBlank()) {
-                        subtitle = qstr(R.string.qk_03900, (text).toString())
+                        subtitle = qstr(R.string.qk_03900, text)
                         status = qstr(R.string.qk_00093)
                         process(text)
                     } else {
@@ -301,7 +345,7 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                 },
                 onError = { _, msg ->
                     if (!callActive) return@startListening
-                    listening = false; status = qstr(R.string.qk_03882, (msg).toString()); scheduleListen()
+                    listening = false; status = qstr(R.string.qk_03882, msg); scheduleListen()
                 },
             )
         } catch (e: Throwable) {
@@ -325,9 +369,8 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         val cfg = QuroFunctionModelConfigRepository(applicationContext)
             .resolveConfig(QuroFunctionType.VIDEO_CALL, baseCfg)
 
-        // 视觉识别层：把当前实时画面作为图片注入本轮对话（当前模型支持视觉时）；
-        // 否则退化为视频识别层（用「视频通话 / 视频识别」配置描述画面并注入文字）。
-        injectFrameContext(cfg.model)
+        // 画面理解：三级降级链由 QuroFrameVisionRouter 判定（主模型视觉 → 视频通话模型 → 图像识别模型）。
+        injectFrameContext(cfg)
 
         status = qstr(R.string.qk_00093)
         launch {
@@ -374,28 +417,70 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         }
     }
 
-    // ──────────────────── 识别层：视觉 / 视频 ────────────────────
+    // ──────────────────── 画面理解层：主模型 → 视频通话模型 → 图像识别模型 ────────────────────
 
-    /** 把当前实时画面作为上下文注入会话：视觉模型→注入图片；非视觉→视频识别层生成文字描述。 */
-    private fun injectFrameContext(model: String) {
+    /**
+     * 把当前实时画面作为上下文注入本轮对话。
+     *
+     * 优先级完全交给纯函数 [QuroFrameVisionRouter.plan] 判定，本函数只负责执行：
+     *  - [QuroFrameVisionSource.MAIN_MODEL]：直接把帧喂给当前多模态模型「亲眼」看（零额外远程调用）。
+     *  - [QuroFrameVisionSource.VIDEO_CALL_MODEL]：主模型没视觉，但「功能模型配置 → 视频通话」
+     *    配了独立模型 → **直接用视频通话模型做视觉识别**。
+     *  - [QuroFrameVisionSource.IMAGE_RECOGNITION_MODEL]：以上都没有 → 用「功能模型配置 → 图像识别」**保底**。
+     *  - [QuroFrameVisionSource.NONE]：全都没配 → 不注入任何画面上下文，本轮退化为纯语音对话。
+     *
+     * @param mainCfg 本轮实际下发的对话模型配置（= 视频通话绑定解析结果）。
+     */
+    private fun injectFrameContext(mainCfg: QuroModelConfig) {
+        val repo = QuroFunctionModelConfigRepository(applicationContext)
+        val global = QuroModelConfigRepository(applicationContext).load()
+
+        val callCfg = repo.resolveConfig(QuroFunctionType.VIDEO_CALL, global)
+        val imageCfg = repo.resolveConfig(QuroFunctionType.IMAGE_RECOGNITION, global)
+
+        val callBinding = repo.getBinding(QuroFunctionType.VIDEO_CALL)
+        val imageBinding = repo.getBinding(QuroFunctionType.IMAGE_RECOGNITION)
+
+        val source = QuroFrameVisionRouter.plan(
+            mainModelHasVision = QuroFrameVisionRouter.isLikelyVisionModel(mainCfg.model),
+            mainHasApiKey = mainCfg.apiKey.isNotBlank(),
+            videoCall = QuroFrameVisionOption(
+                dedicatedModel = !callBinding.useGlobal && callBinding.model.isNotBlank(),
+                hasApiKey = callCfg.apiKey.isNotBlank(),
+            ),
+            imageRecognition = QuroFrameVisionOption(
+                dedicatedModel = !imageBinding.useGlobal && imageBinding.model.isNotBlank(),
+                hasApiKey = imageCfg.apiKey.isNotBlank(),
+            ),
+        )
+
+        // 先决策再截帧：判到 NONE 时连一次 Bitmap 都不用抓，省掉 640×480 的无谓开销。
+        if (source == QuroFrameVisionSource.NONE) return
         val frame = captureFrame() ?: return
-        if (isLikelyVisionModel(model)) {
-            // 视觉识别层：直接把图片喂给当前多模态模型「亲眼」看。
-            val att = QuroAttachmentKit.fromFile(this, frame, "image/jpeg")
-            store.add(
-                QuroMessage(
-                    role = "user",
-                    content = "[视频通话实时画面·请直接查看并描述]",
-                    attachments = listOf(att),
-                    hidden = true,
+
+        when (source) {
+            QuroFrameVisionSource.MAIN_MODEL -> {
+                val att = QuroAttachmentKit.fromFile(this, frame, "image/jpeg")
+                store.add(
+                    QuroMessage(
+                        role = "user",
+                        content = "[视频通话实时画面·请直接查看并描述]",
+                        attachments = listOf(att),
+                        hidden = true,
+                    )
                 )
-            )
-        } else {
-            // 视频识别层：调绑定模型描述画面，注入文字上下文。
-            val caption = captionFrame(frame)
-            if (caption != null) {
-                store.add(QuroMessage(role = "user", content = "[视频画面识别] $caption", hidden = true))
             }
+            // 🔴 本级失败（网络/模型名写错/超时）时继续往下退，绝不因为一层挂了就丢掉整轮画面理解。
+            QuroFrameVisionSource.VIDEO_CALL_MODEL -> {
+                val caption = captionFrame(frame, callCfg)
+                    ?: captionFrame(frame, imageCfg)
+                if (caption != null) store.add(QuroMessage(role = "user", content = "[视频画面识别] $caption", hidden = true))
+            }
+            QuroFrameVisionSource.IMAGE_RECOGNITION_MODEL -> {
+                val caption = captionFrame(frame, imageCfg)
+                if (caption != null) store.add(QuroMessage(role = "user", content = "[视频画面识别] $caption", hidden = true))
+            }
+            QuroFrameVisionSource.NONE -> Unit
         }
     }
 
@@ -415,22 +500,19 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
     }
 
     /**
-     * 视频识别层：把单帧发给绑定模型，返回一句话描述（无密钥返回 null）。
-     * 优先用「视频通话」的独立绑定（视频通话模型 = 画面理解模型），未独立配置时回落「视频识别」。
+     * 用指定配置把单帧发给一个**视觉模型**，返回一句话画面描述。
+     *
+     * 与旧实现的差异：入参从「内部自己解析配置」改为「调用方显式传入已解析好的 [cfg]」——
+     * 降级链的选路集中在 [QuroFrameVisionRouter]，这里退化成纯粹的「一次远程调用」，
+     * 因此主模型 / 视频通话模型 / 图像识别模型三条路径能共用同一份实现，不会各自漂移。
+     *
+     * 无密钥或调用失败返回 null，由调用方决定是否退到下一级。
      */
-    private fun captionFrame(file: File): String? {
+    private fun captionFrame(file: File, cfg: QuroModelConfig): String? {
         return try {
-            val global = QuroModelConfigRepository(applicationContext).load()
-            val repo = QuroFunctionModelConfigRepository(applicationContext)
-            val callBinding = repo.getBinding(QuroFunctionType.VIDEO_CALL)
-            val vcfg = if (!callBinding.useGlobal && callBinding.model.isNotBlank()) {
-                repo.resolveConfig(QuroFunctionType.VIDEO_CALL, global)
-            } else {
-                repo.resolveConfig(QuroFunctionType.VIDEO_RECOGNITION, global)
-            }
-            if (vcfg.apiKey.isBlank()) return null
-            val model = vcfg.model.ifBlank { "gpt-4o" }
-            val baseUrl = vcfg.baseUrl.ifBlank { "https://api.openai.com/v1" }
+            if (cfg.apiKey.isBlank()) return null
+            val model = cfg.model.ifBlank { "gpt-4o" }
+            val baseUrl = cfg.baseUrl.ifBlank { "https://api.openai.com/v1" }
             val b64 = android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP)
             val json = JSONObject().apply {
                 put("model", model)
@@ -450,28 +532,21 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
             }
             val req = Request.Builder()
                 .url(baseUrl.trimEnd('/') + "/chat/completions")
-                .addHeader("Authorization", "Bearer ${vcfg.apiKey}")
+                .addHeader("Authorization", "Bearer ${cfg.apiKey}")
                 .post(json.toString().toRequestBody("application/json".toMediaType()))
                 .build()
             val resp = httpClient.newCall(req).execute()
             if (resp.isSuccessful) {
                 val j = JSONObject(resp.body?.string() ?: "")
                 j.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
-            } else null
+                    .takeIf { it.isNotBlank() }
+            } else {
+                Log.w(TAG, "captionFrame HTTP ${resp.code} model=$model")
+                null
+            }
         } catch (e: Throwable) {
             Log.e(TAG, "captionFrame failed", e); null
         }
-    }
-
-    /** 当前主模型是否大概率支持视觉输入（与 VisualAnalysisTool 同源判断）。默认乐观。 */
-    private fun isLikelyVisionModel(name: String): Boolean {
-        val n = name.lowercase()
-        if (n.isBlank()) return true
-        val textOnly = listOf("gpt-3.5", "text-embedding", "babbage", "davinci", "ada", "tts-1", "whisper",
-            "embedding", "instruct", "llama-2", "llama2", "qwen2-0.5b", "qwen2-1.5b", "qwen2-7b-instruct",
-            "qwen2.5-0.5b", "qwen2.5-1.5b", "qwen3-0.6b", "qwen3-1.7b")
-        if (textOnly.any { n.contains(it) }) return false
-        return true
     }
 
     // ──────────────────── Camera2 ────────────────────
@@ -533,9 +608,19 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         captureSession = null; cameraDevice = null
     }
 
-    // ──────────────────── 悬浮窗 UI ────────────────────
+    // ──────────────────── 全屏通话窗 ────────────────────
 
-    /** 挂载通话界面；返回是否成功（无悬浮窗权限时返回 false）。 */
+    /**
+     * 挂载**全屏**通话界面；返回是否成功（无悬浮窗权限时返回 false）。
+     *
+     * 旧实现是 78%×62%（最大 420×640）的小悬浮窗，且顶部状态条是拖拽把手 —— 画面被压得很小，
+     * 竖屏手机上预览区只剩一条。现在改为 [WindowManager.LayoutParams.MATCH_PARENT] 真全屏：
+     *  - 尺寸铺满整屏，`FLAG_LAYOUT_IN_SCREEN` 让窗口延伸到状态栏/导航栏之下，
+     *    再由 Compose 侧 [WindowInsets.safeDrawing] 把内容压回安全区（刘海/挖孔/手势条都不遮挡）；
+     *  - 保留 [WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE]：全屏不等于抢输入焦点，
+     *    去掉它会让通话窗吞掉键盘与返回键，用户无法在通话中切到别的 App；
+     *  - 全屏后没有「拖动」语义，[viewParams] 也不再参与拖拽，仅保留给 [removeCallView]。
+     */
     private fun addCallView(): Boolean {
         if (composeView != null) return true
         if (!Settings.canDrawOverlays(this)) {
@@ -552,21 +637,21 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                 setContent { VideoCallScreen() }
             }
             composeView = view
-            val dm = resources.displayMetrics
-            val w = (dm.widthPixels * 0.78).toInt().coerceAtMost(420)
-            val h = (dm.heightPixels * 0.62).toInt().coerceAtMost(640)
             val params = WindowManager.LayoutParams(
-                w, h,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 else
                     WindowManager.LayoutParams.TYPE_PHONE,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT,
             ).apply {
-                gravity = Gravity.TOP or Gravity.LEFT
-                x = ((dm.widthPixels - w) / 2).coerceAtLeast(0)
-                y = 120
+                gravity = Gravity.TOP or Gravity.START
+                x = 0
+                y = 0
             }
             viewParams = params
             windowManager.addView(view, params)
@@ -588,33 +673,20 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         composeLifecycleOwner = null
     }
 
-    /** 拖动悬浮窗（顶部状态条为拖拽把手）。 */
-    private fun dragBy(dx: Int, dy: Int) {
-        val v = composeView ?: return
-        val p = viewParams ?: return
-        p.x += dx; p.y += dy
-        try { windowManager.updateViewLayout(v, p) } catch (_: Throwable) {}
-    }
-
     @Composable
     private fun VideoCallScreen() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(18.dp))
-                .background(Color(0xF2101216)),
+                .background(Color(0xFF0B0D10))
+                // 全屏窗口会盖住状态栏/导航栏/刘海，用 safeDrawing 把内容压回可视区。
+                .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
-            // ── ① 顶部状态条（拖拽把手 + 状态 + 关闭）──
+            // ── ① 顶部状态条（全屏后不再是拖拽把手，只保留状态与关闭）──
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .pointerInput(Unit) {
-                        detectDragGestures { change, drag ->
-                            change.consume()
-                            dragBy(drag.x.toInt(), drag.y.toInt())
-                        }
-                    }
-                    .padding(start = 12.dp, end = 6.dp, top = 10.dp, bottom = 6.dp),
+                    .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
@@ -628,30 +700,29 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                     Text(
                         stringResource(R.string.qk_00183),
                         color = Color.White,
-                        fontSize = 13.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                     )
-                    Text(status, color = Color(0xFFB9BDC6), fontSize = 11.sp, maxLines = 1)
+                    Text(status, color = Color(0xFFB9BDC6), fontSize = 12.sp, maxLines = 1)
                 }
                 Box(
                     Modifier
-                        .size(30.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
                         .background(Color(0x33FFFFFF))
                         .clickable { stopCall() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Close, stringResource(R.string.qk_00011), Modifier.size(16.dp), tint = Color.White)
+                    Icon(Icons.Filled.Close, stringResource(R.string.qk_00011), Modifier.size(18.dp), tint = Color.White)
                 }
             }
-            // ── ② 实时预览（真机摄像头画面）+ 字幕 ──
+            // ── ② 实时预览：全屏铺满，不再有外边距与圆角 ──
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 10.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(Color.Black),
             ) {
                 AndroidView(
@@ -667,22 +738,23 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                     Text(
                         subtitle,
                         color = Color.White,
-                        fontSize = 11.sp,
+                        fontSize = 13.sp,
                         maxLines = 4,
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .fillMaxWidth()
-                            .background(Color(0x99000000))
-                            .padding(8.dp),
+                            .background(Color(0xB3000000))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                     )
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            // ── ③ 底部控制：麦克风 / 切换摄像头 / 挂断 ──
+            Spacer(Modifier.height(16.dp))
+            // ── ③ 底部控制：麦克风 / 切换摄像头 / 挂断（全屏下加大间距与触控目标）──
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 20.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -705,22 +777,22 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         }
     }
 
-    /** 圆形通话控制键 + 底部小字标签。 */
+    /** 圆形通话控制键 + 底部小字标签（触控目标 56dp，满足无障碍下限）。 */
     @Composable
     private fun CallCircle(icon: ImageVector, label: String, background: Color, onClick: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 Modifier
-                    .size(52.dp)
+                    .size(56.dp)
                     .clip(CircleShape)
                     .background(background)
                     .clickable(onClick = onClick),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(icon, label, Modifier.size(24.dp), tint = Color.White)
+                Icon(icon, label, Modifier.size(26.dp), tint = Color.White)
             }
-            Spacer(Modifier.height(4.dp))
-            Text(label, color = Color(0xFFB9BDC6), fontSize = 10.sp, maxLines = 1)
+            Spacer(Modifier.height(6.dp))
+            Text(label, color = Color(0xFFB9BDC6), fontSize = 11.sp, maxLines = 1)
         }
     }
 

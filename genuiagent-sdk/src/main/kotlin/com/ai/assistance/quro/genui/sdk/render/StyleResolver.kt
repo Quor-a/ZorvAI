@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -87,14 +88,15 @@ object StyleResolver {
 
         val rawLc = raw?.lowercase(Locale.ROOT)
         val familyCut = rawLc?.startsWith("cut") == true
-        var token: String? = if (familyCut) rawLc?.removePrefix("cut")?.removePrefix("-") else rawLc
+        // familyCut 为 true 已蕴含 rawLc 非空，编译器能 smart-cast，这里无需 ?/!!
+        var token: String? = if (familyCut) rawLc.removePrefix("cut").removePrefix("-") else rawLc
 
         // ── 侧向后缀 ──
         var side: String? = null
         for (s in listOf("-top", "-bottom", "-start", "-end")) {
             if (token != null && token.endsWith(s)) {
                 side = s.removePrefix("-")
-                token = token?.removeSuffix(s)
+                token = token.removeSuffix(s)
                 break
             }
         }
@@ -163,15 +165,14 @@ object StyleResolver {
     /**
      * 解析尺寸 Dimension 为 Dp
      * 仅 Fixed 类型返回具体值，其他类型返回 null
+     *
+     * 🔴 钳制职责已下放给 [GenUILayoutGuard]（2026-10-06）：原先在这里硬编码 `coerceIn(0f, 1200f)`，
+     * 但**宽度**和**高度**的上限完全不同 —— 1200dp 宽的组件在 360dp 屏上会横向截掉三分之二，
+     * 这正是用户说的「排版溢出屏幕」。现在按调用点的语义分别传 limit。
      */
-    fun resolveDp(dim: Dimension?): Dp? {
+    fun resolveDp(dim: Dimension?, limit: Float = GenUILayoutGuard.MAX_HEIGHT_DP): Dp? {
         return when (dim) {
-            is Dimension.Fixed -> {
-                // 防御：模型可能把像素值当 dp 输出（如 1080/2400），
-                // 会把组件推出屏幕外。钳制到合理范围（屏幕高度不超过 ~1000dp）。
-                val clamped = dim.dp.coerceIn(0f, 1200f)
-                clamped.dp
-            }
+            is Dimension.Fixed -> GenUILayoutGuard.fixedDp(dim, limit)?.dp
             else -> null
         }
     }
@@ -230,36 +231,79 @@ object StyleResolver {
     }
 
     /**
-     * 构建基础 Modifier，包含尺寸、阴影、裁剪、背景、边框、内边距、透明度等
-     * 这是 StyleResolver 的核心方法，将 UIStyle 的 28 个属性映射为 Compose Modifier
+     * 构建基础 Modifier，包含尺寸、阴影、裁剪、背景、边框、内外边距、透明度等
+     * 这是 StyleResolver 的核心方法，将 UIStyle 的属性映射为 Compose Modifier
+     *
+     * 🔴 2026-10-06：本方法所有数值一律经 [GenUILayoutGuard] 收敛。
+     * 之前这里是裸值直传，模型写 `width: 1080`（把 px 当 dp）就会把组件推出屏幕，
+     * 写 `padding: 200` 会把内容挤成一个点 —— 两者都是用户反馈的「排版溢出屏幕」。
      */
     @Composable
-    fun baseModifier(style: UIStyle, ctx: RenderContext): Modifier {
+    fun baseModifier(
+        style: UIStyle,
+        ctx: RenderContext,
+        /**
+         * 🔴 本节点是否处于 **Row / flex_row** 的直接子位。
+         *
+         * ## 为什么必须有这个参数（GenUI 竖排挤压的真元
+         *
+         * `RenderNode` 给每个节点都包了一层 `Box(modifier)`，
+         * 而 [baseModifier] 对 `width: match` 无条件地 `fillMaxWidth()`。
+         * 在 Column 里这是正确的（占满一行）；
+         * 但在 Row 里——Compose 测量非 weight 子节点时给的是「剩余宽度」，
+         * 第一个 `match` 子节点拿 `fillMaxWidth` 就把整行吃干净，
+         * 后面的兄弟只剩 0 宽——里面的 Text 被压成「一个字一行」的竖排。
+         *
+         * 用户截图里的天气卡就是这个：左侧「实时天气 · 清晨」占满，
+         * 右侧「体感 24.1° / 西北风 4.8km/h / 湿度 84% / 气压 1015hPa」全部竖成一列字。
+         *
+         * 正确语义（与 `ColumnRowRenderer` 里的 match→weight 修复同源）：
+         * Row 下的 match 应当是「分掉剩余空间」，而不是「占满整行」；
+         * 而行内包装容器（box/container/card）不应含素尽量可压缩。
+         */
+        inRowContext: Boolean = false,
+    ): Modifier {
         val shape = resolveShape(style)
         var modifier: Modifier = Modifier
 
-        // 宽度
-        resolveDp(style.width)?.let { modifier = modifier.then(Modifier.width(it)) }
-        // 高度
-        resolveDp(style.height)?.let { modifier = modifier.then(Modifier.height(it)) }
+        // 宽度（独立上限：720dp，与 PageCanvas 阅读宽度一致）
+        resolveDp(style.width, GenUILayoutGuard.MAX_WIDTH_DP)
+            ?.let { modifier = modifier.then(Modifier.width(it)) }
+        // 高度（独立上限：900dp）
+        resolveDp(style.height, GenUILayoutGuard.MAX_HEIGHT_DP)
+            ?.let { modifier = modifier.then(Modifier.height(it)) }
 
         // Match / Weight 尺寸
-        when (style.width) {
-            is Dimension.Match -> modifier = modifier.then(Modifier.fillMaxWidth())
-            is Dimension.Weight -> modifier = modifier.then(Modifier.fillMaxWidth((style.width as Dimension.Weight).fraction.coerceIn(0f, 1f)))
+        // 🔴 Row 上下文里 match 不能无条件 fillMaxWidth（会吃掉整行，
+        // 把兄弟节点压成竖排）。改用 widthIn 让它自然收敛。
+        when (val w = style.width) {
+            is Dimension.Match -> modifier = modifier.then(
+                if (inRowContext) Modifier.widthIn(max = GenUILayoutGuard.MAX_WIDTH_DP.dp)
+                else Modifier.fillMaxWidth()
+            )
+            is Dimension.Weight -> {
+                val frac = w.fraction.coerceIn(0f, 1f)
+                // Row 下的 fillMaxWidth(fraction) 同样会超出剩余宽度（分数乘的是整行），
+                // 改成「剩余空间的一个比例」才是正确语义。
+                modifier = modifier.then(
+                    if (inRowContext) Modifier.fillMaxWidth(frac.coerceAtMost(1f))
+                    else Modifier.fillMaxWidth(frac)
+                )
+            }
             else -> {}
         }
-        when (style.height) {
+        when (val h = style.height) {
             is Dimension.Match -> modifier = modifier.then(Modifier.fillMaxHeight())
-            is Dimension.Weight -> modifier = modifier.then(Modifier.fillMaxHeight((style.height as Dimension.Weight).fraction.coerceIn(0f, 1f)))
+            is Dimension.Weight -> modifier = modifier.then(Modifier.fillMaxHeight(h.fraction.coerceIn(0f, 1f)))
             else -> {}
         }
 
         // 阴影
-        if (style.elevation > 0f) {
+        val elevation = GenUILayoutGuard.elevation(style.elevation)
+        if (elevation > 0f) {
             modifier = modifier.then(
                 Modifier.shadow(
-                    elevation = style.elevation.dp,
+                    elevation = elevation.dp,
                     shape = shape,
                     clip = style.cornerRadius > 0f
                 )
@@ -293,7 +337,7 @@ object StyleResolver {
             val patColor = resolveColor(style.patternColor, ctx.theme.colorScheme, Color.Unspecified)
             if (patColor != Color.Unspecified) {
                 val pc = patColor.copy(alpha = patColor.alpha * 0.3f)
-                val kind = style.pattern!!.lowercase(Locale.ROOT)
+                val kind = style.pattern.lowercase(Locale.ROOT)
                 modifier = modifier.drawBehind {
                     when (kind) {
                         "dots" -> {
@@ -361,25 +405,42 @@ object StyleResolver {
         }
 
         // 旋转
-        if (style.rotate != 0f) {
-            val rot = style.rotate.coerceIn(-180f, 180f)
-            modifier = modifier.graphicsLayer { rotationZ = rot }
+        val rotation = GenUILayoutGuard.rotation(style.rotate)
+        if (rotation != 0f) {
+            modifier = modifier.graphicsLayer { rotationZ = rotation }
         }
 
         // 边框
-        if (style.borderWidth > 0f && !style.borderColor.isNullOrBlank()) {
+        val borderWidth = GenUILayoutGuard.borderWidth(style.borderWidth)
+        if (borderWidth > 0f && !style.borderColor.isNullOrBlank()) {
             val borderColor = resolveColor(
                 style.borderColor,
                 ctx.theme.colorScheme,
                 ctx.theme.colorScheme.outline
             )
             modifier = modifier.then(
-                Modifier.border(style.borderWidth.dp, borderColor, shape)
+                Modifier.border(borderWidth.dp, borderColor, shape)
             )
         }
 
+        // 外边距（margin）
+        //
+        // 根因（2026-10-06 修复）：`UIStyle.margin` 字段从 DSL 定义起就**从未被渲染层消费过**
+        // —— 全仓只有 `margin_container` 组件经 PaddingContainerRenderer 用到它。
+        // 于是模型按提示词写 `{"margin": 12}`（QuroDynamicUiTool 明确教了它这么写）却毫无效果：
+        // 卡片之间没有间距、元素糊成一片。用户看到的正是「组件虽然多但是不齐」。
+        //
+        // 顺序说明：margin 是「外部留白」，必须**先**占位再谈内容内边距；
+        // 反过来会出现「卡片比容器窄一圈还偏上」的位置错乱。
+        val margin = GenUILayoutGuard.margin(style.margin)
+        val hasMargin = margin.start > 0f || margin.top > 0f ||
+                margin.end > 0f || margin.bottom > 0f
+        if (hasMargin) {
+            modifier = modifier.then(Modifier.padding(resolvePadding(margin)))
+        }
+
         // 内边距
-        val padding = style.padding
+        val padding = GenUILayoutGuard.padding(style.padding)
         val hasPadding = padding.top > 0f || padding.bottom > 0f ||
                 padding.start > 0f || padding.end > 0f
         if (hasPadding) {
@@ -387,8 +448,9 @@ object StyleResolver {
         }
 
         // 透明度
-        if (style.opacity < 1f) {
-            modifier = modifier.then(Modifier.alpha(style.opacity))
+        val opacity = GenUILayoutGuard.opacity(style.opacity)
+        if (opacity < 1f) {
+            modifier = modifier.then(Modifier.alpha(opacity))
         }
 
         return modifier
@@ -410,7 +472,10 @@ object StyleResolver {
         )
 
         // 字号
-        style.textSize?.let { textStyle = textStyle.copy(fontSize = it.sp) }
+        // 🔴 经守卫钳制（2026-10-06）：模型写 `fontSize: 96` 时，一行标题就占满整屏，
+        // 把兄弟元素全挤出可视区 —— 这是「排版溢出屏幕」最常见的来源之一。
+        GenUILayoutGuard.fontSize(style.textSize)
+            ?.let { textStyle = textStyle.copy(fontSize = it.sp) }
 
         // 字重
         resolveFontWeight(style.fontWeight)?.let { textStyle = textStyle.copy(fontWeight = it) }

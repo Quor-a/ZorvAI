@@ -54,5 +54,32 @@ private fun iconRes(name: String): Int = when (name) {
     "square"           -> R.drawable.ic_square
     "code"             -> R.drawable.ic_code
     "maximize"         -> R.drawable.ic_maximize
+
+    // ── 工具调用族专用图标（qic_* 前缀，本项目自绘）──
+    // 🔴 这些是 drawable 资源名，**必须与 res/drawable 下的文件名逐一对应**。
+    // 旧实现里 toolCategory 用的 "terminal" / "globe" / "folder-open" 等名字
+    // 在本仓根本没有对应 drawable，全部落到 else -> ic_x（显示一个 X），
+    // 所以工具图标此前一律是错的。
+    "qic_code_run"     -> R.drawable.qic_code_run
+    "qic_file_write"   -> R.drawable.qic_file_write
+    "qic_file_read"    -> R.drawable.qic_file_read
+    "qic_web"          -> R.drawable.qic_web
+    "qic_terminal"     -> R.drawable.qic_terminal
+    "qic_device"       -> R.drawable.qic_device
+    "qic_system"       -> R.drawable.qic_system
+    "qic_doc"          -> R.drawable.qic_doc
+    "qic_media"        -> R.drawable.qic_media
+    "qic_memory"       -> R.drawable.qic_memory
+    "qic_ui"           -> R.drawable.qic_ui
+    "qic_search"       -> R.drawable.qic_search
+    "qic_other"        -> R.drawable.qic_other
+
+    // ── 工具状态图标（本项目自绘，替代不存在的 lucide check/info/alert-triangle）──
+    "qic_ok"           -> R.drawable.qic_ok
+    "qic_fail"         -> R.drawable.qic_fail
+    "qic_warn"         -> R.drawable.qic_warn
+    "qic_info"         -> R.drawable.qic_info
+    "qic_running"      -> R.drawable.qic_running
+
     else                -> R.drawable.ic_x
 }

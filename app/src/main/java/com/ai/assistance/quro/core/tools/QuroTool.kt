@@ -193,6 +193,13 @@ class QuroToolRegistry {
             "knowledge_search", "knowledge_add", "knowledge_manage", "knowledge_rag_search",
             // 文档生成（aiWPS：本地生成 WPS / Office 兼容 .docx/.xlsx/.pptx，零外部依赖）
             "aiwps_create",
+            // CodeCanvas 出图后端（外部 FastAPI 渲染服务）：确定性渲染，同样输入永远出同样的图，
+            // 适合海报 / 报表 / 代码卡这类要**精确排版**的内容（image_gen 走厂商生图 API，适合创意图）。
+            // 🔴 必须进 coreNames：coreSpecs 是「关掉完整工具集」时的下发集，也是
+            //   appendCapabilityAwareness 的同源输入；漏在这里 → 默认配置下模型看不到、
+            //   系统提示词的工具清单里也不会出现（用户报「AI 根本查不到」）。
+            "codecanvas_probe", "codecanvas_script", "codecanvas_code_card",
+            "codecanvas_markup", "codecanvas_llm_code",
             // 增强文档创建（md/html/json/xml/yaml/css/js/svg/odt/epub/rtf 等 17 种，含 AIP 文档导出）
             "enhanced_doc_create",
             // 后台 AIP 排版合成（整篇长文档/PPT/报告以工具调用形式产出，对话框渲染 B 通道 Canvas 引擎）

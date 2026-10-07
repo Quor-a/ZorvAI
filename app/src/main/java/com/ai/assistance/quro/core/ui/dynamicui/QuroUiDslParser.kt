@@ -191,9 +191,40 @@ object QuroUiDslParser {
         // 截掉首个 { / [ 之前的非 JSON 前缀（如「这是卡片：」）
         val first = s.indexOfFirst { it == '{' || it == '[' }
         if (first > 0) s = s.substring(first)
-        // 截掉末个 } / ] 之后的尾部垃圾（如残留的 ``` 或说明文字）
-        val last = s.indexOfLast { it == '}' || it == ']' }
-        if (last in 0 until s.length - 1) s = s.substring(0, last + 1)
+        // 🔴🔴🔴 截尾部的正确口径（#181「内容明明在屏幕上却只显示空数组」的真凶）。
+        //
+        // 旧实现：`val last = s.indexOfLast { it == '}' || it == ']' }` 然后截到last+1。
+        // 它**按字符位置**找闭合符，既不看结构配对、也不看字符串态，于是：
+        //
+        //   输入： [\n,\n,\n,\n]\n• 选项 A\n• 选项 B
+        //   旧输出：[\n,\n,\n\n]          ←「选项 A / B」被整段砍掉
+        //
+        // 真机截图里正是这样：失败框显示一个空数组，而「• 选项 A」「• 选项 B」
+        // 出现在它**下面**（那是另一段内容）。于是 JSONArray 解析出空壳 → 报红字。
+        //
+        // 现在改成：从起点做**结构配对扫描**（跳过双引号字符串内部），
+        // 找到与起点配对的闭合符：
+        //  - 配对成功 → JSON 本体 = [起点..配对位]，**尾部残留另行保留**（不丢内容）
+        //  - 配对失败（流式截断）→ 退回 indexOfLast 的老行为，由sanitizeJson 补齐
+        val open = s.firstOrNull { it == '{' || it == '[' }
+        if (open != null) {
+            val close = if (open == '{') '}' else ']'
+            val matched = findMatchingClose(s, 0, open, close)
+            when {
+                //配对成功：尾部有残留时，把它**保留下来**（追加换行，避免与 JSON 粘连）
+                matched != null && matched < s.length - 1 -> {
+                    val tail = s.substring(matched + 1).trim()
+                    val body = s.substring(0, matched + 1)
+                    s = if (tail.isEmpty()) body else body + "\n" + tail
+                }
+                matched != null -> s = s.substring(0, matched + 1)
+                // 配对失败 → 流式未闭合，交给 sanitizeJson 的栈算法补齐（老行为）
+                else -> {
+                    val last = s.indexOfLast { it == '}' || it == ']' }
+                    if (last in 0 until s.length - 1) s = s.substring(0, last + 1)
+                }
+            }
+        }
         // 单引号归一为双引号（仅在成对作为字符串定界符、且不在双引号串内时）
         s = normalizeQuotes(s)
         // 修复：原 brokenKeySyntax/trailingComma 正则在字符串内容里也生效，
@@ -245,6 +276,70 @@ object QuroUiDslParser {
             }
         }
         return out.toString()
+    }
+
+    /**
+     * 拆出「JSON 本体」与「尾部正文」（#181）。
+     *
+     * 真机截图的形态是**一个空壳数组 + 后面跟正文**：
+     * ```
+     * [
+     * ,
+     * ,
+     * ]
+     * • 选项 A
+     * • 选项 B
+     * ```
+     * 直接 `JSONArray(整串)` 要么抛异常、要么只看到那个空壳，
+     * 于是用户看到「⚠️ 解析失败 + 空数组」，而真正的内容一个都没渲染出来。
+     *
+     * @return Pair(本体, 尾部正文)。配对失败时整体作为本体、尾部为空
+     *   （流式截断场景交给 [sanitizeJson] 补齐，不要在这里丢内容）。
+     */
+    private fun splitBodyAndTail(s: String): Pair<String, String> {
+        val open = s.firstOrNull { it == '{' || it == '[' } ?: return s to ""
+        val close = if (open == '{') '}' else ']'
+        val matched = findMatchingClose(s, 0, open, close) ?: return s to ""
+        if (matched >= s.length - 1) return s to ""
+        return s.substring(0, matched + 1) to s.substring(matched + 1)
+    }
+
+    /**
+     * 从 [from] 起（该位置必须是 [open]）做结构配对扫描，返回匹配闭合符下标；找不到返回 null。
+     *
+     * 🔴 必须跳过双引号字符串内部：字符串内容里的 `{` `}` `[` `]` 不参与结构配对，
+     * 否则 `{"text":"用 } 表示"}` 会被算成提前闭合。
+     *
+     * 栈算法：open 入栈；遇到与栈顶匹配的闭合符则出栈，栈空时返回该下标。
+     */
+    private fun findMatchingClose(s: String, from: Int, open: Char, close: Char): Int? {
+        val stack = ArrayDeque<Char>()
+        var inStr = false
+        var escaped = false
+        for (i in from until s.length) {
+            val c = s[i]
+            if (escaped) { escaped = false; continue }
+            if (inStr && c == '\\') { escaped = true; continue }
+            if (c == '"') { inStr = !inStr; continue }
+            if (inStr) continue
+            when (c) {
+                '{' -> stack.addLast('{')
+                '[' -> stack.addLast('[')
+                '}', ']' -> {
+                    val want = if (c == '}') '{' else '['
+                    if (stack.lastOrNull() == want) {
+                        stack.removeLast()
+                        if (stack.isEmpty()) return i
+                    } else {
+                        // 闭合顺序错乱：弹到匹配为止；弹空说明结构已乱，返回 null 走兜底
+                        while (stack.isNotEmpty() && stack.last() != want) stack.removeLast()
+                        if (stack.isNotEmpty()) stack.removeLast()
+                        if (stack.isEmpty()) return i
+                    }
+                }
+            }
+        }
+        return null
     }
 
     /**
@@ -330,12 +425,76 @@ object QuroUiDslParser {
         return try {
             when (repaired.first()) {
                 '[' -> {
-                    val arr = JSONArray(repaired)
+                    // 🔴 先把「JSON 本体」与「尾部正文」拆开。
+                    //
+                    // `JSONArray(整串)` 在本体后面还有文字时会抛异常（真机截图就是这个形态：
+                    // 一个空壳数组 + 下面跟着「• 选项 A / • 选项 B」）。
+                    // 这里只喂本体给 JSONArray，尾部文字单独兜住，保证**零内容丢失**。
+                    val (jsonBody, tailText) = splitBodyAndTail(repaired)
+                    val arr = JSONArray(jsonBody)
+                    // 🔴🔴 三形态兜底，**与 [extractSlotContent] 完全同源**。
+                    //
+                    // 旧实现只认`arr.optJSONObject(idx)`：数组元素一旦不是 JSON 对象
+                    // （纯字符串行、嵌套数组、数字/布尔）就全部被 mapNotNull 丢掉，
+                    // children 必为空 → 报「数组为空」→ UI 回退显示原始 JSON。
+                    // 用户实测拿到的正是「⚠️动态 UI 解析失败：数组为空」+ 一堆 `[ , , , , , ]`。
+                    //
+                    // 为什么这与 #175 的原则冲突就必须修：#175 定了「纯文字也必须看得见」，
+                    // 动态 UI **内部**的 extractSlotContent 早就实现了三形态，
+                    // 而顶层数组分支漏了 —— 同一个洞，只是换了个入口。
+                    // toMutableList：#181 要在数组元素之后追加「尾部正文」节点，
+                    // mapNotNull 产出的是不可变 List，不能 add。
                     val children = (0 until arr.length()).mapNotNull { idx ->
-                        arr.optJSONObject(idx)?.let { buildNode(it) }
+                        when (val e = arr.opt(idx)) {
+                            null, JSONObject.NULL -> null
+                            is JSONObject -> buildNode(e)
+                            // 嵌套数组 → 递归成竖排容器（内层元素同样走三形态）
+                            is JSONArray -> {
+                                val kids = (0 until e.length()).mapNotNull { i ->
+                                    when (val k = e.opt(i)) {
+                                        null, JSONObject.NULL -> null
+                                        is JSONObject -> buildNode(k)
+                                        else -> k.toString()
+                                            .takeIf { it.isNotBlank() && it != "null" }
+                                            ?.let { QuroMarkdownNode(value = it) }
+                                    }
+                                }
+                                if (kids.isEmpty()) null else QuroColumnNode(children = kids)
+                            }
+                            // 标量（含 String）：纯文字也要看得见，绝不当成「没内容」
+                            else -> e.toString()
+                                .takeIf { it.isNotBlank() && it != "null" }
+                                ?.let { QuroMarkdownNode(value = it) }
+                        }
                     }
-                    if (children.isEmpty()) QuroUiParseResult.Failure(repaired, "数组为空")
-                    else QuroUiParseResult.Success(QuroColumnNode(children = children), repaired)
+                    .toMutableList()
+                    // 🔴 把尾部正文接在组件之后（#181 真机：选项 A/B 就在空壳数组下面）
+                    val tail = tailText.trim()
+                    if (tail.isNotEmpty()) {
+                        children.add(QuroMarkdownNode(value = tail))
+                    }
+                    if (children.isEmpty()) {
+                        // 🔴🔴🔴 绝不返回 Failure（#181 真机截图里的「⚠️ 动态 UI 解析失败」）。
+                        //
+                        // 现象：`[` + 若干换行/逗号 + `]`，元素全空 —— 用户只看到一句红字
+                        // 和一个空数组，既看不到内容、也不知道该改什么。
+                        //
+                        // 已核实 [repair] 的三个子步骤与 [extractUiBlocks] 都无法产出这种空壳
+                        // （用 Python 等价移植跑 8 组输入逐一验证），所以**不要**在这里
+                        // 继续猜「是哪个正则删了内容」——那条路已经走死。
+                        //
+                        // 正确口径：**读不出来 ≠ 没有**。
+                        //  - 有肉眼可读的正文（换行/文字/非标点残片）→ 当 Markdown 文本显示，
+                        //    用户至少看得见 AI 到底写了什么，而不是一个空数组。
+                        //  - 真的什么都没有 → 才降级为「已折叠的原文预览」，同样**不报错**。
+                        //
+                        // 两种情况都不抛Failure，因为失败分支在 UI 上渲染成
+                        // 红字 + 原始 JSON（[ChatScreen] 的 DynamicUiBlock Failure 分支），
+                        // 那正是用户截图里最刺眼的东西。
+                        fallbackForEmptyArray(repaired)
+                    } else {
+                        QuroUiParseResult.Success(QuroColumnNode(children = children), repaired)
+                    }
                 }
                 '{' -> {
                     val node = buildNode(JSONObject(repaired))
@@ -348,6 +507,38 @@ object QuroUiDslParser {
             }
         } catch (e: Exception) {
             QuroUiParseResult.Failure(repaired, e.message ?: "JSON 解析失败")
+        }
+    }
+
+    /**
+     * 顶层数组一个元素都读不出来时的降级（#181）。
+     *
+     * **绝不返回 Failure** —— 见调用处注释：失败分支会被渲染成红字+ 原始 JSON，
+     * 那正是用户报的问题本身。
+     *
+     * 判定「有可读内容」的口径：剥掉 JSON 的结构字符（`[ ] { } , :` 与空白）
+     * 后若还剩下字符，就说明原文里确实有内容（多半是被结构字符包起来的文字/组件），
+     * 直接当 Markdown 显示；否则退成一句「已收到但无法渲染」的说明 + 原文。
+     */
+    private fun fallbackForEmptyArray(repaired: String): QuroUiParseResult {
+        val meaningful = repaired.filterNot { it.isWhitespace() || it in "[],{}\"" }.trim()
+        return if (meaningful.isNotEmpty()) {
+            // 有内容 → 当文本渲染，绝不让用户面对一个空数组
+            QuroUiParseResult.Success(
+                QuroColumnNode(children = listOf(QuroMarkdownNode(value = meaningful))),
+                repaired,
+            )
+        } else {
+            // 连结构字符都没剩下（典型就是 `[ , , , , , ]`）：说明这确实是个空数组。
+            // 依然**不报错** —— 报一句中性说明，好过一句「解析失败：请检查格式」的红字。
+            QuroUiParseResult.Success(
+                QuroColumnNode(
+                    children = listOf(
+                        QuroMarkdownNode(value = "（这一段内容是空的，没有可显示的组件）")
+                    )
+                ),
+                repaired,
+            )
         }
     }
 
@@ -641,14 +832,35 @@ object QuroUiDslParser {
                     style = buildStyle(json),
                     items = json.optStringList("items"),
                 )
+                // 🔴 折叠类容器同样中招「展开后空白」：body 写成组件对象时 optString 拿不到文本。
+                // extractSlotContent 会把对象/数组/字符串三种形态分别转成节点/竖排/markdown。
+                // 🔴 composite 此前**完全没有实现**：schema（QuroToolsUiWidget.description）
+                // 明确教模型写 `composite{layout(stack|tabs|accordion),children:[...]}`，
+                // 但解析器没有这个分支 → 走 buildUnknown → layout 这个字段进了 fields 里没人读，
+                // children 虽是通用容器能渲染，但 layout=tabs/accordion 的**切换语义完全丢失**
+                // （用户看到的只是一坨堆叠，跟声明的布局不符）。
+                //
+                // 修法：不新增节点类型（那要同步改 sealed 分派 / Catalog / Renderer / 序列化四处，
+                // 漏一处就是新的静默失效），而是在**解析期降解**成已有节点：
+                //   stack     → ColumnNode（竖排，与卡片侧 CompositeCardView 的 stack 分支同义）
+                //   tabs      → TabsNode（每个子节点一个标签页）
+                //   accordion → ExpandableNode（每个子节点一个折叠块）
+                // 三者都复用 extractSlotContent 的同一套键名容错，语义与卡片侧对齐。
+                "composite", "combo", "group" -> buildComposite(json)
                 "expandable", "accordion", "collapse" -> QuroExpandableNode(
                     id = json.optStringOrNull("id"),
                     style = buildStyle(json),
-                    title = json.optStringOrNull("title") ?: "",
-                    body = json.optStringOrNull("body")
-                        ?: json.optStringOrNull("content")
-                        ?: json.optStringOrNull("text") ?: "",
+                    title = json.optStringOrNull("title")
+                        ?: json.optStringOrNull("label")
+                        ?: json.optStringOrNull("name") ?: "",
+                    // 🔴 必须用标量版：optString 对 JSONObject 会返回整段 JSON 文本，
+                    // 那会把组件定义当正文显示出来，比空白更糟。
+                    body = json.optScalarStringOrNull("body")
+                        ?: json.optScalarStringOrNull("content")
+                        ?: json.optScalarStringOrNull("text")
+                        ?: "",
                     expanded = json.optBoolean("expanded", false),
+                    node = extractSlotContent(json),
                 )
                 "pie" -> QuroPieNode(
                     id = json.optStringOrNull("id"),
@@ -677,10 +889,12 @@ object QuroUiDslParser {
                     style = buildStyle(json),
                     columns = json.optStringList("columns"),
                 )
+                // 🔴 轮播同族缺陷：原来 slides 是 List<String>，渲染只能取 title/body 两个字符串。
+                // body 是组件对象时每张只剩标题，「切换过去看不到内容」。
                 "carousel", "swiper" -> QuroCarouselNode(
                     id = json.optStringOrNull("id"),
                     style = buildStyle(json),
-                    slides = json.optStringList("slides"),
+                    slides = buildSlides(json),
                 )
                 "timer" -> QuroTimerNode(
                     id = json.optStringOrNull("id"),
@@ -1209,21 +1423,217 @@ object QuroUiDslParser {
         return map
     }
 
+    /**
+     * 🔴 切换类容器的**通用子内容提取器**（tabs / expandable / carousel 共用）。
+     *
+     * ## 为什么要有这个函数（族级缺陷，不是一个tabs 的 bug）
+     *
+     * 用户报「可视化组件能切换，但组件下的内容没有」。排查后确认这是**一族**问题，
+     * 凡是「切换/折叠类容器」都中招，根因有两条，且两条对每个容器都成立：
+     *
+     * 1. **键名白名单太窄**：tabs 只认 `node` / `content` / `child` 三个键。而工具描述
+     *    （`QuroToolsUiWidget.description`）明确告诉模型写的是 **`body`**，
+     *    schema 与解析器不一致 → 模型照 schema 写 `body`，解析器拿不到 → `node = null`。
+     * 2. **只接受 JSONObject**：即使键名对上了，若模型把内容写成**字符串**或**数组**
+     *    （`body: "一段说明"` / `content: [{...},{...}]`），`optJSONObject` 也一律返回 null。
+     *
+     * 渲染端再补一刀：`RenderTabs` 写的是 `?.node?.let { RenderNode(it) }`，
+     * node 为 null 时**什么都不渲染、零提示** → 用户只看到 TabRow + 一片空白，
+     * 完全无法判断是「模型没给内容」还是「客户端渲染坏了」。
+     *
+     * ## 本函数的行为
+     *
+     * 按 [SLOT_CONTENT_KEYS] 的优先级依次尝试，**三种值形态都接**：
+     * - [org.json.JSONObject] → 递归 [buildNode]（组件 / 排版 / 嵌套容器）
+     * - [org.json.JSONArray]→ 包一层 [QuroColumnNode]（多个子节点竖排）
+     * - 其它非空标量（String / 数字 / Boolean）→ 包一层 [QuroMarkdownNode]
+     *   （纯文字也必须看得见，这正是用户要的「文字排版」）
+     *
+     * 全部找不到才返回 null，由渲染端给出**显式空态提示**，不再静默空白。
+     *
+     * 键名优先级刻意把 `body` 放最前：它既是工具描述教模型写的名字，
+     * 也是人形最自然的名字；而 `node` / `content` 是历史键，保留向后兼容。
+     */
+    private fun extractSlotContent(o: JSONObject): QuroUiNode? {
+        for (k in SLOT_CONTENT_KEYS) {
+            if (!o.has(k)) continue
+            when (val v = o.opt(k)) {
+                null, JSONObject.NULL -> continue
+                is JSONObject -> return buildNode(v)
+                is JSONArray -> {
+                    // 数组：逐项解析；项可以是组件对象，也可以是纯字符串
+                    val kids = (0 until v.length()).mapNotNull { i ->
+                        when (val e = v.opt(i)) {
+                            is JSONObject -> buildNode(e)
+                            is String -> e.takeIf { it.isNotBlank() }?.let { QuroMarkdownNode(value = it) }
+                            else -> null
+                        }
+                    }
+                    if (kids.isNotEmpty()) return QuroColumnNode(children = kids)
+                }
+                // 🔴 标量（含 String）：纯文字也要渲染出来，不能当成「没内容」
+                else -> {
+                    val s = v.toString()
+                    if (s.isNotBlank() && s != "null") return QuroMarkdownNode(value = s)
+                }
+            }
+        }
+        return null
+    }
+
+    /** 切换类容器取子内容的候选键名（有序，命中即用）。见 [extractSlotContent]。 */
+    private val SLOT_CONTENT_KEYS = listOf(
+        // 工具描述教模型写的名字，放最前
+        "body", "content", "node", "child",
+        // 常见别名，AI 自由书写时用
+        "view", "panel", "inner", "html", "markdown", "text", "desc", "description",
+        // 数组形态（多个子节点）
+        "children", "items", "elements", "blocks", "sections",
+    )
+
+    /**
+     * 组合卡：按 [layout] 降解成已有节点类型。
+     *
+     * | layout      | 降解为                       | 语义 |
+     * |-------------|------------------------------|------|
+     * | `stack`     | [QuroColumnNode]             | 子卡竖排（缺省） |
+     * | `tabs`      | [QuroTabsNode]               | 每个子节点一个标签页，一次显示一个 |
+     * | `accordion` | Column（子项包Expandable）   | 各子卡独立折叠 |
+     *
+     * children 的取法走 [buildChildren]（children / items / content / child 四种键），
+     * 与其余容器的键名容错保持一致。
+     *
+     * ⚠️ 为什么降解而不新增 `QuroCompositeNode`：新增节点类型要同步改
+     * sealed 分派、Catalog 白名单、Renderer 分支、序列化四处，**漏一处不会编译报错**，
+     * 只会又造出一个新的静默失效（这正是本轮修的病根）。降解则四处零改动。
+     *
+     * 与卡片侧 `QuroChatCard.CompositeCard` / `CompositeCardView` 的三种布局语义对齐——
+     * 同一个模型输出，走动态 UI 或走卡片两条通道，看到的布局相同。
+     */
+    private fun buildComposite(json: JSONObject): QuroUiNode {
+        val id = json.optStringOrNull("id")
+        val style = buildStyle(json)
+        val layout = (json.optStringOrNull("layout")
+            ?: json.optStringOrNull("mode")
+            ?: "stack").lowercase()
+        val kids = buildChildren(json)
+        val desc = json.optStringOrNull("description") ?: json.optStringOrNull("desc")
+        val spacing = json.optIntOrNull("spacing")
+        val padding = json.optIntOrNull("padding")
+
+        return when (layout) {
+            "tabs", "tab" -> QuroTabsNode(
+                id = id,
+                style = style,
+                tabs = kids.mapIndexed { i, c ->
+                    QuroTabItem(title = childTitle(c) ?: "Tab ${i + 1}", node = c)
+                },
+            )
+            "accordion", "collapse", "fold" -> QuroColumnNode(
+                id = id,
+                style = style,
+                children = kids.mapIndexed { i, c ->
+                    // 已经是折叠节点就原样用（尊重它自己的展开态）；否则套一层，首项默认展开
+                    if (c is QuroExpandableNode) {
+                        c.copy(expanded = c.expanded || i == 0)
+                    } else {
+                        QuroExpandableNode(
+                            title = childTitle(c) ?: "第 ${i + 1} 项",
+                            expanded = i == 0,
+                            node = c,
+                        )
+                    }
+                },
+                spacing = spacing,
+                padding = padding,
+            )
+            // stack / 未知值：竖排堆叠（缺省行为，最保守）
+            else -> QuroColumnNode(
+                id = id,
+                style = style,
+                children = buildChildren(json),
+                spacing = spacing,
+                padding = padding,
+            )
+        }
+    }
+
+    /**
+     * 取子节点自带标题（给组合卡里的标签页/折叠块命名）。
+     * 文本节点只在短文本时采纳，长段落当标题会让标签栏挤成一两个字。
+     */
+    private fun childTitle(c: QuroUiNode): String? = when (c) {
+        is QuroCardNode -> c.title
+        is QuroTextNode -> c.value
+        is QuroExpandableNode -> c.title
+        is QuroTabsNode -> null
+        else -> null
+    }?.trim()?.takeIf { it.isNotEmpty() && it.length <= 24 }
+
+    /**
+     * 解析轮播页列表。每项支持三种形态：
+     * - `{"title":"...","body":"文本"}` → 纯文本页（原有行为）
+     * - `{"title":"...","body":{"type":"table",...}}` → 富内容页，body 转子节点
+     * - `{"title":"...","content":[子节点,子节点]}` → 竖排多节点页
+     */
+    private fun buildSlides(json: JSONObject): List<QuroSlideItem> {
+        val arr = json.optJSONArray("slides") ?: json.optJSONArray("items") ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            // 单页也允许直接给字符串，如 slides: ["第一页","第二页"]
+            QuroSlideItem(
+                title = o.optStringOrNull("title")
+                    ?: o.optStringOrNull("label")
+                    ?: o.optStringOrNull("name")
+                    ?: "",
+                // 🔴 标量版：body 若是组件对象，不能把它的 JSON 文本当摘要显示
+                body = o.optScalarStringOrNull("body")
+                    ?: o.optScalarStringOrNull("text")
+                    ?: o.optScalarStringOrNull("content")
+                    ?: "",
+                node = extractSlotContent(o),
+                color = o.optStringOrNull("color"),
+            )
+        }
+    }
+
     private fun buildTabs(json: JSONObject): List<QuroTabItem> {
-        val arr = json.optJSONArray("tabs") ?: return emptyList()
+        val arr = json.optJSONArray("tabs") ?: json.optJSONArray("items") ?: return emptyList()
         return (0 until arr.length()).mapNotNull { i ->
             val o = arr.optJSONObject(i) ?: return@mapNotNull null
             QuroTabItem(
-                title = o.optStringOrNull("title") ?: o.optStringOrNull("label") ?: "Tab ${i + 1}",
-                node = o.optJSONObject("node")?.let { buildNode(it) }
-                    ?: o.optJSONObject("content")?.let { buildNode(it) }
-                    ?: o.optJSONObject("child")?.let { buildNode(it) },
+                title = o.optStringOrNull("title")
+                    ?: o.optStringOrNull("label")
+                    ?: o.optStringOrNull("name")
+                    ?: o.optStringOrNull("text")
+                    ?: "Tab ${i + 1}",
+                node = extractSlotContent(o),
             )
         }
     }
 
     private fun JSONObject.optStringOrNull(key: String): String? =
         takeIf { has(key) }?.optString(key)?.takeIf { it.isNotBlank() && it != "null" }
+
+    /**
+     * 🔴 只在值**确实是标量**时才返回文本；对象/数组一律返回 null。
+     *
+     * 为什么不直接用 [optStringOrNull]：Android 的 `optString` 内部走 `JSON.toString()`，
+     * 对 JSONObject 值会返回**整段 JSON 文本**而不是 null。后果：
+     * `body: {"type":"table",...}` → body = `{"type":"table","headers":[...]}`，
+     * 渲染出来是一坨 JSON 代码，比空白更糟且极难排查。
+     *
+     * 用在「文本字段与富内容字段同名」的场合（如 expandable/carousel 的 body）：
+     * 标量走文本、对象/数组交给 [extractSlotContent] 转成节点，两条路互不干扰。
+     */
+    private fun JSONObject.optScalarStringOrNull(key: String): String? {
+        if (!has(key)) return null
+        return when (val v = opt(key)) {
+            is String -> v
+            is Number, is Boolean -> v.toString()
+            else -> null // JSONObject / JSONArray / NULL：交给节点解析路径
+        }?.takeIf { it.isNotBlank() && it != "null" }
+    }
 
     /**
      * 修复：原代码缺 id 的控件用 "input_${System.nanoTime()}" 兜底，流式重渲染每帧

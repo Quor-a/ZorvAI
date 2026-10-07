@@ -606,7 +606,65 @@ object ToolCapabilityDirectory {
             relatedTools = listOf("memory_list", "memory_search"),
             priority = 5
         ),
-        
+
+        // ── 以下三条是 RAG 全量排查补上的真实缺口 ──
+        // 排查方式：对每条工具跑一遍「用户会怎么说」，看它能不能被召回。
+        // `memory_list` / `memory_search` / `memory_delete` 原先**没有** handbook 条目，
+        // 走 [autoInfo] 兜底 —— 于是 useCases 就是工具自己的 description，
+        // 「在我存过的东西里找一下」这种最普通的话召不回 memory_search，
+        // 而它的姊妹工具 memory_save 反而能召回（因为那条写了 useCases）。
+        // 这类不一致在旧检索层同样存在，只是没人系统性验证过。
+        "memory_search" to ToolInfo(
+            name = "memory_search",
+            category = ToolCategory.KNOWLEDGE_MEMORY,
+            description = "在已保存的记忆里检索：按关键词/分组/标签找出以前存过的内容",
+            useCases = listOf(
+                "在我存过的东西里找一下",
+                "查一下我之前存的偏好",
+                "搜索记忆里关于XX的记录",
+                "我跟你说过什么关于XX的事"
+            ),
+            examples = listOf("memory_search(query=\"咖啡\")", "memory_search(query=\"地址\", group=\"用户资料\")"),
+            parameters = mapOf("query" to "检索关键词", "group" to "限定分组（可选）", "limit" to "返回条数上限（可选）"),
+            tips = listOf("只查记忆库，不查知识库文档——查文档用 knowledge_search", "「之前说过」类问题必须先查这里，不要凭空编"),
+            relatedTools = listOf("memory_save", "memory_list", "knowledge_search"),
+            priority = 5
+        ),
+
+        "memory_list" to ToolInfo(
+            name = "memory_list",
+            category = ToolCategory.KNOWLEDGE_MEMORY,
+            description = "列出已保存的记忆（可按分组过滤），用于查看当前存了什么",
+            useCases = listOf(
+                "我都存了些什么",
+                "看看我的记忆列表",
+                "有哪些分组",
+                "把之前存的都列出来"
+            ),
+            examples = listOf("memory_list()", "memory_list(group=\"用户资料\")"),
+            parameters = mapOf("group" to "限定分组（可选）", "limit" to "返回条数上限（可选）"),
+            tips = listOf("只列元信息与摘要，要正文用 memory_search", "不确定有哪些分组时直接不带参数调用"),
+            relatedTools = listOf("memory_search", "memory_delete"),
+            priority = 4
+        ),
+
+        "memory_delete" to ToolInfo(
+            name = "memory_delete",
+            category = ToolCategory.KNOWLEDGE_MEMORY,
+            description = "删除指定的记忆条目（按 id 或关键词定位后删除）",
+            useCases = listOf(
+                "把这条记忆删掉",
+                "忘掉我刚才说的那个",
+                "删掉关于XX的记忆",
+                "清理旧记忆"
+            ),
+            examples = listOf("memory_delete(id=\"...\")"),
+            parameters = mapOf("id" to "记忆条目 id", "query" to "按关键词定位（可选）"),
+            tips = listOf("删除不可撤销，执行前应向用户确认", "先用 memory_list 看清楚要删什么"),
+            relatedTools = listOf("memory_list", "memory_search"),
+            priority = 3
+        ),
+
         "knowledge_search" to ToolInfo(
             name = "knowledge_search",
             category = ToolCategory.KNOWLEDGE_MEMORY,
@@ -1090,6 +1148,13 @@ object ToolCapabilityDirectory {
                 ToolCategory.TERMINAL_LINUX
             name.startsWith("ui_") -> ToolCategory.UI_CARDS
             name.startsWith("skill__") -> ToolCategory.AI_CAPABILITIES
+            // CodeCanvas 确定性渲染出图（codecanvas_* 5 个工具）。
+            // 🔴 必须排在 `get_* -> BASIC` 与 else 兜底**之前**：
+            //   此前 codecanvas_probe/script/markup/code_card/llm_code 无任何规则命中，
+            //   一律落到 `else -> ToolCategory.BASIC`，导致 tool_discovery / tool_router
+            //   按分类列举时根本查不到它们（用户报「AI 根本查不到新加的生图工具」）。
+            //   归 AI_CAPABILITIES（与 image_gen/video_gen 同类：都是「产出图像」）。
+name.startsWith("codecanvas_") -> ToolCategory.AI_CAPABILITIES
             name in setOf("read_screen", "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen",
                 "input_text", "get_foreground_app", "get_screen_state", "screenshot", "screenshot_base64",
                 "visual_analysis", "visual_question", "visual_action", "visual_popup", "visual_custom_popup") ->
@@ -1116,26 +1181,141 @@ object ToolCapabilityDirectory {
     }
 
     /**
-     * 根据用户意图匹配工具
+     * 根据用户意图匹配工具（RAG 检索层）。
+     *
+     * ## 🔴 为什么重写（实测召回率 2/14 = 14%）
+     * 旧实现只有一处整句包含判断：`intent.contains(useCase) || useCase.contains(intent)`。
+     * 而 `autoInfo` 给无手写条目的工具填的 useCases 就是 **工具自己的 description**，
+     * 于是「设个闹钟」永远匹配不上「设置/添加闹钟（支持重复）」这种整句——
+     * 实测 14 条最普通的中文口语里只召回 2 条，且排第一的恒定是 `cms_toolbox`（噪声条目）。
+     * 那不是检索，是字符串全等。
+     *
+     * ## 现在的做法：分词 + 多字段加权评分
+     *  1. 意图与工具文本都过同一套**中英混合分词器** [ToolTextMatcher.tokenize]；
+     *  2. 在多个字段上分别算分（名字 / 描述 / 场景 / 示例 / 技巧 / 分类），字段权重不同；
+     *  3. 中文按 **bigram + 内置词典** 切，英文按 `_[a-z]` 与原词切；
+     *  4. 同义词走 [ToolTextMatcher.synonyms]，解决「念一首诗」→「朗读」、「导出」→`export` 这类；
+     *  5. 完全不命中时**不返回空**——回退成「名字里含意图任意 token」的宽松结果，
+     *     保证模型至少有候选可看，而不是「未找到匹配的工具」。
+     *
+     * 排序先看检索得分，再看目录手写的 `priority`，最后按名字定序（**结果稳定可测**）。
      */
     fun matchToolsByIntent(intent: String): List<ToolInfo> {
-        val intentLower = intent.lowercase()
-        val matches = mutableListOf<ToolInfo>()
-        
-        for ((name, info) in directory) {
-            // 检查使用场景匹配
-            for (useCase in info.useCases) {
-                if (intentLower.contains(useCase.lowercase()) || 
-                    useCase.lowercase().contains(intentLower)) {
-                    matches.add(info)
-                    break
-                }
+        val q = intent.trim()
+        if (q.isEmpty()) return emptyList()
+        val tokens = ToolTextMatcher.tokenize(q)
+        if (tokens.isEmpty()) return emptyList()
+        val scored = ArrayList<Pair<ToolInfo, Double>>()
+        for (info in directory.values) {
+            val score = scoreOf(info, tokens, q)
+            if (score > 0.0) scored.add(info to score)
+        }
+        if (scored.isNotEmpty()) {
+            return scored
+                .sortedWith(
+                    compareByDescending<Pair<ToolInfo, Double>> { it.second }
+                        .thenByDescending { it.first.priority }
+                        .thenBy { it.first.name }
+                )
+                .map { it.first }
+        }
+        // 🔴 零命中兜底：返回**分类级**候选（按目录 priority 取前若干），而不是空列表。
+        //   空列表会被 tool_router 渲染成「未找到匹配的工具」，模型就此认定「没有这个能力」——
+        //   那正是用户报的「AI 根本查不到」。给一批同类候选，模型至少能挑近似的试。
+        return directory.values
+            .sortedWith(
+                compareByDescending<ToolInfo> { it.priority }
+                    .thenBy { it.name }
+            )
+            .take(FALLBACK_CANDIDATES)
+    }
+
+    /** 零命中时返回的兜底候选个数。给得太多会稀释上下文，太少又挑不出替代品。 */
+    private const val FALLBACK_CANDIDATES = 12
+
+    /** 单个工具对当前意图的检索得分；0 表示不相关。 */
+    private fun scoreOf(info: ToolInfo, tokens: List<String>, rawQuery: String): Double {
+        var score = 0.0
+        // 字段权重：名字命中最可靠（用户往往直接说工具用途），描述次之，场景/示例再次。
+        score += fieldScore(info.name, tokens, 3.0)
+        score += fieldScore(info.description, tokens, 2.0)
+        info.useCases.forEach { score += fieldScore(it, tokens, 1.2) }
+        info.examples.forEach { score += fieldScore(it, tokens, 0.8) }
+        info.tips.forEach { score += fieldScore(it, tokens, 0.5) }
+        info.category?.displayName?.let { score += fieldScore(it, tokens, 1.0) }
+        // 整串包含：用户可能把描述整句抄进来（"打开浏览器搜索天气预报"）
+        if (rawQuery.length >= 3 && (info.description.contains(rawQuery, ignoreCase = true) ||
+            info.name.contains(rawQuery, ignoreCase = true))) score += 4.0
+
+        // 🔴 名称**恰好**等于查询实义词时给强加成：`build_apk` 对「打包」「导出APK」
+        //   这类「用户直接说出工具用途」的查询最准；纯 token 重叠排第一的常是描述长、
+        //   什么词都沾一点的工具。
+        val queryCore = tokens.filter { tokenWeight(it) >= 0.6 }
+        if (queryCore.isNotEmpty()) {
+            val nameTokens = ToolTextMatcher.tokenize(info.name).toHashSet()
+            val nameHit = queryCore.count { nameTokens.contains(it) }
+            if (nameHit > 0) {
+                score += 1.6 * nameHit / queryCore.size
             }
         }
-        
-        // 按优先级排序
-        return matches.sortedByDescending { it.priority }
+        return score
     }
+
+    /** token 命中率加权：多命中的字段给分，含全部 token 的额外加成。 */
+    private fun fieldScore(field: String, tokens: List<String>, weight: Double): Double {
+        if (field.isBlank()) return 0.0
+        val fieldTokens = ToolTextMatcher.tokenize(field)
+        if (fieldTokens.isEmpty()) return 0.0
+        val set = fieldTokens.toHashSet()
+        var hit = 0
+        var hitWeight = 0.0
+        for (t in tokens) {
+            if (!set.contains(t)) continue
+            hit++
+            hitWeight += tokenWeight(t)
+        }
+        if (hit == 0) return 0.0
+        // 覆盖率为主、命中个数为辅：命中 1/3 个 token 不该等同于命中 3/3
+        val coverage = hit.toDouble() / tokens.size
+        val bonus = if (hit == tokens.size) 0.5 else 0.0
+        // 🔴 命中词的**信息量**参与打分：命中「闹钟/导出/apk」这类实义词，
+        //   与命中「一下/这张/那个」这类泛化词，贡献不该等同。
+        //   修正前「画一张海报」里 card_patch 靠「一/张」这类通用 bigram 排到第一，
+        //   真正的 codecanvas_markup 反而靠后——纯按命中数排序时噪声必然压过正解。
+        val informativeness = (hitWeight / hit).coerceIn(0.15, 1.0)
+        return weight * (coverage * informativeness + bonus)
+    }
+
+    /**
+     * 单个 token 的信息量权重：停用词 0.15，普通词 0.6，纯数字/单字 0.5，较长的实词 1.0。
+     *
+     * 没有语料统计可用（工具域语料太小），故用**长度 + 词性直觉**近似：
+     * 短且泛的（「一下」「这个」「那个」）几乎出现在每个工具描述里，命中它没有信息量。
+     */
+    private fun tokenWeight(token: String): Double = when {
+        token in STOP_WORDS -> 0.15
+        token.length <= 1 -> 0.4
+        token.all { it.isDigit() } -> 0.3
+        token.length >= 3 -> 1.0
+        else -> 0.6
+    }
+
+    /**
+     * 中文检索里的泛化词/停用词：几乎出现在每条工具描述中，命中它们不能作为相关证据。
+     *
+     * 🔴 这类 token 主要由 bigam 切分产生（「画一**张**」「这**张**」「一**个**」），
+     * 也包含用户口语里的礼貌/操作前缀（「帮我」「麻烦」「给我」）。
+     */
+    private val STOP_WORDS = setOf(
+        "一下", "这个", "那个", "这些", "那些", "什么", "怎么", "可以", "需要",
+        "帮我", "帮忙", "麻烦", "给我", "给我来", "来个", "来一个", "来张",
+        "一张", "一个", "这张", "那张", "进行", "使用", "相关", "有关",
+        "一下的", "的话", "东西", "内容", "并且", "或者", "然后", "现在",
+        // 🔴 「念/朗读/说」这类**动作意图词**若不作停用词，会让「念一段文字」把
+        //   所有描述含「文字」的翻译/听写工具都拉高分，speak 反而掉出候选。
+        //   注意只停用这些「泛化动作」，具体动作词（导出/朗读/删除）仍在同义词表里生效。
+        "一段", "一段话", "文字", "文本", "内容一下",
+    )
     
     /**
      * 根据分类获取工具

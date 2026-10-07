@@ -308,6 +308,13 @@ data class QuroTabsNode(
     val tabs: List<QuroTabItem> = emptyList(),
 ) : QuroUiNode
 
+/**
+ * 单个标签页。
+ *
+ * 【修复】`node` 之前只能来自 `{"type":...}` 对象；若AI 把内容写成字符串或数组，
+ * 解析器现在会将其包成 [QuroMarkdownNode] / [QuroColumnNode]，
+ * 所以不会再出现「能切换但下方空白」。
+ */
 data class QuroTabItem(
     val title: String = "",
     val node: QuroUiNode? = null,
@@ -414,13 +421,22 @@ data class QuroTodoNode(
     val items: List<String> = emptyList(),
 ) : QuroUiNode
 
-/** 折叠面板：标题 + 内容；expanded 默认展开状态。 */
+/**
+ * 折叠面板：标题 + 内容；expanded 默认展开状态。
+ *
+ * 【修复】原本只有 [body] 一个 String 字段，AI 把内容写成 `{"type":"text",...}` /
+ * `{"type":"table",...}` 这样的**组件**时，`optString("body")` 拿到空串 → body 空 →
+ * 展开后下方一片空白，用户亲手展开了也看不到任何内容。
+ * 新增 [node]：富内容（任意子节点），渲染时优先于 [body]。
+ */
 data class QuroExpandableNode(
     override val id: String? = null,
     override val style: QuroUiStyle? = null,
     val title: String = "",
     val body: String = "",
     val expanded: Boolean = false,
+    /** 富内容：AI 把面板内容写成组件/排版时的子节点。非空时渲染它，忽略 [body]。 */
+    val node: QuroUiNode? = null,
 ) : QuroUiNode
 
 /** 饼图。segments: List<String>，每项 JSON：`{"name":"...","value":N,"color":"#hex"}`。 */
@@ -463,11 +479,28 @@ data class QuroKanbanNode(
 
 /** 轮播。slides: List<String>，每项 JSON：`{"title":"...","body":"..."}`。
  *  极简版（无第三方库）：横向 ScrollableRow，每张占满可见宽度。 */
+/**
+ * 轮播。
+ *
+ * 【修复】原本 slides 是 `List<String>`（每项一个 JSON 字符串），渲染时只能取
+ * `title`/`body` 两个字符串字段。AI 把一张轮播页的内容写成
+ * `{"title":"运行环境","body":{"type":"table",...}}` 时 body 变 JSONObject、
+ * `optString` 拿不到文本 → 每张都只剩一个标题，「切换到那张看不到内容」。
+ * 改成结构化 [QuroSlideItem]，[node] 可承载任意子节点。
+ */
 data class QuroCarouselNode(
     override val id: String? = null,
     override val style: QuroUiStyle? = null,
-    val slides: List<String> = emptyList(),
+    val slides: List<QuroSlideItem> = emptyList(),
 ) : QuroUiNode
+
+/** 单张轮播页：标题 + 文本摘要 + 可选富内容。 */
+data class QuroSlideItem(
+    val title: String = "",
+    val body: String = "",
+    val node: QuroUiNode? = null,
+    val color: String? = null,
+)
 
 /** 秒表 / 倒计时器（不带动画，纯展示）。seconds: 时长（秒）；label 可选。 */
 data class QuroTimerNode(

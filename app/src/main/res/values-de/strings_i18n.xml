@@ -3736,7 +3736,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03756" formatted="false">Modell für Textübersetzung</string>
     <string name="qk_03757" formatted="false">Modell für Codesuche und Suchplanung</string>
     <string name="qk_03758" formatted="false">Modell für automatische Erstellung und Destillation von Soul-Karten</string>
-    <string name="qk_03759" formatted="false">Modell zum Verstehen von Bildinhalten (muss Vision unterstützen)</string>
+    <string name="qk_03759" formatted="false">Modell zum Verstehen von Bildern (muss Vision unterstützen); zugleich das Reserve-Visionmodell für die Szenenanalyse im Videoanruf</string>
     <string name="qk_03760" formatted="false">Modell zum Verstehen von Audioinhalten</string>
     <string name="qk_03761" formatted="false">Modell zum Verstehen von Videos und Live-Bildern im Videoanruf (muss Vision unterstützen)</string>
     <string name="qk_03762" formatted="false">Bilderzeugungsmodell, das die KI direkt aufrufen kann</string>
@@ -3851,7 +3851,7 @@ Ihre konfigurierten Modelle bleiben erhalten; Sie können den Modellnamen auch m
     <string name="qk_03870" formatted="false">Sign in to manage repos / issues / stars / notifications; search GitHub inside the chat</string>
     <string name="qk_03871" formatted="false">When on, dangerous commands (rm -rf / dd / mkfs) require a second send or confirm</string>
     <string name="qk_03872" formatted="false">Follow system</string>
-    <string name="qk_03873" formatted="false">Model used for the live conversation and scene understanding in a video call (must support vision)</string>
+    <string name="qk_03873" formatted="false">Modell für die Live-Unterhaltung im Videoanruf; wird auch zum Auslesen des Kamerabilds genutzt, wenn das Haupt-Chatmodell keine Vision hat (muss Vision unterstützen)</string>
     <string name="qk_03874" formatted="false">Tap to start the video call</string>
     <string name="qk_03875" formatted="false">Video call on standby</string>
     <string name="qk_03876" formatted="false">Camera on · tap the mic to speak</string>
@@ -3887,4 +3887,21 @@ Ihre konfigurierten Modelle bleiben erhalten; Sie können den Modellnamen auch m
     <string name="qk_03906" formatted="false">Führt die lokale Inferenz in einem separaten Prozess aus. Das Laden eines großen Modells kann so nicht mehr die gesamte App vom System beenden, die Oberfläche bleibt nutzbar. Ausschalten behält das bisherige Verhalten im Hauptprozess bei.</string>
     <string name="qk_03907" formatted="false">Thermisch adaptives Scheduling</string>
     <string name="qk_03908" formatted="false">Liest während langer Inferenz alle 2 Sekunden den SoC-Thermalspielraum und reduziert die Thread-Anzahl frühzeitig leicht, um abruptes Throttling durch das System zu vermeiden. Aus: keine Eingriffe.</string>
+
+    <string name="qk_03909" formatted="false">Weitere Aktionen</string>
+
+    <!-- ⋮ 视频通话启动失败原因（静默自停改为可读提示） -->
+    <string name="qk_03910" formatted="false">Videoanruf konnte nicht gestartet werden. Bitte über den Hauptbildschirm erneut öffnen</string>
+    <string name="qk_03911" formatted="false">Die Videoanruf-Ansicht benötigt die Berechtigung „Über andere Apps anzeigen“</string>
+    <string name="qk_03912" formatted="false">Der Videoanruf-Bildschirm konnte nicht angezeigt werden. Berechtigungen prüfen und erneut versuchen</string>
+    <string name="qk_03913" formatted="false">Kamera-Berechtigung fehlt</string>
+    <string name="qk_03914" formatted="false">Mikrofon-Berechtigung fehlt</string>
+    <string name="qk_03915">Langer Inhalt, zeigt die ersten %1$s von %2$s Zeilen</string>
+
+    <string name="qk_03916">%1$d Einträge gelöscht, %2$s freigegeben</string>
+    <string name="qk_03917">Bereinigung fehlgeschlagen: Zugriff auf einige Dateien verweigert. Speicherberechtigung erteilen und erneut versuchen</string>
+    <string name="qk_03918">Verzeichnis ist leer oder nicht zugänglich</string>
+    <string name="qk_04060">表格列数较多，可左右滑动查看 →</string>
+    <string name="qk_04061">集群 · %1$s</string>
+    <string name="qk_04065">Rollen einstellen, Modelle binden, Host-Grenzen anpassen</string>
 </resources>

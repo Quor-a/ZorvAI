@@ -140,6 +140,14 @@ class QuroApplication : Application(), Configuration.Provider {
             return
         }
 
+        // 集群（tool-first 重写）：工具注册在 buildQuroRegistry 内完成；此处初始化运行时 + 事件桥。
+        runCatching {
+            com.ai.assistance.quro.core.cluster.ClusterRuntime.init(this)
+            com.ai.assistance.quro.core.cluster.ClusterTraceBridge.start(
+                com.ai.assistance.quro.core.cluster.ClusterRuntime.get()
+            )
+        }
+
         // 可视化「询问 / 操作」改走系统级悬浮窗：任何界面（主对话 / GenUI Agent / 设置页 /
         // 甚至已退到别的 App）都能看到并作答。无悬浮窗权限时自动退回 Activity 内 Dialog。
         // 必须在主进程内注册（副进程不能起前台服务）。

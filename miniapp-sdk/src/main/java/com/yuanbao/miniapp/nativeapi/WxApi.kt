@@ -46,6 +46,20 @@ class WxApi(
         fun currentPage(): String
     }
 
+    /**
+     * 可选：实现它即可让 wx.pageScrollTo 真正滚动。
+     * 单独开接口而不加进 [NavigationHost]，是为了不破坏既有实现类
+     * （已实现 NavigationHost 的宿主无需改动即可继续编译）。
+     */
+    interface ScrollHost {
+        fun scrollTo(top: Int, durationMs: Int)
+    }
+
+    /** 可选：实现它即可让 wx.setNavigationBarColor 生效。 */
+    interface ChromeHost {
+        fun applyNavigationBarColors(frontColor: String, backgroundColor: String)
+    }
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val ioExecutor = Executors.newCachedThreadPool()
     private val prefs: SharedPreferences by lazy {
@@ -90,6 +104,19 @@ class WxApi(
             "getClipboardData" -> getClipboard(list)
             "getNetworkType" -> networkType()
             "makePhoneCall" -> makePhoneCall(list)
+            // 本轮补齐 1：存储异步版 + 存储信息。
+            // 此前只有 *Sync；AI 照微信官方文档写 wx.setStorage({key,data}) 会命中
+            // WX_UNSUPPORTED_FALLBACKS 的空壳 —— 不报错，但数据永远不落盘。
+            "setStorage" -> setStorageAsync(list)
+            "getStorage" -> getStorageAsync(list)
+            "removeStorage" -> removeStorageAsync(list)
+            "clearStorage" -> clearStorageAsync(list)
+            "getStorageInfoSync", "getStorageInfo" -> storageInfo(list)
+            "pageScrollTo" -> pageScrollTo(list)
+            "setNavigationBarColor" -> setNavigationBarColor(list)
+            "startPullDownRefresh" -> startPullDownRefresh(list)
+            "getLaunchOptionsSync", "getEnterOptionsSync" -> writeJson(launchOptions())
+            "getRealtimeLogManager" -> realtimeLogManager()
             "stopPullDownRefresh" -> "null"
             "hideHomeButton" -> "null"
             else -> "null"
@@ -387,6 +414,134 @@ class WxApi(
         return "null"
     }
 
+    // ------------------------------------------------------------ storage async
+    // 微信异步版语义：写回调 {errMsg:"setStorage:ok"}，读回调 {data,errMsg}。
+    // 一律经 logicHandler 派发，保证回调在持有引擎的 JS 线程上执行。
+
+    private fun setStorageAsync(args: List<Json>): String {
+        val opts = args.firstOrNull { it is Json.Obj } as? Json.Obj
+        val key = opts?.get("key")?.asString() ?: ""
+        val value = opts?.get("data")
+        if (key.isNotEmpty() && value != null) {
+            prefs.edit().putString(key, writeJson(value)).apply()
+        }
+        val r = writeJson(Json.obj("errMsg" to Json.Str("setStorage:ok")))
+        postCallback(opts?.get("success"), r)
+        postCallback(opts?.get("complete"), r)
+        return "null"
+    }
+
+    private fun getStorageAsync(args: List<Json>): String {
+        val opts = args.firstOrNull { it is Json.Obj } as? Json.Obj
+        val key = opts?.get("key")?.asString() ?: ""
+        val raw = if (key.isEmpty()) null else prefs.getString(key, null)
+        val data = raw?.let { runCatching { parseJson(it) }.getOrNull() } ?: Json.Str("")
+        val r = writeJson(Json.obj(
+            "data" to data, "errMsg" to Json.Str("getStorage:ok")))
+        postCallback(opts?.get("success"), r)
+        postCallback(opts?.get("complete"), r)
+        return "null"
+    }
+
+    private fun removeStorageAsync(args: List<Json>): String {
+        val opts = args.firstOrNull { it is Json.Obj } as? Json.Obj
+        val key = opts?.get("key")?.asString() ?: ""
+        if (key.isNotEmpty()) prefs.edit().remove(key).apply()
+        val r = writeJson(Json.obj("errMsg" to Json.Str("removeStorage:ok")))
+        postCallback(opts?.get("success"), r)
+        postCallback(opts?.get("complete"), r)
+        return "null"
+    }
+
+    private fun clearStorageAsync(args: List<Json>): String {
+        val opts = args.firstOrNull { it is Json.Obj } as? Json.Obj
+        prefs.edit().clear().apply()
+        val r = writeJson(Json.obj("errMsg" to Json.Str("clearStorage:ok")))
+        postCallback(opts?.get("success"), r)
+        postCallback(opts?.get("complete"), r)
+        return "null"
+    }
+
+    /**
+     * wx.getStorageInfo / getStorageInfoSync：keys + 占用字节数。
+     * SharedPreferences 无处查询真实占用，按 key/value 的 UTF-8 字节数估算
+     *（微信本身也是近似值，够 UI 显示用）。
+     */
+    private fun storageInfo(args: List<Json>): String {
+        val all = prefs.all
+        val keys = all.keys.sorted()
+        var bytes = 0
+        all.forEach { (k, v) ->
+            bytes += k.toByteArray(Charsets.UTF_8).size
+            bytes += (v as? String ?: "").toByteArray(Charsets.UTF_8).size
+        }
+        val r = writeJson(Json.obj(
+            "keys" to Json.Arr(keys.mapTo(ArrayList<Json>()) { Json.Str(it) }),
+            "currentSize" to Json.Num(bytes.toDouble()),
+            "limitSize" to Json.Num(5_242_880.0),
+            "errMsg" to Json.Str("getStorageInfo:ok")))
+        postCallback(args.firstOrNull { it is Json.Obj }
+            ?.let { (it as Json.Obj)["success"] }, r)
+        return r
+    }
+
+    // ------------------------------------------------------------ view / nav
+
+    /** wx.pageScrollTo：转发给渲染宿主（MiniAppView 实现 ScrollHost）。 */
+    private fun pageScrollTo(args: List<Json>): String {
+        val opts = args.firstOrNull { it is Json.Obj } as? Json.Obj
+        val top = (opts?.get("scrollTop")?.asDouble() ?: 0.0).toInt()
+        val duration = (opts?.get("duration")?.asDouble() ?: 300.0).toInt()
+        val host = navigation as? ScrollHost
+        mainHandler.post { host?.scrollTo(top, duration) }
+        val r = writeJson(Json.obj("errMsg" to Json.Str("pageScrollTo:ok")))
+        postCallback(opts?.get("success"), r)
+        postCallback(opts?.get("complete"), r)
+        return "null"
+    }
+
+    /**
+     * wx.setNavigationBarColor：引擎自绘、无系统 ActionBar，
+     * 因此交给可选的 ChromeHost 改状态栏配色；宿主未实现时静默忽略。
+     */
+    private fun setNavigationBarColor(args: List<Json>): String {
+        val opts = args.firstOrNull { it is Json.Obj } as? Json.Obj
+        val fg = opts?.get("frontColor")?.asString() ?: "#000000"
+        val bg = opts?.get("backgroundColor")?.asString() ?: "#ffffff"
+        val host = navigation as? ChromeHost
+        mainHandler.post { host?.applyNavigationBarColors(fg, bg) }
+        val r = writeJson(Json.obj("errMsg" to Json.Str("setNavigationBarColor:ok")))
+        postCallback(opts?.get("success"), r)
+        postCallback(opts?.get("complete"), r)
+        return "null"
+    }
+
+    /** wx.startPullDownRefresh：暂不做真下拉，但回调语义须与 stop 成对可用。 */
+    private fun startPullDownRefresh(args: List<Json>): String {
+        val opts = args.firstOrNull { it is Json.Obj } as? Json.Obj
+        val r = writeJson(Json.obj("errMsg" to Json.Str("startPullDownRefresh:ok")))
+        postCallback(opts?.get("success"), r)
+        postCallback(opts?.get("complete"), r)
+        return "null"
+    }
+
+    /** 启动/进入参数：返回微信同构字段（path/scene/query/launchTimer）。 */
+    private fun launchOptions(): Json = Json.obj(
+        "path" to Json.Str(navigation?.currentPage() ?: ""),
+        "scene" to Json.Num(1001.0),
+        "query" to Json.Obj(),
+        "launchTimer" to Json.Num(0.0),
+        "errMsg" to Json.Str("getLaunchOptionsSync:ok"))
+
+    /**
+     * wx.getRealtimeLogManager()：返回 no-op 标记对象。
+     * AI 常写 consoleReporter.info(...)；返回 undefined 会让 .info 抛 TypeError，
+     * 把整段 onLoad 打断。返回对象至少保证链式访问不炸。
+     */
+    private fun realtimeLogManager(): String = writeJson(Json.obj(
+        "__noop" to Json.Bool(true),
+        "errMsg" to Json.Str("getRealtimeLogManager:ok")))
+
     private fun postCallback(cb: Json?, payload: String) {
         if (cb == null) return
         logicHandler.post { callCallback(cb, payload) }
@@ -397,10 +552,17 @@ class WxApi(
         val API_NAMES = listOf(
             "getSystemInfo", "getSystemInfoSync", "showToast", "hideToast", "showLoading", "hideLoading",
             "showModal", "showActionSheet", "vibrateShort", "vibrateLong", "setClipboardData", "getClipboardData",
-            "getNetworkType", "makePhoneCall", "stopPullDownRefresh",
+            "getNetworkType", "makePhoneCall",
+            "startPullDownRefresh", "stopPullDownRefresh",
+            // 存储：同步版 + 异步版 + 容量信息。
+            // AI 绝大多数写的是异步版（wx.setStorage({key,data})），缺了会静默失败。
             "setStorageSync", "getStorageSync", "removeStorageSync", "clearStorageSync",
+            "setStorage", "getStorage", "removeStorage", "clearStorage",
+            "getStorageInfo", "getStorageInfoSync",
             "request", "navigateTo", "redirectTo", "navigateBack", "setNavigationBarTitle",
-            "nextTick", "getCurrentPage"
+            "nextTick", "getCurrentPage", "hideHomeButton",
+            "pageScrollTo", "setNavigationBarColor",
+            "getLaunchOptionsSync", "getEnterOptionsSync", "getRealtimeLogManager"
         )
     }
 }

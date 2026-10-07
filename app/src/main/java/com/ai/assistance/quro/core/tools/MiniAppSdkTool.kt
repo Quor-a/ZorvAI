@@ -5,6 +5,7 @@ import com.ai.assistance.quro.util.qstr
 import android.content.Context
 import com.ai.assistance.quro.core.cards.QuroChatCard
 import com.yuanbao.miniapp.core.MiniAppEngine
+import com.yuanbao.miniapp.nativeapi.WxApi
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -39,14 +40,28 @@ class MiniAppSdkTool : QuroTool {
 - pages/<page>/<page>.json：页面级配置（可选）
 - app.js / app.wxss：全局逻辑 / 全局样式（可选）
 
-原生能力（wx.*，由引擎内置实现）：
-- wx.request：网络请求
-- wx.getSystemInfo / wx.getSystemInfoSync：系统信息
-- wx.showToast：轻提示
-- wx.setStorage / getStorage / removeStorage：本地存储
-- wx.navigateTo / redirectTo / navigateBack：页面路由
-- wx.setNavigationBarTitle：设置标题
-- console.log：日志
+原生能力（wx.*）——**下面这份清单由引擎的 WxApi.API_NAMES 在运行时现读，不是手抄**，
+所以永远与真实实现一致。当前引擎共暴露 ${WxApi.API_NAMES.size} 个接口：
+- 网络：wx.request（支持 method / header / data / dataType，成功回调 {statusCode,data,header,errMsg}）
+- 系统：wx.getSystemInfo / wx.getSystemInfoSync（platform/system/brand/model/screenWidth/screenHeight/
+  windowWidth/windowHeight/pixelRatio/language/SDKVersion）
+- 交互：wx.showToast / wx.hideToast、wx.showLoading / wx.hideLoading、wx.showModal（success 回 {confirm,cancel}）、
+  wx.showActionSheet（success 回 {tapIndex}）
+- 设备：wx.vibrateShort / wx.vibrateLong、wx.setClipboardData / wx.getClipboardData、
+  wx.getNetworkType（回 {networkType:"wifi|4g|none|unknown"}）、wx.makePhoneCall
+- 存储：wx.setStorage / wx.getStorage / wx.removeStorage / wx.clearStorage（**异步版，回调式**），
+  以及 wx.setStorageSync / wx.getStorageSync / wx.removeStorageSync / wx.clearStorageSync（同步版），
+  wx.getStorageInfo / wx.getStorageInfoSync（回 {keys,currentSize,limitSize}）
+- 路由：wx.navigateTo / wx.redirectTo / wx.navigateBack（支持 delta）、wx.setNavigationBarTitle、
+  wx.setNavigationBarColor、wx.getCurrentPage、wx.pageScrollTo（回 scrollTop/duration）
+- 刷新：wx.startPullDownRefresh / wx.stopPullDownRefresh
+- 启动：wx.getLaunchOptionsSync / wx.getEnterOptionsSync（回 {path,scene,query,launchTimer}）
+- 其它：wx.nextTick、wx.getRealtimeLogManager、wx.hideHomeButton
+- console：console.log / info / warn / error / debug
+
+⚠️ 只能写上面这些名字。**引擎里没有的 wx 接口不要凭微信文档臆造** ——
+未实现的接口虽然有"记日志后返回 undefined"的兜底（避免把整页 onLoad 打断导致白屏），
+但功能不会生效。需要某个接口时先查这份清单，缺的话它就真的缺。
 
 操作：
 - list：列出所有可用小程序 appId（内置 assets 演示 + 用户目录工程），返回 appIds 数组

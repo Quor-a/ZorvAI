@@ -213,7 +213,13 @@ object CardSdk {
                 s.id(), s.title(),
                 (0 until s.arrLen("slides")).map { i ->
                     val it = s.objAt("slides", i)
-                    QuroChatCard.CarouselCard.Slide(it.optString("title", ""), it.optString("body", ""), it.optString("color", ""))
+                    // 🔴 接富内容：body 写成组件 spec 时不再丢内容
+                    QuroChatCard.CarouselCard.Slide(
+                        title = it.optString("title", "").ifBlank { it.optString("label", "") },
+                        body = scalarText(it, "body", "text", "content"),
+                        color = it.optString("color", ""),
+                        node = parseSlotNode(it),
+                    )
                 },
             )
         })
@@ -226,14 +232,25 @@ object CardSdk {
             QuroChatCard.InfoCard(s.id(), s.title(), s.optString("body", ""), s.optString("align", "start"))
         })
         add(CardSpec("expandable", "layout", "可折叠面板", """{"type":"expandable","body":"展开内容","expanded":false}""") { s ->
-            QuroChatCard.ExpandableCard(s.id(), s.title(), s.optString("body", ""), s.optBoolean("expanded", false))
+            // 🔴 接富内容：展开后不再是空白
+            QuroChatCard.ExpandableCard(
+                s.id(), s.title(),
+                scalarText(s, "body", "text", "content"),
+                s.optBoolean("expanded", false),
+                parseSlotNode(s),
+            )
         })
         add(CardSpec("tabs", "layout", "标签页", """{"type":"tabs","tabs":[{"title":"概览","body":"内容"},{"title":"详情","body":"..."}],"selectedIndex":0}""") { s ->
             QuroChatCard.TabsCard(
                 s.id(), s.title(),
                 (0 until s.arrLen("tabs")).map { i ->
                     val t = s.objAt("tabs", i)
-                    QuroChatCard.TabsCard.Tab(t.optString("title", ""), t.optString("body", ""))
+                    // 🔴 接富内容：模型写 content/node 或把 body 写成组件时不再丢内容
+                    QuroChatCard.TabsCard.Tab(
+                        title = t.optString("title", "").ifBlank { t.optString("label", "") },
+                        body = scalarText(t, "body", "text", "content"),
+                        node = parseSlotNode(t),
+                    )
                 },
                 s.optInt("selectedIndex", 0),
             )

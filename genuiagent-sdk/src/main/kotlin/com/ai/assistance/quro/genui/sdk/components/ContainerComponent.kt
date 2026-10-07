@@ -17,11 +17,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.quro.genui.sdk.dsl.ComponentTypes
-import com.ai.assistance.quro.genui.sdk.dsl.Dimension
 import com.ai.assistance.quro.genui.sdk.dsl.UIComponent
 import com.ai.assistance.quro.genui.sdk.render.RenderChildren
+import com.ai.assistance.quro.genui.sdk.render.GenUILayoutAlign
+import com.ai.assistance.quro.genui.sdk.render.GenUILayoutGuard
 import com.ai.assistance.quro.genui.sdk.render.RenderContext
-import java.util.Locale
 
 /**
  * 容器组件类型常量
@@ -56,7 +56,7 @@ fun ContainerRenderer(
     modifier: Modifier = Modifier
 ) {
     // 默认间距 8dp：模型漏写 spacing 时避免元素挤成一片或顶死
-    val spacing = component.propFloat("spacing", 8f)
+    val spacing = GenUILayoutGuard.spacing(component.propFloatOrNull("spacing"))
 
     when (component.type) {
         ComponentTypes.COLUMN -> {
@@ -99,18 +99,18 @@ fun ContainerRenderer(
             val width = component.style.width
             val height = component.style.height
             var spacerModifier: Modifier = Modifier
-            if (width is Dimension.Fixed) {
-                spacerModifier = spacerModifier.width(width.dp.dp)
+            GenUILayoutGuard.fixedDp(width, GenUILayoutGuard.MAX_WIDTH_DP)?.let {
+                spacerModifier = spacerModifier.width(it.dp)
             }
-            if (height is Dimension.Fixed) {
-                spacerModifier = spacerModifier.height(height.dp.dp)
+            GenUILayoutGuard.fixedDp(height, GenUILayoutGuard.MAX_HEIGHT_DP)?.let {
+                spacerModifier = spacerModifier.height(it.dp)
             }
             Spacer(modifier = spacerModifier)
         }
         ComponentTypes.SCROLL -> {
-            val direction = component.propString("direction") ?: "vertical"
+            val isHorizontal = GenUILayoutGuard.isHorizontal(component.propString("direction"))
             val scrollState: ScrollState = rememberScrollState()
-            val scrollModifier = if (direction == "horizontal") {
+            val scrollModifier = if (isHorizontal) {
                 Modifier.horizontalScroll(scrollState)
             } else {
                 Modifier.verticalScroll(scrollState)
@@ -132,101 +132,25 @@ fun ContainerRenderer(
     }
 }
 
-/**
- * 解析垂直方向排列方式
- */
-private fun verticalArrangement(value: String?, spacing: Float): Arrangement.Vertical {
-    val spacingDp = if (spacing > 0) spacing.dp else 0.dp
-    val lower = value?.lowercase(Locale.ROOT)
-    return when (lower) {
-        "center" -> if (spacingDp > 0.dp) {
-            Arrangement.spacedBy(spacingDp, Alignment.CenterVertically)
-        } else {
-            Arrangement.Center
-        }
-        "end", "bottom" -> if (spacingDp > 0.dp) {
-            Arrangement.spacedBy(spacingDp, Alignment.Bottom)
-        } else {
-            Arrangement.Bottom
-        }
-        "space_between" -> Arrangement.SpaceBetween
-        "space_around" -> Arrangement.SpaceAround
-        "space_evenly" -> Arrangement.SpaceEvenly
-        else -> if (spacingDp > 0.dp) {
-            Arrangement.spacedBy(spacingDp)
-        } else {
-            Arrangement.Top
-        }
-    }
-}
+// ==================================================================
+// 对齐语义统一委托到 [GenUILayoutAlign]（2026-10-06）
+//
+// 本文件此前有第二份 XxxAlign 实现，与 LayoutTypographyButtonRenderers.kt 的
+// ltbXxx 对同一输入行为不一致（boxAlign 未指定时一份 Center 一份 TopStart）。
+// 「组件虽然多但是不齐」有一半出在这份重复实现上。现在只保留委托。
+// ==================================================================
 
-/**
- * 解析水平方向排列方式
- */
-private fun horizontalArrangement(value: String?, spacing: Float): Arrangement.Horizontal {
-    val spacingDp = if (spacing > 0) spacing.dp else 0.dp
-    val lower = value?.lowercase(Locale.ROOT)
-    return when (lower) {
-        "center" -> if (spacingDp > 0.dp) {
-            Arrangement.spacedBy(spacingDp, Alignment.CenterHorizontally)
-        } else {
-            Arrangement.Center
-        }
-        "end", "right" -> if (spacingDp > 0.dp) {
-            Arrangement.spacedBy(spacingDp, Alignment.End)
-        } else {
-            Arrangement.End
-        }
-        "space_between" -> Arrangement.SpaceBetween
-        "space_around" -> Arrangement.SpaceAround
-        "space_evenly" -> Arrangement.SpaceEvenly
-        else -> if (spacingDp > 0.dp) {
-            Arrangement.spacedBy(spacingDp)
-        } else {
-            Arrangement.Start
-        }
-    }
-}
+private fun verticalArrangement(value: String?, spacing: Float): Arrangement.Vertical =
+    GenUILayoutAlign.verticalArrangement(value, GenUILayoutGuard.spacing(spacing).dp)
 
-/**
- * 解析水平对齐方式
- */
-private fun horizontalAlign(value: String?): Alignment.Horizontal {
-    val lower = value?.lowercase(Locale.ROOT)
-    return when (lower) {
-        "end", "right" -> Alignment.End
-        "center", "stretch" -> Alignment.CenterHorizontally
-        else -> Alignment.Start
-    }
-}
+private fun horizontalArrangement(value: String?, spacing: Float): Arrangement.Horizontal =
+    GenUILayoutAlign.horizontalArrangement(value, GenUILayoutGuard.spacing(spacing).dp)
 
-/**
- * 解析垂直对齐方式
- */
-private fun verticalAlign(value: String?): Alignment.Vertical {
-    val lower = value?.lowercase(Locale.ROOT)
-    return when (lower) {
-        "end", "bottom" -> Alignment.Bottom
-        "center", "stretch" -> Alignment.CenterVertically
-        else -> Alignment.Top
-    }
-}
+private fun horizontalAlign(value: String?): Alignment.Horizontal =
+    GenUILayoutAlign.horizontalAlign(value)
 
-/**
- * 解析Box对齐方式
- */
-private fun boxAlign(value: String?): Alignment {
-    val lower = value?.lowercase(Locale.ROOT)
-    return when (lower) {
-        "top" -> Alignment.TopCenter
-        "bottom" -> Alignment.BottomCenter
-        "center" -> Alignment.Center
-        "start", "left" -> Alignment.CenterStart
-        "end", "right" -> Alignment.CenterEnd
-        "top_start", "top_left" -> Alignment.TopStart
-        "top_end", "top_right" -> Alignment.TopEnd
-        "bottom_start", "bottom_left" -> Alignment.BottomStart
-        "bottom_end", "bottom_right" -> Alignment.BottomEnd
-        else -> Alignment.Center
-    }
-}
+private fun verticalAlign(value: String?): Alignment.Vertical =
+    GenUILayoutAlign.verticalAlign(value)
+
+private fun boxAlign(value: String?): Alignment =
+    GenUILayoutAlign.boxAlign(value)

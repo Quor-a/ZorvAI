@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -147,7 +148,9 @@ fun SetRow(
 fun SetRowClickable(
     icon: ImageVector,
     name: String,
+    /** 名称下方的次要说明（如路径、用途）。留空则不渲染。 */
     sub: String = "",
+    /** 右侧主值（如「12.3 MB」）。留空则不渲染。 */
     value: String = "",
     onClick: () -> Unit,
     scaled: (Int) -> TextUnit = { it.sp },
@@ -162,11 +165,34 @@ fun SetRowClickable(
     ) {
         Icon(icon, contentDescription = null, Modifier.size(20.dp), tint = if (danger) dangerColor else cs.onSurfaceVariant)
         Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(name, fontSize = scaled(14), color = if (danger) dangerColor else cs.onSurface)
-            if (sub.isNotBlank()) Text(sub, fontSize = scaled(11), color = Muted, modifier = Modifier.padding(top = 2.dp))
+        // 🔴 name/sub 这一列拿的是「剩余宽度」，而右侧 value + 箭头是不可压缩的固定内容。
+        // 旧实现里 value 的 Text 不限宽也不限制行数，长文本（如「手机 Download/QuroAI_logs」）
+        // 会把剩余宽度压到 0，中文就被迫竖排成一列字 —— 用户实机截图里的排版 bug。
+        // 修法：value 限宽 + 单行省略；名称列保底 min 宽度，长名称/副标题也省略。
+        Column(Modifier.weight(1f).widthIn(min = 48.dp)) {
+            Text(
+                name, fontSize = scaled(14),
+                color = if (danger) dangerColor else cs.onSurface,
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            if (sub.isNotBlank()) {
+                Text(
+                    sub, fontSize = scaled(11), color = Muted,
+                    modifier = Modifier.padding(top = 2.dp),
+                    maxLines = 2, overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
-        if (value.isNotBlank()) Text(value, fontSize = scaled(13), color = Muted)
+        if (value.isNotBlank()) {
+            Spacer(Modifier.width(10.dp))
+            Text(
+                value, fontSize = scaled(13), color = Muted,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 120.dp),
+                textAlign = TextAlign.End,
+            )
+        }
+        Spacer(Modifier.width(4.dp))
         Icon(Icons.Filled.ChevronRight, contentDescription = null, Modifier.size(16.dp), tint = Muted)
     }
 }

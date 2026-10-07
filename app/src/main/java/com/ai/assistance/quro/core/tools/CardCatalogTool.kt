@@ -4,6 +4,8 @@ import android.content.Context
 import com.ai.assistance.quro.core.cards.CardFence
 import com.ai.assistance.quro.core.cards.CardPatch
 import com.ai.assistance.quro.core.cards.CardSdk
+import com.ai.assistance.quro.core.rag.AgentRag
+import com.ai.assistance.quro.core.rag.RagEngine
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -38,7 +40,8 @@ class CardCatalogTool : QuroTool {
             "参数：category（类目名，可空表示全部）/ types（type 名列表，可空）/ detail（是否回完整样例，默认 true）" +
             " / normalize（是否顺带做 A2UI 组件名归一化，如 GanttChart→gantt，默认 false）" +
             " / fence（是否改为返回正文围栏的 4 种头与属性语法 title=/theme=/compact，默认 false）" +
-            " / patch（是否改为返回 card_patch 增量更新的补丁语法，默认 false）。"
+            " / patch（是否改为返回 card_patch 增量更新的补丁语法，默认 false）" +
+            " / find（**按模糊描述检索**组件类型，直接说用户想要什么效果即可，默认空）。"
 
     /**
      * 参数 schema 用 [JSONObject] 运行时构造，而不是拼字符串。
@@ -75,6 +78,12 @@ class CardCatalogTool : QuroTool {
                 put("type", "boolean")
                 put("description", "true 时改为返回 card_patch 的 JSON Pointer 增量补丁语法，默认 false")
             })
+            put("find", JSONObject().apply {
+                put("type", "string")
+                put("description", "**按模糊描述检索组件类型**：直接说用户想要什么效果即可，" +
+                    "例如「来个仪表盘看完成度」「把占比画出来」「能打分的」。" +
+                    "不必知道 type 的英文名。命中后照常用 detail/types 取完整样例。")
+            })
         })
         put("required", JSONArray())
     }.toString()
@@ -102,6 +111,10 @@ class CardCatalogTool : QuroTool {
                 val normalize = jo.optBoolean("normalize", false)
                 val fence = jo.optBoolean("fence", false)
                 val patchMode = jo.optBoolean("patch", false)
+                val findQ = jo.optString("find", "").trim()
+                // 模糊检索：把命中的 type 直接当 types 用，于是 detail/normalize 等后续参数照样生效，
+                // 模型拿到的是「可直接照抄的完整样例」而不是又一层间接结果。
+                val findHits = if (findQ.isNotEmpty()) findByIntent(findQ) else emptyList()
 
                 // fence / patch 模式：模型问的是「围栏怎么写」或「补丁怎么写」，
                 // 与组件目录无关，所以完全独立返回 —— 混进 items 会让模型在一堆组件里找语法。
@@ -109,17 +122,31 @@ class CardCatalogTool : QuroTool {
                 if (fence) return fenceSyntaxJson()
 
                 val cat = category?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
-                val want = types?.map { it.trim().lowercase() }?.filter { it.isNotEmpty() }?.toSet().orEmpty()
+                val want = (
+                    types?.map { it.trim().lowercase() }?.filter { it.isNotEmpty() }?.toSet().orEmpty() +
+                        findHits
+                    ).toSet()
                 val picked = CardSdk.all.filter { spec ->
                     (cat == null || spec.category == cat) && (want.isEmpty() || spec.type in want)
                 }
 
                 val items = JSONArray()
                 if (detail) {
-                    // 完整样例：复用 CardSdk.samples（继承其类目校验与字符上限截断），
-                    // 再把外层数组**摊平**并入 items —— 直接 put 会多包一层数组，
-                    // 模型按数组元素取对象就会拿到 JSONArray 而不是 JSONObject
-                    val full = JSONArray(CardSdk.samples(category, types, maxChars = 8000))
+                    // 🔴🔴 完整样例必须用**合并后的 want**（types ∪ find 的模糊召回），
+                    // 不能传原始 types。
+                    // 旧码传 `types`：于是 find 命中被算进 picked 却没进 full 样例，
+                    // 模型拿到的 detail 结果里根本没有它召回的类型 ——
+                    // 这就是「card_catalog 的 find 连官方示例查询都召不回」的直接原因。
+                    // 🔴🔴 samples 必须用**合并后的 want**（types ∪ find 的模糊召回），
+                    // 不能传原始 types —— 否则 find 命中被算进 picked 却没进 full 样例，
+                    // 模型拿到的 detail 里根本没有它召回的类型。
+                    // （实测症状：「card_catalog 的 find 连官方示例查询都召不回」）
+                    //
+                    // 未知类目时 samples 会返回 `[{"error":..., "known":[...]}]`，
+                    // 这个**必须原样透传**：它是既有契约（CardCatalogToolTest 钉死），
+                    // 也是模型自我纠正的唯一依据（known 列表就在同一对象里）。
+                    val sampleTypes = if (want.isEmpty()) types else want.toList()
+                    val full = JSONArray(CardSdk.samples(category, sampleTypes, maxChars = 8000))
                     for (i in 0 until full.length()) items.put(full.get(i))
                 } else {
                     // 省 token 模式：只回 type / 类目 / 说明
@@ -131,11 +158,18 @@ class CardCatalogTool : QuroTool {
                         })
                     }
                 }
+                if (findQ.isNotEmpty() && findHits.isEmpty()) {
+                    // 模糊检索没召回到任何真实组件：必须说清「没召回到」而不是回一个空 items，
+                    // 否则模型会把空数组当成「这类组件不存在」并直接告诉用户做不了。
+                    return "没有召回到与「$findQ」直接匹配的卡片类型。可先用 category 或 types 直查" +
+                        "（9 个类目：input/data/layout/action/nav/media/flow/decoration/aiwrite），" +
+                        "或换个更具体的说法。"
+                }
                 if (!normalize) return items.toString()
 
                 // 归一化附表：让模型知道「A2UI / RN 那套 PascalCase 名」对应哪个 snake_case type
                 val norm = JSONArray()
-                (types ?: emptyList()).forEach { raw ->
+                (if (want.isEmpty()) (types ?: emptyList()) else want.toList()).forEach { raw ->
                     val t = CardFence.normalizeType(raw)
                     norm.put(JSONObject().apply {
                         put("input", raw)
@@ -151,6 +185,46 @@ class CardCatalogTool : QuroTool {
                 "❌ card_catalog 失败：${e.message}"
             }
         }
+
+        /**
+         * 按模糊描述召回**卡片 type**。
+         *
+         * ## 索引现读 [CardSdk]，不另维护一张表
+         * 上百种卡片每新增一种就要在别处补一次登记，漏一次就是「这卡存在但 AI 永远想不到用」，
+         * 而且**没有任何报错**。这里直接拿 [CardSdk.all] 建临时索引，
+         * 于是新增卡片自动可检索——漏登记在结构上就不可能发生。
+         *
+         * 返回的是 type 名集合（不是文档），调用方拿它当 `types` 用，
+         * 因此 detail / normalize / fence 等既有参数行为完全不变。
+         */
+        private fun findByIntent(query: String): Set<String> {
+            if (AgentRag.total() <= 0) AgentRag.refresh()
+            val engine = RagEngine()
+            engine.clearDomain(DOMAIN_CARDS)
+            CardSdk.all.forEach { spec ->
+                engine.register(DOMAIN_CARDS, com.ai.assistance.quro.core.rag.RagDoc(
+                    id = spec.type,
+                    name = spec.type,
+                    title = "[富卡片] " + spec.type,
+                    description = spec.description,
+                    capability = spec.type,
+                    // 用 description 本身做关键词：它是作者手写的中文用途说明，
+                    // 比另建同义词表更贴近真实意图，且新增卡片自动带上。
+                    keywords = spec.description.split('，', '、', ',', ' ').map { it.trim() }.filter { it.isNotEmpty() },
+                    triggers = listOf(spec.category, spec.category + "卡片"),
+                    concepts = listOf("卡片", spec.category),
+                    priority = 0.6,
+                    payload = spec.type,
+                ))
+            }
+            val hits = runCatching {
+                engine.search(query, DOMAIN_CARDS, limit = 6, minScore = 1.2)
+            }.getOrDefault(emptyList())
+            return hits.mapNotNull { it.doc.payload as? String }.toSet()
+        }
+
+        /** [findByIntent] 的临时域标识。每次调用现建现弃，不进全局引擎。 */
+        private const val DOMAIN_CARDS = "cards_lookup"
 
         /**
          * 围栏语法说明（`fence=true`）。
