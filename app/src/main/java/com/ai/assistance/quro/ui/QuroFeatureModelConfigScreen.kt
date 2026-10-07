@@ -322,9 +322,13 @@ private data class EngineWired(val label: String, val active: Boolean)
 /**
  * 各功能「独立模型绑定」是否真的改变引擎行为。
  * CHAT / PERSONA_INCUBATE / UI_CONTROL 已有独立调用点接入 resolveConfig，开关即时生效；
- * IMAGE_RECOGNITION 由 VisualAnalysisTool 的 Level2 降级路径接入 resolveConfig；
- * VIDEO_RECOGNITION 由 video_understanding 工具接入 resolveConfig；
- * VIDEO_CALL 由 QuroVideoCallService 的实时对话接入 resolveConfig；以上均真实消费绑定模型。
+ * IMAGE_RECOGNITION 由 VisualAnalysisTool 的 Level2 降级路径接入 resolveConfig，
+ *   同时也是**视频通话实时画面理解的保底视觉模型**（见 QuroFrameVisionRouter 第 3 级）；
+ * VIDEO_RECOGNITION 由 video_understanding 工具接入 resolveConfig
+ *   —— 🔴 它分析的是用户主动发起的**整段视频文件**，与视频通话的实时单帧理解是两条独立链路；
+ * VIDEO_CALL 由 QuroVideoCallService 消费，除了实时对话模型外，
+ *   当主模型没有视觉能力时，**这个绑定的模型会直接被拿来识别摄像头画面**（降级链第 2 级）。
+ * 以上均真实消费绑定模型。
  * 其余功能在单接入点架构下作为主对话内的工具调用，独立绑定无单独 LLM 调用可路由，故跟随主对话。
  */
 private fun engineWired(type: QuroFunctionType): EngineWired = when (type) {

@@ -37,6 +37,8 @@ import com.ai.assistance.quro.core.bot.QuroBotPlatform
 import com.ai.assistance.quro.core.QuroToolSpec
 import com.ai.assistance.quro.core.QuroPersistedConversation
 import com.ai.assistance.quro.core.QuroPersona
+import com.ai.assistance.quro.core.rag.AgentRag
+import com.ai.assistance.quro.core.rag.PromptRagIndex
 import com.ai.assistance.quro.core.soul.QuroSoulPromptEngine
 import com.ai.assistance.quro.core.soul.SoulContext
 import com.ai.assistance.quro.core.QuroPersonaRepository
@@ -105,7 +107,129 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     private val tagRepo = QuroTagRepository(appContext)
 
     // 当前会话的内存存储（单一实例，QuroAssistant 始终写入它）
-    private val store = QuroConversationStore()
+    //
+    // 🔴 #182「集群有消息了但是没有保存记录，退出对话框就没有集群记录了」的真凶。
+    //
+    // store 是纯内存的，落盘**只**由 [commitCurrent] 驱动，而 commitCurrent 只在
+    // `send()` 链路里被调。集群（ClusterChatBridge）与子智能体（QuroAssistant.runSubAgent）
+    // 都是**直接 store.add()** 写入的 —— 于是它们的发言在内存里飘着，
+    // 一切换对话框/退出界面，`selectConversation` 的 store.clear() 就把它们全丢了。
+    //
+    // 修法：给 store 挂落盘钩子，任何来源的写入都触发一次节流落盘。
+    // 不在 add() 里直接落盘（那是 IO，且在集群的 IO 线程上），
+    // 而是转成一次 viewModelScope 内的 commitCurrent —— 复用既有的节流与 #877 防串台守卫。
+    private val store = QuroConversationStore(onMutated = ::onStoreMutated)
+
+    /**
+     * store 被外部写入后的落盘回调（来自集群/子智能体等**非 send() 链路**）。
+     *
+     * 用 `store.all()` 快照落盘：commitCurrent 自带 2s 节流，连续多条集群消息
+     * 不会造成高频写盘。`updateTitle` 传 true —— 集群跑完这一轮，对话标题
+     * 应该按首条真实内容更新，否则历史列表里永远是「新对话」。
+     */
+    private fun onStoreMutated() {
+        val id = _currentId.value
+        if (id.isBlank()) return
+        viewModelScope.launch(AppExecutors.io) {
+            commitCurrent(id, store, updateTitle = true, forceSave = true)
+        }
+    }
+
+    /**
+     * 🔴 暴露会话存储：让**集群**把各角色的回复写进ZorvAI 主对话流。
+     *
+     * 为什么不继续让集群自建气泡列表（旧集群那套）：
+     * 用户原话「集群你并没有做到对话框，而是另外开对话框」。根因不是入口选错了 Sheet，
+     * 而是**数据源根本不通** —— 集群拿不到主对话的消息流，只能自己画一套气泡，
+     * 于是富卡片、工具调用卡、视觉弹窗、记忆、小卡片这些对话框能力全都用不上，
+     * 回复也不进历史。用户看到的自然是「一个只有文本的残废对话框」。
+     *
+     * 只读暴露 + 下面的 [appendClusterMessage] 追加，**不开放 update/clear**：
+     * 集群只该「往对话里说话」，不该改写或清空用户的对话历史。
+     */
+    val conversationStore: QuroConversationStore get() = store
+
+    init {
+        // 🔴 集群 → 对话框投影（本轮修「集群进入对话框你老是另开」）。
+        //
+        // 症状真因不是"另开窗口"，而是集群发言**根本没进对话框**：
+        // ClusterTraceBridge 只把事件写进 QuroAgentTrace（思维链/诊断面板），
+        // 那和消息流是两套东西，于是用户盯着对话框看到零回复，
+        // 而后台其实在真跑模型。
+        //
+        // 为什么在 ViewModel 绑而不是 ChatScreen：store 是 private 的，
+        // 只读暴露在 ViewModel；且 ViewModel 生命周期 ≈ 对话框可见期，
+        // onCleared 时解绑，避免往已销毁的会话里写气泡。
+        //
+        // store 是**单一实例**、selectConversation 里 clear() 后重灌同一对象，
+        // 所以绑一次即可，不需要在切会话时重新绑定。
+        runCatching {
+            val engine = com.ai.assistance.quro.core.cluster.ClusterRuntime.get()
+            com.ai.assistance.quro.core.cluster.ClusterChatBridge.registerSink(store, engine)
+        }.onFailure {
+            // 🔴 别静默失败：吞掉的话症状是「集群跑完了但对话框一个字没有」，
+            // 而日志里什么都没有，排查成本极高。这里必须留可检索的一行。
+            android.util.Log.w(
+                "QuroChatViewModel",
+                "集群投影桥绑定失败（对话里将看不到集群发言）",
+                it
+            )
+        }
+    }
+
+    /**
+     * 只把用户消息写进对话流，**不触发任何模型回复**。
+     *
+     * 集群模式用：集群的发言由 [com.ai.assistance.quro.core.cluster.ClusterChatBridge]
+     * 投影进来，若不先把用户这条写进去，对话流里只有 AI 的气泡、没有用户的话，
+     * 看起来像 AI 自言自语。用 [vm.send] 写是错的 —— 它会连带跑一遍普通模型。
+     */
+    fun appendUserMessage(text: String) {
+        val t = text.trim()
+        if (t.isEmpty()) return
+        store.add(
+            QuroMessage(
+                role = "user",
+                content = t,
+                senderName = userProfile.value.name.takeIf { it.isNotBlank() },
+                avatarUrl = userProfile.value.avatarUri.takeIf { it.isNotBlank() },
+            )
+        )
+    }
+
+    /**
+     * 撤回最后一条内容相同的用户消息。
+     *
+     * 集群提交失败时的回滚：[appendUserMessage] 先写了、但集群没接住，
+     * 这条要撤掉改走 [send]，否则同一条话会在对话里出现两次。
+     */
+    fun dropLastUserMessage(text: String) {
+        val t = text.trim()
+        if (t.isEmpty()) return
+        val all = store.all()
+        val idx = all.indexOfLast { it.role == "user" && it.content.trim() == t }
+        if (idx >= 0) store.remove(all[idx].id)
+    }
+
+    /**
+     * 追加一条**集群角色**的消息到当前对话。
+     *
+     * 用 [QuroMessage.senderName] 承载角色名 —— 这样每个角色的发言
+     * 走的是和 ZorvAI 助手消息**完全同一套**气泡渲染（富卡片、markdown、
+     * 工具调用卡、小卡片全都自动生效），而不是另画一个文本气泡。
+     *
+     * @param speaker 角色显示名（如「主持人」「研究员 小林」）
+     * @param text 发言正文（支持 markdown）
+     */
+    fun appendClusterMessage(speaker: String, text: String) {
+        store.add(
+            QuroMessage(
+                role = "assistant",
+                content = text,
+                senderName = speaker,
+            )
+        )
+    }
     // 共享工具注册表：assistant 下发 tools 字段 �? 系统提示词菜�? 都从这里取，保证二者严格一致�?
     private val registry = buildQuroRegistry(appContext).also { QuroToolRegistry.active = it }
     // 统一附件管理器：管理所有上下文附件（工作区/ACI/技�?/屏幕/通知/位置等）
@@ -431,8 +555,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             val latest = cleaned.maxByOrNull { it.updatedAt }!!
             _currentId.value = latest.id
             activeConversationId = latest.id
-            store.clear()
-            latest.messages.forEach { store.add(it) }
+            store.loadSilently(latest.messages)
             _messages.value = store.all()
             emitMeta()
         }
@@ -514,7 +637,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         emitMeta()
         // 如果追加的是当前可见会话，同步刷�? _messages
         if (_currentId.value == conversationId) {
-            messages.forEach { store.add(it) }
+            store.addAll(messages)
             _messages.value = store.all()
         }
     }
@@ -557,8 +680,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         _genUiType.value = conv.genUiType
         // 优先取在线缓冲（生成�?/刚结束）�? 即时看到最新；否则取持久化消息�?
         val live = liveBuffers[id]
-        if (live != null) live.all().forEach { store.add(it) }
-        else conv.messages.forEach { store.add(it) }
+        store.loadSilently(if (live != null) live.all() else conv.messages)
         _messages.value = store.all()
         // busy 仅反映【当前可见会话】是否生成中；切回仍在后台生成的会话时，
         // _busyMap 中该会话仍为 true，打断按钮会自动重新显示�?
@@ -623,6 +745,13 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         emitMeta()
     }
 
+    override fun onCleared() {
+        // 🔴 集群投影解绑：ViewModel 销毁后再往这个 store 写气泡，
+        // 用户会看到「已死会话」的发言冒出来。
+        runCatching { com.ai.assistance.quro.core.cluster.ClusterChatBridge.unregisterSink() }
+        super.onCleared()
+    }
+
     fun clear() {
         sendJobs[_currentId.value]?.cancel(); sendJobs.remove(_currentId.value)
         liveBuffers.remove(_currentId.value)
@@ -668,8 +797,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             // 但新 job 的后�? commitCurrent(新buf) 会用缺旧内容的新 buf 覆盖 _messages �? 旧内容仍丢失�?
             val oldBuf = liveBuffers[convId]
             if (oldBuf != null) {
-                this@QuroChatViewModel.store.clear()
-                oldBuf.all().forEach { this@QuroChatViewModel.store.add(it) }
+                this@QuroChatViewModel.store.loadSilently(oldBuf.all())
                 commitCurrent(convId, forceSave = true)
             }
             turn.interrupt(convId)
@@ -810,7 +938,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         // 原为 ask 的实参在 viewModelScope(主线�?) 上求�? �? 主线程重 I/O/计算 �? 触发系统 ANR 对话框�?
                         // 改为�? IO 线程先把提示词算好，再交�? ask（ask 自身仍切 IO 执行 ReAct 循环）�?
                         val spStart = System.currentTimeMillis()
-                        val sysPrompt = withContext(Dispatchers.IO) { buildSystemPrompt(effectiveCfg) + (screenCtx ?: "") }
+                        val sysPrompt = withContext(Dispatchers.IO) { buildSystemPrompt(effectiveCfg, t) + (screenCtx ?: "") }
                         QuroDiag.log("GEN_SYSPROMPT_MS", "convId=$convId ms=${System.currentTimeMillis() - spStart}")
                         val askStart = System.currentTimeMillis()
                         var firstTokenTs = 0L
@@ -882,7 +1010,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     //   切回时由 selectConversation 重新装载，数据不一�?
                     if (convId == _currentId.value) {
                         this@QuroChatViewModel.store.clear()
-                        buf.all().forEach { this@QuroChatViewModel.store.add(it) }
+                        this@QuroChatViewModel.store.addAll(buf.all())
                     }
                     liveBuffers.remove(convId)
                     QuroDiag.log("SYNC", "convId=$convId syncedBufToStore visible=${convId == _currentId.value}")
@@ -902,8 +1030,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // �? 串台防御：仅当被停止的会话当前可见时才同步全局 store（全局 store 只承载可见会话副本）�?
         //   停止后台不可见会话时若仍覆盖全局 store，会污染随后可见会话�? send() 首显�?
         if (stoppingBuf != null && id == _currentId.value) {
-            store.clear()
-            stoppingBuf.all().forEach { store.add(it) }
+            store.loadSilently(stoppingBuf.all())
             commitCurrent(id, forceSave = true)
         }
         QuroDiag.log("STOP", "id=$id (manual stop button)")
@@ -942,7 +1069,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 )
             }
             commitCurrent()
-            val reply = runVoiceAsk(cfg) { commitCurrent() }
+            val reply = runVoiceAsk(cfg, text) { commitCurrent() }
             commitCurrent()
             fireReplyNotification("Zorv AI", reply)
             return reply
@@ -953,8 +1080,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             ?: return voiceBallTurn(text, cfg, "")   // 兜底：会话不存在 �? 写当�?
         val saved = store.all().toList()
         return try {
-            store.clear()
-            conv.messages.forEach { store.add(it) }
+            store.loadSilently(conv.messages)
             store.add(QuroMessage(role = "user", content = text, senderName = userProfile.value.name.takeIf { it.isNotBlank() }, avatarUrl = userProfile.value.avatarUri.takeIf { it.isNotBlank() }))
             // 触发词自动激活（绑定其它会话路径）：�? send() 同源逻辑
             val onDemand = QuroSkillStore.matchTriggerSkills(text, appContext).filter { !it.alwaysOn }
@@ -968,7 +1094,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     ),
                 )
             }
-            val reply = runVoiceAsk(cfg) { commitCurrent(targetId) }
+            val reply = runVoiceAsk(cfg, text) { commitCurrent(targetId) }
             val finalMsgs = store.all().toList()
             _convs.value = _convs.value.map { c ->
                 if (c.id == targetId) c.copy(
@@ -982,14 +1108,13 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             fireReplyNotification("Zorv AI", reply)
             reply
         } finally {
-            store.clear()
-            saved.forEach { store.add(it) }
+            store.loadSilently(saved)
             // 当前可见视图�? _messages 不在此处刷新，避免绑定写入时界面闪烁
         }
     }
 
     /** 用同一套助手与系统提示词问询（store 须已含用户消息）。onTick 用于生成中持久化�? */
-    private suspend fun runVoiceAsk(cfg: QuroModelConfig, onTick: () -> Unit): String {
+    private suspend fun runVoiceAsk(cfg: QuroModelConfig, userQuery: String = "", onTick: () -> Unit): String {
         // 本地离线模型（MNN / llama.cpp）走本地推理，不发起 HTTP，无需 apiKey。
         val isLocalModel = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
         return if (!isLocalModel && cfg.apiKey.isBlank()) {
@@ -1000,7 +1125,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 val effCfg = QuroFunctionModelConfigRepository(appContext).resolveConfig(QuroFunctionType.CHAT, cfg)
                 // �? ANR 修复：与对话框主路径一致，buildSystemPrompt 放到 IO 线程求值，避免语音球问答在主线程做存储读取�?
                 val spStart = System.currentTimeMillis()
-                val sysPrompt = withContext(Dispatchers.IO) { buildSystemPrompt(effCfg) }
+                val sysPrompt = withContext(Dispatchers.IO) { buildSystemPrompt(effCfg, userQuery) }
                 QuroDiag.log("VB_SYSPROMPT_MS", "ms=${System.currentTimeMillis() - spStart}")
                 val askStart = System.currentTimeMillis()
                 var firstTokenTs = 0L
@@ -1685,7 +1810,11 @@ $recent
         }
     }
 
-    private fun buildSystemPrompt(cfg: QuroModelConfig): String {
+    /**
+     * @param userQuery 本轮用户输入**原话**。仅供系统提示词 RAG 选段用；
+     *   传空串时 RAG 只注基础段，行为与改动前一致。
+     */
+    private fun buildSystemPrompt(cfg: QuroModelConfig, userQuery: String = ""): String {
         val persona = activePersona()
         val sb = StringBuilder()
 
@@ -2238,6 +2367,20 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         // 本地离线模型不走到这里（已在上面 isLocal 分支 early-return），本段只在云端路径注入。
         sb.append(buildVisualSwitchEnforcement())
 
+        // ══════════════ 系统提示词 RAG：按本轮意图追加「进阶段规则」 ══════════════
+        // 旧架构一行未删：render() 无论开关如何都先拼完整基座，
+        // RAG 只决定「额外的进阶段段落要不要跟」。FULL_ALWAYS 时进阶段全量跟上，
+        // SELECTIVE 时按 userQuery 检索，挑不出就一个不加（宁缺毋滥——
+        // 塞一堆当前无关的规则只会稀释注意力，让模型漏掉真正该守的那条）。
+        sb.append(
+            PromptRagIndex.render(
+                engine = AgentRag.engine,
+                mode = promptRagMode(),
+                userQuery = userQuery,
+                base = sb.toString(),
+            )
+        )
+
         // 「AI 回复语言」结尾复述（近因强化）：系统提示词上万字中文，开头那句容易被后续内容冲淡。
         sb.append(QuroReplyLanguage.tailReminder(appContext))
         sb.append(QuroReplyLanguage.shortThinkingDirective(appContext))
@@ -2256,6 +2399,25 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
      * 把「AI 经验笔记 & 自我进化」的行为指引 + 本轮相关经验注入系统提示词（OODA 闭环�? Feedback）�?
      * 不打扰用户：纯后台沉淀，下次相关对话自动复用并修正�?
      */
+    /**
+     * 系统提示词 RAG 注入模式。
+     *
+     * 默认 [PromptRagIndex.Mode.FULL_ALWAYS]：与改动前**逐字一致**，
+     * 这样即便选段逻辑出任何问题，提示词也只是多了几段而不会缺段。
+     * 用户主动切到 SELECTIVE 才享受「只注入相关段落」的省 token 收益。
+     */
+    private fun promptRagMode(): PromptRagIndex.Mode {
+        val raw = runCatching {
+            appContext.getSharedPreferences("quro_rag", Context.MODE_PRIVATE)
+                .getString("prompt_rag_mode", null)
+        }.getOrNull()
+        return if (raw == PromptRagIndex.Mode.SELECTIVE.name) {
+            PromptRagIndex.Mode.SELECTIVE
+        } else {
+            PromptRagIndex.Mode.FULL_ALWAYS
+        }
+    }
+
     private fun appendExperienceAwareness(sb: StringBuilder) {
         val engine = QuroExperienceEngine(QuroExperienceRepository(appContext))
         sb.append("\n\n## AI 经验笔记 & 自我进化（内部，不打扰用户）\n")
@@ -2353,6 +2515,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "- **屏幕理解授权**：用户要你「看屏幕/截图看下」或你需要像素级读屏时，主动调 `enable_screen_capture` 拉起系统授权，授权后视觉循环自动启用（无需手动长按开关）。\n" +
             "- **节点编辑器**：用户要「画流程图/节点流/可视化编程」时，直接调 `node_editor` 读写 .qne 工程，不用打开界面也能编排。\n" +
             "- **端侧APK构建**：用户要「做个App/打包/出APK/自定义包名或图标或签名」时，主动用 `build_apk`（支持自定义包名、release签名生成、依赖JAR、自定义图标），产物用 `export_apk` 导出。\n" +
+            "- **确定性出图（CodeCanvas）**：用户要「画一张海报/报表/代码卡/示意图」或强调排版必须精确时，主动用 `codecanvas_markup`（HTML→图）或 `codecanvas_script`（脚本→图）。它与 `image_gen` 分工：**image_gen 走厂商生图 API 画创意图；codecanvas_* 走确定性渲染，同样的输入永远出同样的图**。首次使用先调 `codecanvas_probe` 探活并用 `set_server_url` 配好服务地址。\n" +
             "- **可视化小卡片 / 动态UI**：人格卡对应开关开启时（见下方「可视化输出」铁律），能做成卡片/界面的回复必须主动用 ```quro-card / ```quro-ui，不要默认回纯文字。\n"
         )
         // ── 人格卡可视化开关「硬强制」规则已抽到 buildVisualSwitchEnforcement()，
@@ -2387,6 +2550,25 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "- ❌ 因为'大概是这个工具'就跳过查询\n" +
             "- ❌ 工具调用失败后不尝试找替代工具\n\n" +
             "**正确做法：遇到任何不确定，立刻调用 tool_discovery。**\n"
+        )
+        // ══ CodeCanvas 确定性出图专项指引 ══
+        // 🔴 背景：用户报「新加的生图 AI 根本查不到」。工具确实在 tools 字段里，
+        //   但既没进 coreNames / ALWAYS_ON，也没有任何提示词指引与分类规则——
+        //   模型既查不到、也没动机调。本轮三处同时补齐（分类 + 分档 + 本段）。
+        sb.append("\nn### 🎨 确定性出图（codecanvas_* 工具）——海报 / 报表 / 代码卡走这里\nn")
+        sb.append(
+            "当用户要**一张图**，且内容是**排版必须精确**的内容（海报、报表、图表、流程图、代码卡、带文字的图片、示意图）时，**优先用 `codecanvas_*` 而不是 `image_gen`**。\nn" +
+            "**两者分工（别搞混）**：\nn" +
+            "- `codecanvas_*`：**确定性渲染**。HTML/脚本经渲染引擎逐像素画出来，同样的输入永远出同样的图，文字绝不会错、能精确对齐。它调用外部 FastAPI 服务（CodeCanvasServer），需先配好地址。\nn" +
+            "- `image_gen`：厂商生图 API。适合**创意插画、人物、场景**这类没有精确文字需求的图。\nn" +
+            "**五个工具怎么用**：\nn" +
+            "1. `codecanvas_probe` —— 探活 + 配地址。**首次出图前必须先调一次**，用 `set_server_url` 把服务地址设成 PC 的局域网地址（如 http://192.168.1.5:8000）。\nn" +
+            "2. `codecanvas_markup` —— HTML/CSS → 图片。做海报、报表、带文字的卡片首选这个。\nn" +
+            "3. `codecanvas_script` —— 脚本 → 图片（4 引擎 × 4 后端）。做图表、示意图、程序化绘图。\nn" +
+            "4. `codecanvas_code_card` —— 代码高亮卡片。贴代码片段时用它，比 Markdown 好看。\nn" +
+            "5. `codecanvas_llm_code` —— 需求 → LLM 写渲染代码。**唯一不返图的工具**，返回代码文本给你执行。\nn" +
+            "**出图后必须再做一步**：工具返回的是图片的**本地路径**，你必须紧接着调 `attach_file`（参数 `path` = 该路径）把这张图挂进气泡，否则用户只看到一行路径文字、看不到图。\nn" +
+            "**注意**：对话框气泡用位图解码器渲染，**SVG 不会显示**，需要展示时请用 `format=png` 出图。\nn"
         )
         // ══�? AI 键盘通道专项指引（v436 新增）：�? LLM 知道何时�? IME 键盘通道而非无障�? input_text ══�?
         sb.append("\n### AI 键盘通道（ai_type_text / ai_press_enter / ai_press_send）\n")

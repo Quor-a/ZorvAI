@@ -32,6 +32,44 @@ class MiniAppTool : QuroTool {
 - pages/<page>/<page>.html：页面（完整 HTML，用 Page() 运行时组织状态，可调 native.*）
 - components/<name>/<name>.js：可复用组件（可选）
 
+技术栈支持（宿主是 Android WebView = 真 Chromium 内核，不是简化运行时）：
+
+🌐 **HTML5 全量**：语义标签（header/nav/main/article/section/aside/footer/details/summary/dialog）、
+表单（form/input/select/textarea/datalist/output/progress/meter）、多媒体（video/audio/canvas/iframe）、
+SVG 内联、data-* 自定义属性、aria-* 无障碍属性、`<template>`、`<slot>`、Shadow DOM（Web Components）。
+
+🎨 **CSS3 全量**：Flex / Grid / Subgrid、transform / transition / animation（@keyframes）、
+@layer 级联层、:has() / :is() / :where()、CSS 变量 var()、逻辑属性（margin-inline 等）、
+容器查询 @container、媒体查询 @media、@supports、clamp()/min()/max() 流体排版、
+color-mix() / oklch() 现代颜色、backdrop-filter、env(safe-area-inset-*)。
+
+⚙️ **JS 全量（ES2023+）**：let/const、解构、箭头函数、async-await、Promise、Symbol、
+Map/Set、Proxy/Reflect、BigInt、Generator、类与私有字段 #x、顶层 await、
+import.meta、动态 import()、可选链 ?.、空值合并 ??、**ES Modules**（<script type="module"> + import/export）。
+
+🧰 **浏览器 API 全量**：fetch / XMLHttpRequest / WebSocket / EventSource(SSE) / WebRTC、
+localStorage / sessionStorage / **IndexedDB**、Cache API、Service Worker（离线/PWA）、
+Web Workers + SharedWorker、Canvas 2D、**WebGL / WebGL2 / WebGPU**、WebAssembly、
+Web Audio、IntersectionObserver / ResizeObserver / MutationObserver、
+navigator.serviceWorker / clipboard / share / vibrate / geolocation、
+crypto.subtle、Blob / File / FileReader / URL.createObjectURL、Drag & Drop。
+
+🔗 **工程化产物直吃**：页面可以用 CDN 直接引 React / Vue / Svelte / Tailwind / Alpine / GSAP / Three.js
+的构建版或 UMD 版；也可以是 Vite/Webpack/esbuild 打包好的 dist 产物；
+Rust / C++ / Go 编译出的 .wasm（已配好 application/wasm MIME）。
+把 .wasm / .mjs / .woff2 / .mp4 等资源放进工程目录即可，宿主已按扩展名给正确 MIME。
+
+🔐 **运行环境**：页面跑在 **https 同源沙箱**（secure context），且：
+- 外部 https 资源一律放行 → 可以 fetch 公开 API、引 CDN；
+- 本地相对路径 ./x.js、../css/y.css 会被映射到工程目录；
+- 目录穿越（../）已被拦截；
+- 跨域仍受浏览器 CORS 约束（与浏览器一致，不是宿主限制）→ 调外部 API 若对方没开 CORS 会失败，
+  此时用 native.network.request 走宿主通道（宿主侧不受 CORS 限制）；
+- 点外部网站的链接会交给**系统浏览器**打开，不会把用户困在应用里。
+
+⚠️ **做不到的**（别写）：服务端能力（Node/数据库/SSR/Next.js 这类元框架需要后端进程）、
+跨域绕过、访问宿主私有文件（只能读工程目录内）、多窗口标签页。
+
 原生能力（native.* 桥，由宿主注入；这是用本工具的唯一理由）：
 - storage：setItem/getItem/removeItem/clear（跨启动持久化）
 - ui：toast/setNavigationBarTitle

@@ -61,6 +61,7 @@ class UiDslSpecTool : QuroTool {
         }
     }
 
+
     private companion object {
         val NODE_SPEC = """
 【节点类型】每个节点必须有 "type" 字段。下面列出的是「常用组件速查表」，用于告诉你有哪些现成能力可用——
@@ -173,6 +174,42 @@ red green blue yellow orange purple pink teal indigo gray primary secondary erro
   - opacity：透明度 0~1（也接受 0~100，会自动 ÷100）
   - align：父容器内对齐。column 里用 start|center|end（控水平）；row 里用 top|center|bottom（控垂直）
   - visible：false 则该节点整体不渲染（数据驱动显隐，不惊动模型）
+  - direction：容器方向。row/column 里已由类型决定；box/flow 里写 "horizontal" 或 "vertical"
+  - spacing：容器内**子元素之间**的间距(dp)，与 padding 不同（padding 是容器自己的内边距）
+
+【排版契约 —— 写之前必读，违反会被引擎收敛，界面会明显走样】
+
+① 尺寸单位是 **dp 不是 px**。手机屏宽约 360dp。
+   "width": 1080 会被钳到 720；"fontSize": 96 会被钳到 48 —— 都是排版事故。
+   要撑满父容器写 "width": "fill"；要按比例写 {"weight": 0.5}。
+
+② 间距只用 8pt 网格的档位：**2 / 4 / 8 / 12 / 16 / 24 / 32**。
+   ⚠️ 别写 10 / 14 / 18 / 20 —— 这些不在网格上，同屏卡片间距一高一低，
+   肉眼说不出哪里怪但就是觉得「不齐」。这是最常见的「看起来不整齐」原因。
+
+③ 卡片与卡片的间隔用两种写法，**不要混**：
+   · 父容器的 spacing 控制「子元素之间」的间距（推荐，连锁生效）；
+   · 自己的 margin 控制「我与外部的留白」。
+   margin 引擎已支持，缺省会默认 8，所以**不写 margin 不会贴死**，但也别全省。
+
+④ 对齐语义（引擎已统一，此前两套实现行为不一致）：
+   · column 的 align 控**水平**：start（默认，左）/ center / end；
+   · row 的 align 控**垂直**：top（默认，上）/ center / bottom；
+   · box/grid 默认一律**左上角开始**，不是居中 —— 不写 align 就是 top-left。
+   ⚠️ `stretch` 现在是「撑满」的语义（不是居中），需要铺满时用 "align": "stretch"。
+
+⑤ 方向别名已容错：`horizontal` / `Horizontal` / `row` / `h` / `x` 都能识别为横向，
+   `vertical` / `column` / `v` / `y` 都能识别为纵向。但**同一套布局里不要混用别名**。
+
+⑥ 文字层级只用这几个档位（Material 3 Type Scale），别随手 13 / 15 / 17：
+   11 角标、12 辅助说明、**14 正文**、16 卡片标题、22 区块标题、24 页面主标题、36 数字展示。
+   同级内容字号必须相同 —— 一个卡片里标题 22、副标题 12、正文 14 才叫层级清晰。
+
+⑦ 圆角只用 4 / 8 / 12 / 16 / 28，卡片默认 12。别在同一屏混用 6 和 14。
+
+⑧ 一屏内对比度要够：正文与背景的明暗差要明显，弱化文字用 muted 语义名而不是手写浅灰。
+
+⑨ 长文本必须约束：表格/列表单元格写 maxLines + overflow，否则超长文本会把整个布局撑破。
 注意：模型输出永远是「数据」不是「代码」——再自由的样式也只是声明，端上忠实渲染成原生控件，
 且任意字段非法都会回落默认值，绝不会导致渲染失败。
 

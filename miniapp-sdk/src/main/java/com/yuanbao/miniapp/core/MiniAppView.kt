@@ -1,6 +1,7 @@
 package com.yuanbao.miniapp.core
 
 import android.app.Dialog
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
@@ -46,7 +47,8 @@ class MiniAppView @JvmOverloads constructor(
     defStyle: Int = 0
 ) : FrameLayout(context, attrs, defStyle),
     LogicRuntime.RenderHost,
-    WxApi.NavigationHost {
+    WxApi.NavigationHost,
+    WxApi.ScrollHost {
 
     /**
      * 画面承载层：普通 View + onDraw，**不用 SurfaceView**。
@@ -456,6 +458,38 @@ class MiniAppView @JvmOverloads constructor(
 
     override fun setNavigationBarTitle(title: String) { post { titleBar?.invoke(title) } }
     override fun currentPage(): String = currentPagePath()
+
+    /**
+     * wx.pageScrollTo：滚整页。
+     * 微信小程序页面本身就是纵向滚动容器，所以作用在**根节点**的 scrollTop 上
+     *（applyPageScroll 已按内容真实高度把它标成可滚动）。
+     * duration>0 时用 ValueAnimator 平滑滚；<=0 直接跳（微信 duration:0 即瞬时）。
+     */
+    override fun scrollTo(top: Int, durationMs: Int) {
+        post {
+            val entry = pageStack.lastOrNull() ?: return@post
+            val root = entry.root ?: return@post
+            val maxScroll = (root.contentHeight - viewportH).coerceAtLeast(0f)
+            val target = top.toFloat().coerceIn(0f, maxScroll)
+            if (durationMs <= 0) {
+                root.scrollTop = target
+                markDirty()
+                return@post
+            }
+            scrollAnimator?.cancel()
+            val from = root.scrollTop
+            scrollAnimator = ValueAnimator.ofFloat(from, target).apply {
+                duration = durationMs.toLong().coerceIn(0L, 2000L)
+                addUpdateListener {
+                    root.scrollTop = it.animatedValue as Float
+                    markDirty()
+                }
+                start()
+            }
+        }
+    }
+
+    private var scrollAnimator: ValueAnimator? = null
 
     private fun pushPage(page: String, params: Map<String, String>) {
         var wxml = pkg?.pageWxml(page) ?: ""

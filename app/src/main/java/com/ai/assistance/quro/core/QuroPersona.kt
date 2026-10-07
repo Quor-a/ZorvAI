@@ -146,6 +146,9 @@ class QuroPersonaRepository(val context: Context) {
         return all.firstOrNull { it.id == id } ?: all.firstOrNull() ?: QuroPersona()
     }
 
+    /** 按 id 取一条人格卡；不存在返回 null。集群模块（RoleRegistry / ClusterEngine）依赖此方法。 */
+    fun get(id: String): QuroPersona? = loadAll().firstOrNull { it.id == id }
+
     /** 解析 JSONArray 为字符串列表（空/异常返回空列表）。 */
     private fun parseStringList(arr: org.json.JSONArray?): List<String> {
         if (arr == null) return emptyList()

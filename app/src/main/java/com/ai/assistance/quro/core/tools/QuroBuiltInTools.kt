@@ -487,6 +487,21 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(ImageRecognitionTool())   // AI 图像识别
     r.register(AudioRecognitionTool())   // AI 音频识别
     r.register(VideoUnderstandingTool()) // AI 视频理解
+    // CodeCanvas 出图后端（外部 FastAPI 服务，脚本/代码卡/HTML 三条出图通道 + 需求转代码 + 探活）。
+    // 与 ImageGenTool 的分工：image_gen 走厂商生图 API；codecanvas_* 走**确定性渲染**，
+    // 同样的输入永远出同样的图，适合海报/报表/代码卡这类要精确排版的内容。
+    r.register(CodeCanvasProbeTool())     // 先探活与配地址，避免出图失败时盲目重试
+    r.register(CodeCanvasScriptTool())    // 脚本驱动出图（4 引擎 × 4 后端）
+    r.register(CodeCanvasCodeCardTool())  // 代码高亮卡片
+    r.register(CodeCanvasMarkupTool())    // HTML → 图片
+    r.register(CodeCanvasLlmCodeTool())    // 需求 → LLM 写代码（唯一不返图的端点）
+    // CodeCanvas **端侧**出图（SDK 直接跑在 App 里，纯离线，无需起任何服务）。
+    // 与上面五个服务端工具并存：服务端 chromium 后端排版更精细但要用户另装 Python 环境，
+    // 端侧覆盖绝大多数场景且开箱即用。名字带 onscreen 以免与codecanvas_* 撞名
+    // （同名工具会让模型随机挑一个，行为不可预测）。
+    r.register(CodeCanvasOnscreenScriptTool())   // 端侧脚本出图（javascript / kotlin-dsl）
+    r.register(CodeCanvasOnscreenCodeCardTool()) // 端侧代码高亮卡
+    r.register(CodeCanvasOnscreenMarkupTool())   // 端侧 HTML → 图片（需 WebView 后端）
     // 增强版文档创建工具：支持更多类型和更好渲染
     r.register(EnhancedDocTool())        // 增强版文档创建
     // 后台 AIP 排版合成工具：整篇长文档/PPT/报告以「工具调用形式」产出，对话框据此渲染（B 通道 Canvas 引擎）
@@ -502,6 +517,9 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // 可视化组件目录查询（card_catalog）：全量组件的常驻清单在两个下发工具的描述里，
     // 完整样例按需来此拉 —— 避免把十几 KB 样例常驻进系统提示词。
     r.register(CardCatalogTool())
+    // 万物可RAG 的模型侧入口（跨域：工具 / 系统提示词规则 / 动态UI组件 / 界面交付路径）。
+    // 与 tool_router 并存：那个只管工具域，这个管「我该走哪条路」这类跨域问题。
+    r.register(RagSearchTool())
     // 卡片增量补丁（card_patch）：改已下发卡片的某几个字段，不必重发整张卡。
     // 与卡片栏那条老路（ui_control action:"update"，只覆盖少数字段）并存 ——
     // 本工具走 JSON Pointer 补丁，对全部组件一视同仁且新增组件无需登记。
@@ -580,6 +598,11 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // 插件自己贡献的 AI 工具不进 map（其执行体是 suspend，由 QuroToolEngine 单独分支处理），
     // 只通过 coreSpecs() 里的 pluginHostToolSpecs() 下发给 LLM。
     allPluginManagementTools.forEach { r.register(it) }
+    // 新集群（tool-first 重写）：一组 cluster_* 工具。
+    //   🔴 必须在 ToolCapabilityDirectory.install(...) **之前**注册 —— 目录与 RAG 索引都以
+    //   install 那一刻的 fullSpecs() 为快照；晚注册的工具不会进目录，match_intent 意图检索
+    //   就永远召不回 cluster_start（表现为「明明有集群功能，助手却说不会」）。
+    com.ai.assistance.quro.core.cluster.ClusterToolSet.registerAll(r)
     // 工具能力目录以真实注册表为单一真相源动态生成（修复「分组目录残缺→AI 查不到/不主动用工具」）
     // 用 fullSpecs()（内置全部 + 技能工具），与模型实际下发集合严格一致（core/full 模式下目录==可调用全集）
     ToolCapabilityDirectory.install(r.fullSpecs())

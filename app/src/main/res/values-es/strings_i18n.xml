@@ -3736,7 +3736,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03756" formatted="false">Modelo usado para traducir texto</string>
     <string name="qk_03757" formatted="false">Modelo usado para la búsqueda de código</string>
     <string name="qk_03758" formatted="false">Modelo usado para incubar y destilar tarjetas de alma</string>
-    <string name="qk_03759" formatted="false">Modelo usado para entender imágenes (requiere visión)</string>
+    <string name="qk_03759" formatted="false">Modelo para entender imágenes (debe admitir visión); también es el modelo de visión de respaldo para entender la escena en videollamada</string>
     <string name="qk_03760" formatted="false">Modelo usado para entender audio</string>
     <string name="qk_03761" formatted="false">Modelo usado para entender vídeo y fotogramas de videollamada (requiere visión)</string>
     <string name="qk_03762" formatted="false">Modelo de generación de imágenes que la IA puede llamar</string>
@@ -3851,7 +3851,7 @@ Se conservaron tus modelos configurados; también puedes escribir el nombre del 
     <string name="qk_03870" formatted="false">Sign in to manage repos / issues / stars / notifications; search GitHub inside the chat</string>
     <string name="qk_03871" formatted="false">When on, dangerous commands (rm -rf / dd / mkfs) require a second send or confirm</string>
     <string name="qk_03872" formatted="false">Follow system</string>
-    <string name="qk_03873" formatted="false">Model used for the live conversation and scene understanding in a video call (must support vision)</string>
+    <string name="qk_03873" formatted="false">Modelo para la conversación en videollamada; también se usa para leer el fotograma de la cámara cuando el modelo de chat principal no tiene visión (debe admitir visión)</string>
     <string name="qk_03874" formatted="false">Tap to start the video call</string>
     <string name="qk_03875" formatted="false">Video call on standby</string>
     <string name="qk_03876" formatted="false">Camera on · tap the mic to speak</string>
@@ -3887,4 +3887,21 @@ Se conservaron tus modelos configurados; también puedes escribir el nombre del 
     <string name="qk_03906" formatted="false">Ejecuta la inferencia local en un proceso separado: cargar un modelo grande ya no puede hacer que el sistema cierre toda la aplicación, y la interfaz sigue disponible. Desactívalo para volver al comportamiento anterior.</string>
     <string name="qk_03907" formatted="false">Programación térmica adaptativa</string>
     <string name="qk_03908" formatted="false">Lee el margen térmico del SoC cada 2 segundos durante inferencias largas y reduce ligeramente los hilos con antelación, evitando el estrangulamiento brusco del sistema. Desactivado: sin intervención.</string>
+
+    <string name="qk_03909" formatted="false">Más acciones</string>
+
+    <!-- ⋮ 视频通话启动失败原因（静默自停改为可读提示） -->
+    <string name="qk_03910" formatted="false">No se pudo iniciar la videollamada. Ábrela de nuevo desde la pantalla principal</string>
+    <string name="qk_03911" formatted="false">La videollamada necesita permiso para mostrar sobre otras aplicaciones</string>
+    <string name="qk_03912" formatted="false">No se pudo mostrar la pantalla de videollamada. Revisa los permisos e inténtalo de nuevo</string>
+    <string name="qk_03913" formatted="false">Falta el permiso de cámara</string>
+    <string name="qk_03914" formatted="false">Falta el permiso de micrófono</string>
+    <string name="qk_03915">Contenido largo, se muestran las primeras %1$s de %2$s líneas</string>
+
+    <string name="qk_03916">Se limpiaron %1$d elementos, se liberaron %2$s</string>
+    <string name="qk_03917">Limpieza fallida: acceso denegado a algunos archivos. Concede permiso de almacenamiento y reintenta</string>
+    <string name="qk_03918">Directorio vacío o inaccesible</string>
+    <string name="qk_04060">表格列数较多，可左右滑动查看 →</string>
+    <string name="qk_04061">集群 · %1$s</string>
+    <string name="qk_04065">Reclutar roles, vincular modelos, ajustar límites del anfitrión</string>
 </resources>

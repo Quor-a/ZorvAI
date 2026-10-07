@@ -3736,7 +3736,7 @@ Create a file or folder at top right</string>
     <string name="qk_03756" formatted="false">テキスト翻訳に使用するモデル</string>
     <string name="qk_03757" formatted="false">コード検索と検索計画に使用するモデル</string>
     <string name="qk_03758" formatted="false">ソウルカードの自動生成と蒸留に使用するモデル</string>
-    <string name="qk_03759" formatted="false">画像内容の理解に使用するモデル（視覚対応必須）</string>
+    <string name="qk_03759" formatted="false">画像の理解に使うモデル（視覚対応が必要）。ビデオ通話のシーン理解の予備視覚モデルでもあります</string>
     <string name="qk_03760" formatted="false">音声内容の理解に使用するモデル</string>
     <string name="qk_03761" formatted="false">動画とビデオ通話のリアルタイム映像の理解に使用するモデル（視覚対応必須）</string>
     <string name="qk_03762" formatted="false">AI が直接呼び出せる画像生成モデル</string>
@@ -3851,7 +3851,7 @@ Create a file or folder at top right</string>
     <string name="qk_03870" formatted="false">ログイン後はリポジトリ / Issue / Star / 通知を管理。チャット内でGitHub検索も可能</string>
     <string name="qk_03871" formatted="false">オンにすると rm -rf / dd / mkfs などの危険コマンドは再送信か confirm が必要</string>
     <string name="qk_03872" formatted="false">システムに従う</string>
-    <string name="qk_03873" formatted="false">ビデオ通話中のリアルタイム会話と映像理解に使用するモデル（視覚対応が必要）</string>
+    <string name="qk_03873" formatted="false">ビデオ通話のリアルタイム対話モデル。メインのチャットモデルが視覚対応でない場合は、カメラ映像の認識にも使われます（視覚対応が必要）</string>
     <string name="qk_03874" formatted="false">タップしてビデオ通話を開始</string>
     <string name="qk_03875" formatted="false">ビデオ通話スタンバイ</string>
     <string name="qk_03876" formatted="false">カメラ起動中・マイクを押して話す</string>
@@ -3887,4 +3887,21 @@ Create a file or folder at top right</string>
     <string name="qk_03906" formatted="false">ローカル推論を独立したプロセスで実行します。大きなモデルを読み込んでもアプリ全体がシステムに回収されず、画面はそのまま使えます。オフにすると従来の同一プロセス動作に戻ります。</string>
     <string name="qk_03907" formatted="false">温度適応スケジューリング</string>
     <string name="qk_03908" formatted="false">長時間の推論中に 2 秒ごとに SoC のサーマル余裕を読み取り、スレッド数を事前に小幅に下げることで、OS による急激なクロック制限を回避します。オフのときは一切介入しません。</string>
+
+    <string name="qk_03909" formatted="false">その他の操作</string>
+
+    <!-- ⋮ 视频通话启动失败原因（静默自停改为可读提示） -->
+    <string name="qk_03910" formatted="false">ビデオ通話を開始できませんでした。メイン画面から開き直してください</string>
+    <string name="qk_03911" formatted="false">ビデオ通話には通話画面の表示に「他のアプリの上に表示」権限が必要です</string>
+    <string name="qk_03912" formatted="false">通話画面を表示できませんでした。権限を確認して再試行してください</string>
+    <string name="qk_03913" formatted="false">カメラの権限がありません</string>
+    <string name="qk_03914" formatted="false">マイクの権限がありません</string>
+    <string name="qk_03915">内容が長いため、先頭 %1$s 行のみ表示（全 %2$s 行）</string>
+
+    <string name="qk_03916">%1$d 件を削除し、%2$s を解放しました</string>
+    <string name="qk_03917">クリーンアップ失敗：一部のファイルにアクセス権がありません。ストレージ権限を付与して再試行してください</string>
+    <string name="qk_03918">ディレクトリが空かアクセスできません</string>
+    <string name="qk_04060">表格列数较多，可左右滑动查看 →</string>
+    <string name="qk_04061">集群 · %1$s</string>
+    <string name="qk_04065">役割の採用、モデルの割り当て、ホスト上限の調整</string>
 </resources>

@@ -180,22 +180,35 @@ sealed interface QuroChatCard {
         val targetEpochMs: Long,
     ) : QuroChatCard
 
-    /** 标签页：多个 Tab 切换查看内容。 */
+    /**
+     * 标签页：多个 Tab 切换查看内容。
+     *
+     * 🔴 修复「能切换但下方空白」：原来 [Tab.body] 是**纯 String**，只能显示纯文本。
+     * AI 把标签页内容写成组件（`{"type":"table",...}`）或写成 `content`/`node` 等别的键名时，
+     * `optString("body")` 拿到空串 → 切过去一片空白。
+     * 新增 [Tab.node]：标签页内容也可以是一张**完整的子卡片**，渲染时优先于 [body]。
+     */
     data class TabsCard(
         override val id: String,
         override val title: String,
         val tabs: List<Tab>,
         val selectedIndex: Int,
     ) : QuroChatCard {
-        data class Tab(val title: String, val body: String)
+        data class Tab(val title: String, val body: String, val node: QuroChatCard? = null)
     }
 
-    /** 可折叠文本块。 */
+    /**
+     * 可折叠文本块。
+     *
+     * 🔴 同 [TabsCard]：原来只有纯文本 body，AI 写组件内容时展开后是空白。
+     * [node] 承载富内容，渲染时优先。
+     */
     data class ExpandableCard(
         override val id: String,
         override val title: String,
         val body: String,
         val expanded: Boolean,
+        val node: QuroChatCard? = null,
     ) : QuroChatCard
 
     /** 表单：若干输入项 + 提交按钮（command 回传填写结果）。 */
@@ -353,13 +366,17 @@ sealed interface QuroChatCard {
         val command: String = "",
     ) : QuroChatCard
 
-    /** 轮播卡片：左右滑动查看多张特性卡。 */
+    /**
+     * 轮播卡片：左右滑动查看多张特性卡。
+     *
+     * 🔴 同 [TabsCard]：原来 [Slide.body] 纯文本，body 写成组件时每张只剩标题。
+     */
     data class CarouselCard(
         override val id: String,
         override val title: String,
         val slides: List<Slide>,
     ) : QuroChatCard {
-        data class Slide(val title: String, val body: String, val color: String = "")
+        data class Slide(val title: String, val body: String, val color: String = "", val node: QuroChatCard? = null)
     }
 
     /** 看板：多列任务。 */
@@ -530,6 +547,95 @@ sealed interface QuroChatCard {
  * - 非法（未知 type / 字段缺失 / JSON 损坏）：返回 null，由调用方决定是报错还是忽略。
  * - title 缺省为 ""（不显示标题），避免 AI 漏写 title 时出现难看的「组件」占位字。
  */
+/**
+ * 🔴 切换类容器的**通用子内容提取器**（卡片侧）。
+ *
+ * 与动态 UI 侧 `QuroUiDslParser.extractSlotContent` 同名同职责：
+ * 用户报「可视化组件能切换，但组件下的内容没有」，经排查是**两条渲染路径同时中招**：
+ * 卡片路径（`parseComponentSpec`）和动态 UI 路径（`QuroUiDslParser`）各有一份
+ * 「只认固定键名 + 只收字符串/对象」的取内容逻辑，键名对不上就静默产出空白。
+ *
+ * 两条路径必须**同步修**，否则模型换个下发通道，空白就复现。
+ *
+ * 行为：
+ * - 对象 → 递归 [parseComponentSpec]（**必须是完整卡片 spec**，即带 `type`）
+ * - 数组 → 取第一张能解析成卡片的子项
+ * - 字符串 → 原样作为纯文本 body（不试图当 JSON 猜）
+ * - 全无 → null，由渲染层给显式空态提示
+ *
+ * 键名优先级把 `body` 放最前（工具描述教模型写的名字），`content`/`node`/`card`
+ * 作为常见别名；`spec`/`component` 是 AI 自由书写时的常见叫法。
+ */
+internal val SLOT_KEYS = listOf("body", "content", "node", "card", "spec", "component", "children", "child", "items")
+
+/**
+ * 从切换类容器的一个子项（tab / slide / expandable 本体）里抽出子卡片。
+ *
+ * ⚠️ 与动态 UI 侧的差别：这里**不把对象当节点**，只认真正的**卡片 spec**（带 `type` 字段）。
+ * 原因：`parseComponentSpec` 对没有 `type` 的对象返回 null，强行包装只会产出垃圾卡片。
+ * 纯文本由调用方从同名标量字段单独取。
+ */
+internal fun parseSlotNode(o: JSONObject): QuroChatCard? {
+    for (k in SLOT_KEYS) {
+        if (!o.has(k)) continue
+        when (val v = o.opt(k)) {
+            null, org.json.JSONObject.NULL -> continue
+            is JSONObject -> parseSlotSpec(v)?.let { return it }
+            is JSONArray -> {
+                for (i in 0 until v.length()) {
+                    val e = v.optJSONObject(i) ?: continue
+                    parseSlotSpec(e)?.let { return it }
+                }
+            }
+            else -> continue // 字符串由调用方按纯文本取，这里不猜
+        }
+    }
+    return null
+}
+
+/**
+ * 🔴 解析一个子卡 spec，**判别键有两个**，只认一个就会丢内容。
+ *
+ * | 通道 | 判别键 | 谁写的 |
+ * |------|--------|--------|
+ * | 模型下发（`ui_widget` / 文本内联） | `type` | `parseComponentSpec` 读它 |
+ * | 存档往返（`serializeCard` 产出） | `cardType` | `serializeCard` 写它 |
+ *
+ * 本函数只认 `type` 时，存档读回的子卡全部解析失败 →
+ * 标签页当场好用、刷新后富内容变空白。这个 bug 极难查，因为「当场」是对的。
+ * 故这里两条通道都试：`cardType` 存在时复制一份并把 `cardType` 映射成 `type` 再解析。
+ */
+private fun parseSlotSpec(v: JSONObject): QuroChatCard? {
+    if (v.optString("type").isNotBlank()) {
+        parseComponentSpec(v.toString())?.let { return it }
+    }
+    val cardType = v.optString("cardType")
+    if (cardType.isNotBlank()) {
+        // 不改原对象（调用方可能还持有它），复制一份把 cardType 映射成 type
+        val aliased = JSONObject(v.toString()).put("type", cardType)
+        parseComponentSpec(aliased.toString())?.let { return it }
+    }
+    return null
+}
+
+/**
+ * 取切换类容器的**纯文本**内容字段。
+ *
+ * 🔴 不用 `optString`：Android 的 `optString` 对 JSONObject 值会返回**整段 JSON 文本**
+ * （内部走 `JSON.toString()`），那会把组件定义当正文显示出来，比空白更糟且极难排查。
+ */
+internal fun scalarText(o: JSONObject, vararg keys: String): String {
+    for (k in keys) {
+        if (!o.has(k)) continue
+        when (val v = o.opt(k)) {
+            is String -> if (v.isNotBlank()) return v
+            is Number, is Boolean -> return v.toString()
+            else -> continue // 对象/数组交给 parseSlotNode
+        }
+    }
+    return ""
+}
+
 fun parseComponentSpec(spec: String): QuroChatCard? {
     return try {
         val s = JSONObject(spec)
@@ -608,17 +714,26 @@ fun parseComponentSpec(spec: String): QuroChatCard? {
                 id, title, s.optString("label", ""),
                 parseTarget(s.opt("target")),
             )
+            // 🔴 切换类容器接富内容（parseComponentSpec 是 ui_widget 工具与文本内联组件的**真正入口**）：
+            // 原来只取 body 纯文本，AI 写 content/node 或把 body 写成组件 spec 时这里全丢 → 切过去空白。
             "tabs" -> QuroChatCard.TabsCard(
                 id, title,
                 s.optJSONArray("tabs")?.let { arr ->
                     (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.map {
-                        QuroChatCard.TabsCard.Tab(it.optString("title", ""), it.optString("body", ""))
+                        QuroChatCard.TabsCard.Tab(
+                            title = it.optString("title", "").ifBlank { it.optString("label", "") },
+                            body = scalarText(it, "body", "text", "content"),
+                            node = parseSlotNode(it),
+                        )
                     }
                 } ?: emptyList(),
                 s.optInt("selectedIndex", 0),
             )
             "expandable" -> QuroChatCard.ExpandableCard(
-                id, title, s.optString("body", ""), s.optBoolean("expanded", false),
+                id, title,
+                scalarText(s, "body", "text", "content"),
+                s.optBoolean("expanded", false),
+                parseSlotNode(s),
             )
             "form" -> QuroChatCard.FormCard(
                 id, title,
@@ -767,14 +882,16 @@ fun parseComponentSpec(spec: String): QuroChatCard? {
             "timer" -> QuroChatCard.TimerCard(
                 id, title, s.optInt("seconds", 0), s.optString("command", ""),
             )
+            // 🔴 轮播同族缺陷：body 写成组件 spec 时原来只显示标题，切过去看不到内容
             "carousel" -> QuroChatCard.CarouselCard(
                 id, title,
                 s.optJSONArray("slides")?.let { arr ->
                     (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.map {
                         QuroChatCard.CarouselCard.Slide(
-                            it.optString("title", ""),
-                            it.optString("body", ""),
-                            it.optString("color", ""),
+                            title = it.optString("title", "").ifBlank { it.optString("label", "") },
+                            body = scalarText(it, "body", "text", "content"),
+                            color = it.optString("color", ""),
+                            node = parseSlotNode(it),
                         )
                     }
                 } ?: emptyList(),
@@ -1077,11 +1194,20 @@ fun serializeCard(card: QuroChatCard): JSONObject {
         is QuroChatCard.CountdownCard -> { o.put("label", card.label); o.put("targetEpochMs", card.targetEpochMs) }
         is QuroChatCard.TabsCard -> {
             o.put("tabs", JSONArray().also { a ->
-                card.tabs.forEach { t -> a.put(JSONObject().apply { put("title", t.title); put("body", t.body) }) }
+                card.tabs.forEach { t ->
+                    a.put(JSONObject().apply {
+                        put("title", t.title); put("body", t.body)
+                        // 🔴 富内容子卡必须能存档读回，否则重启/刷新后标签页内容又变空白
+                        t.node?.let { put("content", serializeCard(it)) }
+                    })
+                }
             })
             o.put("selectedIndex", card.selectedIndex)
         }
-        is QuroChatCard.ExpandableCard -> { o.put("body", card.body); o.put("expanded", card.expanded) }
+        is QuroChatCard.ExpandableCard -> {
+            o.put("body", card.body); o.put("expanded", card.expanded)
+            card.node?.let { o.put("content", serializeCard(it)) }
+        }
         is QuroChatCard.FormCard -> {
             o.put("fields", JSONArray().also { a ->
                 card.fields.forEach { f -> a.put(JSONObject().apply {
@@ -1235,9 +1361,15 @@ fun parseCard(o: JSONObject): QuroChatCard? {
             "countdown" -> QuroChatCard.CountdownCard(id, title, o.optString("label", ""), o.optLong("targetEpochMs", Long.MAX_VALUE))
             "tabs" -> QuroChatCard.TabsCard(id, title, (0 until (o.optJSONArray("tabs")?.length() ?: 0)).map { i ->
                 val it = o.optJSONArray("tabs")!!.optJSONObject(i)
-                QuroChatCard.TabsCard.Tab(it.optString("title", ""), it.optString("body", ""))
+                QuroChatCard.TabsCard.Tab(
+                    title = it.optString("title", "").ifBlank { it.optString("label", "") },
+                    body = scalarText(it, "body", "text", "content"),
+                    node = parseSlotNode(it),
+                )
             }, o.optInt("selectedIndex", 0))
-            "expandable" -> QuroChatCard.ExpandableCard(id, title, o.optString("body", ""), o.optBoolean("expanded", false))
+            "expandable" -> QuroChatCard.ExpandableCard(
+                id, title, scalarText(o, "body", "text", "content"), o.optBoolean("expanded", false), parseSlotNode(o),
+            )
             "form" -> QuroChatCard.FormCard(id, title, (0 until (o.optJSONArray("fields")?.length() ?: 0)).map { i ->
                 val it = o.optJSONArray("fields")!!.optJSONObject(i)
                 QuroChatCard.FormCard.FormField(it.optString("key", ""), it.optString("label", ""), it.optString("value", ""), it.optString("placeholder", ""), it.optBoolean("secret", false))
@@ -1276,7 +1408,12 @@ fun parseCard(o: JSONObject): QuroChatCard? {
             "timer" -> QuroChatCard.TimerCard(id, title, o.optInt("seconds", 0), o.optString("command", ""))
             "carousel" -> QuroChatCard.CarouselCard(id, title, (0 until (o.optJSONArray("slides")?.length() ?: 0)).map { i ->
                 val it = o.optJSONArray("slides")!!.optJSONObject(i)
-                QuroChatCard.CarouselCard.Slide(it.optString("title", ""), it.optString("body", ""), it.optString("color", ""))
+                QuroChatCard.CarouselCard.Slide(
+                    title = it.optString("title", "").ifBlank { it.optString("label", "") },
+                    body = scalarText(it, "body", "text", "content"),
+                    color = it.optString("color", ""),
+                    node = parseSlotNode(it),
+                )
             })
             "kanban" -> QuroChatCard.KanbanCard(id, title, (0 until (o.optJSONArray("columns")?.length() ?: 0)).map { i ->
                 val it = o.optJSONArray("columns")!!.optJSONObject(i)

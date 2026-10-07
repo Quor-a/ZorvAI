@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.ai.assistance.quro.genui.sdk.animation.AnimatedEntrance
@@ -25,6 +26,7 @@ import com.ai.assistance.quro.genui.sdk.dsl.UIComponent
 import com.ai.assistance.quro.genui.sdk.dsl.UISpec
 import com.ai.assistance.quro.genui.sdk.interaction.ActionHost
 import com.ai.assistance.quro.genui.sdk.style.GenUITheme
+import com.ai.assistance.quro.genui.sdk.style.GenUIDesignTokens
 
 /**
  * GenUI 渲染入口 - 顶层 Composable
@@ -67,8 +69,8 @@ fun GenUIRenderer(
  *
  * 本层兜底三件事，让**任何** AI 产出都至少落在合理的页面上：
  *  1. 页面底色：用主题 background（纸色），而不是透出宿主容器 → 内容与页面有明暗关系；
- *  2. 页边距：水平 16dp（8pt 网格），上下 16/24dp —— 内容永不贴边；
- *  3. 阅读宽度：上限 720dp 且居中，平板/横屏下不会拉成一行超长文本。
+ *  2. 页边距：走 [GenUIDesignTokens] 的 pagePadding* —— 8pt 网格，内容永不贴边；
+ *  3. 阅读宽度：上限 [GenUILayoutGuard.MAX_WIDTH_DP]dp 且居中，平板/横屏下不会拉成超长行。
  *
  * 滚动也在这里兜：根节点自带 scroll 时不再套外层滚动（避免双重滚动抢手势）。
  */
@@ -80,14 +82,23 @@ private fun PageCanvas(
     content: @Composable () -> Unit
 ) {
     val scheme = theme.colorScheme
-    val rootSelfScrolls = rootType.lowercase() in setOf("scroll", "list", "lazy_column", "column_scroll", "virtual_list")
+    // 🔴 2026-10-06 补全：原先只列了 scroll / list / lazy_column / column_scroll / virtual_list，
+    // 漏掉了仓库里真实存在的 nested_scroll、custom_scroll、flex_column+方向属性 等类型。
+    // 漏判的后果是**双重滚动**：根节点自己滚一层，PageCanvas 又套一层 verticalScroll，
+    // 两个滚动容器抢同一份手势 —— 用户表现为「滚一下就飘」「滑不动 / 滑两段」。
+    val rootSelfScrolls = rootType.lowercase(Locale.ROOT) in SELF_SCROLLING_ROOT_TYPES
     Surface(color = scheme.background, modifier = modifier.fillMaxSize()) {
-        val page = Modifier.fillMaxWidth().widthIn(max = 720.dp)
+        val page = Modifier.fillMaxWidth().widthIn(max = GenUILayoutGuard.MAX_WIDTH_DP.dp)
         if (rootSelfScrolls) {
             Box(Modifier.fillMaxSize()) {
                 Column(
                     page.align(Alignment.TopCenter)
-                        .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp)
+                        .padding(
+                    start = GenUIDesignTokens.pagePaddingH,
+                    end = GenUIDesignTokens.pagePaddingH,
+                    top = GenUIDesignTokens.pagePaddingTop,
+                    bottom = GenUIDesignTokens.pagePaddingBottom,
+                )
                 ) { content() }
             }
         } else {
@@ -95,12 +106,30 @@ private fun PageCanvas(
             Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 Column(
                     page.align(Alignment.TopCenter)
-                        .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp)
+                        .padding(
+                    start = GenUIDesignTokens.pagePaddingH,
+                    end = GenUIDesignTokens.pagePaddingH,
+                    top = GenUIDesignTokens.pagePaddingTop,
+                    bottom = GenUIDesignTokens.pagePaddingBottom,
+                )
                 ) { content() }
             }
         }
     }
 }
+
+/**
+ * 自带滚动的根容器类型。
+ *
+ * 列全的依据是 ComponentTypes 里的常量名，而不是「想到什么加什么」——
+ * 漏一个就等于给那个类型开双重滚动。`list` / `grid` / `data_list` 等
+ * 列表族也归入：它们在渲染器里要么自滚、要么本身就是无限高度容器。
+ */
+private val SELF_SCROLLING_ROOT_TYPES = setOf(
+    "scroll", "nested_scroll", "custom_scroll",
+    "list", "lazy_column", "column_scroll", "virtual_list",
+    "data_list", "media_list", "audio_list", "chat_list",
+)
 
 /**
  * 创建并缓存 RenderContext
@@ -166,7 +195,11 @@ fun RenderNode(component: UIComponent, ctx: RenderContext) {
         val nodeStyle = if (component.type.lowercase() in SELF_PADDED_TYPES) {
             variantStyle.copy(padding = com.ai.assistance.quro.genui.sdk.dsl.EdgeInsets(0f, 0f, 0f, 0f))
         } else variantStyle
-        var modifier = StyleResolver.baseModifier(nodeStyle, ctx)
+        // 🔴 判定父容器是否为 Row，供 baseModifier 决定 match 语义。
+        //根据是当前正在渲染的父容器类型，而不是实际的父节点——
+        // Row 内部的子节点在这里被括在 Box 里，父节点信息不可得。
+        val parentIsRow = GenUIParentAxis.inRow
+        var modifier = StyleResolver.baseModifier(nodeStyle, ctx, inRowContext = parentIsRow)
             .then(StyleResolver.resolveSemantics(component.style))
 
         if (clickHandler != null) {

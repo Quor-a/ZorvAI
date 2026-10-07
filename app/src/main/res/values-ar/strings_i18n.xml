@@ -3736,7 +3736,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03756" formatted="false">النموذج المستخدم لترجمة النصوص</string>
     <string name="qk_03757" formatted="false">النموذج المستخدم للبحث في الشيفرة</string>
     <string name="qk_03758" formatted="false">النموذج المستخدم لإنشاء بطاقات الروح وتقطيرها</string>
-    <string name="qk_03759" formatted="false">النموذج المستخدم لفهم الصور (يجب أن يدعم الرؤية)</string>
+    <string name="qk_03759" formatted="false">النموذج المستخدم لفهم الصور (يجب أن يدعم الرؤية)، وهو أيضًا نموذج الرؤية الاحتياطي لفهم المشهد في مكالمة الفيديو</string>
     <string name="qk_03760" formatted="false">النموذج المستخدم لفهم الصوت</string>
     <string name="qk_03761" formatted="false">النموذج المستخدم لفهم الفيديو ومشاهد مكالمة الفيديو (يجب أن يدعم الرؤية)</string>
     <string name="qk_03762" formatted="false">نموذج توليد الصور الذي يمكن للذكاء الاصطناعي استدعاؤه مباشرة</string>
@@ -3851,7 +3851,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03870" formatted="false">Sign in to manage repos / issues / stars / notifications; search GitHub inside the chat</string>
     <string name="qk_03871" formatted="false">When on, dangerous commands (rm -rf / dd / mkfs) require a second send or confirm</string>
     <string name="qk_03872" formatted="false">Follow system</string>
-    <string name="qk_03873" formatted="false">Model used for the live conversation and scene understanding in a video call (must support vision)</string>
+    <string name="qk_03873" formatted="false">نموذج المحادثة المباشرة في مكالمة الفيديو؛ ويُستخدم أيضًا لقراءة إطار الكاميرا عندما لا يدعم نموذج المحادثة الرئيسي الرؤية (يجب أن يدعم الرؤية)</string>
     <string name="qk_03874" formatted="false">Tap to start the video call</string>
     <string name="qk_03875" formatted="false">Video call on standby</string>
     <string name="qk_03876" formatted="false">Camera on · tap the mic to speak</string>
@@ -3887,4 +3887,21 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03906" formatted="false">ينفّذ الاستدلال المحلي في عملية منفصلة: لن يؤدي تحميل نموذج كبير إلى إنهاء النظام للتطبيق بالكامل، وتبقى الواجهة قابلة للاستخدام. أوقفه للعودة إلى السلوك السابق.</string>
     <string name="qk_03907" formatted="false">جدولة حرارية تكيفية</string>
     <string name="qk_03908" formatted="false">يقرأ الهامش الحراري للمعالج كل ثانيتين أثناء الاستدلال الطويل ويقلّل عدد الخيوط مسبقًا لتجنّب الخفض الحاد من النظام. عند الإيقاف لا يوجد أي تدخّل.</string>
+
+    <string name="qk_03909" formatted="false">إجراءات أخرى</string>
+
+    <!-- ⋮ 视频通话启动失败原因（静默自停改为可读提示） -->
+    <string name="qk_03910" formatted="false">فشل بدء مكالمة الفيديو، يرجى فتحها من الشاشة الرئيسية</string>
+    <string name="qk_03911" formatted="false">يحتاج مكالمة الفيديو إلى إذن العرض فوق التطبيقات لعرض شاشة المكالمة</string>
+    <string name="qk_03912" formatted="false">تعذر عرض شاشة مكالمة الفيديو، تحقق من الأذونات وأعد المحاولة</string>
+    <string name="qk_03913" formatted="false">إذن الكاميرا مفقود</string>
+    <string name="qk_03914" formatted="false">إذن الميكروفون مفقود</string>
+    <string name="qk_03915">محتوى طويل، يتم عرض أول %1$s من أصل %2$s سطر</string>
+
+    <string name="qk_03916">تم مسح %1$d عنصر، وتحرير %2$s</string>
+    <string name="qk_03917">فشل التنظيف: تم رفض الوصول لبعض الملفات. امنح إذن التخزين وأعد المحاولة</string>
+    <string name="qk_03918">الدليل فارغ أو غير متاح</string>
+    <string name="qk_04060">表格列数较多，可左右滑动查看 →</string>
+    <string name="qk_04061">集群 · %1$s</string>
+    <string name="qk_04065">توظيف الأدوار وربط النماذج وضبط حدود المضيف</string>
 </resources>

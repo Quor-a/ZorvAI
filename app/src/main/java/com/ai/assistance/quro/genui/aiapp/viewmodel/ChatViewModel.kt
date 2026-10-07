@@ -837,11 +837,31 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
             when (result) {
                 is GenUILlmResult.Text -> {
-                    // 断流续写：genui 代码块未闭合说明输出被中途截断
+                    // 🔴 断流续写（修「GenUI 写不完整」）
+                    //
+                    // 旧实现只认一个信号：「genui 围栏未闭合」。但图1 里用户看到的
+                    // 「AI 能力自检报告」是 **markdown 报告**，围栏本来就是闭合的 → 不续写 → 报告写到一半断掉。
+                    // 真正的信号是上游的 `finish_reason=length`（被 max_tokens 截断），
+                    // 它与围栏是否闭合无关，必须独立判定。
                     val content = result.content.ifBlank { _state.value.streamingText }
-                    if (content.isNotBlank() && hasUnclosedGenuiFence(content) &&
-                        continuationCount < MAX_GENUI_CONTINUATIONS
+                    val truncated = result.truncated
+                    val unclosed = hasUnclosedGenuiFence(content)
+                    if (content.isNotBlank() && (truncated || unclosed) &&
+                        continuationCount < MAX_CONTINUATIONS
                     ) {
+                        // 走工程既有的诊断落盘通道（Logcat 里看不到 GenUI 内部状态，
+                        // 落文件才能在用户报「写不完整」时回溯到底截断在哪、续了几轮）。
+                        runCatching {
+                            GenUiDiag.dump(
+                                getApplication<Application>().applicationContext,
+                                "finishReason=${result.finishReason} unclosedFence=$unclosed " +
+                                    "round=$round continuationCount=${continuationCount + 1} " +
+                                    "contentChars=${content.length}",
+                                currentState.currentRequest,
+                                "genui-continuation",
+                                null
+                            )
+                        }
                         continuationCount++
                         pendingText = if (pendingText.isBlank()) content
                                       else pendingText + "\n" + content
@@ -849,7 +869,13 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                             it.copy(
                                 conversationHistory = it.conversationHistory +
                                     GenUIChatMessage(role = "assistant", content = content) +
-                                    GenUIChatMessage(role = "user", content = GENUI_CONTINUE_PROMPT),
+                                    GenUIChatMessage(
+                                        role = "user",
+                                        // 🔴 分流：被截断的可能是 genui 围栏（要继续写 JSON），
+                                        // 也可能是 markdown/HTML 报告（要继续写文章）。
+                                        // 给错提示词会把平台强引到错的格式上。
+                                        content = if (unclosed) GENUI_CONTINUE_PROMPT else TEXT_CONTINUE_PROMPT
+                                    ),
                                 streamingText = "",
                                 streamingReasoning = ""
                             )
@@ -902,8 +928,14 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
-        /** genui 断流续写的最大次数 */
-        const val MAX_GENUI_CONTINUATIONS = 2
+        /**
+         * 断流续写的最大次数。
+         *
+         * 🔴 从 2 提到 4：上游真正报了 `finish_reason=length` 时，说明输出确实被截断了，
+         * 而不是「模型自己写完了」。旧的 2 次限额是按「围栏未闭合」设计的，
+         * 对「被 max_tokens 截断的长报告」这一类场景不够 —— 长文本约需 2~3 轮才写完。
+         */
+        const val MAX_CONTINUATIONS = 4
 
         /** 「本轮用哪条渲染通道」询问的等待上限（秒）。四条选项要读完，给足时间。 */
         const val ASK_CHANNEL_TIMEOUT_SEC = 120L
@@ -915,6 +947,17 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             "第一行就直接输出 ```genui 代码块，内容是一个【完整且精简】的 JSON：" +
             "从 {\"id\" 开始到收尾括号完整闭合，控制在 600 字以内，" +
             "删掉可有可无的装饰性组件，但必须保留核心功能内容和完整闭合的结构。"
+
+        /**
+         * 被 max_tokens 截断且**不是** genui 围栏时的续写提示词。
+         *
+         * 🔴 为什么必须另写一条：`GENUI_CONTINUE_PROMPT` 强引「第一行就输出```genui 代码块」，
+         * 用在 markdown/HTML 报告被截断时会把模型强拉到 JSON 通道，
+         * 用户要的报告被丢掉、变成一堆乱码块—— 比原来的「写不完整」更糟。
+         */
+        const val TEXT_CONTINUE_PROMPT =
+            "你的上一条回复因输出达到长度上限而被截断。请**只继续写完剩下的部分**，" +
+                "不要重复已经输出的部分，不要重新开头，不要加任何说明或总结。"
 
         /**
          * 自校验返修最大轮次：写完检测出问题后，持续返修直到自检通过才结束

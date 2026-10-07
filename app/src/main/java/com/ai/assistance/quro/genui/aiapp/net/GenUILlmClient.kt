@@ -5,6 +5,9 @@ import com.ai.assistance.quro.genui.aiapp.core.GenUIChatMessage
 import com.ai.assistance.quro.genui.aiapp.core.GenUILlmResult
 import com.ai.assistance.quro.genui.aiapp.core.GenUIToolCall
 import com.ai.assistance.quro.genui.aiapp.core.GenUIToolSpec
+
+import com.ai.assistance.quro.core.network.QuroModelOutputBudget
+import com.ai.assistance.quro.core.network.QuroReasoningControl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -80,6 +83,9 @@ class GenUILlmClient(
         temperature: Float = 0.7f,
         maxTokens: Int = MAX_OUTPUT_TOKENS,
         tools: List<GenUIToolSpec>? = null,
+        /** 思考档位。GenUI 侧的「深度思考」由上层透传；AUTO = 不干预。 */
+        reasoningLevel: QuroReasoningControl.ThinkingLevel =
+            QuroReasoningControl.ThinkingLevel.AUTO,
         stream: Boolean = false,
         onToken: ((String) -> Unit)? = null,
         onThinking: ((String) -> Unit)? = null
@@ -87,28 +93,57 @@ class GenUILlmClient(
         // 端点补全
         val url = completeEndpoint(baseUrl)
 
-        // 推理模型检测（o1/o3/o4 系列）
-        val isReasoningModel = Regex("(?i)^o[0-9]").containsMatchIn(model.trim())
-
-        // max_tokens 硬性上限护栏
-        val effectiveMaxTokens = maxTokens.coerceAtMost(MAX_OUTPUT_TOKENS)
-        if (effectiveMaxTokens != maxTokens) {
-            Log.w(TAG, ">>> max_tokens 钳到 $effectiveMaxTokens（原 $maxTokens 超限）")
+        // 🔴 思考控制：四家字段互斥，必须由编译层统一决定（复用主链路 QuroReasoningControl）。
+        //
+        // 旧实现只有 `Regex("(?i)^o[0-9]")` 一条窄规则，只认 o1/o3/o4 开头，漏掉：
+        //   - gpt-5 / gpt-5.x（正则不匹配 → 仍下发 temperature + max_tokens → GPT-5 直接 400）
+        //   - claude（不下发 thinking → 恒不思考；且 thinking 开启时必须省略 temperature）
+        //   - qwen3（默认开着思考，用户根本关不掉）
+        // 这正是用户说的「部分模型不能用」—— 换模型就报错/不思考。
+        val plan = QuroReasoningControl.plan(
+            provider = "",
+            baseUrl = baseUrl,
+            model = model,
+            level = reasoningLevel,
+            maxTokens = maxTokens,
+        )
+        if (plan.family != QuroReasoningControl.Family.NONE) {
+            Log.i(TAG, ">>> REASONING ${plan.summary()}")
         }
+
+        // 🔴 max_tokens 必须钳到**模型真实输出上限**（这是「写不完整 / 换个模型就报错」的真凶）。
+        //   QuroModelConfig.maxTokens 默认 65536，但 gpt-4o 只有 16384、gpt-4-turbo 只有 4096、
+        //   claude-3 只有 8192 → 上游收到超限值会 400 / 静默夹断（长报告被腰斩）/ 整个 500。
+        val budget = QuroModelOutputBudget.resolve(model, maxTokens)
+        val effectiveMaxTokens = budget.outputTokens.coerceAtMost(MAX_OUTPUT_TOKENS)
+        Log.i(TAG, ">>> OUTPUT_BUDGET ${QuroModelOutputBudget.describe(budget)}")
 
         // 构建请求体
         val body = JSONObject().apply {
             put("model", model)
-            if (isReasoningModel) {
-                Log.i(TAG, ">>> reasoning model: max_completion_tokens, 省略 temperature (model=$model)")
+            // 🔴 字段名与 temperature 抑制全部由 plan 决定（不再用窄正则猜）。
+            if (plan.useMaxCompletionTokens) {
                 put("max_completion_tokens", effectiveMaxTokens)
             } else {
-                put("temperature", temperature)
                 put("max_tokens", effectiveMaxTokens)
             }
+            // suppressTemperature：GPT-5 系与「开了 thinking 的 Claude」明确拒绝 temperature，
+            // 带上就是 400 —— 这是「换个模型就直接报错」的第二个真凶。
+            if (!plan.suppressTemperature) put("temperature", temperature)
             put("messages", JSONArray().also { arr ->
                 normalizeToolCallMessages(messages).forEach { m ->
-                    arr.put(messageToJson(m, emitReasoning = !isReasoningModel))
+                    // 🔴 emitReasoning 由 plan 家族决定（旧实现是 `!isReasoningModel`，
+                    //   而那条窄正则只认 o1/o3/o4 开头，等于「非 o 系一律回吐 reasoning_content」）：
+                    //   · ALWAYS_ON（DeepSeek-R1 / QwQ / GLM-Z1）：**必须回吐**。它们恒思考且用
+                    //     reasoning_content 承载思考，不回吐则多轮对话时模型看不到自己上轮思考 → 重复思考。
+                    //   · 其他家族（OpenAI/GPT-5 用 reasoning、Claude 用 thinking、Qwen3 用
+                    //     chat_template）：reasoning_content 是对方的私有字段，发过去就是 400，**一律不发**。
+                    arr.put(
+                        messageToJson(
+                            m,
+                            emitReasoning = plan.family == QuroReasoningControl.Family.ALWAYS_ON
+                        )
+                    )
                 }
             })
             if (!tools.isNullOrEmpty()) {
@@ -131,6 +166,20 @@ class GenUILlmClient(
                 })
                 put("tool_choice", "auto")
             }
+            // 🔴 四家思考字段互斥：同一请求同时发两种 = 400。全部由 plan 决定，未识别家族一个都不发。
+            plan.reasoningEffort?.let { put("reasoning_effort", it) }
+            plan.topLevelEnableThinking?.let { put("enable_thinking", it) }
+            plan.chatTemplateEnableThinking?.let {
+                put("chat_template_kwargs", JSONObject().put("enable_thinking", it))
+            }
+            if (plan.thinkingType != null) {
+                put(
+                    "thinking",
+                    JSONObject().put("type", plan.thinkingType).apply {
+                        plan.thinkingBudgetTokens?.let { put("budget_tokens", it) }
+                    }
+                )
+            }
             if (stream) put("stream", true)
         }
 
@@ -140,7 +189,7 @@ class GenUILlmClient(
         // 真机只能看到「界面一直空白」，无从判断是提示词过大还是模型不通。
         val promptChars = messages.sumOf { it.content.length }
         val toolsChars = tools?.sumOf { it.description.length + it.parametersJson.length } ?: 0
-        Log.i(TAG, ">>> REQUEST model=$model url=$url messages=${messages.size} tools=${tools?.size ?: 0} maxTokens=$effectiveMaxTokens")
+        Log.i(TAG, ">>> REQUEST model=$model url=$url messages=${messages.size} tools=${tools?.size ?: 0} maxTokens=$effectiveMaxTokens requested=$maxTokens")
         Log.i(TAG, ">>> SIZE promptChars=$promptChars toolsChars=$toolsChars totalChars=${promptChars + toolsChars} (≈${(promptChars + toolsChars) / 2}tok)")
         if (promptChars + toolsChars > PROMPT_WARN_CHARS) {
             Log.w(TAG, ">>> SIZE 提示词体积偏大（${promptChars + toolsChars} 字符），小上下文模型可能直接 400；"
@@ -315,6 +364,9 @@ class GenUILlmClient(
             val toolAcc = StreamToolAcc()
             var isReasoning = false
             var totalBytes = 0L
+            // 🔴 记住上游停止原因：`length` = 被 max_tokens 腰斩。
+            // 旧实现拿到就 break 且丢弃，上层无从判断是否需要续写。
+            var lastFinishReason: String? = null
 
             try {
                 while (!source.exhausted()) {
@@ -390,7 +442,17 @@ class GenUILlmClient(
                                 }
                             }
 
-                            if (finishReason == "stop" || finishReason == "length" || finishReason == "tool_calls") {
+                            if (finishReason == "stop" || finishReason == "length" ||
+                                finishReason == "tool_calls" || finishReason == "content_filter"
+                            ) {
+                                lastFinishReason = finishReason
+                                if (finishReason == "length") {
+                                    Log.w(
+                                        TAG,
+                                        ">>> STREAM 被 max_tokens 截断 (finish_reason=length)，" +
+                                            "已收 ${contentAcc.length} 字符 → 需续写"
+                                    )
+                                }
                                 break
                             }
                         } catch (_: Exception) {
@@ -402,14 +464,15 @@ class GenUILlmClient(
                 Log.w(TAG, "Stream read error: ${e.message}")
             }
 
-            return buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc)
+            return buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc, lastFinishReason)
         }
     }
 
     private fun buildToolCallsOrText(
         toolAcc: StreamToolAcc,
         contentAcc: StringBuilder,
-        reasoningAcc: StringBuilder
+        reasoningAcc: StringBuilder,
+        finishReason: String? = null,
     ): GenUILlmResult {
         val reasoning = reasoningAcc.toString().ifEmpty { null }
         val content = contentAcc.toString()
@@ -418,7 +481,7 @@ class GenUILlmClient(
             val calls = toolAcc.buildCalls()
             return GenUILlmResult.ToolCalls(calls, reasoning, content.ifEmpty { null })
         }
-        return GenUILlmResult.Text(content, reasoning)
+        return GenUILlmResult.Text(content, reasoning, finishReason)
     }
 
     private class StreamToolAcc {
@@ -490,7 +553,10 @@ class GenUILlmClient(
                 }
                 GenUILlmResult.ToolCalls(calls, reasoning, content.ifEmpty { null })
             } else {
-                GenUILlmResult.Text(content, reasoning)
+                GenUILlmResult.Text(
+                    content, reasoning,
+                    choice.optString("finish_reason", null)
+                )
             }
         } catch (e: Exception) {
             GenUILlmResult.Error("解析响应失败: ${e.message}")
@@ -637,10 +703,37 @@ class GenUILlmClient(
                 }
             }
             else -> {
-                val msg = extractJsonErrorMessage(plain) ?: plain.take(200)
+                // 🔴 上游给了 HTTP 码却不给任何正文（或只给了一个空消息字段）时，
+                //旧实现直接拼空串 → 气泡里只有「请求失败（HTTP 500）：」，
+                // 用户看到的就是图2 —— 冒号后面全空，无从跟踪。
+                // 现在补三层：① 取 JSON message；② 取原文首段；③ 仍空 → 给可操作建议。
+                val msg = extractJsonErrorMessage(plain)
+                    ?.takeIf { it.isNotBlank() }
+                    ?: plain.take(200).takeIf { it.isNotBlank() }
+                    ?: emptyBodyHint(code)
                 "请求失败（HTTP $code）：$msg"
             }
         }
+    }
+
+    /**
+     * 🔴 上游错误体为空时的可操作提示。
+     *
+     * 为什么不能继续返回空串：用户看到「请求失败（HTTP 500）：」时，
+     * 无法判断是自己的配置错误还是上游故障 —— 而两者的处置完全不同。
+     * 至少要告诉他下一步去哪看。
+     */
+    private fun emptyBodyHint(code: Int): String = when (code) {
+        401, 403 -> "上游未返回错误详情（HTTP $code）。通常是 API Key 无效或超额，" +
+            "请在「模型配置」检查 Key 与 Base URL。（详细原文见诊断日志）"
+        404 -> "上游未返回错误详情（HTTP 404）。通常是模型名或端点不存在，" +
+            "请刷新模型列表并重新选择。（详细原文见诊断日志）"
+        429 -> "上游未返回错误详情（HTTP 429），多为频率限制。请稍后重试。"
+        in 500..599 -> "上游服务器内部错误（HTTP $code）且未返回详情。" +
+            "通常是中转上游转发失败或该模型暂不可用；" +
+            "若持续出现，请刷新模型列表换一个模型试试。（详细原文见诊断日志）"
+        else -> "上游未返回错误详情（HTTP $code）。" +
+            "请查看诊断日志中的 llm_last_error.json 获取原始响应。"
     }
 
     /**
@@ -650,7 +743,11 @@ class GenUILlmClient(
         return try {
             val obj = JSONObject(plain)
             val error = obj.optJSONObject("error")
-            error?.optString("message", null) ?: obj.optString("message", null)
+            val raw = error?.optString("message", null) ?: obj.optString("message", null)
+            // 🔴 上游给 `{"error":{"message":""}}` 时 optString 返回空串而非null，
+            // 旧实现直接返回空串使 `?:` 兜底失效 → "HTTP 500：" 冒号后全空。
+            // 必须当名字段为空当作没拿到。
+            raw?.takeIf { it.isNotBlank() }
         } catch (_: Exception) {
             null
         }

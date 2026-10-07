@@ -152,6 +152,8 @@ internal fun ChatPermissionModeBar(
                     if (subAgentEnabled) SummaryTag(stringResource(R.string.qk_03221))
                     if (autoRead) SummaryTag(stringResource(R.string.qk_03222))
                     if (visionEnabled) SummaryTag(stringResource(R.string.qk_03223))
+                    // 🔴 集群开启时必须有可见标签：模式开关开没开直接改变消息发去哪，
+                    // 用户看不见就等于消息莫名其妙不回。
                     val cmsBg = when (cmsPolicy) {
                         QuroPolicy.ALLOW -> OkGreen.copy(alpha = 0.18f)
                         QuroPolicy.DENY -> DenyRed.copy(alpha = 0.18f)
@@ -261,6 +263,7 @@ internal fun ChatPermissionModeBar(
                         desc = stringResource(R.string.qk_03234),
                         onClick = onOpenCodeBrowser,
                     )
+                    Spacer(Modifier.height(6.dp))
                 }
             }
         }
@@ -307,6 +310,12 @@ private fun ModeToggleRow(
     onClick: () -> Unit,
     /** 长按回调：用于「看懂屏幕」升级到 MediaProjection 屏幕捕获等二段操作。null 时退化普通 clickable。 */
     onLongClick: (() -> Unit)? = null,
+    /**
+     * 🔴 #182：false 时整行不可点并变灰。
+     * 用于「集群引擎正在后台安装」这类中间态 —— 没有它用户会连点，
+     * 每次点击都触发一次重型初始化。
+     */
+    enabled: Boolean = true,
 ) {
     val cs = MaterialTheme.colorScheme
     val modifier = Modifier
@@ -315,7 +324,8 @@ private fun ModeToggleRow(
         .border(1.dp, if (active) ChipActiveBorder else Line, RoundedCornerShape(999.dp))
         .background(if (active) AccentSoft else cs.surface)
         .then(
-            if (onLongClick != null) Modifier.combinedClickable(
+            if (!enabled) Modifier
+            else if (onLongClick != null) Modifier.combinedClickable(
                 onClickLabel = if (active) stringResource(R.string.qk_03237, (title).toString()) else stringResource(R.string.qk_03238, (title).toString()),
                 onLongClickLabel = stringResource(R.string.qk_03239, (title).toString()),
                 onClick = onClick,
@@ -335,14 +345,18 @@ private fun ModeToggleRow(
         Text(
             title,
             fontSize = 13.sp,
-            color = if (active) AccentPress else Muted,
-            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+            color = when {
+                !enabled -> Muted.copy(alpha = 0.5f)
+                active -> AccentPress
+                else -> Muted
+            },
+            fontWeight = if (active && enabled) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
         )
         Text(
             desc,
             fontSize = 11.sp,
-            color = Muted,
+            color = Muted.copy(alpha = if (enabled) 1f else 0.5f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),

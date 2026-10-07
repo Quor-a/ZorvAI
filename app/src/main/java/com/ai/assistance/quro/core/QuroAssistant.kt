@@ -362,12 +362,15 @@ class QuroAssistant(
                     SUBAGENT_TOOL_PARAMS,
                 )
             }
-            // 🔧 渐进式工具披露（toolfix10）：每轮只下发【路由目录 + 常驻核心 + 已加载】，而非全部工具。
+            // 🔧 渐进式工具披露 / RAG 式按需检索：每轮只下发【路由目录 + 常驻核心 + 已加载】，而非全部工具。
             // router 实例按会话(store)保留，跨轮次累积「已加载」工具，避免每次都扫全量、也不需要每次 discovery。
+            // ⚠️ 传入 context：已加载集合要落盘（进程被杀后不必重新学一遍工具参数）。
             val activeToolRouter = if (QuroToolRouter.PROGRESSIVE && !isLocal) {
-                toolRouters.getOrPut(store) { QuroToolRouter(agentAwareSpecs) }.also { it.setSpecs(agentAwareSpecs) }
+                toolRouters.getOrPut(store) {
+                    QuroToolRouter(agentAwareSpecs, context.applicationContext)
+                }.also { it.setSpecs(agentAwareSpecs) }
             } else null
-            Log.i("QuroAssistant", "tool mode=${if (!effEnableTools) "off" else if (cfg.useFullTools) "full(${agentAwareSpecs.size})" else "core(${agentAwareSpecs.size})"}")
+            Log.i("QuroAssistant", "tool mode=${if (!effEnableTools) "off" else if (QuroToolRouter.PROGRESSIVE && !isLocal) "rag(${activeToolRouter?.activeSpecs()?.size})" else if (cfg.useFullTools) "full(${agentAwareSpecs.size})" else "core(${agentAwareSpecs.size})"}")
             // 诊断日志：确认 aci/workspace 工具是否在下发列表中
             val aciWsTools = agentAwareSpecs.filter { it.name.startsWith("aci_") || it.name.startsWith("workspace_") }
             if (aciWsTools.isNotEmpty()) {
@@ -1281,6 +1284,43 @@ class QuroAssistant(
             return "⚠️ 子智能体未收到有效任务描述（参数 task 为空），已跳过派发。"
         }
         val subStore = QuroConversationStore()
+        // 🔴🔴🔴 #182「子智能体也是根本不到对话框这里」的真凶。
+        //
+        // 子智能体跑在**独立的 subStore** 里，它的每一轮发言、思考、工具调用全都只存在
+        // 那个临时 store 中，完成后仅把最终文本当**工具结果字符串**回喂主智能体。
+        // 于是用户看到的永远是主智能体转述的一句话 —— 子智能体等于黑盒。
+        //
+        // 正确口径（用户原话：「一个角色就是一个 LLM，像 zorvAI LLM 一样使用对话框」）：
+        // **发言权归子智能体自己**，主智能体不许转述。它每说一句话、每调一次工具，
+        // 都作为**独立的一条消息**写进主 store，在同一个对话框里逐条显示。
+        //
+        // 主 LLM 那边仍只收到最终结果字符串作为工具结果（工具协议要求如此），
+        // 但 excludeFromLlm=true 保证主 store 里这些消息不会污染主 LLM 的上下文，
+        // 也不会让它误以为「已经有人答过了」而偷懒。
+        val subLabel = "子智能体"
+
+        fun publish(
+            content: String,
+            reasoningText: String? = null,
+            toolCalls: List<QuroToolCall>? = null,
+            toolLabel: String? = null,
+            toolCallId: String? = null,
+        ) {
+            if (content.isBlank() && reasoningText.isNullOrBlank() && toolCalls.isNullOrEmpty()) return
+            store.add(
+                QuroMessage(
+                    role = if (toolCallId != null) "tool" else "assistant",
+                    content = content,
+                    toolCalls = toolCalls,
+                    toolCallId = toolCallId,
+                    toolLabel = toolLabel,
+                    reasoning = reasoningText,
+                    senderName = subLabel,
+                    excludeFromLlm = true,
+                )
+            )
+        }
+
         // 「AI 回复语言」：子智能体的产出会被主智能体直接采用（可能直接呈现给用户），
         // 语言必须与当前界面语言一致；SUBAGENT_SYSTEM_PROMPT 通篇中文，必须显式约束。
         // 同包（com.ai.assistance.quro.core），无需 import。
@@ -1296,6 +1336,7 @@ class QuroAssistant(
                 content = "【子任务】\n$task\n\n请独立、聚焦地完成此子任务，直接给出可供主智能体继续工作的精炼结果（结论 / 草稿 / 分析 / 清单 / 代码片段），不要寒暄、不要向用户反问。若需要事实或资料，请直接调用可用的只读工具。",
             )
         )
+        publish("开始处理子任务：$task")
         val subSpecs = registry.coreSpecs().filter { it.name in SUBAGENT_SAFE_TOOLS }
         val maxRounds = 6
         var lastText = ""
@@ -1318,6 +1359,7 @@ class QuroAssistant(
                 is QuroLlmResult.Text -> {
                     lastText = res.content
                     subStore.add(QuroMessage(role = "assistant", content = lastText, reasoning = res.reasoning))
+                    publish(lastText, res.reasoning)
                     return lastText.ifBlank { "(子智能体未产出内容)" }
                 }
                 is QuroLlmResult.ToolCalls -> {
@@ -1333,6 +1375,9 @@ class QuroAssistant(
                             hidden = true,
                         )
                     )
+                    // 工具调用也要逐条进对话框：用户要看到子智能体「干了什么」，
+                    // 而不只是它调用后的结论。
+                    publish(res.content ?: "", res.reasoning, toolCalls = calls)
                     val results = calls.map { c ->
                         if (c.name in SUBAGENT_SAFE_TOOLS) {
                             runCatching { engine.execute(context, listOf(c)) }
@@ -1352,10 +1397,19 @@ class QuroAssistant(
                                 hidden = true,
                             )
                         )
+                        // 工具结果同样进对话框（可见但不喂主 LLM）。
+                        publish(
+                            content = "",
+                            toolLabel = c.name,
+                            toolCallId = c.id,
+                        )
                     }
                     lastText = res.content ?: ""
                 }
-                is QuroLlmResult.Error -> return "⚠️ 子智能体任务失败：${res.message}"
+                is QuroLlmResult.Error -> {
+                    publish("执行失败：${res.message}")
+                    return "⚠️ 子智能体任务失败：${res.message}"
+                }
             }
         }
         return lastText.ifBlank { "(子智能体未在限定轮数内产出结果)" }

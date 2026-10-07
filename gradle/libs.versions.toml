@@ -20,6 +20,9 @@ navigation = "2.8.5"
 kotlinxSerialization = "1.8.0"
 room = "2.8.4"
 ksp = "2.3.9"
+# 多角色集群编排（cluster-*）：SQLCipher 独立加密库 + SQLite KTX
+sqlcipher = "4.5.5"
+sqliteKtx = "2.4.0"
 facebookYoga = "2.0.1"
 androidsvg = "1.4"
 coil = "2.6.0"
@@ -67,10 +70,15 @@ eclipse-jgit = { group = "org.eclipse.jgit", name = "org.eclipse.jgit", version.
 # 手写 AlarmManager 都要重复实现一遍且容易漏掉开机恢复。
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntime" }
 
-# Room（生成式 UI 持久层：版本树 + 状态快照）
+# Room（多角色集群编排 :cluster-storage 的持久层：独立加密库 qurocluster.db）
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+# SQLCipher + SQLite：集群数据库加密。SQLCipher 自带多 ABI .so，工程 abiFilters 只留 arm64-v8a，
+# 打包时其余 ABI 会被自动裁掉（不需要额外配置 excludes）。
+sqlcipher = { group = "net.zetetic", name = "sqlcipher-android", version.ref = "sqlcipher" }
+androidx-sqlite-ktx = { group = "androidx.sqlite", name = "sqlite-ktx", version.ref = "sqliteKtx" }
 
 # Shizuku（L2 通道：ADB 级 IPC / 免 Root 系统执行）
 shizuku-api = { group = "dev.rikka.shizuku", name = "api", version.ref = "shizuku" }

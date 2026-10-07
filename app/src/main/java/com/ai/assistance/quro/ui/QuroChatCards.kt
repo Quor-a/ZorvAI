@@ -69,6 +69,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.yuanbao.miniapp.core.MiniAppEngine as NativeMiniAppEngine
 import com.ai.assistance.quro.core.QuroBrowserBridge
 import com.ai.assistance.quro.core.cards.QuroChatCard
+import com.ai.assistance.quro.core.cards.MermaidDiag
+import com.ai.assistance.quro.core.cards.mermaidErrorDiag
+import com.ai.assistance.quro.core.cards.sanitizeMermaidSource
 import com.ai.assistance.quro.core.cards.KeyValueCard
 import com.ai.assistance.quro.core.cards.RingCard
 import com.ai.assistance.quro.core.cards.StackedBarCard
@@ -279,8 +282,8 @@ fun QuroChatCardView(card: QuroChatCard, onCommand: (String) -> Unit, modifier: 
             is QuroChatCard.PieCard -> PieCardView(card)
             is QuroChatCard.RatingCard -> RatingCardView(card, onCommand)
             is QuroChatCard.CountdownCard -> CountdownCardView(card)
-            is QuroChatCard.TabsCard -> TabsCardView(card)
-            is QuroChatCard.ExpandableCard -> ExpandableCardView(card)
+            is QuroChatCard.TabsCard -> TabsCardView(card, onCommand)
+            is QuroChatCard.ExpandableCard -> ExpandableCardView(card, onCommand)
             is QuroChatCard.FormCard -> FormCardView(card, onCommand)
             is QuroChatCard.ChipsCard -> ChipsCardView(card, onCommand)
             is QuroChatCard.StepsCard -> StepsCardView(card)
@@ -297,7 +300,7 @@ fun QuroChatCardView(card: QuroChatCard, onCommand: (String) -> Unit, modifier: 
             is QuroChatCard.CompareCard -> CompareCardView(card)
             is QuroChatCard.RadarCard -> RadarCardView(card)
             is QuroChatCard.TimerCard -> TimerCardView(card, onCommand)
-            is QuroChatCard.CarouselCard -> CarouselCardView(card)
+            is QuroChatCard.CarouselCard -> CarouselCardView(card, onCommand)
             is QuroChatCard.KanbanCard -> KanbanCardView(card)
             is QuroChatCard.YuanbaoCard -> YuanbaoCardView(card)
             is QuroChatCard.ColorCard -> ColorCardView(card, onCommand)
@@ -759,9 +762,39 @@ private fun CountdownCardView(card: QuroChatCard.CountdownCard) {
     }
 }
 
+// ───────────── 切换类容器空态提示 ─────────────
+
+/**
+ * 切换类容器（tabs / carousel / expandable）的**空内容占位**。
+ *
+ * 🔴 存在的唯一理由：静默失败比报错更坏。
+ * 原来标签页 body 为空时 `Text("")` 画出一个零高度的 Text，用户看到 TabRow + 一片空白，
+ * 完全无法区分「模型没下发这部分内容」和「客户端渲染坏了」，只能反复让模型重试。
+ * 复用既有 i18n 键 qk_00053「（无内容）」，**不新增键**。
+ */
+@Composable
+private fun SlotEmptyHint(detail: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        shape = RoundedCornerShape(8.dp),
+    ) {
+        Column(Modifier.padding(10.dp)) {
+            Text(
+                stringResource(R.string.qk_00053),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+            )
+            if (detail.isNotBlank()) {
+                Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
 // ───────────── 标签页 ─────────────
 @Composable
-private fun TabsCardView(card: QuroChatCard.TabsCard) {
+private fun TabsCardView(card: QuroChatCard.TabsCard, onCommand: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
         if (card.tabs.isEmpty()) { Text(stringResource(R.string.qk_00053), color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell }
@@ -779,13 +812,20 @@ private fun TabsCardView(card: QuroChatCard.TabsCard) {
             }
         }
         Spacer(Modifier.height(8.dp))
-        Text(card.tabs[idx].body, color = cs.onSurfaceVariant, fontSize = 13.sp)
+        // 🔴 修复「能切换但下方空白」：原来无条件 Text(body)，body 为空串时是零高度空白。
+        // 现在三态分明：富内容子卡 → 渲染子卡；纯文本 → 渲染文本；都没有 → 显式提示。
+        val tab = card.tabs[idx]
+        when {
+            tab.node != null -> QuroChatCardView(tab.node, onCommand)
+            tab.body.isNotBlank() -> Text(tab.body, color = cs.onSurfaceVariant, fontSize = 13.sp)
+            else -> SlotEmptyHint("「${tab.title.ifBlank { "第 ${idx + 1} 页" }}」暂无内容")
+        }
     }
 }
 
 // ───────────── 折叠块 ─────────────
 @Composable
-private fun ExpandableCardView(card: QuroChatCard.ExpandableCard) {
+private fun ExpandableCardView(card: QuroChatCard.ExpandableCard, onCommand: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     CardShell(card.title) {
         Row(Modifier.fillMaxWidth().clickable { QuroChatCardStore.setExpandable(card.id, !card.expanded) },
@@ -795,7 +835,12 @@ private fun ExpandableCardView(card: QuroChatCard.ExpandableCard) {
         }
         if (card.expanded) {
             Spacer(Modifier.height(8.dp))
-            Text(card.body, color = cs.onSurfaceVariant, fontSize = 13.sp)
+            // 🔴 同 TabsCard：原来 body 为空就是一片空白，用户点开了也看不到内容
+            when {
+                card.node != null -> QuroChatCardView(card.node, onCommand)
+                card.body.isNotBlank() -> Text(card.body, color = cs.onSurfaceVariant, fontSize = 13.sp)
+                else -> SlotEmptyHint("「${card.title.ifBlank { "折叠面板" }}」暂无内容")
+            }
         }
     }
 }
@@ -1444,7 +1489,7 @@ private fun TimerCardView(card: QuroChatCard.TimerCard, onCommand: (String) -> U
 
 /** 轮播卡片：点击内容切换下一张。 */
 @Composable
-private fun CarouselCardView(card: QuroChatCard.CarouselCard) {
+private fun CarouselCardView(card: QuroChatCard.CarouselCard, onCommand: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     var page by remember { mutableStateOf(0) }
     CardShell(card.title) {
@@ -1458,7 +1503,12 @@ private fun CarouselCardView(card: QuroChatCard.CarouselCard) {
         ) {
             Text(slide.title, color = cs.onSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
-            Text(slide.body, color = cs.onSurfaceVariant, fontSize = 13.sp)
+            // 🔴 同 TabsCard：body 是组件 spec 时原来只显示标题，切过去看不到内容
+            when {
+                slide.node != null -> QuroChatCardView(slide.node, onCommand)
+                slide.body.isNotBlank() -> Text(slide.body, color = cs.onSurfaceVariant, fontSize = 13.sp)
+                else -> SlotEmptyHint("「${slide.title.ifBlank { "第 ${p + 1} 页" }}」暂无内容")
+            }
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1773,6 +1823,17 @@ internal fun MermaidWebView(
     }
     val webViewRef = remember { mutableStateOf<WebView?>(null) }
     var renderError by remember(card.id) { mutableStateOf<String?>(null) }
+    // 🔴 #181：渲染前把「模型误塞进来的纯散文行」转成注释。
+    //真机截图（23:44:54）里 mermaid 报错是 `Lexical error on line 4. Unrecognized text.`，
+    // 第 4 行原文 = `...quro-ui 渲染原生控件」 B -->{D[纯文本回复] C -`——模型把说明文字
+    // 混进了图定义，词法器遇到裸文本直接罢工。清洗只在 [sanitizeMermaidSource] 里做，
+    // 不动任何含结构符号的行，所以真节点不会被误删。
+    val cleanSource = remember(card.id, card.source) { sanitizeMermaidSource(card.source) }
+    // 🔴 失败时定位到出错行原文：只糊一句 `take(100)` 的英文报错，用户既不知道是第几行、
+    // 也不知道自己写了什么，等于黑盒。
+    val diag = remember(renderError, cleanSource) {
+        renderError?.let { mermaidErrorDiag(it, cleanSource) } ?: MermaidDiag(null, "")
+    }
 
     AndroidView(
         modifier = modifier,
@@ -1813,8 +1874,11 @@ internal fun MermaidWebView(
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
                         renderError = null
-                        val src = JSONObject.quote(card.source)
-                        view?.evaluateJavascript("window.__render($src, '$theme')", null)
+                        val src = JSONObject.quote(cleanSource)
+                        // #185 修复：离屏 destroy 后 onPageFinished 可能才回调，对已销毁 WebView 调 evaluateJavascript 会 use-after-destroy(SIGTRAP)。仅当仍挂载才注入。
+                        if (view?.isAttachedToWindow == true) {
+                            view.evaluateJavascript("window.__render($src, '$theme')", null)
+                        }
                     }
 
                     override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
@@ -1828,8 +1892,14 @@ internal fun MermaidWebView(
         },
         update = { wv ->
             renderError = null
-            val src = JSONObject.quote(card.source)
-            wv.evaluateJavascript("window.__render($src, '$theme')", null)
+            val src = JSONObject.quote(cleanSource)
+            if (wv.isAttachedToWindow) {
+                wv.evaluateJavascript("window.__render($src, '$theme')", null)
+            }
+        },
+        onRelease = { wv ->
+            webViewRef.value = null
+            wv.destroy()
         }
     )
 
@@ -1846,6 +1916,39 @@ internal fun MermaidWebView(
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // 🔴 #181：把出错行原文亮出来。旧版只显示被 take(100) 截断的英文报错，
+                // 用户看不到「第 4 行写了什么」——模型把散文混进图定义这类问题，
+                // 没有原文根本无从判断是AI 写错还是引擎坏了（真机截图 23:44:54）。
+                if (diag.hasLine) {
+                    Spacer(Modifier.height(6.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.08f),
+                        shape = RoundedCornerShape(6.dp),
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                            Text(
+                                qstr(R.string.qk_04062, (diag.line ?: 0).toString()),
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 11.sp,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                diag.lineText,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                qstr(R.string.qk_04063),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 10.sp,
+                            )
+                        }
+                    }
+                }
                 Spacer(Modifier.height(4.dp))
                 Surface(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
@@ -1853,7 +1956,7 @@ internal fun MermaidWebView(
                     modifier = Modifier.clickable {
                         webViewRef.value?.let { wv ->
                             renderError = null
-                            val src = JSONObject.quote(card.source)
+                            val src = JSONObject.quote(cleanSource)
                             wv.evaluateJavascript("window.__retry($src, '$theme')", null)
                         }
                     }
@@ -2038,9 +2141,12 @@ internal fun HtmlPreviewWebView(
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
-                        view?.evaluateJavascript("document.documentElement.scrollHeight") { value ->
-                            val px = value?.replace("\"", "")?.toIntOrNull() ?: return@evaluateJavascript
-                            onHeight(px.coerceIn(160, 1440))
+                        // #185 修复：离屏 destroy 后不再对死 WebView 调 evaluateJavascript（防 SIGTRAP）
+                        if (view?.isAttachedToWindow == true) {
+                            view.evaluateJavascript("document.documentElement.scrollHeight") { value ->
+                                val px = value?.replace("\"", "")?.toIntOrNull() ?: return@evaluateJavascript
+                                onHeight(px.coerceIn(160, 1440))
+                            }
                         }
                     }
                     
@@ -2064,12 +2170,13 @@ internal fun HtmlPreviewWebView(
         },
         update = { wv ->
             // 仅当 HTML 内容变化时才重载，避免每次 recomposition 重复加载造成闪烁
-            if (wv.tag != html) {
+            if (wv.isAttachedToWindow && wv.tag != html) {
                 wv.tag = html
                 val htmlWithFallback = assetLibResolver.injectFallbackScript(html)
                 wv.loadDataWithBaseURL("file:///android_asset/", htmlWithFallback, "text/html", "UTF-8", null)
             }
         },
+        onRelease = { wv -> wv.destroy() }
     )
 }
 
@@ -2393,9 +2500,12 @@ private fun MiniAppWebView(
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
-                        view?.evaluateJavascript("document.documentElement.scrollHeight") { value ->
-                            val px = value?.replace("\"", "")?.toIntOrNull() ?: return@evaluateJavascript
-                            onHeight(px.coerceIn(160, 1440))
+                        // #185 修复：离屏 destroy 后不再对死 WebView 调 evaluateJavascript（防 SIGTRAP）
+                        if (view?.isAttachedToWindow == true) {
+                            view.evaluateJavascript("document.documentElement.scrollHeight") { value ->
+                                val px = value?.replace("\"", "")?.toIntOrNull() ?: return@evaluateJavascript
+                                onHeight(px.coerceIn(160, 1440))
+                            }
                         }
                     }
 
@@ -2454,7 +2564,7 @@ private fun MiniAppWebView(
         },
         update = { wv ->
             // 仅当 HTML 内容变化时才重载，避免每次 recomposition 重复加载造成闪烁
-            if (wv.tag != html) {
+            if (wv.isAttachedToWindow && wv.tag != html) {
                 wv.tag = html
                 val bridgeJs = try {
                     context.assets.open("bridge/bridge.js").bufferedReader().use { it.readText() }
@@ -2492,6 +2602,7 @@ private fun MiniAppWebView(
                 wv.loadDataWithBaseURL("file:///android_asset/", wrappedHtml, "text/html", "UTF-8", null)
             }
         },
+        onRelease = { wv -> wv.destroy() }
     )
 }
 

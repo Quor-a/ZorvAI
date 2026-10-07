@@ -111,8 +111,11 @@ import com.ai.assistance.quro.genui.sdk.dsl.ComponentVariant
 import com.ai.assistance.quro.genui.sdk.dsl.Dimension
 import com.ai.assistance.quro.genui.sdk.dsl.UIComponent
 import com.ai.assistance.quro.genui.sdk.render.RenderChildren
+import com.ai.assistance.quro.genui.sdk.render.GenUIParentAxis
 import com.ai.assistance.quro.genui.sdk.render.RenderContext
 import com.ai.assistance.quro.genui.sdk.render.RenderNode
+import com.ai.assistance.quro.genui.sdk.render.GenUILayoutAlign
+import com.ai.assistance.quro.genui.sdk.render.GenUILayoutGuard
 import com.ai.assistance.quro.genui.sdk.render.StyleResolver
 import com.ai.assistance.quro.genui.sdk.style.FontProvider
 import java.util.Locale
@@ -193,101 +196,32 @@ private fun resolveOnColorRole(
 /**
  * Resolves vertical arrangement from style properties, supporting spacing between items.
  */
-private fun ltbVerticalArrangement(value: String?, spacing: Float): Arrangement.Vertical {
-    val spacingDp = if (spacing > 0f) spacing.dp else 0.dp
-    val lower = value?.lowercase(Locale.ROOT)
-    return when (lower) {
-        "center" -> if (spacingDp > 0.dp) {
-            Arrangement.spacedBy(spacingDp, Alignment.CenterVertically)
-        } else {
-            Arrangement.Center
-        }
-        "end", "bottom" -> if (spacingDp > 0.dp) {
-            Arrangement.spacedBy(spacingDp, Alignment.Bottom)
-        } else {
-            Arrangement.Bottom
-        }
-        "space_between" -> Arrangement.SpaceBetween
-        "space_around" -> Arrangement.SpaceAround
-        "space_evenly" -> Arrangement.SpaceEvenly
-        else -> if (spacingDp > 0.dp) {
-            Arrangement.spacedBy(spacingDp)
-        } else {
-            Arrangement.Top
-        }
-    }
-}
+// ==================================================================
+// 对齐语义统一委托到 [GenUILayoutAlign]（2026-10-06）
+//
+// 原先这里是本文件私有的 ltbXxx 五件套，而 ContainerComponent.kt 里还有一套同名的
+// XxxAlign。两套对同一输入给出不同结果 —— 典型如 `stretch`：一份当「撑满」、
+// 一份当「居中」；又如 boxAlign 未指定时一份返回 Center、一份返回 TopStart。
+// 模型无从判断哪个对，于是同一个页面里换个组件类型对齐就变了 ——
+// 这正是用户说的「组件虽然多但是不齐」。现在两处都委托，语义只剩一份。
+// ==================================================================
 
-/**
- * Resolves horizontal arrangement from style properties, supporting spacing between items.
- */
-private fun ltbHorizontalArrangement(value: String?, spacing: Float): Arrangement.Horizontal {
-    val spacingDp = if (spacing > 0f) spacing.dp else 0.dp
-    val lower = value?.lowercase(Locale.ROOT)
-    return when (lower) {
-        "center" -> if (spacingDp > 0.dp) {
-            Arrangement.spacedBy(spacingDp, Alignment.CenterHorizontally)
-        } else {
-            Arrangement.Center
-        }
-        "end", "right" -> if (spacingDp > 0.dp) {
-            Arrangement.spacedBy(spacingDp, Alignment.End)
-        } else {
-            Arrangement.End
-        }
-        "space_between" -> Arrangement.SpaceBetween
-        "space_around" -> Arrangement.SpaceAround
-        "space_evenly" -> Arrangement.SpaceEvenly
-        else -> if (spacingDp > 0.dp) {
-            Arrangement.spacedBy(spacingDp)
-        } else {
-            Arrangement.Start
-        }
-    }
-}
+private fun ltbVerticalArrangement(value: String?, spacing: Float): Arrangement.Vertical =
+    GenUILayoutAlign.verticalArrangement(value, GenUILayoutGuard.spacing(spacing).dp)
 
-/**
- * Resolves horizontal alignment for cross-axis in Column.
- */
-private fun ltbHorizontalAlign(value: String?): Alignment.Horizontal {
-    val lower = value?.lowercase(Locale.ROOT)
-    return when (lower) {
-        "end", "right" -> Alignment.End
-        "center", "stretch" -> Alignment.CenterHorizontally
-        else -> Alignment.Start
-    }
-}
+private fun ltbHorizontalArrangement(value: String?, spacing: Float): Arrangement.Horizontal =
+    GenUILayoutAlign.horizontalArrangement(value, GenUILayoutGuard.spacing(spacing).dp)
 
-/**
- * Resolves vertical alignment for cross-axis in Row.
- */
-private fun ltbVerticalAlign(value: String?): Alignment.Vertical {
-    val lower = value?.lowercase(Locale.ROOT)
-    return when (lower) {
-        "end", "bottom" -> Alignment.Bottom
-        "center", "stretch" -> Alignment.CenterVertically
-        else -> Alignment.Top
-    }
-}
+private fun ltbHorizontalAlign(value: String?): Alignment.Horizontal =
+    GenUILayoutAlign.horizontalAlign(value)
 
-/**
- * Resolves Box alignment from style properties.
- */
-private fun ltbBoxAlign(value: String?): Alignment {
-    val lower = value?.lowercase(Locale.ROOT)
-    return when (lower) {
-        "top" -> Alignment.TopCenter
-        "bottom" -> Alignment.BottomCenter
-        "center" -> Alignment.Center
-        "start", "left" -> Alignment.CenterStart
-        "end", "right" -> Alignment.CenterEnd
-        "top_start", "top_left" -> Alignment.TopStart
-        "top_end", "top_right" -> Alignment.TopEnd
-        "bottom_start", "bottom_left" -> Alignment.BottomStart
-        "bottom_end", "bottom_right" -> Alignment.BottomEnd
-        else -> Alignment.Center
-    }
-}
+private fun ltbVerticalAlign(value: String?): Alignment.Vertical =
+    GenUILayoutAlign.verticalAlign(value)
+
+private fun ltbBoxAlign(value: String?): Alignment =
+    GenUILayoutAlign.boxAlign(value)
+
+
 
 /**
  * Resolves button enabled and loading state from component properties and variant state.
@@ -561,15 +495,27 @@ fun ColumnRowRenderer(
     ctx: RenderContext,
     modifier: Modifier = Modifier
 ) {
-    val spacing = component.propFloat("spacing", 0f)
+    // 默认间距 8dp（8pt 网格）：模型漏写 spacing 时用 0 会让元素糊成一片，
+    // 这正是用户说的「组件虽然多但是不齐」。与 ContainerComponent 保持一致。
+    val spacing = GenUILayoutGuard.spacing(component.propFloatOrNull("spacing"))
+
+    // 容器类型优先；只有 box/stack 这类中性容器才听 direction。
+    // 判定走 GenUILayoutGuard.isHorizontal —— 原先只认精确值 "horizontal"，
+    // 模型写 "Horizontal" / "row" / "h" 会静默落回竖排，用户只看到「方向反了」
+    // 且没有任何报错提示。
     val isHorizontal = when (component.type) {
         ComponentTypes.ROW, ComponentTypes.FLEX_ROW -> true
         ComponentTypes.COLUMN, ComponentTypes.FLEX_COLUMN -> false
-        else -> component.propString("direction")?.lowercase(Locale.ROOT) == "horizontal"
+        else -> GenUILayoutGuard.isHorizontal(component.propString("direction"))
     }
 
     if (isHorizontal) {
-        Row(
+        // 🔴 埋点：进入 Row 作用域，让子树知道自己在横向布局里。
+        // 子树里被 box/container/card 包住的那层也靠它拿到 inRowContext，
+        //   否则那层容器的 `width: match` 会 fillMaxWidth 抢整行、把兄弟压成竖排
+        //   （用户截图：天气卡右侧「体感/西北风/湿度/气压」全竖成一列字）。
+        GenUIParentAxis.InRow {
+            Row(
             modifier = modifier.fillMaxWidth(),
             horizontalArrangement = ltbHorizontalArrangement(component.style.arrangement, spacing),
             verticalAlignment = ltbVerticalAlign(component.style.crossAlignment)
@@ -591,6 +537,7 @@ fun ColumnRowRenderer(
                             Box(Modifier.weight(w.fraction.coerceIn(0.01f, 1f))) { RenderNode(child, ctx) }
                         else -> RenderNode(child, ctx)
                     }
+                }
                 }
             }
         }
@@ -637,7 +584,7 @@ fun BoxContainerRenderer(
         component.children.size <= 1
 
     if (!stackChildren) {
-        val spacing = component.propFloat("spacing", 0f)
+        val spacing = GenUILayoutGuard.spacing(component.propFloatOrNull("spacing"))
         Column(
             modifier = modifier.fillMaxWidth(),
             verticalArrangement = if (spacing > 0f) Arrangement.spacedBy(spacing.dp) else Arrangement.Top,
@@ -717,10 +664,12 @@ fun ScrollRenderer(
     ctx: RenderContext,
     modifier: Modifier = Modifier
 ) {
-    val direction = component.propString("direction") ?: "vertical"
-    val spacing = component.propFloat("spacing", 0f)
+    // 方向容错：模型写 "Horizontal" / "x" / "row" 都要能识别，
+    // 否则横向列表会被静默渲染成竖向 —— 用户看到的就是「方向不对」。
+    val isHorizontal = GenUILayoutGuard.isHorizontal(component.propString("direction"))
+    val spacing = GenUILayoutGuard.spacing(component.propFloatOrNull("spacing"))
     val scrollState = rememberScrollState()
-    val scrollModifier = if (direction.lowercase(Locale.ROOT) == "horizontal") {
+    val scrollModifier = if (isHorizontal) {
         Modifier.horizontalScroll(scrollState)
     } else {
         Modifier.verticalScroll(scrollState)
@@ -797,10 +746,11 @@ fun FlowRenderer(
     ctx: RenderContext,
     modifier: Modifier = Modifier
 ) {
-    val direction = component.propString("direction") ?: "horizontal"
+    // 默认横向（与 wrap 一致）；判定走守卫，"Vertical"/"V" 也能识别。
+    val isVertical = GenUILayoutGuard.isVertical(component.propString("direction"))
     val maxItems = component.propInt("maxItemsInRow", Int.MAX_VALUE)
 
-    if (direction.lowercase(Locale.ROOT) == "vertical") {
+    if (isVertical) {
         FlowColumn(
             modifier = modifier.fillMaxWidth(),
             maxItemsInEachColumn = maxItems,

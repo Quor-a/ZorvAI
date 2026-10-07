@@ -38,7 +38,7 @@ class UiWidgetTool : QuroTool {
         "progress{label,value,max?,suffix?}; stat{label,value,unit?,delta?,trend?}; alert{severity,text}; " +
         "table{headers:[],rows:[[]]}; list{items:[{text,sub?,selected?}],selectable?,command?}; segmented{label,options:[],selectedIndex,command?}; " +
         "pie{segments:[{name,value,color?}]}; rating{label,max,value,command?}; countdown{label,target(epoch毫秒或'yyyy-MM-dd HH:mm:ss')}; " +
-        "tabs{tabs:[{title,body}],selectedIndex}; expandable{body,expanded?}; form{fields:[{key,label,value?,placeholder?,secret?}],submitCommand}; " +
+        "tabs{tabs:[{title,body}],selectedIndex}（body 可写纯文本，也可写一个组件 spec（形如 {type: table, ...} 的 JSON），还可用 content/node 键，或给 children 数组放多个组件；expandable{body,expanded?}（body 同样可写组件 spec）; form{fields:[{key,label,value?,placeholder?,secret?}],submitCommand}; " +
         "chips{label,chips:[],selected:[],multi,command?}; steps{steps:[{title,status}],current}; gauge{label,value,max?,unit?}; " +
         "media{mediaUrl,mediaType(image|audio|video)}; info{body,align?}; " +
         "toolcall{tool,status(pending|running|done|error),progress?,message?}; stream{lines:[...]}; mediaplay{mediaType(audio|video),uri,label?}; " +

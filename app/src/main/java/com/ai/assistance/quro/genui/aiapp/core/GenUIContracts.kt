@@ -33,8 +33,23 @@ sealed interface GenUILlmResult {
      */
     data class Text(
         val content: String,
-        val reasoning: String? = null
-    ) : GenUILlmResult
+        val reasoning: String? = null,
+        /**
+         * 上游 `finish_reason` 原值（`stop` / `length` / `tool_calls` / `content_filter` …）。
+         *
+         * 🔴 新增：这是「GenUI 写不完整」的主要信号。
+         *
+         * 旧实现在流式解析里拿到 `finish_reason` 就直接 `break`，
+         * 之后与 `stop` 混为一路返回「正常结束」，
+         * 上层根本无法区分「正常写完」与「被 max_tokens 腰斩」。
+         * 且旧续写判定只看「genui 围栏是否闭合」，
+         * markdown 报告被腰斩时围栏本来就是闭合的 → 不触发续写 → 用户看到「报告写了一半没了」。
+         */
+        val finishReason: String? = null,
+    ) : GenUILlmResult {
+        /** 是否被 `max_tokens` 截断（输出腰斩）。上层据此触发自动续写。 */
+        val truncated: Boolean get() = finishReason == "length"
+    }
 
     /**
      * 工具调用结果

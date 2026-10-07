@@ -3737,7 +3737,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_03756" formatted="false">文本翻译所使用的模型</string>
     <string name="qk_03757" formatted="false">代码检索与检索规划所使用的模型</string>
     <string name="qk_03758" formatted="false">灵魂卡自动孵化蒸馏所使用的模型</string>
-    <string name="qk_03759" formatted="false">图片内容理解所使用的模型（需支持视觉）</string>
+    <string name="qk_03759" formatted="false">图片内容理解所使用的模型（需支持视觉）；也是视频通话画面理解的保底视觉模型</string>
     <string name="qk_03760" formatted="false">音频内容理解所使用的模型</string>
     <string name="qk_03761" formatted="false">视频与视频通话实时画面理解所使用的模型（需支持视觉）</string>
     <string name="qk_03762" formatted="false">AI 可直接调用的图片生成模型</string>
@@ -3852,7 +3852,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_03870" formatted="false">登录后管理仓库 / Issue / Star / 通知，对话框内可搜 GitHub</string>
     <string name="qk_03871" formatted="false">开启后 rm -rf / dd / mkfs 等危险命令需再次发送或 confirm 才执行</string>
     <string name="qk_03872" formatted="false">跟随系统</string>
-    <string name="qk_03873" formatted="false">视频通话中的实时对话与画面理解所使用的模型（需支持视觉）</string>
+    <string name="qk_03873" formatted="false">视频通话的实时对话模型；主对话模型没有视觉能力时，也用它识别摄像头画面（需支持视觉）</string>
     <string name="qk_03874" formatted="false">点我开始视频通话</string>
     <string name="qk_03875" formatted="false">视频通话待命</string>
     <string name="qk_03876" formatted="false">摄像头已开启 · 点麦克风开始说话</string>
@@ -3888,4 +3888,170 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_03906" formatted="false">在独立进程中运行本地推理：加载大模型时不会再被系统回收整个应用，界面始终可用。关闭则沿用旧版进程内行为。</string>
     <string name="qk_03907" formatted="false">温控自适应调度</string>
     <string name="qk_03908" formatted="false">持续推理时每 2 秒读取一次 SoC 温控余量，提前小幅下调线程数，避免被系统断崖式降频。关闭时不做任何干预。</string>
+
+    <!-- ⋮ 溢出菜单无障碍标签（Web 应用 / 小程序详情顶栏） -->
+    <string name="qk_03909" formatted="false">更多操作</string>
+
+    <!-- ⋮ 视频通话启动失败原因（静默自停改为可读提示） -->
+    <string name="qk_03910" formatted="false">视频通话启动失败，请从主界面重新进入</string>
+    <string name="qk_03911" formatted="false">视频通话需要悬浮窗权限才能显示通话界面</string>
+    <string name="qk_03912" formatted="false">无法显示视频通话界面，请检查权限后重试</string>
+    <string name="qk_03913" formatted="false">缺少相机权限</string>
+    <string name="qk_03914" formatted="false">缺少麦克风权限</string>
+    <string name="qk_03915">内容较长，仅显示前 %1$s 行（共 %2$s 行）</string>
+
+    <string name="qk_03916">已清理 %1$d 项，释放 %2$s</string>
+    <string name="qk_03917">清理失败：部分文件无访问权限，请授予存储权限后重试</string>
+    <string name="qk_03919">所选分类本来就是空的，没有可清理的内容</string>
+    <string name="qk_03920">扫描中…</string>
+    <string name="qk_03921">无权限读取</string>
+    <string name="qk_03922">进程内存占用 (PSS)</string>
+    <string name="qk_03923">系统统计的本进程真实物理内存占用，含共享页按比例分摊</string>
+    <string name="qk_03924">Java 堆已用</string>
+    <string name="qk_03925">运行时已分配的 Java 堆中真正被对象占用的部分</string>
+    <string name="qk_03926">可被GC 回收</string>
+    <string name="qk_03927">已分配但未被对象使用的部分，是唯一能被 GC 真正回收的量</string>
+    <string name="qk_03928">Native 堆已用</string>
+    <string name="qk_03929">通过 malloc 分配的 Native 内存，MNN/llama 推理主要占这里</string>
+    <string name="qk_03930">系统可用内存</string>
+    <string name="qk_03931">设备层面当前可供应用使用的内存</string>
+    <string name="qk_03932">释放内存</string>
+    <string name="qk_03933">系统已回收 xx 内存</string>
+    <string name="qk_03934">已请求系统回收，暂无可释放的空闲堆（内存由系统按需管理）</string>
+    <string name="qk_03935">读取内存失败</string>
+    <string name="qk_03918">目录为空或不可访问</string>
+    <!-- R7-14：诊断日志副标题。旧键 qk_00357 写「手机 Download/QuroAI_logs」，
+         但工程真实写入点是 getExternalFilesDir("QuroAI_logs")（app 私有外部目录），
+         旧文案与真实路径不符且误导用户以为需要「所有文件访问权限」。旧键保留不改。 -->
+    <string name="qk_03936" formatted="false">应用私有目录 QuroAI_logs</string>
+    <!-- R7-14：清理页「假实现」修复。旧键 qk_03917 写「请授予存储权限后重试」，
+         但清理目标全在 app 私有目录（filesDir / cacheDir / getExternalFilesDir），
+         不在 MANAGE_EXTERNAL_STORAGE 管辖内 —— 跳授权页后依然删不掉，正是「点了没反应」的观感来源。
+         旧键保留不改，新增两个如实描述的键。 -->
+    <string name="qk_03938" formatted="false">清理失败：无法读取该目录，可能正被其他进程占用，请稍后重试</string>
+    <string name="qk_03939">已清理 %1$d 项，释放 %2$s（部分文件被占用，未能全部删除）</string>
+    <!-- R7-14：清理页改用系统记账（StorageStatsManager / StorageManager）后新增的维度。
+         旧页只有「可清理总大小」，缺「缓存到底多少」「存储还剩多少」，用户无从判断。 -->
+    <string name="qk_03940" formatted="false">≥ </string>
+    <string name="qk_03941" formatted="false">可清理缓存</string>
+    <string name="qk_03942" formatted="false">系统设置里「清除缓存」对应的量</string>
+    <string name="qk_03943" formatted="false">存储剩余</string>
+    <string name="qk_03944" formatted="false">本卷可用 / 总量</string>
+    <string name="qk_03945">%1$s 可用 / 共 %2$s</string>
+    <string name="qk_03946">Agent cluster</string>
+    <string name="qk_03947">No cluster yet</string>
+    <string name="qk_03948">Create the default cluster (host + researcher / writer / reviewer)</string>
+    <string name="qk_03949">Cluster name</string>
+    <string name="qk_03950">Goal</string>
+    <string name="qk_03951">Start</string>
+    <string name="qk_03952">Abort</string>
+    <string name="qk_03953">Pause</string>
+    <string name="qk_03954">Resume</string>
+    <string name="qk_03955">Interject</string>
+    <string name="qk_03956">State machine</string>
+    <string name="qk_03957">Roles</string>
+    <string name="qk_03961">例如：写一篇对比三款国产芯片的短文，要数据有来源</string>
+    <string name="qk_03962">主持 + 0 个角色</string>
+    <string name="qk_03963">刷新列表</string>
+    <string name="qk_03964">新建</string>
+    <string name="qk_03965">创建默认集群（主持 + 研究员 / 写手 / 校对）</string>
+    <string name="qk_03966">身份锁定</string>
+    <string name="qk_03967">模型：%1$s</string>
+    <string name="qk_03968">%1$d 人提案 · %2$d 技能</string>
+    <string name="qk_03969">（未设置工作内容）</string>
+    <string name="qk_03970">%1$s</string>
+    <string name="qk_03971">技能 %1$d</string>
+    <string name="qk_03972">工具 %1$d</string>
+    <string name="qk_03973">AI 创建</string>
+    <string name="qk_03974">添加角色</string>
+    <string name="qk_03975">让 AI 起草配置</string>
+    <string name="qk_03976">删除角色</string>
+    <string name="qk_03977">身份 / 角色 / 提示词 / 职责 / 触发词 / 模型 / 技能 均可修改</string>
+    <string name="qk_03978">① 身份</string>
+    <string name="qk_03979">名称</string>
+    <string name="qk_03980">图标</string>
+    <string name="qk_03981">签名（显示在发言气泡上）</string>
+    <string name="qk_03982">自称（如：我 / 本官 / 本研究员）</string>
+    <string name="qk_03983">② 角色设定</string>
+    <string name="qk_03984">角色设定</string>
+    <string name="qk_03985">它是谁、什么性格、说话风格</string>
+    <string name="qk_03986">③ 系统提示词</string>
+    <string name="qk_03987">系统提示词</string>
+    <string name="qk_03988">留空则只用身份与角色设定</string>
+    <string name="qk_03989">④ 工作内容（职责清单）</string>
+    <string name="qk_03990">添加一项职责</string>
+    <string name="qk_03991">⑤ 禁忌（绝不做的事）</string>
+    <string name="qk_03992">添加一条禁忌</string>
+    <string name="qk_03993">⑥ 触发词（主持据此选人）</string>
+    <string name="qk_03994">添加触发词</string>
+    <string name="qk_03995">命中才派活给它，留空则接所有指派</string>
+    <string name="qk_03996">⑦ 模型绑定（可与其它角色不同）</string>
+    <string name="qk_03997">⑧ 技能</string>
+    <string name="qk_03998">权限与限额</string>
+    <string name="qk_03999">保存</string>
+    <string name="qk_04000">取消</string>
+    <string name="qk_04001">让 AI 起草角色配置</string>
+    <string name="qk_04002">描述你缺什么样的角色，AI 生成身份、职责、禁忌与提示词，你再修改。</string>
+    <string name="qk_04003">删除角色「%1$s」？</string>
+    <string name="qk_04004">删除后该角色不再被主持选派。历史消息与产物保留。</string>
+    <string name="qk_04005">删除</string>
+    <string name="qk_04006">主持身份：内置不可修改</string>
+    <string name="qk_04007">主持模型</string>
+    <string name="qk_04008">编排策略</string>
+    <string name="qk_04009">终止策略</string>
+    <string name="qk_04010">风格微调（不改身份与职责）</string>
+    <string name="qk_04011">添加</string>
+    <string name="qk_04012">未读到宿主模型列表，将沿用当前绑定。</string>
+    <string name="qk_04013">宿主模型配置 ID</string>
+    <string name="qk_04014">降级链（逗号分隔）</string>
+    <string name="qk_04015">失败时依次切换</string>
+    <string name="qk_04016">▶ 请求参数与上下文隔离</string>
+    <string name="qk_04017">历史窗口（轮）</string>
+    <string name="qk_04018">黑板键白名单（留空=全部）</string>
+    <string name="qk_04019">逗号分隔</string>
+    <string name="qk_04020">上下文 token 上限</string>
+    <string name="qk_04021">可看到其它角色的发言</string>
+    <string name="qk_04022">可看到历史产物</string>
+    <string name="qk_04023">允许调用工具</string>
+    <string name="qk_04024">允许修改自己的提示词</string>
+    <string name="qk_04025">允许创建新角色</string>
+    <string name="qk_04026">允许安装技能</string>
+    <string name="qk_04027">每任务最多轮数</string>
+    <string name="qk_04028">每轮最多工具调用</string>
+    <string name="qk_04029">编排模式</string>
+    <string name="qk_04030">一次点名几个角色提方案</string>
+    <string name="qk_04031">提案并行且互相隔离</string>
+    <string name="qk_04032">启用批评者</string>
+    <string name="qk_04033">收尾前必须验收</string>
+    <string name="qk_04034">出错时重规划</string>
+    <string name="qk_04035">最大轮数</string>
+    <string name="qk_04036">墙钟上限（分钟）</string>
+    <string name="qk_04037">token 上限（千）</string>
+    <string name="qk_04038">停滞判定窗口（轮）</string>
+    <string name="qk_04039">停滞时的动作</string>
+    <string name="qk_04040">尚未安装任何技能。安装后即可在此按角色挂载。</string>
+    <string name="qk_04041">生成</string>
+    <string name="qk_04042">%1$dK token</string>
+    <string name="qk_04043">子任务</string>
+    <string name="qk_04044">插入</string>
+    <string name="qk_04045">待指派</string>
+    <string name="qk_04046">计划 %1$d 个子任务</string>
+    <string name="qk_04047">换模型 %1$s → %2$s</string>
+    <string name="qk_04048">重规划 #%1$d：%2$s</string>
+    <string name="qk_04049">升级人工：%1$s</string>
+    <string name="qk_04050">预算超限：%1$s</string>
+    <string name="qk_04051">错误：%1$s</string>
+    <string name="qk_04052">工具授权</string>
+    <string name="qk_04053">宿主暂无已注册工具，无法授权。</string>
+    <string name="qk_04054">集群模式</string>
+    <string name="qk_04055">开启后由多角色协作回答，可在下方配置角色</string>
+    <string name="qk_04056">集群协作中</string>
+    <string name="qk_04057">停止</string>
+    <string name="qk_04058">开启对话框下方的「集群模式」后，在输入框发消息即可交给多角色协作</string>
+    <string name="qk_04060">表格列数较多，可左右滑动查看 →</string>
+    <string name="qk_04061">集群 · %1$s</string>
+    <string name="qk_04062">第 %1$s 行出错了：</string>
+    <string name="qk_04063" formatted="false">多半是模型把说明文字写进了图定义里，点「复制源码」把这段发给它改一下即可。</string>
+    <string name="qk_04064" formatted="false">正在启动集群引擎，首次开启需要准备环境，请稍候…</string>
+    <string name="qk_04065">Recruit roles, bind models, tune host limits</string>
 </resources>

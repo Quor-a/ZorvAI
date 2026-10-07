@@ -320,14 +320,13 @@ class LogicRuntime(
  * 与 [WxApi.API_NAMES] 取差集后使用，绝不覆盖已实现的接口。
  */
 private val WX_UNSUPPORTED_FALLBACKS = listOf(
-    "setStorage", "getStorage", "removeStorage", "clearStorage", "getStorageInfo", "getStorageInfoSync",
-    "pageScrollTo", "createSelectorQuery", "createAnimation", "createIntersectionObserver",
-    "getMenuButtonBoundingClientRect", "setNavigationBarColor", "hideHomeButton",
+    "createSelectorQuery", "createAnimation", "createIntersectionObserver",
+    "getMenuButtonBoundingClientRect",
     "showTabBar", "hideTabBar", "setTabBarBadge", "removeTabBarBadge",
     "createInnerAudioContext", "createVideoContext", "createCanvasContext", "canvasToTempFilePath",
     "getUserInfo", "getUserProfile", "login", "checkSession", "getSetting", "authorize", "openSetting",
     "uploadFile", "downloadFile", "getImageInfo", "saveImageToPhotosAlbum", "previewImage",
-    "getBatteryInfoSync", "getLaunchOptionsSync", "getEnterOptionsSync", "getRealtimeLogManager",
+    "getBatteryInfoSync",
     "onNetworkStatusChange", "onAppShow", "onAppHide", "offAppShow", "offAppHide",
-    "onError", "onPageNotFound", "offError", "startPullDownRefresh", "updateManager"
+    "onError", "onPageNotFound", "offError", "updateManager"
 )

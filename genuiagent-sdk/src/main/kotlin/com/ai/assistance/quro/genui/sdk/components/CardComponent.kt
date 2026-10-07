@@ -75,7 +75,7 @@ fun CardRenderer(
             start = inner.start.dp, top = inner.top.dp,
             end = inner.end.dp, bottom = inner.bottom.dp
         )
-    } else Modifier.padding(16.dp)
+    } else Modifier.padding(com.ai.assistance.quro.genui.sdk.style.GenUIDesignTokens.space16)
 
     Card(
         modifier = modifier.fillMaxWidth(),

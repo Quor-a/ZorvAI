@@ -3736,7 +3736,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03756" formatted="false">Model used for text translation</string>
     <string name="qk_03757" formatted="false">Model used for code search and retrieval planning</string>
     <string name="qk_03758" formatted="false">Model used to incubate and distill soul cards automatically</string>
-    <string name="qk_03759" formatted="false">Model used to understand images (must support vision)</string>
+    <string name="qk_03759" formatted="false">Model used to understand images (must support vision); also the fallback vision model for video-call scene understanding</string>
     <string name="qk_03760" formatted="false">Model used to understand audio</string>
     <string name="qk_03761" formatted="false">Model used to understand video and live video-call frames (must support vision)</string>
     <string name="qk_03762" formatted="false">Image generation model the AI can call directly</string>
@@ -3851,7 +3851,7 @@ Your configured models were kept; you can also type a model name manually.</stri
     <string name="qk_03870" formatted="false">Sign in to manage repos / issues / stars / notifications; search GitHub inside the chat</string>
     <string name="qk_03871" formatted="false">When on, dangerous commands (rm -rf / dd / mkfs) require a second send or confirm</string>
     <string name="qk_03872" formatted="false">Follow system</string>
-    <string name="qk_03873" formatted="false">Model used for the live conversation and scene understanding in a video call (must support vision)</string>
+    <string name="qk_03873" formatted="false">Model for the live conversation in a video call; also used to read the camera frame when the main chat model has no vision (must support vision)</string>
     <string name="qk_03874" formatted="false">Tap to start the video call</string>
     <string name="qk_03875" formatted="false">Video call on standby</string>
     <string name="qk_03876" formatted="false">Camera on · tap the mic to speak</string>
@@ -3887,4 +3887,112 @@ Your configured models were kept; you can also type a model name manually.</stri
     <string name="qk_03906" formatted="false">Run local inference in a separate process, so loading a large model can no longer get the whole app killed by the system and the interface stays usable. Turn off to keep the previous in-process behaviour.</string>
     <string name="qk_03907" formatted="false">Thermal-adaptive scheduling</string>
     <string name="qk_03908" formatted="false">During long generations it reads the SoC thermal headroom every 2 seconds and trims the thread count slightly ahead of time, avoiding the cliff-edge throttling the system would otherwise apply. When off, nothing is intervened.</string>
+
+    <string name="qk_03909" formatted="false">More actions</string>
+
+    <!-- ⋮ 视频通话启动失败原因（静默自停改为可读提示） -->
+    <string name="qk_03910" formatted="false">Video call failed to start. Please reopen it from the main screen</string>
+    <string name="qk_03911" formatted="false">Video call needs the display-over-other-apps permission to show the call screen</string>
+    <string name="qk_03912" formatted="false">Could not show the video call screen. Check the permissions and try again</string>
+    <string name="qk_03913" formatted="false">Camera permission missing</string>
+    <string name="qk_03914" formatted="false">Microphone permission missing</string>
+    <string name="qk_03915">Long content, showing the first %1$s of %2$s lines</string>
+
+    <string name="qk_03916">Cleaned %1$d items, freed %2$s</string>
+    <string name="qk_03917">Cleanup failed: access denied to some files. Grant storage permission and retry</string>
+    <string name="qk_03918">Directory is empty or inaccessible</string>
+    <string name="qk_03961">e.g. Write a short comparison of three domestic chips, with sourced data</string>
+    <string name="qk_03962">Host + 0 roles</string>
+    <string name="qk_03963">Refresh</string>
+    <string name="qk_03964">Create</string>
+    <string name="qk_03965">Create default cluster (host + researcher / writer / reviewer)</string>
+    <string name="qk_03966">identity locked</string>
+    <string name="qk_03967">Model: %1$s</string>
+    <string name="qk_03968">%1$d proposers · %2$d skills</string>
+    <string name="qk_03969">(no duties set)</string>
+    <string name="qk_03970">%1$s</string>
+    <string name="qk_03971">skill %1$d</string>
+    <string name="qk_03972">tools %1$d</string>
+    <string name="qk_03973">AI-made</string>
+    <string name="qk_03974">Add role</string>
+    <string name="qk_03975">Let AI draft this role</string>
+    <string name="qk_03976">Delete role</string>
+    <string name="qk_03977">Identity, persona, prompt, duties, triggers, model and skills are all editable</string>
+    <string name="qk_03978">1. Identity</string>
+    <string name="qk_03979">Name</string>
+    <string name="qk_03980">Icon</string>
+    <string name="qk_03981">Signature (shown on speech bubbles)</string>
+    <string name="qk_03982">Self-reference (e.g. I / this official)</string>
+    <string name="qk_03983">2. Persona</string>
+    <string name="qk_03984">Persona</string>
+    <string name="qk_03985">Who it is, temperament, speaking style</string>
+    <string name="qk_03986">3. System prompt</string>
+    <string name="qk_03987">System prompt</string>
+    <string name="qk_03988">Leave blank to use identity and persona only</string>
+    <string name="qk_03989">4. Duties</string>
+    <string name="qk_03990">Add a duty</string>
+    <string name="qk_03991">5. Taboos</string>
+    <string name="qk_03992">Add a taboo</string>
+    <string name="qk_03993">6. Trigger keywords</string>
+    <string name="qk_03994">Add a keyword</string>
+    <string name="qk_03995">Only assigned on match; blank means accepts any assignment</string>
+    <string name="qk_03996">7. Model binding (may differ per role)</string>
+    <string name="qk_03997">8. Skills</string>
+    <string name="qk_03998">Permissions and limits</string>
+    <string name="qk_03999">Save</string>
+    <string name="qk_04000">Cancel</string>
+    <string name="qk_04001">Let AI draft a role</string>
+    <string name="qk_04002">Describe the role you need; AI drafts identity, duties, taboos and prompt for you to edit.</string>
+    <string name="qk_04003">Delete role "%1$s"?</string>
+    <string name="qk_04004">It will no longer be selected by the host. History and artifacts are kept.</string>
+    <string name="qk_04005">Delete</string>
+    <string name="qk_04006">Host identity: built-in and immutable</string>
+    <string name="qk_04007">Host model</string>
+    <string name="qk_04008">Orchestration policy</string>
+    <string name="qk_04009">Termination policy</string>
+    <string name="qk_04010">Style only (identity and duties untouched)</string>
+    <string name="qk_04011">Add</string>
+    <string name="qk_04012">No host models found; keeping the current binding.</string>
+    <string name="qk_04013">Host model config ID</string>
+    <string name="qk_04014">Fallback chain (comma separated)</string>
+    <string name="qk_04015">Switch to these in order on failure</string>
+    <string name="qk_04016">&gt; Request params and context isolation</string>
+    <string name="qk_04017">History window (turns)</string>
+    <string name="qk_04018">Blackboard key allowlist (blank = all)</string>
+    <string name="qk_04019">Comma separated</string>
+    <string name="qk_04020">Context token cap</string>
+    <string name="qk_04021">Can see utterances from other roles</string>
+    <string name="qk_04022">Can see past artifacts</string>
+    <string name="qk_04023">Allow tool calls</string>
+    <string name="qk_04024">Allow modifying its own prompt</string>
+    <string name="qk_04025">Allow creating new roles</string>
+    <string name="qk_04026">Allow installing skills</string>
+    <string name="qk_04027">Max turns per task</string>
+    <string name="qk_04028">Max tool calls per turn</string>
+    <string name="qk_04029">Orchestration mode</string>
+    <string name="qk_04030">How many roles propose at once</string>
+    <string name="qk_04031">Proposals run in parallel, isolated from each other</string>
+    <string name="qk_04032">Enable critic</string>
+    <string name="qk_04033">Verify before close</string>
+    <string name="qk_04034">Replan on error</string>
+    <string name="qk_04035">Max turns</string>
+    <string name="qk_04036">Wall clock cap (minutes)</string>
+    <string name="qk_04037">Token cap (thousands)</string>
+    <string name="qk_04038">No-progress window (turns)</string>
+    <string name="qk_04039">Action when stagnant</string>
+    <string name="qk_04040">No skills installed yet. Install some to mount them per role.</string>
+    <string name="qk_04041">Generate</string>
+    <string name="qk_04042">%1$dK tokens</string>
+    <string name="qk_04043">Subtasks</string>
+    <string name="qk_04044">Inject</string>
+    <string name="qk_04045">unassigned</string>
+    <string name="qk_04046">Planned %1$d subtasks</string>
+    <string name="qk_04047">Model switched %1$s to %2$s</string>
+    <string name="qk_04048">Replan #%1$d: %2$s</string>
+    <string name="qk_04049">Escalated: %1$s</string>
+    <string name="qk_04050">Budget exceeded: %1$s</string>
+    <string name="qk_04051">Error: %1$s</string>
+    <string name="qk_04060">表格列数较多，可左右滑动查看 →</string>
+    <string name="qk_04061">集群 · %1$s</string>
+    <string name="qk_04065">Recruit roles, bind models, tune host limits</string>
 </resources>

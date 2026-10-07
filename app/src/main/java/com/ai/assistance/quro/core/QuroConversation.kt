@@ -82,6 +82,22 @@ data class QuroMessage(
     val genUiCardIds: List<String> = emptyList(),
     /** 发送者昵称（用户消息气泡显示用；为空则回退到当前用户资料昵称「我」）。默认 null 以保证旧消息反序列化向后兼容。 */
     val senderName: String? = null,
+
+    /**
+     * 🔴 #182「给用户看，但**不**喂给 LLM」的消息。
+     *
+     * 与 [hidden] 语义**相反**，两个都不能省：
+     *  - [hidden]=true → 用户看不见，LLM 看得见（工具原始结果、管道占位）；
+     *  - [excludeFromLlm]=true → 用户看得见，LLM 看不见。
+     *
+     * 为什么需要后者：集群角色与子智能体要在**同一个对话框**里逐条发言
+     * （用户诉求：「一个角色就是一个 LLM，像 ZorvAI LLM 一样使用对话框」），
+     * 但它们的发言已经在各自的引擎上下文里了；再塞回主 LLM 的messages，
+     * 既浪费 token，又会让主 LLM 误以为「集群已经替我回答过了」而不再自己干活。
+     *
+     * 默认 false = 保持历史行为不变（旧消息反序列化也安全）。
+     */
+    val excludeFromLlm: Boolean = false,
     /** 发送者头像 URL/Uri（用户消息气泡头像用；为空则回退到当前用户资料头像）。默认 null 以保证向后兼容。 */
     val avatarUrl: String? = null,
     /** 内部管道消息标记：true 时 UI 层不渲染此消息（LLM 上下文仍包含）。默认 false。 */
@@ -89,8 +105,37 @@ data class QuroMessage(
     val createdAt: Long = System.currentTimeMillis(),
 )
 
-/** 会话存储（原创，内存版；v1 不做落盘以控制风险）。 */
-class QuroConversationStore {
+/**
+ * 会话存储（原创，内存版；v1 不做落盘以控制风险）。
+ *
+ * 🔴 #182：新增 [onMutated] 落盘钩子。
+ *
+ * ## 为什么必须有
+ *
+ * `store` 是**纯内存**的，落盘完全由 ViewModel 的 `commitCurrent()` 驱动 ——
+ * 而 `commitCurrent` 只在 `send()`（普通模型回复链路）里被调用。
+ * 集群（[com.ai.assistance.quro.core.cluster.ClusterChatBridge]）与子智能体
+ * 是**直接 `store.add()`** 写入的，从不经过 `send()`，于是：
+ *
+ * >「集群有消息了但是没有保存记录，退出对话框就没有集群记录了」
+ *
+ * 消息在内存里飘着，一退出/切会话就没了。
+ *
+ * ## 为什么用回调而不是让集群去调 commitCurrent
+ *
+ * `commitCurrent` 是 `private` 且带一堆守卫（`liveBuffers` 比对、2s 节流、
+ * IO 线程落盘）。集群/子智能体在 IO 线程被回调时若直接调它，既要跨可见性
+ * 又容易踩 #877 那类「过时缓冲覆盖新会话」的坑。所以反过来：
+ * **store 只负责「我变了」的通知，落盘仍由 ViewModel 在自己线程上做**。
+ */
+class QuroConversationStore(
+    /**
+     * 消息被外部增删改后的回调（**在调用方线程**触发，不做任何 IO）。
+     *
+     * ViewModel 侧应转成一次节流的落盘；测试可传 null 忽略。
+     */
+    private val onMutated: (() -> Unit)? = null,
+) {
     private val messages = mutableListOf<QuroMessage>()
     // 🔧 #765 修复：流式 onToken 在 IO 线程写、UI 在主线程读 → 裸 mutableListOf 跨线程并发损坏
     // （ConcurrentModificationException / IndexOutOfBoundsException），异常被 streamChat catch 吞掉
@@ -100,21 +145,61 @@ class QuroConversationStore {
     fun all(): List<QuroMessage> = synchronized(lock) { messages.toList() }
     fun add(msg: QuroMessage) {
         synchronized(lock) { messages.add(msg) }
+        onMutated?.invoke()
     }
 
     /** 按 id 原地更新某条消息（工具执行完后回填结果到 assistant 的 toolCalls）。 */
     fun update(id: String, transform: (QuroMessage) -> QuroMessage) {
-        synchronized(lock) {
+        val changed = synchronized(lock) {
             val idx = messages.indexOfFirst { it.id == id }
-            if (idx >= 0) messages[idx] = transform(messages[idx])
+            if (idx >= 0) {
+                messages[idx] = transform(messages[idx])
+                true
+            } else {
+                false
+            }
         }
+        if (changed) onMutated?.invoke()
     }
 
     fun clear() = synchronized(lock) { messages.clear() }
 
     /** 按 id 删除某条消息（如本地模型加载占位气泡在工具调用轮需清除，避免残留可见）。 */
     fun remove(id: String) {
-        synchronized(lock) { messages.removeAll { it.id == id } }
+        val removed = synchronized(lock) { messages.removeAll { it.id == id } }
+        if (removed) onMutated?.invoke()
+    }
+
+    /**
+     * 批量追加（[forEach] 逐条 [add] 的批量版）。
+     *
+     * 🔴 只触发**一次** [onMutated]：集群回放事件时可能一次写十几条，
+     * 逐条触发等于十几轮落盘。这里用 suppressed 标志把回调压到末尾发一次。
+     */
+    fun addAll(msgs: List<QuroMessage>) {
+        if (msgs.isEmpty()) return
+        synchronized(lock) { messages.addAll(msgs) }
+        onMutated?.invoke()
+    }
+
+    /**
+     * 🔴 #183：从磁盘**恢复**对话内容（切会话 / 冷启动加载历史），**不触发** [onMutated]。
+     *
+     * 与 [addAll] 语义严格区分：
+     *  - [addAll] = 外部**新增**内容（集群角色发言 / 子智能体发言），要兜底落盘；
+     *  - [loadSilently] = 内容本来就在磁盘上、只是读回内存，**再落一次盘纯属浪费**，
+     *    更致命的是它会触发 2s 节流之外的 `forceSave=true` 风暴 ——
+     *    冷启动 `latest.messages.forEach { store.add(it) }` 每条都触发 [onMutated]，
+     *    每条都 `commitCurrent(forceSave=true)`，每条都让主线程重组一次，
+     *    N 条消息 = N 次主线程重组 + N 次写盘 = **启动即 ANR**。
+     *
+     * 所以恢复一律走这里：清掉当前 + 整体灌入，全程**不回调**，显示由调用方自己 `_messages.value = all()`。
+     */
+    fun loadSilently(msgs: List<QuroMessage>) {
+        synchronized(lock) {
+            messages.clear()
+            messages.addAll(msgs)
+        }
     }
 
     /**
@@ -130,7 +215,10 @@ class QuroConversationStore {
         system?.let { built.add(QuroChatMessage(it.role, it.content)) }
         // 🔧 #765：先取锁快照，后续遍历快照，避免与 IO 线程的 add/update 并发修改冲突。
         val snapshot = synchronized(lock) { messages.toList() }
-        snapshot.forEach { m ->
+        // 🔴 #182：剔除「给用户看但不喂 LLM」的消息（集群角色 / 子智能体在对话框里的发言）。
+        // 不剔的话主 LLM 会把它们的发言当成自己已经答过的内容 —— 表现为主智能体
+        // 突然不再回答、或重复集群已经做过的事。
+        snapshot.filterNot { it.excludeFromLlm }.forEach { m ->
             // 🔑 思考仅用于界面展示，绝不替代/混入发送给模型的 content（v201 修正）。
             // 旧逻辑在 assistant 带 reasoning 时把 content 整体替换为 reasoning（常含 HTML 标签），
             // 导致：(a) 真实正文丢失；(b) HTML 泄漏进对话上下文，污染后续回复（用户截图确诊）。
