@@ -79,6 +79,15 @@ class Issue180RegressionTest {
      * 读不出来不等于没有，宁可显示一句中性说明，也不要报红字让用户以为功能坏了。
      * 详见 [QuroUiDslParser.fallbackForEmptyArray]。
      */
+    /**
+     * 🔴 #206 改判：与 #181 一致的口径 —— **不报 Failure**，但也不产出可见节点。
+     *
+     * #181 当时要求「至少有一条可见内容」（那句「（这一段内容是空的，
+     * 没有可显示的组件）」）。真机上那句裸文本直接出现在聊天流里，
+     * 成了用户的投诉对象 —— 它是解析器的自言自语，不是 AI 想说的内容。
+     *
+     * 空 Column 零高度不留间隙，AI 真正要说的话照常渲染在 UI 块之外。
+     */
     @Test
     fun topLevelArray_allBlank_degradesInsteadOfFailing() {
         val r = QuroUiDslParser.parseBlock("""["","",""]""")
@@ -87,7 +96,10 @@ class Issue180RegressionTest {
             r is QuroUiParseResult.Success,
         )
         val root = (r as QuroUiParseResult.Success).root
-        assertTrue("降级后必须仍有可见节点，否则等于白屏", collectText(root).isNotEmpty())
+        assertTrue(
+            "空内容不该产出任何面向用户的解析器提示，实际=${collectText(root)}",
+            collectText(root).none { it.contains("没有可显示的组件") },
+        )
     }
 
     /** 摊平节点树里的全部文本，用于断言「内容可见」。 */

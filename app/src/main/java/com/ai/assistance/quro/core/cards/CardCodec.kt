@@ -257,6 +257,17 @@ object CardCodec {
                 o.put("away", card.away); o.put("awayScore", card.awayScore)
                 o.put("period", card.period); o.put("time", card.time); o.put("status", card.status)
             }
+            is RankingCard -> {
+                o.put("unit", card.unit); o.put("topN", card.topN)
+                o.put("items", JSONArray().also { a ->
+                    card.items.forEach { it ->
+                        a.put(JSONObject().apply {
+                            put("name", it.name); put("value", it.value)
+                            put("delta", it.delta); put("trend", it.trend)
+                        })
+                    }
+                })
+            }
             is VocabCard -> {
                 o.put("word", card.word); o.put("phonetic", card.phonetic)
                 o.put("pos", card.pos); o.put("meaning", card.meaning)

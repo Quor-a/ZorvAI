@@ -265,7 +265,7 @@ object CardSdk {
                 s.optInt("current", 0),
             )
         })
-        add(CardSpec("timeline", "layout", "时间轴", """{"type":"timeline","events":[{"time":"09:00","title":"起床","status":"done"},{"time":"12:00","title":"午饭","status":"active"}]}""") { s ->
+        add(CardSpec("timeline", "layout", "时间轴 / 时间线 / 历程：按时间顺序排列的事件节点（每个节点有时间 + 标题 + 状态）。用户说「时间线」「历程」「按时间排」「事件序列」「过程」都用这张；要排期跨度用 gantt，要倒计时用 countdown", """{"type":"timeline","events":[{"time":"09:00","title":"起床","status":"done"},{"time":"12:00","title":"午饭","status":"active"}]}""") { s ->
             QuroChatCard.TimelineCard(
                 s.id(), s.title(),
                 (0 until s.arrLen("events")).map { i ->
@@ -740,7 +740,7 @@ object CardSdk {
                 s.optInt("target", 0), s.optInt("streak", 0), s.optString("unit", "天"),
             )
         })
-        add(CardSpec("scoreboard", "data", "比分板：主客队 + 比分 + 节次/时间/比赛状态", """{"type":"scoreboard","title":"小组赛","home":"主队","homeScore":"2","away":"客队","awayScore":"1","period":"上半场","time":"45:00","status":"live"}""") { s ->
+        add(CardSpec("scoreboard", "data", "体育比分板：主客队 + 比分 + 节次/时间/比赛状态。仅限体育比赛比分（用户说「比分」「几比几」「谁赢了」「主队客队」）；要「排名 / 排行 / top N」用 ranking，要「分组对比」用 compare", """{"type":"scoreboard","title":"小组赛","home":"主队","homeScore":"2","away":"客队","awayScore":"1","period":"上半场","time":"45:00","status":"live"}""") { s ->
             ScoreboardCard(
                 s.id(), s.title(), s.optString("home", ""), s.optString("homeScore", ""),
                 s.optString("away", ""), s.optString("awayScore", ""),
@@ -851,6 +851,24 @@ object CardSdk {
                 },
                 s.optString("xLabel", ""), s.optString("yLabel", ""), s.optDouble("axisMax", 100.0),
                 s.strArrLoose("quadrants"),
+            )
+        })
+        add(CardSpec("ranking", "data",
+            "通用排行榜 / 排名 / 排行 / top N：名次降序排列的条目 + 数值，前三名高亮并带涨跌。"
+            + "vs table：table 是平铺等权的行，ranking 有序有高低；"
+            + "vs scoreboard：scoreboard 只管体育比分；"
+            + "vs compare：compare 是两组维度对照，不是排名；vs bar：bar 不排序",
+            """{"type":"ranking","title":"本周销售榜","unit":"万","items":[{"name":"华东","value":32.5,"delta":"+12%","trend":"up"},{"name":"华南","value":28.1,"delta":"+3%","trend":"up"},{"name":"华北","value":19.4,"delta":"-5%","trend":"down"}]}""") { s ->
+            RankingCard(
+                s.id(), s.title(),
+                (0 until s.arrLen("items")).map { i ->
+                    val t = s.objAt("items", i)
+                    RankingCard.RankItem(
+                        t.optString("name", ""), t.optDouble("value", 0.0).toFloat(),
+                        t.optString("delta", ""), t.optString("trend", ""),
+                    )
+                },
+                s.optString("unit", ""), s.optInt("topN", 3),
             )
         })
         add(CardSpec("matrix", "data", "逐维对照打分表（两个方案/实体在同一批指标上比高低，差值自动着色）。与 compare 的区别：compare 是左右两张卡并列（结构可不同），matrix 是同维度逐行打分；better 字段说明哪方向为优（high/low/null）", """{"type":"matrix","title":"方案对比","leftLabel":"方案 A","rightLabel":"方案 B","showDiff":true,"unit":"ms","rows":[{"label":"平均延迟","left":"120","right":"80","better":"low"},{"label":"月费","left":"免费","right":"¥99","better":"low"},{"label":"可用区","left":"1","right":"3","better":"high"},{"label":"上线时间","left":"2026-01","right":"2026-04","better":null}]}""") { s ->

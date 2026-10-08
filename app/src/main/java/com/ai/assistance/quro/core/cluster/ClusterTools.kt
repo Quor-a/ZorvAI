@@ -376,6 +376,14 @@ object ClusterToolSet {
         registry.register(ClusterRemoveRoleTool())
         registry.register(ClusterHostConfigTool())
         registry.register(ClusterAbortTool())
+        // #190 技能市场：主持可自行查技能、给角色配技能、从外部导入技能
+        registry.register(ClusterSkillMarketTool())
+        registry.register(ClusterSkillGrantTool())
+        registry.register(ClusterSkillImportTool())
+        // #191 开源技能 + 角色卡：去开源社区找技能、下载安装、用角色卡（skills 聚合）一键建角
+        registry.register(ClusterOpenSkillSearchTool())
+        registry.register(ClusterOpenSkillInstallTool())
+        registry.register(ClusterRoleCardTool())
     }
 }
 

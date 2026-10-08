@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -44,6 +45,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +60,9 @@ import com.ai.assistance.quro.core.cluster.ClusterBudget
 import com.ai.assistance.quro.core.cluster.ClusterRuntime
 import com.ai.assistance.quro.core.cluster.CloseReason
 import com.ai.assistance.quro.core.cluster.ModelProfile
+import com.ai.assistance.quro.core.cluster.ClusterRoleCard
+import com.ai.assistance.quro.core.cluster.ClusterRoleCardTool
+import com.ai.assistance.quro.core.cluster.ClusterRoleCards
 import com.ai.assistance.quro.core.cluster.RoleKind
 import com.ai.assistance.quro.core.cluster.RoleProfile
 import com.ai.assistance.quro.core.cluster.RoleRegistry
@@ -87,6 +92,8 @@ fun QuroClusterSettingsScreen(onBack: () -> Unit = {}) {
     // bump 用于在增删改后强制重读注册表（RoleRegistry 本身是文件存储，无观察者）
     var bump by remember { mutableIntStateOf(0) }
     var showEnroll by remember { mutableStateOf(false) }
+    // #191 角色卡（= 一个 skills 聚合）选择器
+    var showRoleCards by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<RoleProfile?>(null) }
     var editing by remember { mutableStateOf<RoleProfile?>(null) }
 
@@ -153,12 +160,19 @@ fun QuroClusterSettingsScreen(onBack: () -> Unit = {}) {
                 )
             }
 
-            OutlinedButton(
-                onClick = { showEnroll = true },
-                modifier = Modifier.padding(horizontal = 16.dp),
+            Row(
+                Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Text("  添加角色")
+                OutlinedButton(onClick = { showEnroll = true }) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Text("  添加角色")
+                }
+                // #191 角色卡 = 一个 skills 聚合，一键建角并自动绑好这组技能
+                OutlinedButton(onClick = { showRoleCards = true }) {
+                    Icon(Icons.Filled.AutoAwesome, contentDescription = null)
+                    Text("  从角色卡创建")
+                }
             }
 
             // ——— 主持熔断参数 ———
@@ -194,6 +208,20 @@ fun QuroClusterSettingsScreen(onBack: () -> Unit = {}) {
 
             Box(Modifier.padding(16.dp))
         }
+    }
+
+    // ——— 角色卡对话框（#191）——
+    if (showRoleCards) {
+        RoleCardDialog(
+            ctx = ctx,
+            models = models,
+            onDismiss = { showRoleCards = false },
+            onDone = { created ->
+                showRoleCards = false
+                bump++
+                toast(ctx, created)
+            },
+        )
     }
 
     // ——— 招人对话框 ———
@@ -493,12 +521,14 @@ private fun EnrollDialog(
                             )
                         }
                     }
+                    // #190 RoleKind 扩到 5 档后，这里原来写死的 if(EXPERT) "专家" else "评审"
+                    // 会让「规划/执行」两档都显示成「专家」。必须用 k.label。
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        RoleKind.entries.filter { it != RoleKind.HOST }.forEach { k ->
+                        RoleKind.selectable.forEach { k ->
                             FilterChip(
                                 selected = kind == k,
                                 onClick = { kind = k },
-                                label = { Text(if (k == RoleKind.EXPERT) "专家" else "评审") },
+                                label = { Text(k.label) },
                             )
                         }
                     }
@@ -555,3 +585,164 @@ private fun personaName(ctx: Context, personaId: String): String =
 
 private fun toast(ctx: Context, msg: String) =
     Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+
+/**
+ * ★ 角色卡选择器（#191）★
+ *
+ * 一张角色卡 = 分工 + 灵魂注入正文 + **一整组 skills**。
+ * 用户不需要先去 67 个技能里一格格勾 —— 选一张卡，角色连同技能一起建好。
+ *
+ * 建角走 [com.ai.assistance.quro.core.cluster.ClusterRoleCardTool]，
+ * 开源技能由它联网现拉现装；失败会在结果里如实回报（gaps），这里照原样显示，
+ * 不把「没绑上技能」的角色说成满配。
+ */
+@Composable
+private fun RoleCardDialog(
+    ctx: Context,
+    models: List<ModelProfile>,
+    onDismiss: () -> Unit,
+    onDone: (String) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val scope = rememberCoroutineScope()
+    var query by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var sel by remember { mutableStateOf(ClusterRoleCards.BUILT_IN.firstOrNull()?.id) }
+    var modelId by remember { mutableStateOf(models.firstOrNull()?.id ?: "cloud:current") }
+    var nameOverride by remember { mutableStateOf("") }
+    // 卡片的技能清单：本地已装 / 本地缺失 / 需联网现拉
+    var previews by remember { mutableStateOf<Map<String, Pair<List<String>, List<String>>>>(emptyMap()) }
+
+    LaunchedEffect(Unit) {
+        // 🔴 #202：这里原来seed +读**全局** QuroSkillStore，
+        // 与建角（ClusterRoleCard.resolveForRole，只认集群库）不是同一套口径，
+        // 表现为「卡片显示本地已装 → 建角却说缺技能」。
+        // 现在只读集群库，播种交给 ClusterSkillStore.seed（内部按需触发）。
+        runCatching { com.ai.assistance.quro.core.cluster.ClusterSkillStore.seed(ctx) }
+        previews = ClusterRoleCards.BUILT_IN.associate { c ->
+            // 直接调localOnlyPreview —— 它就是建角用的同一份判定。
+            // 这里曾把逻辑手抄一遍，等于第三份口径，迟早与建角分叉。
+            val (hits, missing) = ClusterRoleCards.localOnlyPreview(ctx, c)
+            c.id to (hits.map { it.name } to missing)
+        }
+    }
+
+    val cards = remember(query) { ClusterRoleCards.search(query) }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text("从角色卡创建角色") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "角色卡 = 一个技能聚合：选一张卡，角色的分工、灵魂设定与那组技能会一次性配好。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cs.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("搜索角色卡") },
+                    placeholder = { Text("如 ui / 前端 / 写作 / 评审") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                LazyColumn(
+                    Modifier.fillMaxWidth().heightIn(max = 230.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items(cards, key = { it.id }) { c ->
+                        val pv = previews[c.id]
+                        FilterChip(
+                            selected = sel == c.id,
+                            onClick = { sel = c.id; nameOverride = "" },
+                            label = {
+                                Column {
+                                    Text("${c.emoji} ${c.label} · ${c.kind.label}")
+                                    Text(
+                                        c.tagline,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = cs.onSurfaceVariant,
+                                    )
+                                    // 诚实：把「本地还没装/需联网拉」明写出来
+                                    val open = c.skills.count { it.isOpenSource }
+                                    val miss = pv?.second?.size ?: 0
+                                    Text(
+                                        buildString {
+                                            append("技能 ${c.skills.size} 门")
+                                            if (open > 0) append(" · $open 门联网现拉")
+                                            if (miss > 0) append(" · $miss 门本地缺失")
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (miss > 0) cs.error else cs.primary,
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = nameOverride,
+                    onValueChange = { nameOverride = it },
+                    label = { Text("角色名（留空用卡片名）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = modelId,
+                    onValueChange = { modelId = it },
+                    label = { Text("模型 profile id") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = sel != null && !busy,
+                onClick = {
+                    val cardId = sel ?: return@TextButton
+                    busy = true
+                    scope.launch {
+                        // 建角要联网拉开源技能 → 放 IO 线程，别卡 UI
+                        val out = withContext(Dispatchers.IO) {
+                            runCatching {
+                                org.json.JSONObject(
+                                    ClusterRoleCardTool().run(
+                                        ctx,
+                                        org.json.JSONObject()
+                                            .put("mode", "create")
+                                            .put("cardId", cardId)
+                                            .put("modelId", modelId)
+                                            .put(
+                                                "personaName",
+                                                if (nameOverride.isBlank()) "" else nameOverride.trim()
+                                            ).toString()
+                                    )
+                                )
+                            }
+                        }
+                        busy = false
+                        out.onSuccess { j ->
+                            if (j.optBoolean("ok")) {
+                                // 缺技能必须让用户看见，不能一句「已创建」糊过去
+                                val gaps = j.optJSONArray("gaps")
+                                val gapMsg = if (gaps != null && gaps.length() > 0) {
+                                    "\n⚠ " + (0 until gaps.length()).joinToString("\n") { gaps.optString(it) }
+                                } else ""
+                                onDone(j.optString("message") + gapMsg)
+                            } else {
+                                toast(ctx, j.optString("error").ifBlank { "创建失败" })
+                            }
+                        }.onFailure {
+                            toast(ctx, "创建失败：" + (it.message ?: it.javaClass.simpleName))
+                        }
+                    }
+                },
+            ) { Text(if (busy) "创建中…" else "创建") }
+        },
+        dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text("取消") } },
+    )
+
+}

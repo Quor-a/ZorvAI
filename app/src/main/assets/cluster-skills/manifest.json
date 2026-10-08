@@ -1,0 +1,118 @@
+{
+  "version": 2,
+  "suite": "cluster-v2",
+  "skills": [
+    {
+      "id": "cluster_3460bb44a0c8",
+      "name": "skill-fetch",
+      "description": "主持专用。当子任务需要的能力本地技能库里没有时，从开源社区检索并安装技能包。这是 CAPABILITY 阶段补救动作 B 的执行规程，不是「随便装个东西」。",
+      "abilityWords": "技能获取 拉取技能 装技能 补技能 开源技能 skill fetch 装包 取技能",
+      "file": "skill-fetch.md",
+      "size": 3433
+    },
+    {
+      "id": "cluster_de2debbba11f",
+      "name": "role-forge",
+      "description": "主持专用。当装技能也补不上能力缺口时，造一张新角色卡。这是 CAPABILITY 阶段补救动作 C 的执行规程，产出的是有可判据标准的人格卡，不是空壳。",
+      "abilityWords": "造角色 新建角色 角色卡 加专家 补角色 建卡 forge 角色",
+      "file": "role-forge.md",
+      "size": 4072
+    },
+    {
+      "id": "cluster_e43b468bd429",
+      "name": "html-dev",
+      "description": "单文件 HTML 页面的开发规程。要求双击即开、零构建、零外链字体图标。交付前必须跑那份可点自检清单。",
+      "abilityWords": "网页 页面 单文件 html css 前端 布局 编码 实现界面 界面实现 写网页 做页面 html",
+      "file": "html-dev.md",
+      "size": 3093
+    },
+    {
+      "id": "cluster_422880774be1",
+      "name": "ui-design",
+      "description": "界面视觉与设计系统的执行规程。产出可判据的设计规格（配色 HEX、字号阶梯、间距刻度、栅格），不是「大概好看点」的形容词堆砌。",
+      "abilityWords": "设计 界面 视觉 配色 视觉设计 界面设计 美化 样式 ui design 界面美化 设计稿",
+      "file": "ui-design.md",
+      "size": 4152
+    },
+    {
+      "id": "cluster_b3709e5a377a",
+      "name": "frontend-design-playbook",
+      "description": "前端交付的执行规程：从「设计规格」走到「能跑的代码」，强调状态覆盖、真实数据形态、错误与空态、以及可验证的自检。",
+      "abilityWords": "前端 界面 交互 实现界面 组件 页面 前端开发 前端实现 html 界面实现",
+      "file": "frontend-design-playbook.md",
+      "size": 3362
+    },
+    {
+      "id": "cluster_0dd55816bb9d",
+      "name": "md-doc",
+      "description": "Markdown 文档写作规程。要求先给结论再展开、代码块必须带语言、不留 TODO 与占位符、链接必须可达。",
+      "abilityWords": "文档 写作 说明书 markdown 写文档 技术文档 撰写文档 doc",
+      "file": "md-doc.md",
+      "size": 2935
+    },
+    {
+      "id": "cluster_3ca2a944a1d2",
+      "name": "copywrite",
+      "description": "文案写作规程。要求先定读者与目标句、给具体数字而非形容词、写完自查 AI 腔。不许编造事实与数据。",
+      "abilityWords": "文案 写作 标题 卖点 宣传 撰写 文案写作 总结 归纳 copy",
+      "file": "copywrite.md",
+      "size": 3122
+    },
+    {
+      "id": "cluster_bdf5c73d18f4",
+      "name": "planning",
+      "description": "任务拆解规程。要求每个子节点可独立验收、依赖显式、验收标准先于任务存在、失败不停留。",
+      "abilityWords": "规划 拆解 拆任务 计划 任务分解 排期 拆分 计划制定 planning",
+      "file": "planning.md",
+      "size": 2950
+    },
+    {
+      "id": "cluster_31e10e635731",
+      "name": "strategy",
+      "description": "策略与决策规程。要求给出取舍而不只是方案、区分事实与判断、每个判断带可证伪条件。",
+      "abilityWords": "策略 战略 决策 取舍 方案 选择方案 strategy",
+      "file": "strategy.md",
+      "size": 3445
+    },
+    {
+      "id": "cluster_61e62b213a1a",
+      "name": "review",
+      "description": "评审与验收规程。核心：没有验收标准时第一反应是要求补标准，不是凭感觉看看。",
+      "abilityWords": "评审 验收 审阅 检查 复核 把关 评审验收 review",
+      "file": "review.md",
+      "size": 4348
+    },
+    {
+      "id": "cluster_3697fa5d1b22",
+      "name": "code-review",
+      "description": "代码评审规程。只报真问题、每条带触发条件与修法、不给风格偏好充数、不做无证据的安全指控。",
+      "abilityWords": "代码评审 审代码 检查代码 代码质量 code review cr",
+      "file": "code-review.md",
+      "size": 3332
+    },
+    {
+      "id": "cluster_97125580a245",
+      "name": "mobile-control",
+      "description": "手机操作规程。观察—决策—执行—再观察，危险动作先确认，坐标必须来自最新截图。",
+      "abilityWords": "手机 操作手机 点击 滑动 截屏 设备控制 app操作 手机操作 mobile",
+      "file": "mobile-control.md",
+      "size": 3186
+    },
+    {
+      "id": "cluster_5cab1e1197db",
+      "name": "data-analysis",
+      "description": "数据分析规程。先问口径与粒度、先看分布再谈相关、缺失值与异常值必须显式处理、结论给区间不给点值。",
+      "abilityWords": "数据分析 统计 报表 透视 数据处理 看数据 分析 data",
+      "file": "data-analysis.md",
+      "size": 3606
+    },
+    {
+      "id": "cluster_15ed4175a40c",
+      "name": "web-research",
+      "description": "联网调研规程。要求多源交叉、标明来源与时间、区分一手/二手、无法核实就明说，不许用记忆冒充检索。",
+      "abilityWords": "联网 搜索 检索 调研 研究 调查 查证 查资料 联网搜索 搜索联网 资讯 热点新闻 搜集资料 web research search",
+      "file": "web-research.md",
+      "size": 3964
+    }
+  ]
+}

@@ -338,6 +338,16 @@ object QuroSkillStore {
     /** 设计/美术套件：默认启用、按需注入的那组内建技能。 */
     const val SUITE_DESIGN = "design-studio"
 
+    /**
+     * 集群 V2 方法论套件（文档第四节）：14 个「工作流 + 自检清单」型技能包。
+     *
+     * 与 [SUITE_DESIGN] 是**不同性质**的东西：
+     * - design-studio / 原有 67 个 = 工具型（怎么调某个 API、怎么写某个界面的手法）
+     * - cluster-v2 = 方法论型（接到这类活该怎么一步步做、做完了怎么自检）
+     * 所以不能靠改原有文件糊弄，必须新写。
+     */
+    const val SUITE_CLUSTER_V2 = "cluster-v2"
+
     fun seedBuiltinZorvSkills(context: Context) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getBoolean(KEY_BUILTIN_ZORV, false)) return
@@ -436,6 +446,87 @@ object QuroSkillStore {
         if (changed) save(context, out)
     }
 
+    /** V2 增量播种的一次性守卫（**独立于** [KEY_BUILTIN_ZORV]，否则老设备拿不到新包）。 */
+    private const val KEY_BUILTIN_ZORV_V2 = "builtin_zorv_v2_v1"
+
+    /**
+     * 增量播种集群 V2 方法论套件（suite=cluster-v2）。
+     *
+     * 🔴 为什么必须单独开一条，不能靠 [seedBuiltinZorvSkills]：
+     * 那个函数有 `builtin_zorv_v1` 一次性守卫，老设备早已置 true → 直接 return。
+     * 只往 manifest.json 加条目 + 放 SKILL.md，对**已安装的设备完全无效** ——
+     * 用户技能库里永远不会出现这 14 个包，角色卡 [SkillRef] 解析只会得到 missing。
+     *
+     * 幂等三重保障：
+     * 1. 自己的守卫 key，同一设备只跑一次；
+     * 2. 已存在的 id 直接跳过（用户删过的包不会被强行加回）；
+     * 3. **不覆盖已存在条目的 enabled** —— 用户手动关掉的技能不该被重新打开。
+     *
+     * 签名校验沿用 [SkillSigner]：不符只标 failed 并打 Log，不丢弃（保持与旧行为一致）。
+     */
+    fun seedClusterV2Skills(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_BUILTIN_ZORV_V2, false)) return
+        prefs.edit().putBoolean(KEY_BUILTIN_ZORV_V2, true).apply()
+        runCatching {
+            val am = context.assets
+            val manifest = JSONObject(am.open("skills/zorv/manifest.json").bufferedReader().readText())
+            val arr = manifest.optJSONArray("skills") ?: return@runCatching
+            val current = loadRaw(context)
+            val existing = current.map { it.id }.toSet()
+            val list = current.toMutableList()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                if (o.optString("suite", "").trim() != SUITE_CLUSTER_V2) continue
+                val id = o.optString("id", "")
+                val file = o.optString("file", "")
+                if (id.isEmpty() || file.isEmpty() || id in existing) continue
+                val md = runCatching { am.open("skills/zorv/$file").bufferedReader().readText() }.getOrNull()
+                    ?: continue
+                val parsed = parseSkillMd(md).firstOrNull() ?: continue
+                val signature = o.optString("signature", "").trim()
+                val signState = when {
+                    signature.isBlank() -> "unsigned"
+                    SkillSigner.verify(id, parsed.name, md, signature) -> "verified"
+                    else -> "failed"
+                }
+                if (signState == "failed") {
+                    android.util.Log.w("QuroSkillStore", "V2 内置技能签名校验失败（可能已篡改）：$id / ${parsed.name}")
+                }
+                // enabled=true 但 callable/alwaysOn=false：只注入提示词，不注册成工具。
+                list.add(
+                    parsed.copy(
+                        id = id,
+                        suite = SUITE_CLUSTER_V2,
+                        signState = signState,
+                        enabled = true,
+                        callable = false,
+                        alwaysOn = false,
+                        updatedAt = System.currentTimeMillis(),
+                    )
+                )
+            }
+            if (list.size != current.size) save(context, list)
+        }
+    }
+
+    /**
+     * 已入库的 V2 方法论技能（按名字查真实 id）。
+     *
+     * 主持启动即绑（[com.ai.assistance.quro.core.cluster.RoleRegistry]）靠它拿到
+     * skill-fetch / role-forge 的稳定 id —— 这两个 id 来自 manifest 的
+     * `zorv_ + sha1(name)[:12]` 算法，写死在代码里会随改名漂移，所以运行时查。
+     */
+    fun clusterV2SkillIds(context: Context, names: List<String>): List<String> {
+        val want = names.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        if (want.isEmpty()) return emptyList()
+        return runCatching {
+            load(context)
+                .filter { it.suite == SUITE_CLUSTER_V2 && it.name in want }
+                .map { it.id }
+        }.getOrDefault(emptyList())
+    }
+
     /**
      * 当前启用、可被注入提示词的设计/美术套件技能。
      *
@@ -492,6 +583,7 @@ object QuroSkillStore {
         seedBuiltinZorvSkills(context)
         migrateBuiltinSkillsOff(context)
         migrateDesignSkillsOn(context)
+        seedClusterV2Skills(context)
         val out = mutableListOf<QuroSkill>()
         runCatching {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

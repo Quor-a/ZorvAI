@@ -603,6 +603,132 @@
       "size": 4620,
       "suite": "design-studio",
       "signature": "bdbb5302630cd8486683ffaf913b95051fc4c8905f19fa7d22c70384b6532964"
+    },
+    {
+      "id": "zorv_3460bb44a0c8",
+      "name": "skill-fetch",
+      "description": "主持专用。当子任务需要的能力本地技能库里没有时，从开源社区检索并安装技能包。这是 CAPABILITY 阶段补救动作 B 的执行规程，不是「随便装个东西」。",
+      "file": "v2-skill-fetch.md",
+      "size": 3330,
+      "suite": "cluster-v2",
+      "signature": "7c456bd86520952843992b5fa70c5bfde3d543ad1e7f7483e603cd9391206196"
+    },
+    {
+      "id": "zorv_de2debbba11f",
+      "name": "role-forge",
+      "description": "主持专用。当装技能也补不上能力缺口时，造一张新角色卡。这是 CAPABILITY 阶段补救动作 C 的执行规程，产出的是有可判据标准的人格卡，不是空壳。",
+      "file": "v2-role-forge.md",
+      "size": 3984,
+      "suite": "cluster-v2",
+      "signature": "ecfe619d2267d2ec12a8836b0ecffb9fef496aaaca71651b9d2d8f93714cda51"
+    },
+    {
+      "id": "zorv_e43b468bd429",
+      "name": "html-dev",
+      "description": "单文件 HTML 页面的开发规程。要求双击即开、零构建、零外链字体图标。交付前必须跑那份可点自检清单。",
+      "file": "v2-html-dev.md",
+      "size": 2973,
+      "suite": "cluster-v2",
+      "signature": "31af4d64c3f4a82124b6d6d895033bbe3c41382371e256b38724b5dfbd2d8736"
+    },
+    {
+      "id": "zorv_422880774be1",
+      "name": "ui-design",
+      "description": "界面视觉与设计系统的执行规程。产出可判据的设计规格（配色 HEX、字号阶梯、间距刻度、栅格），不是「大概好看点」的形容词堆砌。",
+      "file": "v2-ui-design.md",
+      "size": 4036,
+      "suite": "cluster-v2",
+      "signature": "dea01a920a2484730ade662e473d18714c566b415bf64f2932ef7ffe24b7c919"
+    },
+    {
+      "id": "zorv_b3709e5a377a",
+      "name": "frontend-design-playbook",
+      "description": "前端交付的执行规程：从「设计规格」走到「能跑的代码」，强调状态覆盖、真实数据形态、错误与空态、以及可验证的自检。",
+      "file": "v2-frontend-design.md",
+      "size": 3255,
+      "suite": "cluster-v2",
+      "signature": "30991652e688bb6f33777bad74c553b4c0ead7db111ff3cf6f31e9db5f167fca"
+    },
+    {
+      "id": "zorv_0dd55816bb9d",
+      "name": "md-doc",
+      "description": "Markdown 文档写作规程。要求先给结论再展开、代码块必须带语言、不留 TODO 与占位符、链接必须可达。",
+      "file": "v2-md-doc.md",
+      "size": 2847,
+      "suite": "cluster-v2",
+      "signature": "32e2788ecb16e965cf1a3da15fdfc3770a16382cca55379a571aba0aeb514e12"
+    },
+    {
+      "id": "zorv_3ca2a944a1d2",
+      "name": "copywrite",
+      "description": "文案写作规程。要求先定读者与目标句、给具体数字而非形容词、写完自查 AI 腔。不许编造事实与数据。",
+      "file": "v2-copywrite.md",
+      "size": 3033,
+      "suite": "cluster-v2",
+      "signature": "264fce6d532ab17b916df2964772590b6320bf633a1529a767e5701be31dbe4d"
+    },
+    {
+      "id": "zorv_bdf5c73d18f4",
+      "name": "planning",
+      "description": "任务拆解规程。要求每个子节点可独立验收、依赖显式、验收标准先于任务存在、失败不停留。",
+      "file": "v2-planning.md",
+      "size": 2855,
+      "suite": "cluster-v2",
+      "signature": "bdb4ef3cf24738c16db89ddee68ef52158160a42c31fb9d4658816a580d28297"
+    },
+    {
+      "id": "zorv_31e10e635731",
+      "name": "strategy",
+      "description": "策略与决策规程。要求给出取舍而不只是方案、区分事实与判断、每个判断带可证伪条件。",
+      "file": "v2-strategy.md",
+      "size": 3373,
+      "suite": "cluster-v2",
+      "signature": "1ddde217077dcb44aa076c686bc30052d7862693e58cb69580b2cebfec0f41f5"
+    },
+    {
+      "id": "zorv_61e62b213a1a",
+      "name": "review",
+      "description": "评审与验收规程。核心：没有验收标准时第一反应是要求补标准，不是凭感觉看看。",
+      "file": "v2-review.md",
+      "size": 4271,
+      "suite": "cluster-v2",
+      "signature": "4186eaf84a512f3886d962cc47ae403128c7e6ff5d6773c41654386875d241ba"
+    },
+    {
+      "id": "zorv_3697fa5d1b22",
+      "name": "code-review",
+      "description": "代码评审规程。只报真问题、每条带触发条件与修法、不给风格偏好充数、不做无证据的安全指控。",
+      "file": "v2-code-review.md",
+      "size": 3253,
+      "suite": "cluster-v2",
+      "signature": "4fcee718288f9e08ed8727521d7474a62352e20b887d837319e3331b588e1df8"
+    },
+    {
+      "id": "zorv_97125580a245",
+      "name": "mobile-control",
+      "description": "手机操作规程。观察—决策—执行—再观察，危险动作先确认，坐标必须来自最新截图。",
+      "file": "v2-mobile-control.md",
+      "size": 3087,
+      "suite": "cluster-v2",
+      "signature": "2e7accc016d0ca7f5836ce22b5b7ec236825270512106df358b148fc0ef2a755"
+    },
+    {
+      "id": "zorv_5cab1e1197db",
+      "name": "data-analysis",
+      "description": "数据分析规程。先问口径与粒度、先看分布再谈相关、缺失值与异常值必须显式处理、结论给区间不给点值。",
+      "file": "v2-data-analysis.md",
+      "size": 3522,
+      "suite": "cluster-v2",
+      "signature": "6bfa6e095a7ad193e7a1e51bdb4e6e6ec73e532e6e00b792c354305284a9e660"
+    },
+    {
+      "id": "zorv_15ed4175a40c",
+      "name": "web-research",
+      "description": "联网调研规程。要求多源交叉、标明来源与时间、区分一手/二手、无法核实就明说，不许用记忆冒充检索。",
+      "file": "v2-web-research.md",
+      "size": 3811,
+      "suite": "cluster-v2",
+      "signature": "9f28c92ae7610e04fe7191035a873307b759110ab5e1c5e3b8cf565a3268b293"
     }
   ]
 }

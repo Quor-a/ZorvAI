@@ -48,6 +48,7 @@ import com.ai.assistance.quro.core.cards.CardFence
 import com.ai.assistance.quro.core.cards.CardPatch
 import com.ai.assistance.quro.core.cards.CardPatchBridge
 import com.ai.assistance.quro.core.cards.QuroChatCard
+import com.ai.assistance.quro.core.cards.RankingCard
 import com.ai.assistance.quro.core.cards.parseComponentSpec
 import com.ai.assistance.quro.ui.QuroShareBridge
 // 自研卡片渲染（feat_self_card）：独立功能，与动态 UI 的 quro-ui 完全不合并。
@@ -6330,6 +6331,7 @@ private sealed class MsgBlock {
 private fun cardHasNoData(card: QuroChatCard): Boolean = when (card) {
     is QuroChatCard.TableCard -> card.headers.isEmpty() && card.rows.isEmpty()
     is QuroChatCard.PieCard -> card.segments.isEmpty()
+    is RankingCard -> card.items.isEmpty()
     is QuroChatCard.ChartCard -> card.series.isEmpty()
     is QuroChatCard.HeatmapCard -> card.values.isEmpty()
     is QuroChatCard.RadarCard -> card.axes.isEmpty()

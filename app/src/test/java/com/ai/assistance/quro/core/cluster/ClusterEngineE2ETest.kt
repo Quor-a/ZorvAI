@@ -45,8 +45,13 @@ class ClusterEngineE2ETest {
             """{"acceptance":["完成用户目标"],"nodes":[{"id":"n1","title":"子任务1","instruction":"做研究并输出结论","dependsOn":[]}]}"""
         "请裁决" in prompt ->
             """{"pass":true,"reason":"方案可行","steps":["执行第一步"],"chosen":"研究员"}"""
-        "请对照验收标准严格检查" in prompt ->
-            """{"pass":true,"reason":"满足验收标准"}"""
+        // #200E2E：锚点用「只输出 JSON」——
+        // #190 把验收 prompt 整段重写过，里面已经没有「请对照验收标准严格检查」这句，
+        // 脚本还按老文案匹配 → 落到 else 分支返回纯文本 → 验收 JSON 解析失败
+        // → 按不通过处理 → 节点 SKIPPED → NO_PROGRESS。
+        // 判单链路是好的（能力覆盖 1/1），挂在验收闸门上。
+        "只输出 JSON" in prompt && "待验收产物" in prompt ->
+            """{"pass":true,"reason":"满足验收标准","checks":[{"index":1,"pass":true,"note":"已完成"}],"failed":[]}"""
         "全部子任务已完成" in prompt ->
             """{"summary":"调研完成，结论已产出"}"""
         else -> "角色输出：${prompt.take(20)}"
@@ -56,6 +61,11 @@ class ClusterEngineE2ETest {
     fun `host drives single-node task to GOAL_REACHED and emits RoleUtterance`() = runBlocking {
         val context = RuntimeEnvironment.getApplication()
         RoleRegistry.ensureHost(context)
+        // 🔴 #198：节点必须有真技能才会被执行。不绑技能的节点会被跳过，
+        // 而一个没人做的任务不能被宣布成「完成」（NO_PROGRESS）。
+        // 所以这里绑一门真手艺（web-research），不绑就是在测「跳过后不能算完成」。
+        ClusterTestSkills.seedClusterSkills(context)
+        val researchSkillId = ClusterTestSkills.skillIdByAbility(context, "联网", "调研", "搜索")
 
         // 登记一名专家角色，并绑定已配置模型
         QuroPersonaRepository(context).upsert(
@@ -69,10 +79,15 @@ class ClusterEngineE2ETest {
             context, "expert1", modelProfileId = "cloud:current",
             role = RoleKind.EXPERT, duties = listOf("研究", "调研")
         )
+        assertTrue("测试前提：集群库里应能找到联网调研技能，实际=$researchSkillId",
+            researchSkillId.isNotBlank())
+        val role0 = RoleRegistry.get(context, "expert1")!!
+        RoleRegistry.upsert(context, role0.copy(skillIds = listOf(researchSkillId)))
 
         val engine = ClusterEngine(context, ScriptedLlmGateway(::scripted), FakeModelSource())
         val cluster = ClusterConfig(id = "default", name = "默认集群")
         val task = engine.submit(cluster, "写一份折叠屏市场简报")
+
 
         val events = CopyOnWriteArrayList<ClusterEvent>()
         val job = launch { engine.events.collect { events.add(it) } }
@@ -80,6 +95,11 @@ class ClusterEngineE2ETest {
         delay(200) // 让 SharedFlow 把事件投递给收集协程
         job.cancel()
 
+        // #200E2E 护栏：能力描述「子任务1 做研究并输出结论」里，
+        // 「子任务1」是纯编号标签必须被剔除，剩下的一段要靠近义词（研究↔调研）
+        // 才能命中 web-research。这两条任一失效，本用例都会退回 NO_PROGRESS。
+        val segs = ClusterCapability.abilitySegments("子任务1 做研究并输出结论")
+        assertEquals("编号标签不该进能力分母：" + segs, listOf("做研究并输出结论"), segs)
         assertEquals("任务应闭环到 GOAL_REACHED", CloseReason.GOAL_REACHED, reason)
         assertTrue("应当产生 RoleUtterance 事件（角色确实发言）", events.any { it is ClusterEvent.RoleUtterance })
         assertTrue("应当产生 Closed 事件", events.any { it is ClusterEvent.Closed })
@@ -87,18 +107,22 @@ class ClusterEngineE2ETest {
     }
 
     @Test
-    fun `cluster tools register all nine into registry`() {
+    fun `cluster tools register all fifteen into registry`() {
         val reg = QuroToolRegistry()
         ClusterToolSet.registerAll(reg)
         val expected = listOf(
             "cluster_start", "cluster_status", "cluster_roles", "cluster_models",
             "cluster_bind_model", "cluster_enroll", "cluster_remove_role",
-            "cluster_host_config", "cluster_abort"
+            "cluster_host_config", "cluster_abort",
+            // #190 技能市场：主持可查技能、给角色配技能、从外部导入技能
+            "cluster_skill_market", "cluster_skill_grant", "cluster_skill_import",
+            // #191 开源技能 + 角色卡：搜开源社区、下载安装、用角色卡一键建角
+            "cluster_skill_search", "cluster_skill_install", "cluster_rolecard"
         )
         expected.forEach { name ->
             assertTrue("缺少集群工具 $name", reg.get(name) != null)
         }
-        assertEquals("应注册 9 个集群工具", 9, reg.all().size)
+        assertEquals("应注册 15 个集群工具", 15, reg.all().size)
     }
 
     /**

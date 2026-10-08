@@ -1111,6 +1111,20 @@ object ToolCapabilityDirectory {
      */
     private var directory: Map<String, ToolInfo> = handbook
 
+    /**
+     * 最近一次 [install] 进来的**真实工具清单**快照。
+     *
+     * 🔴 为什么需要：`AgentRag.refresh()` 无参调用时不会安装工具域
+     * （`if (toolSpecs.isNotEmpty())`），于是若 RAG 的第一次初始化
+     * 是由 `rag_search` 触发的，tools 域会**永远为空** ——
+     * `rag_search(domain="tools")` 必然零命中，模型据此判定「没有这个工具」。
+     * 留这份快照，让任何地方都能补齐工具域索引。
+     */
+    private var lastInstalledSpecs: List<QuroToolSpec> = emptyList()
+
+    /** 真实工具清单的只读快照；尚未 install 时返回空表（调用方需判空）。 */
+    fun specsSnapshot(): List<QuroToolSpec> = lastInstalledSpecs
+
     /** 由真实注册表安装/刷新工具能力目录。应在注册表构建（register + attach + mergeSkills）完成后调用一次。 */
     fun install(specs: List<QuroToolSpec>) {
         val merged = LinkedHashMap<String, ToolInfo>()
@@ -1118,6 +1132,7 @@ object ToolCapabilityDirectory {
             merged[s.name] = handbook[s.name] ?: autoInfo(s)
         }
         directory = merged
+        lastInstalledSpecs = specs.toList()
     }
 
     private fun autoInfo(spec: QuroToolSpec): ToolInfo = ToolInfo(

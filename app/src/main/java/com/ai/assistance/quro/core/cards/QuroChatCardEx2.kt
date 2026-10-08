@@ -208,6 +208,33 @@ data class ScoreboardCard(
 ) : QuroChatCard
 
 /**
+ * 通用排行榜：名次 + 条目 + 数值（可带单位/涨跌幅）。
+ *
+ * 与 `ScoreboardCard` 的区别（2026-10-08 补）：
+ * scoreboard 是**体育比分**（主客队 + 比分 + 节次/时间/状态），而通用
+ * 「排名 / 排行 / top N」此前在名册里**无卡可用**，AI 只能退回 table ——
+ * 这正是「老是使用同一个类型组件」的根因之一，故单独立卡。
+ */
+data class RankingCard(
+    override val id: String,
+    override val title: String,
+    val items: List<RankItem>,
+    /** 数值单位，如「分」「万」「%」。 */
+    val unit: String = "",
+    /** 前几名高亮（默认前三）。 */
+    val topN: Int = 3,
+) : QuroChatCard {
+    data class RankItem(
+        val name: String,
+        val value: Float,
+        /** 涨跌幅文本，如「+12%」；空串表示不显示。 */
+        val delta: String = "",
+        /** up / down / flat；空串表示不显示箭头。 */
+        val trend: String = "",
+    )
+}
+
+/**
  * 秒表（正计时）。
  *
  * 与 `timer` 的区别：timer 是**倒计时**（有终点，到点发 command），

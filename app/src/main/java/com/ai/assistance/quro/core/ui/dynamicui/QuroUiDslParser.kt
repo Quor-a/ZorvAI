@@ -529,16 +529,18 @@ object QuroUiDslParser {
                 repaired,
             )
         } else {
-            // 连结构字符都没剩下（典型就是 `[ , , , , , ]`）：说明这确实是个空数组。
-            // 依然**不报错** —— 报一句中性说明，好过一句「解析失败：请检查格式」的红字。
-            QuroUiParseResult.Success(
-                QuroColumnNode(
-                    children = listOf(
-                        QuroMarkdownNode(value = "（这一段内容是空的，没有可显示的组件）")
-                    )
-                ),
-                repaired,
-            )
+            // 连结构字符都没剩下（典型就是 `[ , , , , , ]`）：这确实是个空数组。
+            //
+            // 🔴 #206 改口径：这里**不再**注入「（这一段内容是空的，没有可显示的组件）」
+            // 之类的解析器元信息。用户截图里那句裸文本本身就是投诉对象 ——
+            // 它是解析器在跟用户自言自语，不是 AI 想表达的内容。
+            //
+            // 改成「不产出任何可见节点」是安全的：`Column` 没有子节点时高度为 0
+            // （`Arrangement.spacedBy` 只在相邻子节点之间生效），不会留下空白间隙。
+            // AI 真正想说的文字照常在 UI 块之外的 Markdown 里渲染。
+            //
+            // 仍然**不报 Failure** —— 红字 + 原始 JSON 才是 #181 要消灭的东西。
+            QuroUiParseResult.Success(QuroColumnNode(children = emptyList()), repaired)
         }
     }
 

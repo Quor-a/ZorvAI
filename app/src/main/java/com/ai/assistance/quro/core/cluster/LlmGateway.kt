@@ -1,6 +1,10 @@
 package com.ai.assistance.quro.core.cluster
 
 import android.content.Context
+import com.ai.assistance.quro.core.QuroChatMessage
+import com.ai.assistance.quro.core.QuroLlmResult
+import com.ai.assistance.quro.core.QuroToolCall
+import com.ai.assistance.quro.core.QuroToolSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -13,7 +17,15 @@ import kotlinx.coroutines.sync.withPermit
 data class LlmOutcome(
     val text: String,
     val modelId: String,
-    val tokens: Int
+    val tokens: Int,
+    /**
+     * #190：本次调用真正执行过的工具（工具名 -> 结果摘要）。
+     * 角色不再只是「说」，它做了什么必须可查 —— 否则「模型说自己操作了手机」和
+     * 「真的操作了手机」在日志里长得一模一样。
+     */
+    val toolsUsed: List<Pair<String, String>> = emptyList(),
+    /** ReAct 实际轮数（1 = 没调工具，纯文本回答） */
+    val rounds: Int = 1
 )
 
 /**
@@ -38,6 +50,35 @@ interface LlmGateway {
         maxTokens: Int = 4096
     ): LlmOutcome
 
+    /**
+     * #190：**带工具的 ReAct 调用** —— 角色真正执行能力的唯一入口。
+     *
+     * 循环语义（每轮都真调上游，不是本地假循环）：
+     * ```
+     * messages = [system, user]
+     * repeat(maxRounds) {
+     *     r = 上游(messages, tools)
+     *     if (r 无 tool_calls) return r.content
+     *     messages += assistant(r)          // 必须带 toolCalls + reasoning
+     *     for (call in r.tool_calls) {
+     *         messages += tool(执行结果)   // 必须带 toolCallId + toolName
+     *     }
+     * }
+     * ```
+     *
+     * @param onToolCall 每执行一个工具回调一次（工具名, 结果摘要），供引擎发事件。
+     */
+    suspend fun withTools(
+        model: ModelProfile,
+        systemPrompt: String,
+        userPrompt: String,
+        tools: List<com.ai.assistance.quro.core.QuroToolSpec>,
+        maxRounds: Int = 6,
+        temperature: Float = 0.7f,
+        maxTokens: Int = 4096,
+        onToolCall: ((String, String) -> Unit)? = null
+    ): LlmOutcome
+
     /** 流式版本：把回调桥成 Flow，供 UI 多轨道渲染 */
     fun stream(
         model: ModelProfile,
@@ -55,6 +96,13 @@ class DefaultLlmGateway(
 
     /** 每个模型一个并发闸门：端侧 maxConcurrency=1，天然串行 */
     private val gates = HashMap<String, Semaphore>()
+
+    /**
+     * 工具执行器（由 ClusterEngine 注入）。
+     * 网关不持有 QuroToolRegistry —— 谁注册的工具、能不能执行，由上层决定。
+     */
+    @Volatile
+    var toolExecutor: (suspend (com.ai.assistance.quro.core.QuroToolCall) -> String)? = null
 
     private fun gate(m: ModelProfile): Semaphore = gates.getOrPut(m.id) {
         Semaphore(m.maxConcurrency.coerceAtLeast(1))
@@ -74,6 +122,225 @@ class DefaultLlmGateway(
             else callCloud(model, systemPrompt, userPrompt, history, temperature, maxTokens, null)
         }
         return LlmOutcome(raw.first, model.id, raw.first.length / 3)
+    }
+
+    /**
+     * 云端 ReAct 循环。真调上游每一轮，工具结果作为 tool 消息回灌。
+     *
+     * 三个必须守住的点：
+     * 1. **messages 累积** —— 每轮assistant 回复与 tool 结果都追加，不累积则
+     *    模型看不到自己上一步做了什么，ReAct 退化成单轮工具调用。
+     * 2. **轮次上限** —— 模型可能反复调同一个工具；到顶就返回当前文本，不再请求上游。
+     * 3. **工具失败也回灌** —— 回一条「工具 X 执行失败：原因」而不是静默跳过，
+     *    否则模型看到 assistant 调了工具却没结果，会开始编造工具返回值。
+     */
+    override suspend fun withTools(
+        model: ModelProfile,
+        systemPrompt: String,
+        userPrompt: String,
+        tools: List<com.ai.assistance.quro.core.QuroToolSpec>,
+        maxRounds: Int,
+        temperature: Float,
+        maxTokens: Int,
+        onToolCall: ((String, String) -> Unit)?
+    ): LlmOutcome {
+        // #192：端侧小模型大多不支持原生 function-calling，
+        // 但这**不等于端侧角色不能动手** —— 改走文本协议（ClusterTextReAct）：
+        // 用「思考：/ 行动：/ 参数：/ 观察：」的普通文本约定，
+        // 任何能读文本的模型都能用，不依赖任何厂商的原生能力。
+        if (tools.isEmpty()) {
+            return complete(model, systemPrompt, userPrompt, emptyList(), false, temperature, maxTokens)
+        }
+        if (model.kind == ModelKind.LOCAL) {
+            return withToolsByText(model, systemPrompt, userPrompt, tools, maxRounds, temperature, maxTokens, onToolCall)
+        }
+
+        val base = com.ai.assistance.quro.core.model.QuroModelConfigRepository(context).load()
+        val useOwnChannel = model.baseUrl.isNotBlank()
+        val cfg = base.copy(
+            baseUrl = if (useOwnChannel) model.baseUrl else base.baseUrl,
+            apiKey = if (useOwnChannel) model.apiKey.ifBlank { base.apiKey } else base.apiKey,
+            model = model.displayName,
+            provider = model.provider.ifBlank { base.provider },
+            temperature = temperature,
+            maxTokens = maxTokens
+        )
+
+        val messages = mutableListOf<QuroChatMessage>()
+        if (systemPrompt.isNotBlank()) messages += QuroChatMessage("system", systemPrompt)
+        messages += QuroChatMessage("user", userPrompt)
+
+        val client = com.ai.assistance.quro.core.network.QuroLlmClient()
+        val used = mutableListOf<Pair<String, String>>()
+        var totalTokens = 0
+        var round = 0
+        var lastText = ""
+
+        while (round < maxRounds.coerceAtLeast(1)) {
+            round++
+            val result = client.chat(
+                baseUrl = cfg.baseUrl,
+                apiKey = cfg.apiKey,
+                model = cfg.model,
+                messages = messages,
+                temperature = cfg.temperature,
+                maxTokens = cfg.maxTokens,
+                tools = tools,
+                stream = false,
+                provider = cfg.provider
+            )
+            // 🔴 token 计量必须用 when 逐分支取：QuroLlmResult.Error 没有 meta 字段，
+            // 在结果上直接写 result.meta 编译不过（sealed 各分支字段不同）。
+            totalTokens += when (result) {
+                is QuroLlmResult.Text -> result.meta.totalTokens
+                is QuroLlmResult.ToolCalls -> result.meta.totalTokens
+                is QuroLlmResult.Error -> 0
+            }
+
+            when (result) {
+                is QuroLlmResult.Error -> {
+                    // 中途报错：带已拿到的文本回去，不丢弃前面的工具成果。
+                    // 只有第一轮才抛 —— 首轮就失败说明请求本身有问题，没救。
+                    if (round == 1) throw IllegalStateException(result.message)
+                }
+                is QuroLlmResult.Text -> {
+                    return@withTools LlmOutcome(result.content, model.id, totalTokens, used, round)
+                }
+                is QuroLlmResult.ToolCalls -> {
+                    val calls = result.calls
+                    if (calls.isEmpty()) {
+                        lastText = result.content.orEmpty()
+                        return@withTools LlmOutcome(lastText, model.id, totalTokens, used, round)
+                    }
+                    result.content?.takeIf { it.isNotBlank() }?.let { lastText = it }
+                    // 🔴 assistant 回灌必须带 toolCalls；reasoning 也要带 ——
+                    // MiMo / DeepSeek-Reasoner 丢了 reasoning 每轮都「失忆」，多步调用直接断链。
+                    messages += QuroChatMessage(
+                        role = "assistant",
+                        content = result.content.orEmpty()
+                            .ifBlank { "(调用工具: " + calls.joinToString { it.name } + ")" },
+                        toolCalls = calls,
+                        reasoning = result.reasoning
+                    )
+                    for (call in calls) {
+                        val outcome = runToolLoop(call)
+                        used += call.name to outcome.first
+                        onToolCall?.invoke(call.name, outcome.first)
+                        // 🔴 tool 消息必须带 toolCallId 与 toolName：
+                        // Kimi K3 等严格实现要求 tool 消息自身带 name，缺了就 400。
+                        messages += QuroChatMessage(
+                            role = "tool",
+                            content = outcome.second,
+                            toolCallId = call.id,
+                            toolName = call.name
+                        )
+                    }
+                }
+                else -> Unit
+            }
+        }
+        return LlmOutcome(lastText, model.id, totalTokens, used, round)
+    }
+
+    /**
+     * ★ 端侧 ReAct：文本协议版 ★
+     *
+     * 为什么不在这里用原生 tools：端侧量化模型（MNN / llama.cpp）
+     * 带 `tools` 字段要么被静默忽略要么模板错位（用户侧表现是「模型掉线」）。
+     * 所以请求里 tools 照旧传 null，改由本方法在**应用层**用文本协议驱动：
+     *
+     * ```
+     * 模型 → 思考：… 行动：read_file  参数：{"path":"a.txt"}
+     * 应用 → 解析 → 执行工具 → 模型 → … → 结论：最终答案
+     * ```
+     *
+     * 三条铁律：
+     * 1. **模型不按协议输出也不能崩** —— 解析不出调用就把它的话当最终答案收下
+     *    （[ClusterTextReAct] 的第 3 级）；
+     * 2. **只执行清单内的工具名** —— 模型幻觉出的工具名绝不能真去调，
+     *    调了就是「执行了不存在的操作」，比不调更糟；
+     * 3. **观察结果必须回灌** —— 不回灌模型每轮都在失忆状态，多步调用直接断链。
+     */
+    private suspend fun withToolsByText(
+        model: ModelProfile,
+        systemPrompt: String,
+        userPrompt: String,
+        tools: List<com.ai.assistance.quro.core.QuroToolSpec>,
+        maxRounds: Int,
+        temperature: Float,
+        maxTokens: Int,
+        onToolCall: ((String, String) -> Unit)?
+    ): LlmOutcome {
+        val names = tools.map { it.name }
+        val sys = buildString {
+            append(systemPrompt)
+            val proto = ClusterTextReAct.protocolPrompt(tools)
+            if (proto.isNotBlank()) {
+                appendLine()
+                appendLine()
+                append(proto)
+            }
+        }
+        val history = mutableListOf<Pair<String, String>>()
+        var prompt = userPrompt
+        val used = mutableListOf<Pair<String, String>>()
+        var totalTokens = 0
+        var round = 0
+        var lastText = ""
+
+        while (round < maxRounds.coerceAtLeast(1)) {
+            round++
+            val raw = try {
+                gate(model).withPermit {
+                    callLocal(model, sys, prompt, history, temperature, maxTokens, null)
+                }
+            } catch (e: Exception) {
+                // 首轮失败才抛：说明请求本身有问题，没救。
+                // 中途失败带着已拿到的文本回去，不丢弃前面的工具成果。
+                if (round == 1) throw e
+                break
+            }
+            totalTokens += raw.second
+
+            val parsed = ClusterTextReAct.parse(raw.first, names)
+            if (parsed.visible.isNotBlank()) lastText = parsed.visible
+
+            // 没有可执行调用 → 模型已经交卷了（可能是它不听话，也可能是真做完了）
+            if (parsed.calls.isEmpty()) {
+                return LlmOutcome(
+                    lastText.ifBlank { raw.first }, model.id, totalTokens, used, round
+                )
+            }
+
+            history += prompt to raw.first
+            for (call in parsed.calls) {
+                val outcome = runToolLoop(call)
+                used += call.name to outcome.first
+                onToolCall?.invoke(call.name, outcome.first)
+                // 观察回灌：模型必须看到工具到底返回了什么才能决定下一步
+                history += "观察：" to outcome.second
+            }
+            prompt = "请根据上面的观察给出最终答案，或继续调用工具。"
+        }
+        return LlmOutcome(lastText, model.id, totalTokens, used, round)
+    }
+
+    /**
+     * 跑一个工具并返回 (结果摘要, 回灌文本)。
+     * 任何异常都转成失败说明回灌，绝不抛出中断整个 ReAct ——
+     * 模型需要看到「失败了、原因是这个」才能换路径。
+     */
+    private suspend fun runToolLoop(
+        call: QuroToolCall
+    ): Pair<String, String> {
+        val executor = toolExecutor
+        if (executor == null) return "工具未就绪" to
+            "（宿主未提供工具执行器，无法调用 " + call.name + "）"
+        val text = runCatching { executor(call) }.getOrElse { e ->
+            return "执行异常" to
+                "（" + call.name + " 执行异常：" + (e.message ?: e.javaClass.simpleName) + "）"
+        }.ifBlank { "(工具返回空)" }
+        return text.take(120) to text.take(4000)
     }
 
     override fun stream(
@@ -118,7 +385,10 @@ class DefaultLlmGateway(
             provider = model.provider.ifBlank { base.provider },
             temperature = temperature,
             maxTokens = maxTokens,
-            // 集群角色自己不发工具：工具由主持统一调度，避免 N 角色 × 259 工具撑爆上下文
+            // #190：这行曾是「角色不能执行」的总开关（一刀切关工具）。
+            // 现在**不再一刀切**：要执行走 withTools() 的 ReAct 路径（带工具），
+            // complete() 保持无工具 —— 主持调度、纯规划/评审文本用，省 token。
+            // 工具按分工裁剪下发，见 ClusterSkillRuntime.toolsFor（不是全量 259 个）。
             enableTools = false,
             maxToolRounds = 0
         )
@@ -237,6 +507,17 @@ class DefaultLlmGateway(
 
 /** 测试用：不联网、不花 token，验证主持能否闭环 */
 class ScriptedLlmGateway(private val script: (String) -> String) : LlmGateway {
+    /** 测试用：脚本输出当最终文本，视为未调用任何工具。 */
+    override suspend fun withTools(
+        model: ModelProfile, systemPrompt: String, userPrompt: String,
+        tools: List<com.ai.assistance.quro.core.QuroToolSpec>, maxRounds: Int,
+        temperature: Float, maxTokens: Int,
+        onToolCall: ((String, String) -> Unit)?
+    ): LlmOutcome {
+        val out = script(userPrompt)
+        return LlmOutcome(out, model.id, out.length / 3)
+    }
+
     override suspend fun complete(
         model: ModelProfile, systemPrompt: String, userPrompt: String,
         history: List<Pair<String, String>>, jsonMode: Boolean,

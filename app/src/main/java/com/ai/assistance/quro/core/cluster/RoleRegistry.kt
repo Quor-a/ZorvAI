@@ -21,6 +21,9 @@ object RoleRegistry {
 
     const val HOST_PERSONA_ID = "persona_cluster_host"
     const val HOST_NAME = "主持"
+
+    /** 文档第四节标注「主持专用」的两个方法论包（会由 [bindHostSkills] 自动绑给主持）。 */
+    private val HOST_ONLY_SKILLS = listOf("skill-fetch", "role-forge")
     private const val FILE = "quro_cluster_roles.json"
 
     /** 主持的誓言：写死在代码里，UI 不提供编辑入口 */
@@ -52,19 +55,42 @@ object RoleRegistry {
         }
         val roles = loadRaw(context).toMutableList()
         if (roles.none { it.personaId == HOST_PERSONA_ID }) {
-            roles += RoleProfile(
-                personaId = HOST_PERSONA_ID,
-                role = RoleKind.HOST,
-                duties = listOf("定义验收标准", "拆解子任务", "点名与裁决", "验收与收敛"),
-                context = RoleContextPolicy(
-                    historyRounds = 16,
-                    seeOtherRoles = true,
-                    temperature = 0.2f,
-                    maxTokens = 2048
-                )
-            )
+            roles += hostProfile()
             saveRaw(context, roles)
         }
+        bindHostSkills(context)
+    }
+
+    /**
+     * 主持启动即绑文档第四节的两个「主持专用」方法论包：skill-fetch / role-forge。
+     *
+     * 为什么必须常驻：这两个包管的是 CAPABILITY 阶段的补救动作（缺能力时去开源社区取技能 /
+     * 造新角色）。主持拿不到这套规程，就只会「没人会 → 跳过」，而文档要求的是
+     * 「先补救，补不了才跳过」。它们可调用性为 false，只注入提示词、
+     * 不给本地模型注册多余工具；打分时也不该被当成「什么活都能干」的通用能力 ——
+     * 真正干活的角色绑的是各自的方法论包（如 ui-design / code-review）。
+     *
+     * 语义是 **[union + 只增不删]**：用户手动解绑后，下次启动不会被强行绑回去。
+     * 查不到 id（老设备播种失败/用户删了包）时静默跳过，主持照常工作。
+     */
+    private fun bindHostSkills(context: Context) {
+        // 🔴 #196：主持的常驻规程也必须来自**集群自己的**技能库。
+        // 从全局库取会导致「主持的补救规程」与「角色的执行规程」分属两套，
+        // 能力核对时又只认一套 —— 于是主持拿着一套规程去核对另一套标准的角色。
+        val ids = runCatching {
+            ClusterSkillStore.load(context)
+                .filter { it.name in HOST_ONLY_SKILLS && it.enabled }
+                .map { it.id }
+        }.getOrElse { return }
+        if (ids.isEmpty()) return
+        val roles = loadRaw(context).toMutableList()
+        val idx = roles.indexOfFirst { it.personaId == HOST_PERSONA_ID }
+        if (idx < 0) return
+        val host = roles[idx]
+        val merged = (host.skillIds + ids).distinct()
+        if (merged.size == host.skillIds.size) return          // 已绑齐 → 不写盘
+        roles[idx] = host.copy(skillIds = merged)
+        saveRaw(context, roles)
     }
 
     fun isHost(personaId: String) = personaId == HOST_PERSONA_ID
@@ -127,10 +153,33 @@ object RoleRegistry {
             val arr = JSONArray(f.readText())
             (0 until arr.length()).mapNotNull { runCatching { RoleProfile.fromJson(arr.getJSONObject(it)) }.getOrNull() }
         }.getOrDefault(emptyList()).also { list ->
-            // 自愈：主持被外部改没了就补回来
-            if (list.none { it.personaId == HOST_PERSONA_ID }) ensureHost(context)
+            // 自愈：主持被外部改没了就补回来。
+            //
+            // 🔴 这里**绝不能调 ensureHost**：ensureHost 内部会再调 loadRaw，
+            // 而此刻主持仍然不在文件里 → 又触发这里 → 无限递归 → StackOverflowError。
+            // （本轮实测：主持未初始化时 upsert 任何角色都会炸，且 runCatching
+            //  会把 StackOverflow 吞成 message=null，报成「绑定失败：null」，极难定位。）
+            // 所以这里直接就地补一条主持档案，不走任何会回读本函数的路径。
+            if (list.none { it.personaId == HOST_PERSONA_ID }) {
+                val fixed = list + hostProfile()
+                saveRaw(context, fixed)
+                return fixed
+            }
         }
     }
+
+    /** 内置主持档案（唯一真源，ensureHost 与 loadRaw 自愈共用）。 */
+    private fun hostProfile() = RoleProfile(
+        personaId = HOST_PERSONA_ID,
+        role = RoleKind.HOST,
+        duties = listOf("定义验收标准", "拆解子任务", "点名与裁决", "验收与收敛"),
+        context = RoleContextPolicy(
+            historyRounds = 16,
+            seeOtherRoles = true,
+            temperature = 0.2f,
+            maxTokens = 2048
+        )
+    )
 
     private fun saveRaw(context: Context, list: List<RoleProfile>) {
         val arr = JSONArray()

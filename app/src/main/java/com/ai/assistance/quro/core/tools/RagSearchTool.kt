@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import com.ai.assistance.quro.core.rag.AgentRag
+import com.ai.assistance.quro.core.rag.PromptRagIndex
 import com.ai.assistance.quro.core.rag.RagHit
 import org.json.JSONArray
 import org.json.JSONObject
@@ -38,7 +39,8 @@ class RagSearchTool : QuroTool {
             "\n- 你不知道该用哪个工具，且用户说的是效果不是工具名（「把这段视频弄短一点」）；" +
             "\n- 你在纠结该走哪条界面交付路径（「出海报」是 AI 生图还是确定性渲染？）；" +
             "\n- 用户想看趋势/占比/排行，你不确定名册里对应哪个组件类型；" +
-            "\n- 你打算直接回「我不支持 / 我不会」之前——先搜一遍，目录里可能就有。\n\n" +
+            "\n- 你打算直接回「我不支持 / 我不会」之前——先搜一遍，目录里可能就有；\n" +
+            "- 拿不准「该用哪个组件 / 该守哪条规则」时——搜 domain=\"prompts\" 会带回**完整规则正文**。\n\n" +
             "参数：query（**用户的原话**，别自己概括，概括会丢掉关键限定词）" +
             " / domain（all|tools|prompts，默认 all）" +
             " / limit（返回条数，默认 10）" +
@@ -46,6 +48,7 @@ class RagSearchTool : QuroTool {
             " / cross_domain（**默认 false**：限定域零命中时**绝不**返回别的域的结果，" +
             "只会告诉你本域没有 + 其它域各有什么。只有你确定「就想要别的域的」时才传 true）" +
             " / explain（true 时回人类可读的建议清单，默认 false，回结构化 JSON）。\n\n" +
+            "\n🔴 prompts 域命中时，每条 hit 带 rule_body、顶层带 rules_full_text，那是**规则原文**，照它执行即可（不要只看 description 摘要）。\n" +
             "🔴 domain 是**严格隔离**的：domain=\"prompts\" 就只会返回 prompts，" +
             "绝不会返回 tools。以前版本会在零命中时偷偷回退成跨域结果，" +
             "让你误以为「域过滤方向是反的」—— 那个 bug 已修，别再依赖那种行为。"
@@ -105,7 +108,10 @@ class RagSearchTool : QuroTool {
             // 索引可能还没装（极早期调用 / 工具注册顺序变化）。**零命中绝不返回空**
             // ——空列表会被渲染成「未找到」，正是用户报的「查不到」，比多返回几条更糟。
             if (AgentRag.total() <= 0) {
-                AgentRag.refresh()
+                // 🔴 必须带上真实工具清单。无参 refresh() 只装 prompts，
+                // tools 域会空 —— 那样 rag_search(domain="tools") 永远零命中，
+                // 模型会以为「根本没有这个工具」。
+                AgentRag.refresh(ToolCapabilityDirectory.specsSnapshot())
             }
 
             //🔴 限定域**就是限定域**。旧实现在零命中时无条件回退 everything()，
@@ -116,7 +122,12 @@ class RagSearchTool : QuroTool {
             val crossDomain = jo.optBoolean("cross_domain", false)
             val hits: List<RagHit> = when (domain) {
                 "tools" -> AgentRag.tools(q, limit)
-                "prompts" -> AgentRag.prompts(q, limit.coerceAtMost(5))
+                // 🔴 prompts 域走自己的门槛（见 [PromptRagIndex.PROMPT_MIN_SCORE]）。
+                // 旧代码走 AgentRag.prompts → 引擎默认 MIN_SCORE(0.62)，
+                // 而 `fieldScore` 的 coverage 分母是整句 token 数，中文 bigram 切分后
+                // 单个触发词最多值 0.1 —— 实测「这些数据做成表格给我看」top1 只有 0.318，
+                // 直接零命中。这是「AI 被动检索规则」整条路失效的真因。
+                "prompts" -> PromptRagIndex.searchPrompts(AgentRag.engine, q, limit.coerceAtMost(5))
                                 else -> AgentRag.everything(q, limit)
             }
 
@@ -147,9 +158,24 @@ class RagSearchTool : QuroTool {
          * 并给出可执行的下一步（换说法 / 看类别清单）。
          */
         private fun noHit(q: String, domain: String): String =
-            "没有检索到与「$q」直接相关的内容（限定域 domain=$domain，全库兜底同样为空）。\n" +
-                "换个更具体的说法（说清你想达成的效果，而不是你想用的工具名），" +
-                "或用 tool_router(action=\"list_categories\") 看有哪些类别。"
+            JSONObject().apply {
+                put("query", q)
+                put("requested_domain", domain)
+                put("count", 0)
+                put("hits", JSONArray())
+                // 🔴 本工具对外的契约是 JSON（调用方直接 JSONObject(out)）。
+                // 旧实现这里返回散文，跨域且全库空时会让调用方抛 JSONException。
+                // 散文一字不改地留在 message 里，只是外面套了结构。
+                put(
+                    "message",
+                    "没有检索到与「$q」直接相关的内容（限定域 domain=$domain，全库兜底同样为空）。",
+                )
+                put(
+                    "next",
+                    "换个更具体的说法（说清你想达成的效果，而不是你想用的工具名），" +
+                        "或用 tool_router(action=\"list_categories\") 看有哪些类别。",
+                )
+            }.toString()
 
         /**
          * 限定域零命中 —— **本函数是「domain 过滤方向颠倒」这个 bug 的正解**。
@@ -175,7 +201,7 @@ class RagSearchTool : QuroTool {
                             val got = runCatching {
                                 when (dom) {
                                     "tools" -> AgentRag.tools(q, per)
-                                    "prompts" -> AgentRag.prompts(q, per)
+                                    "prompts" -> PromptRagIndex.searchPrompts(AgentRag.engine, q, per)
                                     else -> emptyList()
                                 }
                             }.getOrDefault(emptyList())
@@ -201,17 +227,40 @@ class RagSearchTool : QuroTool {
         private fun render(q: String, hits: List<RagHit>, explain: Boolean, note: String?): String {
             if (explain) return AgentRag.explain(q, hits.size)
             val arr = JSONArray()
-            hits.forEach { arr.put(it.toJson()) }
+            // 🔴 prompts 域必须带**完整规则正文**（payload 里的 PromptBlock.body）。
+            // 旧实现只 put(hit.toJson())，而 toJson 只回 description，
+            // 而 PromptBlock.toDoc 的 description 当时还是 body.take(200) ——
+            // 于是 AI 主动检索「规则」时，命中了却只拿到 200 字碎片，
+            // 拿到半条规则照样会用错。这是「改成 AI 被动使用」必须先补的洞。
+            val promptHits = hits.filter { it.domain == PromptRagIndex.DOMAIN }
+            val bodies = PromptRagIndex.renderFullBodies(promptHits)
+            hits.forEach { h ->
+                arr.put(
+                    if (h.domain == PromptRagIndex.DOMAIN) {
+                        val body = PromptRagIndex.ruleBodyOf(h)
+                        h.toJson().apply {
+                            if (body != null) {
+                                put("rule_title", h.doc.title.ifBlank { h.id })
+                                put("rule_body", body)
+                            }
+                        }
+                    } else h.toJson()
+                )
+            }
             return JSONObject().apply {
                 put("query", q)
                 note?.let { put("note", it) }
                 put("count", hits.size)
                 put("hits", arr)
+                // 🔴 额外给一份纯正文：模型读 hits 里的 rule_body 容易被 JSON 转义干扰，
+                // 这份是可以直接照着执行的原文。
+                if (bodies.isNotBlank()) put("rules_full_text", bodies)
                 put(
                     "next",
                     "命中工具名后用 tool_router(action=\"get_schema\", name=...) 拿完整参数；" +
                         "命中卡片类型后用 card_catalog(types=[...]) 拿样例；" +
-                        "命中组件类型后用 ui_dsl_spec 拿完整 DSL 规范。"
+                        "命中组件类型后用 ui_dsl_spec 拿完整 DSL 规范；" +
+                        "命中规则段（domain=prompts）后**按 rules_full_text 里那份正文执行**，不要只看摘要。"
                 )
             }.toString()
         }
