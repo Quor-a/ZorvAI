@@ -234,8 +234,7 @@ class ClusterBindModelTool : com.ai.assistance.quro.core.tools.QuroTool {
         "personaId":{"type":"string","description":"角色的人格 ID，主持固定为 persona_cluster_host"},
         "modelId":{"type":"string","description":"cluster_models 返回的模型 id"},
         "fallback":{"type":"array","items":{"type":"string"},"description":"降级链，模型 id 列表"},
-        "temperature":{"type":"number"},
-        "maxTokens":{"type":"integer"}
+        "temperature":{"type":"number"}
       },
       "required":["personaId","modelId"]
     }"""
@@ -252,8 +251,7 @@ class ClusterBindModelTool : com.ai.assistance.quro.core.tools.QuroTool {
             modelProfileId = mid,
             fallbackModelIds = fb,
             context = role.context.copy(
-                temperature = if (a.has("temperature")) a.optDouble("temperature").toFloat() else role.context.temperature,
-                maxTokens = a.optInt("maxTokens", role.context.maxTokens)
+                temperature = if (a.has("temperature")) a.optDouble("temperature").toFloat() else role.context.temperature
             ),
             version = role.version + 1
         ))
@@ -323,7 +321,6 @@ class ClusterHostConfigTool : com.ai.assistance.quro.core.tools.QuroTool {
         val updated = host.copy(
             modelProfileId = a.optString("modelId").takeIf { it.isNotBlank() } ?: host.modelProfileId,
             context = host.context.copy(
-                maxTokens = a.optInt("maxTokens", host.context.maxTokens),
                 temperature = if (a.has("temperature")) a.optDouble("temperature").toFloat() else host.context.temperature
             )
         )

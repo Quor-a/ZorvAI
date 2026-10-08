@@ -589,6 +589,7 @@ ${t.acceptance.joinToString("\n") { "- $it" }}
                     "这不是「验收通过」。",
                 verifierName
             ))
+            node.releaseUnverified = true
             node.state = NodeState.DONE
             t.state = if (t.finished()) ClusterTaskState.CONVERGING else ClusterTaskState.DISPATCHING
             return
@@ -633,6 +634,35 @@ ${t.acceptance.joinToString("\n") { "- $it" }}
         } else {
             node.lastError = "验收未通过：" + effectiveReason
             node.attempt++
+            // 🔴 #207：连败到上限就**降级放行**，不再回 REPLANNING。
+            //
+            // 旧逻辑只要验收不过就 replanCount++ 回 REPLANNING，
+            // 而单节点任务里 maxReplan(3) 一定**先于** maxNodeAttempts(3) 撞线
+            // （ESCALATED 判定在进 REPLANNING 之前），于是 REPLANNING 里那句
+            // 「attempt >= maxNodeAttempts 就 SKIPPED」永远走不到 —— 是死代码。
+            // 结果是执行→验收→不过→重做 反复 4 轮后直接熔断。
+            //
+            // 实测「20 字 slogan」这类主观任务正是这么烧掉 47k tokens 的：
+            // 验收方每次都能挑出新毛病，产物永远「无法收敛」。
+            // 再重做不是「再多试一次」，是拿确定的 token 换确定的失败。
+            //
+            // 与上面的 UNPARSABLE 分支同一口径：用尽重试后**如实记账并放行**，
+            // 绝不当「验收通过」（那是编造），也绝不无限重做（那是烧钱）。
+            if (node.attempt >= cluster.budget.maxNodeAttempts) {
+                node.releaseUnverified = true
+                emit(
+                    ClusterEvent.Verdict(
+                        t.id, node.id, true,
+                        "验收连续 ${node.attempt} 次未通过，已达到单节点重试上限。" +
+                            "最后一次理由：$effectiveReason。" +
+                            "产物已产出但**未经有效验收**，请你自行复核；这不是「验收通过」。",
+                        verifierName,
+                    )
+                )
+                node.state = NodeState.DONE
+                t.state = if (t.finished()) ClusterTaskState.CONVERGING else ClusterTaskState.DISPATCHING
+                return
+            }
             node.state = NodeState.FAILED
             node.assignee?.let { record(it, false) }
             t.replanCount++
@@ -702,8 +732,20 @@ ${stillFailed.joinToString("\n") { "- ${it.title}：${it.lastError}" }}
 
         // 有产出但也有一部分被跳过 —— 如实点名，不许把跳过的算进成果。
         val skippedTitles = t.nodes.filter { it.state == NodeState.SKIPPED }.map { it.title }
-        val finalSummary = if (skippedTitles.isEmpty()) summary
-        else summary + "\n\n⚠ 以下子任务未完成，不要算作成果：" + skippedTitles.joinToString("、")
+        // 🔴 #207：降级放行的节点**不算已验收成果**。
+        // 不点名的话，CONVERGING 会无条件报 GOAL_REACHED，
+        // 「验收从未通过」就被包装成「圆满达成」—— 那是假闭环，比熔断更糟。
+        val unverifiedTitles = t.nodes.filter { it.releaseUnverified }.map { it.title }
+        val finalSummary = buildString {
+            append(summary)
+            if (skippedTitles.isNotEmpty()) {
+                append("\n\n⚠ 以下子任务未完成，不要算作成果：").append(skippedTitles.joinToString("、"))
+            }
+            if (unverifiedTitles.isNotEmpty()) {
+                append("\n\n⚠ 以下子任务**产出了内容但未通过验收**（达到重试上限后放行），")
+                append("不要算作已验收成果，需你自行复核：").append(unverifiedTitles.joinToString("、"))
+            }
+        }
 
         close(t, CloseReason.GOAL_REACHED, finalSummary)
     }

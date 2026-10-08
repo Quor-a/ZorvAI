@@ -125,7 +125,10 @@ fun RoleEditScreen(
     var modelId by remember { mutableStateOf(role.modelProfileId) }
     var historyRounds by remember { mutableStateOf(role.context.historyRounds.toString()) }
     var temperature by remember { mutableStateOf(role.context.temperature.toString()) }
-    var maxTokens by remember { mutableStateOf(role.context.maxTokens.toString()) }
+    // 🔴 #209：不再有「最大输出 token」这一层。
+    // 模型配置（QuroModelConfig.maxTokens）本来就有这个值，角色级再配一次
+    // 只会把它**覆盖成更小的值**（角色默认 4096、UI 还 coerceIn 到 32768，
+    // 而模型配置是 65536）—— skills 需要大量上下文与输出，这层必须去掉。
     var seeOthers by remember { mutableStateOf(role.context.seeOtherRoles) }
     var modelOpen by remember { mutableStateOf(false) }
     var personaOpen by remember { mutableStateOf(false) }
@@ -143,7 +146,6 @@ fun RoleEditScreen(
         (if (isHost) RoleKind.HOST else kind) != role.role ||
         historyRounds.toIntOrNull() != role.context.historyRounds ||
         temperature.toFloatOrNull() != role.context.temperature ||
-        maxTokens.toIntOrNull() != role.context.maxTokens ||
         seeOthers != role.context.seeOtherRoles
 
     fun save() {
@@ -152,8 +154,6 @@ fun RoleEditScreen(
                 ?: role.context.historyRounds,
             temperature = temperature.toFloatOrNull()?.coerceIn(0f, 2f)
                 ?: role.context.temperature,
-            maxTokens = maxTokens.toIntOrNull()?.coerceIn(256, 32768)
-                ?: role.context.maxTokens,
             seeOtherRoles = seeOthers,
         )
         RoleRegistry.upsert(
@@ -520,13 +520,9 @@ fun RoleEditScreen(
                             modifier = Modifier.weight(1f),
                         )
                     }
-                    OutlinedTextField(
-                        value = maxTokens,
-                        onValueChange = { maxTokens = it.filter(Char::isDigit) },
-                        label = { Text("最大输出 token") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    // 🔴 #209：这里原本有个「最大输出 token」输入框。
+                    // 它把模型配置的 65536 覆盖成 <=32768 —— 同一件事配两遍，
+                    // 且第二遍只会更小。token 上限现在只由「模型配置」决定。
                 }
             }
 
