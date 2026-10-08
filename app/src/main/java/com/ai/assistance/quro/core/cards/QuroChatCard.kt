@@ -1037,6 +1037,7 @@ fun serializeCard(card: QuroChatCard): JSONObject {
         is QuroChatCard.ToggleCard -> "toggle"
         is QuroChatCard.SliderCard -> "slider"
         is QuroChatCard.ProgressCard -> "progress"
+        is RankingCard -> "ranking"
         is QuroChatCard.StatCard -> "stat"
         is QuroChatCard.AlertCard -> "alert"
         is QuroChatCard.TableCard -> "table"
@@ -1345,6 +1346,10 @@ fun parseCard(o: JSONObject): QuroChatCard? {
             "toggle" -> QuroChatCard.ToggleCard(id, title, o.optString("label", ""), o.optBoolean("checked", false), o.optString("command", ""))
             "slider" -> QuroChatCard.SliderCard(id, title, o.optString("label", ""), o.optDouble("value", 0.0).toFloat(), o.optDouble("min", 0.0).toFloat(), o.optDouble("max", 100.0).toFloat(), o.optDouble("step", 1.0).toFloat(), o.optString("unit", ""), o.optString("command", ""))
             "progress" -> QuroChatCard.ProgressCard(id, title, o.optString("label", ""), o.optDouble("value", 0.0).toFloat(), o.optDouble("max", 100.0).toFloat(), o.optString("suffix", "%"))
+            "ranking" -> RankingCard(id, title, (0 until (o.optJSONArray("items")?.length() ?: 0)).map { i ->
+                val it = o.optJSONArray("items")!!.optJSONObject(i)
+                RankingCard.RankItem(it.optString("name", ""), it.optDouble("value", 0.0).toFloat(), it.optString("delta", ""), it.optString("trend", ""))
+            }, o.optString("unit", ""), o.optInt("topN", 3))
             "stat" -> QuroChatCard.StatCard(id, title, o.optString("label", ""), o.optString("value", ""), o.optString("unit", ""), o.optString("delta", ""), o.optString("trend", "flat"))
             "alert" -> QuroChatCard.AlertCard(id, title, o.optString("severity", "info"), o.optString("text", ""))
             "table" -> QuroChatCard.TableCard(id, title, arrStr(o.optJSONArray("headers")), arrArrStr(o.optJSONArray("rows")))

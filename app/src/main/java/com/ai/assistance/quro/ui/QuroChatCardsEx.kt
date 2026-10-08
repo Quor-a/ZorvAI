@@ -167,11 +167,26 @@ internal object ExCardPalette {
 
 // ═══════════════════ 数据增强 ═══════════════════
 
-/** 键值对列表：左键右值，右值超长省略号截断。 */
+/** 键值对列表：左键右值。
+ *
+ * 🔴 2026-10-08 修「值区换行溢出被压掉」（用户截图实锤）。
+ *
+ * 旧实现是 `weight(1f)` + `maxLines = 3` + `TextOverflow.Ellipsis` 的**双截断**：
+ * - 键和值各占一半宽度，值本身又长（截图里「集群暂不建议用于…」那种整句结论），
+ *   一半宽度下3 行根本放不下 → 直接省略号砍掉；
+ * - 用户看到的是「结论被压成半句」，完全不知道集群到底说了什么。
+ *
+ * 现在：
+ * - **键定宽不抢值**：键用 `widthIn(max = 96.dp)`，剩下的全给值（键都是「版本」「大小」这类短词）；
+ * - **默认不限行数**，让长值完整换行显示（这才是用户要的信息）；
+ * - 真正过长的（> 8 行）才折叠，可点「展开」看全文 —— 折叠阈值给得比旧值宽得多。
+ */
 @Composable
 internal fun KeyValueCardView(card: KeyValueCard, onCommand: (String) -> Unit) {
+    var expanded by remember(card.rows) { mutableStateOf(false) }
     CardShell(card.title) {
         card.rows.forEach { r ->
+            val isLong = r.v.length > LONG_VALUE_CHARS
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -179,9 +194,10 @@ internal fun KeyValueCardView(card: KeyValueCard, onCommand: (String) -> Unit) {
                     .padding(vertical = 5.dp),
                 verticalAlignment = Alignment.Top,
             ) {
+                // 键：定宽上限，短词就短着，长词也不会把值挤没
                 Text(
                     r.k,
-                    Modifier.weight(1f),
+                    Modifier.widthIn(max = 96.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -192,14 +208,33 @@ internal fun KeyValueCardView(card: KeyValueCard, onCommand: (String) -> Unit) {
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.End,
-                    maxLines = 3,
+                    // 🔴 左对齐而不是 End：值被折行时右对齐会读着别扭
+                    textAlign = TextAlign.Start,
+                    maxLines = if (isLong && !expanded) FOLD_LINES else Int.MAX_VALUE,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
+        // 有超长值且被折叠过→ 给一个展开入口
+        if (card.rows.any { it.v.length > LONG_VALUE_CHARS }) {
+            Text(
+                if (expanded) "收起" else "展开完整内容",
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(top = 6.dp),
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
     }
 }
+
+/** 值长度超过它才认为「需要折叠」。比旧版的 3 行宽松得多。 */
+private const val LONG_VALUE_CHARS = 80
+
+/** 折叠时最多显示几行（比旧版 3 行高，且只有真超长才触发）。 */
+private const val FOLD_LINES = 6
 
 /** 环形进度：中心给百分比，thickness 可画细环。 */
 @Composable

@@ -2367,11 +2367,18 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         // 本地离线模型不走到这里（已在上面 isLocal 分支 early-return），本段只在云端路径注入。
         sb.append(buildVisualSwitchEnforcement())
 
-        // ══════════════ 系统提示词 RAG：按本轮意图追加「进阶段规则」 ══════════════
-        // 旧架构一行未删：render() 无论开关如何都先拼完整基座，
-        // RAG 只决定「额外的进阶段段落要不要跟」。FULL_ALWAYS 时进阶段全量跟上，
-        // SELECTIVE 时按 userQuery 检索，挑不出就一个不加（宁缺毋滥——
-        // 塞一堆当前无关的规则只会稀释注意力，让模型漏掉真正该守的那条）。
+        // ══════════════ 系统提示词 RAG：**备用方案**，按本轮意图追加「进阶段规则」══
+        // 🔴 2026-10-08 默认从 FULL_ALWAYS 改成 SELECTIVE（实测依据）：
+        // FULL_ALWAYS 实测每轮追加 **3182 字符（≈2100 tokens）**，其中
+        // cluster_orchestration 一段独占 1416 字 —— 那就是「把 RAG 当主要方案」，
+        // 用户明确要求「改成 AI 被动使用，RAG 是备用方案不是主要方案」。
+        //
+        // 现在的主路径是**AI 自己**调 rag_search(domain="prompts") 主动取规则，
+        // 每轮只常驻两块真正必须守的基础段（工具调用纪律 + 输出格式纪律，见
+        // PromptRagIndex 的 alwaysSticky）。FULL_ALWAYS 仍可通过
+        // SharedPreferences("quro_rag", "prompt_rag_mode"="FULL_ALWAYS") 显式打开。
+        //
+        // 旧架构一行未删：render() 无论开关如何都先拼完整基座。
         sb.append(
             PromptRagIndex.render(
                 engine = AgentRag.engine,
@@ -2400,21 +2407,31 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
      * 不打扰用户：纯后台沉淀，下次相关对话自动复用并修正�?
      */
     /**
-     * 系统提示词 RAG 注入模式。
+     * 系统提示词 RAG 注入模式。**默认 [PromptRagIndex.Mode.SELECTIVE]（备用方案）**。
      *
-     * 默认 [PromptRagIndex.Mode.FULL_ALWAYS]：与改动前**逐字一致**，
-     * 这样即便选段逻辑出任何问题，提示词也只是多了几段而不会缺段。
-     * 用户主动切到 SELECTIVE 才享受「只注入相关段落」的省 token 收益。
+     * ## 🔴 为什么默认从 FULL_ALWAYS 改成 SELECTIVE（2026-10-08）
+     *
+     * 用户要求「改成 AI 被动使用，系统提示词 RAG 是**备用方案不是主要方案**」。
+     * FULL_ALWAYS 实测每轮追加 3182 字符（≈2100 tokens）——
+     * 相当于每轮无条件给模型灌一份规则手册，而规则里真正当前相关的可能只有一段。
+     * 这不只是 token 浪费，更是**注意力被稀释**：
+     * 模型在一堆当前无关的规则里，容易漏掉真正该守的那条。
+     *
+     * 改后每轮只常驻两块基础段（工具调用纪律 + 输出格式纪律），
+     * 其余规则由 **AI 自己**调 `rag_search(domain="prompts")` 主动取——
+     * 检索从「宿主塞给 AI」变成「AI 按需拉」，这才是被动使用。
+     *
+     * 显式切回全量：写入 SharedPreferences("quro_rag") 的键 `prompt_rag_mode` = `FULL_ALWAYS`。
      */
     private fun promptRagMode(): PromptRagIndex.Mode {
         val raw = runCatching {
             appContext.getSharedPreferences("quro_rag", Context.MODE_PRIVATE)
                 .getString("prompt_rag_mode", null)
         }.getOrNull()
-        return if (raw == PromptRagIndex.Mode.SELECTIVE.name) {
-            PromptRagIndex.Mode.SELECTIVE
-        } else {
+        return if (raw == PromptRagIndex.Mode.FULL_ALWAYS.name) {
             PromptRagIndex.Mode.FULL_ALWAYS
+        } else {
+            PromptRagIndex.Mode.SELECTIVE
         }
     }
 

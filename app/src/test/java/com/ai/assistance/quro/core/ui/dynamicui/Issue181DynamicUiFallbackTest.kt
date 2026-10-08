@@ -41,12 +41,40 @@ class Issue181DynamicUiFallbackTest {
         )
     }
 
+    /**
+     * 🔴 #206 改判：空壳数组**不产出任何可见节点**。
+     *
+     * #181 原本要求「至少产出一条可见内容」，当时用的是一句
+     * 「（这一段内容是空的，没有可显示的组件）」。真机上那句裸文本
+     * 直接出现在聊天流里（用户截图投诉对象）—— 它是解析器的自言自语，
+     * 不是 AI 想表达的内容。
+     *
+     * 改成空 Column 是安全的：Column 无子节点即 0 高度，不留间隙；
+     * AI 真正要说的话照常渲染在 UI 块之外的 Markdown 里。
+     */
     @Test
-    fun 空壳数组要有一条可见内容而不是空渲染() {
+    fun 空壳数组不再往聊天里塞解析器元信息() {
         val r = QuroUiDslParser.parseBlock(emptyShell)
         assertTrue(r is QuroUiParseResult.Success)
         val root = (r as QuroUiParseResult.Success).root as QuroColumnNode
-        assertTrue("必须产出至少一个可见节点，否则仍是白屏", root.children.isNotEmpty())
+        assertTrue(
+            "空的 UI 块不该产出任何可见节点（否则又是一句解析器自言自语），实际=${root.children}",
+            root.children.isEmpty(),
+        )
+        val flat = flatten(root)
+        assertTrue(
+            "绝不能再出现「没有可显示的组件」这类面向用户的解析器提示，实际=$flat",
+            flat.none { it.contains("没有可显示的组件") },
+        )
+    }
+
+    /** 反向保护：真的有内容时照常渲染，不能被「空则不渲染」的口径误伤。 */
+    @Test
+    fun 有内容的数组不受空块口径影响() {
+        val r = QuroUiDslParser.parseBlock("""[{"type":"text","content":"真内容"}]""")
+        assertTrue(r is QuroUiParseResult.Success)
+        val root = (r as QuroUiParseResult.Success).root as QuroColumnNode
+        assertTrue("有内容就必须渲染出来，实际=${root.children}", root.children.isNotEmpty())
     }
 
     @Test

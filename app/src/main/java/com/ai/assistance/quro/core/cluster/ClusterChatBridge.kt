@@ -55,6 +55,24 @@ object ClusterChatBridge {
      */
     @Volatile private var job: kotlinx.coroutines.Job? = null
 
+    /**
+     * 工具调用合流窗口（毫秒）。窗口内的多次工具调用汇总成一条气泡，
+     * 避免一次闭环调十几个工具把对话框刷爆（详见 toMessages 的ToolInvoked 分支）。
+     */
+    private const val TOOL_MERGE_WINDOW_MS = 3000L
+
+    /**
+     * 产物正文在气泡里最多展示多少字。
+     *
+     * 🔴 为什么不全文贴：产物动辄上万字（集群跑 14 轮就是），全贴会把对话框撑爆，
+     * 反而又是「输出不完整」——用户要滚动十几屏才看到结论。截断 + 标注原长度，
+     * 既看得到内容、也看得出「后面还有」。
+     */
+    private const val BODY_PREVIEW = 1200
+
+    private val toolTrace = ArrayList<Pair<String, String>>()
+    private var lastToolBucket = -1L
+
     fun registerSink(store: QuroConversationStore?, engine: ClusterEngine) {
         // 先解绑旧的，避免重复订阅导致同一发言进多个 store
         job?.cancel()
@@ -93,21 +111,44 @@ object ClusterChatBridge {
             )
         )
 
+        // 🔴 2026-10-08 补验收方身份。用户直接问过「关键是谁验收？」——
+        // 旧气泡只有 ✅/❌ 加一句理由，看不出是评审角色判的还是主持代验的。
+        // 验收方不同结论的可信度完全不同，必须让人看得见。
         is ClusterEvent.Verdict -> listOf(
             msg(
-                sender = "主持",
+                sender = e.verifier.ifBlank { "主持" },
                 content = buildString {
-                    append(if (e.pass) "✅ 裁决通过" else "❌ 裁决不通过")
+                    append(if (e.pass) "✅ 验收通过" else "❌ 验收未通过")
+                    if (e.verifier.isNotBlank()) append("（验收方：").append(e.verifier).append("）")
                     if (e.reason.isNotBlank()) append("：").append(e.reason)
                 },
                 host = true,
             )
         )
 
+        // 🔴 2026-10-08 修「集群在对话框输出的内容不是正常的文本内容和产物」。
+        //
+        // 旧实现只投影 `"📎 产出：${e.title}"` —— 标题有、**产物正文一个字都没有**。
+        // 集群跑了 14 轮真在干活，用户在对话框看到的却是十几条只有标题的空气泡，
+        // 于是「跑没跑」完全无法判断。这是「输出不完整」最直接的证据。
+        //
+        // 现在带上正文：超长则截断（对话框不是产物仓库），并明确告诉用户内容在哪。
         is ClusterEvent.ArtifactProduced -> listOf(
             msg(
                 sender = nameOf(e.personaId),
-                content = "📎 产出：${e.title}",
+                content = buildString {
+                    append("📎 产出：").append(e.title)
+                    val body = e.body.trim()
+                    if (body.isNotEmpty()) {
+                        append("\n\n")
+                        if (body.length > BODY_PREVIEW) {
+                            append(body.take(BODY_PREVIEW))
+                            append("\n… （全文 ").append(body.length).append(" 字，已截断）")
+                        } else {
+                            append(body)
+                        }
+                    }
+                },
                 host = RoleRegistry.isHost(e.personaId),
             )
         )
@@ -115,6 +156,49 @@ object ClusterChatBridge {
         is ClusterEvent.Error -> listOf(
             msg(sender = "集群", content = "⚠ ${e.message}", host = false)
         )
+
+        // #190：工具执行轨迹。ReAct 之后「模型说自己做了什么」和「真做了什么」
+        // 在最终文本里长得一模一样 —— 没有这一条，用户无从判断集群是在执行还是在编。
+        //
+        // 但**不能**每个工具一条气泡：一次闭环可能调十几个工具，会把对话框刷爆。
+        // 做法：每 TOOL_MERGE_WINDOW_MS 只发一条汇总气泡（列出这一串调过的工具），
+        // 窗口内的后续调用只累积、不再发泡。
+        is ClusterEvent.ToolInvoked -> {
+            val key = e.ts / TOOL_MERGE_WINDOW_MS
+            val bucket = synchronized(toolTrace) {
+                if (lastToolBucket != key) {
+                    lastToolBucket = key
+                    toolTrace.clear()
+                }
+                toolTrace += e.toolName to e.summary
+                toolTrace.toList()
+            }
+            // 只有当累积的调用数 ≥ 3（说明确实是一串动作）时才发汇总泡；
+            // 1-2 个工具的场合走上面各自的分支更清楚。
+            if (bucket.size >= 3) {
+                listOf(
+                    msg(
+                        sender = nameOf(e.personaId),
+                        content = buildString {
+                            append("🔧 连续调用 ${bucket.size} 个工具：")
+                            append(bucket.joinToString(" → ") { it.first })
+                            val last = bucket.last().second
+                            if (last.isNotBlank()) append("\n└ ").append(last.take(300))
+                        },
+                        host = RoleRegistry.isHost(e.personaId),
+                    )
+                )
+            } else {
+                listOf(
+                    msg(
+                        sender = nameOf(e.personaId),
+                        content = "🔧 调用工具 `${e.toolName}`" +
+                            if (e.summary.isNotBlank()) "\n└ ${e.summary.take(300)}" else "",
+                        host = RoleRegistry.isHost(e.personaId),
+                    )
+                )
+            }
+        }
 
         is ClusterEvent.Replanned -> listOf(
             msg(

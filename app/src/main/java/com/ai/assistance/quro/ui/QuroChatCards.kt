@@ -63,6 +63,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -129,6 +130,7 @@ import com.ai.assistance.quro.core.cards.SankeyCard
 import com.ai.assistance.quro.core.cards.SectionCard
 import com.ai.assistance.quro.core.cards.WaterfallCard
 import com.ai.assistance.quro.core.cards.QuroChatCardStore
+import com.ai.assistance.quro.core.cards.RankingCard
 import com.ai.assistance.quro.core.media.QuroVideoLauncher
 import com.ai.assistance.quro.core.tools.QuroMediaController
 import com.ai.assistance.quro.service.QuroMediaService
@@ -274,6 +276,7 @@ fun QuroChatCardView(card: QuroChatCard, onCommand: (String) -> Unit, modifier: 
             is QuroChatCard.ToggleCard -> ToggleCardView(card, onCommand)
             is QuroChatCard.SliderCard -> SliderCardView(card, onCommand)
             is QuroChatCard.ProgressCard -> ProgressCardView(card)
+            is RankingCard -> RankingCardView(card)
             is QuroChatCard.StatCard -> StatCardView(card)
             is QuroChatCard.AlertCard -> AlertCardView(card)
             is QuroChatCard.TableCard -> TableCardView(card)
@@ -539,6 +542,74 @@ private fun ProgressCardView(card: QuroChatCard.ProgressCard) {
     }
 }
 
+// ───────────── 排行榜 ─────────────
+/**
+ * 通用排行榜：名次徽章 + 条目名 + 数值条 + 涨跌幅，前三名（topN）主色高亮。
+ * 与 scoreboard 的分工：这里排**名次**，scoreboard 只显示**体育比分**。
+ */
+@Composable
+private fun RankingCardView(card: RankingCard) {
+    val cs = MaterialTheme.colorScheme
+    CardShell(card.title) {
+        // 同 gauge/progress：全 0 时除零会得 NaN，进度条会整条消失
+        val maxV = card.items.maxOfOrNull { it.value } ?: 0f
+        val pMax = if (maxV > 0f) maxV else 1f
+        card.items.forEachIndexed { idx, it ->
+            if (idx > 0) Spacer(Modifier.height(8.dp))
+            val top = idx < card.topN
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(22.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(if (top) cs.primary.copy(alpha = 0.15f) else cs.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        (idx + 1).toString(),
+                        fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                        color = if (top) cs.primary else cs.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        it.name, color = cs.onSurface, fontSize = 13.sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(3.dp))
+                    LinearProgressIndicator(
+                        progress = (it.value / pMax).coerceIn(0f, 1f),
+                        modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
+                        color = if (top) cs.primary else cs.outlineVariant,
+                        trackColor = cs.outlineVariant.copy(alpha = 0.35f),
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(rankValueText(it.value, card.unit), color = cs.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    if (it.delta.isNotBlank()) {
+                        Text(
+                            it.delta, fontSize = 11.sp,
+                            color = when (it.trend) {
+                                "up" -> SUCCESS
+                                "down" -> ERROR
+                                else -> cs.onSurfaceVariant
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 整数不带小数点，其余保留一位。 */
+private fun rankValueText(v: Float, unit: String): String {
+    val s = if (v.toInt().toFloat() == v) v.toInt().toString() else "%.1f".format(v)
+    return if (unit.isBlank()) s else "$s$unit"
+}
+
 // ───────────── 统计 ─────────────
 @Composable
 private fun StatCardView(card: QuroChatCard.StatCard) {
@@ -585,39 +656,117 @@ private fun AlertCardView(card: QuroChatCard.AlertCard) {
 }
 
 // ───────────── 表格 ─────────────
+/** 表格列宽的取值范围（dp）。下限防太窄，下限之上按内容长度分配。 */
+private const val TABLE_COL_MIN = 72
+private const val TABLE_COL_MAX = 260
+private const val TABLE_COL_CHARS = 18   // 每 18 个字符算一档宽度
+
+/**
+ * 🔴 2026-10-08 修表格「截断 + 列对不齐」（用户截图实锤）。
+ *
+ * ## 旧实现的两处病根
+ *
+ * 1. **每格各自算宽度**：表头与每个单元格里都写 `widthIn(min=80, max=220)`，
+ *    而 `widthIn` 对**不同内容**自然给出不同宽度 ——
+ *    「熔断+假闭环」那格宽、「0/5」那格窄，于是**同一列在各行宽度都不一样**，
+ *    表格纵向根本对不齐（截图里正是这个观感）。
+ * 2. **文字被硬裁**：单元格没有换行与展开机制，长文本被容器边界切掉，
+ *    用户看到「熔断+假闭」这种**半截词**，完全读不出结论。
+ *
+ * ## 现在
+ *
+ * - **先统一算一次列宽**（`tableColumnWidths`），表头与所有行共用同一组宽度 → 必然对齐；
+ * - 单元格 `maxLines` 放开到 [TABLE_CELL_LINES]，长文本**换行完整显示**；
+ *   仍超长的才折叠，整表给一个「展开全部」入口。
+ */
 @Composable
 private fun TableCardView(card: QuroChatCard.TableCard) {
     val cs = MaterialTheme.colorScheme
+    var expanded by remember(card.rows) { mutableStateOf(false) }
     CardShell(card.title) {
         if (card.headers.isEmpty() && card.rows.isEmpty()) {
             Text(stringResource(R.string.qk_00946), color = cs.onSurfaceVariant, fontSize = 12.sp); return@CardShell
         }
+        val colCount = maxOf(
+            card.headers.size,
+            card.rows.maxOfOrNull { it.size } ?: 0
+        )
+        // 🔴 统一列宽：表头与所有行共用，表格才能纵向对齐
+        val widths = remember(card.headers, card.rows) {
+            tableColumnWidths(card.headers, card.rows, colCount)
+        }
         Column(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
             if (card.headers.isNotEmpty()) {
                 Row(Modifier.background(cs.primaryContainer).padding(vertical = 6.dp)) {
-                    card.headers.forEach { h ->
-                        Text(h, color = cs.onPrimaryContainer, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.widthIn(min = 80.dp, max = 220.dp).padding(horizontal = 8.dp))
+                    card.headers.forEachIndexed { ci, h ->
+                        Text(
+                            h, color = cs.onPrimaryContainer, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .width(if (ci < widths.size) widths[ci] else TABLE_COL_MIN.dp)
+                                .padding(horizontal = 8.dp)
+                        )
                     }
                 }
             }
             // ★ ANR 防御：大表（工具/查询返回上百行）原 Column+forEach 主线程一次性布局 → 卡顿/ANR。
             // 上限渲染 80 行，超出显示脚注（完整数据仍在卡片 JSON 中）。
-            val shownRows = card.rows.take(80)
+            val shownRows = if (expanded) card.rows else card.rows.take(80)
             shownRows.forEachIndexed { ri, row ->
                 Row(Modifier.padding(vertical = 6.dp).then(if (ri % 2 == 1) Modifier.background(cs.outlineVariant.copy(alpha = 0.18f)) else Modifier)) {
-                    row.forEach { cell ->
-                        Text(cell, color = cs.onSurfaceVariant, fontSize = 12.sp,
-                            modifier = Modifier.widthIn(min = 80.dp, max = 220.dp).padding(horizontal = 8.dp))
+                    (0 until colCount).forEach { ci ->
+                        Text(
+                            text = row.getOrElse(ci) { "" },
+                            color = cs.onSurfaceVariant, fontSize = 12.sp,
+                            modifier = Modifier
+                                .width(if (ci < widths.size) widths[ci] else TABLE_COL_MIN.dp)
+                                .padding(horizontal = 8.dp),
+                            // 🔴 完整换行显示，别把「熔断+假闭环」裁成「熔断+假闭」
+                            maxLines = if (expanded) Int.MAX_VALUE else TABLE_CELL_LINES,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }
             if (card.rows.size > shownRows.size) {
                 Text(stringResource(R.string.qk_00947, (card.rows.size - shownRows.size).toString()), color = cs.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp, horizontal = 8.dp))
             }
+            // 有被折叠的单元格就给出路，否则用户永远看不到完整结论
+            if (!expanded && card.rows.any { row -> row.any { it.length > TABLE_CELL_LINES * TABLE_COL_CHARS } }) {
+                Text(
+                    "展开完整表格",
+                    Modifier.fillMaxWidth().clickable { expanded = true }.padding(top = 4.dp),
+                    color = cs.primary, fontSize = 11.sp,
+                )
+            }
         }
     }
 }
+
+/** 单元格未展开时最多显示几行（旧实现没有换行概念，等价于被容器硬裁成 1 行）。 */
+private const val TABLE_CELL_LINES = 3
+
+/**
+ * 统一计算每列宽度（dp）。
+ *
+ * 🔴 为什么必须整表算一次而不是每格各自 `widthIn`：
+ * `widthIn(min,max)` 对不同内容给出不同宽度，于是同一列在各行宽度不同 → 纵向对不齐。
+ * 这里按「该列最长内容的字符数」分档，每档取该列所有行里的最大值，全表共用。
+ */
+internal fun tableColumnWidths(
+    headers: List<String>,
+    rows: List<List<String>>,
+    colCount: Int,
+): List<Dp> = (0 until colCount).map { ci ->
+    var longest = headers.getOrElse(ci) { "" }.length
+    for (r in rows) longest = maxOf(longest, r.getOrElse(ci) { "" }.length)
+    // 中文按 2 个字符宽度估
+    val visual = longest.coerceIn(TABLE_COL_MIN_CHARS, TABLE_COL_MAX_CHARS)
+    ((visual / TABLE_COL_CHARS) * TABLE_COL_MIN + TABLE_COL_MIN)
+        .coerceIn(TABLE_COL_MIN, TABLE_COL_MAX).dp
+}
+
+private const val TABLE_COL_MIN_CHARS = 8
+private const val TABLE_COL_MAX_CHARS = 60
 
 // ───────────── 列表 ─────────────
 @Composable
