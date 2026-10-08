@@ -131,7 +131,14 @@ data class RoleContextPolicy(
     val seeOtherRoles: Boolean = true,
     /** 是否可见集群共享记忆 */
     val seeSharedMemory: Boolean = true,
-    val maxTokens: Int = 4096,
+    /**
+     * 🔴 #209：**已停用**，0 = 跟随模型配置（[com.ai.assistance.quro.core.model.QuroModelConfig.maxTokens]）。
+     *
+     * 以前这里是角色级输出上限（默认 4096，UI 保存时 coerceIn 到 <=32768），
+     * 而模型配置明明是 65536 —— 等于同一件事配两遍、且第二遍只会更小。
+     * 保留字段只为 JSON 向后兼容，不再参与任何限制。
+     */
+    val maxTokens: Int = 0,
     val temperature: Float = 0.7f
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
@@ -151,7 +158,7 @@ data class RoleContextPolicy(
             } ?: emptySet(),
             seeOtherRoles = o.optBoolean("seeOtherRoles", true),
             seeSharedMemory = o.optBoolean("seeSharedMemory", true),
-            maxTokens = o.optInt("maxTokens", 4096),
+            maxTokens = o.optInt("maxTokens", 0),
             temperature = o.optDouble("temperature", 0.7).toFloat()
         )
     }
@@ -355,7 +362,15 @@ data class ClusterNode(
     var state: NodeState = NodeState.PENDING,
     var attempt: Int = 0,
     var lastError: String? = null,
-    var artifact: String? = null
+    var artifact: String? = null,
+    /**
+     * #207：产物**未经有效验收**就被放行了。
+     *
+     * 两种情况会置位：验收方输出连续解析不出结论、或连续判不通过达到重试上限。
+     * 置位后 [ClusterEngine.converging] 必须在总结里点名，
+     * 否则「降级放行」会被无条件报成 GOAL_REACHED —— 那只是把熔断换成假闭环。
+     */
+    var releaseUnverified: Boolean = false
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("title", title); put("instruction", instruction)
@@ -363,6 +378,7 @@ data class ClusterNode(
         put("assignee", assignee ?: ""); put("dependsOn", JSONArray(dependsOn))
         put("state", state.name); put("attempt", attempt)
         put("lastError", lastError ?: ""); put("artifact", artifact ?: "")
+        put("releaseUnverified", releaseUnverified)
     }
 
     companion object {
@@ -374,7 +390,8 @@ data class ClusterNode(
             state = runCatching { NodeState.valueOf(o.optString("state", "PENDING")) }.getOrDefault(NodeState.PENDING),
             attempt = o.optInt("attempt", 0),
             lastError = o.optString("lastError").takeIf { it.isNotBlank() },
-            artifact = o.optString("artifact").takeIf { it.isNotBlank() }
+            artifact = o.optString("artifact").takeIf { it.isNotBlank() },
+            releaseUnverified = o.optBoolean("releaseUnverified", false)
         )
     }
 }

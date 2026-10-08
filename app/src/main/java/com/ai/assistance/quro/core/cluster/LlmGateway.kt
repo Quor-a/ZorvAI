@@ -163,7 +163,10 @@ class DefaultLlmGateway(
             model = model.displayName,
             provider = model.provider.ifBlank { base.provider },
             temperature = temperature,
-            maxTokens = maxTokens
+            // 🔴 #209：角色级 maxTokens 已停用（<=0 表示不设角色级限制）。
+            // 直接用模型配置里的值 —— 它本来就是为这个模型设的（默认 65536），
+            // 再叠一层只会把它砍小。
+            maxTokens = if (maxTokens > 0) maxTokens else base.maxTokens
         )
 
         val messages = mutableListOf<QuroChatMessage>()
@@ -463,7 +466,11 @@ class DefaultLlmGateway(
             modelName = model.displayName,
             messages = messages,
             temperature = temperature,
-            maxTokens = maxTokens,
+            // 🔴 #209：端侧没有「模型配置 maxTokens」这一层，用模型的上下文窗口兜底；
+            // 都给不出时才用一个宽松默认。绝不再回到写死的 4096 —— 那连一次
+            // 带工具的编排都装不下。
+            maxTokens = if (maxTokens > 0) maxTokens
+            else model.contextWindow.takeIf { it > 0 } ?: 32_768,
             contextWindow = model.contextWindow,
             toolSpecsJson = null,
             onToken = onToken,
