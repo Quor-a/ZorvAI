@@ -364,6 +364,32 @@ data class ClusterNode(
     var lastError: String? = null,
     var artifact: String? = null,
     /**
+     * #210：ARBITRATING 定下的**执行计划**，与 [artifact] 分开存。
+     *
+     * 为什么必须分开：EXECUTING 一结束 `artifact` 就被产物覆盖了，
+     * 而验收不通过时要拿原计划当底稿去**改**产物。计划没了就只能凭印象重写，
+     * 改出来的东西跟上一版毫无关系 ——
+     * 「给意见 → 修改 → 再验收」这个闭环根本转不起来。
+     */
+    var plan: String? = null,
+    /**
+     * #211：本节点是否已经**带着意见返工过一次**。
+     *
+     * 为什么不用 [attempt] 判断：attempt 是「重试次数」，
+     * 验收方的**协议重试**（判了不合格却没给改法、要求补齐）也会 ++，
+     * 于是「到底有没有真正按意见改过一次」就分不清了 ——
+     * 本该「改」的一轮会被当成「重做」，闭环又断掉。
+     * 返工是**有且只有一次**的动作，用独立标记才说得清。
+     */
+    var revised: Boolean = false,
+    /**
+     * #210：上一轮**被验收驳回**的产物。
+     *
+     * 重做时它跟着驳回意见一起交回执行角色，让它**改这一版**而不是从零重写。
+     * 只有意见没有底稿，角色只能凭意见重新想象一份，等于又回到第一次。
+     */
+    var lastArtifact: String? = null,
+    /**
      * #207：产物**未经有效验收**就被放行了。
      *
      * 两种情况会置位：验收方输出连续解析不出结论、或连续判不通过达到重试上限。
@@ -378,6 +404,8 @@ data class ClusterNode(
         put("assignee", assignee ?: ""); put("dependsOn", JSONArray(dependsOn))
         put("state", state.name); put("attempt", attempt)
         put("lastError", lastError ?: ""); put("artifact", artifact ?: "")
+        put("plan", plan ?: ""); put("lastArtifact", lastArtifact ?: "")
+        put("revised", revised)
         put("releaseUnverified", releaseUnverified)
     }
 
@@ -391,6 +419,9 @@ data class ClusterNode(
             attempt = o.optInt("attempt", 0),
             lastError = o.optString("lastError").takeIf { it.isNotBlank() },
             artifact = o.optString("artifact").takeIf { it.isNotBlank() },
+            plan = o.optString("plan").takeIf { it.isNotBlank() },
+            lastArtifact = o.optString("lastArtifact").takeIf { it.isNotBlank() },
+            revised = o.optBoolean("revised", false),
             releaseUnverified = o.optBoolean("releaseUnverified", false)
         )
     }

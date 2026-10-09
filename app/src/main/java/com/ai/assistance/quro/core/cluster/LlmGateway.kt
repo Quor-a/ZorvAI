@@ -529,7 +529,14 @@ class ScriptedLlmGateway(private val script: (String) -> String) : LlmGateway {
         model: ModelProfile, systemPrompt: String, userPrompt: String,
         history: List<Pair<String, String>>, jsonMode: Boolean,
         temperature: Float, maxTokens: Int
-    ): LlmOutcome = LlmOutcome(script(userPrompt), model.id, script(userPrompt).length / 3)
+    ): LlmOutcome {
+        // 🔴 这里原写成 `LlmOutcome(script(userPrompt), model.id, script(userPrompt).length / 3)`
+        // —— script 被调用了**两次**。无状态脚本看不出问题，
+        // 但测试里凡是带计数、记录或任何副作用的脚本都会被放大一倍，
+        // 于是「执行了几次」这种断言读到的是假数字（实测 1 次被读成 2 次）。
+        val out = script(userPrompt)
+        return LlmOutcome(out, model.id, out.length / 3)
+    }
 
     override fun stream(
         model: ModelProfile, systemPrompt: String, userPrompt: String,

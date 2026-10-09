@@ -202,21 +202,32 @@ object ClusterCapability {
      * 把「谁都能沾一点」的词塞进同一组会凭空派单，比漏派更坏。
      */
     private val SYNONYM_GROUPS: List<Set<String>> = listOf(
-        setOf("研究", "调研", "调查", "查证"),
-        setOf("搜索", "检索", "查询", "查找"),
-        setOf("写作", "撰写", "撰稿", "起草"),
+        setOf("研究", "调研", "调查", "查证", "research"),
+        setOf("搜索", "检索", "查询", "查找", "search", "web"),
+        setOf("写作", "撰写", "撰稿", "起草", "writing"),
         setOf("文案", "宣传", "推广", "卖点"),
-        setOf("设计", "策划", "构思"),
-        setOf("前端", "网页", "页面", "界面"),
-        setOf("审查", "评审", "验收", "核对"),
-        setOf("测试", "验证", "自查", "校验"),
-        setOf("优化", "改进", "提速"),
-        setOf("输出", "产出", "交付"),
+        setOf("设计", "策划", "构思", "design"),
+        // #210 中英混排：技能名/描述多是英文（frontend-dev / html / css），
+        // 主持拆的能力标签是中文或中英混写（「JavaScript 编程」）。
+        // 同一组里必须**同时放中英两套说法**，否则 contains 跨语言恒 false ——
+        // 这就是 #197「中英断层」的真身：不是匹配算法错，是根本没有桥。
+        setOf("前端", "网页", "页面", "界面", "html", "css", "javascript",
+            "js", "frontend", "组件", "布局", "落地页"),
+        setOf("编程", "编码", "开发", "写代码", "脚本", "程序",
+            "code", "coding", "development", "dev", "program", "script"),
+        setOf("审查", "评审", "验收", "核对", "review", "critic"),
+        setOf("测试", "验证", "自查", "校验", "test", "verify"),
+        setOf("优化", "改进", "提速", "optimize", "performance"),
+        setOf("输出", "产出", "交付", "output", "deliver"),
         // #202：实测「定义子任务」撞不上 planning 的「拆解/任务分解」——
         // 主持与策划对同一件事用不同词，且都不是对方的字面。
         setOf("拆解", "拆分", "分解", "拆任务", "任务分解", "定义子任务", "定义任务"),
         setOf("规划", "计划", "排期", "策划案", "方案"),
         setOf("目标", "指标", "目的"),
+        setOf("文档", "说明书", "markdown", "doc", "docs"),
+        setOf("部署", "上线", "发布", "deploy", "publish", "ship"),
+        setOf("数据", "统计", "报表", "分析", "data", "analysis"),
+        setOf("新闻", "资讯", "热点", "news"),
     )
 
     /** 能力片段的切分符：标点 + 空白。斜杠与连字符**保留**（「HTML/CSS」是一个整体）。 */

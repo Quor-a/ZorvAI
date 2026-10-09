@@ -1,6 +1,12 @@
 ---
 name: frontend-dev
-description: |
+description: Full-stack frontend development combining premium UI design, cinematic animations, and production-ready code. Use when building or improving web/mobile frontends, components, pages, or apps with high design quality.
+trigger: /frontend-dev
+# #210：这里原本是空 description（连 manifest 里的描述都没带进来），
+# 加上技能名是英文、正文也是英文 —— 中文能力标签（「JavaScript 编程」）
+# 一个都撞不上，角色被判「不具备能力」→ 节点直接 SKIPPED。
+# abilityWords 就是给能力核对用的显式词表，中英文都要写。
+abilityWords: 前端 网页 页面 界面 html css javascript js 编程 编码 实现界面 前端开发 组件 交互 动画 落地页
 ---
 
 # Frontend Studio
