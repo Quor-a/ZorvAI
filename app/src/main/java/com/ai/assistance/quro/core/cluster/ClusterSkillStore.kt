@@ -279,9 +279,46 @@ object ClusterSkillStore {
     fun effectiveAbilityWords(skill: ClusterSkill): List<String> {
         val fromField = skill.abilityWords.split(" ").map { it.trim() }.filter { it.isNotBlank() }
         if (fromField.isNotEmpty()) return fromField.map { it.lowercase() }
-        return NAME_FALLBACK_WORDS[skill.name.lowercase()]
+        NAME_FALLBACK_WORDS[skill.name.lowercase()]
             ?.split(" ")?.filter { it.isNotBlank() }?.map { it.lowercase() }
-            ?: emptyList()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { return it }
+        // #210：手写表也没覆盖 → 自动切词，绝不返回空（见 [heuristicWords]）。
+        return heuristicWords(skill)
+    }
+
+    /** 切词时丢掉的英文虚词与噪音（中英混排的 description 里很多）。 */
+    private val HEURISTIC_STOP = setOf(
+        "the", "and", "for", "with", "use", "when", "your", "you", "are", "this",
+        "that", "from", "com", "www", "http", "https", "skill", "skills", "based",
+        "into", "how", "what", "all", "can", "via", "not", "any", "its", "them",
+    )
+
+    /**
+     * #210：从技能名/描述**自动切词**的最后一道兜底。
+     *
+     * 为什么必须有它：随包 81 个技能里只有 [NAME_FALLBACK_WORDS] 那 20 个手写了
+     * 中文能力词。其余（frontend-dev / Docker / tavily / …）一旦没填 abilityWords，
+     * [effectiveAbilityWords] 就返回**空列表** —— 于是这个技能对任何能力都得 0 分，
+     * 绑着它的角色在 CAPABILITY 阶段一律被判「不具备能力」→ 节点 SKIPPED。
+     *
+     * 用户实测「JavaScript 编程匹配不上已绑定的 frontend-dev」就是这么来的：
+     * 不是打分公式错，是**根本没有可供匹配的词**。
+     * 空列表等于「这个技能等于不存在」，比给个大概坏得多。
+     */
+    private fun heuristicWords(skill: ClusterSkill): List<String> {
+        fun cut(s: String): List<String> =
+            Regex("[^a-z0-9\u4e00-\u9fff]+")
+                .split(s.lowercase())
+                .filter { w ->
+                    w.isNotBlank() && w !in HEURISTIC_STOP &&
+                        // 中文片段全收；英文要 >=3 字符（2 字符的 ui/if 太容易误命中）
+                        (w.all { it.code in 0x4E00..0x9FFF } || w.length >= 3)
+                }
+        // 技能名优先（它最能代表这个技能是什么），描述只作补充。
+        return (cut(skill.name) + cut(skill.description + " " + skill.trigger))
+            .distinct()
+            .take(24)
     }
 
     /**

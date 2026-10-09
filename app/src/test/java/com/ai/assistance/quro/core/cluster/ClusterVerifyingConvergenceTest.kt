@@ -65,11 +65,16 @@ class ClusterVerifyingConvergenceTest {
     private fun neverPass(prompt: String): String = when {
         "定义验收标准" in prompt ->
             """{"acceptance":["朗朗上口且不超过20字"],"nodes":[{"id":"n1","title":"子任务1","instruction":"做研究并输出结论","dependsOn":[]}]}"""
-        "请裁决" in prompt ->
+        // 🔴 关键字跟着**当前**提示词：#211 之后裁决提示词里已无「请裁决」二字，
+        // 这里若继续按旧关键字匹配，裁决输出会落进 else 被当成执行产物，
+        // 裁决解析失败走兜底 —— 测试就测不到真正的裁决/验收路径了。
+        "confidence" in prompt ->
+            """{"summary":"方案","options":[{"name":"A","pros":"快","cons":"糙"}],"recommend":"A","steps":["执行第一步"],"risks":["无"],"confidence":0.8}"""
+        "chosen" in prompt ->
             """{"pass":true,"reason":"方案可行","steps":["执行第一步"],"chosen":"研究员"}"""
-        "只输出 JSON" in prompt && "待验收产物" in prompt ->
+        "待验收产物" in prompt ->
             """{"pass":false,"reason":"不够朗朗上口","checks":[{"index":1,"pass":false,"note":"不够朗朗上口"}],"failed":["换更押韵的写法"]}"""
-        "全部子任务已完成" in prompt ->
+        "请如实总结" in prompt || "全部子任务已完成" in prompt ->
             """{"summary":"slogan 已产出"}"""
         else -> "角色输出：${prompt.take(20)}"
     }
@@ -78,11 +83,16 @@ class ClusterVerifyingConvergenceTest {
     private fun alwaysPass(prompt: String): String = when {
         "定义验收标准" in prompt ->
             """{"acceptance":["朗朗上口且不超过20字"],"nodes":[{"id":"n1","title":"子任务1","instruction":"做研究并输出结论","dependsOn":[]}]}"""
-        "请裁决" in prompt ->
+        // 🔴 关键字跟着**当前**提示词：#211 之后裁决提示词里已无「请裁决」二字，
+        // 这里若继续按旧关键字匹配，裁决输出会落进 else 被当成执行产物，
+        // 裁决解析失败走兜底 —— 测试就测不到真正的裁决/验收路径了。
+        "confidence" in prompt ->
+            """{"summary":"方案","options":[{"name":"A","pros":"快","cons":"糙"}],"recommend":"A","steps":["执行第一步"],"risks":["无"],"confidence":0.8}"""
+        "chosen" in prompt ->
             """{"pass":true,"reason":"方案可行","steps":["执行第一步"],"chosen":"研究员"}"""
-        "只输出 JSON" in prompt && "待验收产物" in prompt ->
+        "待验收产物" in prompt ->
             """{"pass":true,"reason":"满足验收标准","checks":[{"index":1,"pass":true,"note":"已完成"}],"failed":[]}"""
-        "全部子任务已完成" in prompt ->
+        "请如实总结" in prompt || "全部子任务已完成" in prompt ->
             """{"summary":"slogan 已产出"}"""
         else -> "角色输出：${prompt.take(20)}"
     }

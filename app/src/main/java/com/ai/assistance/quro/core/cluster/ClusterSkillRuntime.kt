@@ -54,6 +54,15 @@ object ClusterSkillRuntime {
      */
     const val MAX_TOOLS_PER_ROLE = 20
 
+    /**
+     * #212：工具**全开**的上限。工具总数不超过它就一股脑全给，
+     * 不再按「分工需要」裁剪（见 [toolsFor] 的注释）。
+     *
+     * 只有当工具多到会挤爆上下文时才退化成按需裁剪，
+     * 这个数设得很宽松，正常情况永远走全开。
+     */
+    const val TOOL_FULL_OPEN_LIMIT = 80
+
     /** 单个角色注入的技能正文总字符上限。 */
     const val MAX_SKILL_TEXT_CHARS = 6000
 
@@ -169,28 +178,23 @@ object ClusterSkillRuntime {
         val picked: List<QuroToolSpec> = if (whitelist.isNotEmpty()) {
             // 显式白名单：按用户写的顺序保留，未知工具名静默丢弃（不报错，工具可能已下线）
             allTools.filter { it.name in whitelist }.take(MAX_TOOLS_PER_ROLE)
+        } else if (allTools.size > TOOL_FULL_OPEN_LIMIT) {
+            // 工具多到会挤爆上下文时才退化成按需裁剪
+            pickByRelevance(role, allTools)
         } else {
-            // 分类查询走 ToolCapabilityDirectory.getToolInfo(name)（目录是 install 时的快照，
-            // 未 install 的工具返回 null → 记 0 分，靠关键词兜底，不会因此漏掉新工具）。
-            val keywords = kindKeywords(role.role)
-            val scored = allTools.map { spec ->
-                var score = 0
-                preferredCategories(role.role).forEachIndexed { idx, cat ->
-                    if (categoryOf(spec.name) == cat) {
-                        // 越靠前的类别权重越高
-                        score += (preferredCategories(role.role).size - idx) * 10
-                    }
-                }
-                val lower = spec.name.lowercase()
-                keywords.forEach { kw ->
-                    if (lower.contains(kw)) score += 6
-                }
-                spec to score
-            }
-            scored.filter { it.second > 0 }
-                .sortedByDescending { it.second }
-                .take(MAX_TOOLS_PER_ROLE)
-                .map { it.first }
+            // 🔴 #212：**默认全开**。
+            //
+            // 原来这里按「分工需要」打分裁剪，最多只给 MAX_TOOLS_PER_ROLE(20) 个。
+            // 实测后果：执行角色需要的 write_file / shell / browser 之类
+            // 一旦没被关键词或类别命中就被砍掉，它**想干活却没有工具** ——
+            // 于是只能输出一段文字说明，甚至什么都产不出来，
+            // 验收方看到的就是「待验收产物为空」。用户原话：
+            // 「所有成员开开放所有工具能力而不是只是给需要的」。
+            //
+            // 「给需要的」听起来合理，但**需要什么只有模型执行到那一步才知道**，
+            // 提前替它猜，猜错就是整个子任务空转。
+            // 真要限，用 toolWhitelist 显式圈定 —— 那是明确意图，不是猜测。
+            allTools
         }
 
         // 🔴 #200：先硬过滤全局技能激活工具（`skill__xxx`），再过过评审禁用。
@@ -200,6 +204,33 @@ object ClusterSkillRuntime {
         // 直接抽全局技能正文 ——隔离弱了一半，而且它还恰好命中关键词被强得分优先下发。
         val isolated = picked.filterNot { it.name.startsWith(GLOBAL_SKILL_TOOL_PREFIX) }
         return if (role.role.isVerifier) isolated.filterNot { it.name in MUTATING_TOOLS } else isolated
+    }
+
+    /**
+     * #212：按需裁剪 —— **只在工具总数超过 [TOOL_FULL_OPEN_LIMIT] 时**才用。
+     *
+     * 分类 + 关键词打分，取前 [MAX_TOOLS_PER_ROLE] 个。
+     * 保留它不是因为默认需要，而是给「工具真的多到失控」留一条退路。
+     */
+    private fun pickByRelevance(role: RoleProfile, allTools: List<QuroToolSpec>): List<QuroToolSpec> {
+        val cats = preferredCategories(role.role)
+        val keywords = kindKeywords(role.role)
+        val scored = allTools.map { spec ->
+            var score = 0
+            cats.forEachIndexed { idx, cat ->
+                if (categoryOf(spec.name) == cat) {
+                    // 越靠前的类别权重越高
+                    score += (cats.size - idx) * 10
+                }
+            }
+            val lower = spec.name.lowercase()
+            keywords.forEach { kw -> if (lower.contains(kw)) score += 6 }
+            spec to score
+        }
+        return scored.filter { it.second > 0 }
+            .sortedByDescending { it.second }
+            .take(MAX_TOOLS_PER_ROLE)
+            .map { it.first }
     }
 
     /** 查工具所属分类；目录未收录时返回 null（不抛异常）。 */

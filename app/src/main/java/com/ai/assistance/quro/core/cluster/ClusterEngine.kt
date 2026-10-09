@@ -154,7 +154,26 @@ class ClusterEngine(
     // ——————————————— 阶段 ———————————————
 
     /** INTAKE：主持先定"什么算做完"，没有验收标准不许开工 */
+    /**
+     * #210：把技能库里**真实存在**的能力词摊给主持看。
+     *
+     * 为什么必须给：主持不知道库里有什么，只能凭训练知识自由发挥写标签
+     * （实测写出「JavaScript 编程」，而技能词是「前端/网页/html/javascript」），
+     * 于是标签一个都撞不上 → CAPABILITY 判「无人具备」→ 节点 SKIPPED。
+     * 主持措辞的自由度在这里不是优点，是故障源；给词表是治本。
+     */
+    private fun capabilityVocabulary(): String = runCatching {
+        ClusterSkillStore.load(context)
+            .filter { it.enabled }
+            .map { s ->
+                val words = ClusterSkillStore.effectiveAbilityWords(s).take(4)
+                if (words.isEmpty()) s.name else s.name + "：" + words.joinToString(" ")
+            }
+            .joinToString("\n")
+    }.getOrDefault("")
+
     private suspend fun intake(cluster: ClusterConfig, t: ClusterTask) {
+        val vocab = capabilityVocabulary()
         val prompt = """
 用户目标：${t.goal}
 
@@ -170,6 +189,9 @@ class ClusterEngine(
 ability 怎么写：写**手艺名词**，不要写句子。
 好：「视觉设计」「数据统计」「文案写作」「代码审查」「设备操作」
 坏：「帮我把页面做得好看一点」（这是句子不是能力，匹配不到任何技能）
+
+**优先从下面这份真实存在的能力词里挑**（写库里没有的词 = 匹配不到任何技能 = 该子任务会被判「无人具备」而跳过）：
+${if (vocab.isNotBlank()) vocab else "(技能库为空)"}
 
 只输出 JSON，不要任何额外文字：
 {"acceptance":["...","..."],"nodes":[{"id":"n1","title":"...","instruction":"...","ability":"...","dependsOn":[]}]}
@@ -359,11 +381,16 @@ ability 怎么写：写**手艺名词**，不要写句子。
 子任务「${node.title}」：${node.instruction}
 ${if (node.lastError != null) "⚠ 上一次失败：${node.lastError}，你必须换一种做法。" else ""}
 
-请给出你的执行方案。要求具体、可执行、标明风险。
-只输出 JSON：{"summary":"...","steps":["..."],"risks":["..."],"confidence":0.8}
+请**按顺序**走完这四步再输出（不许跳过讨论直接给步骤）：
+1. 理解：这个子任务真正要交付的东西是什么（一句话）；
+2. 讨论：至少两条可选做法，各自的代价与风险（只列一条等于没讨论）；
+3. 建议：你推荐哪一条，为什么（要和上面的代价对得上）；
+4. 计划：把推荐做法拆成可照做的步骤。
+
+只输出 JSON：{"summary":"...","options":[{"name":"...","pros":"...","cons":"..."}],"recommend":"...","steps":["..."],"risks":["..."],"confidence":0.8}
 """.trimIndent()
 
-        val out = callRole(cluster, t, role, persona, prompt) ?: return null
+        val out = callRole(cluster, t, role, persona, prompt)?.outcome ?: return null
         val display = persona.name
         emit(ClusterEvent.RoleUtterance(t.id, c.personaId, out.text))
         return display to out.text
@@ -378,8 +405,14 @@ ${if (node.lastError != null) "⚠ 上一次失败：${node.lastError}，你必�
 子任务「${node.title}」已收到以下方案：
 ${node.artifact.orEmpty()}
 
-请裁决：选出或合并为一个执行计划，说明理由。若全部不可行，pass=false 并说明缺什么。
-只输出 JSON：{"pass":true,"reason":"...","steps":["..."],"chosen":"角色名"}
+请**按顺序**输出（不许只给结论）：
+1. 点评：逐份方案的可取之处与问题（只夸不评等于没审）；
+2. 取舍：选哪一份 / 怎么合并，理由是什么；
+3. 建议：执行时必须注意的点（写进 advice，执行方会照着做）；
+4. 计划：最终执行步骤。
+
+若全部不可行，pass=false，并说明**缺什么**、**补上什么才可行**。
+只输出 JSON：{"pass":true,"reason":"...","reviews":[{"who":"...","pro":"...","con":"..."}],"advice":["..."],"steps":["..."],"chosen":"角色名"}
 """.trimIndent()
 
         val out = callHost(cluster, t, prompt)
@@ -414,7 +447,11 @@ ${node.artifact.orEmpty()}
             return
         }
         val steps = o?.optJSONArray("steps")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
-        node.artifact = steps.joinToString("\n")
+        // #210：计划另存一份。EXECUTING 会把 artifact 覆盖成产物，
+        // 返工时还要拿计划当底稿，不能只留一份。
+        val planText = steps.joinToString("\n")
+        node.plan = planText
+        node.artifact = planText
         node.state = NodeState.EXECUTING
         t.state = ClusterTaskState.EXECUTING
     }
@@ -469,7 +506,9 @@ ${node.artifact.orEmpty()}
                 "这是**降级采用**不是裁决通过，后续验收仍会兜一道。",
             "主持"
         ))
-        node.artifact = steps.joinToString("\n")
+        val planText = steps.joinToString("\n")
+        node.plan = planText
+        node.artifact = planText
         node.state = NodeState.EXECUTING
         t.state = ClusterTaskState.EXECUTING
     }
@@ -486,36 +525,117 @@ ${node.artifact.orEmpty()}
             node.lastError = "人格卡缺失"; node.state = NodeState.FAILED; t.state = ClusterTaskState.REPLANNING; return
         }
 
+        // #210：返工时必须带着「上一版产物 + 驳回意见」。
+        // 少了其中任何一个，角色的「修改」都会退化成「重新想象一份」：
+        // 只有意见没底稿 → 不知道从哪改；只有底稿没意见 → 不知道差在哪。
+        // 两种情况的结果都是产出同质产物 → 再次被驳回 → 空转烧 token。
+        val revise = buildString {
+            val rejected = node.lastArtifact
+            val note = node.lastError
+            if (rejected.isNullOrBlank() && note.isNullOrBlank()) return@buildString
+            appendLine()
+            appendLine("⚠ 这是**返工**：上一版已被验收驳回。请针对驳回意见修改，不要从零重写。")
+            if (!note.isNullOrBlank()) appendLine("驳回意见（逐条照着改，改完再自查一遍）：\n$note")
+            if (!rejected.isNullOrBlank()) {
+                appendLine("上一版产物（在它基础上改，保留仍然合格的部分）：")
+                appendLine(rejected.take(6000))
+            }
+            appendLine("只输出**修改后的完整产物**，不要输出修改说明。")
+        }
+        val planText = node.plan?.takeIf { it.isNotBlank() } ?: node.artifact.orEmpty()
         val prompt = """
 请按以下执行计划完成子任务「${node.title}」，直接产出成果内容（不要只说"我会怎么做"）。
+
+按顺序走完再输出（思考过程不用写出来，产物里也不要写）：
+1. 目标：本子任务要交付什么（先想清楚，一句话）；
+2. 对照：验收标准逐条对应到你要产出的内容；
+3. 执行：按计划产出**完整**成果；
+4. 自查：逐条核对验收标准，发现不满足的**当场补齐**再交付。
+
 执行计划：
-${node.artifact.orEmpty()}
+$planText
 
 子任务说明：${node.instruction}
 验收标准：
 ${t.acceptance.joinToString("\n") { "- $it" }}
-""".trimIndent()
+$revise""".trimIndent()
 
-        val out = callRole(cluster, t, role, persona, prompt)
-        if (out == null) {
-            node.lastError = "执行失败"
+        val reply = callRole(cluster, t, role, persona, prompt)
+        if (reply == null) {
+            node.lastError = "执行失败（模型调用未返回）"
             node.attempt++
             t.replanCount++
             emit(ClusterEvent.Error(t.id, role.personaId, "执行失败"))
             t.state = if (t.replanCount > cluster.budget.maxReplan) ClusterTaskState.ESCALATED else ClusterTaskState.REPLANNING
             return
         }
-        node.artifact = out.text
+        val body = reply.outcome.text.trim()
+        // 🔴 #212：**空产物不许送去验收**。
+        //
+        // 用户实测：「⚠ 验收未通过：待验收产物为空，无任何源码或文件可供检查」。
+        // 拿空东西去问验收方，它只能回一句「产物为空」—— 白烧一轮 token，
+        // 而且这条「驳回意见」里**没有任何可执行的修改动作**，
+        // 按照 #211 的口径它连有效驳回都算不上。所以这里直接按执行环节失败处理。
+        if (body.isBlank() && reply.trace.isEmpty()) {
+            node.lastError = "执行未产出任何内容（既没有正文，也没有调用任何工具）"
+            node.attempt++
+            t.replanCount++
+            emit(ClusterEvent.Error(t.id, role.personaId, node.lastError!!))
+            t.state = if (t.replanCount > cluster.budget.maxReplan) ClusterTaskState.ESCALATED else ClusterTaskState.REPLANNING
+            return
+        }
+        // 没写正文但**真的调过工具**：把执行痕迹当产物交付。
+        // 否则用户看到的是「什么都没做」，而活其实已经干了 ——
+        // 这正是「执行可视化 / 产物交付」缺失的那一块。
+        node.artifact = if (body.isNotBlank()) {
+            body
+        } else {
+            buildString {
+                appendLine("（本轮未产出文字说明，以下为实际执行痕迹）")
+                reply.trace.forEach { (name, summary) -> appendLine("- $name：$summary") }
+            }
+        }
         // 🔴 带上正文：只有标题的话对话框里就是一条空气泡（用户报「输出不是正常文本内容和产物」）
-        emit(ClusterEvent.ArtifactProduced(t.id, node.id, role.personaId, node.title, out.text))
+        emit(ClusterEvent.ArtifactProduced(t.id, node.id, role.personaId, node.title, node.artifact!!))
         record(role.personaId, true)
         t.state = ClusterTaskState.VERIFYING
     }
+
+    /**
+     * #211：验收方给出的**一条具体问题**（含怎么改）。
+     *
+     * 只有 problem 没有 [fix] 的意见不算数 —— 它没法指导修改，
+     * 见 [verifying] 里的「无效驳回」判定。
+     */
+    private data class VerdictIssue(
+        val index: Int,
+        val problem: String,
+        val why: String,
+        val fix: String,
+        val severity: String,
+    )
 
     /** VERIFYING：验收。不过 → 携带失败原因回重规划（异常驱动重提方案） */
     private suspend fun verifying(cluster: ClusterConfig, t: ClusterTask) {
         val node = t.nodes.firstOrNull { it.state == NodeState.EXECUTING }
             ?: run { t.state = ClusterTaskState.DISPATCHING; return }
+
+        // 🔴 #212：产物为空 → **不调验收模型**。
+        // 它只会回一句「待验收产物为空」，既浪费一轮 token，
+        // 也拿不到任何能指导修改的信息。直接按执行环节没交付处理。
+        if (node.artifact.isNullOrBlank()) {
+            node.lastError = "执行环节没有交付任何产物，无法验收"
+            node.attempt++
+            emit(ClusterEvent.Error(t.id, node.assignee, node.lastError!!))
+            if (node.attempt >= cluster.budget.maxNodeAttempts) {
+                node.releaseUnverified = true
+                node.state = NodeState.DONE
+                t.state = if (t.finished()) ClusterTaskState.CONVERGING else ClusterTaskState.DISPATCHING
+                return
+            }
+            t.state = ClusterTaskState.EXECUTING
+            return
+        }
 
         // 优先挑评审角色；没有 CRITIC 就让主持代验（下面会给主持另一套更严的 prompt）。
         // 排除 node.assignee：执行者审自己的活等于没审。
@@ -530,6 +650,19 @@ ${t.acceptance.joinToString("\n") { "- $it" }}
         val prompt = buildString {
             appendLine(if (criticSide) "你是验收方。" else "你兼任验收方（集群里没有专职评审）。")
             appendLine()
+            // 🔴 #211：**逐步引导**，不许跳步直接甩一个 pass=false。
+            // 用户实测的原话：评审「只驳回」，既不说出了什么问题，也不说怎么改 ——
+            // 执行方拿到一句「不合格」只能重新想象一份，于是每轮都能被挑出新毛病，
+            // 产物永远收敛不了。所以这里强制它先把「复述 → 核对 → 定问题 → 给改法 → 判定」
+            // 五步走完，且第 4 步必须产出可直接照做的动作。
+            appendLine("请**严格按步骤**走，不要跳步直接给结论：")
+            appendLine("第1步 复述：这份产物实际交付了什么（只描述，不评价）。")
+            appendLine("第2步 核对：逐条比对验收标准，给出达标/不达标，并引用产物里的证据。")
+            appendLine("第3步 定问题：不达标的写清「问题是什么」「为什么不合格」。")
+            appendLine("第4步 给建议：每条问题都要给出**能直接照做**的修改动作；")
+            appendLine("       另外可给不阻断的改进意见（写进 suggestions）。")
+            appendLine("第5步 判定：综合给出 pass。")
+            appendLine()
             appendLine("验收标准（逐条判定，不允许整体泛判）：")
             t.acceptance.forEachIndexed { i, a -> appendLine("  " + (i + 1) + ". " + a) }
             appendLine()
@@ -539,14 +672,22 @@ ${t.acceptance.joinToString("\n") { "- $it" }}
             appendLine("判定规则：")
             appendLine("- 每条标准单独给结论，任一条不满足 → pass=false。")
             appendLine("- **找不到证据 = 不通过**。不要因为「看起来应该做了」就放行。")
-            appendLine("- 不通过时 failed 里逐条写：哪条不满足 + 具体该怎么改（要能直接指导重做）。")
+            appendLine("- 不达标的问题写进 issues，每条都要有：")
+            appendLine("  problem（问题是什么）、why（为什么不合格）、")
+            appendLine("  fix（**具体怎么改，要能直接照着做**，不许写「重新考虑一下」这种空话）。")
+            appendLine("- 🔴 **没有 fix 的驳回是无效驳回**：只判不合格却不给改法，")
+            appendLine("  本次验收会被退回要求补齐，不会拿它去驱动返工。")
+            appendLine("- 不影响达标的改进意见写进 suggestions。")
             appendLine()
             appendLine("只输出 JSON，不要任何额外文字：")
-            appendLine("{\"pass\":true/false,\"reason\":\"总体结论\",\"checks\":[{\"index\":1,\"pass\":true,\"note\":\"\"}],\"failed\":[\"\"]}")
+            appendLine("{\"restatement\":\"产物实际交付了什么\",\"pass\":true/false,\"reason\":\"总体结论\",")
+            appendLine(" \"checks\":[{\"index\":1,\"pass\":true,\"evidence\":\"...\",\"note\":\"\"}],")
+            appendLine(" \"issues\":[{\"index\":1,\"problem\":\"...\",\"why\":\"...\",\"fix\":\"具体怎么改\",\"severity\":\"blocker|major|minor\"}],")
+            appendLine(" \"suggestions\":[\"...\"]}")
         }
 
         val out = if (critic != null) {
-            personaOf(critic.personaId)?.let { callRole(cluster, t, critic, it, prompt) }
+            personaOf(critic.personaId)?.let { callRole(cluster, t, critic, it, prompt)?.outcome }
         } else {
             callHost(cluster, t, prompt)
         }
@@ -598,6 +739,21 @@ ${t.acceptance.joinToString("\n") { "- $it" }}
         val failedItems = o?.optJSONArray("failed")?.let { arr ->
             (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotBlank() }
         } ?: emptyList()
+        // #211：结构化的「问题 + 怎么改」。这才是能驱动返工的东西。
+        val issues = o?.optJSONArray("issues")?.let { arr ->
+            (0 until arr.length()).mapNotNull { i ->
+                runCatching {
+                    val c = arr.getJSONObject(i)
+                    VerdictIssue(
+                        index = c.optInt("index", 0),
+                        problem = c.optString("problem"),
+                        why = c.optString("why"),
+                        fix = c.optString("fix"),
+                        severity = c.optString("severity", "major"),
+                    )
+                }.getOrNull()
+            }
+        } ?: emptyList()
         // 逐条结论：验收标准里第 k 条没过，要能指出是哪条
         val checkNotes = o?.optJSONArray("checks")?.let { arr ->
             (0 until arr.length()).mapNotNull { i ->
@@ -613,6 +769,22 @@ ${t.acceptance.joinToString("\n") { "- $it" }}
         val unmet = checkNotes.filter { !it.first.second }
         val effectiveReason = buildString {
             if (reason.isNotBlank()) appendLine(reason)
+            // #211：把 issues 摊成「问题 → 怎么改」的清单再交回执行方。
+            // 差的一条一条列出来，比一大坨 reason 好用得多：
+            // 执行方能逐条勾掉，也能逐条自查。
+            if (issues.isNotEmpty()) {
+                appendLine("需修改的问题（照着下面的改法逐条改，改完自查）：")
+                issues.sortedByDescending {
+                    when (it.severity) { "blocker" -> 2; "major" -> 1; else -> 0 }
+                }.forEach { isu ->
+                    val std = t.acceptance.getOrNull(isu.index - 1)
+                    append("- ")
+                    if (std != null) append("【标准${isu.index}：$std】")
+                    if (isu.problem.isNotBlank()) append("问题：${isu.problem}")
+                    if (isu.why.isNotBlank()) append("（${isu.why}）")
+                    append("\n  怎么改：${isu.fix}\n")
+                }
+            }
             if (unmet.isNotEmpty()) {
                 append("未达标条目：")
                 unmet.forEach { (idxOk, note) ->
@@ -626,12 +798,44 @@ ${t.acceptance.joinToString("\n") { "- $it" }}
         // 解析失败已在上游分流到 UNPARSABLE 分支，走不到这里。
             if (isBlank()) append("验收方未给出有效结论")
         }.trim()
+        // 🔴 #211：**无效驳回**——判了不合格，却一条「怎么改」都没给。
+        //
+        // 拿这种意见去驱动返工，执行方只能重新想象一份，
+        // 于是「每次都能挑出新毛病、产物永远收敛不了」——
+        // 用户原话就是「盲目驳回」。所以它不算一次有效验收：
+        // 退回补齐，补不出来就如实记账放行，绝不拿它当返工依据。
+        val actionable = issues.count { it.fix.isNotBlank() }
+        if (!pass && actionable == 0) {
+            if (node.attempt < cluster.budget.maxNodeAttempts) {
+                node.attempt++
+                emit(ClusterEvent.Error(
+                    t.id, node.assignee,
+                    "验收方（$verifierName）判定不合格，但没给出具体怎么改，" +
+                        "已退回要求补齐修改意见（第 ${node.attempt} 次）"
+                ))
+                t.state = ClusterTaskState.VERIFYING
+                return
+            }
+            emit(ClusterEvent.Verdict(
+                t.id, node.id, true,
+                "验收方（$verifierName）连续 ${node.attempt} 次判定不合格，" +
+                    "但始终没给出可执行的修改意见，本次按**未能判定**处理，" +
+                    "产物由你自行复核；这不是「验收通过」。",
+                verifierName
+            ))
+            node.releaseUnverified = true
+            node.state = NodeState.DONE
+            t.state = if (t.finished()) ClusterTaskState.CONVERGING else ClusterTaskState.DISPATCHING
+            return
+        }
         emit(ClusterEvent.Verdict(t.id, node.id, pass, effectiveReason, verifierName))
 
         if (pass) {
             node.state = NodeState.DONE
             t.state = if (t.finished()) ClusterTaskState.CONVERGING else ClusterTaskState.DISPATCHING
         } else {
+            // #210：先把被驳回的这一版存下来当修改底稿（见 [executing] 的 revise 段）。
+            node.lastArtifact = node.artifact
             node.lastError = "验收未通过：" + effectiveReason
             node.attempt++
             // 🔴 #207：连败到上限就**降级放行**，不再回 REPLANNING。
@@ -648,6 +852,22 @@ ${t.acceptance.joinToString("\n") { "- $it" }}
             //
             // 与上面的 UNPARSABLE 分支同一口径：用尽重试后**如实记账并放行**，
             // 绝不当「验收通过」（那是编造），也绝不无限重做（那是烧钱）。
+            // 🔴 #210：第一次不通过 → 回 EXECUTING 让角色**按意见改**，
+            // 而不是回 REPLANNING 重走「派单→提方案→裁决→执行」四步。
+            //
+            // 旧路径每驳回一次就整轮重来，而角色拿到的还是最初那句任务说明，
+            // 它根本不知道上一版差在哪，于是产出同质的东西再被驳回 ——
+            // 这就是用户实测「没有给出修改意见→角色修改→再验收的闭环」的病灶。
+            // 改一次的成本远低于重做一轮，且只有"改"才算得上闭环。
+            if (!node.revised) {
+                node.revised = true
+                emit(ClusterEvent.Error(
+                    t.id, node.assignee,
+                    "验收未通过，已把驳回意见与上一版产物交回执行角色修改：" + effectiveReason
+                ))
+                t.state = ClusterTaskState.EXECUTING
+                return
+            }
             if (node.attempt >= cluster.budget.maxNodeAttempts) {
                 node.releaseUnverified = true
                 emit(
@@ -822,12 +1042,25 @@ ${stillFailed.joinToString("\n") { "- ${it.title}：${it.lastError}" }}
         return out
     }
 
+    /**
+     * #212：角色回复 = 模型输出 + **工具执行痕迹**。
+     *
+     * 为什么要把痕迹一起带出来：只有文本的话，「模型说自己做了」和「真做了」
+     * 在调用方看起来一模一样。执行阶段尤其致命 —— 模型调了工具写了文件，
+     * 却没在正文中复述，产物就是空的，验收只会看到「待验收产物为空」。
+     * 痕迹是用来兜住这种「干了活但没说」的情况的。
+     */
+    private data class RoleReply(
+        val outcome: LlmOutcome,
+        val trace: List<Pair<String, String>>,
+    )
+
     /** 角色发言：用它自己绑定的模型 —— 这就是"每个角色一条独立请求"的落点 */
     private suspend fun callRole(
         cluster: ClusterConfig, t: ClusterTask,
         role: RoleProfile, persona: com.ai.assistance.quro.core.QuroPersona,
         prompt: String
-    ): LlmOutcome? {
+    ): RoleReply? {
         val used = spend["${role.personaId}|${t.id}"] ?: 0
         if (used >= cluster.budget.maxTokensPerRole) {
             emit(ClusterEvent.Error(t.id, role.personaId, "该角色本任务 token 预算耗尽"))
@@ -879,7 +1112,7 @@ ${stillFailed.joinToString("\n") { "- ${it.title}：${it.lastError}" }}
         if (model.second) {
             emit(ClusterEvent.ModelSwitched(t.id, role.personaId, role.modelProfileId, out.modelId, model.first.displayName))
         }
-        return out
+        return RoleReply(out, toolTrace.toList())
     }
 
     /**
