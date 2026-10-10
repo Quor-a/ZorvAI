@@ -182,11 +182,19 @@ object ClusterSkillStore {
      * 从 `assets/cluster-skills/manifest.json` 播种集群技能。
      *
      * 幂等：守卫 + 已存在则跳过（用户删过的不会被加回）。
+     *
+     * 🔴 #214：`KEY_SEEDED` 必须**成功播种并落库后**才置 true。
+     * 旧实现先 `putBoolean(KEY_SEEDED, true)` 再读 assets —— 一旦 assets 读取失败
+     * （manifest 损坏/权限异常/文件被裁剪），守卫已被置位，之后每次 `load()` 都直接 return，
+     * 技能库永远播种不出来 → 角色绑定的 `cluster_xxx` id 全部查不到 →
+     * `ClusterCapability.audit` 的 `byId` 为空 → 只走 declaredScore（封顶 0.30 < 0.34）
+     * → 每个节点都判「无人具备」→ SKIPPED。这正是用户实测「角色明明绑定了 copywrite，
+     * host 却判无人具备」的直接根因之一。
      */
     fun seed(context: Context) {
         val prefs = context.getSharedPreferences("quro_cluster_skills", Context.MODE_PRIVATE)
-        if (prefs.getBoolean(KEY_SEEDED, false)) return
-        prefs.edit().putBoolean(KEY_SEEDED, true).apply()
+        // 自愈：守卫为 true 但库是空的（旧版本异常路径留下的坏状态）→ 强制重新播种。
+        if (prefs.getBoolean(KEY_SEEDED, false) && readRaw(context).isNotEmpty()) return
         runCatching {
             val am = context.assets
             val manifest = JSONObject(
@@ -211,6 +219,8 @@ object ClusterSkillStore {
                 list.add(parsed)
             }
             if (list.size != existing.size) writeRaw(context, list)
+            // 🔴 #214：全部成功后才置位。这样 assets 读取失败时下次还能重试。
+            prefs.edit().putBoolean(KEY_SEEDED, true).apply()
         }
     }
 

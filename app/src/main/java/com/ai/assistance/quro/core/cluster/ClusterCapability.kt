@@ -146,7 +146,13 @@ object ClusterCapability {
             // 现在只收**够短**的整块（<=6 字，如「HTML/CSS」「联网搜索」），
             // 长句交给下面的 2 字窗口拆 —— 宁可漏掉整句精确匹配，
             // 也不能让「长句含短词」变成普遍误判。
-            if (part !in STOP && part.length <= 6) out += part
+            //
+            // 🔴 #216：6 字上限**只应用于中文**。英文/数字词（不含 CJK）不受此限——
+            // strategy(8)/planning(8)/copywrite(9)/brainstorming(12) 全是英文能力词，
+            // 若也套 6 字上限会被全部丢弃 → abilityTerms 返回空 → hitCount 循环不执行 →
+            // 绑定任何技能都判 0 分 →「明明绑了技能，host 仍说无人具备」。
+            val isCjk = part.all { it.code in 0x4E00..0x9FFF }
+            if (part !in STOP && (!isCjk || part.length <= 6)) out += part
             // 中文长词再切 2 字窗口
             // 🔴 #202：原来只切**前 4 个**窗口（`until minOf(4, ...)`），
             // 实测「承接功能目标定义子任务」只切出 [承接, 接功, 功能, 能目]，
@@ -335,8 +341,14 @@ object ClusterCapability {
      * 但如果不设门槛，「产出可验收的方案片段」这种整句会
      * 因为技能里有「验收」「方案」二字就整段命中 —— 实测导致 8 个技能同分 0.5，
      * 派单彻底失去区分度。所以只有**短词**才允许被长句包含式命中。
+     *
+     * 🔴 #216：**英文词不受 4 字上限**。strategy/planning/copywrite/brainstorming
+     * 全是 >4 字符的英文能力词，若套用 `length in 2..4` 会被全部挡掉 →
+     * byDesc 恒 false → 绑了技能仍判 0 分。英文词只要求 >=3 字符（>=2 太容易误命中）。
      */
-    private fun isShortWord(w: String): Boolean = w.length in 2..4
+    private fun isShortWord(w: String): Boolean =
+        if (w.all { it.code in 0x4E00..0x9FFF }) w.length in 2..4
+        else w.length >= 3
 
     /**
      * #202：技能 name / description / trigger 字段的**分词符**。
@@ -514,7 +526,7 @@ object ClusterCapability {
     }
 
     /**
-     * 执行补救。挂起 —— [Remedy.FETCH_OPEN] 要联网装技能。
+     * 执行补救。挂起 —— [Remedy.FETCH_OPEN] 要联网装技能，[Remedy.FORGE] 要造新角色。
      *
      * @param context 上下文
      * @param cov 覆盖缺口
@@ -588,16 +600,85 @@ object ClusterCapability {
                     "开源技能 ${pick.key} 安装失败：${installed.exceptionOrNull()?.message ?: "未知原因"}"
                 )
             }
-            return RemedyResult(
-                Remedy.FETCH_OPEN, false,
-                "本地与开源社区都没找到能覆盖「${cov.ability}」的技能"
-            )
+            // ③ 本地与开源都找不到 → 造一个新角色承接（#215：缺什么让主持加）
+            return forgeRole(context, cov)
         }
 
-        // ③ 不允许联网 → 如实回报，不偷偷降级
+        // 不允许联网：本地也没有 → 同样尝试造角色（造角色不联网）
+        return forgeRole(context, cov)
+    }
+
+    /**
+     * #215：FORGE 档 —— 本地与开源都找不到覆盖该能力的技能时，
+     * **不再只是「如实回报缺口」然后跳过**，而是动态造一个新角色来承接。
+     *
+     * 用户原话：「没有能力就创造能力……缺什么让主持加或者自己给自己加，
+     * 缺成员让主持加或者自己创造一个，缺什么加什么，而不是盯着内置的那几个」。
+     *
+     * 造出来的角色：
+     * - 以「能力名」命名（如「视觉设计专员」），职责/禁忌/专业背景直接由缺口能力生成；
+     * - 绑定本地技能库里**最接近**的技能（若存在），并如实说明「该技能并不完全覆盖所需能力」；
+     * - 注册进集群，让后续节点真的能点它的名。
+     *
+     * 无论如何都会返回 ok=true —— 因为「造出角色」本身就是成功的补救动作；
+     * 若连角色都造不出来（存储失败）才返回 ok=false。
+     */
+    private suspend fun forgeRole(context: Context, cov: Coverage): RemedyResult {
+        val ability = cov.ability.ifBlank { cov.nodeTitle }
+        val safeName = ability
+            .trim()
+            .replace(Regex("[\\s,，。、；;：:（）()\\[\\]【】/]+"), "")
+            .take(12)
+            .ifBlank { "能力专员" }
+        val personaId = "persona_forge_${System.currentTimeMillis().toString().takeLast(8)}"
+
+        // 造人格卡：以该能力为身份，职责/禁忌/专业背景直接由缺口生成
+        val persona = com.ai.assistance.quro.core.QuroPersona(
+            id = personaId,
+            name = "${safeName}专员",
+            avatarEmoji = "🛠",
+            description = "为补足「$ability」而动态创建的角色",
+            roleSetting = buildString {
+                appendLine("你是本集群为补足「$ability」而动态创建的专家角色。")
+                appendLine()
+                appendLine("你的唯一使命：承接一切与「$ability」相关的子任务并给出可执行、可验收的产出。")
+                appendLine("你不必等别人给你能力——你本身就是为这项能力而生的。")
+            }.trim(),
+            chatSetting = "直接动手，缺什么就明确说出来让主持补。",
+            tags = listOf("集群角色", "动态创建", safeName),
+        )
+        try {
+            com.ai.assistance.quro.core.QuroPersonaRepository(context).upsert(persona)
+        } catch (e: Throwable) {
+            return RemedyResult(Remedy.FORGE, false, "创建角色人格卡失败：${e.message ?: e.javaClass.simpleName}")
+        }
+
+        // 绑定最接近的本地技能（若有）
+        val nearest = findLocalMatch(context, cov.ability, excludeIds = emptySet())
+        val skillIds = nearest?.let { listOf(it.id) } ?: emptyList()
+        val role = RoleProfile(
+            personaId = personaId,
+            role = RoleKind.EXECUTOR,
+            duties = listOf("承接并完成「$ability」相关子任务"),
+            taboos = listOf("不得推诿说「我没有这项能力」——你就是为此而建"),
+            skills = listOf("擅长：$ability"),
+            skillIds = skillIds,
+        )
+        try {
+            RoleRegistry.upsert(context, role)
+        } catch (e: Throwable) {
+            return RemedyResult(Remedy.FORGE, false, "角色已建人格卡但登记失败：${e.message ?: e.javaClass.simpleName}")
+        }
+
+        val skillNote = if (nearest != null) {
+            "；并绑上了最接近的本地技能「${nearest.name}」（注意它并不完全等于所需能力）"
+        } else {
+            "；本地与开源都没有完全匹配的技能，该角色将基于任务描述直接产出"
+        }
         return RemedyResult(
-            Remedy.GRANT_LOCAL, false,
-            "本地技能库也没有覆盖「${cov.ability}」的技能，且当前未允许联网获取"
+            Remedy.FORGE, true,
+            "已动态创建角色「${persona.name}」（${personaId}）来承接「$ability」$skillNote",
+            skillIds, personaId
         )
     }
 

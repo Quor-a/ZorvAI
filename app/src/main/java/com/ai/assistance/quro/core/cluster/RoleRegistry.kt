@@ -22,6 +22,12 @@ object RoleRegistry {
     const val HOST_PERSONA_ID = "persona_cluster_host"
     const val HOST_NAME = "主持"
 
+    /**
+     * #215 五专家默认播种：老用户升级后也能直接看到，不用再去角色卡里手动建。
+     * 只种一次（幂等），已存在则跳过；失败静默，不阻断启动。
+     */
+    private const val KEY_EXPERTS_SEEDED = "quro_cluster_experts_seeded_v1"
+
     /** 文档第四节标注「主持专用」的两个方法论包（会由 [bindHostSkills] 自动绑给主持）。 */
     private val HOST_ONLY_SKILLS = listOf("skill-fetch", "role-forge")
     private const val FILE = "quro_cluster_roles.json"
@@ -59,6 +65,81 @@ object RoleRegistry {
             saveRaw(context, roles)
         }
         bindHostSkills(context)
+        seedBuiltinExperts(context)
+    }
+
+    /**
+     * 测试专用入口：绕过 prefs 一次性守卫，强制重新播种。
+     * 生产代码不调用；仅 [ClusterExpertSeedTest] 使用。
+     */
+    internal fun seedBuiltinExpertsForTest(context: Context) {
+        val prefs = context.getSharedPreferences("quro_cluster", Context.MODE_PRIVATE)
+        // 先清掉守卫，让重复调用也能走到播种逻辑（内部仍有 personaId 查重，保证幂等）
+        val existing = loadRaw(context).map { it.personaId }.toSet()
+        seedBuiltinExpertsLocked(context, existing)
+    }
+
+    /**
+     * #215：把用户点名的五张专家卡默认播种进集群，老用户升级后立即可见。
+     *
+     * 为什么在这做而不是让用户手动建角：
+     * - 角色卡目录虽然已有这 5 张卡，但那是「候选」，不会出现在集群角色列表里；
+     * - 用户升级后打开设置页仍只有主持 → 感觉「什么都没改变」。
+     *
+     * 幂等：用 prefs 标记 + 按 personaId 查重，只种一次；已存在对应角色则跳过。
+     * 失败：任何一步异常都静默吞掉，绝不影响启动。
+     */
+    private fun seedBuiltinExperts(context: Context) {
+        val prefs = context.getSharedPreferences("quro_cluster", Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_EXPERTS_SEEDED, false)) return
+        val existing = loadRaw(context).map { it.personaId }.toSet()
+        seedBuiltinExpertsLocked(context, existing)
+        prefs.edit().putBoolean(KEY_EXPERTS_SEEDED, true).apply()
+    }
+
+    private fun seedBuiltinExpertsLocked(context: Context, existing: Set<String>) {
+        val seededIds = listOf(
+            "logic-thinker",
+            "prompt-engineer",
+            "ai-software-dev",
+            "bug-detector",
+            "completeness-auditor",
+        )
+        val personas = com.ai.assistance.quro.core.QuroPersonaRepository(context)
+        for (cardId in seededIds) {
+            val card = ClusterRoleCards.byId(cardId) ?: continue
+            val personaId = "persona_cluster_${card.id}_seed"
+            if (personaId in existing) continue
+            // 与 ClusterRoleCardTool.createRole 同一套技能解析：本地直接查，开源现拉现装。
+            val resolved = runCatching {
+                kotlinx.coroutines.runBlocking { card.skills.resolveForRole(context) }
+            }.getOrNull() ?: continue
+            val persona = com.ai.assistance.quro.core.QuroPersona(
+                id = personaId,
+                name = card.label,
+                avatarEmoji = card.emoji,
+                description = card.tagline,
+                roleSetting = buildString {
+                    appendLine(card.persona)
+                    if (!card.soul.isEmpty) {
+                        appendLine()
+                        appendLine(card.soul.render())
+                    }
+                }.trim(),
+                chatSetting = "以职责为准，动手执行，不空谈。",
+                tags = listOf("集群角色", card.kind.label, "角色卡"),
+            )
+            runCatching { personas.upsert(persona) }.getOrElse { continue }
+            val role = RoleProfile(
+                personaId = personaId,
+                role = card.kind,
+                duties = card.duties,
+                taboos = card.taboos,
+                skillIds = resolved.skillIds,
+                tags = card.tags,
+            )
+            runCatching { upsert(context, role) }.getOrElse { continue }
+        }
     }
 
     /**

@@ -3,6 +3,7 @@ package com.ai.assistance.quro.ui.dialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,12 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.style.BaselineShift
+import coil.compose.AsyncImage
 
 // ════════════════════════════════════════════════════════════════════
 //  第一部分：纯解析层（零 Compose 依赖，可直接单元测试）
@@ -91,7 +98,33 @@ sealed interface MdBlock {
      * `Text` 且只给 2dp 上下间距，导致整段文字糊成一坨（用户反馈"排版被限制死"）。
      */
     data class Paragraph(val text: String) : MdBlock
+
+    /** 独立成行的图片 `![alt](url)`。行内图片不渲染（AnnotatedString 装不下视图）。 */
+    data class Image(val url: String, val alt: String = "") : MdBlock
+
+    /** `<details><summary>…</summary>…</details>` 折叠区块。 */
+    data class Details(val summary: String, val body: String) : MdBlock
+
+    /**
+     * 块级数学公式 `$$…$$`（独立成行）。
+     *
+     * 行内 `$…$` 由 [parseInlineSpans] 处理；这里只管独占一行的展示级公式。
+     * 不做真 KaTeX 渲染（那需要 WebView，气泡里一条消息塞 N 个 WebView 会卡死），
+     * 但保证**公式内部不被 Markdown 拆烂**（`a_i` / `x^2` / `*` 都是公式语法）。
+     */
+    data class Math(val tex: String) : MdBlock
+
+    /**
+     * 文末脚注定义（`[^1]: 释义`）。
+     *
+     * 正文里的 `[^1]` 已渲染成上标角标，这里统一挂到文末给出释义 ——
+     * 旧实现只做了角标、没有释义，等于点了没反应。
+     */
+    data class Footnotes(val items: List<FootnoteItem>) : MdBlock
 }
+
+/** 一条脚注定义。[id] 不含方括号与 `^`。 */
+data class FootnoteItem(val id: String, val text: String)
 
 /**
  * 列表项。
@@ -118,10 +151,16 @@ data class InlineSpan(
     val strike: Boolean = false,
     val code: Boolean = false,
     val highlight: Boolean = false,
+    /** 上标（`^x^` 或脚注引用 `[^1]`）。 */
+    val sup: Boolean = false,
+    /** 下标（`~x~`，单波浪；双波浪是删除线）。 */
+    val sub: Boolean = false,
     /** 非空表示这是一个链接，值为目标 URL。 */
     val link: String? = null,
     /** 非空表示命中了 `<c=#RRGGBB>` 着色约定。 */
     val colorHex: String? = null,
+    /** 数学公式（`$…$` / `$$…$$`）：内部不做任何 Markdown 解析。 */
+    val math: Boolean = false,
 )
 
 private val RE_HEADING = Regex("^(#{1,6})\\s+(.*)$")
@@ -134,6 +173,22 @@ private val RE_UL_ITEM = Regex("^(\\s*)[-*+]\\s+(.*)$")
 private val RE_OL_ITEM = Regex("^(\\s*)(\\d+)[.)]\\s+(.*)$")
 private val RE_TASK = Regex("^\\[([ xX])\\]\\s*(.*)$")
 private val RE_FENCE = Regex("^\\s*(`{3,}|~{3,})\\s*([^\\s`]*)\\s*$")
+private val RE_DETAILS_OPEN = Regex("^\\s*<details>\\s*$", RegexOption.IGNORE_CASE)
+private val RE_DETAILS_CLOSE = Regex("^\\s*</details>\\s*$", RegexOption.IGNORE_CASE)
+private val RE_SUMMARY = Regex("^\\s*<summary>(.*?)</summary>\\s*$", RegexOption.IGNORE_CASE)
+private val RE_IMAGE_LINE = Regex("^\\s*!\\[([^\\]]*)\\]\\(([^)\\s]+)[^)]*\\)\\s*$")
+
+/** 脚注定义行：`[^1]: 释义`。 */
+private val RE_FOOTNOTE_DEF = Regex("^\\s*\\[\\^([^\\]]+)]\\s*:\\s*(.*)$")
+
+/**
+ * 美元符常量。
+ *
+ * 🔴 必须这么写：Kotlin 字符串里 `$` 是模板起始符，`"$$"` 编译不过。
+ *    用 charArray 构造最稳，不依赖编译器对转义的支持。
+ */
+private val MATH_DELIM = String(charArrayOf('$', '$'))
+private val MATH_DOLLAR = String(charArrayOf('$'))
 
 /**
  * 🔴 围栏闭合行判定：**整行只有同种标记符号**，且长度 >= 开启围栏（CommonMark §4.5）。
@@ -181,9 +236,22 @@ private fun splitTableRow(line: String): List<String> =
 fun parseMarkdown(src: String): List<MdBlock> {
     val lines = src.replace("\r\n", "\n").replace('\r', '\n').split("\n")
     val out = mutableListOf<MdBlock>()
+    val footnotes = mutableListOf<FootnoteItem>()
     var i = 0
     while (i < lines.size) {
         val line = lines[i]
+
+        // ── 脚注定义 `[^1]: 释义`：先抽出来，统一挂到文末 ──
+        //    模型常把脚注定义写在段落中间，就地渲染会把正文劈成两截。
+        if (RE_FOOTNOTE_DEF.matches(line)) {
+            val fm = RE_FOOTNOTE_DEF.find(line)!!
+            val defText = fm.groupValues[2].trim()
+            if (defText.isNotEmpty()) {
+                footnotes.add(FootnoteItem(fm.groupValues[1].trim(), defText))
+                i++
+                continue
+            }
+        }
 
         // ── 围栏代码块（优先级最高，内部一切 Markdown 都不解析）──
         val fence = RE_FENCE.find(line)
@@ -258,6 +326,34 @@ fun parseMarkdown(src: String): List<MdBlock> {
 
             RE_RULE.matches(line) -> { out.add(MdBlock.Rule); i++ }
 
+            // 块级公式：$$…$$ 独占一行
+            line.trim().startsWith(MATH_DELIM) && line.trim().endsWith(MATH_DELIM) &&
+                line.trim().length > MATH_DELIM.length * 2 -> {
+                val tl = line.trim()
+                out.add(MdBlock.Math(tl.substring(MATH_DELIM.length, tl.length - MATH_DELIM.length).trim()))
+                i++
+            }
+
+            RE_IMAGE_LINE.matches(line) -> {
+                val m = RE_IMAGE_LINE.find(line)!!
+                out.add(MdBlock.Image(m.groupValues[2], m.groupValues[1]))
+                i++
+            }
+
+            RE_DETAILS_OPEN.matches(line) -> {
+                i++
+                var summary = ""
+                val buf = StringBuilder()
+                while (i < lines.size) {
+                    val cur = lines[i]
+                    if (RE_DETAILS_CLOSE.matches(cur)) { i++; break }
+                    val sm = RE_SUMMARY.find(cur)
+                    if (sm != null) { summary = sm.groupValues[1].trim(); i++; continue }
+                    buf.append(cur).append('\n'); i++
+                }
+                out.add(MdBlock.Details(summary.ifBlank { "详情" }, buf.toString().trimEnd()))
+            }
+
             RE_QUOTE.matches(line) -> {
                 val buf = mutableListOf<String>()
                 while (i < lines.size && RE_QUOTE.matches(lines[i])) {
@@ -330,6 +426,8 @@ fun parseMarkdown(src: String): List<MdBlock> {
             }
         }
     }
+    // 脚注定义统一挂到文末，避免在正文中间插一坨小字打断阅读
+    if (footnotes.isNotEmpty()) out.add(MdBlock.Footnotes(footnotes))
     return out
 }
 
@@ -378,6 +476,37 @@ fun parseInlineSpans(src: String): List<InlineSpan> {
                 i = if (end > i) end + 1 else i + 1
             }
 
+            // 数学公式 $…$ / $$…$$：内部一律按字面输出，不做任何 Markdown 解析。
+            //
+            // 🔴 不保护会怎样：`$a_i + b_j$` 里的 `_i + b_` 会被当成斜体区间，
+            //    `$x^2$` 里的 `^2^` 会被当成上标，公式被拆成两半 —— 这是**当前的真实缺陷**，
+            //    模型一输出公式就烂。保护后至少原文完整、可读。
+            c == '$' -> {
+                val dbl = src.startsWith(MATH_DELIM, i)
+                val delim = if (dbl) MATH_DELIM else MATH_DOLLAR
+                val from = i + delim.length
+                val end = src.indexOf(delim, from)
+                if (end > from) {
+                    emit(src.substring(from, end)) { it.copy(math = true) }
+                    i = end + delim.length
+                } else {
+                    buf.append(c); i++
+                }
+            }
+
+            // 脚注引用 [^1] → 上标角标
+            //
+            // 🔴 **必须排在链接 `[text](url)` 之前**：两条都以 `[` 起手，
+            //    若链接在前，`[^1]` 会因找不到 `](` 而走 else 把 `[` 当字面量吐回 buf，
+            //    接着 `^1]` 又被上标分支吃掉一半 —— 脚注分支就成了永远进不去的死代码
+            //    （本轮实测：`结论[^1]` 一个上标都没有，测试直接钉住了这个顺序）。
+            c == '[' && i + 1 < n && src[i + 1] == '^' -> {
+                val close = src.indexOf(']', i)
+                if (close > i + 2) emit(src.substring(i + 2, close)) { it.copy(sup = true) }
+                else buf.append(c)
+                i = if (close > i + 2) close + 1 else i + 1
+            }
+
             // 链接 [text](url)
             c == '[' -> {
                 val close = src.indexOf(']', i)
@@ -416,6 +545,22 @@ fun parseInlineSpans(src: String): List<InlineSpan> {
                     }
                     i = end + 2
                 } else buf.append(c).also { i++ }
+            }
+
+            // 上标 ^x^
+            c == '^' && i + 1 < n && src[i + 1] != '^' -> {
+                val end = src.indexOf('^', i + 1)
+                if (end > i + 1) emit(src.substring(i + 1, end)) { it.copy(sup = true) }
+                else buf.append(c)
+                i = if (end > i + 1) end + 1 else i + 1
+            }
+
+            // 下标 ~x~（单波浪；双波浪 ~~…~~ 走下面的删除线）
+            c == '~' && i + 1 < n && src[i + 1] != '~' -> {
+                val end = src.indexOf('~', i + 1)
+                if (end > i + 1) emit(src.substring(i + 1, end)) { it.copy(sub = true) }
+                else buf.append(c)
+                i = if (end > i + 1) end + 1 else i + 1
             }
 
             // ~~删除线~~
@@ -740,19 +885,44 @@ fun RichText(
     // 标题/列表等块级样式则统一用 onBackground，避免用户消息里出现灰标题。
     val bodyColor = baseStyle.color
     val blocks = remember(text) { parseMarkdown(text) }
+    // #213 大纲折叠：被折叠标题的下标集合。长回答里点标题即可收起它到下一个
+    // 同级标题之间的全部内容 —— 相当于一份可交互目录，且不需要滚动定位机制
+    // （气泡在 LazyColumn 里，拿不到稳定的全局锚点，做滚动跳转反而会跳错消息）。
+    val collapsed = remember { mutableStateOf(emptySet<Int>()) }
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(MD_BLOCK_GAP),
         horizontalAlignment = if (textAlign == TextAlign.End) Alignment.End else Alignment.Start,
     ) {
-        blocks.forEach { block ->
+        // 折叠作用域：命中后，层级更深的所有块都不渲染，直到遇到同级或更高级标题
+        var skipLevel: Int? = null
+        blocks.forEachIndexed { idx, block ->
+            if (block is MdBlock.Heading) {
+                val cur = skipLevel
+                if (cur != null && block.level > cur) return@forEachIndexed
+                skipLevel = if (idx in collapsed.value) block.level else null
+            } else if (skipLevel != null) {
+                return@forEachIndexed
+            }
             when (block) {
-                is MdBlock.Heading -> MdHeading(block, cs, baseStyle, bodyColor, textAlign)
-                is MdBlock.Code -> MdCode(block, cs, baseStyle)
+                is MdBlock.Heading -> MdHeading(
+                    block, cs, baseStyle, bodyColor, textAlign,
+                    collapsible = block.level <= 3,
+                    collapsed = idx in collapsed.value,
+                    onToggle = {
+                        collapsed.value =
+                            if (idx in collapsed.value) collapsed.value - idx else collapsed.value + idx
+                    },
+                )
+                is MdBlock.Code -> CodeSourceView(block.code, block.lang)
                 is MdBlock.Quote -> MdQuote(block, cs, baseStyle, bodyColor, textAlign)
                 is MdBlock.Alert -> MdAlert(block, cs, baseStyle, bodyColor)
                 is MdBlock.ListBlock -> MdList(block, cs, baseStyle, bodyColor)
-                is MdBlock.Table -> MdTable(block, cs, baseStyle)
+                is MdBlock.Image -> MdImage(block, cs, onLinkClick)
+                is MdBlock.Details -> MdDetails(block, cs, baseStyle, bodyColor)
+                is MdBlock.Math -> MdMath(block, cs, baseStyle)
+                is MdBlock.Footnotes -> MdFootnotes(block, cs, baseStyle, bodyColor)
+                is MdBlock.Table -> MarkdownTableView(block.header, block.rows)
                 is MdBlock.Rule -> HorizontalDivider(
                     color = cs.outlineVariant.copy(alpha = 0.5f),
                     modifier = Modifier.padding(vertical = 2.dp),
@@ -781,13 +951,19 @@ private fun MdHeading(
     base: TextStyle,
     bodyColor: Color,
     textAlign: TextAlign = TextAlign.Start,
+    /** 是否可点击折叠（H1~H3 才有，更深层级折叠收益低还容易误触）。 */
+    collapsible: Boolean = false,
+    collapsed: Boolean = false,
+    onToggle: () -> Unit = {},
 ) {
     // 层级越高字号越大，但正文是 15sp，标题只留有限梯度，避免小屏上标题反而比正文还挤
     val size = when (b.level) {
         1 -> 22.sp; 2 -> 19.sp; 3 -> 17.sp; 4 -> 16.sp; else -> 15.sp
     }
     Column(
-        Modifier.fillMaxWidth(),
+        Modifier
+            .fillMaxWidth()
+            .then(if (collapsible) Modifier.clickable { onToggle() } else Modifier),
         horizontalAlignment = if (textAlign == TextAlign.End) Alignment.End else Alignment.Start,
     ) {
         if (b.level <= 2) {
@@ -796,39 +972,377 @@ private fun MdHeading(
                 .clip(RoundedCornerShape(2.dp)).background(cs.primary.copy(alpha = 0.7f)))
             Spacer(Modifier.height(6.dp))
         }
-        Text(
-            text = inlineToAnnotated(parseInlineSpans(b.text), cs, base),
-            style = base.copy(fontSize = size, fontWeight = FontWeight.Bold, color = bodyColor, lineHeight = size * 1.3f),
-            textAlign = textAlign,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (collapsible) {
+                Text(
+                    text = if (collapsed) "\u25b8" else "\u25be",
+                    style = base.copy(fontSize = 12.sp, color = cs.primary),
+                    modifier = Modifier.padding(end = 5.dp),
+                )
+            }
+            Text(
+                text = inlineToAnnotated(parseInlineSpans(b.text), cs, base),
+                style = base.copy(fontSize = size, fontWeight = FontWeight.Bold, color = bodyColor, lineHeight = size * 1.3f),
+                textAlign = textAlign,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 
 @Composable
-private fun MdCode(b: MdBlock.Code, cs: androidx.compose.material3.ColorScheme, base: TextStyle) {
+/**
+ * #213：代码块 —— 语法高亮 / 行号 / 复制 / 长代码折叠 / diff 增删着色 / 横向滚动。
+ *
+ * 原来只有「语言标签 + 一坨等宽文本」：长行被硬挤竖排、没有行号、改一行要手抄全文、
+ * 两百行的代码直接把整条消息顶到屏幕外。这些都是「看得见但用不了」的典型。
+ */
+
+/** 各语言关键字表。够用即可 —— 这里要的是扫读时的层次感，不是编译器。 */
+private fun keywordsFor(lang: String): Set<String> = when (lang.lowercase()) {
+    "kotlin", "kt", "kts" -> setOf(
+        "fun", "val", "var", "when", "if", "else", "return", "class", "object", "for", "while",
+        "import", "package", "suspend", "data", "sealed", "const", "override", "private", "internal",
+        "public", "companion", "interface", "enum", "try", "catch", "finally", "throw", "true",
+        "false", "null", "this", "is", "in", "not", "by", "lazy", "also", "let", "apply", "run", "with",
+    )
+    "java" -> setOf(
+        "public", "private", "protected", "class", "interface", "enum", "static", "final", "void",
+        "int", "long", "boolean", "new", "return", "if", "else", "for", "while", "try", "catch",
+        "import", "package", "extends", "implements", "this", "super", "null", "true", "false",
+        "abstract", "synchronized", "throws",
+    )
+    "python", "py" -> setOf(
+        "def", "class", "if", "elif", "else", "for", "while", "return", "import", "from", "as",
+        "with", "try", "except", "finally", "raise", "lambda", "yield", "global", "pass", "break",
+        "continue", "and", "or", "not", "in", "is", "None", "True", "False", "self", "async", "await",
+    )
+    "javascript", "js", "typescript", "ts", "jsx", "tsx" -> setOf(
+        "function", "const", "let", "var", "if", "else", "for", "while", "return", "class", "import",
+        "export", "from", "default", "new", "try", "catch", "finally", "async", "await", "this",
+        "typeof", "instanceof", "null", "undefined", "true", "false", "switch", "case", "break",
+        "continue", "extends", "super", "interface", "type",
+    )
+    "bash", "sh", "shell", "zsh" -> setOf(
+        "if", "then", "else", "fi", "for", "while", "do", "done", "case", "esac", "function",
+        "return", "export", "local", "echo", "cd", "sudo", "npm", "git", "curl",
+    )
+    "sql" -> setOf(
+        "select", "from", "where", "insert", "into", "values", "update", "set", "delete", "create",
+        "table", "drop", "alter", "join", "left", "right", "inner", "on", "group", "order", "by",
+        "limit", "and", "or", "not", "null", "as", "distinct", "having", "union",
+    )
+    "html", "xml" -> setOf(
+        "html", "head", "body", "div", "span", "script", "style", "meta", "link", "title", "p",
+        "table", "tr", "td", "th", "ul", "li", "input", "button",
+    )
+    "go" -> setOf(
+        "func", "package", "import", "var", "const", "type", "struct", "interface", "if", "else",
+        "for", "range", "return", "go", "defer", "chan", "map", "nil", "true", "false",
+    )
+    "rust", "rs" -> setOf(
+        "fn", "let", "mut", "const", "static", "struct", "enum", "impl", "trait", "match", "if",
+        "else", "for", "while", "loop", "return", "use", "mod", "pub", "self", "Some", "None",
+        "Ok", "Err", "true", "false",
+    )
+    "c", "cpp", "cc", "h" -> setOf(
+        "int", "char", "float", "double", "void", "if", "else", "for", "while", "return", "struct",
+        "class", "public", "private", "include", "define", "const", "static", "new", "delete",
+        "this", "template", "namespace", "using",
+    )
+    else -> emptySet()
+}
+
+private val CODE_KW = Color(0xFF7C5CFF)
+private val CODE_STR = Color(0xFF2E9E63)
+private val CODE_NUM = Color(0xFFD08700)
+private val CODE_COMMENT = Color(0xFF8A8F98)
+
+/**
+ * 极简语法着色：注释 → 字符串 → 数字 → 关键字，其余按正文色。
+ *
+ * 刻意不用第三方高亮库：那些要么带几十 KB 语法定义、要么要 WebView，
+ * 而气泡里要的只是「一眼分得清哪是注释哪是字符串」。
+ */
+@Composable
+private fun highlightCode(code: String, lang: String, plain: Color): AnnotatedString {
+    val kw = keywordsFor(lang)
+    val hashComment = lang.lowercase() in setOf("python", "py", "bash", "sh", "shell", "zsh", "yaml", "yml", "ruby")
+    // 🔴 这里**必须**用显式 Builder：Compose 1.7 起 `buildAnnotatedString` 有一个
+    // @Composable 重载（支持 appendInlineContent），顶层非 Composable 函数里
+    // 直接调用会被解析到它，于是报「must be marked with @Composable」。
+    // inlineToAnnotated 那边能编译是因为它的调用形态不同，别照抄过去。
+    val b = AnnotatedString.Builder()
+    var i = 0
+    val n = code.length
+    while (i < n) {
+        val c = code[i]
+        if (code.startsWith("//", i)) {
+            val e = code.indexOf('\n', i); val end = if (e < 0) n else e
+            b.withStyle(SpanStyle(color = CODE_COMMENT)) { append(code.substring(i, end)) }; i = end; continue
+        }
+        if (code.startsWith("/*", i)) {
+            val e = code.indexOf("*/", i + 2); val end = if (e < 0) n else (e + 2)
+            b.withStyle(SpanStyle(color = CODE_COMMENT)) { append(code.substring(i, end)) }; i = end; continue
+        }
+        if (hashComment && (i == 0 || code[i - 1] == '\n') && c == '#') {
+            val e = code.indexOf('\n', i); val end = if (e < 0) n else e
+            b.withStyle(SpanStyle(color = CODE_COMMENT)) { append(code.substring(i, end)) }; i = end; continue
+        }
+        if (c == '"' || c == '\'' || c == '`') {
+            var j = i + 1
+            while (j < n && code[j] != c) { if (code[j] == '\\') j++; j++ }
+            val end = minOf(j + 1, n)
+            b.withStyle(SpanStyle(color = CODE_STR)) { append(code.substring(i, end)) }
+            i = end; continue
+        }
+        if (c.isDigit()) {
+            var j = i
+            while (j < n && (code[j].isDigit() || code[j] == '.')) j++
+            b.withStyle(SpanStyle(color = CODE_NUM)) { append(code.substring(i, j)) }
+            i = j; continue
+        }
+        if (c.isLetter() || c == '_') {
+            var j = i
+            while (j < n && (code[j].isLetterOrDigit() || code[j] == '_')) j++
+            val word = code.substring(i, j)
+            if (word in kw) {
+                b.withStyle(SpanStyle(color = CODE_KW, fontWeight = FontWeight.SemiBold)) { append(word) }
+            } else {
+                b.withStyle(SpanStyle(color = plain)) { append(word) }
+            }
+            i = j; continue
+        }
+        b.append(c); i++
+    }
+    return b.toAnnotatedString()
+}
+
+/** `diff` / `patch` 围栏按行着色：新增绿、删除红、hunk 头蓝。 */
+@Composable
+private fun diffAnnotated(code: String, plain: Color): AnnotatedString {
+    val b = AnnotatedString.Builder()   // 同上：避开 @Composable 重载
+    code.split("\n").forEachIndexed { idx, ln ->
+        if (idx > 0) b.append("\n")
+        when {
+            ln.startsWith("+") -> b.withStyle(SpanStyle(color = Color(0xFF2E9E63))) { append(ln) }
+            ln.startsWith("-") -> b.withStyle(SpanStyle(color = Color(0xFFC0392B))) { append(ln) }
+            ln.startsWith("@@") -> b.withStyle(SpanStyle(color = Color(0xFF2563EB))) { append(ln) }
+            else -> b.withStyle(SpanStyle(color = plain.copy(alpha = 0.72f))) { append(ln) }
+        }
+    }
+    return b.toAnnotatedString()
+}
+
+/**
+ * #213：代码源码视图 —— 语法高亮 / 行号 / 复制 / 长代码折叠 / diff 增删着色 / 横向滚动。
+ *
+ * 🔴 **必须公开**。原因：`ChatScreen.parseBlocks` 会把消息里的**所有** ``` 围栏
+ *   先抽成 `MsgBlock.Code`，交给 `ChatScreen.CodeBlock` 渲染；`RichText` 私有的
+ *   `MdCode` 在聊天气泡里**一次都走不到**。只改私有实现 = 白改（本轮第一版就踩了这个坑）。
+ *   现在两边共用这一份实现，改一处两处都生效。
+ *
+ * @param showHeader 是否显示「语言标签 + 复制」头。`ChatScreen` 自带工具栏，传 false。
+ */
+@Composable
+fun CodeSourceView(
+    code: String,
+    lang: String,
+    modifier: Modifier = Modifier,
+    showHeader: Boolean = true,
+) {
+    val cs = MaterialTheme.colorScheme
+    val lines = code.split("\n")
+    // 超过这个行数先折叠：两百行代码不该把整条消息顶到屏幕外
+    val collapseAt = 18
+    val expandedState = remember(code) { mutableStateOf(lines.size <= collapseAt) }
+    val expanded = expandedState.value
+    val visibleLines = if (expanded) lines else lines.take(collapseAt)
+    val visible = visibleLines.joinToString("\n")
+    val clipboard = LocalClipboardManager.current
+    val isDiff = lang.equals("diff", ignoreCase = true) || lang.equals("patch", ignoreCase = true)
+    val plain = cs.onSurface
+    val mono = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp)
+    val body = if (isDiff) diffAnnotated(visible, plain) else highlightCode(visible, lang, plain)
+
     Column(
-        Modifier
+        modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(cs.surfaceVariant.copy(alpha = 0.45f))
-            .padding(12.dp)
     ) {
-        if (b.lang.isNotBlank()) {
-            Text(
-                text = b.lang.uppercase(),
-                style = base.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurfaceVariant),
-            )
-            Spacer(Modifier.height(6.dp))
+        if (showHeader) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (lang.isNotBlank()) {
+                    Text(
+                        text = lang.uppercase(),
+                        style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurfaceVariant),
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "\u590d\u5236",
+                    style = TextStyle(fontSize = 11.sp, color = cs.primary),
+                    modifier = Modifier
+                        .clickable { clipboard.setText(AnnotatedString(code)) }
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+            Spacer(Modifier.height(2.dp))
         }
+        // 横向滚动：长行不再被硬挤成竖排
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(start = 10.dp, end = 12.dp, bottom = 10.dp)
+        ) {
+            Column {
+                visibleLines.forEachIndexed { idx, _ ->
+                    Text(
+                        text = (idx + 1).toString(),
+                        style = mono.copy(fontSize = 11.sp, color = cs.onSurfaceVariant.copy(alpha = 0.45f)),
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.width(26.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(text = body, style = mono)
+        }
+        if (lines.size > collapseAt) {
+            Text(
+                text = if (expanded) "\u6536\u8d77" else "\u5c55\u5f00\u5168\u90e8 ${lines.size} \u884c",
+                style = TextStyle(fontSize = 11.sp, color = cs.primary),
+                modifier = Modifier
+                    .clickable { expandedState.value = !expanded }
+                    .padding(start = 12.dp, bottom = 8.dp),
+            )
+        }
+    }
+}
+
+/**
+ * 块级数学公式：等宽居中展示 LaTeX 原文。
+ *
+ * 不做真 KaTeX 渲染 —— 气泡里每来一个公式就塞一个 WebView，长回答会直接卡死滚动。
+ * 保证的是「公式不被 Markdown 拆烂」+「视觉上明确是公式」，可读性够用。
+ */
+@Composable
+private fun MdMath(
+    b: MdBlock.Math,
+    cs: androidx.compose.material3.ColorScheme,
+    base: TextStyle,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(cs.surfaceVariant.copy(alpha = 0.4f))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Text(
-            text = b.code,
+            text = b.tex,
             style = base.copy(
                 fontFamily = FontFamily.Monospace,
-                fontSize = 13.sp,
-                color = cs.onSurface,
-                lineHeight = 19.sp,
+                fontSize = 14.sp,
+                color = cs.primary,
+                lineHeight = 20.sp,
             ),
+            textAlign = TextAlign.Center,
         )
+    }
+}
+
+/** 文末脚注列表：正文里的 `[^1]` 上标角标指向这里。 */
+@Composable
+private fun MdFootnotes(
+    b: MdBlock.Footnotes,
+    cs: androidx.compose.material3.ColorScheme,
+    base: TextStyle,
+    bodyColor: Color,
+) {
+    Column(Modifier.fillMaxWidth().padding(top = 2.dp)) {
+        HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.4f))
+        Spacer(Modifier.height(6.dp))
+        b.items.forEach { item ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                Text(
+                    text = item.id,
+                    style = base.copy(
+                        fontSize = 11.sp,
+                        color = cs.primary,
+                        baselineShift = BaselineShift.Superscript,
+                    ),
+                    modifier = Modifier.widthIn(min = 16.dp),
+                )
+                Text(
+                    text = inlineToAnnotated(parseInlineSpans(item.text), cs, base),
+                    style = base.copy(fontSize = 12.sp, color = bodyColor.copy(alpha = 0.8f), lineHeight = 17.sp),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+/** 独立成行的图片：等比铺满宽度，点击按链接处理（放大/跳浏览器由外层决定）。 */
+@Composable
+private fun MdImage(
+    b: MdBlock.Image,
+    cs: androidx.compose.material3.ColorScheme,
+    onLinkClick: ((String) -> Unit)?,
+) {
+    AsyncImage(
+        model = b.url,
+        contentDescription = b.alt.ifBlank { null },
+        contentScale = ContentScale.FillWidth,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(cs.surfaceVariant.copy(alpha = 0.3f))
+            .clickable { onLinkClick?.invoke(b.url) },
+    )
+}
+
+/** `<details>` 折叠区块：摘要行可点，默认收起。 */
+@Composable
+private fun MdDetails(
+    b: MdBlock.Details,
+    cs: androidx.compose.material3.ColorScheme,
+    base: TextStyle,
+    bodyColor: Color,
+) {
+    val openState = remember { mutableStateOf(false) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(cs.surfaceVariant.copy(alpha = 0.35f))
+            .padding(10.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().clickable { openState.value = !openState.value },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(if (openState.value) "▾" else "▸", style = base.copy(color = cs.primary, fontSize = 13.sp))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = inlineToAnnotated(parseInlineSpans(b.summary), cs, base),
+                style = base.copy(fontWeight = FontWeight.SemiBold, color = bodyColor),
+            )
+        }
+        if (openState.value) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = inlineToAnnotated(parseInlineSpans(b.body), cs, base),
+                style = base.copy(color = bodyColor, lineHeight = bodyLineHeight(base)),
+            )
+        }
     }
 }
 
@@ -910,17 +1424,21 @@ private fun MdList(
                 // 任务列表画复选框，普通列表画项目符号 / 序号
                 when {
                     item.checked != null -> {
+                        // #213：可勾选。原来只是个画出来的方框 —— 用户看着像个复选框，
+                        // 点上去毫无反应，比不给复选框更迷惑。
+                        val ck = remember(item.text, item.checked) { mutableStateOf(item.checked) }
                         Box(
                             Modifier.size(16.dp).clip(RoundedCornerShape(4.dp))
-                                .background(if (item.checked) cs.primary else Color.Transparent)
+                                .clickable { ck.value = !(ck.value ?: false) }
+                                .background(if (ck.value == true) cs.primary else Color.Transparent)
                                 .border(
                                     1.5.dp,
-                                    if (item.checked) cs.primary else cs.outline,
+                                    if (ck.value == true) cs.primary else cs.outline,
                                     RoundedCornerShape(4.dp),
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (item.checked) CheckMark(Modifier.size(11.dp), cs.onPrimary)
+                            if (ck.value == true) CheckMark(Modifier.size(11.dp), cs.onPrimary)
                         }
                     }
                     b.ordered -> Text(
@@ -967,48 +1485,161 @@ private fun CheckMark(modifier: Modifier, tint: Color) {
     }
 }
 
+/**
+ * #213：表格统一渲染实现（公开，`RichText` 与 `ChatScreen.RenderTable` 共用一份）。
+ *
+ * ## 为什么必须公开
+ * 仓库里原先**两处各写一遍**表格，且都只有「横向滚动的裸文本」：
+ *   - `RichText.MdTable`（GFM 管道表格）
+ *   - `ChatScreen.RenderTable`（HTML `<table>`）
+ * 只改一处，另一处的表格照样是老样子 —— 用户眼里就是「有的表好、有的表烂」。
+ *
+ * ## 本轮补齐
+ * 表头点击排序（数字优先比较）、超 12 行折叠、复制为 CSV、斑马纹、
+ * 列宽按内容自适应、单元格内富文本与链接可点。
+ *
+ * 排序/折叠都是**局部状态**，不写回外部数据，流式重组安全。
+ */
 @Composable
-private fun MdTable(
-    b: MdBlock.Table,
-    cs: androidx.compose.material3.ColorScheme,
-    base: TextStyle,
+fun MarkdownTableView(
+    header: List<String>,
+    rows: List<List<String>>,
+    modifier: Modifier = Modifier,
+    base: TextStyle = MaterialTheme.typography.bodyMedium,
+    onLinkClick: ((String) -> Unit)? = null,
 ) {
-    // 表格可能比气泡宽，横向可滚动，避免单元格文字被硬挤成竖排
-    val scroll = rememberScrollState()
+    val cs = MaterialTheme.colorScheme
     val cellColor = base.color
+    val sortCol = remember { mutableStateOf<Int?>(null) }
+    val sortAsc = remember { mutableStateOf(true) }
+    val expanded = remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
+
+    val colCount = remember(header, rows) {
+        maxOf(header.size, rows.maxOfOrNull { it.size } ?: 0)
+    }
+    // 列宽按该列最长单元格估算：短表不再撑满屏，长表不再挤成竖条
+    val colWidths = remember(header, rows) {
+        (0 until colCount).map { c ->
+            val longest = maxOf(
+                header.getOrElse(c) { "" }.length,
+                rows.maxOfOrNull { it.getOrElse(c) { "" }.length } ?: 0,
+            )
+            (longest * 7 + 20).coerceIn(72, 240).dp
+        }
+    }
+    val ordered = remember(header, rows, sortCol.value, sortAsc.value) {
+        val col = sortCol.value
+        if (col == null) rows
+        else rows.sortedWith(Comparator { a, b ->
+            compareTableCells(a.getOrElse(col) { "" }, b.getOrElse(col) { "" })
+        }).let { if (sortAsc.value) it else it.reversed() }
+    }
+    val limit = 12
+    val visible = if (expanded.value) ordered else ordered.take(limit)
+    val cellStyle = base.copy(fontSize = 13.sp, color = cellColor)
+
     Column(
-        Modifier
+        modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .border(1.dp, cs.outlineVariant.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-            .horizontalScroll(scroll)
+            .horizontalScroll(rememberScrollState())
     ) {
-        Row(Modifier.background(cs.surfaceVariant.copy(alpha = 0.5f))) {
-            b.header.forEach { cell ->
+        Row(Modifier.background(cs.surfaceVariant.copy(alpha = 0.55f))) {
+            header.forEachIndexed { c, cell ->
+                val sorted = sortCol.value == c
+                val raw = cell + if (sorted) (if (sortAsc.value) " \u25b2" else " \u25bc") else ""
                 Text(
-                    text = inlineToAnnotated(parseInlineSpans(cell), cs, base),
-                    style = base.copy(fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = cellColor),
+                    text = inlineToAnnotated(parseInlineSpans(raw), cs, base),
+                    style = cellStyle.copy(fontWeight = FontWeight.SemiBold),
                     modifier = Modifier
-                        .widthIn(min = 72.dp)
+                        .width(colWidths.getOrElse(c) { 72.dp })
+                        .clickable {
+                            if (sortCol.value == c) {
+                                if (sortAsc.value) sortAsc.value = false
+                                else { sortCol.value = null; sortAsc.value = true }
+                            } else { sortCol.value = c; sortAsc.value = true }
+                        }
                         .padding(horizontal = 10.dp, vertical = 8.dp),
                 )
             }
         }
-        b.rows.forEach { row ->
+        visible.forEachIndexed { ri, row ->
             HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.35f))
-            Row {
-                row.forEach { cell ->
+            Row(
+                Modifier.background(
+                    if (ri % 2 == 1) cs.surfaceVariant.copy(alpha = 0.25f) else Color.Transparent
+                )
+            ) {
+                row.forEachIndexed { c, cell ->
+                    val rich = inlineToAnnotated(parseInlineSpans(cell), cs, base)
+                    val cellMod = Modifier
+                        .width(colWidths.getOrElse(c) { 72.dp })
+                        .padding(horizontal = 10.dp, vertical = 7.dp)
+                    if (onLinkClick != null) {
+                        ClickableText(
+                            text = rich,
+                            style = cellStyle,
+                            onClick = { off ->
+                                rich.getStringAnnotations("link", off, off)
+                                    .firstOrNull()?.item?.let { onLinkClick(it) }
+                            },
+                            modifier = cellMod,
+                        )
+                    } else {
+                        Text(text = rich, style = cellStyle, modifier = cellMod)
+                    }
+                }
+            }
+        }
+        if (header.isNotEmpty()) {
+            HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.35f))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp)) {
+                Text(
+                    text = "\u590d\u5236\u8868\u683c",
+                    style = base.copy(fontSize = 11.sp, color = cs.primary),
+                    modifier = Modifier
+                        .clickable { clipboard.setText(AnnotatedString(tableToCsv(header, ordered))) }
+                        .padding(end = 4.dp),
+                )
+                if (ordered.size > limit) {
+                    Spacer(Modifier.width(12.dp))
                     Text(
-                        text = inlineToAnnotated(parseInlineSpans(cell), cs, base),
-                        style = base.copy(fontSize = 13.sp, color = cellColor),
-                        modifier = Modifier
-                            .widthIn(min = 72.dp)
-                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                        text = if (expanded.value) "\u6536\u8d77"
+                        else "\u5c55\u5f00\u5168\u90e8 ${ordered.size} \u884c",
+                        style = base.copy(fontSize = 11.sp, color = cs.primary),
+                        modifier = Modifier.clickable { expanded.value = !expanded.value },
                     )
                 }
             }
         }
     }
+}
+
+/** 表格排序：数字优先（`1,234` / `12.5%` / `-3` 先剥成 Double），否则按字典序。 */
+private fun compareTableCells(a: String, b: String): Int {
+    fun num(s: String): Double? =
+        s.trim().replace(",", "").removeSuffix("%").toDoubleOrNull()
+    val na = num(a)
+    val nb = num(b)
+    return when {
+        na != null && nb != null -> na.compareTo(nb)
+        na != null -> -1
+        nb != null -> 1
+        else -> a.trim().compareTo(b.trim())
+    }
+}
+
+/** 表格转 CSV，方便直接粘进 Excel / 飞书表格。 */
+internal fun tableToCsv(header: List<String>, rows: List<List<String>>): String {
+    fun esc(s: String): String = if (s.any { it == ',' || it == '"' || it == '\n' }) {
+        "\"" + s.replace("\"", "\"\"") + "\""
+    } else s
+    val sb = StringBuilder()
+    if (header.isNotEmpty()) sb.append(header.joinToString(",") { esc(it) }).append("\n")
+    rows.forEach { r -> sb.append(r.joinToString(",") { esc(it) }).append("\n") }
+    return sb.toString().trimEnd('\n')
 }
 
 /**
@@ -1037,6 +1668,19 @@ private fun inlineToAnnotated(
         if (sp.bold) style = style.merge(SpanStyle(fontWeight = FontWeight.Bold))
         if (sp.italic) style = style.merge(SpanStyle(fontStyle = FontStyle.Italic))
         if (sp.strike) style = style.merge(SpanStyle(textDecoration = TextDecoration.LineThrough))
+        if (sp.sup) style = style.merge(
+            SpanStyle(baselineShift = BaselineShift.Superscript, fontSize = (base.fontSize.value * 0.72f).sp)
+        )
+        if (sp.sub) style = style.merge(
+            SpanStyle(baselineShift = BaselineShift.Subscript, fontSize = (base.fontSize.value * 0.72f).sp)
+        )
+        if (sp.math) style = style.merge(
+            SpanStyle(
+                fontFamily = FontFamily.Monospace,
+                color = cs.primary,
+                fontStyle = FontStyle.Italic,
+            )
+        )
         if (sp.colorHex != null) {
             val col = runCatching { Color(android.graphics.Color.parseColor(sp.colorHex)) }.getOrNull()
             if (col != null) style = style.merge(SpanStyle(color = col))
