@@ -104,6 +104,8 @@ fun RoleEditScreen(
     var duties by remember { mutableStateOf(role.duties.joinToString("、")) }
     var taboos by remember { mutableStateOf(role.taboos.joinToString("、")) }
     var skills by remember { mutableStateOf(role.skills.joinToString("、")) }
+    // #215：角色类型标签（可添加、带内容，参考灵魂注入标签）
+    var tags by remember { mutableStateOf(role.tags.joinToString("、")) }
     // #190：绑定的真技能（id）。与上面的「技能标签」不同 —— 这里选的是技能库里的真技能，
     // 勾上之后技能正文会真正注入该角色的系统提示词。
     var skillIds by remember { mutableStateOf(role.skillIds) }
@@ -141,6 +143,7 @@ fun RoleEditScreen(
     val dirty = duties != role.duties.joinToString("、") ||
         taboos != role.taboos.joinToString("、") ||
         skills != role.skills.joinToString("、") ||
+        tags != role.tags.joinToString("、") ||
         skillIds != role.skillIds ||
         modelId != role.modelProfileId ||
         (if (isHost) RoleKind.HOST else kind) != role.role ||
@@ -164,6 +167,7 @@ fun RoleEditScreen(
                 duties = split(duties),
                 taboos = split(taboos),
                 skills = split(skills),
+                tags = split(tags),
                 skillIds = skillIds,
                 context = ctxPolicy,
                 version = role.version + 1,
@@ -391,6 +395,16 @@ fun RoleEditScreen(
                 label = { Text("技能标签（自由描述）") },
                 placeholder = { Text("例：数据分析、检索、写作") },
                 supportingText = { Text("只是几句描述，不产生约束力。真正的手艺请在下方勾选技能库。") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            // #215：角色类型标签 —— 参考灵魂注入的标签功能，可添加、带内容。
+            // 不限于 RoleKind 那 5 个固定枚举，用户可自由定义「这个角色是什么类型」。
+            OutlinedTextField(
+                value = tags,
+                onValueChange = { tags = it },
+                label = { Text("角色类型标签（可自定义）") },
+                placeholder = { Text("例：前端、视觉、文案、验收、数据") },
+                supportingText = { Text("顿号/逗号分隔。会作为身份标记注入系统提示词，角色据此自我定位。") },
                 modifier = Modifier.fillMaxWidth(),
             )
 

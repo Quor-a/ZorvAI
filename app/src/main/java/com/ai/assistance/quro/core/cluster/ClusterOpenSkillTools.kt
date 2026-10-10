@@ -261,6 +261,7 @@ class ClusterRoleCardTool : QuroTool {
                 put("tagline", c.tagline)
                 put("duties", JSONArray(c.duties))
                 put("taboos", JSONArray(c.taboos))
+                put("tags", JSONArray(c.tags))
                         // #192：把结构化灵魂的判据暴露出来 —— 用户建角前要能看见
                         // "怎样才算做对"，否则卡片列表只是一堆名字。
                         put("soulBeliefs", JSONArray(c.soul.beliefs))
@@ -340,7 +341,8 @@ class ClusterRoleCardTool : QuroTool {
             role = card.kind,
             duties = card.duties,
             taboos = card.taboos,
-            skillIds = resolved.skillIds
+            skillIds = resolved.skillIds,
+            tags = card.tags,
         )
         try {
             RoleRegistry.upsert(context, role)
@@ -379,6 +381,122 @@ class ClusterRoleCardTool : QuroTool {
                     (if (gaps.isNotEmpty()) "；仍有缺口，见 gaps" else "") + "。"
             )
         }.toString()
+    }
+}
+
+// ————————————————————————————————————————
+// cluster_forge_role：缺能力时动态造一个新角色（#215）
+// ————————————————————————————————————————
+
+/**
+ * cluster_forge_role：动态创建一个集群角色来承接某个能力。
+ *
+ * #215 用户原话：「没有能力就创造能力……缺什么让主持加或者自己给自己加，
+ * 缺成员让主持加或者自己创造一个，缺什么加什么，而不是盯着内置的那几个」。
+ *
+ * 与 [ClusterRoleCardTool] 的区别：
+ * - 角色卡是从**预置卡**里选一张建角（skills 聚合）；
+ * - 本工具是从**任意能力描述**出发现造一个角色 —— 没有预置卡覆盖这门手艺时用它。
+ */
+class ClusterForgeRoleTool : QuroTool {
+    override val name = "cluster_forge_role"
+    override val description =
+        "动态创建一个集群角色来承接某个能力。当技能库和开源社区都找不到覆盖该能力的技能、" +
+        "又没有现成角色卡可用时，用这个工具现场造一个角色：以能力为身份、注册进集群、绑定最接近的本地技能。" +
+        "参数 ability 是能力描述（如「数据可视化」「竞品拆解」「3D建模」）。" +
+        "这是「缺什么让主持加」的显式工具 —— 不要因为库里没有对应技能就拒绝任务。"
+    override val parametersJson = """{
+      "type":"object",
+      "properties":{
+        "ability":{"type":"string","description":"要补足的能力描述，例如「数据可视化」「竞品拆解」「3D建模」"},
+        "name":{"type":"string","description":"可选：给新角色起名，默认「<能力>专员」"},
+        "modelId":{"type":"string","description":"可选：指定模型 profile id"}
+      },
+      "required":["ability"]
+    }"""
+    override val readOnly = false
+
+    override fun run(context: Context, arguments: String): String {
+        try {
+            val a = JSONObject(arguments)
+            val ability = a.optString("ability").trim()
+            if (ability.isEmpty()) return cardErr("缺少 ability")
+            val safeName = ability
+                .replace(Regex("[\\s,，。、；;：:（）()\\[\\]【】/]+"), "")
+                .take(12)
+                .ifBlank { "能力" }
+            val displayName = a.optString("name").trim().ifBlank { "${safeName}专员" }
+            val personaId = "persona_forge_${System.currentTimeMillis().toString().takeLast(8)}"
+
+            // 造人格卡
+            val persona = com.ai.assistance.quro.core.QuroPersona(
+                id = personaId,
+                name = displayName,
+                avatarEmoji = "🛠",
+                description = "为补足「$ability」而动态创建的角色",
+                roleSetting = buildString {
+                    appendLine("你是本集群为补足「$ability」而动态创建的专家角色。")
+                    appendLine()
+                    appendLine("你的唯一使命：承接一切与「$ability」相关的子任务并给出可执行、可验收的产出。")
+                    appendLine("你不必等别人给你能力——你本身就是为这项能力而生的。")
+                    appendLine()
+                    appendLine("工作准则：")
+                    appendLine("- 拿到任务先想清楚「做完长什么样」，再动手。")
+                    appendLine("- 缺工具、缺资料、缺上游产物时，明确说出来让主持补，不要凭空编造。")
+                    appendLine("- 交付物必须能被评审逐条验收。")
+                }.trim(),
+                chatSetting = "直接动手，缺什么就明确说出来让主持补。",
+                tags = listOf("集群角色", "动态创建", safeName),
+            )
+            try {
+                com.ai.assistance.quro.core.QuroPersonaRepository(context).upsert(persona)
+            } catch (e: Throwable) {
+                return cardErr("创建人格卡失败：${e.message ?: e.javaClass.simpleName}")
+            }
+
+            // 绑定最接近的本地技能（若有）
+            val nearest = runCatching {
+                ClusterCapability.findLocalMatch(context, ability)
+            }.getOrNull()
+            val skillIds = nearest?.let { listOf(it.id) } ?: emptyList()
+            val role = RoleProfile(
+                personaId = personaId,
+                modelProfileId = a.optString("modelId").trim(),
+                role = RoleKind.EXECUTOR,
+                duties = listOf("承接并完成「$ability」相关子任务"),
+                taboos = listOf("不得推诿说「我没有这项能力」——你就是为此而建"),
+                skills = listOf("擅长：$ability"),
+                skillIds = skillIds,
+            )
+            try {
+                RoleRegistry.upsert(context, role)
+            } catch (e: Throwable) {
+                return cardErr("登记集群角色失败：${e.message ?: e.javaClass.simpleName}")
+            }
+
+            return JSONObject().apply {
+                put("ok", true)
+                put("personaId", personaId)
+                put("personaName", displayName)
+                put("ability", ability)
+                put("kind", role.role.name)
+                put("kindLabel", role.role.label)
+                if (nearest != null) {
+                    put("boundSkill", nearest.name)
+                    put("boundSkillId", nearest.id)
+                }
+                put("message", buildString {
+                    append("已动态创建角色「$displayName」（${role.role.label}）来承接「$ability」")
+                    if (nearest != null) {
+                        append("，并绑上了最接近的本地技能「${nearest.name}」")
+                    } else {
+                        append("；本地与开源都没有完全匹配的技能，该角色将基于任务描述直接产出")
+                    }
+                })
+            }.toString()
+        } catch (e: Throwable) {
+            return cardErr("动态建角失败：${e.message ?: e.javaClass.simpleName}")
+        }
     }
 }
 

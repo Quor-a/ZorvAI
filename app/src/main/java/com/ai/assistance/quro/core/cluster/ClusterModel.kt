@@ -195,6 +195,15 @@ data class RoleProfile(
      * 存 id 而不存名字：id 稳定，改了技能显示名不会丢绑定。
      */
     val skillIds: List<String> = emptyList(),
+    /**
+     * #215：角色类型标签（参考灵魂注入标签）。
+     *
+     * 角色类型不再只是 [RoleKind] 那 5 个固定枚举，而是**可添加、带内容**的标签：
+     * - 每个标签是一个短词（如「前端」「后端」「视觉」「文案」「验收」）；
+     * - 标签会注入该角色的系统提示词，作为额外的身份/能力标记；
+     * - 用户可自由增删，不限于内置的 RoleKind。
+     */
+    val tags: List<String> = emptyList(),
     val context: RoleContextPolicy = RoleContextPolicy(),
     val enabled: Boolean = true,
     val version: Int = 1
@@ -205,6 +214,7 @@ data class RoleProfile(
         put("role", role.name)
         put("duties", JSONArray(duties)); put("taboos", JSONArray(taboos)); put("skills", JSONArray(skills))
         put("skillIds", JSONArray(skillIds))
+        put("tags", JSONArray(tags))
         put("context", context.toJson())
         put("enabled", enabled); put("version", version)
     }
@@ -221,6 +231,7 @@ data class RoleProfile(
             taboos = o.optJSONArray("taboos")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
             skills = o.optJSONArray("skills")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
             skillIds = o.optJSONArray("skillIds")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+            tags = o.optJSONArray("tags")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
             context = o.optJSONObject("context")?.let { RoleContextPolicy.fromJson(it) } ?: RoleContextPolicy(),
             enabled = o.optBoolean("enabled", true),
             version = o.optInt("version", 1)

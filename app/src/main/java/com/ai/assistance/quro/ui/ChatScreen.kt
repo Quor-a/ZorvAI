@@ -241,6 +241,8 @@ import com.ai.assistance.quro.core.QuroPersona
 import com.ai.assistance.quro.core.QuroCrashLogger
 import com.ai.assistance.quro.ui.QuroChatViewModel
 import com.ai.assistance.quro.ui.dialog.RichText
+import com.ai.assistance.quro.ui.dialog.CodeSourceView
+import com.ai.assistance.quro.ui.dialog.MarkdownTableView
 import com.ai.assistance.quro.ui.dialog.messageContentMaxWidth
 import com.ai.assistance.quro.ui.dialog.bodyTopInsetDp
 import com.ai.assistance.quro.ui.dialog.nameRowCenterOffsetDp
@@ -6896,29 +6898,15 @@ private fun RenderTable(
     textColor: Color,
     onOpenLink: (String) -> Unit,
 ) {
-    val cs = MaterialTheme.colorScheme
-    val all = if (header.isNotEmpty()) listOf(header) + rows else rows
-    Column(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-        all.forEachIndexed { ri, row ->
-            Row(Modifier.fillMaxWidth()) {
-                row.forEach { cell ->
-                    val rich = buildRich(
-                        cell,
-                        TextStyle(fontSize = scaled(13), color = if (ri == 0) cs.primary else textColor, lineHeight = scaled(18)),
-                        boldColor = cs.primary, linkColor = cs.primary,
-                        codeBackground = cs.surfaceVariant.copy(alpha = 0.5f),
-                    )
-                    ClickableText(
-                        text = rich,
-                        style = TextStyle(fontSize = scaled(13), color = if (ri == 0) cs.primary else textColor, lineHeight = scaled(18)),
-                        onClick = { offset -> rich.getStringAnnotations("link", offset, offset).firstOrNull()?.item?.let { onOpenLink(it) } },
-                        modifier = Modifier.widthIn(min = 80.dp, max = 220.dp).padding(6.dp),
-                    )
-                }
-            }
-            HorizontalDivider(color = Line)
-        }
-    }
+    // #213：委托给统一的表格实现（排序 / 折叠 / 复制 CSV / 斑马纹 / 列宽自适应）。
+    // 这里原来自己画了一遍「只能横滚的裸文本」，与 RichText 那份重复且都缺功能。
+    MarkdownTableView(
+        header = header,
+        rows = rows,
+        base = TextStyle(fontSize = scaled(15), color = textColor, lineHeight = scaled(23)),
+        onLinkClick = onOpenLink,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 /** 嗅探代码内容是否像 HTML（兼容 AI 把语言标签写成空 / xml / markup / htm 等情况）。 */
@@ -7466,27 +7454,21 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                     })
                 }
             } else {
-                // 默认：源码文本展示（双向滚动 + 裁剪到圆角框内，避免长代码/HTML 撑出卡片）
-                // v396 修复：长单行代码/HTML 不再横向溢出——改为水平滚动 + 裁剪，
-                // softWrap=false 让长行保持单行、由 horizontalScroll 承载。
-                SelectionContainer(
-                    Modifier
+                // #213：改用统一代码视图 —— 语法高亮 / 行号 / 长代码折叠 / diff 着色 / 横向滚动。
+                //
+                // 旧实现是「纯文本 + softWrap=false」：没有层次、没有行号，
+                // 想改其中一行只能整段手抄；两百行的代码还会把消息顶到屏幕外。
+                // 🔴 外层气泡已在 SelectionContainer 内（见消息体最外层），这里不再嵌套，
+                //    嵌套 SelectionContainer 会让两侧的选区互相截断。
+                CodeSourceView(
+                    code = code,
+                    lang = lang,
+                    showHeader = false,
+                    modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .heightIn(max = 300.dp)
-                        .verticalScroll(rememberScrollState())
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 10.dp)
-                        .padding(bottom = 8.dp)
-                ) {
-                    Text(
-                        code,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 13.sp,
-                        color = cs.onSurface,
-                        softWrap = false
-                    )
-                }
+                        .padding(horizontal = 6.dp)
+                        .padding(bottom = 8.dp),
+                )
             }
 
             output?.let { result ->

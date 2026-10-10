@@ -332,4 +332,77 @@ class ClusterCapabilityAndReviseTest {
             seen.none { "⚠ 这是" in it },
         )
     }
+
+    // ————————————————— 靶子三：绑定真实技能后 audit 必须识别（用户实测） —————————————————
+
+    /**
+     * 🔴 用户实测：规划师**绑定了 copywrite**（6 门技能之一），
+     * 但 n2 需要「文案写作」时 host 却判「无人具备」→ 节点 SKIPPED。
+     *
+     * 这条测试用**真实 manifest 播种**的集群库 + 真实技能 id，
+     * 复现「角色 skillIds 里有 copywrite，audit 对『文案写作』必须判覆盖」。
+     */
+    @Test
+    fun 绑定真实copywrite技能后audit必须识别文案写作() {
+        val context = RuntimeEnvironment.getApplication()
+        ClusterTestSkills.seedClusterSkills(context)
+        val lib = ClusterSkillStore.load(context).associateBy { it.id }
+
+        // 找 copywrite 的真实 id（manifest 播种出来的）
+        val copy = lib.values.firstOrNull { it.name == "copywrite" }
+        assertTrue("测试前提：集群库应有 copywrite 技能", copy != null)
+
+        val role = RoleProfile(
+            personaId = "planner1",
+            modelProfileId = "cloud:current",
+            role = RoleKind.PLANNER,
+            duties = listOf("文案写作", "内容策划"),
+            skillIds = listOf(copy!!.id),
+        )
+        val covs = ClusterCapability.audit(
+            context,
+            listOf(ClusterNode(id = "n2", title = "子任务2", instruction = "写宣传文案", ability = "文案写作")),
+            listOf(role),
+        )
+        val cov = covs.first()
+        assertTrue(
+            "角色绑定了真实 copywrite 技能，audit 对『文案写作』必须判覆盖。" +
+                "实际 score=${cov.score}（阈值 ${ClusterCapability.COVER_THRESHOLD}），" +
+                "bestRole=${cov.bestRoleId}，declared=${cov.declared}",
+            cov.covered,
+        )
+    }
+
+    /**
+     * 🔴 配套：绑定 strategy 后 audit 对「策略制定」必须识别。
+     * 用户实测 n1 需要 strategy，补绑后仍失败。
+     */
+    @Test
+    fun 绑定真实strategy技能后audit必须识别策略() {
+        val context = RuntimeEnvironment.getApplication()
+        ClusterTestSkills.seedClusterSkills(context)
+        val lib = ClusterSkillStore.load(context).associateBy { it.id }
+
+        val strat = lib.values.firstOrNull { it.name == "strategy" }
+        assertTrue("测试前提：集群库应有 strategy 技能", strat != null)
+
+        val role = RoleProfile(
+            personaId = "planner2",
+            modelProfileId = "cloud:current",
+            role = RoleKind.PLANNER,
+            duties = listOf("策略制定", "方案取舍"),
+            skillIds = listOf(strat!!.id),
+        )
+        val covs = ClusterCapability.audit(
+            context,
+            listOf(ClusterNode(id = "n1", title = "子任务1", instruction = "制定策略", ability = "策略制定")),
+            listOf(role),
+        )
+        val cov = covs.first()
+        assertTrue(
+            "角色绑定了真实 strategy 技能，audit 对『策略制定』必须判覆盖。" +
+                "实际 score=${cov.score}（阈值 ${ClusterCapability.COVER_THRESHOLD}）",
+            cov.covered,
+        )
+    }
 }

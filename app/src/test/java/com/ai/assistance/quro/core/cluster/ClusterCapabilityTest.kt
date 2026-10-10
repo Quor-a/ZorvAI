@@ -239,17 +239,18 @@ class ClusterCapabilityTest {
             nodeId = "n1", nodeTitle = "设计", ability = "视觉设计",
             score = 0f, bestRoleId = "", covered = false
         )
-        // 只有评审在场：必须如实说绑不了，绝不给评审塞生产技能
+        // 只有评审在场：绝不给评审塞生产技能；#215 起改为动态造一个执行角色承接。
         val critic = role("critic-only", kind = RoleKind.CRITIC)
         RoleRegistry.upsert(ctx, critic)
         val res = ClusterCapability.remedy(ctx, cov, listOf(critic), allowNetwork = false)
         assertFalse("不该把生产技能绑给评审", RoleRegistry.get(ctx, "critic-only")!!.skillIds.isNotEmpty())
-        assertFalse("无可绑对象时不能谎报成功", res.ok)
-        assertTrue("必须说清为什么没绑：${res.detail}", res.detail.isNotBlank())
+        // #215：缺能力就创造能力 —— 即使只有评审在场，也动态造一个执行角色，而不是失败。
+        assertTrue("缺能力时应动态造角色（FORGE），而不是谎报失败：${res.detail}", res.ok)
+        assertTrue("补救说明里应提到动态创建角色：${res.detail}", res.detail.contains("动态创建角色"))
     }
 
     @Test
-    fun `remedy fails honestly when nothing matches and network is off`() =
+    fun `remedy forges a role when nothing matches and network is off`() =
         runBlocking {
             // 注意：QuroSkillStore.load 会 seed 内置技能，所以「什么都没有」不可靠。
             // 这里靠一个内置技能库里绝不会出现的生僻能力词来制造真实缺口。
@@ -260,10 +261,11 @@ class ClusterCapabilityTest {
             )
             val r = role("exec")
             val res = ClusterCapability.remedy(ctx, cov, listOf(r), allowNetwork = false)
-            assertFalse("没有对应技能时不可能成功", res.ok)
+            // #215：没有对应技能时不再失败，而是动态创建一个新角色来承接。
+            assertTrue("没有对应技能时应动态造角色（FORGE），而不是失败：${res.detail}", res.ok)
             assertTrue(
-                "必须明说未允许联网，而不是假装社区没有：${res.detail}",
-                res.detail.contains("联网")
+                "必须说清造了什么角色：${res.detail}",
+                res.detail.contains("动态创建角色")
             )
             assertTrue("执行角色的技能列表不该被凭空塞东西", r.skillIds.isEmpty())
         }
