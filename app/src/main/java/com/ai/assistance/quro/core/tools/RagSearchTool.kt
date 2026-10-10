@@ -62,8 +62,8 @@ class RagSearchTool : QuroTool {
             })
             put("domain", JSONObject().apply {
                 put("type", "string")
-                put("description", "限定检索域：all（默认，跨域）/ tools（只搜工具）/ prompts（只搜规则段）")
-                put("enum", JSONArray().apply { put("all"); put("tools"); put("prompts") })
+                put("description", "限定检索域：all（默认，跨域）/ tools（只搜工具）/ prompts（只搜规则段）/ cluster_skills（只搜集群技能规程）")
+                put("enum", JSONArray().apply { put("all"); put("tools"); put("prompts"); put("cluster_skills") })
             })
             put("limit", JSONObject().apply {
                 put("type", "integer")
@@ -128,7 +128,13 @@ class RagSearchTool : QuroTool {
                 // 单个触发词最多值 0.1 —— 实测「这些数据做成表格给我看」top1 只有 0.318，
                 // 直接零命中。这是「AI 被动检索规则」整条路失效的真因。
                 "prompts" -> PromptRagIndex.searchPrompts(AgentRag.engine, q, limit.coerceAtMost(5))
-                                else -> AgentRag.everything(q, limit)
+                // #217：集群技能域 —— 走 ClusterSkillRagIndex 的独立门槛与全文。
+                // 索引由 ClusterRuntime.init / ClusterSkillRuntime.resolveSkills 预装。
+                "cluster_skills" ->
+                    com.ai.assistance.quro.core.rag.ClusterSkillRagIndex.searchSkills(
+                        q, limit.coerceAtMost(8),
+                    )
+                else -> AgentRag.everything(q, limit)
             }
 
             if (hits.isEmpty() && crossDomain) {
@@ -196,12 +202,14 @@ class RagSearchTool : QuroTool {
                     "what_other_domains_return",
                     org.json.JSONArray().apply {
                         val per = (limit / 3).coerceIn(2, 4)
-                        for (dom in listOf("tools", "prompts")) {
+                        for (dom in listOf("tools", "prompts", "cluster_skills")) {
                             if (dom == domain) continue
                             val got = runCatching {
                                 when (dom) {
                                     "tools" -> AgentRag.tools(q, per)
                                     "prompts" -> PromptRagIndex.searchPrompts(AgentRag.engine, q, per)
+                                    "cluster_skills" ->
+                                        com.ai.assistance.quro.core.rag.ClusterSkillRagIndex.searchSkills(q, per)
                                     else -> emptyList()
                                 }
                             }.getOrDefault(emptyList())
@@ -233,18 +241,34 @@ class RagSearchTool : QuroTool {
             // 于是 AI 主动检索「规则」时，命中了却只拿到 200 字碎片，
             // 拿到半条规则照样会用错。这是「改成 AI 被动使用」必须先补的洞。
             val promptHits = hits.filter { it.domain == PromptRagIndex.DOMAIN }
+            val skillHits = hits.filter { it.domain == com.ai.assistance.quro.core.rag.ClusterSkillRagIndex.DOMAIN }
             val bodies = PromptRagIndex.renderFullBodies(promptHits)
+            val skillBodies = com.ai.assistance.quro.core.rag.ClusterSkillRagIndex.renderFullBodies(skillHits)
             hits.forEach { h ->
                 arr.put(
-                    if (h.domain == PromptRagIndex.DOMAIN) {
-                        val body = PromptRagIndex.ruleBodyOf(h)
-                        h.toJson().apply {
-                            if (body != null) {
-                                put("rule_title", h.doc.title.ifBlank { h.id })
-                                put("rule_body", body)
+                    when (h.domain) {
+                        PromptRagIndex.DOMAIN -> {
+                            val body = PromptRagIndex.ruleBodyOf(h)
+                            h.toJson().apply {
+                                if (body != null) {
+                                    put("rule_title", h.doc.title.ifBlank { h.id })
+                                    put("rule_body", body)
+                                }
                             }
                         }
-                    } else h.toJson()
+                        // #217：集群技能域 —— 命中必须带回**完整规程正文**（prompt），
+                        // 否则角色拿到摘要照样没法照做。
+                        com.ai.assistance.quro.core.rag.ClusterSkillRagIndex.DOMAIN -> {
+                            val body = com.ai.assistance.quro.core.rag.ClusterSkillRagIndex.skillBodyOf(h)
+                            h.toJson().apply {
+                                if (body != null) {
+                                    put("skill_title", h.doc.title.ifBlank { h.id })
+                                    put("skill_body", body)
+                                }
+                            }
+                        }
+                        else -> h.toJson()
+                    }
                 )
             }
             return JSONObject().apply {
@@ -255,12 +279,15 @@ class RagSearchTool : QuroTool {
                 // 🔴 额外给一份纯正文：模型读 hits 里的 rule_body 容易被 JSON 转义干扰，
                 // 这份是可以直接照着执行的原文。
                 if (bodies.isNotBlank()) put("rules_full_text", bodies)
+                // #217：集群技能全文，可直接照着执行。
+                if (skillBodies.isNotBlank()) put("skills_full_text", skillBodies)
                 put(
                     "next",
                     "命中工具名后用 tool_router(action=\"get_schema\", name=...) 拿完整参数；" +
                         "命中卡片类型后用 card_catalog(types=[...]) 拿样例；" +
                         "命中组件类型后用 ui_dsl_spec 拿完整 DSL 规范；" +
-                        "命中规则段（domain=prompts）后**按 rules_full_text 里那份正文执行**，不要只看摘要。"
+                        "命中规则段（domain=prompts）后**按 rules_full_text 里那份正文执行**，不要只看摘要；" +
+                        "命中集群技能段（domain=cluster_skills）后**按 skills_full_text 里那份规程执行**，不要只看摘要。"
                 )
             }.toString()
         }

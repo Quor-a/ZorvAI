@@ -107,7 +107,7 @@ class ClusterEngineE2ETest {
     }
 
     @Test
-    fun `cluster tools register all fifteen into registry`() {
+    fun `cluster tools register all sixteen into registry`() {
         val reg = QuroToolRegistry()
         ClusterToolSet.registerAll(reg)
         val expected = listOf(
@@ -117,12 +117,14 @@ class ClusterEngineE2ETest {
             // #190 技能市场：主持可查技能、给角色配技能、从外部导入技能
             "cluster_skill_market", "cluster_skill_grant", "cluster_skill_import",
             // #191 开源技能 + 角色卡：搜开源社区、下载安装、用角色卡一键建角
-            "cluster_skill_search", "cluster_skill_install", "cluster_rolecard"
+            "cluster_skill_search", "cluster_skill_install", "cluster_rolecard",
+            // #215 动态创造能力：缺能力时现场造一个新角色
+            "cluster_forge_role"
         )
         expected.forEach { name ->
             assertTrue("缺少集群工具 $name", reg.get(name) != null)
         }
-        assertEquals("应注册 15 个集群工具", 15, reg.all().size)
+        assertEquals("应注册 16 个集群工具", 16, reg.all().size)
     }
 
     /**
@@ -211,5 +213,81 @@ class ClusterEngineE2ETest {
 
     private companion object {
         const val HOST_ID = RoleRegistry.HOST_PERSONA_ID
+    }
+
+    // ————————————————— #213 病灶 C：sync=false 必须有后台驱动入口 —————————————————
+
+    /**
+     * 🔴 用户实测：cluster_start(sync=false) 提交后任务一直停在 IDLE
+     * （progress 0/0，主持从不拾取）。
+     *
+     * 根因：旧实现 sync=false 只 submit 存任务就返回，**没有任何后台协程调 drive()**。
+     * 修复后 [ClusterRuntime.launchBackground] 会在后台作用域里立即驱动任务。
+     *
+     * 由于 [ClusterRuntime] 是进程级单例且依赖真实网关，这里钉住行为契约：
+     * - sync=false 返回的 message 必须明说「后台推进」（不再是静默提交）；
+     * - 返回体必须带 taskId（供 cluster_status 查询）；
+     * - [ClusterRuntime.launchBackground] 在引擎未初始化时不崩溃（`engine ?: return`）。
+     */
+    @Test
+    fun `cluster_start sync=false 返回后台推进提示且带 taskId`() {
+        val context = RuntimeEnvironment.getApplication()
+        RoleRegistry.ensureHost(context)
+        // 初始化进程级单例（Robolectric 下只注册不联网）
+        ClusterRuntime.init(context)
+        val out = ClusterStartTool().run(context, """{"goal":"写 slogan","sync":false}""")
+        val j = org.json.JSONObject(out)
+        assertTrue("sync=false 应返回 ok，实际=$out", j.optBoolean("ok"))
+        assertTrue("sync=false 必须带 taskId，实际=$out", j.has("taskId") && j.optString("taskId").isNotBlank())
+        assertTrue(
+            "返回信息必须明说后台推进（否则调用方以为只是静默存了任务），实际=${j.optString("message")}",
+            j.optString("message").contains("后台"),
+        )
+        // 引擎已初始化，launchBackground 不应崩溃
+        ClusterRuntime.launchBackground(
+            ClusterConfig(id = "default", name = "默认集群"),
+            ClusterTask(id = "probe", clusterId = "default", goal = "x"),
+        )
+    }
+
+    // ————————————————— #213 病灶 B：开源技能缺 abilityWords 时兜底不空 —————————————————
+
+    /**
+     * 🔴 用户实测：通过 cluster_skill_grant 用 skillNames 绑定的开源技能，能力核对
+     * 匹配不上（节点 SKIPPED）。
+     *
+     * 根因排查结论：内置集群技能 manifest 全部写了完整中文 `abilityWords`，但**开源
+     * SKILL.md 的 front-matter 往往不写这个字段**。此时必须靠 [ClusterSkillStore
+     * .effectiveAbilityWords] 的启发式兜底（手写表 → 自动切词），**绝不返回空列表**。
+     *
+     * 这条测试钉住：一个只带 name/description 的 SKILL.md（模拟开源技能），
+     * 解析后 abilityWords 为空，但 effectiveAbilityWords 必须给出可匹配词。
+     */
+    @Test
+    fun `开源技能缺 abilityWords 时兜底词表不空`() {
+        val context = RuntimeEnvironment.getApplication()
+        val md = """
+            ---
+            name: web-research-probe
+            description: Research and summarize topics from the web with multiple sources
+            ---
+            正文规则：多源交叉、标注来源。
+        """.trimIndent()
+        val skill = ClusterSkillStore.parseMd(
+            id = ClusterSkillStore.stableId("web-research-probe"),
+            name = "web-research-probe",
+            md = md,
+        )
+        assertEquals("开源技能 front-matter 没有 abilityWords 时字段应为空", "", skill.abilityWords)
+        val words = ClusterSkillStore.effectiveAbilityWords(skill)
+        assertTrue(
+            "缺 abilityWords 的开源技能必须兜底出可匹配词（否则判单时该技能=不存在），实际=$words",
+            words.isNotEmpty(),
+        )
+        // 自动切词必须包含技能名片段（research / web），否则中英匹配仍可能断
+        assertTrue(
+            "兜底词应含技能名切出的词（research/web），实际=$words",
+            words.any { it.contains("research") || it.contains("web") },
+        )
     }
 }

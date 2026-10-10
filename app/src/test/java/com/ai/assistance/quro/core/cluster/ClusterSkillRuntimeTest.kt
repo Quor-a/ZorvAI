@@ -161,12 +161,21 @@ class ClusterSkillRuntimeTest {
     }
 
     @Test
-    fun `tool count is capped per role`() {
-        val all = (1..200).map { spec("tool_$it") }
-        val picked = ClusterSkillRuntime.toolsFor(ctx, role(), all)
+    fun `tool count is capped per role when tool set explodes`() {
+        // #215：工具总数 < TOOL_FULL_OPEN_LIMIT 时默认全开（对话框所有功能给集群兼容）。
+        // 只有工具多到会挤爆上下文（> TOOL_FULL_OPEN_LIMIT）才走裁剪分支，此时才封顶。
+        val small = (1..ClusterSkillRuntime.TOOL_FULL_OPEN_LIMIT).map { spec("tool_$it") }
+        val allOpen = ClusterSkillRuntime.toolsFor(ctx, role(), small)
+        assertEquals(
+            "工具未超上限时应全开（对话框所有功能给集群兼容），实际=${allOpen.size}",
+            small.size, allOpen.size
+        )
+
+        val big = (1..(ClusterSkillRuntime.TOOL_FULL_OPEN_LIMIT + 100)).map { spec("tool_$it") }
+        val capped = ClusterSkillRuntime.toolsFor(ctx, role(), big)
         assertTrue(
-            "每个角色的工具数必须封顶（实际 ${picked.size}），否则上下文会被撑爆",
-            picked.size <= ClusterSkillRuntime.MAX_TOOLS_PER_ROLE
+            "工具多到失控时才按需裁剪并封顶（实际 ${capped.size}），否则上下文会被撑爆",
+            capped.size <= ClusterSkillRuntime.MAX_TOOLS_PER_ROLE
         )
     }
 
@@ -196,7 +205,11 @@ class ClusterSkillRuntimeTest {
                 tags = listOf("内置")
             )
         )
-        RoleRegistry.enroll(ctx, "ex2", modelProfileId = "cloud:current", role = RoleKind.EXECUTOR)
+        RoleRegistry.enroll(
+            ctx, "ex2", modelProfileId = "cloud:current",
+            role = RoleKind.EXECUTOR,
+            duties = listOf("设计", "视觉")
+        )
 
         val skill = ClusterSkill(
             id = "sk_design_1", name = "design-pro", description = "专业设计能力",

@@ -1,6 +1,10 @@
 package com.ai.assistance.quro.core.cluster
 
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
@@ -30,11 +34,22 @@ object ClusterRuntime {
     @Volatile private var appContext: Context? = null
     @Volatile private var clusters = listOf<ClusterConfig>()
 
+    /**
+     * #213 病灶 C：sync=false 后台驱动作用域。
+     *
+     * 旧实现 cluster_start(sync=false) 只 submit 存任务就返回，**没有任何后台协程调
+     * drive()**，于是主持永远不拾取，任务一直停在 IDLE（用户实测 progress 0/0）。
+     * 这个作用域持有每个异步任务的驱动 Job，随应用进程存活。
+     */
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     fun init(context: Context, gateway: LlmGateway? = null) {
         appContext = context.applicationContext
         val src = DefaultClusterModelSource(context)
         engine = ClusterEngine(context, gateway ?: DefaultLlmGateway(context, src), src)
         RoleRegistry.ensureHost(context)
+        // #217：集群技能 RAG 域预装 —— 让 rag_search(domain="cluster_skills") 立即可用。
+        com.ai.assistance.quro.core.rag.ClusterSkillRagIndex.install(context)
         if (clusters.isEmpty()) {
             clusters = listOf(ClusterConfig(id = "default", name = "默认集群"))
         }
@@ -50,6 +65,20 @@ object ClusterRuntime {
         clusters = clusters.map { if (it.id == c.id) c else it }.ifEmpty { listOf(c) }
     }
     fun ctx(): Context = appContext ?: error("未初始化")
+
+    /**
+     * #213 病灶 C：提交一个后台任务并立即开始驱动。
+     *
+     * 由 [ClusterStartTool] 在 sync=false 时调用。任务在 [backgroundScope] 里推进，
+     * 事件照常发到 [ClusterEngine.events]（ClusterChatBridge / ClusterTraceBridge
+     * 会投影到对话框与 trace 面板），调用方立即拿到任务 ID 用于 cluster_status 查询。
+     */
+    fun launchBackground(cluster: ClusterConfig, task: ClusterTask) {
+        val eng = engine ?: return
+        backgroundScope.launch {
+            runCatching { eng.drive(cluster, task) }
+        }
+    }
 }
 
 // ————————————————————————————————————————
@@ -87,9 +116,13 @@ class ClusterStartTool : com.ai.assistance.quro.core.tools.QuroTool {
         val task = engine.submit(cluster, goal)
 
         if (!sync) {
+            // #213 病灶 C：sync=false 也要让主持真的开始推进。
+            // 旧实现只 submit 就返回，没有后台协程 drive，任务永远停在 IDLE。
+            // 现在提交后立即在后台作用域里驱动，调用方拿 taskId 用 cluster_status 查进度。
+            ClusterRuntime.launchBackground(cluster, task)
             return@runBlocking JSONObject().apply {
                 put("ok", true); put("taskId", task.id)
-                put("message", "任务已提交，主持开始推进，可用 cluster_status 查询进度")
+                put("message", "任务已提交，主持正在后台推进，可用 cluster_status 查询进度")
             }.toString()
         }
         val reason = withTimeoutOrNull(30 * 60 * 1000L) { engine.drive(cluster, task) }
@@ -159,6 +192,7 @@ class ClusterRolesTool : com.ai.assistance.quro.core.tools.QuroTool {
                 put("model", models[r.modelProfileId]?.displayName ?: r.modelProfileId.ifBlank { "（未绑定，运行时兜底）" })
                 put("fallback", JSONArray(r.fallbackModelIds))
                 put("duties", JSONArray(r.duties))
+                put("tags", JSONArray(r.tags))
                 put("enabled", r.enabled)
             })
         }
@@ -171,11 +205,23 @@ class ClusterModelsTool : com.ai.assistance.quro.core.tools.QuroTool {
     override val name = "cluster_models"
     override val description =
         "列出 Zorv AI 中已配置好的所有可用模型（含云端厂商与本地离线模型），可用来给集群角色分配模型。" +
-        "返回的 id 可直接用于 cluster_bind_model。"
-    override val parametersJson = """{"type":"object","properties":{}}"""
+        "返回的 id 可直接用于 cluster_bind_model。" +
+        "支持 action=fetch：从当前接入点联网拉取该厂商可用的模型列表（参考功能模型配置的『拉取模型』），" +
+        "拉到的模型 id 同样可用于 cluster_bind_model。"
+    override val parametersJson = """{
+      "type":"object",
+      "properties":{
+        "action":{"type":"string","description":"list=列出已配置模型（默认）；fetch=从当前接入点联网拉取可用模型列表"}
+      }
+    }"""
     override val readOnly = true
 
     override fun run(context: Context, arguments: String): String {
+        val action = JSONObject(arguments).optString("action", "list").ifBlank { "list" }
+        return if (action == "fetch") fetchModels(context) else listConfiguredModels()
+    }
+
+    private fun listConfiguredModels(): String {
         val arr = JSONArray()
         ClusterRuntime.models().forEach { m ->
             arr.put(JSONObject().apply {
@@ -186,6 +232,47 @@ class ClusterModelsTool : com.ai.assistance.quro.core.tools.QuroTool {
             })
         }
         return JSONObject().put("ok", true).put("models", arr).toString()
+    }
+
+    /** #215：联网拉取当前接入点可用模型列表（复用功能模型配置的 QuroModelListFetcher）。 */
+    private fun fetchModels(context: Context): String {
+        val cfg = runCatching {
+            com.ai.assistance.quro.core.model.QuroModelConfigRepository(context).load()
+        }.getOrNull()
+        if (cfg == null || cfg.baseUrl.isBlank()) {
+            return err("当前没有可用的云端接入点（baseUrl 为空），无法拉取模型列表")
+        }
+        val baseUrl = cfg.baseUrl
+        val apiKey = cfg.apiKey
+        return kotlinx.coroutines.runBlocking {
+            val r = com.ai.assistance.quro.core.network.QuroModelListFetcher(
+                connectTimeout = 8, readTimeout = 15
+            ).fetch(baseUrl, apiKey)
+            when (r) {
+                is com.ai.assistance.quro.core.network.QuroModelListResult.Success -> {
+                    val arr = JSONArray()
+                    r.models.forEach { m ->
+                        arr.put(JSONObject().apply {
+                            put("id", m.id)
+                            put("displayName", m.id)
+                            put("contextLength", m.contextLength)
+                            put("kind", "CLOUD")
+                            put("available", true)
+                            put("supportsTools", true)
+                        })
+                    }
+                    JSONObject().apply {
+                        put("ok", true)
+                        put("models", arr)
+                        put("source", baseUrl)
+                        put("hint", "这些是接入点可用的模型，用 cluster_bind_model(personaId, modelId) 绑定给角色")
+                    }.toString()
+                }
+                is com.ai.assistance.quro.core.network.QuroModelListResult.Error -> {
+                    err("拉取模型列表失败：${r.message}")
+                }
+            }
+        }
     }
 }
 
@@ -381,6 +468,8 @@ object ClusterToolSet {
         registry.register(ClusterOpenSkillSearchTool())
         registry.register(ClusterOpenSkillInstallTool())
         registry.register(ClusterRoleCardTool())
+        // #215 动态创造能力：缺能力/缺成员时，主持现场造一个新角色
+        registry.register(ClusterForgeRoleTool())
     }
 }
 
