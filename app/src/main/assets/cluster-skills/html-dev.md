@@ -3,6 +3,7 @@ name: html-dev
 description: 单文件 HTML 页面的开发规程。要求双击即开、零构建、零外链字体图标。交付前必须跑那份可点自检清单。
 trigger: 写网页,做页面,HTML,单文件网页,做个界面,网页原型,静态页面
 abilityWords: 网页 页面 单文件 html css 前端 布局 编码 实现界面 界面实现 写网页 做页面 html
+requires-tools: write_file
 ---
 
 # 单文件 HTML 开发

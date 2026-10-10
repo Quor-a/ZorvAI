@@ -3,6 +3,8 @@ name: frontend-design-playbook
 description: 前端交付的执行规程：从「设计规格」走到「能跑的代码」，强调状态覆盖、真实数据形态、错误与空态、以及可验证的自检。
 trigger: 前端开发,写前端,做页面,React,Vue,组件开发,前端实现,搭界面
 abilityWords: 前端 界面 交互 实现界面 组件 页面 前端开发 前端实现 html 界面实现
+depends-on: html-dev, ui-design
+requires-tools: write_file, read_file
 ---
 
 # 前端实现

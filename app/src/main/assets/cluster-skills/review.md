@@ -3,6 +3,7 @@ name: review
 description: 评审与验收规程。核心：没有验收标准时第一反应是要求补标准，不是凭感觉看看。
 trigger: 评审,验收,审阅,检查,复核,把关,看看有没有问题,review
 abilityWords: 评审 验收 审阅 检查 复核 把关 评审验收 review
+requires-tools: read_file
 ---
 
 # 评审与验收

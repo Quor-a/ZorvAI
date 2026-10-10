@@ -77,6 +77,25 @@ object ClusterSkillStore {
          * 格式：`中文词|english-term` 用空格分隔，例如 `"编码 html css frontend web"`。
          */
         val abilityWords: String = "",
+        /**
+         * 依赖声明（逗号分隔的技能 id 或技能名）。
+         *
+         * #218：集群技能要实现「自己的技能架构、引擎、依赖」——
+         * 这门技能装配进角色时，[ClusterSkillEngine] 会把它声明的依赖做**传递闭包**
+         * 解析：依赖的技能即使没有显式绑定，也会一并装配，保证主技能引用的前置规矩在场。
+         *
+         * front-matter 键：`depends-on: skill-a, skill-b`。
+         */
+        val dependsOn: List<String> = emptyList(),
+        /**
+         * 执行这门技能需要的宿主工具名（逗号分隔）。
+         *
+         * #218：[ClusterSkillEngine] 会把全部需求与角色实际工具面求交，
+         * 缺失工具**显式报告**，让角色知道「规程要求用 X，但手上没有 X」。
+         *
+         * front-matter 键：`requires-tools: write_file, shell`。
+         */
+        val requiresTools: List<String> = emptyList(),
         val enabled: Boolean = true,
         val updatedAt: Long = 0L,
     ) {
@@ -89,6 +108,7 @@ object ClusterSkillStore {
         fun toJson(): JSONObject = JSONObject().apply {
             put("id", id); put("name", name); put("description", description)
             put("prompt", prompt); put("trigger", trigger); put("abilityWords", abilityWords)
+            put("dependsOn", JSONArray(dependsOn)); put("requiresTools", JSONArray(requiresTools))
             put("enabled", enabled); put("updatedAt", updatedAt)
         }
 
@@ -100,6 +120,12 @@ object ClusterSkillStore {
                 prompt = o.optString("prompt"),
                 trigger = o.optString("trigger"),
                 abilityWords = o.optString("abilityWords"),
+                dependsOn = o.optJSONArray("dependsOn")?.let { a ->
+                    (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }
+                } ?: emptyList(),
+                requiresTools = o.optJSONArray("requiresTools")?.let { a ->
+                    (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }
+                } ?: emptyList(),
                 enabled = o.optBoolean("enabled", true),
                 updatedAt = o.optLong("updatedAt", 0L),
             )
@@ -227,7 +253,8 @@ object ClusterSkillStore {
     /**
      * 解析 SKILL.md。
      *
-     * front-matter 支持 `name` / `description` / `trigger` / `abilityWords`，
+     * front-matter 支持 `name` / `description` / `trigger` / `abilityWords` /
+     * `depends-on`（依赖技能 id/名，逗号分隔）/ `requires-tools`（需要宿主工具，逗号分隔），
      * 其余为正文。与全局库的同名解析**刻意分开实现**——
      * 共用一个函数就得共用一套字段，以后全局库加字段会静默影响集群。
      */
@@ -241,6 +268,8 @@ object ClusterSkillStore {
         }
         fun fmField(k: String): String =
             Regex("^$k:\\s*(.+)$", RegexOption.MULTILINE).find(fm)?.groupValues?.get(1)?.trim().orEmpty()
+        fun fmList(k: String): List<String> =
+            fmField(k).split(Regex("[,\\s]+")).filter { it.isNotBlank() }
         return ClusterSkill(
             id = id,
             name = if (fmField("name").isNotBlank()) fmField("name") else name,
@@ -248,6 +277,8 @@ object ClusterSkillStore {
             prompt = body.trim(),
             trigger = fmField("trigger"),
             abilityWords = fmField("abilityWords"),
+            dependsOn = fmList("depends-on"),
+            requiresTools = fmList("requires-tools"),
             enabled = true,
             updatedAt = System.currentTimeMillis(),
         )

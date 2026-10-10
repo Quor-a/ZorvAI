@@ -3,6 +3,7 @@ name: web-research
 description: 联网调研规程。要求多源交叉、标明来源与时间、区分一手/二手、无法核实就明说，不许用记忆冒充检索。
 trigger: 调研,查一下,联网搜索,搜索,查资料,看看最新,研究一下
 abilityWords: 联网 搜索 检索 调研 研究 调查 查证 查资料 联网搜索 搜索联网 资讯 热点新闻 搜集资料 web research search
+requires-tools: web_search, http_get
 ---
 
 # 联网调研

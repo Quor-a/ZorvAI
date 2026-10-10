@@ -3,6 +3,7 @@ name: copywrite
 description: 文案写作规程。要求先定读者与目标句、给具体数字而非形容词、写完自查 AI 腔。不许编造事实与数据。
 trigger: 写文案,写文章,写稿,文案,标题,卖点,宣传,博客,推文
 abilityWords: 文案 写作 标题 卖点 宣传 撰写 文案写作 总结 归纳 copy
+requires-tools: write_file
 ---
 
 # 文案写作

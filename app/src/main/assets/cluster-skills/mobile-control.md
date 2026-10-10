@@ -3,6 +3,7 @@ name: mobile-control
 description: 手机操作规程。观察—决策—执行—再观察，危险动作先确认，坐标必须来自最新截图。
 trigger: 手机操作,操作手机,点击,滑动,截屏,自动化,控制手机,app操作
 abilityWords: 手机 操作手机 点击 滑动 截屏 设备控制 app操作 手机操作 mobile
+requires-tools: screen_tap, screen_swipe, screenshot
 ---
 
 # 手机操作
