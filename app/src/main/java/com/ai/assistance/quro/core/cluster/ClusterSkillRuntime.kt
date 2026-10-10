@@ -272,6 +272,8 @@ object ClusterSkillRuntime {
      * 解析角色绑定的真技能。
      *
      * #217：**技能注入走 RAG**（用户最新诉求：「给集群加技能 skills 加 RAG」）。
+     * #218：**技能装配走 [ClusterSkillEngine]**（用户最新诉求：「集群 skills 要实现
+     * 自己的 skills 架构、引擎、依赖，等等使用做出来自己的功能」）。
      *
      * 旧实现把绑定的技能正文全量拼进 system prompt（受 [MAX_SKILLS_PER_ROLE] /
      * [MAX_SKILL_TEXT_CHARS] 限制），与当前子任务无关的技能也在刷屏。
@@ -283,70 +285,34 @@ object ClusterSkillRuntime {
      * 3. 未命中的绑定技能保留摘要行（summaryLines），角色知道它存在，
      *    需要时可 `rag_search(domain="cluster_skills")` 按需取全文。
      *
+     * #218 新增：`resolveSkills` 委托给 [ClusterSkillEngine.assemble]，
+     * 后者在 RAG 之前先做依赖闭包解析与工具需求校验。
+     * 本函数保留为**兼容旧契约**的薄封装，供既有调用方（[ClusterEngine.callRole]）
+     * 使用；返回的 [ResolvedSkills] 只含引擎产物中与旧契约一致的部分
+     * （skills / summaryLines / bodies），引擎新增的 missingDependencies / cycles /
+     * missingTools 由 [ClusterSkillEngine.assemble] 单独暴露，接入方可按需读取。
+     *
      * @param role 角色档案，读它的 `skillIds`
      * @return (技能正文, 技能摘要行, 可function-calling 的技能)
      */
     fun resolveSkills(
         context: Context,
-        role: RoleProfile
+        role: RoleProfile,
+        actualToolNames: Set<String> = emptySet(),
     ): ResolvedSkills {
         if (role.skillIds.isEmpty()) {
             return ResolvedSkills(emptyList(), emptyList(), emptyList())
         }
-        // 🔴 #196：只读**集群自己的**技能库，不再读全局 QuroSkillStore。
-        // 隔离理由见 [ClusterSkillStore] 的类注释（一技能全角色可见 + 上下文爆 + 用户改全局
-        // 会静默改变集群判单标准）。
-        val all = runCatching { ClusterSkillStore.load(context) }.getOrElse { emptyList() }
-        val byId = all.associateBy { it.id }
-        val bound = role.skillIds.mapNotNull { byId[it] }
-
-        // #217：先注册技能 RAG 域（幂等；失败不阻断——降级为旧的全量注入）。
-        val ragInstalled = ClusterSkillRagIndex.install(context)
-
-        // #217：RAG 按需注入。查询 = 角色**任务上下文**的能力词（职责 + 专业背景）。
-        //
-        // 🔴 不能把绑定技能的 description 也拼进查询：技能文档的 description 全文参与
-        // 检索，一旦拼进去，每个绑定技能都能靠自己的描述**自证命中**，
-        // RAG 按需注入就退化成全量注入（与旧实现没有区别，还多烧一轮检索）。
-        // 只有任务相关的能力词（duties/skills）才能决定哪些技能正文值得注入。
-        val query = buildString {
-            (role.duties + role.skills)
-                .filter { it.isNotBlank() }
-                .forEach { append(it).append(' ') }
-        }.trim()
-        val ragHits = if (ragInstalled && query.isNotBlank()) {
-            ClusterSkillRagIndex.searchSkills(query, limit = ClusterSkillRuntime.MAX_SKILLS_PER_ROLE)
-        } else {
-            emptyList()
-        }
-        val ragHitIds = ragHits.map { it.id }.toSet()
-
-        // 命中 RAG 的技能按相关度优先注入正文；其余绑定技能只进摘要行。
-        val relevant = bound.filter { it.id in ragHitIds }
-
-        val fullText = when (role.role) {
-            RoleKind.EXECUTOR, RoleKind.CRITIC -> true
-            RoleKind.HOST, RoleKind.PLANNER, RoleKind.EXPERT -> false
-        }
-        // 注入正文 = RAG 命中的技能（仍走预算/个数收口，防止单技能超长）
-        val bodies = if (fullText) {
-            buildBodies(relevant)
-        } else {
-            buildSummaries(relevant)
-        }
-        // 摘要行 = 全部绑定技能（含未命中 RAG 的），角色知道它绑了哪些手艺
-        val lines = bound.map {
-            "- 「${it.name}」${it.description.ifBlank { "（无说明）" }.take(80)}"
-        }
-        // 🔴 #217：`skills` 必须始终是**全部绑定技能**，不是仅 RAG 命中的。
-        // 角色先要「知道自己绑了哪些手艺」，才能决定要不要 rag_search 取全文；
-        // 若 skills 只含 RAG 命中，未命中技能就从能力清单里消失了，
-        // 角色根本不知道它有这门手艺，更不会去检索它。
-        // 正文注入（bodies）才按 RAG 命中取舍 —— 那是「当前任务优先看什么」，
-        // 不是「角色会什么」。
-        val skills = bound
-        val bodyTexts = if (bodies.isBlank()) emptyList() else listOf(bodies)
-        return ResolvedSkills(skills, lines, bodyTexts)
+        // #218：委托给集群自己的技能引擎（依赖闭包 + 工具校验 + RAG 注入）。
+        val assembled = ClusterSkillEngine.assemble(context, role, actualToolNames)
+        return ResolvedSkills(
+            skills = assembled.skills,
+            summaryLines = assembled.summaryLines,
+            bodies = assembled.bodies,
+            missingTools = assembled.missingTools,
+            missingDependencies = assembled.missingDependencies,
+            cycles = assembled.cycles,
+        )
     }
 
     /**
@@ -383,8 +349,10 @@ object ClusterSkillRuntime {
      * - [MAX_SKILLS_PER_ROLE]：单角色最多注入几个技能；
      * - [MAX_SKILL_TEXT_CHARS]：总预算，超了就停并**明确写明截断**；
      * - [MAX_CHARS_PER_SKILL]：单技能超长时截断并注明。
+     *
+     * #218：改为 internal，供 [ClusterSkillEngine] 装配时调用。
      */
-    private fun buildBodies(skills: List<ClusterSkill>): String {
+    internal fun buildBodies(skills: List<ClusterSkill>): String {
         val usable = skills.filter { it.enabled }
             .sortedByDescending { it.updatedAt }
             .take(MAX_SKILLS_PER_ROLE)
@@ -421,8 +389,10 @@ object ClusterSkillRuntime {
     /**
      * #217：摘要模式 —— 非执行型角色只拿「规程存在 + 何时用」，不拿整篇正文。
      * 主持/规划师的工作是调度与判断，不需要照着网页/文案规程去写。
+     *
+     * #218：改为 internal，供 [ClusterSkillEngine] 装配时调用。
      */
-    private fun buildSummaries(skills: List<ClusterSkill>): String {
+    internal fun buildSummaries(skills: List<ClusterSkill>): String {
         val usable = skills.filter { it.enabled }
             .sortedByDescending { it.updatedAt }
             .take(MAX_SKILLS_PER_ROLE)
@@ -465,6 +435,23 @@ object ClusterSkillRuntime {
         role: RoleProfile,
         tools: List<QuroToolSpec>,
         skills: List<ClusterSkill>
+    ): String = capabilityAwareness(
+        context, role, tools,
+        ResolvedSkills(skills = skills, summaryLines = emptyList(), bodies = emptyList()),
+    )
+
+    /**
+     * #218：带技能引擎产物的能力自我感知。
+     *
+     * 在旧版基础上，额外把 [ResolvedSkills.missingTools] / [ResolvedSkills.missingDependencies]
+     * / [ResolvedSkills.cycles] 告知角色：技能规程要求用某个工具但角色没有，角色必须如实
+     * 说出来让主持补，而不是假装自己能做。
+     */
+    fun capabilityAwareness(
+        context: Context,
+        role: RoleProfile,
+        tools: List<QuroToolSpec>,
+        resolved: ResolvedSkills,
     ): String = buildString {
         appendLine("# 你现在实际拥有的能力")
         appendLine()
@@ -492,12 +479,12 @@ object ClusterSkillRuntime {
             appendLine("- 工具失败就把失败原因说清楚并换路径，不要编造成功。")
         }
 
-        if (skills.isNotEmpty()) {
+        if (resolved.skills.isNotEmpty()) {
             appendLine()
-            appendLine("## 技能（${skills.size} 项，规程正文已注入你的系统提示）")
+            appendLine("## 技能（${resolved.skills.size} 项，规程正文已注入你的系统提示）")
             // 🔴 #196：不再分「可激活/仅规范」—— 集群技能一律只是提示词规程，
             // 没有 function-calling 形态。标成「可激活」会让角色去调一个不存在的工具。
-            skills.forEach { sk ->
+            resolved.skills.forEach { sk ->
                 appendLine("- 「${sk.name}」${sk.description.take(60)}")
             }
             // #217：技能走 RAG 按需取全文 —— 与主对话同一检索通道。
@@ -508,6 +495,26 @@ object ClusterSkillRuntime {
             appendLine("  按需取回**完整正文**，取回后照着执行。")
             appendLine("- 不确定自己有没有某门手艺时，**先 rag_search(domain=\"cluster_skills\") 搜一遍再说**，")
             appendLine("  不要凭记忆说「我不会」——技能库里可能就有。")
+
+            // #218：依赖与工具需求校验结果必须如实告知。
+            if (resolved.missingDependencies.isNotEmpty()) {
+                appendLine()
+                appendLine("## 技能依赖缺失")
+                appendLine("- 你绑定的技能声明了依赖，但技能库里找不到：${resolved.missingDependencies.joinToString("、")}")
+                appendLine("- 依赖缺失的技能可能不完整。需要时明确告诉主持，由主持补装或换技能。")
+            }
+            if (resolved.cycles.isNotEmpty()) {
+                appendLine()
+                appendLine("## 技能依赖环（已剔除）")
+                appendLine("- 检测到依赖成环：${resolved.cycles.joinToString("；") { it.joinToString(" -> ") }}")
+                appendLine("- 环上技能已从装配中剔除，避免死循环。需要时告诉主持调整依赖声明。")
+            }
+            if (resolved.missingTools.isNotEmpty()) {
+                appendLine()
+                appendLine("## 技能需要但你缺的工具")
+                appendLine("- 你的技能规程声明需要这些工具，但你当前没有：${resolved.missingTools.joinToString("、")}")
+                appendLine("- 不要假装能用它们。需要时明确告诉主持，由主持用工具配置/白名单补上，或换技能。")
+            }
         }
 
         appendLine()
@@ -525,6 +532,19 @@ object ClusterSkillRuntime {
         /** 供 UI/工具展示的一行摘要 */
         val summaryLines: List<String>,
         /** 注入提示词的技能正文（可能为空 —— 技能都禁用了） */
-        val bodies: List<String>
+        val bodies: List<String>,
+        /**
+         * #218：技能声明需要、但角色实际没有的工具名。
+         * 由 [ClusterSkillEngine] 汇总；接入方可据此告知角色缺什么。
+         */
+        val missingTools: List<String> = emptyList(),
+        /**
+         * #218：依赖声明了但库中不存在的技能 id/名。
+         */
+        val missingDependencies: List<String> = emptyList(),
+        /**
+         * #218：被检测出的依赖环（环上技能已从装配中剔除）。
+         */
+        val cycles: List<List<String>> = emptyList(),
     )
 }

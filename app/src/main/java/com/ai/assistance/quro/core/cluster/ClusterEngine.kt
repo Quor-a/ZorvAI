@@ -1129,8 +1129,13 @@ ${stillFailed.joinToString("\n") { "- ${it.title}：${it.lastError}" }}
             return null
         }
         val model = resolveModel(role, fallbackToAny = true) ?: return null
-        val skills = ClusterSkillRuntime.resolveSkills(context, role)
         val tools = toolsForRole(role, model.first.kind == ModelKind.LOCAL)
+        // #218：先算工具面，再让技能引擎做「依赖闭包 + 工具需求校验」——
+        // 技能声明的 requiresTools 与角色实际拿到的工具求交，缺失工具会进提示词。
+        val skills = ClusterSkillRuntime.resolveSkills(
+            context, role,
+            actualToolNames = tools.map { it.name }.toSet(),
+        )
         val toolTrace = java.util.Collections.synchronizedList(ArrayList<Pair<String, String>>())
         val sys = buildRoleSystem(persona.roleSetting, role, persona, skills, tools)
         val out = runCatching {
@@ -1251,7 +1256,8 @@ ${stillFailed.joinToString("\n") { "- ${it.title}：${it.lastError}" }}
         }
 
         appendLine()
-        appendLine(ClusterSkillRuntime.capabilityAwareness(context, role, tools, skills.skills))
+        // #218：能力自我感知带完整技能引擎产物（依赖缺失/工具需求校验如实告知）。
+        appendLine(ClusterSkillRuntime.capabilityAwareness(context, role, tools, skills))
         appendLine()
         appendLine("# 输出纪律")
         appendLine("- 只做与你职责相关的事，不越权替其他角色做决定。")

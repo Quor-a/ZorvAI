@@ -3,6 +3,7 @@ name: role-forge
 description: 主持专用。当装技能也补不上能力缺口时，造一张新角色卡。这是 CAPABILITY 阶段补救动作 C 的执行规程，产出的是有可判据标准的人格卡，不是空壳。
 trigger: 造角色,新建角色,新角色卡,角色即专家,加个专家,补角色,没有合适的人
 abilityWords: 造角色 新建角色 角色卡 加专家 补角色 建卡 forge 角色
+requires-tools: cluster_rolecard, cluster_forge_role
 ---
 
 # 角色锻造（主持专用）

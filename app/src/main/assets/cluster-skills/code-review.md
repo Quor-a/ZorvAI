@@ -3,6 +3,8 @@ name: code-review
 description: 代码评审规程。只报真问题、每条带触发条件与修法、不给风格偏好充数、不做无证据的安全指控。
 trigger: 代码评审,code review,看代码,检查代码,审代码,这段代码有没有问题,CR
 abilityWords: 代码评审 审代码 检查代码 代码质量 code review cr
+depends-on: review
+requires-tools: read_file
 ---
 
 # 代码评审

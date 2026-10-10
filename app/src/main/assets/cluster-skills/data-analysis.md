@@ -3,6 +3,7 @@ name: data-analysis
 description: 数据分析规程。先问口径与粒度、先看分布再谈相关、缺失值与异常值必须显式处理、结论给区间不给点值。
 trigger: 数据分析,分析数据,统计,看数据,报表,透视,数据处理,做个分析
 abilityWords: 数据分析 统计 报表 透视 数据处理 看数据 分析 data
+requires-tools: read_file
 ---
 
 # 数据分析

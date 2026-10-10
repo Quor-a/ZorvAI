@@ -3,6 +3,7 @@ name: skill-fetch
 description: 主持专用。当子任务需要的能力本地技能库里没有时，从开源社区检索并安装技能包。这是 CAPABILITY 阶段补救动作 B 的执行规程，不是「随便装个东西」。
 trigger: 技能获取,拉取技能,装技能,开源技能,社区技能,没有这个技能,补技能
 abilityWords: 技能获取 拉取技能 装技能 补技能 开源技能 skill fetch 装包 取技能
+requires-tools: cluster_skill_search, cluster_skill_install
 ---
 
 # 技能获取（主持专用）

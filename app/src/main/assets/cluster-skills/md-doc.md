@@ -3,6 +3,7 @@ name: md-doc
 description: Markdown 文档写作规程。要求先给结论再展开、代码块必须带语言、不留 TODO 与占位符、链接必须可达。
 trigger: 写文档,md文档,Markdown,写说明,README,技术文档,写个文档
 abilityWords: 文档 写作 说明书 markdown 写文档 技术文档 撰写文档 doc
+requires-tools: write_file
 ---
 
 # Markdown 文档

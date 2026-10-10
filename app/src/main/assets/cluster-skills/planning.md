@@ -3,6 +3,7 @@ name: planning
 description: 任务拆解规程。要求每个子节点可独立验收、依赖显式、验收标准先于任务存在、失败不停留。
 trigger: 拆解,规划,拆任务,任务分解,计划,做计划,排期,拆一下
 abilityWords: 规划 拆解 拆任务 计划 任务分解 排期 拆分 计划制定 planning
+depends-on: strategy
 ---
 
 # 任务拆解
