@@ -53,7 +53,7 @@
 
 </div>
 
-> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.1.2`（`versionCode 1001002`）
+> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.1.5`（`versionCode 1001005`）
 >
 > Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **235 个内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
 >
@@ -336,13 +336,15 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[v1.1.2 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
+- 🟢 **[v1.1.5 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
 
-  **任务级闭环真正接进主循环**
+  **AI 集群技能全面升级：独立技能引擎 + RAG + 工具主通道**
 
-  - **`LongHorizonOrchestrator.runTask` 从死代码变成主干**：此前编排器写好了却全仓零调用。此版本把 `QuroAssistant` 的 ReAct 循环抽成局部 `reactPass()`，交给 `runTask` 作为 `stepExecutor` —— 一趟 = 一条完整 ReAct，链路变为「策划 → 执行 → 交付闸门 → 不可交付则带记忆重新策划 → 再跑一趟 → 超限按最后一趟强制交付」。
-  - **交付闸门与任务策划是 Agent 固有环节**，不再是可关的开关：模型给出候选答复后先判可交付性，不可交付就带记忆重新策划，而不是把失败回执直接抛给用户。
-  - **顺带修掉闸门「失明」的两个真问题**：① 重规划上下文原本恒为字面量 `"ctx"`，重规划 100% 是盲的 —— 改为编排器自累积打回原因 + 建议 + 失败步骤，另开 `extraPlanContext` 出口喂入工具层失败明细；② 闸门判定输入原本是加了 `OK: ` 前缀并截断到 200 字的摘要，导致 `startsWith("工具执行失败")` 永远不成立、闸门恒判可交付、形同虚设 —— 改为判**产物原文**。
+  - **集群技能使用独立 Skills 架构**：SKILL.md 走标准 skills 文件格式，支持 `dependsOn` / `requiresTools` 字段，可声明技能依赖与工具需求。
+  - **独立 ClusterSkillEngine**：依赖闭包解析、循环依赖检测、工具需求校验、能力感知透传，不再依赖 ZorvAI 内置 skills 格式。
+  - **集群技能接入 RAG 检索**：技能调用时可通过 RAG 查询相关知识，工具调用统一走 ZorvAI 主通道。
+  - **12 个内置集群 SKILL.md 同步更新**，配套 10 个引擎测试用例，全量测试通过。
+  - 同时包含多轮集群验收、能力匹配中英桥梁、工具全开与空产物治理等改进。
 
   **可靠性**
 
