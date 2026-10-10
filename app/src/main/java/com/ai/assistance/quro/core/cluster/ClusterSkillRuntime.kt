@@ -3,6 +3,7 @@ package com.ai.assistance.quro.core.cluster
 import android.content.Context
 import com.ai.assistance.quro.core.QuroToolSpec
 import com.ai.assistance.quro.core.cluster.ClusterSkillStore.ClusterSkill
+import com.ai.assistance.quro.core.rag.ClusterSkillRagIndex
 import com.ai.assistance.quro.core.tools.ToolCapabilityDirectory
 
 /**
@@ -49,19 +50,24 @@ object ClusterSkillRuntime {
      * 加上角色自己的技能正文与历史，一次请求很容易顶到上下文上限，
      * 表现为「模型不响应」或「答非所问」。
      *
-     * 但这个值是**给定的预算**而不是「关掉工具」—— 20 个足够覆盖
-     * 「查资料 / 写文件 / 跑命令 / 出图 / 建站」这类真实执行需求。
+     * #215：从 20 提高到 60 —— 用户要求「对话框所有功能给集群兼容」，
+     * 集群角色默认全开时（工具总数 < 300）不受此限制；只有工具多到失控
+     * 走裁剪分支时，这个值才决定每个角色最多能拿到多少工具。
      */
-    const val MAX_TOOLS_PER_ROLE = 20
+    const val MAX_TOOLS_PER_ROLE = 60
 
     /**
      * #212：工具**全开**的上限。工具总数不超过它就一股脑全给，
      * 不再按「分工需要」裁剪（见 [toolsFor] 的注释）。
      *
-     * 只有当工具多到会挤爆上下文时才退化成按需裁剪，
-     * 这个数设得很宽松，正常情况永远走全开。
+     * 只有当工具多到会挤爆上下文时才退化成按需裁剪。
+     *
+     * #215：用户要求「对话框支持还是不够，完全分开对话框所有功能给集群兼容」——
+     * 主对话能用的工具，集群角色也应当能用。原上限 80 会让拥有 200+ 工具的宿主
+     * 永远走「按需裁剪」，集群角色只能看到一小撮工具，等于对话框功能没有开放给集群。
+     * 提高到 300：只要工具总数没超过它，**一律全开**；只有工具多到失控才裁剪。
      */
-    const val TOOL_FULL_OPEN_LIMIT = 80
+    const val TOOL_FULL_OPEN_LIMIT = 300
 
     /** 单个角色注入的技能正文总字符上限。 */
     const val MAX_SKILL_TEXT_CHARS = 6000
@@ -211,6 +217,9 @@ object ClusterSkillRuntime {
      *
      * 分类 + 关键词打分，取前 [MAX_TOOLS_PER_ROLE] 个。
      * 保留它不是因为默认需要，而是给「工具真的多到失控」留一条退路。
+     *
+     * #215：上限从 20 提高到 60 —— 即使走到裁剪分支，也要让集群角色
+     * 尽量拿到与主对话一致的工具面，而不是只给一丁点。
      */
     private fun pickByRelevance(role: RoleProfile, allTools: List<QuroToolSpec>): List<QuroToolSpec> {
         val cats = preferredCategories(role.role)
@@ -262,6 +271,18 @@ object ClusterSkillRuntime {
     /**
      * 解析角色绑定的真技能。
      *
+     * #217：**技能注入走 RAG**（用户最新诉求：「给集群加技能 skills 加 RAG」）。
+     *
+     * 旧实现把绑定的技能正文全量拼进 system prompt（受 [MAX_SKILLS_PER_ROLE] /
+     * [MAX_SKILL_TEXT_CHARS] 限制），与当前子任务无关的技能也在刷屏。
+     * 现在：
+     * 1. 先把集群技能库注册成 [ClusterSkillRagIndex] 的 RAG 域（与主对话共用
+     *    [com.ai.assistance.quro.core.rag.AgentRag.engine] 同一通道）；
+     * 2. 按角色当前任务相关的能力词（[RoleProfile.duties]/[RoleProfile.skills]/
+     *    任务上下文）RAG 检索，只把**命中当前任务**的技能正文注入；
+     * 3. 未命中的绑定技能保留摘要行（summaryLines），角色知道它存在，
+     *    需要时可 `rag_search(domain="cluster_skills")` 按需取全文。
+     *
      * @param role 角色档案，读它的 `skillIds`
      * @return (技能正文, 技能摘要行, 可function-calling 的技能)
      */
@@ -278,7 +299,54 @@ object ClusterSkillRuntime {
         val all = runCatching { ClusterSkillStore.load(context) }.getOrElse { emptyList() }
         val byId = all.associateBy { it.id }
         val bound = role.skillIds.mapNotNull { byId[it] }
-        return buildSkills(bound, role.role)
+
+        // #217：先注册技能 RAG 域（幂等；失败不阻断——降级为旧的全量注入）。
+        val ragInstalled = ClusterSkillRagIndex.install(context)
+
+        // #217：RAG 按需注入。查询 = 角色**任务上下文**的能力词（职责 + 专业背景）。
+        //
+        // 🔴 不能把绑定技能的 description 也拼进查询：技能文档的 description 全文参与
+        // 检索，一旦拼进去，每个绑定技能都能靠自己的描述**自证命中**，
+        // RAG 按需注入就退化成全量注入（与旧实现没有区别，还多烧一轮检索）。
+        // 只有任务相关的能力词（duties/skills）才能决定哪些技能正文值得注入。
+        val query = buildString {
+            (role.duties + role.skills)
+                .filter { it.isNotBlank() }
+                .forEach { append(it).append(' ') }
+        }.trim()
+        val ragHits = if (ragInstalled && query.isNotBlank()) {
+            ClusterSkillRagIndex.searchSkills(query, limit = ClusterSkillRuntime.MAX_SKILLS_PER_ROLE)
+        } else {
+            emptyList()
+        }
+        val ragHitIds = ragHits.map { it.id }.toSet()
+
+        // 命中 RAG 的技能按相关度优先注入正文；其余绑定技能只进摘要行。
+        val relevant = bound.filter { it.id in ragHitIds }
+
+        val fullText = when (role.role) {
+            RoleKind.EXECUTOR, RoleKind.CRITIC -> true
+            RoleKind.HOST, RoleKind.PLANNER, RoleKind.EXPERT -> false
+        }
+        // 注入正文 = RAG 命中的技能（仍走预算/个数收口，防止单技能超长）
+        val bodies = if (fullText) {
+            buildBodies(relevant)
+        } else {
+            buildSummaries(relevant)
+        }
+        // 摘要行 = 全部绑定技能（含未命中 RAG 的），角色知道它绑了哪些手艺
+        val lines = bound.map {
+            "- 「${it.name}」${it.description.ifBlank { "（无说明）" }.take(80)}"
+        }
+        // 🔴 #217：`skills` 必须始终是**全部绑定技能**，不是仅 RAG 命中的。
+        // 角色先要「知道自己绑了哪些手艺」，才能决定要不要 rag_search 取全文；
+        // 若 skills 只含 RAG 命中，未命中技能就从能力清单里消失了，
+        // 角色根本不知道它有这门手艺，更不会去检索它。
+        // 正文注入（bodies）才按 RAG 命中取舍 —— 那是「当前任务优先看什么」，
+        // 不是「角色会什么」。
+        val skills = bound
+        val bodyTexts = if (bodies.isBlank()) emptyList() else listOf(bodies)
+        return ResolvedSkills(skills, lines, bodyTexts)
     }
 
     /**
@@ -288,6 +356,9 @@ object ClusterSkillRuntime {
      * - [MAX_SKILLS_PER_ROLE]：单角色最多注入几个技能的正文；
      * - **按 kind 分层注入**：主持/规划师只要「知道有这套规矩」，不要正文；
      *   执行者/评审才需要照着做。只截断不算隔离 —— 截断后所有人拿到的是同一坨残缺文本。
+     *
+     * #217：生产路径 [resolveSkills] 已改为 RAG 按需注入（只注入命中当前任务的技能正文），
+     * 本函数保留为纯逻辑入口（测试与降级用），行为与旧版一致。
      */
     fun buildSkills(skills: List<ClusterSkill>, kind: RoleKind = RoleKind.EXECUTOR): ResolvedSkills {
         // 只注入启用的技能：被用户关掉的技能注入进去等于自我否定
@@ -297,33 +368,35 @@ object ClusterSkillRuntime {
         val lines = usable.map {
             "- 「${it.name}」${it.description.ifBlank { "（无说明）" }.take(80)}"
         }
-        // 技能正文按 updatedAt 新的优先累加，超预算即停 —— 保证至少注入一个完整技能，
-        // 而不是把每个技能都截成半截（半截技能比没有更糟：模型会以为那就是全部）。
-        val body = StringBuilder()
-        var budget = MAX_SKILL_TEXT_CHARS
-        // #199：非执行型角色只拿「规程存在 + 何时用」，不拿整篇正文。
-        // 主持/规划师的工作是调度与判断，不需要照着网页/文案规程去写；
-        // 把几千字符正文塞给它们只会挤掉真正要用的调度上下文。
         val fullText = when (kind) {
             RoleKind.EXECUTOR, RoleKind.CRITIC -> true
             RoleKind.HOST, RoleKind.PLANNER, RoleKind.EXPERT -> false
         }
+        val body = if (fullText) buildBodies(usable) else buildSummaries(usable)
+        return ResolvedSkills(usable, lines, if (body.isEmpty()) emptyList() else listOf(body.toString()))
+    }
+
+    /**
+     * #217：把 RAG 命中的技能正文拼成可注入文本（全文模式）。
+     *
+     * 与旧 [buildSkills] 的预算语义一致：
+     * - [MAX_SKILLS_PER_ROLE]：单角色最多注入几个技能；
+     * - [MAX_SKILL_TEXT_CHARS]：总预算，超了就停并**明确写明截断**；
+     * - [MAX_CHARS_PER_SKILL]：单技能超长时截断并注明。
+     */
+    private fun buildBodies(skills: List<ClusterSkill>): String {
+        val usable = skills.filter { it.enabled }
+            .sortedByDescending { it.updatedAt }
+            .take(MAX_SKILLS_PER_ROLE)
+        val body = StringBuilder()
+        var budget = MAX_SKILL_TEXT_CHARS
         for (s in usable) {
             val raw = s.prompt.trim()
             if (raw.isEmpty()) continue
-            val text = if (fullText) {
-                if (raw.length > MAX_CHARS_PER_SKILL) {
-                    // 单个技能本身超长时**必须写明被截断**，不能让角色以为那就是全部规矩
-                    raw.take(MAX_CHARS_PER_SKILL) +
-                        "\n\n（此技能正文过长，此处只给了摘要；完整内容见该角色技能清单）"
-                } else raw
-            } else {
-                // 摘要模式：只保留「什么时候用」那一节的能力判断依据
-                val head = raw.lineSequence().takeWhile { it.isNotBlank() }.joinToString("\n")
-                val lead = if (head.length > MAX_CHARS_PER_SKILL / 2) head.take(MAX_CHARS_PER_SKILL / 2)
-                else head
-                lead + "\n（本技能是方法论型规程全文，执行细节需照着做时再取；此处只登记其存在与适用场景）"
-            }
+            val text = if (raw.length > MAX_CHARS_PER_SKILL) {
+                raw.take(MAX_CHARS_PER_SKILL) +
+                    "\n\n（此技能正文过长，此处只给了摘要；完整内容见该角色技能清单）"
+            } else raw
             if (text.length > budget) {
                 body.appendLine()
                 body.appendLine("## 技能「${s.name}」（已截断）")
@@ -336,17 +409,46 @@ object ClusterSkillRuntime {
             body.appendLine("## 技能「${s.name}」")
             body.appendLine(text)
             if (budget <= 0) {
-                // 🔴 #196：集群技能一律**不是** function-calling 工具（ClusterSkill 没有
-                // callable 字段，这是刻意的 —— 见 ClusterSkillStore 的注释）。
-                // 所以这里不许提「调用 skill__xxx 激活」，那套话术属于全局技能库，
-                // 抄过来会让角色去找一个根本不存在的工具。
                 body.appendLine("（其余技能因篇幅未注入。本角色绑定的技能清单：${
                     usable.joinToString("、") { "「${it.name}」" }
                 }。若某一门正是本次任务所需，明确说出来，由主持决定是否拆细本节点。）")
                 break
             }
         }
-        return ResolvedSkills(usable, lines, if (body.isEmpty()) emptyList() else listOf(body.toString()))
+        return body.toString()
+    }
+
+    /**
+     * #217：摘要模式 —— 非执行型角色只拿「规程存在 + 何时用」，不拿整篇正文。
+     * 主持/规划师的工作是调度与判断，不需要照着网页/文案规程去写。
+     */
+    private fun buildSummaries(skills: List<ClusterSkill>): String {
+        val usable = skills.filter { it.enabled }
+            .sortedByDescending { it.updatedAt }
+            .take(MAX_SKILLS_PER_ROLE)
+        val body = StringBuilder()
+        var budget = MAX_SKILL_TEXT_CHARS
+        for (s in usable) {
+            val raw = s.prompt.trim()
+            if (raw.isEmpty()) continue
+            val head = raw.lineSequence().takeWhile { it.isNotBlank() }.joinToString("\n")
+            val lead = if (head.length > MAX_CHARS_PER_SKILL / 2) head.take(MAX_CHARS_PER_SKILL / 2)
+            else head
+            val text = lead + "\n（本技能是方法论型规程全文，执行细节需照着做时再取；此处只登记其存在与适用场景）"
+            if (text.length > budget) {
+                body.appendLine()
+                body.appendLine("## 技能「${s.name}」（已截断）")
+                body.appendLine(text.take(budget))
+                body.appendLine("（正文过长已截断，完整规则见技能页）")
+                break
+            }
+            budget -= text.length
+            body.appendLine()
+            body.appendLine("## 技能「${s.name}」")
+            body.appendLine(text)
+            if (budget <= 0) break
+        }
+        return body.toString()
     }
 
     /**
@@ -398,11 +500,22 @@ object ClusterSkillRuntime {
             skills.forEach { sk ->
                 appendLine("- 「${sk.name}」${sk.description.take(60)}")
             }
+            // #217：技能走 RAG 按需取全文 —— 与主对话同一检索通道。
+            appendLine()
+            appendLine("## 技能按需检索（RAG）")
+            appendLine("- 上面注入的是与当前任务**最相关**的技能正文。你绑定的全部技能以摘要行登记在上，")
+            appendLine("  需要某门技能的完整规程时，调 `rag_search(query=\"<你要达成的效果>\", domain=\"cluster_skills\")`")
+            appendLine("  按需取回**完整正文**，取回后照着执行。")
+            appendLine("- 不确定自己有没有某门手艺时，**先 rag_search(domain=\"cluster_skills\") 搜一遍再说**，")
+            appendLine("  不要凭记忆说「我不会」——技能库里可能就有。")
         }
 
         appendLine()
         appendLine("## 边界")
-        appendLine("- 上面没列出的能力，你**没有**。需要时如实说明缺什么，不要用想象代替执行。")
+        appendLine("- 上面没列出的能力，你当前没有。需要时**如实说明缺什么**，然后：")
+        appendLine("  - 若你能用现有工具/技能组合出解决办法，就直接动手；")
+        appendLine("  - 若确实缺一门手艺，明确告诉主持「需要什么能力」，主持会通过 cluster_skill_search / cluster_skill_install / cluster_rolecard / cluster_forge_role 补上；")
+        appendLine("  - 不要假装自己已经做了，也不要因为「没有现成能力」就拒绝任务 —— 缺能力就去创造。")
     }
 
     /** 技能解析产物。 */

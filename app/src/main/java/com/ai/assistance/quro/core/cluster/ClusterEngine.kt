@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.cluster
 
 import android.content.Context
+import com.ai.assistance.quro.core.tools.QuroToolRouter
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -52,6 +53,15 @@ class ClusterEngine(
      */
     private suspend fun execTool(call: com.ai.assistance.quro.core.QuroToolCall): String {
         val name = call.name
+        // #217：渐进式披露 —— `tool_router` 调用由主通道的 QuroToolRouter 处理，
+        // 不进真实工具注册表（它不是可执行工具，是路由目录）。
+        if (name == "tool_router") {
+            val all = runCatching {
+                com.ai.assistance.quro.core.tools.QuroToolRegistry.active?.fullSpecs()
+            }.getOrNull() ?: return "工具注册表未就绪（应用可能刚启动，稍后重试）"
+            val router = routerFor(all)
+            return router.handle(name, call.arguments)
+        }
         // 🔴 #200：集群角色拿不到 `skill__xxx`（toolsFor 已硬过滤），
         // 且集群技能本来就没有 function-calling 形态。这里不再回灌全局库正文——
         // 那等于绕过集群技能体系直接抽全局规程，隔离就是个空壳。
@@ -86,12 +96,52 @@ class ClusterEngine(
     private val spend = HashMap<String, Int>()          // personaId|taskId → tokens
     private val profiles = HashMap<String, Pair<Int, Int>>()  // personaId → (成功, 失败)
 
+    /**
+     * #217：集群云端角色共用的 [QuroToolRouter] —— 工具调用获取走 ZorvAI 主通道。
+     *
+     * 主对话的渐进式披露（每轮只下发【路由目录 + 常驻核心 + 已加载】，其余工具
+     * 经 `tool_router` 检索后加载）在这里原样生效：集群角色看到的工具面与主对话一致，
+     * 不再由 ClusterSkillRuntime 按分工裁剪后全量下发。
+     *
+     * 所有云端角色共用实例（跨角色复用「已加载工具」知识，与主对话跨会话复用同语义），
+     * 每次角色发言前 [setSpecs] 同步最新注册表。
+     */
+    @Volatile private var toolRouter: QuroToolRouter? = null
+    private val toolRouterLock = Any()
+
+    private fun routerFor(all: List<com.ai.assistance.quro.core.QuroToolSpec>): QuroToolRouter {
+        var r = toolRouter
+        if (r == null) {
+            synchronized(toolRouterLock) {
+                r = toolRouter
+                if (r == null) {
+                    r = QuroToolRouter(all, context.applicationContext)
+                    toolRouter = r
+                }
+            }
+        }
+        r!!.setSpecs(all)
+        return r!!
+    }
+
     @Volatile private var paused = false
-    @Volatile private var aborted = false
+
+    /**
+     * 目标任务级中止（#213 病灶 A）。
+     *
+     * 旧实现 `aborted: Boolean` 被 abort() 置 true 后**永不重置**，之后每个新任务
+     * 的 drive() 第一行就 `return USER_ABORTED` —— 用户实测 sync=true 立即中止
+     * （turns=0, tokens=0）就是这个原因。现在改成记录「中止时正在 drive 的任务 id」：
+     * - abort() 只标记**当前活跃任务**；
+     * - 之后提交的新任务不受旧中止影响；
+     * - 被标记的任务在下一个检查点收尾。
+     */
+    @Volatile private var abortedTaskId: String? = null
+    @Volatile private var activeTaskId: String? = null
 
     fun pause() { paused = true }
     fun resume() { paused = false }
-    fun abort() { aborted = true }
+    fun abort() { abortedTaskId = activeTaskId }
 
     fun task(id: String) = tasks[id]
 
@@ -112,9 +162,21 @@ class ClusterEngine(
     /** 驱动到闭环。阻塞式，宿主在自己的协程里调用。 */
     suspend fun drive(cluster: ClusterConfig, t: ClusterTask): CloseReason {
         emit(ClusterEvent.Started(t.id, t.goal))
+        // 记录当前活跃任务，abort() 只会标记它（#213 病灶 A）
+        activeTaskId = t.id
+        try {
+            return driveLoop(cluster, t)
+        } finally {
+            if (activeTaskId == t.id) activeTaskId = null
+        }
+    }
+
+    private suspend fun driveLoop(cluster: ClusterConfig, t: ClusterTask): CloseReason {
         var guard = 0
         while (t.state != ClusterTaskState.CLOSED && t.state != ClusterTaskState.ESCALATED) {
-            if (aborted) return close(t, CloseReason.USER_ABORTED, "用户中止")
+            // #213 病灶 A：只有「当前任务正是被 abort 标记的那个」才中止。
+            // 旧的中止请求不得误杀之后提交的新任务。
+            if (abortedTaskId == t.id) return close(t, CloseReason.USER_ABORTED, "用户中止")
             while (paused) kotlinx.coroutines.delay(300)
 
             // 终止检查优先于一切：主持不能无限循环
@@ -324,7 +386,7 @@ ${if (vocab.isNotBlank()) vocab else "(技能库为空)"}
         val node = ready.first()
         node.state = NodeState.READY
 
-        val picks = rankRoles(t, node, cluster.budget.proposeFanout)
+        val picks = rankRoles(t, node, cluster.budget.proposeFanout, cluster.budget.maxTokensPerRole)
         if (picks.isEmpty()) {
             node.lastError = "没有可用角色承接该子任务（模型不可用或预算耗尽）"
             node.state = NodeState.FAILED
@@ -344,7 +406,7 @@ ${if (vocab.isNotBlank()) vocab else "(技能库为空)"}
             ?: run { t.state = ClusterTaskState.DISPATCHING; return }
         node.state = NodeState.PROPOSING
 
-        val picks = rankRoles(t, node, cluster.budget.proposeFanout).ifEmpty {
+        val picks = rankRoles(t, node, cluster.budget.proposeFanout, cluster.budget.maxTokensPerRole).ifEmpty {
             listOf(Candidate(node.assignee ?: return@proposing run { t.state = ClusterTaskState.ESCALATED }, 0f, "兜底点名"))
         }
 
@@ -519,7 +581,7 @@ ${node.artifact.orEmpty()}
             ?: run { t.state = ClusterTaskState.DISPATCHING; return }
 
         val role = RoleRegistry.get(context, node.assignee ?: "")
-            ?: rankRoles(t, node, 1).firstOrNull()?.let { RoleRegistry.get(context, it.personaId) }
+            ?: rankRoles(t, node, 1, cluster.budget.maxTokensPerRole).firstOrNull()?.let { RoleRegistry.get(context, it.personaId) }
         if (role == null) { node.lastError = "执行角色缺失"; node.state = NodeState.FAILED; t.state = ClusterTaskState.REPLANNING; return }
         val persona = personaOf(role.personaId) ?: run {
             node.lastError = "人格卡缺失"; node.state = NodeState.FAILED; t.state = ClusterTaskState.REPLANNING; return
@@ -975,7 +1037,7 @@ ${stillFailed.joinToString("\n") { "- ${it.title}：${it.lastError}" }}
     private suspend fun checkTermination(cluster: ClusterConfig, t: ClusterTask): CloseReason? {
         val b = cluster.budget
         return when {
-            aborted -> CloseReason.USER_ABORTED
+            abortedTaskId == t.id -> CloseReason.USER_ABORTED
             t.turnCount >= b.maxTurns -> CloseReason.CIRCUIT_BROKEN
             t.replanCount > b.maxReplan -> CloseReason.CIRCUIT_BROKEN
             t.idleStreak >= b.noProgressWindow -> CloseReason.CIRCUIT_BROKEN
@@ -1068,7 +1130,7 @@ ${stillFailed.joinToString("\n") { "- ${it.title}：${it.lastError}" }}
         }
         val model = resolveModel(role, fallbackToAny = true) ?: return null
         val skills = ClusterSkillRuntime.resolveSkills(context, role)
-        val tools = toolsForRole(role)
+        val tools = toolsForRole(role, model.first.kind == ModelKind.LOCAL)
         val toolTrace = java.util.Collections.synchronizedList(ArrayList<Pair<String, String>>())
         val sys = buildRoleSystem(persona.roleSetting, role, persona, skills, tools)
         val out = runCatching {
@@ -1117,15 +1179,32 @@ ${stillFailed.joinToString("\n") { "- ${it.title}：${it.lastError}" }}
 
     /**
      * 算出该角色这一轮真正能用的工具。
+     *
+     * #217：**云端角色走 ZorvAI 主通道** —— 用 [QuroToolRouter] 渐进式披露
+     * （路由目录 + 常驻核心 + 已加载），与主对话完全一致；角色通过 `tool_router`
+     * 检索并按需加载工具，而不是每轮全量下发。
+     *
+     * 三种路径：
+     * 1. 显式白名单（[RoleContextPolicy.toolWhitelist] 非空）→ 完全以它为准；
+     * 2. 端侧（LOCAL）→ 小模型不支持原生 function-calling，走文本协议，
+     *    仍用 [ClusterSkillRuntime.toolsFor] 全开/裁剪（与主对话在本地路径不启用
+     *    PROGRESSIVE 的行为一致）；
+     * 3. 云端 → [QuroToolRouter.activeSpecs] 渐进式披露。
+     *
      * 注册表可能还没就绪（应用刚启动），拿不到就返回空 —— 角色降级为纯文本，
      * **绝不**因此让整个任务失败。
      */
-    private fun toolsForRole(role: RoleProfile): List<com.ai.assistance.quro.core.QuroToolSpec> {
+    private fun toolsForRole(role: RoleProfile, isLocal: Boolean): List<com.ai.assistance.quro.core.QuroToolSpec> {
         val all = runCatching {
             com.ai.assistance.quro.core.tools.QuroToolRegistry.active?.fullSpecs()
         }.getOrNull() ?: return emptyList()
-        return runCatching { ClusterSkillRuntime.toolsFor(context, role, all) }
-            .getOrElse { emptyList() }
+        // 显式白名单永远压过自动推断：用户手动圈定就是意图本身，不接路由。
+        if (role.context.toolWhitelist.isNotEmpty() || isLocal) {
+            return runCatching { ClusterSkillRuntime.toolsFor(context, role, all) }
+                .getOrElse { emptyList() }
+        }
+        // 云端：走主通道渐进式披露
+        return routerFor(all).activeSpecs()
     }
 
     /** 装配该角色专属的 system prompt —— 每个角色看到的都不一样 */
@@ -1154,6 +1233,11 @@ ${stillFailed.joinToString("\n") { "- ${it.title}：${it.lastError}" }}
         if (role.skills.isNotEmpty()) {
             appendLine(); appendLine("# 你的专业背景")
             role.skills.forEach { appendLine("- $it") }
+        }
+        if (role.tags.isNotEmpty()) {
+            appendLine(); appendLine("# 角色类型标签")
+            appendLine("你是：" + role.tags.joinToString("、"))
+            appendLine("这些标签是你的身份标记，任务相关时主动以此定位自己。")
         }
 
         // 🔴 #190 技能正文真正注入。
@@ -1211,13 +1295,15 @@ ${stillFailed.joinToString("\n") { "- ${it.title}：${it.lastError}" }}
      *
      * 自动排除：主持（除非只有它）、停用、模型不可用、预算耗尽。
      */
-    private fun rankRoles(t: ClusterTask, node: ClusterNode, topK: Int): List<Candidate> {
+    private fun rankRoles(t: ClusterTask, node: ClusterNode, topK: Int, maxTokensPerRole: Int): List<Candidate> {
         val query = (node.title + " " + node.instruction).lowercase()
         val terms = query.split(Regex("[\\s,，。、；;：:（）()\\[\\]]+"))
             .filter { it.length >= 2 }.distinct().take(24)
-        // 预算上限与 ClusterBudget.maxTokensPerRole 同值（#192 之前这里是写死的 120_000，
-        // 调预算时它不跟着变，导致 callRole 按新预算放行、选人却按旧预算淘汰，两处口径不一致）
-        val budget = ClusterBudget().maxTokensPerRole.toFloat()
+        // 预算上限必须与调用方实际生效的 cluster.budget.maxTokensPerRole 同值。
+        // 旧码这里写死 ClusterBudget().maxTokensPerRole（默认 120_000），
+        // 而 callRole 按 cluster.budget.maxTokensPerRole 拒绝 —— 用户自定义预算后，
+        // 选人按 120k 放行、发言按实际预算拒绝，选出来的人一开口就「预算耗尽」→ 空转。
+        val budget = maxTokensPerRole.toFloat()
         val skillLib = runCatching {
             // #196：派单排序也必须读集群库，否则 audit（集群库）与 rankRoles（全局库）
             // 会得出两套互相矛盾的能力结论，表现为「核对说有人能做、派单却派给别人」。
