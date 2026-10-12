@@ -62,14 +62,12 @@ who=人, u/unit=单位, hex=颜色, e/icon=图标, max/min=量程, items/rows/no
         if (component.isNotEmpty()) {
             val ct = contracts.optJSONObject(component)
                 ?: return """{"ok":false,"error":"没有名为 $component 的组件","hint":"用 zx_catalog 不传参看名册，或 query 过滤"}"""
-            val fields = ct.optJSONArray("fields") ?: ct.optJSONArray("fields")
-            val arrays = ct.optJSONArray("arrays")
-            val sample = ct.opt("sample")
             val out = JSONObject()
                 .put("ok", true)
                 .put("component", component)
-                .put("fields", fields ?: org.json.JSONArray())
-                .put("arrays", arrays ?: org.json.JSONArray())
+                .put("fields", ct.optJSONArray("fields") ?: org.json.JSONArray())
+                .put("arrays", ct.optJSONArray("arrays") ?: org.json.JSONArray())
+            val sample = ct.opt("sample")
             if (sample != null && sample != JSONObject.NULL) out.put("example", sample)
             val itemKeys = itemKeysOf(ct)
             if (itemKeys.isNotEmpty()) out.put("item_fields", org.json.JSONArray(itemKeys))
