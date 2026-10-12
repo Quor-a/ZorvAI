@@ -21,6 +21,7 @@ import com.ai.assistance.quro.core.tools.UiNavigationBus
 import com.ai.assistance.quro.core.tools.ui.UiNavigationEvent
 import com.ai.assistance.quro.core.tools.VisualCustomPopupQueue
 import com.ai.assistance.quro.core.tools.VisualPopupQueue
+import com.ai.assistance.quro.core.tools.ZxWebCardQueue
 import com.ai.assistance.quro.core.tools.PopupButton
 import com.ai.assistance.quro.core.tools.PopupInput
 import com.ai.assistance.quro.core.tools.PopupResult
@@ -234,6 +235,7 @@ import com.ai.assistance.quro.ui.icons.LucideIcon
 import com.ai.assistance.quro.ui.chat.ChatPermissionModeBar
 import com.ai.assistance.quro.ui.chat.ZxWebCard
 import com.ai.assistance.quro.ui.chat.ZxWebCardDialog
+import com.ai.assistance.quro.ui.chat.ZxWebChatDialog
 import com.ai.assistance.quro.ui.chat.ChatTopBar
 import com.ai.assistance.quro.core.policy.QuroPolicy
 import com.ai.assistance.quro.core.policy.QuroPolicyStore
@@ -837,9 +839,46 @@ fun ChatScreen(
 
     // 第三个对话框：Web UI 卡片（zx 交互式卡片族）。与上面两个同族，都由 UiNavigationBus 触发
     var showZxWebCard by remember { mutableStateOf(false) }
+    // 第三个对话框：Web UI 对话框（ZorvAI 对话框的 Web UI 复制品，完整聊天端）
+    var showZxWebChat by remember { mutableStateOf(false) }
     var zxWebCardTitle by remember { mutableStateOf("") }
     var zxWebCardComponent by remember { mutableStateOf("") }
     var zxWebCardDsl by remember { mutableStateOf("") }
+    /**
+     * 当前卡片若来自 zx_web_card **工具**调用，这里是它在 [ZxWebCardQueue] 里的 ID。
+     *
+     * 两种来源必须分开处理，否则模型会被喂重复内容：
+     * ① 工具来源（本字段非空）→ 用户交互要作为**工具结果**回传（submitInteraction），本轮对话继续；
+     * ② 动态 UI 动作来源（本字段为空）→ 没有工具在等，交互要作为一条**用户消息**发出去。
+     */
+    var zxWebCardQueueId by remember { mutableStateOf<String?>(null) }
+
+    /**
+     * ═══ zx_web_card 工具 → 单卡片对话框 ═══
+     * 工具在后台线程阻塞等用户（[ZxWebCardQueue]），这里消费队列把卡片弹出来。
+     * **没有这一段，工具会一直空等到超时**（120s）才返回——卡片根本不会出现。
+     * 与 visual_popup 走的是同一套「工具阻塞 + UI 消费」模式。
+     */
+    LaunchedEffect(Unit) {
+        ZxWebCardQueue.eventFlow.collect { ev ->
+            when (ev) {
+                is ZxWebCardQueue.CardEvent.CardAdded -> {
+                    // Web UI 第三个对话框开着：同一张卡已经在它的消息流里内联渲染成动态交互界面，
+                    // 再弹一个单卡片对话框只会挡在全屏页背后——用户看不见也无处可点，工具白等超时。
+                    if (showZxWebChat) return@collect
+                    val card = ZxWebCardQueue.getCurrentCard() ?: return@collect
+                    // 上一张还没关就来了新卡：先放行旧的，避免它空等超时
+                    zxWebCardQueueId?.let { old -> ZxWebCardQueue.dismiss(old) }
+                    zxWebCardQueueId = card.id
+                    zxWebCardTitle = card.title
+                    zxWebCardComponent = card.component
+                    zxWebCardDsl = card.dsl
+                    showZxWebCard = true
+                }
+                is ZxWebCardQueue.CardEvent.CardRemoved -> Unit
+            }
+        }
+    }
 
     // ═══ UI 动作桥：把 AI 调用的 ui_* 工具回调到本组合作用域，打开对应界面/弹层/开关 ═══
     fun handleUiAction(action: String) {
@@ -1097,6 +1136,8 @@ fun ChatScreen(
                             zxWebCardTitle = event.title
                             zxWebCardComponent = event.component
                             zxWebCardDsl = event.dsl
+                            // 动态 UI 动作来源：没有工具在等，交互要走 vm.send 而不是工具结果
+                            zxWebCardQueueId = null
                             showZxWebCard = true
                         }
                     }
@@ -2218,14 +2259,35 @@ fun ChatScreen(
                 dsl = zxWebCardDsl,
                 dark = darkMode,
                 onInteract = { json ->
-                    // 交互即对话：关掉对话框，把「用户做了什么」结构化喂给模型接着推理。
-                    // 与 VisualAsk 的区别：那里回发的是固定选项文本，这里回发的是完整交互语义。
+                    // 交互即对话：关掉对话框，把「用户做了什么」结构化喂回模型接着推理。
+                    // 两条回路必须分开，否则模型会收到重复内容：
+                    // ① 卡片来自 zx_web_card 工具 → 作为**工具结果**回传，本轮对话直接继续；
+                    // ② 卡片来自动态 UI 动作 → 没有工具在等，作为一条**用户消息**发出去。
                     showZxWebCard = false
                     val text = ZxWebCard.summarize(zxWebCardComponent, json)
                     QuroDiag.log("ZXWEB", text)
-                    vm.send(text, emptyList(), cfg)
+                    val qid = zxWebCardQueueId
+                    val delivered = qid != null && ZxWebCardQueue.submitInteraction(qid, text)
+                    zxWebCardQueueId = null
+                    if (!delivered) vm.send(text)
                 },
-                onDismiss = { showZxWebCard = false },
+                onDismiss = {
+                    // 用户没交互就关掉：立刻放行工具，别让模型白等满超时
+                    zxWebCardQueueId?.let { ZxWebCardQueue.dismiss(it) }
+                    zxWebCardQueueId = null
+                    showZxWebCard = false
+                },
+            )
+        }
+
+        // 第三个对话框：Web UI 对话框 —— ZorvAI 对话框的 Web UI 复制品。
+        // 整套聊天 UI（消息流 / Markdown / 流式 / 工具调用 / zxwidget 动态交互界面）
+        // 都是网页，与主对话框共用同一个会话：这里发的消息、生成的回复，主对话框里也看得见。
+        if (showZxWebChat) {
+            ZxWebChatDialog(
+                vm = vm,
+                dark = darkMode,
+                onDismiss = { showZxWebChat = false },
             )
         }
 
@@ -2864,7 +2926,9 @@ fun ChatScreen(
                             Toast.makeText(ctx, if (pendingAipDoc.value) qstr(R.string.qk_00078) else qstr(R.string.qk_00079), Toast.LENGTH_SHORT).show()
                         },
                         onSelectZxWebCard = {
+                            // 第三个对话框（Web UI）：打开完整聊天端，同时给主对话框注入 zx 指令
                             pendingZxWebCard.value = !pendingZxWebCard.value
+                            showZxWebChat = true
                             Toast.makeText(ctx, if (pendingZxWebCard.value) qstr(R.string.qk_04070) else qstr(R.string.qk_04071), Toast.LENGTH_SHORT).show()
                         },
                         pendingSelfCard = pendingSelfCard.value,

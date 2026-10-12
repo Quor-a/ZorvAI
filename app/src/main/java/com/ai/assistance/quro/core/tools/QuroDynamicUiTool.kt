@@ -277,8 +277,9 @@ red green blue yellow orange purple pink teal indigo gray primary secondary erro
   弹出 ZorvAI 第三个对话框（Web UI 卡片）：用 WebView 渲染 zx 交互式卡片族（477 个组件：对比/表格/图表/
   表单/时间线/看板/审批流/终端/仪表盘…）。用户在卡片上的每次交互（点了哪一行、改了哪个字段、提交了什么）
   都会整理成结构化描述回发给你，比纯文本罗列更适合让用户当场操作。dsl 必须是该组件的数据契约 JSON，
-  可写成嵌套对象（"dsl":{...}）或字符串。⚠ 只在用户明确要「可交互卡片 / Web UI 卡片」时用；
-  纯展示用 visual_popup，简单二选一用 visual_ask。
+  可写成嵌套对象（"dsl":{...}）或字符串。**组件名与字段先用 `zx_catalog` 查**（传 component=X 可拿到该组件的
+  字段契约与示例 DSL）——名册外的名字会落到通用渲染，效果差。
+  ⚠ 只在用户明确要「可交互卡片 / Web UI 卡片」时用；纯展示用 visual_popup，简单二选一用 visual_ask。
 
 【多层渲染说明】动态 UI 组件既能渲染在第一层（如上面 render_html / render_vispro 直接进气泡），
 也能作为导航中枢：按钮点进去可进终端、模型配置、可视化编程、 Web 应用等任意内置界面（open_screen），

@@ -3914,4 +3914,7 @@ Seus modelos configurados foram mantidos; você também pode digitar o nome do m
 
     <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
     <string name="qk_04073" formatted="false">Ação do cartão Web UI sem component ou dsl</string>
+
+    <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
+    <string name="qk_04074" formatted="false">ZorvAI - Web UI</string>
 </resources>
