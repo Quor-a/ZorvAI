@@ -48,6 +48,8 @@ compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 compose-animation = { group = "androidx.compose.animation", name = "animation" }
 compose-animation-core = { group = "androidx.compose.animation", name = "animation-core" }
+compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
+compose-runtime = { group = "androidx.compose.runtime", name = "runtime" }
 # Compose 平台（Android）实现 artifacts：canvas 渲染层显式依赖
 androidx-ui-android = { group = "androidx.compose.ui", name = "ui-android" }
 androidx-runtime-android = { group = "androidx.compose.runtime", name = "runtime-android" }

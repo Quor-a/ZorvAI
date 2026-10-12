@@ -25,7 +25,7 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Quro AI"
-include(":app", ":aidl-aci-browser", ":aidl-aci-core", ":mnn", ":llama", ":lib_aci", ":cap_main", ":xposed-stub", ":aci-app", ":terminal-core", ":genuiagent-sdk", ":miniapp-sdk", ":kaleidobox", ":plugin-contract", ":plugin-engine", ":plugin-express", ":plugin-devkit", ":plugin-units", ":plugin-todo", ":plugin-sysinfo", ":plugin-zorvweb", ":plugin-signcheck",
+include(":app", ":aidl-aci-browser", ":aidl-aci-core", ":mnn", ":llama", ":lib_aci", ":cap_main", ":xposed-stub", ":aci-app", ":terminal-core", ":genuiagent-sdk", ":miniapp-sdk", ":kaleidobox", ":plugin-contract", ":plugin-engine", ":plugin-express", ":plugin-devkit", ":plugin-units", ":plugin-todo", ":plugin-sysinfo", ":plugin-zorvweb", ":plugin-signcheck", ":plugin-zxwidget",
     // 多角色集群编排（移植自 AI集群SDK，已去品牌化为 com.ai.assistance.quro.cluster.*）
     // 依赖方向：cluster-ui → cluster-engine → cluster-bridge → cluster-model
     ":cluster-model", ":cluster-bridge", ":cluster-engine", ":cluster-storage", ":cluster-ui", ":cluster-fake",

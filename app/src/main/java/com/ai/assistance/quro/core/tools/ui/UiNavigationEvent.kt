@@ -21,6 +21,19 @@ sealed class UiNavigationEvent {
     /** 可视化询问：prompt + 选项，选中项回发对话。 */
     data class VisualAsk(val prompt: String, val options: List<String>) : UiNavigationEvent()
 
+    /**
+     * 第三个对话框：Web UI 卡片。
+     *
+     * 与上面两个同族（都在输入框「工具」菜单、都走 [UiNavigationBus]），
+     * 差别是它用 WebView 承载 zx 交互式卡片族（[component] + [dsl]），
+     * 交互不回发固定文案，而是把用户做了什么结构化回传宿主。
+     */
+    data class ZxWebCard(
+        val title: String,
+        val component: String,
+        val dsl: String,
+    ) : UiNavigationEvent()
+
     // ─── 组件操作 ───
     data class QueryStatus(val component: String) : UiNavigationEvent()
     data class UpdateComponent(val component: String, val props: Map<String, String>) : UiNavigationEvent()

@@ -19,6 +19,13 @@ internal class PluginContextImpl(
     private val prefs: SharedPreferences =
         hostContext.getSharedPreferences("quro_plugin_$pluginId", Context.MODE_PRIVATE)
 
+    /** 宿主设备唯一标识（ANDROID_ID；插件侧跨设备同步/去重用） */
+    override val deviceId: String =
+        android.provider.Settings.Secure.getString(
+            hostContext.contentResolver,
+            android.provider.Settings.Secure.ANDROID_ID
+        ) ?: ""
+
     override fun register(extension: PluginExtension) {
         ExtensionRegistry.register(pluginId, extension)
         android.util.Log.i("QuroPlugin", "注册扩展 ${extension.type}/${extension.id}")

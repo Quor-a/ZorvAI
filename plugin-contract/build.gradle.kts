@@ -39,4 +39,9 @@ kotlin {
 //   否则插件编译 classpath 会与宿主冲突。
 dependencies {
     implementation(libs.coroutines.core)
+    // ★ 仅编译期可见 Compose 运行时注解（@Composable）：
+    //   插件渲染函数以 @Composable 声明，契约层要能引用该注解；
+    //   但契约 jar 本身不打 Compose 类（宿主已含 androidx.*，运行时由宿主提供）。
+    compileOnly(platform(libs.compose.bom))
+    compileOnly(libs.compose.runtime)
 }

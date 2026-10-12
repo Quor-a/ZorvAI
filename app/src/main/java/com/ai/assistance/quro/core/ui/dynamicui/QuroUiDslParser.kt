@@ -1227,6 +1227,21 @@ object QuroUiDslParser {
                     options = json.optStringList("options")
                         .ifEmpty { buildStringList(json) },
                 )
+                // Web UI 卡片（第三个对话框）：component 取 zx_ 开头的组件名，
+                // dsl 是该组件的 JSON 数据。卡片内交互会结构化回发给模型。
+                "zx_web_card", "zx_card", "web_card", "webui_card", "zx_widget_card" -> QuroZxWebCardAction(
+                    component = json.optStringOrNull("component")
+                        ?: json.optStringOrNull("widget")
+                        ?: json.optStringOrNull("name") ?: "",
+                    title = json.optStringOrNull("title")
+                        ?: json.optStringOrNull("label") ?: "",
+                    // dsl 允许两种写法：字符串 JSON，或直接嵌套 JSON 对象
+                    dsl = when (val raw = json.opt("dsl")) {
+                        is JSONObject -> raw.toString()
+                        is String -> raw
+                        else -> json.opt("data")?.toString() ?: ""
+                    },
+                )
                 else -> null
             }
         } catch (e: Exception) {

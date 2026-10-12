@@ -185,9 +185,10 @@ object PromptRagIndex {
                 - **整屏界面** → GenUI 画布（`genui_draw`）
                 - **Web 应用 / 小程序** → `miniapp`
                 - **可视化弹窗 / 询问** → `visual_popup` / `visual_ask`
+                - **可交互卡片（Web UI）** → `zx_web_card`（第三个对话框，WebView 承载 zx 卡片族 477 个组件）
                 - **出图（静态图片）** → `codecanvas_onscreen_*`（端��，无需服务器）
                 - ⚠️ 这六条路径**互不等价**，不要用一个凑另一个。需要「能点」就用可交互组件，
-                  需要「能看」用富卡片，需要「整屏」用画布。
+                  需要「能看」用富卡片，需要「整屏」用画布，需要「用户在卡片上当场操作并回传」用 Web UI 卡片。
             """.trimIndent(),
             triggers = listOf("界面", "卡片", "组件", "画布", "页面", "弹窗", "小程序", "可视化", "交互"),
             keywords = listOf("ui_card", "ui_widget", "ui_control", "genui", "miniapp", "codecanvas"),

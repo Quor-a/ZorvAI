@@ -4054,4 +4054,16 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_04063" formatted="false">多半是模型把说明文字写进了图定义里，点「复制源码」把这段发给它改一下即可。</string>
     <string name="qk_04064" formatted="false">正在启动集群引擎，首次开启需要准备环境，请稍候…</string>
     <string name="qk_04065">Recruit roles, bind models, tune host limits</string>
+
+    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <string name="qk_04066" formatted="false">重新加载卡片</string>
+    <string name="qk_04067" formatted="false">复制卡片 DSL</string>
+    <string name="qk_04068">卡片运行时资源缺失：%1$s</string>
+    <string name="qk_04069" formatted="false">本轮必须用 Web UI 卡片对话框回答：调用 zx 交互式卡片组件（component 取 zx_ 开头的组件名，dsl 填该组件的 JSON），把结构化结果画成可交互卡片，不要用纯文本罗列。</string>
+    <string name="qk_04070" formatted="false">已开启 Web UI 卡片：本轮将用可交互卡片回答</string>
+    <string name="qk_04071" formatted="false">已关闭 Web UI 卡片</string>
+    <string name="qk_04072" formatted="false">Web UI 卡片</string>
+
+    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">Web UI 卡片缺少 component 或 dsl 参数</string>
 </resources>

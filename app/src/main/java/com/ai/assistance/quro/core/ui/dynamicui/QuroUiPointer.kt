@@ -176,6 +176,11 @@ object QuroUiPointer {
             prompt = rt(action.prompt, model) ?: action.prompt,
             options = action.options.mapNotNull { rt(it, model) },
         )
+        is QuroZxWebCardAction -> action.copy(
+            component = rt(action.component, model) ?: action.component,
+            title = rt(action.title, model) ?: action.title,
+            dsl = rt(action.dsl, model) ?: action.dsl,
+        )
         is QuroToggleAction -> action
     }
 }

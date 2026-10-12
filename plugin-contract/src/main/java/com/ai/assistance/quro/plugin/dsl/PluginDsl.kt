@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.plugin.dsl
 
+import androidx.compose.runtime.Composable
 import com.ai.assistance.quro.plugin.contract.*
 import com.ai.assistance.quro.plugin.extension.*
 
@@ -55,8 +56,13 @@ class PluginBuilder(private val ctx: PluginContext) {
     }
 
     // ---------- 对话卡片 ----------
-    fun chatCard(id: String, label: String, render: (String, RenderContext) -> RenderedCard) {
+    fun chatCard(id: String, label: String, render: @Composable (org.json.JSONObject, RenderContext) -> Any?) {
         extensions += ChatCardExtension(id, label, render)
+    }
+
+    // ---------- 内联可交互组件（UI Widget） ----------
+    fun uiWidget(id: String, label: String, render: @Composable (org.json.JSONObject, RenderContext) -> Any?) {
+        extensions += UiWidgetExtension(id, label, render)
     }
 
     // ---------- 界面表面（插件自带的完整界面） ----------
@@ -72,6 +78,17 @@ class PluginBuilder(private val ctx: PluginContext) {
         onRelease: (() -> Unit)? = null,
     ) {
         extensions += UiSurfaceExtension(id, label, title, build, onRelease)
+    }
+
+    // ---------- Compose 型界面表面（副作用式绘制，不返回 View 树） ----------
+    fun uiComposeSurface(
+        id: String,
+        label: String,
+        title: String = label,
+        build: @Composable (RenderContext) -> Unit,
+        onRelease: (() -> Unit)? = null,
+    ) {
+        extensions += UiComposeSurfaceExtension(id, label, title, build, onRelease)
     }
 
     // ---------- 设置项 ----------

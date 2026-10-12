@@ -3904,4 +3904,16 @@ Create a file or folder at top right</string>
     <string name="qk_04060">表格列数较多，可左右滑动查看 →</string>
     <string name="qk_04061">集群 · %1$s</string>
     <string name="qk_04065">役割の採用、モデルの割り当て、ホスト上限の調整</string>
+
+    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <string name="qk_04066" formatted="false">カードを再読み込み</string>
+    <string name="qk_04067" formatted="false">カード DSL をコピー</string>
+    <string name="qk_04068">カード実行時リソースが見つかりません：%1$s</string>
+    <string name="qk_04069" formatted="false">このターンは Web UI カードダイアログで回答してください：zx インタラクティブカードコンポーネント（component は zx_ 始まりの名前、dsl はその JSON）を呼び、構造化結果をインタラクティブカードとして描画し、プレーンテキストの羅列は避けてください。</string>
+    <string name="qk_04070" formatted="false">Web UI カード ON：このターンはインタラクティブカードで回答します</string>
+    <string name="qk_04071" formatted="false">Web UI カード OFF</string>
+    <string name="qk_04072" formatted="false">Web UI カード</string>
+
+    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">Web UI カードアクションに component または dsl がありません</string>
 </resources>

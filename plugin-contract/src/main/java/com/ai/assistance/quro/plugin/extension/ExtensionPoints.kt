@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.plugin.extension
 
+import androidx.compose.runtime.Composable
 import com.ai.assistance.quro.plugin.contract.ToolArgs
 import com.ai.assistance.quro.plugin.contract.ToolResult
 import com.ai.assistance.quro.plugin.contract.ToolSpec
@@ -81,10 +82,24 @@ class AciCapabilityExtension(
 class ChatCardExtension(
     override val id: String,
     override val label: String,
-    /** 卡片数据 → 宿主可渲染的描述（JSON Schema 在 meta 里） */
-    val render: (data: String, ctx: RenderContext) -> RenderedCard
+    /** 卡片数据(JSONObject) → 宿主可渲染的描述（Compose 渲染函数；返回 RenderedCard 或 Unit(副作用式绘制)） */
+    val render: @Composable (data: org.json.JSONObject, ctx: RenderContext) -> Any?
 ) : PluginExtension {
     override val type: ExtensionType = ExtensionType.CHAT_CARD
+}
+
+/**
+ * 内联可交互组件（UI Widget）：用户可直接在对话气泡里操作的轻量控件。
+ * 与 [ChatCardExtension] 的区别：卡片偏「信息展示」，Widget 偏「行内交互」
+ * （按钮、滑块、可编辑单元格、进度条、状态徽章…）。
+ */
+class UiWidgetExtension(
+    override val id: String,
+    override val label: String,
+    /** 数据(JSONObject) → 宿主可渲染的交互控件（Compose 渲染函数） */
+    val render: @Composable (data: org.json.JSONObject, ctx: RenderContext) -> Any?
+) : PluginExtension {
+    override val type: ExtensionType = ExtensionType.UI_WIDGET
 }
 
 /**
@@ -111,8 +126,31 @@ class UiSurfaceExtension(
     override val label: String,
     /** 打开界面时显示的标题 */
     val title: String,
-    /** Activity Context + 宿主回调 → 返回要显示的 View（null 表示插件拒绝打开） */
+    /** Activity Context + 宿主回调 → 返回要显示的 View（null 表示插件拒绝打开）
+     *  ⚠ 保持普通 lambda：宿主 PluginSurfaceActivity 在 onCreate 里直接调用。
+     *  纯 Compose 插件请用 [UiComposeSurfaceExtension]（宿主尚未实现容器承载，注册后空转）。 */
     val build: (android.content.Context, SurfaceHost) -> android.view.View?,
+    /** 界面关闭回调（主线程）。插件在这里 detach WebView、注销监听等 */
+    val onRelease: (() -> Unit)? = null,
+) : PluginExtension {
+    override val type: ExtensionType = ExtensionType.UI_SURFACE
+}
+
+/**
+ * Compose 型界面表面：插件以 @Composable 副作用式绘制界面（不返回 View 树）。
+ *
+ * 与 [UiSurfaceExtension] 的区别：后者由插件拼 View 树（适合 WebView / 传统 View 体系），
+ * 前者直接在宿主的 Compose 容器里绘制（适合纯 Compose 插件，如 zx_widget）。
+ *
+ * ⚠ 宿主当前若未实现 Compose 容器承载，此扩展注册后暂不生效；编译期可用、运行期空转。
+ */
+class UiComposeSurfaceExtension(
+    override val id: String,
+    override val label: String,
+    /** 打开界面时显示的标题 */
+    val title: String,
+    /** 渲染上下文 → 在 Compose 容器里绘制界面 */
+    val build: @Composable (RenderContext) -> Unit,
     /** 界面关闭回调（主线程）。插件在这里 detach WebView、注销监听等 */
     val onRelease: (() -> Unit)? = null,
 ) : PluginExtension {
@@ -212,6 +250,14 @@ interface RenderContext {
     fun inflate(pluginId: String, layoutName: String): android.view.View?
     fun themeIsDark(): Boolean
     fun density(): Float
+
+    /**
+     * 卡片交互回传：用户点了卡片上的按钮/选项时，把这次交互以「工具调用」的形式
+     * 回传给 AI（宿主把它转成 tool_call 喂给模型下一轮）。
+     *
+     * 默认空实现：宿主若没接入卡片交互回传，点了也不报错（只是 AI 收不到）。
+     */
+    fun callTool(name: String, args: Map<String, Any?>): Unit = Unit
 }
 
 data class RenderedCard(
@@ -220,6 +266,9 @@ data class RenderedCard(
     val title: String? = null,
     val body: String? = null,
     val actions: List<CardAction> = emptyList()
-)
+) {
+    /** 兼容旧式插件：以 (title, body) 字符串对构造一张纯文本卡片 */
+    constructor(title: String, body: String) : this(view = null, title = title, body = body)
+}
 
 data class CardAction(val text: String, val onClick: () -> Unit)
