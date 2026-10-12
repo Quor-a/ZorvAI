@@ -232,6 +232,8 @@ import com.ai.assistance.quro.ui.data.ThinkBlock
 import com.ai.assistance.quro.ui.data.ToolCallUi
 import com.ai.assistance.quro.ui.icons.LucideIcon
 import com.ai.assistance.quro.ui.chat.ChatPermissionModeBar
+import com.ai.assistance.quro.ui.chat.ZxWebCard
+import com.ai.assistance.quro.ui.chat.ZxWebCardDialog
 import com.ai.assistance.quro.ui.chat.ChatTopBar
 import com.ai.assistance.quro.core.policy.QuroPolicy
 import com.ai.assistance.quro.core.policy.QuroPolicyStore
@@ -391,6 +393,7 @@ import com.ai.assistance.quro.core.ui.dynamicui.QuroRenderHtmlAction
 import com.ai.assistance.quro.core.ui.dynamicui.QuroRenderVisproAction
 import com.ai.assistance.quro.core.ui.dynamicui.QuroVisualPopupAction
 import com.ai.assistance.quro.core.ui.dynamicui.QuroVisualAskAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroZxWebCardAction
 
 private enum class SheetType { Model, Persona, Settings, Upload, Voice }
 
@@ -746,6 +749,8 @@ fun ChatScreen(
     val pendingSelfCard = remember { mutableStateOf(false) }
     val pendingDynamicUi = remember { mutableStateOf(false) }
     val pendingAipDoc = remember { mutableStateOf(false) }
+    // 第三个对话框（Web UI 卡片）：选中后下一条消息强制 AI 走 zx 交互式卡片
+    val pendingZxWebCard = remember { mutableStateOf(false) }
     // 定时任务管理入口
     var showSchedule by remember { mutableStateOf(false) }
     // 工作流管理入口
@@ -829,6 +834,12 @@ fun ChatScreen(
     var showVisualAsk by remember { mutableStateOf(false) }
     var visualAskPrompt by remember { mutableStateOf("") }
     var visualAskOptions by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    // 第三个对话框：Web UI 卡片（zx 交互式卡片族）。与上面两个同族，都由 UiNavigationBus 触发
+    var showZxWebCard by remember { mutableStateOf(false) }
+    var zxWebCardTitle by remember { mutableStateOf("") }
+    var zxWebCardComponent by remember { mutableStateOf("") }
+    var zxWebCardDsl by remember { mutableStateOf("") }
 
     // ═══ UI 动作桥：把 AI 调用的 ui_* 工具回调到本组合作用域，打开对应界面/弹层/开关 ═══
     fun handleUiAction(action: String) {
@@ -1075,6 +1086,19 @@ fun ChatScreen(
                         visualAskPrompt = event.prompt
                         visualAskOptions = event.options
                         showVisualAsk = true
+                    }
+
+                    // 第三个对话框：Web UI 卡片。交互不回发固定文案，
+                    // 而是把「用户在卡片上做了什么」整理成结构化描述喂给模型。
+                    is UiNavigationEvent.ZxWebCard -> {
+                        if (event.component.isBlank() || event.dsl.isBlank()) {
+                            QuroDiag.log("ZXWEB", "ZxWebCard 事件缺 component/dsl，已忽略")
+                        } else {
+                            zxWebCardTitle = event.title
+                            zxWebCardComponent = event.component
+                            zxWebCardDsl = event.dsl
+                            showZxWebCard = true
+                        }
                     }
 
                     // ─── 查询状态 ───
@@ -1507,6 +1531,10 @@ fun ChatScreen(
         if (pendingAipDoc.value) {
             ctxParts.add(qstr(R.string.qk_00032))
             pendingAipDoc.value = false
+        }
+        if (pendingZxWebCard.value) {
+            ctxParts.add(qstr(R.string.qk_04069))
+            pendingZxWebCard.value = false
         }
         if (enabledSkillsCount > 0) {
             val enabledSkills = com.ai.assistance.quro.core.skill.QuroSkillStore.load(ctx)
@@ -2182,6 +2210,25 @@ fun ChatScreen(
             )
         }
 
+        // 第三个对话框：Web UI 卡片（zx 交互式卡片族）
+        if (showZxWebCard) {
+            ZxWebCardDialog(
+                component = zxWebCardComponent,
+                title = zxWebCardTitle,
+                dsl = zxWebCardDsl,
+                dark = darkMode,
+                onInteract = { json ->
+                    // 交互即对话：关掉对话框，把「用户做了什么」结构化喂给模型接着推理。
+                    // 与 VisualAsk 的区别：那里回发的是固定选项文本，这里回发的是完整交互语义。
+                    showZxWebCard = false
+                    val text = ZxWebCard.summarize(zxWebCardComponent, json)
+                    QuroDiag.log("ZXWEB", text)
+                    vm.send(text, emptyList(), cfg)
+                },
+                onDismiss = { showZxWebCard = false },
+            )
+        }
+
         // 工具箱（从输入框「+」工具进入：文件管理 / 包名查询 / 工作区）
         if (showToolbox) {
             BackHandler { showToolbox = false }
@@ -2816,9 +2863,14 @@ fun ChatScreen(
                             pendingAipDoc.value = !pendingAipDoc.value
                             Toast.makeText(ctx, if (pendingAipDoc.value) qstr(R.string.qk_00078) else qstr(R.string.qk_00079), Toast.LENGTH_SHORT).show()
                         },
+                        onSelectZxWebCard = {
+                            pendingZxWebCard.value = !pendingZxWebCard.value
+                            Toast.makeText(ctx, if (pendingZxWebCard.value) qstr(R.string.qk_04070) else qstr(R.string.qk_04071), Toast.LENGTH_SHORT).show()
+                        },
                         pendingSelfCard = pendingSelfCard.value,
                         pendingDynamicUi = pendingDynamicUi.value,
                         pendingAipDoc = pendingAipDoc.value,
+                        pendingZxWebCard = pendingZxWebCard.value,
                         currentWorkspace = currentWorkspace,
                         onOpenWorkspaceSelector = { showWorkspaceSelector = true },
                         onOpenCodeBrowser = { showCodeWorkspace = true },
@@ -4699,9 +4751,11 @@ private fun Composer(
     onSelectSelfCard: () -> Unit = {},
     onSelectDynamicUi: () -> Unit = {},
     onSelectAipDoc: () -> Unit = {},
+    onSelectZxWebCard: () -> Unit = {},
     pendingSelfCard: Boolean = false,
     pendingDynamicUi: Boolean = false,
     pendingAipDoc: Boolean = false,
+    pendingZxWebCard: Boolean = false,
     currentWorkspace: String? = null,
     onOpenWorkspaceSelector: () -> Unit = {},
     onOpenCodeBrowser: () -> Unit = {},
@@ -4882,6 +4936,8 @@ private fun Composer(
                 onSelectSelfCard = onSelectSelfCard,
                 onSelectDynamicUi = onSelectDynamicUi,
                 onSelectAipDoc = onSelectAipDoc,
+                pendingZxWebCard = pendingZxWebCard,
+                onSelectZxWebCard = onSelectZxWebCard,
             )
             if (voiceInputEnabled) {
                 IconButton(onClick = onVoiceInput, Modifier.size(44.dp).padding(2.dp)) {
@@ -4965,6 +5021,7 @@ private fun ChatToolMenu(
     pendingSelfCard: Boolean,
     pendingDynamicUi: Boolean,
     pendingAipDoc: Boolean,
+    pendingZxWebCard: Boolean,
     onOpenSkills: () -> Unit,
     onOpenAciSelector: () -> Unit,
     onOpenEditor: () -> Unit,
@@ -4973,6 +5030,7 @@ private fun ChatToolMenu(
     onSelectSelfCard: () -> Unit,
     onSelectDynamicUi: () -> Unit,
     onSelectAipDoc: () -> Unit,
+    onSelectZxWebCard: () -> Unit,
 ) {
     var showToolMenu by remember { mutableStateOf(false) }
     Box {
@@ -5098,6 +5156,24 @@ private fun ChatToolMenu(
                 onClick = {
                     showToolMenu = false
                     onSelectAipDoc()
+                },
+            )
+            // 第三个对话框：Web UI 卡片（zx 交互式卡片族，477 个组件）
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LucideIcon("layout-grid", null, Modifier.size(18.dp), tint = cs.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.qk_04072))
+                        if (pendingZxWebCard) {
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Filled.Check, stringResource(R.string.qk_00168), Modifier.size(16.dp), tint = cs.primary)
+                        }
+                    }
+                },
+                onClick = {
+                    showToolMenu = false
+                    onSelectZxWebCard()
                 },
             )
         }
@@ -7132,6 +7208,22 @@ fun handleDynamicUiAction(
             UiNavigationBus.navEvent = UiNavigationEvent.VisualAsk(
                 prompt = action.prompt,
                 options = options,
+            )
+        }
+
+        // Web UI 卡片（第三个对话框）：WebView 承载 zx 交互式卡片，
+        // 卡片内交互由 ZxWebCard.summarize 整理成结构化描述回发模型。
+        is QuroZxWebCardAction -> {
+            val component = action.component.ifBlank { values["component"] ?: "" }
+            val dsl = action.dsl.ifBlank { values["dsl"] ?: "" }
+            if (component.isBlank() || dsl.isBlank()) {
+                Toast.makeText(ctx, qstr(R.string.qk_04073), Toast.LENGTH_SHORT).show()
+                return
+            }
+            UiNavigationBus.navEvent = UiNavigationEvent.ZxWebCard(
+                title = action.title.ifBlank { values["title"] ?: "" },
+                component = component,
+                dsl = dsl,
             )
         }
 

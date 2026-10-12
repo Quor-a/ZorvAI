@@ -3995,4 +3995,16 @@ Your configured models were kept; you can also type a model name manually.</stri
     <string name="qk_04060">表格列数较多，可左右滑动查看 →</string>
     <string name="qk_04061">集群 · %1$s</string>
     <string name="qk_04065">Recruit roles, bind models, tune host limits</string>
+
+    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <string name="qk_04066" formatted="false">Reload card</string>
+    <string name="qk_04067" formatted="false">Copy card DSL</string>
+    <string name="qk_04068">Card runtime asset missing: %1$s</string>
+    <string name="qk_04069" formatted="false">This turn must be answered with the Web UI card dialog: call a zx interactive card component (component = a zx_* component name, dsl = that component\'s JSON) and render the structured result as an interactive card instead of plain text.</string>
+    <string name="qk_04070" formatted="false">Web UI card on: this turn will use an interactive card</string>
+    <string name="qk_04071" formatted="false">Web UI card off</string>
+    <string name="qk_04072" formatted="false">Web UI card</string>
+
+    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">Web UI card action is missing component or dsl</string>
 </resources>

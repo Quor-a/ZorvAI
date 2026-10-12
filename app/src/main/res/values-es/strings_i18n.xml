@@ -3904,4 +3904,16 @@ Se conservaron tus modelos configurados; también puedes escribir el nombre del 
     <string name="qk_04060">表格列数较多，可左右滑动查看 →</string>
     <string name="qk_04061">集群 · %1$s</string>
     <string name="qk_04065">Reclutar roles, vincular modelos, ajustar límites del anfitrión</string>
+
+    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <string name="qk_04066" formatted="false">Recargar tarjeta</string>
+    <string name="qk_04067" formatted="false">Copiar DSL de la tarjeta</string>
+    <string name="qk_04068">Falta el recurso del runtime de tarjeta: %1$s</string>
+    <string name="qk_04069" formatted="false">Responde este turno con el diálogo de tarjetas Web UI: llama a un componente de tarjeta interactiva zx (component = nombre zx_*, dsl = su JSON) y muestra el resultado estructurado como tarjeta interactiva, no como texto plano.</string>
+    <string name="qk_04070" formatted="false">Tarjeta Web UI activada: este turno usará una tarjeta interactiva</string>
+    <string name="qk_04071" formatted="false">Tarjeta Web UI desactivada</string>
+    <string name="qk_04072" formatted="false">Tarjeta Web UI</string>
+
+    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">La acción de tarjeta Web UI no tiene component o dsl</string>
 </resources>

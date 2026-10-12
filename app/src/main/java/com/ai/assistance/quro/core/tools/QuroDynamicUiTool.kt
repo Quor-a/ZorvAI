@@ -273,10 +273,17 @@ red green blue yellow orange purple pink teal indigo gray primary secondary erro
 - {"type":"visual_popup","title":"提示","content":"这是一段说明文字"} → 在对话上方弹出可视化信息框（纯展示）。
 - {"type":"visual_ask","prompt":"请选择操作","options":["方案A","方案B","取消"]} → 弹出选项让用户点选，
   选中项会作为用户消息回发给你继续对话（轻量版「询问」，比 callback 表单更简单）。
+- {"type":"zx_web_card","component":"zx_compare","title":"方案对比","dsl":{...该组件的JSON数据...}} →
+  弹出 ZorvAI 第三个对话框（Web UI 卡片）：用 WebView 渲染 zx 交互式卡片族（477 个组件：对比/表格/图表/
+  表单/时间线/看板/审批流/终端/仪表盘…）。用户在卡片上的每次交互（点了哪一行、改了哪个字段、提交了什么）
+  都会整理成结构化描述回发给你，比纯文本罗列更适合让用户当场操作。dsl 必须是该组件的数据契约 JSON，
+  可写成嵌套对象（"dsl":{...}）或字符串。⚠ 只在用户明确要「可交互卡片 / Web UI 卡片」时用；
+  纯展示用 visual_popup，简单二选一用 visual_ask。
 
 【多层渲染说明】动态 UI 组件既能渲染在第一层（如上面 render_html / render_vispro 直接进气泡），
 也能作为导航中枢：按钮点进去可进终端、模型配置、可视化编程、 Web 应用等任意内置界面（open_screen），
-或弹可视化弹窗 / 询问（visual_popup / visual_ask）。所有动作均在客户端真调用，无需你二次解析。
+或弹可视化弹窗 / 询问（visual_popup / visual_ask），或弹 Web UI 交互卡片（zx_web_card）。
+所有动作均在客户端真调用，无需你二次解析。
 
 【重要】以上动作在客户端即「真调用」，无需你再二次解析文本去执行——点一下按钮就落地（复制/打开应用/
 打开网页/跑工具/激活技能/进内置界面/渲染内容/弹窗询问）。tool_call 与 skill 的执行结果会回传给你，便于你接着对话。

@@ -3902,4 +3902,16 @@ Seus modelos configurados foram mantidos; você também pode digitar o nome do m
     <string name="qk_03917">Falha na limpeza: acesso negado a alguns arquivos. Conceda permissão de armazenamento e tente de novo</string>
     <string name="qk_03918">Diretório vazio ou inacessível</string>
     <string name="qk_04065">Recrutar funções, vincular modelos, ajustar limites do anfitrião</string>
+
+    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <string name="qk_04066" formatted="false">Recarregar cartão</string>
+    <string name="qk_04067" formatted="false">Copiar DSL do cartão</string>
+    <string name="qk_04068">Recurso de runtime do cartão ausente: %1$s</string>
+    <string name="qk_04069" formatted="false">Responda este turno com a caixa de diálogo de cartões Web UI: chame um componente de cartão interativo zx (component = nome zx_*, dsl = seu JSON) e renderize o resultado estruturado como cartão interativo.</string>
+    <string name="qk_04070" formatted="false">Cartão Web UI ativado: este turno usará um cartão interativo</string>
+    <string name="qk_04071" formatted="false">Cartão Web UI desativado</string>
+    <string name="qk_04072" formatted="false">Cartão Web UI</string>
+
+    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">Ação do cartão Web UI sem component ou dsl</string>
 </resources>

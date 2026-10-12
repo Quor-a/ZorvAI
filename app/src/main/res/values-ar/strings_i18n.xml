@@ -3904,4 +3904,16 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_04060">表格列数较多，可左右滑动查看 →</string>
     <string name="qk_04061">集群 · %1$s</string>
     <string name="qk_04065">توظيف الأدوار وربط النماذج وضبط حدود المضيف</string>
+
+    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <string name="qk_04066" formatted="false">إعادة تحميل البطاقة</string>
+    <string name="qk_04067" formatted="false">نسخ DSL البطاقة</string>
+    <string name="qk_04068">مورد runtime البطاقة مفقود: %1$s</string>
+    <string name="qk_04069" formatted="false">أجب في هذه الدور عبر حوار بطاقة Web UI: استدعِ مكوّن بطاقة zx تفاعلي (component = اسم zx_*، dsl = JSON الخاص به) واعرض النتيجة المهيكلة كبطاقة تفاعلية.</string>
+    <string name="qk_04070" formatted="false">تم تشغيل بطاقة Web UI: ستستخدم هذه الدور بطاقة تفاعلية</string>
+    <string name="qk_04071" formatted="false">تم إيقاف بطاقة Web UI</string>
+    <string name="qk_04072" formatted="false">بطاقة Web UI</string>
+
+    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">إجراء بطاقة Web UI يفتقد component أو dsl</string>
 </resources>

@@ -704,6 +704,22 @@ data class QuroVisualAskAction(
     val options: List<String> = emptyList(),
 ) : QuroUiAction
 
+/**
+ * Web UI 卡片（ZorvAI 第三个对话框）：弹出 WebView 承载的 zx 交互式卡片。
+ *
+ * 与 visual_popup / visual_ask 是同族动作，区别在于：
+ *   · visual_popup 只展示、visual_ask 回发固定选项文本；
+ *   · 本动作回发的是「用户在卡片上做了什么」的完整结构化语义
+ *     （组件名 + 动作 + 被操作对象的明细），由宿主整理后喂给模型继续推理。
+ *
+ * dsl 必须是 JSON 字符串（组件的数据契约，见 zx 组件族规格）。
+ */
+data class QuroZxWebCardAction(
+    val component: String = "",
+    val title: String = "",
+    val dsl: String = "",
+) : QuroUiAction
+
 // =============================================================================================
 // 通用样式系统（v1.0.83）
 // =============================================================================================

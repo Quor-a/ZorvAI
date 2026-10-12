@@ -28,7 +28,8 @@ object QuroUiCatalog {
     /** 允许出现的动作类型（A2UI 第②小语种：动作语言）。 */
     val ACTIONS: Set<String> = setOf(
         "callback", "toggle", "open_url", "copy", "tool_call", "skill", "open_app",
-        "open_screen", "render_html", "render_vispro", "visual_popup", "visual_ask"
+        "open_screen", "render_html", "render_vispro", "visual_popup", "visual_ask",
+        "zx_web_card"
     )
 
     enum class Severity { DEGRADE, WARN }
@@ -215,6 +216,7 @@ object QuroUiCatalog {
         is QuroRenderVisproAction -> "render_vispro"
         is QuroVisualPopupAction -> "visual_popup"
         is QuroVisualAskAction -> "visual_ask"
+        is QuroZxWebCardAction -> "zx_web_card"
     }
 
     // ─── 参数约束 ───

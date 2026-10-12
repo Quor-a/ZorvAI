@@ -12,6 +12,9 @@ interface PluginContext {
     val pluginId: String
     val pluginVersion: String
 
+    /** 宿主设备唯一标识（用于插件侧跨设备同步/去重，可空时插件自行降级） */
+    val deviceId: String
+
     /** 注册一个扩展点实现 —— 这是插件给 ZorvAI「加功能」的唯一入口 */
     fun register(extension: PluginExtension)
 

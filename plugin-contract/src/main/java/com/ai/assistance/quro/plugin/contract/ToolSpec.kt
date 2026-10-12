@@ -50,6 +50,16 @@ class ToolArgs(private val map: Map<String, Any?>) {
         (map[key] as? Boolean) ?: (map[key]?.toString()?.toBoolean() ?: default)
     fun has(key: String): Boolean = map.containsKey(key)
     fun raw(): Map<String, Any?> = map
+
+    // ---- JSONObject 风格别名（部分插件按 JSONObject 习惯调用） ----
+    fun optString(key: String): String = string(key)
+    fun optString(key: String, default: String): String =
+        if (has(key)) string(key) else default
+    fun optBoolean(key: String, default: Boolean = false): Boolean = boolean(key, default)
+    fun optInt(key: String, default: Int = 0): Int = int(key, default)
+    fun optLong(key: String, default: Long = 0L): Long =
+        (map[key] as? Number)?.toLong() ?: map[key]?.toString()?.toLongOrNull() ?: default
+    fun optDouble(key: String, default: Double = 0.0): Double = number(key, default)
 }
 
 /** 工具执行结果 */
