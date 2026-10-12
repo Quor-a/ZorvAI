@@ -1,0 +1,13715 @@
+{
+ "components": [
+  "zx_2048",
+  "zx_abmon",
+  "zx_abtest",
+  "zx_accessreview",
+  "zx_accordion",
+  "zx_activity",
+  "zx_agenda",
+  "zx_album",
+  "zx_alert",
+  "zx_align",
+  "zx_alloc",
+  "zx_annotate",
+  "zx_annualaudit",
+  "zx_anomaly",
+  "zx_appointment",
+  "zx_approval",
+  "zx_aqi",
+  "zx_arc",
+  "zx_ast",
+  "zx_auction",
+  "zx_audio",
+  "zx_audittrail",
+  "zx_autocomplete",
+  "zx_avatargroup",
+  "zx_backtest",
+  "zx_badges",
+  "zx_balance",
+  "zx_bandit",
+  "zx_banner",
+  "zx_barcode",
+  "zx_bargain",
+  "zx_bargauge",
+  "zx_baseline",
+  "zx_batch",
+  "zx_bayes",
+  "zx_beeswarm",
+  "zx_bento",
+  "zx_bezier",
+  "zx_bidcurve",
+  "zx_bland",
+  "zx_blast",
+  "zx_board",
+  "zx_booking",
+  "zx_bookkeep",
+  "zx_boot",
+  "zx_bottleneck",
+  "zx_boxplot",
+  "zx_bracket",
+  "zx_branch",
+  "zx_breadcrumb",
+  "zx_breakeven",
+  "zx_brush",
+  "zx_bubble",
+  "zx_bullet",
+  "zx_bullet2",
+  "zx_calendar",
+  "zx_calheat",
+  "zx_calib",
+  "zx_callout",
+  "zx_callstack",
+  "zx_canary",
+  "zx_candle",
+  "zx_capacity",
+  "zx_cardflip",
+  "zx_carerota",
+  "zx_carousel",
+  "zx_carservice",
+  "zx_causal",
+  "zx_cfactual",
+  "zx_cforest",
+  "zx_chain",
+  "zx_changerisk",
+  "zx_chart",
+  "zx_chatlog",
+  "zx_checkflow",
+  "zx_checklist",
+  "zx_checkpoint",
+  "zx_chips",
+  "zx_choice",
+  "zx_chord",
+  "zx_choro",
+  "zx_claim",
+  "zx_claimprog",
+  "zx_clinic",
+  "zx_cmdhist",
+  "zx_cmdpal",
+  "zx_code",
+  "zx_codetheme",
+  "zx_cohort",
+  "zx_color",
+  "zx_colorpick",
+  "zx_command",
+  "zx_comment",
+  "zx_commit",
+  "zx_commute",
+  "zx_compare",
+  "zx_compliance",
+  "zx_conflict",
+  "zx_confront",
+  "zx_console",
+  "zx_contact",
+  "zx_contingent",
+  "zx_contour",
+  "zx_control",
+  "zx_conversation",
+  "zx_corr",
+  "zx_costattrib",
+  "zx_costtrack",
+  "zx_countdown",
+  "zx_coupon",
+  "zx_credential",
+  "zx_critical",
+  "zx_crop",
+  "zx_dag",
+  "zx_damage",
+  "zx_dataclass",
+  "zx_datalist",
+  "zx_datamap",
+  "zx_debt",
+  "zx_decision",
+  "zx_decisionlog",
+  "zx_decompose",
+  "zx_depgraph",
+  "zx_deviation",
+  "zx_dial",
+  "zx_dial2",
+  "zx_dial3",
+  "zx_dialpad",
+  "zx_did",
+  "zx_diff",
+  "zx_diffview",
+  "zx_divider",
+  "zx_dmatrix",
+  "zx_docview",
+  "zx_dotstrip",
+  "zx_drift",
+  "zx_dropzone",
+  "zx_dualist",
+  "zx_dumbbell",
+  "zx_dutyrota",
+  "zx_ecdf",
+  "zx_editor",
+  "zx_empty",
+  "zx_escalate",
+  "zx_escalation",
+  "zx_escort",
+  "zx_evidence",
+  "zx_examprep",
+  "zx_expiry",
+  "zx_explain",
+  "zx_explode",
+  "zx_export",
+  "zx_expresult",
+  "zx_fallback",
+  "zx_feed",
+  "zx_feedback",
+  "zx_filecard",
+  "zx_filemgr",
+  "zx_filterchips",
+  "zx_finalpay",
+  "zx_firstaid",
+  "zx_fitness",
+  "zx_flipnum",
+  "zx_floor",
+  "zx_flow",
+  "zx_flowedit",
+  "zx_forecast",
+  "zx_forest",
+  "zx_form",
+  "zx_formula",
+  "zx_fosterdaily",
+  "zx_funnel",
+  "zx_gallery",
+  "zx_gantt",
+  "zx_gauge",
+  "zx_gauntlet",
+  "zx_geo",
+  "zx_geoflow",
+  "zx_gift",
+  "zx_glossary",
+  "zx_glyph",
+  "zx_grid",
+  "zx_gridform",
+  "zx_habit",
+  "zx_handoff",
+  "zx_headline",
+  "zx_healthcheck",
+  "zx_heatmap",
+  "zx_hedge",
+  "zx_hexgrid",
+  "zx_hint",
+  "zx_histogram",
+  "zx_horizon",
+  "zx_hotspot",
+  "zx_housedeal",
+  "zx_housekeep",
+  "zx_icicle",
+  "zx_impact",
+  "zx_incident",
+  "zx_inputmask",
+  "zx_inspect",
+  "zx_inspecthand",
+  "zx_inspection",
+  "zx_insurance",
+  "zx_interview",
+  "zx_inventory",
+  "zx_isometric",
+  "zx_iv",
+  "zx_ivreview",
+  "zx_joystick",
+  "zx_jsondiff",
+  "zx_kanban",
+  "zx_keyvalue",
+  "zx_knowledge",
+  "zx_ladder",
+  "zx_lane",
+  "zx_lease",
+  "zx_ledger",
+  "zx_legend",
+  "zx_liability",
+  "zx_lift",
+  "zx_lineage",
+  "zx_loadtest",
+  "zx_logview",
+  "zx_lorenz",
+  "zx_lostdoc",
+  "zx_mapnav",
+  "zx_mapping",
+  "zx_markov",
+  "zx_marquee",
+  "zx_master",
+  "zx_matrix",
+  "zx_matrix2",
+  "zx_matrix3",
+  "zx_matrixheat",
+  "zx_mds",
+  "zx_media",
+  "zx_medicine",
+  "zx_medremote",
+  "zx_mention",
+  "zx_meter",
+  "zx_metrics",
+  "zx_mindmap",
+  "zx_minmap",
+  "zx_mirror",
+  "zx_missing",
+  "zx_model3d",
+  "zx_montecarlo",
+  "zx_mosaic",
+  "zx_moveout",
+  "zx_multiissue",
+  "zx_music",
+  "zx_network",
+  "zx_news",
+  "zx_notice",
+  "zx_nps",
+  "zx_odometer",
+  "zx_offboard",
+  "zx_optline",
+  "zx_optpath",
+  "zx_order",
+  "zx_org",
+  "zx_orgchart",
+  "zx_overrun",
+  "zx_pager",
+  "zx_pagination",
+  "zx_parallel",
+  "zx_parcel",
+  "zx_pareto",
+  "zx_parking",
+  "zx_payoff",
+  "zx_perm",
+  "zx_pet",
+  "zx_pfront",
+  "zx_photospec",
+  "zx_pictogram",
+  "zx_pin",
+  "zx_pipe",
+  "zx_plant",
+  "zx_playback",
+  "zx_playbook",
+  "zx_polar",
+  "zx_poll",
+  "zx_portfolio",
+  "zx_postmortem",
+  "zx_power",
+  "zx_price",
+  "zx_priority",
+  "zx_probe",
+  "zx_projhandover",
+  "zx_pscan",
+  "zx_psm",
+  "zx_pulse",
+  "zx_punch",
+  "zx_pyramid",
+  "zx_qq",
+  "zx_qr",
+  "zx_queue",
+  "zx_quote",
+  "zx_radar",
+  "zx_radar2",
+  "zx_radial",
+  "zx_radiogroup",
+  "zx_range",
+  "zx_rank",
+  "zx_rating",
+  "zx_ratio",
+  "zx_rca",
+  "zx_rdd",
+  "zx_react",
+  "zx_realoption",
+  "zx_receipt",
+  "zx_recipe",
+  "zx_recycle",
+  "zx_refile",
+  "zx_regress",
+  "zx_regret",
+  "zx_reimburse",
+  "zx_relocation",
+  "zx_remap",
+  "zx_remote",
+  "zx_renovation",
+  "zx_rental",
+  "zx_rentreturn",
+  "zx_repair",
+  "zx_repost",
+  "zx_resizable",
+  "zx_retention",
+  "zx_retry",
+  "zx_reversesolve",
+  "zx_revision",
+  "zx_revoke",
+  "zx_rich",
+  "zx_ridgeline",
+  "zx_ring",
+  "zx_ring2",
+  "zx_riskreturn",
+  "zx_roc",
+  "zx_rollout",
+  "zx_rollup",
+  "zx_route",
+  "zx_runbook",
+  "zx_sankey",
+  "zx_sankey2",
+  "zx_scale",
+  "zx_scale2",
+  "zx_scatter",
+  "zx_scenario",
+  "zx_schedule",
+  "zx_schoolnote",
+  "zx_schoolup",
+  "zx_scoreboard",
+  "zx_scorecard",
+  "zx_scrubber",
+  "zx_searchbar",
+  "zx_seat",
+  "zx_seek",
+  "zx_segmented",
+  "zx_sense",
+  "zx_seq",
+  "zx_seqdiff",
+  "zx_seqtest",
+  "zx_sequential",
+  "zx_settings",
+  "zx_setup",
+  "zx_shell",
+  "zx_ship",
+  "zx_shop",
+  "zx_sign",
+  "zx_sizing",
+  "zx_skeleton",
+  "zx_sla",
+  "zx_sleep",
+  "zx_slidergroup",
+  "zx_slo",
+  "zx_slope",
+  "zx_slot",
+  "zx_slotconflict",
+  "zx_sortable",
+  "zx_span",
+  "zx_sparkgrid",
+  "zx_sparkline",
+  "zx_spectrum",
+  "zx_spin",
+  "zx_spiral",
+  "zx_split",
+  "zx_splitbill",
+  "zx_splitflap",
+  "zx_spreadsheet",
+  "zx_stack",
+  "zx_stagger",
+  "zx_stars",
+  "zx_stat",
+  "zx_statelist",
+  "zx_statemachine",
+  "zx_steparea",
+  "zx_stepflow",
+  "zx_stepper",
+  "zx_stocktake",
+  "zx_stoprule",
+  "zx_stream",
+  "zx_stress",
+  "zx_study",
+  "zx_sublet",
+  "zx_subscription",
+  "zx_sunburst",
+  "zx_survcmp",
+  "zx_survey",
+  "zx_survival",
+  "zx_swatch",
+  "zx_swimlane",
+  "zx_swipe",
+  "zx_switch",
+  "zx_systemdyn",
+  "zx_tabbar",
+  "zx_table",
+  "zx_tabs",
+  "zx_tags",
+  "zx_tasklist",
+  "zx_taxxborder",
+  "zx_terminal",
+  "zx_test",
+  "zx_thread",
+  "zx_threeway",
+  "zx_ticket",
+  "zx_tictactoe",
+  "zx_timeline",
+  "zx_timeline2",
+  "zx_timepicker",
+  "zx_timerange",
+  "zx_toc",
+  "zx_toggle",
+  "zx_tokens",
+  "zx_tolerance",
+  "zx_toolargs",
+  "zx_toolcall",
+  "zx_toolchain",
+  "zx_topology",
+  "zx_tornado",
+  "zx_tour",
+  "zx_traceback",
+  "zx_tradeoff",
+  "zx_trail",
+  "zx_transfer",
+  "zx_transit",
+  "zx_tree",
+  "zx_treemap",
+  "zx_treeview",
+  "zx_tripkit",
+  "zx_tty",
+  "zx_unitecon",
+  "zx_uptime",
+  "zx_utility",
+  "zx_utilitymeter",
+  "zx_vardec",
+  "zx_vehiclecare",
+  "zx_venn",
+  "zx_vet",
+  "zx_video",
+  "zx_violin",
+  "zx_violincmp",
+  "zx_visa",
+  "zx_voice",
+  "zx_waffle",
+  "zx_wallet",
+  "zx_wardhand",
+  "zx_warranty",
+  "zx_warrtrack",
+  "zx_waterfall",
+  "zx_waveedit",
+  "zx_weather",
+  "zx_weekgrid",
+  "zx_whatif",
+  "zx_wizard",
+  "zx_wordcloud",
+  "zx_workload",
+  "zx_wxradar"
+ ],
+ "contracts": {
+  "zx_compare": {
+   "fields": [
+    "onPick"
+   ],
+   "arrays": [
+    "columns",
+    "rows",
+    "v"
+   ],
+   "fn": "compare",
+   "sample": {
+    "type": "zx_compare",
+    "title": "方案对比",
+    "columns": [
+     "A",
+     "B"
+    ],
+    "rows": [
+     {
+      "k": "成本",
+      "v": [
+       "低",
+       "高"
+      ]
+     }
+    ]
+   }
+  },
+  "zx_form": {
+   "fields": [
+    "id",
+    "kind",
+    "max",
+    "min",
+    "submit"
+   ],
+   "arrays": [
+    "fields",
+    "options"
+   ],
+   "fn": "form",
+   "sample": {
+    "type": "zx_form",
+    "title": "补参数",
+    "fields": [
+     {
+      "id": "usage",
+      "kind": "segment",
+      "options": [
+       "游戏",
+       "办公"
+      ]
+     }
+    ],
+    "submit": {
+     "action": "callback",
+     "name": "zx_form_submit"
+    }
+   }
+  },
+  "zx_timeline": {
+   "fields": [
+    "bind",
+    "n"
+   ],
+   "arrays": [
+    "steps"
+   ],
+   "fn": "timeline"
+  },
+  "zx_choice": {
+   "fields": [
+    "key",
+    "onSelect",
+    "rec"
+   ],
+   "arrays": [
+    "options"
+   ],
+   "fn": "choice",
+   "sample": {
+    "type": "zx_choice",
+    "title": "建议",
+    "options": [
+     {
+      "key": "A",
+      "t": "方案 A",
+      "rec": true
+     },
+     {
+      "key": "B",
+      "t": "方案 B"
+     }
+    ]
+   }
+  },
+  "zx_calheat": {
+   "fields": [],
+   "arrays": [
+    "cells",
+    "labels"
+   ],
+   "fn": "calheat",
+   "sample": {
+    "type": "zx_calheat",
+    "labels": [
+     "W1",
+     "W2",
+     "W3"
+    ],
+    "cells": [
+     3,
+     0,
+     7,
+     12,
+     5,
+     0,
+     2,
+     9,
+     14,
+     6,
+     1,
+     0,
+     8
+    ]
+   }
+  },
+  "zx_matrixheat": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "cols",
+    "rows",
+    "v"
+   ],
+   "fn": "matrixheat",
+   "sample": {
+    "type": "zx_matrixheat",
+    "cols": [
+     "一",
+     "二",
+     "三"
+    ],
+    "rows": [
+     {
+      "n": "登录",
+      "v": [
+       120,
+       80,
+       45
+      ]
+     },
+     {
+      "n": "支付",
+      "v": [
+       30,
+       25,
+       18
+      ]
+     }
+    ]
+   }
+  },
+  "zx_polar": {
+   "fields": [
+    "n",
+    "r",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "polar",
+   "sample": {
+    "type": "zx_polar",
+    "items": [
+     {
+      "n": "A",
+      "v": 320,
+      "r": 0.8
+     },
+     {
+      "n": "B",
+      "v": 180,
+      "r": 0.4
+     },
+     {
+      "n": "C",
+      "v": 95,
+      "r": 0.25
+     }
+    ]
+   }
+  },
+  "zx_voice": {
+   "fields": [
+    "maxSecs",
+    "v"
+   ],
+   "arrays": [],
+   "fn": "voice",
+   "sample": {
+    "type": "zx_voice",
+    "maxSecs": 60,
+    "v": ""
+   }
+  },
+  "zx_stars": {
+   "fields": [
+    "max",
+    "v"
+   ],
+   "arrays": [
+    "labels"
+   ],
+   "fn": "stars",
+   "sample": {
+    "type": "zx_stars",
+    "max": 5,
+    "v": 0,
+    "labels": [
+     "很差",
+     "较差",
+     "一般",
+     "好",
+     "非常好"
+    ]
+   }
+  },
+  "zx_react": {
+   "fields": [
+    "e",
+    "k"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "react"
+  },
+  "zx_scale": {
+   "fields": [
+    "hex",
+    "max",
+    "min",
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "stops"
+   ],
+   "fn": "scale",
+   "sample": {
+    "type": "zx_scale",
+    "label": "延迟",
+    "min": 0,
+    "max": 200,
+    "v": 45,
+    "unit": "ms",
+    "stops": [
+     {
+      "n": "快",
+      "hex": "#3FBF7F"
+     },
+     {
+      "n": "慢",
+      "hex": "#E5544B"
+     }
+    ]
+   }
+  },
+  "zx_tags": {
+   "fields": [
+    "max"
+   ],
+   "arrays": [
+    "tags"
+   ],
+   "fn": "tags",
+   "sample": {
+    "type": "zx_tags",
+    "max": 8,
+    "tags": [
+     "Kotlin",
+     "Compose"
+    ],
+    "sugg": [
+     "Jetpack",
+     "MNN",
+     "插件"
+    ]
+   }
+  },
+  "zx_flipnum": {
+   "fields": [
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "flipnum"
+  },
+  "zx_skeleton": {
+   "fields": [
+    "rows"
+   ],
+   "arrays": [],
+   "fn": "skeleton",
+   "sample": {
+    "type": "zx_skeleton",
+    "rows": 3,
+    "hint": "正在渲染卡片…"
+   }
+  },
+  "zx_badges": {
+   "fields": [
+    "e",
+    "got",
+    "k",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "badges",
+   "sample": {
+    "type": "zx_badges",
+    "items": [
+     {
+      "k": "b1",
+      "e": "★",
+      "n": "首次运行",
+      "got": true
+     },
+     {
+      "k": "b2",
+      "e": "◆",
+      "n": "插件作者",
+      "got": false
+     }
+    ]
+   }
+  },
+  "zx_rich": {
+   "fields": [
+    "t",
+    "v"
+   ],
+   "arrays": [
+    "blocks"
+   ],
+   "fn": "rich"
+  },
+  "zx_quote": {
+   "fields": [
+    "hex",
+    "v"
+   ],
+   "arrays": [],
+   "fn": "quote",
+   "sample": {
+    "type": "zx_quote",
+    "v": "被引用的原文",
+    "src": "出处",
+    "hex": "#5046E4"
+   }
+  },
+  "zx_filecard": {
+   "fields": [
+    "k",
+    "n"
+   ],
+   "arrays": [
+    "files"
+   ],
+   "fn": "filecard",
+   "sample": {
+    "type": "zx_filecard",
+    "files": [
+     {
+      "k": "ZxRender.kt",
+      "n": "渲染层",
+      "size": "12.4 KB"
+     },
+     {
+      "k": "spec.png",
+      "n": "视觉稿",
+      "size": "840 KB"
+     }
+    ]
+   }
+  },
+  "zx_callout": {
+   "fields": [
+    "kind",
+    "v"
+   ],
+   "arrays": [],
+   "fn": "callout",
+   "sample": {
+    "type": "zx_callout",
+    "kind": "warn",
+    "title": "注意",
+    "v": "这段会在下一次渲染时失效"
+   }
+  },
+  "zx_hint": {
+   "fields": [
+    "v"
+   ],
+   "arrays": [],
+   "fn": "hint",
+   "sample": {
+    "type": "zx_hint",
+    "n": "这是什么意思？",
+    "v": "展开后的说明文字",
+    "open": true
+   }
+  },
+  "zx_seat": {
+   "fields": [
+    "max",
+    "st"
+   ],
+   "arrays": [
+    "rows"
+   ],
+   "fn": "seat",
+   "sample": {
+    "type": "zx_seat",
+    "max": 2,
+    "rows": [
+     [
+      {
+       "k": "A1",
+       "st": "free"
+      },
+      {
+       "k": "A2",
+       "st": "sold"
+      }
+     ],
+     [
+      {
+       "k": "B1",
+       "st": "vip"
+      },
+      {
+       "k": "B2",
+       "st": "free"
+      }
+     ]
+    ]
+   }
+  },
+  "zx_floor": {
+   "fields": [
+    "h",
+    "n",
+    "st",
+    "w",
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "rooms"
+   ],
+   "fn": "floor",
+   "sample": {
+    "type": "zx_floor",
+    "rooms": [
+     {
+      "n": "A 区",
+      "x": 0.05,
+      "y": 0.08,
+      "w": 0.4,
+      "h": 0.35,
+      "st": "free"
+     },
+     {
+      "n": "B 区",
+      "x": 0.55,
+      "y": 0.08,
+      "w": 0.4,
+      "h": 0.35,
+      "st": "busy"
+     }
+    ]
+   }
+  },
+  "zx_banner": {
+   "fields": [
+    "hex",
+    "n"
+   ],
+   "arrays": [],
+   "fn": "banner",
+   "sample": {
+    "type": "zx_banner",
+    "k": "upgrade",
+    "e": "★",
+    "n": "升级到专业版",
+    "d": "解锁全部 107 个组件",
+    "btn": "查看",
+    "hex": "#5046E4"
+   }
+  },
+  "zx_divider": {
+   "fields": [],
+   "arrays": [],
+   "fn": "divider",
+   "sample": {
+    "type": "zx_divider",
+    "n": "以下为可选"
+   }
+  },
+  "zx_settings": {
+   "fields": [
+    "k",
+    "n",
+    "type"
+   ],
+   "arrays": [
+    "items",
+    "options"
+   ],
+   "fn": "settings",
+   "sample": {
+    "type": "zx_settings",
+    "items": [
+     {
+      "k": "notify",
+      "n": "推送通知",
+      "d": "有新消息时提醒",
+      "type": "switch",
+      "v": true
+     },
+     {
+      "k": "theme",
+      "n": "主题",
+      "type": "pick",
+      "options": [
+       "自动",
+       "浅色",
+       "深色"
+      ]
+     }
+    ]
+   }
+  },
+  "zx_command": {
+   "fields": [
+    "k",
+    "n"
+   ],
+   "arrays": [
+    "cmds"
+   ],
+   "fn": "command",
+   "sample": {
+    "type": "zx_command",
+    "cmds": [
+     {
+      "k": "render",
+      "n": "渲染一张卡片",
+      "key": "⌘K"
+     },
+     {
+      "k": "clear",
+      "n": "清空会话",
+      "key": "⌘⌫"
+     }
+    ]
+   }
+  },
+  "zx_empty": {
+   "fields": [
+    "btn",
+    "d",
+    "n"
+   ],
+   "arrays": [],
+   "fn": "empty",
+   "sample": {
+    "type": "zx_empty",
+    "e": "◌",
+    "n": "还没有卡片",
+    "d": "让 AI 下发一张试试",
+    "btn": "生成示例"
+   }
+  },
+  "zx_orgchart": {
+   "fields": [
+    "depth",
+    "n",
+    "root"
+   ],
+   "arrays": [],
+   "fn": "orgchart"
+  },
+  "zx_sankey": {
+   "fields": [
+    "d",
+    "from",
+    "s",
+    "to",
+    "v"
+   ],
+   "arrays": [
+    "flows"
+   ],
+   "fn": "sankey",
+   "sample": {
+    "type": "zx_sankey",
+    "flows": [
+     {
+      "s": "首页",
+      "d": "列表",
+      "v": 1000
+     },
+     {
+      "s": "列表",
+      "d": "详情",
+      "v": 620
+     },
+     {
+      "s": "首页",
+      "d": "搜索",
+      "v": 380
+     }
+    ]
+   }
+  },
+  "zx_gauge": {
+   "fields": [
+    "from",
+    "hex",
+    "max",
+    "min",
+    "target",
+    "to",
+    "v"
+   ],
+   "arrays": [
+    "zones"
+   ],
+   "fn": "gauge",
+   "sample": {
+    "type": "zx_gauge",
+    "n": "CPU",
+    "min": 0,
+    "max": 100,
+    "v": 72,
+    "unit": "%",
+    "zones": [
+     {
+      "from": 0,
+      "to": 60,
+      "hex": "#3FBF7F"
+     },
+     {
+      "from": 60,
+      "to": 100,
+      "hex": "#E5544B"
+     }
+    ]
+   }
+  },
+  "zx_sparkgrid": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "items",
+    "pts"
+   ],
+   "fn": "sparkgrid",
+   "sample": {
+    "type": "zx_sparkgrid",
+    "items": [
+     {
+      "n": "日活",
+      "pts": [
+       12,
+       18,
+       15,
+       22,
+       28,
+       25
+      ]
+     },
+     {
+      "n": "留存",
+      "pts": [
+       40,
+       38,
+       35,
+       33,
+       30,
+       29
+      ]
+     }
+    ]
+   }
+  },
+  "zx_breadcrumb": {
+   "fields": [
+    "cur",
+    "n"
+   ],
+   "arrays": [
+    "items",
+    "path"
+   ],
+   "fn": "breadcrumb",
+   "sample": {
+    "type": "zx_breadcrumb",
+    "cur": 2,
+    "items": [
+     "项目",
+     "组件库",
+     "zx_gauge"
+    ]
+   }
+  },
+  "zx_pagination": {
+   "fields": [
+    "cur",
+    "total"
+   ],
+   "arrays": [],
+   "fn": "pagination",
+   "sample": {
+    "type": "zx_pagination",
+    "total": 12,
+    "cur": 3
+   }
+  },
+  "zx_tabbar": {
+   "fields": [
+    "cur",
+    "k",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "tabbar",
+   "sample": {
+    "type": "zx_tabbar",
+    "cur": 0,
+    "items": [
+     {
+      "k": "chat",
+      "n": "对话",
+      "e": "◉"
+     },
+     {
+      "k": "card",
+      "n": "卡片",
+      "e": "◆"
+     }
+    ]
+   }
+  },
+  "zx_searchbar": {
+   "fields": [
+    "v"
+   ],
+   "arrays": [
+    "sugg"
+   ],
+   "fn": "searchbar",
+   "sample": {
+    "type": "zx_searchbar",
+    "hint": "搜索组件…",
+    "v": "",
+    "sugg": [
+     "zx_gauge",
+     "zx_sankey",
+     "zx_orgchart"
+    ]
+   }
+  },
+  "zx_filterchips": {
+   "fields": [],
+   "arrays": [
+    "items"
+   ],
+   "fn": "chips",
+   "sample": {
+    "type": "zx_filterchips",
+    "multi": true,
+    "items": [
+     "全部",
+     "数据",
+     "导航",
+     "输入"
+    ]
+   }
+  },
+  "zx_colorpick": {
+   "fields": [],
+   "arrays": [
+    "swatches"
+   ],
+   "fn": "colorpick",
+   "sample": {
+    "type": "zx_colorpick",
+    "swatches": [
+     "#5046E4",
+     "#3FBF7F",
+     "#E8A33D",
+     "#E5544B"
+    ]
+   }
+  },
+  "zx_stepper": {
+   "fields": [
+    "max",
+    "min",
+    "step",
+    "t",
+    "v"
+   ],
+   "arrays": [
+    "steps"
+   ],
+   "fn": "stepper",
+   "sample": {
+    "type": "zx_stepper",
+    "n": "并发数",
+    "min": 1,
+    "max": 16,
+    "step": 1,
+    "v": 4
+   }
+  },
+  "zx_treeview": {
+   "fields": [
+    "k",
+    "n",
+    "root"
+   ],
+   "arrays": [],
+   "fn": "treeview"
+  },
+  "zx_diffview": {
+   "fields": [
+    "a",
+    "b",
+    "t"
+   ],
+   "arrays": [
+    "lines"
+   ],
+   "fn": "diffview",
+   "sample": {
+    "type": "zx_diffview",
+    "lines": [
+     {
+      "no": "12",
+      "t": "mod",
+      "a": "val a = 1",
+      "b": "val a = 2"
+     },
+     {
+      "no": "13",
+      "t": "add",
+      "a": "",
+      "b": "val b = 3"
+     }
+    ]
+   }
+  },
+  "zx_baseline": {
+   "fields": [
+    "base",
+    "n",
+    "tgt"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "baseline",
+   "sample": {
+    "type": "zx_baseline",
+    "items": [
+     {
+      "n": "启动耗时",
+      "base": 820,
+      "cur": 640,
+      "tgt": 600,
+      "lower": true
+     },
+     {
+      "n": "崩溃率",
+      "base": 1.2,
+      "cur": 0.4,
+      "tgt": 0.5,
+      "lower": true
+     }
+    ]
+   }
+  },
+  "zx_logview": {
+   "fields": [
+    "lv",
+    "v"
+   ],
+   "arrays": [
+    "rows"
+   ],
+   "fn": "logview"
+  },
+  "zx_console": {
+   "fields": [],
+   "arrays": [
+    "hist"
+   ],
+   "fn": "console",
+   "sample": {
+    "type": "zx_console",
+    "hist": [
+     "zorv> 就绪",
+     "$ zx_discover(op=list)"
+    ]
+   }
+  },
+  "zx_depgraph": {
+   "fields": [
+    "f",
+    "k",
+    "n",
+    "t"
+   ],
+   "arrays": [
+    "edges",
+    "nodes"
+   ],
+   "fn": "depgraph"
+  },
+  "zx_datamap": {
+   "fields": [
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "regions"
+   ],
+   "fn": "datamap",
+   "sample": {
+    "type": "zx_datamap",
+    "regions": [
+     {
+      "n": "华东",
+      "v": 3200
+     },
+     {
+      "n": "华南",
+      "v": 1800
+     }
+    ]
+   }
+  },
+  "zx_conflict": {
+   "fields": [
+    "local",
+    "path",
+    "remote",
+    "sev"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "conflict",
+   "sample": {
+    "type": "zx_conflict",
+    "items": [
+     {
+      "path": "rows[0].v[1]",
+      "label": "研发预算",
+      "local": "2400",
+      "remote": "1800",
+      "sev": "SOFT"
+     }
+    ]
+   }
+  },
+  "zx_activity": {
+   "fields": [
+    "k",
+    "v",
+    "who"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "activity",
+   "sample": {
+    "type": "zx_activity",
+    "items": [
+     {
+      "k": "edit",
+      "who": "我",
+      "v": "把预算改成 2400",
+      "t": "10:24"
+     },
+     {
+      "k": "comment",
+      "who": "同事",
+      "v": "这个数不对吧",
+      "t": "10:31"
+     }
+    ]
+   }
+  },
+  "zx_timerange": {
+   "fields": [
+    "a",
+    "b",
+    "total"
+   ],
+   "arrays": [],
+   "fn": "timerange",
+   "sample": {
+    "type": "zx_timerange",
+    "total": 24,
+    "a": 0.25,
+    "b": 0.6
+   }
+  },
+  "zx_gridform": {
+   "fields": [
+    "cols",
+    "k",
+    "n"
+   ],
+   "arrays": [
+    "fields"
+   ],
+   "fn": "gridform"
+  },
+  "zx_scorecard": {
+   "fields": [
+    "max",
+    "n",
+    "v",
+    "w"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "scorecard",
+   "sample": {
+    "type": "zx_scorecard",
+    "n": "方案评估",
+    "items": [
+     {
+      "k": "cost",
+      "n": "成本",
+      "v": 4,
+      "max": 5,
+      "w": 2.0
+     },
+     {
+      "k": "risk",
+      "n": "风险",
+      "v": 3,
+      "max": 5,
+      "w": 1.0
+     }
+    ]
+   }
+  },
+  "zx_waveedit": {
+   "fields": [],
+   "arrays": [
+    "peaks"
+   ],
+   "fn": "waveedit",
+   "sample": {
+    "type": "zx_waveedit",
+    "peaks": [
+     0.2,
+     0.5,
+     0.8,
+     0.4,
+     0.9,
+     0.3,
+     0.6
+    ]
+   }
+  },
+  "zx_histogram": {
+   "fields": [
+    "n",
+    "to",
+    "v"
+   ],
+   "arrays": [
+    "bins"
+   ],
+   "fn": "histogram",
+   "sample": {
+    "type": "zx_histogram",
+    "mean": 4.2,
+    "bins": [
+     {
+      "n": "0-2",
+      "v": 12,
+      "to": 2
+     },
+     {
+      "n": "2-4",
+      "v": 31,
+      "to": 4
+     },
+     {
+      "n": "4-6",
+      "v": 45,
+      "to": 6
+     },
+     {
+      "n": "6-8",
+      "v": 18,
+      "to": 8
+     }
+    ]
+   }
+  },
+  "zx_boxplot": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "boxplot",
+   "sample": {
+    "type": "zx_boxplot",
+    "items": [
+     {
+      "n": "A",
+      "lo": 1.2,
+      "q1": 2.4,
+      "q2": 3.1,
+      "q3": 4.0,
+      "hi": 5.6,
+      "out": [
+       7.2,
+       0.4
+      ]
+     },
+     {
+      "n": "B",
+      "lo": 2.0,
+      "q1": 3.0,
+      "q2": 3.8,
+      "q3": 4.6,
+      "hi": 6.1
+     }
+    ]
+   }
+  },
+  "zx_pareto": {
+   "fields": [
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "pareto",
+   "sample": {
+    "type": "zx_pareto",
+    "items": [
+     {
+      "n": "渲染失败",
+      "v": 42
+     },
+     {
+      "n": "校验不过",
+      "v": 28
+     },
+     {
+      "n": "超时",
+      "v": 15
+     },
+     {
+      "n": "其他",
+      "v": 8
+     }
+    ]
+   }
+  },
+  "zx_control": {
+   "fields": [
+    "cl",
+    "lcl",
+    "ucl"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "control",
+   "sample": {
+    "type": "zx_control",
+    "cl": 100,
+    "ucl": 112,
+    "lcl": 88,
+    "pts": [
+     98,
+     101,
+     103,
+     99,
+     114,
+     97,
+     102,
+     100,
+     86,
+     101,
+     104,
+     99
+    ]
+   }
+  },
+  "zx_sunburst": {
+   "fields": [
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "items",
+    "rings"
+   ],
+   "fn": "sunburst",
+   "sample": {
+    "type": "zx_sunburst",
+    "n": "总计",
+    "rings": [
+     {
+      "items": [
+       {
+        "n": "渲染",
+        "v": 60
+       },
+       {
+        "n": "校验",
+        "v": 40
+       }
+      ]
+     },
+     {
+      "items": [
+       {
+        "n": "Compose",
+        "v": 35
+       },
+       {
+        "n": "Canvas",
+        "v": 25
+       },
+       {
+        "n": "DSL",
+        "v": 25
+       },
+       {
+        "n": "Ref",
+        "v": 15
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "zx_video": {
+   "fields": [
+    "at",
+    "dur",
+    "n",
+    "rate"
+   ],
+   "arrays": [
+    "marks"
+   ],
+   "fn": "video",
+   "sample": {
+    "type": "zx_video",
+    "n": "演示录屏",
+    "dur": 180,
+    "at": 0.3,
+    "rate": 1,
+    "marks": [
+     {
+      "at": 0.2
+     },
+     {
+      "at": 0.65
+     }
+    ]
+   }
+  },
+  "zx_docview": {
+   "fields": [
+    "at",
+    "total",
+    "zoom"
+   ],
+   "arrays": [],
+   "fn": "docview",
+   "sample": {
+    "type": "zx_docview",
+    "n": "方案.pdf",
+    "total": 12,
+    "at": 3,
+    "zoom": 1
+   }
+  },
+  "zx_model3d": {
+   "fields": [
+    "n",
+    "pitch",
+    "yaw"
+   ],
+   "arrays": [],
+   "fn": "model3d",
+   "sample": {
+    "type": "zx_model3d",
+    "n": "外壳",
+    "yaw": 0,
+    "pitch": 0
+   }
+  },
+  "zx_schedule": {
+   "fields": [
+    "d",
+    "s"
+   ],
+   "arrays": [
+    "cells",
+    "days",
+    "slots"
+   ],
+   "fn": "schedule"
+  },
+  "zx_nps": {
+   "fields": [
+    "detractors",
+    "passives",
+    "promoters",
+    "total"
+   ],
+   "arrays": [],
+   "fn": "nps",
+   "sample": {
+    "type": "zx_nps",
+    "n": "本季 NPS",
+    "detractors": 18,
+    "passives": 42,
+    "promoters": 90,
+    "total": 150
+   }
+  },
+  "zx_export": {
+   "fields": [
+    "k",
+    "n"
+   ],
+   "arrays": [
+    "fmts"
+   ],
+   "fn": "export",
+   "sample": {
+    "type": "zx_export",
+    "n": "导出这张表",
+    "size": "12.4 KB",
+    "target": "budget",
+    "fmts": [
+     {
+      "k": "csv",
+      "n": "CSV",
+      "e": "▤"
+     },
+     {
+      "k": "xlsx",
+      "n": "Excel",
+      "e": "▦"
+     },
+     {
+      "k": "md",
+      "n": "Markdown",
+      "e": "≡"
+     }
+    ]
+   }
+  },
+  "zx_bargauge": {
+   "fields": [
+    "hex",
+    "max",
+    "n",
+    "tgt",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "bargauge",
+   "sample": {
+    "type": "zx_bargauge",
+    "max": 100,
+    "items": [
+     {
+      "n": "完成度",
+      "v": 72,
+      "tgt": 80,
+      "hex": "#5046E4"
+     },
+     {
+      "n": "覆盖率",
+      "v": 45,
+      "tgt": 60,
+      "hex": "#3FBF7F"
+     }
+    ]
+   }
+  },
+  "zx_route": {
+   "fields": [
+    "k",
+    "n"
+   ],
+   "arrays": [
+    "stops"
+   ],
+   "fn": "route"
+  },
+  "zx_network": {
+   "fields": [
+    "a",
+    "b",
+    "k",
+    "n",
+    "v",
+    "w"
+   ],
+   "arrays": [
+    "links",
+    "nodes"
+   ],
+   "fn": "network",
+   "sample": {
+    "type": "zx_network",
+    "nodes": [
+     {
+      "k": "a",
+      "n": "渲染",
+      "v": 3
+     },
+     {
+      "k": "b",
+      "n": "校验",
+      "v": 2
+     },
+     {
+      "k": "c",
+      "n": "缓存",
+      "v": 1
+     },
+     {
+      "k": "d",
+      "n": "事务",
+      "v": 2
+     }
+    ],
+    "links": [
+     {
+      "a": 0,
+      "b": 1,
+      "w": 2
+     },
+     {
+      "a": 1,
+      "b": 2,
+      "w": 1
+     },
+     {
+      "a": 1,
+      "b": 3,
+      "w": 1.5
+     },
+     {
+      "a": 2,
+      "b": 3,
+      "w": 1
+     }
+    ]
+   }
+  },
+  "zx_annotate": {
+   "fields": [
+    "c",
+    "e",
+    "h",
+    "n",
+    "s",
+    "t",
+    "text",
+    "w",
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "marks"
+   ],
+   "fn": "annotate"
+  },
+  "zx_revision": {
+   "fields": [
+    "k",
+    "new",
+    "old"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "revision",
+   "sample": {
+    "type": "zx_revision",
+    "path": "Config.kt",
+    "items": [
+     {
+      "k": "mod",
+      "old": "timeout = 10",
+      "new": "timeout = 30"
+     },
+     {
+      "k": "add",
+      "old": "",
+      "new": "retry = 5"
+     }
+    ]
+   }
+  },
+  "zx_bullet": {
+   "fields": [
+    "bad",
+    "max",
+    "n",
+    "ok",
+    "tgt",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "bullet",
+   "sample": {
+    "type": "zx_bullet",
+    "items": [
+     {
+      "n": "收入",
+      "v": 72,
+      "tgt": 80,
+      "max": 100,
+      "bad": 50,
+      "ok": 75
+     },
+     {
+      "n": "毛利",
+      "v": 38,
+      "tgt": 35,
+      "max": 100,
+      "bad": 50,
+      "ok": 75
+     }
+    ]
+   }
+  },
+  "zx_icicle": {
+   "fields": [],
+   "arrays": [],
+   "fn": "icicle",
+   "sample": {
+    "type": "zx_icicle",
+    "root": {
+     "n": "总计",
+     "v": 100,
+     "c": [
+      {
+       "n": "渲染",
+       "v": 60,
+       "c": [
+        {
+         "n": "Compose",
+         "v": 35
+        },
+        {
+         "n": "Canvas",
+         "v": 25
+        }
+       ]
+      },
+      {
+       "n": "校验",
+       "v": 40
+      }
+     ]
+    }
+   }
+  },
+  "zx_cohort": {
+   "fields": [
+    "n",
+    "periods",
+    "size"
+   ],
+   "arrays": [
+    "rows",
+    "v"
+   ],
+   "fn": "cohort",
+   "sample": {
+    "type": "zx_cohort",
+    "unit": "周",
+    "periods": 4,
+    "rows": [
+     {
+      "n": "第 1 周",
+      "size": 1200,
+      "v": [
+       100,
+       62,
+       45,
+       33
+      ]
+     },
+     {
+      "n": "第 2 周",
+      "size": 1450,
+      "v": [
+       100,
+       58,
+       41
+      ]
+     }
+    ]
+   }
+  },
+  "zx_slope": {
+   "fields": [
+    "a",
+    "b",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "slope",
+   "sample": {
+    "type": "zx_slope",
+    "a": "Q1",
+    "b": "Q2",
+    "items": [
+     {
+      "n": "A 方案",
+      "a": 32,
+      "b": 48
+     },
+     {
+      "n": "B 方案",
+      "a": 55,
+      "b": 41
+     }
+    ]
+   }
+  },
+  "zx_dumbbell": {
+   "fields": [
+    "a",
+    "b",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "dumbbell",
+   "sample": {
+    "type": "zx_dumbbell",
+    "a": "改前",
+    "b": "改后",
+    "items": [
+     {
+      "n": "启动",
+      "a": 820,
+      "b": 640
+     },
+     {
+      "n": "内存",
+      "a": 310,
+      "b": 290
+     }
+    ]
+   }
+  },
+  "zx_waffle": {
+   "fields": [
+    "cols",
+    "n",
+    "per",
+    "v"
+   ],
+   "arrays": [
+    "parts"
+   ],
+   "fn": "waffle",
+   "sample": {
+    "type": "zx_waffle",
+    "cols": 10,
+    "per": 10,
+    "parts": [
+     {
+      "n": "已覆盖",
+      "v": 72
+     },
+     {
+      "n": "未覆盖",
+      "v": 28
+     }
+    ]
+   }
+  },
+  "zx_ridgeline": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "rows",
+    "v"
+   ],
+   "fn": "ridgeline",
+   "sample": {
+    "type": "zx_ridgeline",
+    "rows": [
+     {
+      "n": "1 月",
+      "v": [
+       3,
+       5,
+       9,
+       6,
+       2,
+       1
+      ]
+     },
+     {
+      "n": "2 月",
+      "v": [
+       2,
+       4,
+       8,
+       9,
+       5,
+       2
+      ]
+     }
+    ]
+   }
+  },
+  "zx_steparea": {
+   "fields": [],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "steparea",
+   "sample": {
+    "type": "zx_steparea",
+    "pts": [
+     10,
+     10,
+     25,
+     25,
+     18,
+     18,
+     30,
+     30,
+     22
+    ]
+   }
+  },
+  "zx_weekgrid": {
+   "fields": [
+    "d",
+    "nowD",
+    "nowS",
+    "s"
+   ],
+   "arrays": [
+    "cells",
+    "days",
+    "slots"
+   ],
+   "fn": "weekgrid"
+  },
+  "zx_pulse": {
+   "fields": [
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "pulse",
+   "sample": {
+    "type": "zx_pulse",
+    "items": [
+     {
+      "n": "00",
+      "v": 12
+     },
+     {
+      "n": "04",
+      "v": 5
+     },
+     {
+      "n": "08",
+      "v": 31
+     },
+     {
+      "n": "12",
+      "v": 48
+     },
+     {
+      "n": "16",
+      "v": 39
+     },
+     {
+      "n": "20",
+      "v": 22
+     }
+    ]
+   }
+  },
+  "zx_scoreboard": {
+   "fields": [
+    "n",
+    "w"
+   ],
+   "arrays": [
+    "crit",
+    "opts",
+    "scores"
+   ],
+   "fn": "scoreboard",
+   "sample": {
+    "type": "zx_scoreboard",
+    "opts": [
+     "A",
+     "B",
+     "C"
+    ],
+    "crit": [
+     {
+      "n": "成本",
+      "w": 2
+     },
+     {
+      "n": "性能",
+      "w": 1
+     },
+     {
+      "n": "可维护",
+      "w": 1.5
+     }
+    ],
+    "scores": [
+     [
+      8,
+      7,
+      6
+     ],
+     [
+      6,
+      9,
+      7
+     ],
+     [
+      7,
+      6,
+      9
+     ]
+    ]
+   }
+  },
+  "zx_abtest": {
+   "fields": [
+    "cr",
+    "n",
+    "n_"
+   ],
+   "arrays": [
+    "variants"
+   ],
+   "fn": "abtest",
+   "sample": {
+    "type": "zx_abtest",
+    "sig": "p=0.03",
+    "variants": [
+     {
+      "n": "对照组",
+      "n_": 12000,
+      "cr": 2.4
+     },
+     {
+      "n": "新版",
+      "n_": 11800,
+      "cr": 3.1
+     }
+    ]
+   }
+  },
+  "zx_statemachine": {
+   "fields": [
+    "at",
+    "f",
+    "k",
+    "n",
+    "t"
+   ],
+   "arrays": [
+    "states",
+    "trans"
+   ],
+   "fn": "statemachine"
+  },
+  "zx_checkflow": {
+   "fields": [
+    "after",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "checkflow",
+   "sample": {
+    "type": "zx_checkflow",
+    "n": "发布前检查",
+    "items": [
+     {
+      "n": "跑测试",
+      "req": true
+     },
+     {
+      "n": "打标签",
+      "req": true,
+      "after": 0
+     },
+     {
+      "n": "更新文档",
+      "req": false,
+      "after": 1
+     }
+    ]
+   }
+  },
+  "zx_branch": {
+   "fields": [
+    "c",
+    "cols",
+    "head",
+    "k",
+    "n",
+    "r"
+   ],
+   "arrays": [
+    "cells",
+    "rows"
+   ],
+   "fn": "branch",
+   "sample": {
+    "type": "zx_branch",
+    "cols": 6,
+    "head": 4,
+    "rows": [
+     {
+      "n": "main"
+     },
+     {
+      "n": "feature"
+     }
+    ],
+    "cells": [
+     {
+      "r": 0,
+      "c": 0,
+      "k": "commit"
+     },
+     {
+      "r": 1,
+      "c": 1,
+      "k": "branch"
+     },
+     {
+      "r": 1,
+      "c": 3,
+      "k": "commit"
+     },
+     {
+      "r": 0,
+      "c": 4,
+      "k": "merge"
+     }
+    ]
+   }
+  },
+  "zx_sla": {
+   "fields": [
+    "budget",
+    "n",
+    "used"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "sla",
+   "sample": {
+    "type": "zx_sla",
+    "items": [
+     {
+      "n": "可用性",
+      "used": 99.2,
+      "budget": 100
+     },
+     {
+      "n": "错误预算",
+      "used": 118,
+      "budget": 100
+     }
+    ]
+   }
+  },
+  "zx_repost": {
+   "fields": [
+    "by",
+    "likes",
+    "quote",
+    "replies",
+    "reposts",
+    "text"
+   ],
+   "arrays": [],
+   "fn": "repost",
+   "sample": {
+    "type": "zx_repost",
+    "by": "同事",
+    "at": "2 小时前",
+    "text": "这版把重试改成 5 次了，感觉偏多。",
+    "likes": 12,
+    "reposts": 3,
+    "quote": {
+     "by": "我",
+     "text": "超时放宽到 30 秒。"
+    }
+   }
+  },
+  "zx_thread": {
+   "fields": [
+    "by",
+    "d",
+    "t"
+   ],
+   "arrays": [
+    "posts"
+   ],
+   "fn": "thread",
+   "sample": {
+    "type": "zx_thread",
+    "posts": [
+     {
+      "by": "我",
+      "at": "09:00",
+      "t": "这个方案行吗",
+      "d": 0
+     },
+     {
+      "by": "同事",
+      "at": "09:12",
+      "t": "成本偏高",
+      "d": 1
+     },
+     {
+      "by": "我",
+      "at": "09:30",
+      "t": "那换成 B",
+      "d": 2
+     }
+    ]
+   }
+  },
+  "zx_splitflap": {
+   "fields": [
+    "v"
+   ],
+   "arrays": [
+    "digits"
+   ],
+   "fn": "splitflap"
+  },
+  "zx_runbook": {
+   "fields": [
+    "at",
+    "cmd",
+    "n"
+   ],
+   "arrays": [
+    "steps"
+   ],
+   "fn": "runbook"
+  },
+  "zx_geo": {
+   "fields": [
+    "la",
+    "lo",
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "geo",
+   "sample": {
+    "type": "zx_geo",
+    "pts": [
+     {
+      "n": "北京",
+      "la": 39.9,
+      "lo": 116.4,
+      "v": 8
+     },
+     {
+      "n": "上海",
+      "la": 31.2,
+      "lo": 121.5,
+      "v": 9
+     },
+     {
+      "n": "广州",
+      "la": 23.1,
+      "lo": 113.3,
+      "v": 6
+     }
+    ]
+   }
+  },
+  "zx_formula": {
+   "fields": [
+    "expr",
+    "op",
+    "v"
+   ],
+   "arrays": [
+    "c"
+   ],
+   "fn": "formula",
+   "sample": {
+    "type": "zx_formula",
+    "lhs": "E",
+    "expr": {
+     "op": "frac",
+     "c": [
+      {
+       "v": "m"
+      },
+      {
+       "op": "pow",
+       "c": [
+        {
+         "v": "c"
+        },
+        {
+         "v": "2"
+        }
+       ]
+      }
+     ]
+    },
+    "subs": [
+     {
+      "k": "m",
+      "d": "质量",
+      "v": "2.0 kg"
+     }
+    ]
+   }
+  },
+  "zx_tokens": {
+   "fields": [
+    "k",
+    "v"
+   ],
+   "arrays": [
+    "tokens"
+   ],
+   "fn": "tokens",
+   "sample": {
+    "type": "zx_tokens",
+    "tokens": [
+     {
+      "v": "fun",
+      "k": "kw"
+     },
+     {
+      "v": "calc",
+      "k": "fn"
+     },
+     {
+      "v": "(",
+      "k": "op"
+     },
+     {
+      "v": "42",
+      "k": "num",
+      "nl": true
+     }
+    ]
+   }
+  },
+  "zx_ast": {
+   "fields": [
+    "k",
+    "n",
+    "root"
+   ],
+   "arrays": [
+    "c"
+   ],
+   "fn": "ast",
+   "sample": {
+    "type": "zx_ast",
+    "root": {
+     "n": "Call",
+     "k": "call",
+     "c": [
+      {
+       "n": "calc",
+       "k": "id"
+      },
+      {
+       "n": "42",
+       "k": "lit"
+      }
+     ]
+    }
+   }
+  },
+  "zx_hexgrid": {
+   "fields": [
+    "cols",
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "cells"
+   ],
+   "fn": "hexgrid",
+   "sample": {
+    "type": "zx_hexgrid",
+    "cols": 4,
+    "cells": [
+     {
+      "n": "A",
+      "v": 0.2
+     },
+     {
+      "n": "B",
+      "v": 0.6
+     },
+     {
+      "n": "C",
+      "v": 0.9
+     }
+    ]
+   }
+  },
+  "zx_spiral": {
+   "fields": [
+    "n",
+    "turns",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "spiral",
+   "sample": {
+    "type": "zx_spiral",
+    "turns": 2,
+    "items": [
+     {
+      "n": "1 月",
+      "v": 0.3
+     },
+     {
+      "n": "2 月",
+      "v": 0.5
+     },
+     {
+      "n": "3 月",
+      "v": 0.8
+     },
+     {
+      "n": "4 月",
+      "v": 0.6
+     }
+    ]
+   }
+  },
+  "zx_marquee": {
+   "fields": [
+    "speed",
+    "t"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "marquee"
+  },
+  "zx_odometer": {
+   "fields": [
+    "dec",
+    "dur",
+    "v"
+   ],
+   "arrays": [],
+   "fn": "odometer",
+   "sample": {
+    "type": "zx_odometer",
+    "n": "今日访问",
+    "v": 15600,
+    "dur": 1200,
+    "dec": 0
+   }
+  },
+  "zx_radial": {
+   "fields": [
+    "inner",
+    "k",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "radial"
+  },
+  "zx_isometric": {
+   "fields": [
+    "h",
+    "n",
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "blocks"
+   ],
+   "fn": "isometric",
+   "sample": {
+    "type": "zx_isometric",
+    "blocks": [
+     {
+      "n": "服务A",
+      "x": 0,
+      "y": 0,
+      "h": 3
+     },
+     {
+      "n": "服务B",
+      "x": 1,
+      "y": 0,
+      "h": 5
+     }
+    ]
+   }
+  },
+  "zx_spectrum": {
+   "fields": [],
+   "arrays": [
+    "bands"
+   ],
+   "fn": "spectrum",
+   "sample": {
+    "type": "zx_spectrum",
+    "n": "音频频谱",
+    "bands": [
+     0.2,
+     0.5,
+     0.8,
+     0.6,
+     0.3,
+     0.7,
+     0.9,
+     0.4
+    ]
+   }
+  },
+  "zx_bezier": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "presets"
+   ],
+   "fn": "bezier",
+   "sample": {
+    "type": "zx_bezier",
+    "p1x": 0.25,
+    "p1y": 0.1,
+    "p2x": 0.25,
+    "p2y": 1,
+    "presets": [
+     {
+      "n": "ease",
+      "p1x": 0.25,
+      "p1y": 0.1,
+      "p2x": 0.25,
+      "p2y": 1
+     }
+    ]
+   }
+  },
+  "zx_flowedit": {
+   "fields": [
+    "f",
+    "n",
+    "t",
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "edges",
+    "nodes"
+   ],
+   "fn": "flowedit",
+   "sample": {
+    "type": "zx_flowedit",
+    "nodes": [
+     {
+      "n": "开始",
+      "x": 0.15,
+      "y": 0.5
+     },
+     {
+      "n": "校验",
+      "x": 0.45,
+      "y": 0.3
+     },
+     {
+      "n": "结束",
+      "x": 0.8,
+      "y": 0.5
+     }
+    ],
+    "edges": [
+     {
+      "f": 0,
+      "t": 1
+     },
+     {
+      "f": 1,
+      "t": 2
+     }
+    ]
+   }
+  },
+  "zx_crop": {
+   "fields": [
+    "h",
+    "ratio",
+    "w",
+    "x",
+    "y"
+   ],
+   "arrays": [],
+   "fn": "crop",
+   "sample": {
+    "type": "zx_crop",
+    "src": "photo.jpg",
+    "x": 0.15,
+    "y": 0.15,
+    "w": 0.6,
+    "h": 0.6,
+    "ratio": 0
+   }
+  },
+  "zx_mapping": {
+   "fields": [
+    "k",
+    "n",
+    "to"
+   ],
+   "arrays": [
+    "from",
+    "to"
+   ],
+   "fn": "mapping"
+  },
+  "zx_ratio": {
+   "fields": [
+    "a",
+    "b",
+    "target"
+   ],
+   "arrays": [],
+   "fn": "ratio",
+   "sample": {
+    "type": "zx_ratio",
+    "n": "投入产出",
+    "a": 320,
+    "b": 80,
+    "target": 3,
+    "an": "收入",
+    "bn": "成本"
+   }
+  },
+  "zx_deviation": {
+   "fields": [
+    "n",
+    "tgt"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "deviation",
+   "sample": {
+    "type": "zx_deviation",
+    "n": "月度偏差",
+    "items": [
+     {
+      "n": "1月",
+      "act": 110,
+      "tgt": 100
+     },
+     {
+      "n": "2月",
+      "act": 92,
+      "tgt": 100
+     },
+     {
+      "n": "3月",
+      "act": 118,
+      "tgt": 100
+     }
+    ]
+   }
+  },
+  "zx_timeline2": {
+   "fields": [
+    "e",
+    "from",
+    "n",
+    "pe",
+    "ps",
+    "s",
+    "to"
+   ],
+   "arrays": [
+    "rows"
+   ],
+   "fn": "timeline2",
+   "sample": {
+    "type": "zx_timeline2",
+    "from": 0,
+    "to": 30,
+    "rows": [
+     {
+      "n": "设计",
+      "s": 0,
+      "e": 6,
+      "ps": 0,
+      "pe": 5
+     },
+     {
+      "n": "开发",
+      "s": 5,
+      "e": 18,
+      "ps": 5,
+      "pe": 14
+     }
+    ]
+   }
+  },
+  "zx_scale2": {
+   "fields": [
+    "l",
+    "r"
+   ],
+   "arrays": [],
+   "fn": "scale2",
+   "sample": {
+    "type": "zx_scale2",
+    "l": 320,
+    "r": 180,
+    "ln": "收入",
+    "rn": "成本"
+   }
+  },
+  "zx_mirror": {
+   "fields": [
+    "a",
+    "b",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "mirror",
+   "sample": {
+    "type": "zx_mirror",
+    "an": "去年",
+    "bn": "今年",
+    "items": [
+     {
+      "n": "Q1",
+      "a": 120,
+      "b": 150
+     },
+     {
+      "n": "Q2",
+      "a": 140,
+      "b": 132
+     }
+    ]
+   }
+  },
+  "zx_dial2": {
+   "fields": [
+    "f",
+    "k",
+    "max",
+    "min",
+    "t",
+    "v"
+   ],
+   "arrays": [
+    "zones"
+   ],
+   "fn": "dial2",
+   "sample": {
+    "type": "zx_dial2",
+    "v": 72,
+    "min": 0,
+    "max": 100,
+    "u": "%",
+    "zones": [
+     {
+      "f": 0,
+      "t": 40,
+      "k": "err"
+     },
+     {
+      "f": 40,
+      "t": 75,
+      "k": "warn"
+     },
+     {
+      "f": 75,
+      "t": 100,
+      "k": "ok"
+     }
+    ]
+   }
+  },
+  "zx_matrix2": {
+   "fields": [
+    "mode"
+   ],
+   "arrays": [
+    "cols",
+    "rows"
+   ],
+   "fn": "matrix2",
+   "sample": {
+    "type": "zx_matrix2",
+    "mode": "row",
+    "rows": [
+     "成本",
+     "性能",
+     "可维护"
+    ],
+    "cols": [
+     "低",
+     "中",
+     "高"
+    ]
+   }
+  },
+  "zx_ladder": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "ladder",
+   "sample": {
+    "type": "zx_ladder",
+    "items": [
+     {
+      "n": "A",
+      "v": 92
+     },
+     {
+      "n": "B",
+      "v": 78
+     },
+     {
+      "n": "C",
+      "v": 65
+     }
+    ]
+   }
+  },
+  "zx_slot": {
+   "fields": [
+    "from",
+    "len",
+    "n",
+    "s",
+    "to"
+   ],
+   "arrays": [
+    "blocks"
+   ],
+   "fn": "slot",
+   "sample": {
+    "type": "zx_slot",
+    "from": 8,
+    "to": 20,
+    "blocks": [
+     {
+      "n": "晨会",
+      "s": 9,
+      "len": 0.5
+     },
+     {
+      "n": "开发",
+      "s": 10,
+      "len": 4
+     },
+     {
+      "n": "评审",
+      "s": 15,
+      "len": 1
+     }
+    ]
+   }
+  },
+  "zx_traceback": {
+   "fields": [
+    "n",
+    "p"
+   ],
+   "arrays": [
+    "nodes"
+   ],
+   "fn": "traceback"
+  },
+  "zx_seq": {
+   "fields": [
+    "f",
+    "n",
+    "t"
+   ],
+   "arrays": [
+    "actors",
+    "msgs"
+   ],
+   "fn": "seq"
+  },
+  "zx_explode": {
+   "fields": [
+    "n",
+    "spread",
+    "w"
+   ],
+   "arrays": [
+    "parts"
+   ],
+   "fn": "explode"
+  },
+  "zx_critical": {
+   "fields": [
+    "d",
+    "n"
+   ],
+   "arrays": [
+    "after",
+    "tasks"
+   ],
+   "fn": "critical",
+   "sample": {
+    "type": "zx_critical",
+    "n": "上线计划",
+    "tasks": [
+     {
+      "n": "设计",
+      "d": 5,
+      "after": []
+     },
+     {
+      "n": "开发",
+      "d": 12,
+      "after": [
+       0
+      ]
+     },
+     {
+      "n": "测试",
+      "d": 6,
+      "after": [
+       1
+      ]
+     }
+    ]
+   }
+  },
+  "zx_evidence": {
+   "fields": [
+    "c",
+    "concl",
+    "k",
+    "t"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "evidence",
+   "sample": {
+    "type": "zx_evidence",
+    "concl": "应该拆分成两个服务",
+    "items": [
+     {
+      "t": "该模块 QPS 是其余 8 倍",
+      "k": "fact",
+      "c": 0.95
+     },
+     {
+      "t": "拆分后运维成本可控",
+      "k": "infer",
+      "c": 0.6
+     }
+    ]
+   }
+  },
+  "zx_confront": {
+   "fields": [
+    "a",
+    "b",
+    "c",
+    "n",
+    "t",
+    "verdict"
+   ],
+   "arrays": [],
+   "fn": "confront",
+   "sample": {
+    "type": "zx_confront",
+    "n": "版本冲突",
+    "a": {
+     "n": "文档",
+     "t": "需要 v2.1",
+     "c": 0.8
+    },
+    "b": {
+     "n": "实测",
+     "t": "v2.1 会崩",
+     "c": 0.9
+    }
+   }
+  },
+  "zx_matrix3": {
+   "fields": [
+    "e",
+    "i",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "matrix3",
+   "sample": {
+    "type": "zx_matrix3",
+    "n": "优先级",
+    "items": [
+     {
+      "n": "登录",
+      "i": 0.9,
+      "e": 0.8
+     },
+     {
+      "n": "换肤",
+      "i": 0.2,
+      "e": 0.6
+     }
+    ]
+   }
+  },
+  "zx_receipt": {
+   "fields": [
+    "at",
+    "id",
+    "k",
+    "st"
+   ],
+   "arrays": [
+    "rows"
+   ],
+   "fn": "receipt"
+  },
+  "zx_ledger": {
+   "fields": [
+    "d",
+    "n"
+   ],
+   "arrays": [
+    "rows"
+   ],
+   "fn": "ledger",
+   "sample": {
+    "type": "zx_ledger",
+    "n": "账户流水",
+    "rows": [
+     {
+      "n": "充值",
+      "d": 1000
+     },
+     {
+      "n": "消费",
+      "d": -240
+     },
+     {
+      "n": "退款",
+      "d": 80
+     }
+    ]
+   }
+  },
+  "zx_gauntlet": {
+   "fields": [
+    "cnt",
+    "n"
+   ],
+   "arrays": [
+    "rounds"
+   ],
+   "fn": "gauntlet",
+   "sample": {
+    "type": "zx_gauntlet",
+    "n": "简历筛选",
+    "rounds": [
+     {
+      "n": "投递",
+      "cnt": 1200
+     },
+     {
+      "n": "初筛",
+      "cnt": 240
+     },
+     {
+      "n": "笔试",
+      "cnt": 60
+     }
+    ]
+   }
+  },
+  "zx_chain": {
+   "fields": [
+    "n",
+    "s"
+   ],
+   "arrays": [
+    "links"
+   ],
+   "fn": "chain",
+   "sample": {
+    "type": "zx_chain",
+    "n": "发布链路",
+    "links": [
+     {
+      "n": "构建",
+      "s": 0.9
+     },
+     {
+      "n": "测试",
+      "s": 0.55
+     },
+     {
+      "n": "部署",
+      "s": 0.85
+     }
+    ]
+   }
+  },
+  "zx_bracket": {
+   "fields": [
+    "a",
+    "b",
+    "w"
+   ],
+   "arrays": [
+    "rounds"
+   ],
+   "fn": "bracket",
+   "sample": {
+    "type": "zx_bracket",
+    "names": [
+     "半决赛",
+     "决赛"
+    ],
+    "rounds": [
+     [
+      {
+       "a": "A",
+       "b": "B",
+       "sa": "3",
+       "sb": "1",
+       "w": "A"
+      },
+      {
+       "a": "C",
+       "b": "D",
+       "sa": "2",
+       "sb": "2",
+       "w": "C"
+      }
+     ],
+     [
+      {
+       "a": "A",
+       "b": "C",
+       "sa": "3",
+       "sb": "0",
+       "w": "A"
+      }
+     ]
+    ]
+   }
+  },
+  "zx_table": {
+   "fields": [],
+   "arrays": [
+    "columns",
+    "rows"
+   ],
+   "fn": "table",
+   "sample": {
+    "type": "zx_table",
+    "title": "预算表",
+    "columns": [
+     "项目",
+     "金额",
+     "备注"
+    ],
+    "rows": [
+     [
+      "服务器",
+      "1200",
+      "按月"
+     ],
+     [
+      "域名",
+      "80",
+      "年付"
+     ]
+    ]
+   }
+  },
+  "zx_chart": {
+   "fields": [
+    "style"
+   ],
+   "arrays": [
+    "labels",
+    "points"
+   ],
+   "fn": "chart",
+   "sample": {
+    "type": "zx_chart",
+    "style": "line",
+    "title": "周活跃",
+    "points": [
+     120,
+     180,
+     150,
+     220,
+     260,
+     240,
+     300
+    ],
+    "labels": [
+     "一",
+     "二",
+     "三",
+     "四",
+     "五",
+     "六",
+     "日"
+    ]
+   }
+  },
+  "zx_kanban": {
+   "fields": [
+    "col",
+    "k",
+    "n",
+    "name",
+    "t"
+   ],
+   "arrays": [
+    "cards",
+    "cols",
+    "columns"
+   ],
+   "fn": "kanban",
+   "sample": {
+    "type": "zx_kanban",
+    "title": "迭代",
+    "columns": [
+     {
+      "name": "待办",
+      "items": [
+       "登录页",
+       "埋点"
+      ]
+     },
+     {
+      "name": "进行中",
+      "items": [
+       "支付"
+      ]
+     },
+     {
+      "name": "完成",
+      "items": [
+       "灰度"
+      ]
+     }
+    ]
+   }
+  },
+  "zx_diff": {
+   "fields": [
+    "header",
+    "path",
+    "t"
+   ],
+   "arrays": [
+    "hunks",
+    "lines"
+   ],
+   "fn": "diff",
+   "sample": {
+    "type": "zx_diff",
+    "path": "app/src/Main.kt",
+    "hunks": [
+     {
+      "header": "@@ -12,4 +12,6 @@",
+      "lines": [
+       {
+        "t": " ",
+        "c": "fun main() {"
+       },
+       {
+        "t": "-",
+        "c": "  println(1)"
+       },
+       {
+        "t": "+",
+        "c": "  println(2)"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "zx_terminal": {
+   "fields": [
+    "lv"
+   ],
+   "arrays": [
+    "lines"
+   ],
+   "fn": "terminal",
+   "sample": {
+    "type": "zx_terminal",
+    "cmd": "./gradlew build",
+    "exit": 0,
+    "lines": [
+     {
+      "lv": "cmd",
+      "c": "$ ./gradlew build"
+     },
+     {
+      "lv": "ok",
+      "c": "BUILD SUCCESSFUL in 12s"
+     }
+    ]
+   }
+  },
+  "zx_approval": {
+   "fields": [
+    "detail",
+    "level",
+    "op"
+   ],
+   "arrays": [],
+   "fn": "approval",
+   "sample": {
+    "type": "zx_approval",
+    "level": "L3",
+    "op": "冻结该应用",
+    "detail": "将通过设备管理员冻结 com.xxx.app，期间无法启动。"
+   }
+  },
+  "zx_media": {
+   "fields": [
+    "kind",
+    "src"
+   ],
+   "arrays": [],
+   "fn": "media",
+   "sample": {
+    "type": "zx_media",
+    "kind": "image",
+    "src": "/sdcard/a.png",
+    "caption": "截屏 2026-10-10"
+   }
+  },
+  "zx_contour": {
+   "fields": [],
+   "arrays": [
+    "grid",
+    "levels"
+   ],
+   "fn": "contour",
+   "sample": {
+    "type": "zx_contour",
+    "n": "地形",
+    "grid": [
+     [
+      0,
+      1,
+      2,
+      1
+     ],
+     [
+      1,
+      3,
+      5,
+      3
+     ],
+     [
+      2,
+      5,
+      8,
+      5
+     ],
+     [
+      1,
+      3,
+      5,
+      3
+     ]
+    ],
+    "levels": [
+     2,
+     4,
+     6
+    ]
+   }
+  },
+  "zx_stream": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "series",
+    "v"
+   ],
+   "fn": "stream",
+   "sample": {
+    "type": "zx_stream",
+    "n": "流量构成",
+    "series": [
+     {
+      "n": "Web",
+      "v": [
+       30,
+       28,
+       25,
+       20,
+       18
+      ]
+     },
+     {
+      "n": "App",
+      "v": [
+       10,
+       16,
+       22,
+       30,
+       38
+      ]
+     }
+    ]
+   }
+  },
+  "zx_horizon": {
+   "fields": [
+    "bands"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "horizon",
+   "sample": {
+    "type": "zx_horizon",
+    "n": "QPS",
+    "bands": 3,
+    "pts": [
+     12,
+     18,
+     40,
+     95,
+     60,
+     30,
+     22,
+     15,
+     44,
+     110,
+     70,
+     35
+    ]
+   }
+  },
+  "zx_parallel": {
+   "fields": [
+    "max",
+    "min",
+    "n"
+   ],
+   "arrays": [
+    "axes",
+    "rows"
+   ],
+   "fn": "parallel",
+   "sample": {
+    "type": "zx_parallel",
+    "axes": [
+     {
+      "n": "价格",
+      "min": 0,
+      "max": 100
+     },
+     {
+      "n": "性能",
+      "min": 0,
+      "max": 100
+     },
+     {
+      "n": "续航",
+      "min": 0,
+      "max": 100
+     }
+    ],
+    "rows": [
+     [
+      20,
+      90,
+      40
+     ],
+     [
+      60,
+      70,
+      85
+     ],
+     [
+      95,
+      50,
+      60
+     ]
+    ]
+   }
+  },
+  "zx_beeswarm": {
+   "fields": [
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "beeswarm",
+   "sample": {
+    "type": "zx_beeswarm",
+    "n": "响应耗时",
+    "items": [
+     {
+      "n": "a",
+      "v": 120
+     },
+     {
+      "n": "b",
+      "v": 135
+     },
+     {
+      "n": "c",
+      "v": 280
+     }
+    ]
+   }
+  },
+  "zx_violin": {
+   "fields": [
+    "med",
+    "n"
+   ],
+   "arrays": [
+    "groups",
+    "pts"
+   ],
+   "fn": "violin",
+   "sample": {
+    "type": "zx_violin",
+    "n": "分组分布",
+    "groups": [
+     {
+      "n": "A",
+      "pts": [
+       10,
+       12,
+       11,
+       40,
+       42,
+       38
+      ],
+      "med": 26
+     },
+     {
+      "n": "B",
+      "pts": [
+       20,
+       22,
+       21,
+       19,
+       20,
+       23
+      ],
+      "med": 21
+     }
+    ]
+   }
+  },
+  "zx_glyph": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "dims",
+    "items",
+    "v"
+   ],
+   "fn": "glyph"
+  },
+  "zx_arc": {
+   "fields": [
+    "f",
+    "t"
+   ],
+   "arrays": [
+    "edges",
+    "nodes"
+   ],
+   "fn": "arc",
+   "sample": {
+    "type": "zx_arc",
+    "n": "跨文件引用",
+    "nodes": [
+     "a.kt",
+     "b.kt",
+     "c.kt",
+     "d.kt",
+     "e.kt"
+    ],
+    "edges": [
+     {
+      "f": 0,
+      "t": 3
+     },
+     {
+      "f": 1,
+      "t": 4
+     }
+    ]
+   }
+  },
+  "zx_mosaic": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "cols",
+    "rows",
+    "v"
+   ],
+   "fn": "mosaic",
+   "sample": {
+    "type": "zx_mosaic",
+    "n": "渠道×转化",
+    "cols": [
+     "新客",
+     "老客"
+    ],
+    "rows": [
+     {
+      "n": "A",
+      "v": [
+       40,
+       10
+      ]
+     },
+     {
+      "n": "B",
+      "v": [
+       15,
+       55
+      ]
+     }
+    ]
+   }
+  },
+  "zx_trail": {
+   "fields": [
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "trail"
+  },
+  "zx_pictogram": {
+   "fields": [
+    "cnt",
+    "n",
+    "per"
+   ],
+   "arrays": [
+    "groups"
+   ],
+   "fn": "pictogram",
+   "sample": {
+    "type": "zx_pictogram",
+    "n": "用户构成",
+    "per": 10,
+    "unit": "人",
+    "total": 1000,
+    "groups": [
+     {
+      "n": "付费",
+      "cnt": 240
+     },
+     {
+      "n": "免费",
+      "cnt": 760
+     }
+    ]
+   }
+  },
+  "zx_dotstrip": {
+   "fields": [
+    "cnt",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "dotstrip",
+   "sample": {
+    "type": "zx_dotstrip",
+    "n": "缺陷数",
+    "items": [
+     {
+      "n": "v1.0",
+      "cnt": 7
+     },
+     {
+      "n": "v1.1",
+      "cnt": 3
+     },
+     {
+      "n": "v1.2",
+      "cnt": 1
+     }
+    ]
+   }
+  },
+  "zx_align": {
+   "fields": [
+    "mode",
+    "n"
+   ],
+   "arrays": [
+    "series",
+    "v"
+   ],
+   "fn": "align",
+   "sample": {
+    "type": "zx_align",
+    "n": "三轮压测",
+    "mode": "stretch",
+    "series": [
+     {
+      "n": "v1.0",
+      "v": [
+       10,
+       30,
+       60,
+       90,
+       70,
+       40
+      ]
+     },
+     {
+      "n": "v1.1",
+      "v": [
+       12,
+       45,
+       85,
+       60
+      ]
+     }
+    ]
+   }
+  },
+  "zx_jsondiff": {
+   "fields": [
+    "a",
+    "b",
+    "k",
+    "only",
+    "p"
+   ],
+   "arrays": [
+    "rows"
+   ],
+   "fn": "jsondiff",
+   "sample": {
+    "type": "zx_jsondiff",
+    "n": "配置对比",
+    "rows": [
+     {
+      "p": "server.port",
+      "k": "mod",
+      "a": "8080",
+      "b": "9090"
+     },
+     {
+      "p": "cache.ttl",
+      "k": "add",
+      "b": "600"
+     },
+     {
+      "p": "debug",
+      "k": "del",
+      "a": "true"
+     }
+    ]
+   }
+  },
+  "zx_threeway": {
+   "fields": [
+    "a",
+    "b",
+    "base",
+    "f"
+   ],
+   "arrays": [
+    "rows"
+   ],
+   "fn": "threeway",
+   "sample": {
+    "type": "zx_threeway",
+    "n": "合并预览",
+    "a": "你的",
+    "b": "远端",
+    "base": "基准",
+    "rows": [
+     {
+      "f": "timeout",
+      "base": "30",
+      "a": "60",
+      "b": "45"
+     },
+     {
+      "f": "retries",
+      "base": "3",
+      "a": "3",
+      "b": "5"
+     }
+    ]
+   }
+  },
+  "zx_sankey2": {
+   "fields": [
+    "f",
+    "l",
+    "loss",
+    "n",
+    "t",
+    "v"
+   ],
+   "arrays": [
+    "flows",
+    "nodes"
+   ],
+   "fn": "sankey2",
+   "sample": {
+    "type": "zx_sankey2",
+    "n": "能量流",
+    "loss": 15,
+    "nodes": [
+     {
+      "n": "输入",
+      "l": 0
+     },
+     {
+      "n": "转换",
+      "l": 1
+     },
+     {
+      "n": "输出",
+      "l": 2
+     },
+     {
+      "n": "散热",
+      "l": 2
+     }
+    ],
+    "flows": [
+     {
+      "f": 0,
+      "t": 1,
+      "v": 100
+     },
+     {
+      "f": 1,
+      "t": 2,
+      "v": 85
+     },
+     {
+      "f": 1,
+      "t": 3,
+      "v": 15,
+      "loss": true
+     }
+    ]
+   }
+  },
+  "zx_split": {
+   "fields": [
+    "dir",
+    "max",
+    "min",
+    "ratio"
+   ],
+   "arrays": [],
+   "fn": "split"
+  },
+  "zx_switch": {
+   "fields": [
+    "cur",
+    "when"
+   ],
+   "arrays": [
+    "cases"
+   ],
+   "fn": "switch",
+   "sample": {
+    "type": "zx_switch",
+    "n": "状态分支",
+    "cur": 0,
+    "cases": [
+     {
+      "when": "state=ok",
+      "label": "正常",
+      "body": {
+       "type": "zx_terminal",
+       "text": ""
+      }
+     },
+     {
+      "when": "default",
+      "label": "其他",
+      "body": {
+       "type": "zx_terminal",
+       "text": ""
+      }
+     }
+    ]
+   }
+  },
+  "zx_lane": {
+   "fields": [
+    "n",
+    "slots"
+   ],
+   "arrays": [
+    "lanes",
+    "v"
+   ],
+   "fn": "lane",
+   "sample": {
+    "type": "zx_lane",
+    "n": "排期",
+    "slots": 6,
+    "lanes": [
+     {
+      "n": "甲",
+      "v": [
+       0,
+       1,
+       1,
+       0,
+       2,
+       3
+      ]
+     },
+     {
+      "n": "乙",
+      "v": [
+       1,
+       0,
+       0,
+       1,
+       1,
+       0
+      ]
+     }
+    ]
+   }
+  },
+  "zx_bullet2": {
+   "fields": [
+    "act",
+    "max",
+    "n",
+    "tgt"
+   ],
+   "arrays": [
+    "bands",
+    "items"
+   ],
+   "fn": "bullet2",
+   "sample": {
+    "type": "zx_bullet2",
+    "n": "Q4 达成",
+    "items": [
+     {
+      "n": "营收",
+      "act": 92,
+      "tgt": 100,
+      "max": 120,
+      "bands": [
+       40,
+       70,
+       120
+      ]
+     },
+     {
+      "n": "利润",
+      "act": 28,
+      "tgt": 25,
+      "max": 40,
+      "bands": [
+       15,
+       25,
+       40
+      ]
+     }
+    ]
+   }
+  },
+  "zx_ring2": {
+   "fields": [
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "rings",
+    "segs"
+   ],
+   "fn": "ring2",
+   "sample": {
+    "type": "zx_ring2",
+    "n": "三年构成",
+    "rings": [
+     {
+      "n": "2023",
+      "segs": [
+       {
+        "n": "A",
+        "v": 60
+       },
+       {
+        "n": "B",
+        "v": 40
+       }
+      ]
+     },
+     {
+      "n": "2024",
+      "segs": [
+       {
+        "n": "A",
+        "v": 45
+       },
+       {
+        "n": "B",
+        "v": 55
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "zx_stepflow": {
+   "fields": [
+    "n",
+    "s"
+   ],
+   "arrays": [
+    "steps"
+   ],
+   "fn": "stepflow",
+   "sample": {
+    "type": "zx_stepflow",
+    "n": "发布流程",
+    "steps": [
+     {
+      "n": "构建",
+      "s": 2
+     },
+     {
+      "n": "测试",
+      "s": 2
+     },
+     {
+      "n": "部署",
+      "s": 1
+     },
+     {
+      "n": "验收",
+      "s": 0
+     }
+    ]
+   }
+  },
+  "zx_dial3": {
+   "fields": [
+    "bad",
+    "max",
+    "n",
+    "v",
+    "warn"
+   ],
+   "arrays": [
+    "dials"
+   ],
+   "fn": "dial3",
+   "sample": {
+    "type": "zx_dial3",
+    "n": "系统监控",
+    "dials": [
+     {
+      "n": "CPU",
+      "v": 72,
+      "max": 100,
+      "warn": 75,
+      "bad": 90,
+      "u": "%"
+     },
+     {
+      "n": "内存",
+      "v": 88,
+      "max": 100,
+      "warn": 75,
+      "bad": 90,
+      "u": "%"
+     }
+    ]
+   }
+  },
+  "zx_cmdhist": {
+   "fields": [
+    "c",
+    "t"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "cmdhist",
+   "sample": {
+    "type": "zx_cmdhist",
+    "n": "命令历史",
+    "items": [
+     {
+      "c": "gradle build",
+      "t": "14:02",
+      "d": "1m20s",
+      "rc": 0
+     },
+     {
+      "c": "adb install app.apk",
+      "t": "14:05",
+      "d": "8s",
+      "rc": 1
+     }
+    ]
+   }
+  },
+  "zx_callstack": {
+   "fields": [
+    "at",
+    "err",
+    "fn"
+   ],
+   "arrays": [
+    "frames"
+   ],
+   "fn": "callstack",
+   "sample": {
+    "type": "zx_callstack",
+    "n": "崩溃栈",
+    "err": "NullPointerException",
+    "frames": [
+     {
+      "fn": "loadUser",
+      "at": "UserRepo.kt:142"
+     },
+     {
+      "fn": "onResume",
+      "at": "Main.kt:88",
+      "ext": true
+     }
+    ]
+   }
+  },
+  "zx_uptime": {
+   "fields": [],
+   "arrays": [
+    "at",
+    "slots"
+   ],
+   "fn": "uptime",
+   "sample": {
+    "type": "zx_uptime",
+    "n": "近 24 小时",
+    "total": 99.2,
+    "at": [
+     "00",
+     "01"
+    ],
+    "slots": [
+     0,
+     2
+    ]
+   }
+  },
+  "zx_playback": {
+   "fields": [
+    "cur",
+    "f",
+    "frames",
+    "n",
+    "speed"
+   ],
+   "arrays": [
+    "marks"
+   ],
+   "fn": "playback"
+  },
+  "zx_pipe": {
+   "fields": [
+    "n",
+    "rate"
+   ],
+   "arrays": [
+    "stages"
+   ],
+   "fn": "pipe",
+   "sample": {
+    "type": "zx_pipe",
+    "n": "构建流水线",
+    "queue": 3,
+    "stages": [
+     {
+      "n": "拉取",
+      "rate": 120,
+      "u": "MB/s"
+     },
+     {
+      "n": "编译",
+      "rate": 18,
+      "u": "文件/s"
+     }
+    ]
+   }
+  },
+  "zx_corr": {
+   "fields": [],
+   "arrays": [
+    "m",
+    "names"
+   ],
+   "fn": "corr",
+   "sample": {
+    "type": "zx_corr",
+    "n": "指标相关性",
+    "names": [
+     "价格",
+     "销量",
+     "评分"
+    ],
+    "m": [
+     [
+      1,
+      -0.62,
+      0.31
+     ],
+     [
+      -0.62,
+      1,
+      -0.08
+     ],
+     [
+      0.31,
+      -0.08,
+      1
+     ]
+    ]
+   }
+  },
+  "zx_radar2": {
+   "fields": [
+    "max",
+    "n"
+   ],
+   "arrays": [
+    "axes",
+    "series",
+    "v"
+   ],
+   "fn": "radar2",
+   "sample": {
+    "type": "zx_radar2",
+    "n": "方案对比",
+    "max": 100,
+    "axes": [
+     "性能",
+     "成本",
+     "易用",
+     "稳定"
+    ],
+    "series": [
+     {
+      "n": "A",
+      "v": [
+       90,
+       60,
+       75,
+       80
+      ]
+     },
+     {
+      "n": "B",
+      "v": [
+       70,
+       85,
+       90,
+       65
+      ]
+     }
+    ]
+   }
+  },
+  "zx_choro": {
+   "fields": [
+    "cols",
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "cells"
+   ],
+   "fn": "choro",
+   "sample": {
+    "type": "zx_choro",
+    "n": "区域销量",
+    "cols": 4,
+    "cells": [
+     {
+      "n": "华东",
+      "v": 320
+     },
+     {
+      "n": "华南",
+      "v": 180
+     },
+     {
+      "n": "华北",
+      "v": 240
+     },
+     {
+      "n": "西部",
+      "v": 90
+     }
+    ]
+   }
+  },
+  "zx_toc": {
+   "fields": [
+    "cur",
+    "lv",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "toc",
+   "sample": {
+    "type": "zx_toc",
+    "n": "文档目录",
+    "cur": 1,
+    "items": [
+     {
+      "n": "一、概述",
+      "lv": 1
+     },
+     {
+      "n": "1.1 背景",
+      "lv": 2,
+      "kids": true
+     },
+     {
+      "n": "二、方案",
+      "lv": 1
+     }
+    ]
+   }
+  },
+  "zx_glossary": {
+   "fields": [
+    "d",
+    "t"
+   ],
+   "arrays": [
+    "terms"
+   ],
+   "fn": "glossary"
+  },
+  "zx_survey": {
+   "fields": [
+    "id",
+    "k",
+    "max",
+    "q"
+   ],
+   "arrays": [
+    "opts",
+    "qs"
+   ],
+   "fn": "survey",
+   "sample": {
+    "type": "zx_survey",
+    "n": "满意度",
+    "qs": [
+     {
+      "id": "q1",
+      "q": "整体满意度？",
+      "k": "scale",
+      "max": 5,
+      "req": true
+     },
+     {
+      "id": "q2",
+      "q": "常用功能",
+      "k": "multi",
+      "opts": [
+       "搜索",
+       "对比",
+       "导出"
+      ]
+     }
+    ]
+   }
+  },
+  "zx_punch": {
+   "fields": [
+    "d",
+    "days",
+    "h",
+    "hours"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "punch",
+   "sample": {
+    "type": "zx_punch",
+    "n": "活跃时段",
+    "days": 7,
+    "hours": 24,
+    "pts": [
+     {
+      "d": 0,
+      "h": 9
+     },
+     {
+      "d": 0,
+      "h": 9
+     },
+     {
+      "d": 2,
+      "h": 14
+     }
+    ]
+   }
+  },
+  "zx_decision": {
+   "fields": [
+    "c",
+    "leaf",
+    "r"
+   ],
+   "arrays": [
+    "b",
+    "nodes"
+   ],
+   "fn": "decision"
+  },
+  "zx_tradeoff": {
+   "fields": [
+    "a",
+    "b",
+    "same",
+    "t"
+   ],
+   "arrays": [
+    "front"
+   ],
+   "fn": "tradeoff",
+   "sample": {
+    "type": "zx_tradeoff",
+    "n": "速度与质量",
+    "a": "速度",
+    "b": "质量",
+    "t": 0.5
+   }
+  },
+  "zx_fallback": {
+   "fields": [
+    "cur",
+    "n",
+    "st"
+   ],
+   "arrays": [
+    "links"
+   ],
+   "fn": "fallback",
+   "sample": {
+    "type": "zx_fallback",
+    "n": "支付链路",
+    "cur": 1,
+    "links": [
+     {
+      "n": "主支付",
+      "cost": "全量",
+      "st": 2
+     },
+     {
+      "n": "备用通道",
+      "cost": "手续费 +0.6%",
+      "st": 0
+     },
+     {
+      "n": "离线记账",
+      "cost": "延后对账",
+      "st": 0
+     }
+    ]
+   }
+  },
+  "zx_retry": {
+   "fields": [
+    "base",
+    "cap",
+    "factor",
+    "max",
+    "used"
+   ],
+   "arrays": [],
+   "fn": "retry",
+   "sample": {
+    "type": "zx_retry",
+    "n": "下单重试",
+    "max": 5,
+    "used": 2,
+    "base": 1,
+    "factor": 2,
+    "cap": 30
+   }
+  },
+  "zx_brush": {
+   "fields": [
+    "hi",
+    "lo"
+   ],
+   "arrays": [
+    "data"
+   ],
+   "fn": "brush",
+   "sample": {
+    "type": "zx_brush",
+    "n": "QPS 区间",
+    "lo": 10,
+    "hi": 30,
+    "data": [
+     120,
+     130,
+     125,
+     140,
+     180,
+     210,
+     240,
+     230,
+     200,
+     170,
+     150,
+     140,
+     145,
+     160,
+     190,
+     220,
+     260,
+     250,
+     210,
+     180,
+     160,
+     150,
+     155,
+     170,
+     200,
+     240,
+     280,
+     270,
+     230,
+     200,
+     180,
+     170,
+     175,
+     190,
+     220,
+     260,
+     300,
+     290,
+     250,
+     220
+    ]
+   }
+  },
+  "zx_blast": {
+   "fields": [
+    "f",
+    "n",
+    "root",
+    "t"
+   ],
+   "arrays": [
+    "edges",
+    "nodes"
+   ],
+   "fn": "blast",
+   "sample": {
+    "type": "zx_blast",
+    "n": "改动波及",
+    "root": 0,
+    "nodes": [
+     {
+      "n": "UserRepo"
+     },
+     {
+      "n": "ProfileVM"
+     },
+     {
+      "n": "MainAct"
+     },
+     {
+      "n": "SettingUI"
+     }
+    ],
+    "edges": [
+     {
+      "f": 0,
+      "t": 1
+     },
+     {
+      "f": 1,
+      "t": 2
+     },
+     {
+      "f": 1,
+      "t": 3
+     }
+    ]
+   }
+  },
+  "zx_batch": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "acts",
+    "items"
+   ],
+   "fn": "batch",
+   "sample": {
+    "type": "zx_batch",
+    "n": "批量发布",
+    "acts": [
+     "发布",
+     "回滚",
+     "下线"
+    ],
+    "items": [
+     {
+      "n": "服务A"
+     },
+     {
+      "n": "服务B"
+     },
+     {
+      "n": "服务C"
+     }
+    ]
+   }
+  },
+  "zx_priority": {
+   "fields": [
+    "n",
+    "thr",
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "priority",
+   "sample": {
+    "type": "zx_priority",
+    "n": "需求排序",
+    "thr": 50,
+    "items": [
+     {
+      "n": "搜索优化",
+      "x": 80,
+      "y": 25
+     },
+     {
+      "n": "换肤",
+      "x": 20,
+      "y": 70
+     },
+     {
+      "n": "导出",
+      "x": 60,
+      "y": 30
+     }
+    ]
+   }
+  },
+  "zx_probe": {
+   "fields": [
+    "ms",
+    "n",
+    "slow"
+   ],
+   "arrays": [
+    "eps"
+   ],
+   "fn": "probe",
+   "sample": {
+    "type": "zx_probe",
+    "n": "健康检查",
+    "slow": 300,
+    "eps": [
+     {
+      "n": "api-1",
+      "ms": 120,
+      "rc": 0
+     },
+     {
+      "n": "api-2",
+      "ms": 520,
+      "rc": 0
+     },
+     {
+      "n": "db-1",
+      "ms": 80,
+      "rc": 0
+     }
+    ]
+   }
+  },
+  "zx_inspect": {
+   "fields": [
+    "k",
+    "src"
+   ],
+   "arrays": [
+    "fields"
+   ],
+   "fn": "inspect",
+   "sample": {
+    "type": "zx_inspect",
+    "n": "报价字段",
+    "fields": [
+     {
+      "k": "price",
+      "v": "1200",
+      "src": "user",
+      "ok": true
+     },
+     {
+      "k": "tax",
+      "v": "96",
+      "src": "derived",
+      "from": "price*0.08"
+     },
+     {
+      "k": "ship",
+      "v": "0",
+      "src": "default",
+      "ok": false
+     }
+    ]
+   }
+  },
+  "zx_remap": {
+   "fields": [
+    "f",
+    "t"
+   ],
+   "arrays": [
+    "rules"
+   ],
+   "fn": "remap",
+   "sample": {
+    "type": "zx_remap",
+    "n": "状态码归一",
+    "rules": [
+     {
+      "f": "OK",
+      "t": "0"
+     },
+     {
+      "f": "SUCCESS",
+      "t": "0"
+     },
+     {
+      "f": "FAIL",
+      "t": "1",
+      "n": "失败统一为 1"
+     }
+    ]
+   }
+  },
+  "zx_rollup": {
+   "fields": [
+    "lv",
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "rows"
+   ],
+   "fn": "rollup",
+   "sample": {
+    "type": "zx_rollup",
+    "n": "成本汇总",
+    "rows": [
+     {
+      "n": "总成本",
+      "v": 300,
+      "lv": 1
+     },
+     {
+      "n": "人力",
+      "v": 200,
+      "lv": 2
+     },
+     {
+      "n": "开发",
+      "v": 120,
+      "lv": 3
+     },
+     {
+      "n": "测试",
+      "v": 80,
+      "lv": 3
+     },
+     {
+      "n": "基建",
+      "v": 100,
+      "lv": 2
+     }
+    ]
+   }
+  },
+  "zx_qq": {
+   "fields": [],
+   "arrays": [],
+   "fn": "qq",
+   "sample": {
+    "type": "zx_qq",
+    "n": "响应耗时正态性",
+    "data": [
+     98,
+     102,
+     105,
+     110,
+     97,
+     101,
+     99,
+     103,
+     108,
+     96,
+     104,
+     100,
+     107,
+     95,
+     109,
+     102,
+     98,
+     106,
+     101,
+     103,
+     99,
+     105,
+     100,
+     102,
+     97,
+     104,
+     108,
+     96,
+     101,
+     103
+    ]
+   }
+  },
+  "zx_forest": {
+   "fields": [
+    "e",
+    "hi",
+    "lo",
+    "n"
+   ],
+   "arrays": [
+    "studies"
+   ],
+   "fn": "forest",
+   "sample": {
+    "type": "zx_forest",
+    "title": "三个研究的效应量",
+    "null": 0,
+    "studies": [
+     {
+      "n": "研究A",
+      "e": 0.42,
+      "lo": 0.18,
+      "hi": 0.66
+     },
+     {
+      "n": "研究B",
+      "e": 0.31,
+      "lo": 0.05,
+      "hi": 0.57
+     },
+     {
+      "n": "研究C",
+      "e": 0.55,
+      "lo": 0.3,
+      "hi": 0.8
+     }
+    ]
+   }
+  },
+  "zx_bland": {
+   "fields": [],
+   "arrays": [],
+   "fn": "bland",
+   "sample": {
+    "type": "zx_bland",
+    "n": "两种测压法一致性",
+    "a": [
+     120,
+     130,
+     140,
+     150,
+     160,
+     170
+    ],
+    "b": [
+     118,
+     127,
+     141,
+     146,
+     163,
+     166
+    ]
+   }
+  },
+  "zx_survival": {
+   "fields": [
+    "c",
+    "d",
+    "n0",
+    "t"
+   ],
+   "arrays": [
+    "events"
+   ],
+   "fn": "survival",
+   "sample": {
+    "type": "zx_survival",
+    "title": "留存",
+    "n0": 100,
+    "events": [
+     {
+      "t": 1,
+      "d": 8,
+      "c": 2
+     },
+     {
+      "t": 3,
+      "d": 12,
+      "c": 5
+     },
+     {
+      "t": 6,
+      "d": 9,
+      "c": 1
+     },
+     {
+      "t": 12,
+      "d": 6,
+      "c": 8
+     }
+    ]
+   }
+  },
+  "zx_ecdf": {
+   "fields": [],
+   "arrays": [
+    "marks"
+   ],
+   "fn": "ecdf",
+   "sample": {
+    "type": "zx_ecdf",
+    "n": "首屏耗时分布",
+    "marks": [
+     0.5,
+     0.9
+    ],
+    "data": [
+     820,
+     910,
+     1050,
+     1120,
+     980,
+     1240,
+     760,
+     1310,
+     1090,
+     940
+    ]
+   }
+  },
+  "zx_lorenz": {
+   "fields": [],
+   "arrays": [],
+   "fn": "lorenz",
+   "sample": {
+    "type": "zx_lorenz",
+    "n": "订单集中度",
+    "shares": [
+     5,
+     9,
+     14,
+     22,
+     38,
+     64,
+     110
+    ]
+   }
+  },
+  "zx_regress": {
+   "fields": [
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "regress",
+   "sample": {
+    "type": "zx_regress",
+    "n": "投放与转化",
+    "pts": [
+     {
+      "x": 10,
+      "y": 22
+     },
+     {
+      "x": 20,
+      "y": 38
+     },
+     {
+      "x": 30,
+      "y": 55
+     },
+     {
+      "x": 40,
+      "y": 68
+     },
+     {
+      "x": 50,
+      "y": 91
+     },
+     {
+      "x": 60,
+      "y": 102
+     }
+    ]
+   }
+  },
+  "zx_scatter": {
+   "fields": [
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "scatter",
+   "sample": {
+    "type": "zx_scatter",
+    "title": "机型与耗电",
+    "pts": [
+     {
+      "x": 2.1,
+      "y": 31,
+      "n": "A"
+     },
+     {
+      "x": 3.4,
+      "y": 48,
+      "n": "A"
+     },
+     {
+      "x": 2.8,
+      "y": 39,
+      "n": "B"
+     },
+     {
+      "x": 4.2,
+      "y": 62,
+      "n": "B"
+     }
+    ]
+   }
+  },
+  "zx_seqdiff": {
+   "fields": [],
+   "arrays": [
+    "a",
+    "b"
+   ],
+   "fn": "seqdiff",
+   "sample": {
+    "type": "zx_seqdiff",
+    "n": "两版 token 序列",
+    "an": "v1",
+    "bn": "v2",
+    "a": [
+     "GET",
+     "user",
+     "id",
+     "name"
+    ],
+    "b": [
+     "GET",
+     "user",
+     "id",
+     "email"
+    ]
+   }
+  },
+  "zx_cmdpal": {
+   "fields": [
+    "n",
+    "used"
+   ],
+   "arrays": [
+    "cmds"
+   ],
+   "fn": "cmdpal",
+   "sample": {
+    "type": "zx_cmdpal",
+    "n": "命令",
+    "cmds": [
+     {
+      "n": "发布到预发",
+      "k": "⌘P",
+      "used": 12
+     },
+     {
+      "n": "回滚上一版",
+      "k": "⌘Z",
+      "used": 5
+     },
+     {
+      "n": "查看日志",
+      "used": 3
+     }
+    ]
+   }
+  },
+  "zx_span": {
+   "fields": [
+    "e",
+    "n",
+    "s",
+    "total"
+   ],
+   "arrays": [
+    "spans"
+   ],
+   "fn": "span",
+   "sample": {
+    "type": "zx_span",
+    "title": "请求耗时分解",
+    "total": 1200,
+    "spans": [
+     {
+      "n": "DNS",
+      "s": 0,
+      "e": 80
+     },
+     {
+      "n": "连接",
+      "s": 80,
+      "e": 210
+     },
+     {
+      "n": "等待",
+      "s": 210,
+      "e": 900
+     },
+     {
+      "n": "下载",
+      "s": 900,
+      "e": 1180
+     }
+    ]
+   }
+  },
+  "zx_tolerance": {
+   "fields": [
+    "lsl",
+    "target",
+    "usl"
+   ],
+   "arrays": [],
+   "fn": "tolerance",
+   "sample": {
+    "type": "zx_tolerance",
+    "n": "孔径",
+    "lsl": 9.8,
+    "usl": 10.2,
+    "target": 10,
+    "data": [
+     9.94,
+     10.02,
+     9.98,
+     10.05,
+     9.91,
+     10.08,
+     9.97,
+     10.01,
+     9.95,
+     10.03,
+     9.99,
+     10.06
+    ]
+   }
+  },
+  "zx_decompose": {
+   "fields": [
+    "period"
+   ],
+   "arrays": [],
+   "fn": "decompose",
+   "sample": {
+    "type": "zx_decompose",
+    "n": "日活量",
+    "period": 7,
+    "data": [
+     120,
+     132,
+     141,
+     138,
+     150,
+     163,
+     158,
+     130,
+     142,
+     152,
+     148,
+     161,
+     172,
+     166,
+     138,
+     150,
+     160,
+     156,
+     170,
+     182,
+     176
+    ]
+   }
+  },
+  "zx_boot": {
+   "fields": [
+    "b",
+    "stat"
+   ],
+   "arrays": [],
+   "fn": "boot",
+   "sample": {
+    "type": "zx_boot",
+    "n": "响应耗时中位数",
+    "stat": "median",
+    "b": 2000,
+    "data": [
+     820,
+     910,
+     1050,
+     1120,
+     980,
+     1240,
+     760,
+     1310,
+     1090,
+     940,
+     1150,
+     1010,
+     880,
+     1260,
+     990,
+     1070
+    ]
+   }
+  },
+  "zx_perm": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [],
+   "fn": "perm",
+   "sample": {
+    "type": "zx_perm",
+    "n": 2000,
+    "a": [
+     820,
+     910,
+     1050,
+     980,
+     1240,
+     760,
+     1090,
+     940
+    ],
+    "b": [
+     1150,
+     1010,
+     880,
+     1260,
+     990,
+     1070,
+     1300,
+     1180
+    ]
+   }
+  },
+  "zx_test": {
+   "fields": [
+    "method"
+   ],
+   "arrays": [],
+   "fn": "test",
+   "sample": {
+    "type": "zx_test",
+    "n": "A/B 转化",
+    "method": "t",
+    "a": [
+     22,
+     38,
+     55,
+     68,
+     91,
+     102,
+     88,
+     74
+    ],
+    "b": [
+     30,
+     42,
+     51,
+     60,
+     79,
+     88,
+     71,
+     66
+    ]
+   }
+  },
+  "zx_roc": {
+   "fields": [
+    "s",
+    "y"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "roc",
+   "sample": {
+    "type": "zx_roc",
+    "n": "风控模型",
+    "pts": [
+     {
+      "s": 0.92,
+      "y": 1
+     },
+     {
+      "s": 0.85,
+      "y": 1
+     },
+     {
+      "s": 0.72,
+      "y": 1
+     },
+     {
+      "s": 0.61,
+      "y": 0
+     },
+     {
+      "s": 0.55,
+      "y": 1
+     },
+     {
+      "s": 0.43,
+      "y": 0
+     },
+     {
+      "s": 0.31,
+      "y": 0
+     },
+     {
+      "s": 0.22,
+      "y": 0
+     }
+    ]
+   }
+  },
+  "zx_lift": {
+   "fields": [
+    "hit",
+    "n",
+    "tot"
+   ],
+   "arrays": [
+    "bins"
+   ],
+   "fn": "lift",
+   "sample": {
+    "type": "zx_lift",
+    "n": "分箱提升",
+    "bins": [
+     {
+      "n": "第1箱",
+      "hit": 42,
+      "tot": 100
+     },
+     {
+      "n": "第2箱",
+      "hit": 28,
+      "tot": 100
+     },
+     {
+      "n": "第3箱",
+      "hit": 16,
+      "tot": 100
+     },
+     {
+      "n": "第4箱",
+      "hit": 8,
+      "tot": 100
+     }
+    ]
+   }
+  },
+  "zx_pscan": {
+   "fields": [
+    "x"
+   ],
+   "arrays": [
+    "grid",
+    "metrics",
+    "ys"
+   ],
+   "fn": "pscan",
+   "sample": {
+    "type": "zx_pscan",
+    "n": "阈值扫描",
+    "metrics": [
+     "精确率",
+     "召回率"
+    ],
+    "grid": [
+     {
+      "x": 0.1,
+      "ys": [
+       0.42,
+       0.95
+      ]
+     },
+     {
+      "x": 0.3,
+      "ys": [
+       0.61,
+       0.82
+      ]
+     },
+     {
+      "x": 0.5,
+      "ys": [
+       0.78,
+       0.63
+      ]
+     },
+     {
+      "x": 0.7,
+      "ys": [
+       0.89,
+       0.41
+      ]
+     }
+    ]
+   }
+  },
+  "zx_vardec": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "groups",
+    "vs"
+   ],
+   "fn": "vardec",
+   "sample": {
+    "type": "zx_vardec",
+    "n": "机型耗电",
+    "groups": [
+     {
+      "n": "旗舰",
+      "vs": [
+       31,
+       33,
+       30,
+       32,
+       34
+      ]
+     },
+     {
+      "n": "中端",
+      "vs": [
+       22,
+       24,
+       21,
+       23,
+       25
+      ]
+     },
+     {
+      "n": "入门",
+      "vs": [
+       16,
+       18,
+       15,
+       17,
+       19
+      ]
+     }
+    ]
+   }
+  },
+  "zx_mds": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "d",
+    "pts"
+   ],
+   "fn": "mds",
+   "sample": {
+    "type": "zx_mds",
+    "n": "机型相似度",
+    "iter": 60,
+    "pts": [
+     {
+      "n": "A"
+     },
+     {
+      "n": "B"
+     },
+     {
+      "n": "C"
+     },
+     {
+      "n": "D"
+     }
+    ],
+    "d": [
+     [
+      0,
+      1.2,
+      2.4,
+      3.1
+     ],
+     [
+      1.2,
+      0,
+      1.5,
+      2.8
+     ],
+     [
+      2.4,
+      1.5,
+      0,
+      1.1
+     ],
+     [
+      3.1,
+      2.8,
+      1.1,
+      0
+     ]
+    ]
+   }
+  },
+  "zx_geoflow": {
+   "fields": [
+    "f",
+    "n",
+    "t",
+    "w",
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "edges",
+    "nodes"
+   ],
+   "fn": "geoflow",
+   "sample": {
+    "type": "zx_geoflow",
+    "n": "专线流量",
+    "nodes": [
+     {
+      "n": "北京",
+      "x": 0.7,
+      "y": 0.2
+     },
+     {
+      "n": "上海",
+      "x": 0.8,
+      "y": 0.5
+     },
+     {
+      "n": "广州",
+      "x": 0.7,
+      "y": 0.85
+     },
+     {
+      "n": "成都",
+      "x": 0.4,
+      "y": 0.55
+     }
+    ],
+    "edges": [
+     {
+      "f": 0,
+      "t": 1,
+      "w": 8
+     },
+     {
+      "f": 0,
+      "t": 3,
+      "w": 5
+     },
+     {
+      "f": 1,
+      "t": 2,
+      "w": 6
+     },
+     {
+      "f": 3,
+      "t": 2,
+      "w": 3
+     }
+    ]
+   }
+  },
+  "zx_violincmp": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "groups",
+    "vs"
+   ],
+   "fn": "violincmp",
+   "sample": {
+    "type": "zx_violincmp",
+    "n": "三版本耗时",
+    "groups": [
+     {
+      "n": "v1.0",
+      "vs": [
+       820,
+       910,
+       1050,
+       980,
+       1240,
+       760
+      ]
+     },
+     {
+      "n": "v1.1",
+      "vs": [
+       690,
+       720,
+       880,
+       760,
+       910,
+       700
+      ]
+     },
+     {
+      "n": "v1.2",
+      "vs": [
+       520,
+       610,
+       480,
+       700,
+       560,
+       530
+      ]
+     }
+    ]
+   }
+  },
+  "zx_survcmp": {
+   "fields": [
+    "c",
+    "d",
+    "n",
+    "n0",
+    "t"
+   ],
+   "arrays": [
+    "events",
+    "groups"
+   ],
+   "fn": "survcmp",
+   "sample": {
+    "type": "zx_survcmp",
+    "n": "两组留存",
+    "n0": 100,
+    "groups": [
+     {
+      "n": "对照组",
+      "events": [
+       {
+        "t": 1,
+        "d": 8,
+        "c": 2
+       },
+       {
+        "t": 3,
+        "d": 12,
+        "c": 5
+       }
+      ]
+     },
+     {
+      "n": "实验组",
+      "events": [
+       {
+        "t": 1,
+        "d": 4,
+        "c": 1
+       },
+       {
+        "t": 3,
+        "d": 6,
+        "c": 3
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "zx_causal": {
+   "fields": [
+    "f",
+    "n",
+    "role",
+    "t",
+    "y"
+   ],
+   "arrays": [
+    "edges",
+    "nodes"
+   ],
+   "fn": "causal",
+   "sample": {
+    "type": "zx_causal",
+    "n": "首页改版 → 留存",
+    "t": 0,
+    "y": 2,
+    "nodes": [
+     {
+      "n": "改版",
+      "role": ""
+     },
+     {
+      "n": "活跃度",
+      "role": "confounder"
+     },
+     {
+      "n": "留存",
+      "role": ""
+     },
+     {
+      "n": "不同触达",
+      "role": "mediator"
+     }
+    ],
+    "edges": [
+     {
+      "f": 0,
+      "t": 2
+     },
+     {
+      "f": 1,
+      "t": 0
+     },
+     {
+      "f": 1,
+      "t": 2
+     },
+     {
+      "f": 0,
+      "t": 3
+     },
+     {
+      "f": 3,
+      "t": 2
+     }
+    ]
+   }
+  },
+  "zx_did": {
+   "fields": [
+    "at"
+   ],
+   "arrays": [],
+   "fn": "did",
+   "sample": {
+    "type": "zx_did",
+    "n": "改版对留存的 DID",
+    "at": 5,
+    "treat": [
+     0.52,
+     0.51,
+     0.53,
+     0.52,
+     0.51,
+     0.58,
+     0.61,
+     0.63,
+     0.64,
+     0.66
+    ],
+    "ctrl": [
+     0.5,
+     0.49,
+     0.51,
+     0.5,
+     0.5,
+     0.51,
+     0.52,
+     0.53,
+     0.52,
+     0.54
+    ]
+   }
+  },
+  "zx_rdd": {
+   "fields": [
+    "bw",
+    "cut",
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "rdd",
+   "sample": {
+    "type": "zx_rdd",
+    "n": "满减门槛效应",
+    "cut": 100,
+    "bw": 0.5,
+    "pts": [
+     {
+      "x": 96.2,
+      "y": 41
+     },
+     {
+      "x": 97.5,
+      "y": 43
+     },
+     {
+      "x": 98.4,
+      "y": 44
+     },
+     {
+      "x": 99.1,
+      "y": 46
+     },
+     {
+      "x": 99.7,
+      "y": 47
+     },
+     {
+      "x": 100.3,
+      "y": 62
+     },
+     {
+      "x": 100.9,
+      "y": 63
+     },
+     {
+      "x": 101.6,
+      "y": 65
+     },
+     {
+      "x": 102.4,
+      "y": 66
+     },
+     {
+      "x": 103.1,
+      "y": 68
+     }
+    ]
+   }
+  },
+  "zx_iv": {
+   "fields": [
+    "x",
+    "y",
+    "z"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "iv",
+   "sample": {
+    "type": "zx_iv",
+    "n": "推送对付费的 IV",
+    "pts": [
+     {
+      "z": 1,
+      "x": 3,
+      "y": 12
+     },
+     {
+      "z": 0,
+      "x": 1,
+      "y": 8
+     },
+     {
+      "z": 1,
+      "x": 4,
+      "y": 15
+     },
+     {
+      "z": 0,
+      "x": 2,
+      "y": 9
+     },
+     {
+      "z": 1,
+      "x": 5,
+      "y": 18
+     },
+     {
+      "z": 0,
+      "x": 1,
+      "y": 7
+     }
+    ]
+   }
+  },
+  "zx_sense": {
+   "fields": [
+    "est",
+    "g",
+    "se"
+   ],
+   "arrays": [],
+   "fn": "sense",
+   "sample": {
+    "type": "zx_sense",
+    "n": "改版效应有多稳",
+    "est": 0.42,
+    "se": 0.13,
+    "g": 1.0
+   }
+  },
+  "zx_psm": {
+   "fields": [
+    "p",
+    "t"
+   ],
+   "arrays": [
+    "covs",
+    "cs",
+    "units"
+   ],
+   "fn": "psm",
+   "sample": {
+    "type": "zx_psm",
+    "n": "用没用新功能",
+    "covs": [
+     "活跃度",
+     "设备档"
+    ],
+    "units": [
+     {
+      "t": 1,
+      "p": 0.72,
+      "cs": [
+       42,
+       3
+      ]
+     },
+     {
+      "t": 1,
+      "p": 0.68,
+      "cs": [
+       38,
+       3
+      ]
+     },
+     {
+      "t": 0,
+      "p": 0.31,
+      "cs": [
+       15,
+       1
+      ]
+     },
+     {
+      "t": 0,
+      "p": 0.35,
+      "cs": [
+       18,
+       1
+      ]
+     },
+     {
+      "t": 1,
+      "p": 0.75,
+      "cs": [
+       45,
+       3
+      ]
+     },
+     {
+      "t": 0,
+      "p": 0.29,
+      "cs": [
+       12,
+       1
+      ]
+     }
+    ]
+   }
+  },
+  "zx_balance": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "a",
+    "b",
+    "covs"
+   ],
+   "fn": "balance",
+   "sample": {
+    "type": "zx_balance",
+    "n": "两组可不可比",
+    "covs": [
+     {
+      "n": "活跃度",
+      "a": [
+       42,
+       38,
+       45,
+       40,
+       44
+      ],
+      "b": [
+       15,
+       18,
+       12,
+       16,
+       20
+      ]
+     },
+     {
+      "n": "注册天数",
+      "a": [
+       310,
+       280,
+       340,
+       300,
+       320
+      ],
+      "b": [
+       95,
+       120,
+       88,
+       110,
+       130
+      ]
+     },
+     {
+      "n": "设备档",
+      "a": [
+       3,
+       3,
+       3,
+       2,
+       3
+      ],
+      "b": [
+       1,
+       1,
+       1,
+       2,
+       1
+      ]
+     }
+    ]
+   }
+  },
+  "zx_missing": {
+   "fields": [],
+   "arrays": [
+    "cols",
+    "rows"
+   ],
+   "fn": "missing",
+   "sample": {
+    "type": "zx_missing",
+    "n": "问卷缺失模式",
+    "cols": [
+     "年龄",
+     "收入",
+     "城市",
+     "评分"
+    ],
+    "rows": [
+     [
+      0,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      1,
+      0,
+      0
+     ],
+     [
+      1,
+      1,
+      0,
+      1
+     ],
+     [
+      0,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      1,
+      1,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0
+     ],
+     [
+      1,
+      1,
+      0,
+      1
+     ],
+     [
+      0,
+      0,
+      0,
+      0
+     ]
+    ]
+   }
+  },
+  "zx_seqtest": {
+   "fields": [
+    "alpha",
+    "fn",
+    "n",
+    "z"
+   ],
+   "arrays": [
+    "looks"
+   ],
+   "fn": "seqtest"
+  },
+  "zx_bayes": {
+   "fields": [
+    "ln",
+    "lp",
+    "nn",
+    "np",
+    "prior"
+   ],
+   "arrays": [],
+   "fn": "bayes",
+   "sample": {
+    "type": "zx_bayes",
+    "n": "故障是否由发布引起",
+    "prior": 0.15,
+    "lp": 4.0,
+    "ln": 0.35,
+    "np": 1,
+    "nn": 0
+   }
+  },
+  "zx_anomaly": {
+   "fields": [
+    "method"
+   ],
+   "arrays": [],
+   "fn": "anomaly",
+   "sample": {
+    "type": "zx_anomaly",
+    "n": "响应耗时异常",
+    "method": "z",
+    "data": [
+     120,
+     131,
+     128,
+     140,
+     135,
+     126,
+     138,
+     132,
+     129,
+     145,
+     133,
+     127,
+     139,
+     136,
+     410,
+     130,
+     134,
+     128,
+     137,
+     131
+    ]
+   }
+  },
+  "zx_power": {
+   "fields": [
+    "alpha",
+    "d",
+    "n"
+   ],
+   "arrays": [],
+   "fn": "power",
+   "sample": {
+    "type": "zx_power",
+    "n": 60,
+    "d": 0.35,
+    "alpha": 0.05
+   }
+  },
+  "zx_forecast": {
+   "fields": [
+    "h"
+   ],
+   "arrays": [
+    "hi",
+    "lo"
+   ],
+   "fn": "forecast",
+   "sample": {
+    "type": "zx_forecast",
+    "n": "下周单量预测",
+    "h": 6,
+    "hist": [
+     212,
+     228,
+     235,
+     241,
+     238,
+     250,
+     259,
+     266,
+     271,
+     283,
+     290,
+     297
+    ]
+   }
+  },
+  "zx_calib": {
+   "fields": [
+    "bins",
+    "p",
+    "y"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "calib",
+   "sample": {
+    "type": "zx_calib",
+    "n": "流失预测校准",
+    "bins": 5,
+    "pts": [
+     {
+      "p": 0.12,
+      "y": 0
+     },
+     {
+      "p": 0.18,
+      "y": 1
+     },
+     {
+      "p": 0.25,
+      "y": 0
+     },
+     {
+      "p": 0.31,
+      "y": 1
+     },
+     {
+      "p": 0.44,
+      "y": 0
+     },
+     {
+      "p": 0.47,
+      "y": 1
+     },
+     {
+      "p": 0.55,
+      "y": 1
+     },
+     {
+      "p": 0.62,
+      "y": 1
+     },
+     {
+      "p": 0.71,
+      "y": 1
+     },
+     {
+      "p": 0.78,
+      "y": 1
+     },
+     {
+      "p": 0.83,
+      "y": 0
+     },
+     {
+      "p": 0.91,
+      "y": 1
+     }
+    ]
+   }
+  },
+  "zx_optline": {
+   "fields": [],
+   "arrays": [],
+   "fn": "optline",
+   "sample": {
+    "type": "zx_optline",
+    "n": "面试该在第几个停",
+    "cand": [
+     62,
+     71,
+     58,
+     80,
+     74,
+     69,
+     88,
+     77,
+     72,
+     85,
+     79,
+     91
+    ]
+   }
+  },
+  "zx_dmatrix": {
+   "fields": [
+    "n",
+    "w"
+   ],
+   "arrays": [
+    "crit",
+    "opts",
+    "scores"
+   ],
+   "fn": "decision",
+   "sample": {
+    "type": "zx_dmatrix",
+    "n": "选哪家供应商",
+    "opts": [
+     "A 厂",
+     "B 厂",
+     "C 厂"
+    ],
+    "crit": [
+     {
+      "n": "价格",
+      "w": 2
+     },
+     {
+      "n": "交期",
+      "w": 1
+     },
+     {
+      "n": "质量",
+      "w": 2
+     }
+    ],
+    "scores": [
+     [
+      8,
+      6,
+      7
+     ],
+     [
+      6,
+      9,
+      8
+     ],
+     [
+      9,
+      5,
+      6
+     ]
+    ]
+   }
+  },
+  "zx_riskreturn": {
+   "fields": [
+    "n",
+    "r",
+    "s"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "riskreturn",
+   "sample": {
+    "type": "zx_riskreturn",
+    "n": "三个投放方案",
+    "pts": [
+     {
+      "n": "激进",
+      "r": 0.18,
+      "s": 0.32
+     },
+     {
+      "n": "平衡",
+      "r": 0.12,
+      "s": 0.15
+     },
+     {
+      "n": "保守",
+      "r": 0.06,
+      "s": 0.05
+     },
+     {
+      "n": "次优",
+      "r": 0.09,
+      "s": 0.16
+     }
+    ]
+   }
+  },
+  "zx_utility": {
+   "fields": [
+    "u",
+    "x"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "utility",
+   "sample": {
+    "type": "zx_utility",
+    "n": "收益的效用曲线",
+    "pts": [
+     {
+      "x": 0,
+      "u": 0
+     },
+     {
+      "x": 10,
+      "u": 0.42
+     },
+     {
+      "x": 20,
+      "u": 0.7
+     },
+     {
+      "x": 40,
+      "u": 0.92
+     },
+     {
+      "x": 80,
+      "u": 1.0
+     }
+    ]
+   }
+  },
+  "zx_bandit": {
+   "fields": [
+    "k",
+    "mu",
+    "n"
+   ],
+   "arrays": [
+    "arms"
+   ],
+   "fn": "bandit",
+   "sample": {
+    "type": "zx_bandit",
+    "n": "三个文案哪个更好",
+    "arms": [
+     {
+      "n": "文案A",
+      "mu": 0.31,
+      "k": 42
+     },
+     {
+      "n": "文案B",
+      "mu": 0.28,
+      "k": 38
+     },
+     {
+      "n": "文案C",
+      "mu": 0.0,
+      "k": 0
+     }
+    ]
+   }
+  },
+  "zx_explain": {
+   "fields": [
+    "base",
+    "n",
+    "pred",
+    "v"
+   ],
+   "arrays": [
+    "attrs"
+   ],
+   "fn": "explain"
+  },
+  "zx_cfactual": {
+   "fields": [
+    "n",
+    "v",
+    "y0",
+    "y1"
+   ],
+   "arrays": [
+    "cf",
+    "cur"
+   ],
+   "fn": "cfactual"
+  },
+  "zx_cforest": {
+   "fields": [
+    "e",
+    "n",
+    "se"
+   ],
+   "arrays": [
+    "subs"
+   ],
+   "fn": "cforest",
+   "sample": {
+    "type": "zx_cforest",
+    "n": "新功能对谁有效",
+    "subs": [
+     {
+      "n": "新客",
+      "e": 0.22,
+      "se": 0.06
+     },
+     {
+      "n": "老客",
+      "e": -0.08,
+      "se": 0.05
+     },
+     {
+      "n": "高频",
+      "e": 0.31,
+      "se": 0.09
+     },
+     {
+      "n": "低频",
+      "e": 0.02,
+      "se": 0.07
+     }
+    ]
+   }
+  },
+  "zx_alloc": {
+   "fields": [
+    "a",
+    "b",
+    "budget",
+    "n"
+   ],
+   "arrays": [
+    "ch"
+   ],
+   "fn": "alloc",
+   "sample": {
+    "type": "zx_alloc",
+    "n": "季度预算怎么投",
+    "budget": 100,
+    "ch": [
+     {
+      "n": "搜索",
+      "a": 1.0,
+      "b": 0.9
+     },
+     {
+      "n": "信息流",
+      "a": 0.8,
+      "b": 0.6
+     },
+     {
+      "n": "私域",
+      "a": 0.5,
+      "b": 0.4
+     }
+    ]
+   }
+  },
+  "zx_abmon": {
+   "fields": [
+    "k",
+    "n",
+    "p"
+   ],
+   "arrays": [
+    "arms"
+   ],
+   "fn": "abmon",
+   "sample": {
+    "type": "zx_abmon",
+    "n": "分流体检",
+    "arms": [
+     {
+      "n": "对照",
+      "p": 0.5,
+      "k": 5120
+     },
+     {
+      "n": "实验",
+      "p": 0.5,
+      "k": 4980
+     }
+    ]
+   }
+  },
+  "zx_rollout": {
+   "fields": [
+    "p",
+    "s"
+   ],
+   "arrays": [
+    "stages"
+   ],
+   "fn": "rollout",
+   "sample": {
+    "type": "zx_rollout",
+    "n": "v2.3 灰度",
+    "stages": [
+     {
+      "p": 1,
+      "s": "ok"
+     },
+     {
+      "p": 5,
+      "s": "ok"
+     },
+     {
+      "p": 20,
+      "s": "run"
+     },
+     {
+      "p": 50,
+      "s": "idle"
+     },
+     {
+      "p": 100,
+      "s": "idle"
+     }
+    ]
+   }
+  },
+  "zx_canary": {
+   "fields": [
+    "a",
+    "b",
+    "n",
+    "tol"
+   ],
+   "arrays": [
+    "metrics"
+   ],
+   "fn": "canary",
+   "sample": {
+    "type": "zx_canary",
+    "n": "v2.3 金丝雀",
+    "tol": 0.02,
+    "metrics": [
+     {
+      "n": "转化率",
+      "a": 0.124,
+      "b": 0.126
+     },
+     {
+      "n": "P95 延迟",
+      "a": 240,
+      "b": 336
+     },
+     {
+      "n": "错误率",
+      "a": 0.0031,
+      "b": 0.0033
+     }
+    ]
+   }
+  },
+  "zx_slo": {
+   "fields": [
+    "target",
+    "used"
+   ],
+   "arrays": [
+    "days"
+   ],
+   "fn": "slo"
+  },
+  "zx_healthcheck": {
+   "fields": [
+    "n",
+    "s"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "healthcheck"
+  },
+  "zx_incident": {
+   "fields": [
+    "k",
+    "t"
+   ],
+   "arrays": [
+    "ev"
+   ],
+   "fn": "incident"
+  },
+  "zx_rca": {
+   "fields": [
+    "a",
+    "q"
+   ],
+   "arrays": [
+    "why"
+   ],
+   "fn": "rca"
+  },
+  "zx_regret": {
+   "fields": [
+    "actual",
+    "chosen",
+    "n",
+    "p",
+    "v"
+   ],
+   "arrays": [
+    "alts"
+   ],
+   "fn": "regret",
+   "sample": {
+    "type": "zx_regret",
+    "n": "选 A 还是选 B",
+    "chosen": "方案A",
+    "actual": 8.2,
+    "alts": [
+     {
+      "n": "方案A",
+      "v": 8.2,
+      "p": 0.6
+     },
+     {
+      "n": "方案B",
+      "v": 11.5,
+      "p": 0.4
+     }
+    ]
+   }
+  },
+  "zx_backtest": {
+   "fields": [],
+   "arrays": [
+    "bench",
+    "eq"
+   ],
+   "fn": "backtest",
+   "sample": {
+    "type": "zx_backtest",
+    "n": "动量策略回测",
+    "eq": [
+     100,
+     103,
+     101,
+     107,
+     112,
+     109,
+     115,
+     121,
+     118
+    ],
+    "bench": [
+     100,
+     101,
+     102,
+     103,
+     104,
+     105,
+     106,
+     107,
+     108
+    ]
+   }
+  },
+  "zx_drift": {
+   "fields": [
+    "n",
+    "psi",
+    "retrain",
+    "warn"
+   ],
+   "arrays": [
+    "cols"
+   ],
+   "fn": "drift"
+  },
+  "zx_alert": {
+   "fields": [
+    "act",
+    "lv",
+    "n"
+   ],
+   "arrays": [
+    "alerts"
+   ],
+   "fn": "alert"
+  },
+  "zx_costtrack": {
+   "fields": [
+    "budget",
+    "d",
+    "days",
+    "v"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "costtrack",
+   "sample": {
+    "type": "zx_costtrack",
+    "n": "本月云成本",
+    "budget": 100,
+    "days": 30,
+    "pts": [
+     {
+      "d": 2,
+      "v": 6
+     },
+     {
+      "d": 4,
+      "v": 14
+     },
+     {
+      "d": 7,
+      "v": 26
+     },
+     {
+      "d": 9,
+      "v": 35
+     },
+     {
+      "d": 12,
+      "v": 49
+     },
+     {
+      "d": 14,
+      "v": 58
+     }
+    ]
+   }
+  },
+  "zx_feedback": {
+   "fields": [
+    "a",
+    "n",
+    "p"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "feedback",
+   "sample": {
+    "type": "zx_feedback",
+    "n": "上季度预测 vs 实际",
+    "items": [
+     {
+      "n": "1月",
+      "p": 210,
+      "a": 228
+     },
+     {
+      "n": "2月",
+      "p": 235,
+      "a": 241
+     },
+     {
+      "n": "3月",
+      "p": 260,
+      "a": 271
+     },
+     {
+      "n": "4月",
+      "p": 288,
+      "a": 297
+     },
+     {
+      "n": "5月",
+      "p": 312,
+      "a": 330
+     },
+     {
+      "n": "6月",
+      "p": 340
+     }
+    ]
+   }
+  },
+  "zx_capacity": {
+   "fields": [
+    "lambda",
+    "mu",
+    "servers"
+   ],
+   "arrays": [],
+   "fn": "capacity",
+   "sample": {
+    "type": "zx_capacity",
+    "n": "订单服务容量",
+    "lambda": 820,
+    "mu": 1000,
+    "servers": 1
+   }
+  },
+  "zx_queue": {
+   "fields": [
+    "at",
+    "lambda",
+    "mu",
+    "n",
+    "svc"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "queue",
+   "sample": {
+    "type": "zx_queue",
+    "n": "消息队列",
+    "lambda": 8,
+    "mu": 10,
+    "items": [
+     {
+      "n": "A",
+      "at": 0,
+      "svc": 0.1
+     },
+     {
+      "n": "B",
+      "at": 0.2,
+      "svc": 0.1
+     },
+     {
+      "n": "C",
+      "at": 0.4,
+      "svc": 0.1
+     },
+     {
+      "n": "D",
+      "at": 0.6,
+      "svc": 0.1
+     }
+    ]
+   }
+  },
+  "zx_loadtest": {
+   "fields": [
+    "lat",
+    "q",
+    "sla"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "loadtest",
+   "sample": {
+    "type": "zx_loadtest",
+    "n": "压测",
+    "sla": 400,
+    "pts": [
+     {
+      "q": 100,
+      "lat": 85
+     },
+     {
+      "q": 200,
+      "lat": 92
+     },
+     {
+      "q": 300,
+      "lat": 101
+     },
+     {
+      "q": 400,
+      "lat": 118
+     },
+     {
+      "q": 500,
+      "lat": 147
+     },
+     {
+      "q": 600,
+      "lat": 205
+     },
+     {
+      "q": 700,
+      "lat": 318
+     },
+     {
+      "q": 800,
+      "lat": 520
+     }
+    ]
+   }
+  },
+  "zx_topology": {
+   "fields": [
+    "f",
+    "n",
+    "s",
+    "t"
+   ],
+   "arrays": [
+    "edges",
+    "nodes"
+   ],
+   "fn": "topology"
+  },
+  "zx_changerisk": {
+   "fields": [
+    "n",
+    "w",
+    "why"
+   ],
+   "arrays": [
+    "factors"
+   ],
+   "fn": "changerisk"
+  },
+  "zx_playbook": {
+   "fields": [
+    "d",
+    "n",
+    "sec"
+   ],
+   "arrays": [
+    "steps"
+   ],
+   "fn": "playbook",
+   "sample": {
+    "type": "zx_playbook",
+    "n": "支付故障处置",
+    "steps": [
+     {
+      "n": "确认影响面",
+      "d": "看拓扑，哪些下游受影响",
+      "sec": 30
+     },
+     {
+      "n": "切备用网关",
+      "d": "改 DNS 权重到备用",
+      "sec": 60
+     },
+     {
+      "n": "观察 5 分钟",
+      "d": "盯错误率和延迟",
+      "sec": 300
+     },
+     {
+      "n": "回滚：切回主网关",
+      "d": "指标没恢复就切回来",
+      "sec": 60
+     }
+    ]
+   }
+  },
+  "zx_escalation": {
+   "fields": [
+    "min",
+    "who"
+   ],
+   "arrays": [
+    "levels"
+   ],
+   "fn": "escalation"
+  },
+  "zx_postmortem": {
+   "fields": [
+    "impact",
+    "n",
+    "summary",
+    "who"
+   ],
+   "arrays": [
+    "actions"
+   ],
+   "fn": "postmortem"
+  },
+  "zx_knowledge": {
+   "fields": [
+    "at",
+    "n",
+    "src",
+    "stale"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "knowledge",
+   "sample": {
+    "type": "zx_knowledge",
+    "n": "运维经验",
+    "stale": 90,
+    "items": [
+     {
+      "n": "Redis 连接池默认 200 够用",
+      "src": "2024-08 压测报告",
+      "at": 15
+     },
+     {
+      "n": "大促前必须做容量评估",
+      "src": "3/12 复盘",
+      "at": 20
+     },
+     {
+      "n": "网关超时设 3s",
+      "src": "2023 年某次调整",
+      "at": 410
+     }
+    ]
+   }
+  },
+  "zx_decisionlog": {
+   "fields": [
+    "n",
+    "why"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "decisionlog"
+  },
+  "zx_debt": {
+   "fields": [
+    "cost",
+    "int",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "debt",
+   "sample": {
+    "type": "zx_debt",
+    "n": "技术债",
+    "items": [
+     {
+      "n": "订单表没分区",
+      "int": 12,
+      "cost": 3
+     },
+     {
+      "n": "老定时任务没下线",
+      "int": 2,
+      "cost": 1
+     },
+     {
+      "n": "缺集成测试",
+      "int": 8,
+      "cost": 10
+     },
+     {
+      "n": "硬编码配置",
+      "int": 1,
+      "cost": 0.5
+     }
+    ]
+   }
+  },
+  "zx_checkpoint": {
+   "fields": [
+    "n",
+    "p",
+    "total"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "checkpoint"
+  },
+  "zx_metrics": {
+   "fields": [
+    "k",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "metrics",
+   "sample": {
+    "type": "zx_metrics",
+    "items": [
+     {
+      "k": "日活",
+      "v": "12.4万",
+      "delta": "+8.2%"
+     },
+     {
+      "k": "留存",
+      "v": "43.1%",
+      "delta": "-1.4%"
+     },
+     {
+      "k": "崩溃率",
+      "v": "0.07%",
+      "delta": "+0.01%"
+     },
+     {
+      "k": "ARPU",
+      "v": "¥8.6",
+      "delta": "+0.3"
+     }
+    ]
+   }
+  },
+  "zx_gantt": {
+   "fields": [
+    "e",
+    "n",
+    "s"
+   ],
+   "arrays": [
+    "tasks"
+   ],
+   "fn": "gantt",
+   "sample": {
+    "type": "zx_gantt",
+    "tasks": [
+     {
+      "n": "需求评审",
+      "s": 0,
+      "e": 2,
+      "st": "done"
+     },
+     {
+      "n": "接口开发",
+      "s": 2,
+      "e": 6,
+      "st": "done"
+     },
+     {
+      "n": "联调",
+      "s": 6,
+      "e": 8,
+      "st": "run"
+     },
+     {
+      "n": "灰度",
+      "s": 8,
+      "e": 10,
+      "st": "todo"
+     },
+     {
+      "n": "全量",
+      "s": 10,
+      "e": 11,
+      "st": "todo"
+     }
+    ]
+   }
+  },
+  "zx_tree": {
+   "fields": [
+    "n",
+    "path"
+   ],
+   "arrays": [
+    "children",
+    "nodes"
+   ],
+   "fn": "tree"
+  },
+  "zx_flow": {
+   "fields": [
+    "from",
+    "n",
+    "to"
+   ],
+   "arrays": [
+    "edges",
+    "nodes"
+   ],
+   "fn": "flow",
+   "sample": {
+    "type": "zx_flow",
+    "nodes": [
+     {
+      "n": "拉取代码",
+      "st": "done"
+     },
+     {
+      "n": "编译",
+      "st": "done"
+     },
+     {
+      "n": "测试",
+      "st": "run"
+     },
+     {
+      "n": "打包",
+      "st": "todo"
+     }
+    ],
+    "edges": [
+     {
+      "from": 0,
+      "to": 1
+     },
+     {
+      "from": 1,
+      "to": 2
+     },
+     {
+      "from": 2,
+      "to": 3
+     }
+    ]
+   }
+  },
+  "zx_calendar": {
+   "fields": [
+    "d",
+    "firstDow",
+    "mark",
+    "total"
+   ],
+   "arrays": [
+    "days"
+   ],
+   "fn": "calendar",
+   "sample": {
+    "type": "zx_calendar",
+    "month": "2026年10月",
+    "total": 31,
+    "firstDow": 4,
+    "days": [
+     {
+      "d": 3,
+      "mark": "done"
+     },
+     {
+      "d": 10,
+      "mark": "warn"
+     },
+     {
+      "d": 17,
+      "mark": "err"
+     }
+    ]
+   }
+  },
+  "zx_rating": {
+   "fields": [
+    "max",
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "dims"
+   ],
+   "fn": "rating",
+   "sample": {
+    "type": "zx_rating",
+    "dims": [
+     {
+      "n": "响应速度",
+      "max": 5,
+      "v": 4
+     },
+     {
+      "n": "准确性",
+      "max": 5,
+      "v": 5
+     },
+     {
+      "n": "表达清晰",
+      "max": 5,
+      "v": 3
+     }
+    ]
+   }
+  },
+  "zx_editor": {
+   "fields": [
+    "code",
+    "path"
+   ],
+   "arrays": [],
+   "fn": "editor",
+   "sample": {
+    "type": "zx_editor",
+    "lang": "kotlin",
+    "path": "app/ui/Main.kt",
+    "code": "fun main() {\n    println(\"hi\")\n}"
+   }
+  },
+  "zx_audio": {
+   "fields": [
+    "dur"
+   ],
+   "arrays": [
+    "peaks"
+   ],
+   "fn": "audio",
+   "sample": {
+    "type": "zx_audio",
+    "title": "会议录音 01",
+    "dur": 184,
+    "at": 0.35,
+    "peaks": [
+     0.2,
+     0.5,
+     0.9,
+     0.4,
+     0.7,
+     1.0,
+     0.3,
+     0.6
+    ]
+   }
+  },
+  "zx_heatmap": {
+   "fields": [],
+   "arrays": [
+    "rows"
+   ],
+   "fn": "heatmap",
+   "sample": {
+    "type": "zx_heatmap",
+    "rows": [
+     [
+      0.1,
+      0.4,
+      0.9,
+      0.3
+     ],
+     [
+      0.7,
+      0.2,
+      0.5,
+      1.0
+     ],
+     [
+      0.3,
+      0.8,
+      0.1,
+      0.6
+     ]
+    ]
+   }
+  },
+  "zx_toggle": {
+   "fields": [
+    "k",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "toggle",
+   "sample": {
+    "type": "zx_toggle",
+    "items": [
+     {
+      "k": "notify",
+      "n": "消息通知",
+      "d": "新消息时推送",
+      "on": true
+     },
+     {
+      "k": "autoplay",
+      "n": "自动播放",
+      "on": false
+     },
+     {
+      "k": "beta",
+      "n": "Beta 功能",
+      "d": "可能不稳定",
+      "on": false,
+      "locked": true
+     }
+    ]
+   }
+  },
+  "zx_qr": {
+   "fields": [
+    "text"
+   ],
+   "arrays": [],
+   "fn": "qr",
+   "sample": {
+    "type": "zx_qr",
+    "text": "https://example.com/invite?c=zx",
+    "caption": "扫码加入"
+   }
+  },
+  "zx_stack": {
+   "fields": [
+    "k",
+    "t"
+   ],
+   "arrays": [
+    "cards"
+   ],
+   "fn": "stack"
+  },
+  "zx_unitecon": {
+   "fields": [
+    "arpu",
+    "cac",
+    "churn",
+    "horizon"
+   ],
+   "arrays": [],
+   "fn": "unitecon",
+   "sample": {
+    "type": "zx_unitecon",
+    "n": "付费版单客经济",
+    "cac": 420,
+    "arpu": 68,
+    "churn": 0.055,
+    "horizon": 24
+   }
+  },
+  "zx_costattrib": {
+   "fields": [
+    "n",
+    "total",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "costattrib",
+   "sample": {
+    "type": "zx_costattrib",
+    "n": "云成本归因",
+    "total": 100,
+    "items": [
+     {
+      "n": "计算",
+      "v": 42,
+      "d": 6
+     },
+     {
+      "n": "存储",
+      "v": 23,
+      "d": 2
+     },
+     {
+      "n": "网络",
+      "v": 18,
+      "d": -3
+     },
+     {
+      "n": "数据库",
+      "v": 12,
+      "d": 1
+     },
+     {
+      "n": "其他",
+      "v": 5,
+      "d": 0
+     }
+    ]
+   }
+  },
+  "zx_lineage": {
+   "fields": [
+    "f",
+    "n",
+    "t"
+   ],
+   "arrays": [
+    "edges",
+    "nodes"
+   ],
+   "fn": "lineage",
+   "sample": {
+    "type": "zx_lineage",
+    "n": "订单域血缘",
+    "nodes": [
+     {
+      "n": "ods_order"
+     },
+     {
+      "n": "dwd_order"
+     },
+     {
+      "n": "dws_user_1d"
+     },
+     {
+      "n": "ads_gmv"
+     },
+     {
+      "n": "bi_dashboard"
+     }
+    ],
+    "edges": [
+     {
+      "f": 0,
+      "t": 1
+     },
+     {
+      "f": 1,
+      "t": 2
+     },
+     {
+      "f": 2,
+      "t": 3
+     },
+     {
+      "f": 3,
+      "t": 4
+     }
+    ]
+   }
+  },
+  "zx_impact": {
+   "fields": [
+    "change",
+    "fix",
+    "n",
+    "sev",
+    "t"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "impact"
+  },
+  "zx_dataclass": {
+   "fields": [
+    "lv",
+    "n"
+   ],
+   "arrays": [
+    "cols"
+   ],
+   "fn": "dataclass"
+  },
+  "zx_retention": {
+   "fields": [
+    "age",
+    "keep",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "retention",
+   "sample": {
+    "type": "zx_retention",
+    "n": "数据保留",
+    "items": [
+     {
+      "n": "访问日志",
+      "keep": 90,
+      "age": 142
+     },
+     {
+      "n": "订单快照",
+      "keep": 365,
+      "age": 210
+     },
+     {
+      "n": "埋点原始数据",
+      "keep": 30,
+      "age": 28
+     },
+     {
+      "n": "用户画像",
+      "keep": 180,
+      "age": 95
+     }
+    ]
+   }
+  },
+  "zx_workload": {
+   "fields": [
+    "cap",
+    "n",
+    "todo"
+   ],
+   "arrays": [
+    "people"
+   ],
+   "fn": "workload",
+   "sample": {
+    "type": "zx_workload",
+    "n": "迭代 24 负载",
+    "people": [
+     {
+      "n": "张三",
+      "todo": 14,
+      "cap": 10
+     },
+     {
+      "n": "李四",
+      "todo": 9,
+      "cap": 10
+     },
+     {
+      "n": "王五",
+      "todo": 3,
+      "cap": 10
+     },
+     {
+      "n": "赵六",
+      "todo": 11,
+      "cap": 10
+     }
+    ]
+   }
+  },
+  "zx_bottleneck": {
+   "fields": [
+    "n",
+    "thr",
+    "wip"
+   ],
+   "arrays": [
+    "stages"
+   ],
+   "fn": "bottleneck",
+   "sample": {
+    "type": "zx_bottleneck",
+    "n": "发布流水线瓶颈",
+    "stages": [
+     {
+      "n": "构建",
+      "thr": 12,
+      "wip": 8
+     },
+     {
+      "n": "测试",
+      "thr": 5,
+      "wip": 31
+     },
+     {
+      "n": "评审",
+      "thr": 18,
+      "wip": 6
+     },
+     {
+      "n": "部署",
+      "thr": 20,
+      "wip": 3
+     }
+    ]
+   }
+  },
+  "zx_expresult": {
+   "fields": [
+    "lift",
+    "n",
+    "p"
+   ],
+   "arrays": [
+    "metrics"
+   ],
+   "fn": "expresult",
+   "sample": {
+    "type": "zx_expresult",
+    "n": "首页改版实验",
+    "decision": "建议上线，但只取转化提升，跳过停留时长",
+    "metrics": [
+     {
+      "n": "转化率",
+      "lift": 0.032,
+      "p": 0.004
+     },
+     {
+      "n": "客单价",
+      "lift": -0.008,
+      "p": 0.21
+     },
+     {
+      "n": "停留时长",
+      "lift": 0.004,
+      "p": 0.031
+     }
+    ]
+   }
+  },
+  "zx_compliance": {
+   "fields": [
+    "n",
+    "s",
+    "who"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "compliance"
+  },
+  "zx_audittrail": {
+   "fields": [
+    "kind",
+    "what",
+    "who"
+   ],
+   "arrays": [
+    "entries"
+   ],
+   "fn": "audittrail",
+   "sample": {
+    "type": "zx_audittrail",
+    "n": "配置变更审计",
+    "entries": [
+     {
+      "who": "李四",
+      "what": "改超时 3s→8s",
+      "when": "今天 14:02",
+      "kind": "write"
+     },
+     {
+      "who": "王五",
+      "what": "导出用户表 2 万行",
+      "when": "今天 11:37",
+      "kind": "export"
+     },
+     {
+      "who": "张三",
+      "what": "查看密钥",
+      "when": "昨天 19:20",
+      "kind": "read"
+     }
+    ]
+   }
+  },
+  "zx_accessreview": {
+   "fields": [
+    "age",
+    "perm",
+    "stale",
+    "who"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "accessreview",
+   "sample": {
+    "type": "zx_accessreview",
+    "n": "生产库权限评审",
+    "stale": 90,
+    "items": [
+     {
+      "who": "张三",
+      "perm": "admin",
+      "age": 420
+     },
+     {
+      "who": "李四",
+      "perm": "read",
+      "age": 30
+     },
+     {
+      "who": "离职账号",
+      "perm": "owner",
+      "age": 610
+     },
+     {
+      "who": "王五",
+      "perm": "write",
+      "age": 15
+     }
+    ]
+   }
+  },
+  "zx_scenario": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "scenarios",
+    "v"
+   ],
+   "fn": "scenario",
+   "sample": {
+    "type": "zx_scenario",
+    "n": "明年营收推演",
+    "scenarios": [
+     {
+      "n": "乐观",
+      "v": [
+       100,
+       128,
+       160,
+       198,
+       242
+      ]
+     },
+     {
+      "n": "中性",
+      "v": [
+       100,
+       118,
+       138,
+       160,
+       182
+      ]
+     },
+     {
+      "n": "悲观",
+      "v": [
+       100,
+       105,
+       108,
+       110,
+       112
+      ]
+     }
+    ]
+   }
+  },
+  "zx_montecarlo": {
+   "fields": [
+    "mean",
+    "n",
+    "sd"
+   ],
+   "arrays": [],
+   "fn": "montecarlo",
+   "sample": {
+    "type": "zx_montecarlo",
+    "n": 2000,
+    "mean": 120,
+    "sd": 38,
+    "target": 100,
+    "seed": 20250101
+   }
+  },
+  "zx_stress": {
+   "fields": [
+    "load",
+    "n",
+    "s"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "stress",
+   "sample": {
+    "type": "zx_stress",
+    "n": "极端情景",
+    "items": [
+     {
+      "n": "常规流量",
+      "load": 1.0,
+      "s": "pass"
+     },
+     {
+      "n": "大促 2 倍",
+      "load": 2.0,
+      "s": "pass"
+     },
+     {
+      "n": "大促 3 倍",
+      "load": 3.0,
+      "s": "warn"
+     },
+     {
+      "n": "依赖全挂",
+      "load": 1.0,
+      "s": "pass"
+     },
+     {
+      "n": "机房断电",
+      "load": 0.0,
+      "s": "fail"
+     }
+    ]
+   }
+  },
+  "zx_tornado": {
+   "fields": [
+    "hi",
+    "lo",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "tornado",
+   "sample": {
+    "type": "zx_tornado",
+    "n": "利润敏感性",
+    "items": [
+     {
+      "n": "客单价",
+      "lo": -42,
+      "hi": 38
+     },
+     {
+      "n": "转化率",
+      "lo": -28,
+      "hi": 31
+     },
+     {
+      "n": "获客成本",
+      "lo": -19,
+      "hi": 16
+     },
+     {
+      "n": "留存率",
+      "lo": -11,
+      "hi": 13
+     }
+    ]
+   }
+  },
+  "zx_whatif": {
+   "fields": [
+    "k",
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "nodes"
+   ],
+   "fn": "whatif",
+   "sample": {
+    "type": "zx_whatif",
+    "n": "曝光到营收",
+    "nodes": [
+     {
+      "n": "曝光",
+      "v": 1000,
+      "k": 1.0
+     },
+     {
+      "n": "点击",
+      "v": 120,
+      "k": 1.15
+     },
+     {
+      "n": "加购",
+      "v": 38,
+      "k": 1.3
+     },
+     {
+      "n": "成交",
+      "v": 12,
+      "k": 1.05
+     }
+    ]
+   }
+  },
+  "zx_breakeven": {
+   "fields": [
+    "fixed",
+    "price",
+    "vc"
+   ],
+   "arrays": [],
+   "fn": "breakeven",
+   "sample": {
+    "type": "zx_breakeven",
+    "n": "新品盈亏平衡",
+    "fixed": 48000,
+    "price": 39,
+    "vc": 14,
+    "maxq": 4000,
+    "q": 1500
+   }
+  },
+  "zx_systemdyn": {
+   "fields": [
+    "cap",
+    "in",
+    "out",
+    "s0",
+    "steps"
+   ],
+   "arrays": [],
+   "fn": "systemdyn",
+   "sample": {
+    "type": "zx_systemdyn",
+    "n": "用户池演化",
+    "s0": 1200,
+    "in": 180,
+    "out": 0.09,
+    "steps": 40
+   }
+  },
+  "zx_markov": {
+   "fields": [],
+   "arrays": [
+    "p",
+    "r",
+    "states"
+   ],
+   "fn": "markov",
+   "sample": {
+    "type": "zx_markov",
+    "n": "用户状态迁移",
+    "at": 6,
+    "states": [
+     "活跃",
+     "沉默",
+     "流失"
+    ],
+    "p": [
+     {
+      "r": [
+       0.82,
+       0.15,
+       0.03
+      ]
+     },
+     {
+      "r": [
+       0.22,
+       0.55,
+       0.23
+      ]
+     },
+     {
+      "r": [
+       0.04,
+       0.06,
+       0.9
+      ]
+     }
+    ]
+   }
+  },
+  "zx_optpath": {
+   "fields": [
+    "dst",
+    "f",
+    "src",
+    "t",
+    "w"
+   ],
+   "arrays": [
+    "edges",
+    "nodes"
+   ],
+   "fn": "optpath",
+   "sample": {
+    "type": "zx_optpath",
+    "n": "数据同步最优链路",
+    "src": 0,
+    "dst": 7,
+    "nodes": [
+     "源库",
+     "清洗",
+     "校验",
+     "缓存A",
+     "缓存B",
+     "队列",
+     "转换",
+     "目标"
+    ],
+    "edges": [
+     {
+      "f": 0,
+      "t": 1,
+      "w": 3
+     },
+     {
+      "f": 1,
+      "t": 2,
+      "w": 5
+     },
+     {
+      "f": 2,
+      "t": 5,
+      "w": 4
+     },
+     {
+      "f": 0,
+      "t": 3,
+      "w": 8
+     },
+     {
+      "f": 3,
+      "t": 6,
+      "w": 5
+     },
+     {
+      "f": 5,
+      "t": 6,
+      "w": 2
+     },
+     {
+      "f": 6,
+      "t": 7,
+      "w": 1
+     },
+     {
+      "f": 4,
+      "t": 6,
+      "w": 7
+     },
+     {
+      "f": 1,
+      "t": 4,
+      "w": 2
+     }
+    ]
+   }
+  },
+  "zx_payoff": {
+   "fields": [
+    "a",
+    "b"
+   ],
+   "arrays": [
+    "cells",
+    "cols",
+    "rows"
+   ],
+   "fn": "payoff",
+   "sample": {
+    "type": "zx_payoff",
+    "n": "定价博弈",
+    "rows": [
+     "我方降价",
+     "我方维持"
+    ],
+    "cols": [
+     "对手降价",
+     "对手维持"
+    ],
+    "cells": [
+     {
+      "a": 2,
+      "b": 2
+     },
+     {
+      "a": 8,
+      "b": 1
+     },
+     {
+      "a": 1,
+      "b": 8
+     },
+     {
+      "a": 5,
+      "b": 5
+     }
+    ]
+   }
+  },
+  "zx_reversesolve": {
+   "fields": [
+    "a",
+    "b",
+    "hi",
+    "lo",
+    "target"
+   ],
+   "arrays": [],
+   "fn": "reversesolve",
+   "sample": {
+    "type": "zx_reversesolve",
+    "n": "要 5000 单需要多少曝光",
+    "target": 5000,
+    "a": 0.42,
+    "b": -180,
+    "lo": 0,
+    "hi": 30000
+   }
+  },
+  "zx_realoption": {
+   "fields": [
+    "cost",
+    "later",
+    "now",
+    "sigma"
+   ],
+   "arrays": [],
+   "fn": "realoption",
+   "sample": {
+    "type": "zx_realoption",
+    "n": "是否立刻上线",
+    "now": 180,
+    "later": 205,
+    "sigma": 0.55,
+    "cost": 32
+   }
+  },
+  "zx_bargain": {
+   "fields": [
+    "hi",
+    "hismin",
+    "lo",
+    "mymax",
+    "offer"
+   ],
+   "arrays": [],
+   "fn": "bargain",
+   "sample": {
+    "type": "zx_bargain",
+    "n": "供应商报价",
+    "mymax": 85,
+    "hismin": 62,
+    "lo": 50,
+    "hi": 110,
+    "offer": 74
+   }
+  },
+  "zx_auction": {
+   "fields": [
+    "e",
+    "n",
+    "reserve",
+    "v"
+   ],
+   "arrays": [
+    "bids"
+   ],
+   "fn": "auction",
+   "sample": {
+    "type": "zx_auction",
+    "n": "广告位竞标",
+    "reserve": 40,
+    "bids": [
+     {
+      "n": "甲方",
+      "v": 92,
+      "e": 78
+     },
+     {
+      "n": "乙方",
+      "v": 85,
+      "e": 88
+     },
+     {
+      "n": "丙方",
+      "v": 71,
+      "e": 74
+     }
+    ]
+   }
+  },
+  "zx_multiissue": {
+   "fields": [
+    "a",
+    "b",
+    "n"
+   ],
+   "arrays": [
+    "issues"
+   ],
+   "fn": "multiissue",
+   "sample": {
+    "type": "zx_multiissue",
+    "n": "合同条款",
+    "issues": [
+     {
+      "n": "价格",
+      "a": 3,
+      "b": 1
+     },
+     {
+      "n": "交付期",
+      "a": 1,
+      "b": 3
+     },
+     {
+      "n": "质保",
+      "a": 2,
+      "b": 1
+     },
+     {
+      "n": "付款方式",
+      "a": 1,
+      "b": 2
+     }
+    ]
+   }
+  },
+  "zx_pfront": {
+   "fields": [
+    "n",
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "pareto",
+   "sample": {
+    "type": "zx_pfront",
+    "n": "方案前沿",
+    "xname": "成本(万)",
+    "yname": "效果",
+    "pts": [
+     {
+      "n": "A",
+      "x": 30,
+      "y": 55
+     },
+     {
+      "n": "B",
+      "x": 45,
+      "y": 78
+     },
+     {
+      "n": "C",
+      "x": 60,
+      "y": 72
+     },
+     {
+      "n": "D",
+      "x": 38,
+      "y": 48
+     },
+     {
+      "n": "E",
+      "x": 52,
+      "y": 85
+     }
+    ]
+   }
+  },
+  "zx_portfolio": {
+   "fields": [
+    "n",
+    "r",
+    "rho",
+    "s"
+   ],
+   "arrays": [
+    "items",
+    "w"
+   ],
+   "fn": "portfolio",
+   "sample": {
+    "type": "zx_portfolio",
+    "n": "渠道预算组合",
+    "rho": 0.25,
+    "items": [
+     {
+      "n": "搜索",
+      "r": 12,
+      "s": 18
+     },
+     {
+      "n": "信息流",
+      "r": 20,
+      "s": 32
+     },
+     {
+      "n": "私域",
+      "r": 8,
+      "s": 9
+     }
+    ]
+   }
+  },
+  "zx_bidcurve": {
+   "fields": [],
+   "arrays": [
+    "demand",
+    "prices",
+    "supply"
+   ],
+   "fn": "bidcurve",
+   "sample": {
+    "type": "zx_bidcurve",
+    "n": "算力竞价",
+    "prices": [
+     10,
+     20,
+     30,
+     40,
+     50
+    ],
+    "demand": [
+     180,
+     140,
+     105,
+     70,
+     40
+    ],
+    "supply": [
+     30,
+     75,
+     120,
+     165,
+     205
+    ]
+   }
+  },
+  "zx_sequential": {
+   "fields": [
+    "cost",
+    "gain",
+    "now",
+    "p"
+   ],
+   "arrays": [],
+   "fn": "sequential",
+   "sample": {
+    "type": "zx_sequential",
+    "n": "要不要等灰度数据",
+    "now": 180,
+    "cost": 22,
+    "gain": 95,
+    "p": 0.55
+   }
+  },
+  "zx_stoprule": {
+   "fields": [
+    "at",
+    "best",
+    "n"
+   ],
+   "arrays": [],
+   "fn": "stoprule",
+   "sample": {
+    "type": "zx_stoprule",
+    "n": 20,
+    "at": 9,
+    "best": 7.5,
+    "explore": 8.2
+   }
+  },
+  "zx_hedge": {
+   "fields": [
+    "cost",
+    "exposure",
+    "loss",
+    "p",
+    "ratio"
+   ],
+   "arrays": [],
+   "fn": "hedge",
+   "sample": {
+    "type": "zx_hedge",
+    "n": "汇率对冲",
+    "exposure": 480,
+    "p": 0.25,
+    "loss": 95,
+    "cost": 14,
+    "ratio": 0.8
+   }
+  },
+  "zx_contingent": {
+   "fields": [
+    "if",
+    "p",
+    "then"
+   ],
+   "arrays": [
+    "plans"
+   ],
+   "fn": "contingent",
+   "sample": {
+    "type": "zx_contingent",
+    "n": "大促预案",
+    "plans": [
+     {
+      "if": "流量超预期 2 倍",
+      "then": "切只读+限流",
+      "p": 0.18
+     },
+     {
+      "if": "支付通道故障",
+      "then": "切备用通道",
+      "p": 0.12
+     },
+     {
+      "if": "库存扣减异常",
+      "then": "关秒杀入口",
+      "p": 0.08
+     }
+    ]
+   }
+  },
+  "zx_escalate": {
+   "fields": [
+    "at",
+    "cost",
+    "horizon",
+    "loss",
+    "p"
+   ],
+   "arrays": [],
+   "fn": "escalate",
+   "sample": {
+    "type": "zx_escalate",
+    "n": "要不要叫架构师",
+    "loss": 38,
+    "cost": 45,
+    "p": 0.45,
+    "horizon": 8,
+    "at": 3
+   }
+  },
+  "zx_commit": {
+   "fields": [
+    "benefit",
+    "claim",
+    "cost",
+    "hiscost"
+   ],
+   "arrays": [],
+   "fn": "commit",
+   "sample": {
+    "type": "zx_commit",
+    "n": "最低价承诺",
+    "claim": "我们不会低于这个价",
+    "benefit": 120,
+    "cost": 85,
+    "hiscost": 60
+   }
+  },
+  "zx_weather": {
+   "fields": [
+    "city",
+    "code",
+    "now",
+    "ts"
+   ],
+   "arrays": [
+    "days",
+    "hi",
+    "lo"
+   ],
+   "fn": "weather",
+   "sample": {
+    "type": "zx_weather",
+    "city": "揭阳",
+    "code": 3,
+    "now": 21,
+    "feels": 19,
+    "hum": 82,
+    "wind": "东南风 3 级",
+    "ts": 1760000000000,
+    "days": [
+     {
+      "d": "周一",
+      "c": 3
+     },
+     {
+      "d": "周二",
+      "c": 1
+     },
+     {
+      "d": "周三",
+      "c": 0
+     },
+     {
+      "d": "周四",
+      "c": 2
+     },
+     {
+      "d": "周五",
+      "c": 3
+     }
+    ],
+    "hi": [
+     24,
+     27,
+     29,
+     26,
+     23
+    ],
+    "lo": [
+     18,
+     19,
+     20,
+     21,
+     17
+    ]
+   }
+  },
+  "zx_wxradar": {
+   "fields": [
+    "radius",
+    "v",
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "cells"
+   ],
+   "fn": "wxradar",
+   "sample": {
+    "type": "zx_wxradar",
+    "site": "汕头雷达站",
+    "radius": 120,
+    "cells": [
+     {
+      "x": 0.42,
+      "y": 0.38,
+      "v": 45
+     },
+     {
+      "x": 0.55,
+      "y": 0.3,
+      "v": 38
+     },
+     {
+      "x": 0.6,
+      "y": 0.52,
+      "v": 18
+     },
+     {
+      "x": 0.35,
+      "y": 0.6,
+      "v": 12
+     },
+     {
+      "x": 0.7,
+      "y": 0.44,
+      "v": 28
+     },
+     {
+      "x": 0.48,
+      "y": 0.66,
+      "v": 8
+     }
+    ]
+   }
+  },
+  "zx_aqi": {
+   "fields": [
+    "lim",
+    "n",
+    "ts",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "aqi",
+   "sample": {
+    "type": "zx_aqi",
+    "n": "揭阳空气质量",
+    "v": 118,
+    "ts": 1760000000000,
+    "items": [
+     {
+      "n": "PM2.5",
+      "v": 89,
+      "lim": 75
+     },
+     {
+      "n": "PM10",
+      "v": 132,
+      "lim": 150
+     },
+     {
+      "n": "O3",
+      "v": 96,
+      "lim": 160
+     },
+     {
+      "n": "NO2",
+      "v": 41,
+      "lim": 80
+     }
+    ]
+   }
+  },
+  "zx_news": {
+   "fields": [
+    "h",
+    "s",
+    "t",
+    "ts"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "news",
+   "sample": {
+    "type": "zx_news",
+    "n": "AI 动态",
+    "items": [
+     {
+      "t": "某厂发布新模型",
+      "s": "机器之心",
+      "ts": 1760000000000,
+      "h": 92
+     },
+     {
+      "t": "开源社区周报",
+      "s": "InfoQ",
+      "ts": 1759990000000,
+      "h": 61
+     },
+     {
+      "t": "端侧推理新进展",
+      "s": "机器之心",
+      "ts": 1759980000000,
+      "h": 44
+     }
+    ]
+   }
+  },
+  "zx_headline": {
+   "fields": [
+    "s",
+    "sum",
+    "t",
+    "ts"
+   ],
+   "arrays": [
+    "pts"
+   ],
+   "fn": "headline",
+   "sample": {
+    "type": "zx_headline",
+    "t": "端侧大模型迎来新突破",
+    "s": "机器之心",
+    "ts": 1760000000000,
+    "sum": "昨日发布的方案把显存占用压到原来的三分之一。",
+    "pts": [
+     "推理速度提升约 2 倍",
+     "已在多款机型验证",
+     "开源协议宽松"
+    ]
+   }
+  },
+  "zx_feed": {
+   "fields": [
+    "s",
+    "t",
+    "ts"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "feed",
+   "sample": {
+    "type": "zx_feed",
+    "n": "订阅",
+    "items": [
+     {
+      "t": "每周技术选读",
+      "s": "周刊",
+      "ts": 1760000000000,
+      "r": false
+     },
+     {
+      "t": "开源项目月报",
+      "s": "GitHub",
+      "ts": 1759990000000,
+      "r": true
+     },
+     {
+      "t": "设计资源合集",
+      "s": "设计站",
+      "ts": 1759980000000,
+      "r": false
+     }
+    ]
+   }
+  },
+  "zx_code": {
+   "fields": [
+    "lang",
+    "src"
+   ],
+   "arrays": [
+    "hl"
+   ],
+   "fn": "code",
+   "sample": {
+    "type": "zx_code",
+    "lang": "kotlin",
+    "src": "fun render(o: JSONObject) {\n  // 只重组最后一个 token\n  val t = tokens.last()\n  return 42\n}",
+    "hl": [
+     2,
+     3
+    ]
+   }
+  },
+  "zx_codetheme": {
+   "fields": [
+    "lang",
+    "src"
+   ],
+   "arrays": [
+    "themes"
+   ],
+   "fn": "codetheme"
+  },
+  "zx_shell": {
+   "fields": [
+    "prompt"
+   ],
+   "arrays": [
+    "hist"
+   ],
+   "fn": "shell",
+   "sample": {
+    "type": "zx_shell",
+    "prompt": "$ ",
+    "hist": [
+     "ls",
+     "pwd"
+    ]
+   }
+  },
+  "zx_tty": {
+   "fields": [
+    "n",
+    "st"
+   ],
+   "arrays": [
+    "tabs"
+   ],
+   "fn": "tty",
+   "sample": {
+    "type": "zx_tty",
+    "n": "会话",
+    "tabs": [
+     {
+      "n": "build",
+      "st": "running",
+      "last": "> gradle assembleDebug"
+     },
+     {
+      "n": "log",
+      "st": "idle",
+      "last": "tail -f app.log"
+     },
+     {
+      "n": "test",
+      "st": "error",
+      "last": "FAILED: 3 tests"
+     }
+    ]
+   }
+  },
+  "zx_toolcall": {
+   "fields": [
+    "ms",
+    "res",
+    "st",
+    "tool"
+   ],
+   "arrays": [],
+   "fn": "toolcall"
+  },
+  "zx_toolchain": {
+   "fields": [
+    "after",
+    "id",
+    "st",
+    "tool"
+   ],
+   "arrays": [
+    "steps"
+   ],
+   "fn": "toolchain",
+   "sample": {
+    "type": "zx_toolchain",
+    "n": "改文件",
+    "steps": [
+     {
+      "id": "s1",
+      "tool": "file_read",
+      "st": "ok",
+      "ms": 30
+     },
+     {
+      "id": "s2",
+      "tool": "file_write",
+      "st": "ok",
+      "ms": 55,
+      "after": "s1"
+     },
+     {
+      "id": "s3",
+      "tool": "run_test",
+      "st": "err",
+      "ms": 2100,
+      "after": "s2"
+     }
+    ]
+   }
+  },
+  "zx_toolargs": {
+   "fields": [
+    "def",
+    "n",
+    "req",
+    "t",
+    "tool"
+   ],
+   "arrays": [
+    "fields"
+   ],
+   "fn": "toolargs",
+   "sample": {
+    "type": "zx_toolargs",
+    "tool": "file_write",
+    "fields": [
+     {
+      "n": "path",
+      "t": "string",
+      "req": true,
+      "def": "/sdcard/a.txt"
+     },
+     {
+      "n": "content",
+      "t": "string",
+      "req": true,
+      "def": "hello"
+     },
+     {
+      "n": "append",
+      "t": "bool",
+      "req": false,
+      "def": "false"
+     }
+    ]
+   }
+  },
+  "zx_2048": {
+   "fields": [
+    "init"
+   ],
+   "arrays": [],
+   "fn": "g2048",
+   "sample": {
+    "type": "zx_2048",
+    "n": "2048",
+    "init": "2,0,0,0,4,2,0,0,0,0,4,0,0,0,0,2"
+   }
+  },
+  "zx_tictactoe": {
+   "fields": [
+    "board"
+   ],
+   "arrays": [],
+   "fn": "ttt",
+   "sample": {
+    "type": "zx_tictactoe",
+    "n": "井字棋",
+    "board": "X, ,O, ,X, , , ,O"
+   }
+  },
+  "zx_mapnav": {
+   "fields": [
+    "d",
+    "t",
+    "total",
+    "turn"
+   ],
+   "arrays": [
+    "steps"
+   ],
+   "fn": "mapnav",
+   "sample": {
+    "type": "zx_mapnav",
+    "n": "去公司",
+    "total": 3400,
+    "eta": 18,
+    "steps": [
+     {
+      "d": 300,
+      "t": "沿当前路直行",
+      "turn": 0
+     },
+     {
+      "d": 800,
+      "t": "到环岛右转",
+      "turn": 2
+     },
+     {
+      "d": 1200,
+      "t": "进入快速路",
+      "turn": 0
+     },
+     {
+      "d": 900,
+      "t": "下匝道左转",
+      "turn": 1
+     },
+     {
+      "d": 200,
+      "t": "到达目的地",
+      "turn": 0
+     }
+    ]
+   }
+  },
+  "zx_transit": {
+   "fields": [
+    "arr",
+    "dep",
+    "from",
+    "m",
+    "min",
+    "to"
+   ],
+   "arrays": [
+    "legs"
+   ],
+   "fn": "transit",
+   "sample": {
+    "type": "zx_transit",
+    "n": "去机场",
+    "legs": [
+     {
+      "m": "walk",
+      "l": "步行",
+      "from": "家",
+      "to": "地铁 A 口",
+      "min": 6
+     },
+     {
+      "m": "metro",
+      "l": "2 号线",
+      "from": "A 口",
+      "to": "换乘站",
+      "min": 22,
+      "dep": "08:10",
+      "arr": "08:32"
+     },
+     {
+      "m": "walk",
+      "l": "换乘",
+      "from": "2 号线",
+      "to": "机场线",
+      "min": 5
+     },
+     {
+      "m": "metro",
+      "l": "机场线",
+      "from": "换乘站",
+      "to": "机场",
+      "min": 18,
+      "dep": "08:38",
+      "arr": "08:56"
+     }
+    ]
+   }
+  },
+  "zx_music": {
+   "fields": [
+    "cur",
+    "d",
+    "loop",
+    "t"
+   ],
+   "arrays": [
+    "tracks"
+   ],
+   "fn": "music",
+   "sample": {
+    "type": "zx_music",
+    "cur": 0,
+    "loop": "all",
+    "tracks": [
+     {
+      "t": "夜航",
+      "a": "某某",
+      "d": 214
+     },
+     {
+      "t": "晨光",
+      "a": "某某",
+      "d": 187
+     },
+     {
+      "t": "中途",
+      "a": "另一人",
+      "d": 253
+     }
+    ]
+   }
+  },
+  "zx_album": {
+   "fields": [
+    "cur"
+   ],
+   "arrays": [
+    "imgs"
+   ],
+   "fn": "album",
+   "sample": {
+    "type": "zx_album",
+    "n": "旅行",
+    "cur": 0,
+    "imgs": [
+     "a.jpg",
+     "b.jpg",
+     "c.jpg",
+     "d.jpg",
+     "e.jpg",
+     "f.jpg"
+    ]
+   }
+  },
+  "zx_chatlog": {
+   "fields": [
+    "me",
+    "st",
+    "t",
+    "who"
+   ],
+   "arrays": [
+    "msgs"
+   ],
+   "fn": "chatlog",
+   "sample": {
+    "type": "zx_chatlog",
+    "n": "与客服",
+    "msgs": [
+     {
+      "me": false,
+      "t": "您好，请问什么问题",
+      "who": "客服",
+      "ts": 1760000000000,
+      "st": 1
+     },
+     {
+      "me": true,
+      "t": "我的订单还没发货",
+      "ts": 1760000060000,
+      "st": 1
+     },
+     {
+      "me": false,
+      "t": "帮您查一下",
+      "who": "客服",
+      "ts": 1760000120000,
+      "st": 0
+     }
+    ]
+   }
+  },
+  "zx_contact": {
+   "fields": [
+    "name",
+    "t",
+    "v"
+   ],
+   "arrays": [
+    "ways"
+   ],
+   "fn": "contact",
+   "sample": {
+    "type": "zx_contact",
+    "name": "张三",
+    "role": "技术对接",
+    "acts": [
+     "打电话",
+     "发消息"
+    ],
+    "ways": [
+     {
+      "t": "tel",
+      "v": "13800000000"
+     },
+     {
+      "t": "mail",
+      "v": "z@example.com"
+     }
+    ]
+   }
+  },
+  "zx_agenda": {
+   "fields": [
+    "e",
+    "s",
+    "t"
+   ],
+   "arrays": [
+    "blocks"
+   ],
+   "fn": "agenda",
+   "sample": {
+    "type": "zx_agenda",
+    "n": "今日",
+    "blocks": [
+     {
+      "t": "晨会",
+      "s": 540,
+      "e": 570,
+      "c": 0
+     },
+     {
+      "t": "需求评审",
+      "s": 600,
+      "e": 720,
+      "c": 1
+     },
+     {
+      "t": "一对一",
+      "s": 840,
+      "e": 900,
+      "c": 4
+     }
+    ]
+   }
+  },
+  "zx_filemgr": {
+   "fields": [
+    "n",
+    "p"
+   ],
+   "arrays": [
+    "nodes"
+   ],
+   "fn": "filemgr",
+   "sample": {
+    "type": "zx_filemgr",
+    "n": "文件",
+    "root": "/",
+    "nodes": [
+     {
+      "n": "src",
+      "p": "/",
+      "d": true
+     },
+     {
+      "n": "doc",
+      "p": "/",
+      "d": true
+     },
+     {
+      "n": "README.md",
+      "p": "/",
+      "d": false,
+      "sz": 2048
+     },
+     {
+      "n": "Main.kt",
+      "p": "/src",
+      "d": false,
+      "sz": 5120
+     }
+    ]
+   }
+  },
+  "zx_setup": {
+   "fields": [
+    "req",
+    "t"
+   ],
+   "arrays": [
+    "steps"
+   ],
+   "fn": "setup"
+  },
+  "zx_shop": {
+   "fields": [
+    "n",
+    "name",
+    "price",
+    "sel",
+    "stock"
+   ],
+   "arrays": [
+    "specs"
+   ],
+   "fn": "shop",
+   "sample": {
+    "type": "zx_shop",
+    "name": "无线耳机",
+    "price": 299,
+    "specs": [
+     {
+      "n": "黑色",
+      "stock": 12,
+      "add": 0
+     },
+     {
+      "n": "白色",
+      "stock": 0,
+      "add": 10
+     },
+     {
+      "n": "蓝色",
+      "stock": 5,
+      "add": 0
+     }
+    ]
+   }
+  },
+  "zx_order": {
+   "fields": [
+    "cur",
+    "t"
+   ],
+   "arrays": [
+    "nodes"
+   ],
+   "fn": "order",
+   "sample": {
+    "type": "zx_order",
+    "id": "A20261011",
+    "total": 299,
+    "cur": 2,
+    "nodes": [
+     {
+      "t": "已下单",
+      "ts": "10-11 09:20"
+     },
+     {
+      "t": "已付款",
+      "ts": "10-11 09:21"
+     },
+     {
+      "t": "已发货",
+      "ts": "10-11 15:40"
+     },
+     {
+      "t": "运输中",
+      "ts": ""
+     },
+     {
+      "t": "待签收",
+      "ts": ""
+     }
+    ]
+   }
+  },
+  "zx_wallet": {
+   "fields": [
+    "bal",
+    "t",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "wallet"
+  },
+  "zx_remote": {
+   "fields": [
+    "a",
+    "l"
+   ],
+   "arrays": [
+    "keys"
+   ],
+   "fn": "remote",
+   "sample": {
+    "type": "zx_remote",
+    "n": "客厅空调",
+    "keys": [
+     {
+      "l": "开关",
+      "a": "power"
+     },
+     {
+      "l": "模式",
+      "a": "mode"
+     },
+     {
+      "l": "定时",
+      "a": "timer"
+     }
+    ]
+   }
+  },
+  "zx_dialpad": {
+   "fields": [
+    "num"
+   ],
+   "arrays": [],
+   "fn": "dialpad",
+   "sample": {
+    "type": "zx_dialpad",
+    "n": "拨号",
+    "num": "1380000"
+   }
+  },
+  "zx_tasklist": {
+   "fields": [
+    "dep",
+    "pri",
+    "t"
+   ],
+   "arrays": [
+    "tasks"
+   ],
+   "fn": "tasklist",
+   "sample": {
+    "type": "zx_tasklist",
+    "n": "上线前",
+    "tasks": [
+     {
+      "t": "跑通测试",
+      "done": true,
+      "pri": 1,
+      "sub": [
+       "单测",
+       "集成"
+      ]
+     },
+     {
+      "t": "写发布说明",
+      "dep": "跑通测试",
+      "pri": 2
+     },
+     {
+      "t": "提交审核",
+      "dep": "写发布说明",
+      "pri": 3
+     }
+    ]
+   }
+  },
+  "zx_fitness": {
+   "fields": [
+    "d",
+    "target",
+    "v"
+   ],
+   "arrays": [
+    "recs"
+   ],
+   "fn": "fitness",
+   "sample": {
+    "type": "zx_fitness",
+    "n": "卧推",
+    "unit": "kg",
+    "target": 60,
+    "recs": [
+     {
+      "d": "10-01",
+      "v": 50
+     },
+     {
+      "d": "10-04",
+      "v": 52.5
+     },
+     {
+      "d": "10-07",
+      "v": 52
+     },
+     {
+      "d": "10-10",
+      "v": 55
+     },
+     {
+      "d": "10-13",
+      "v": 57.5
+     }
+    ]
+   }
+  },
+  "zx_medicine": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "items",
+    "plan",
+    "times"
+   ],
+   "fn": "medicine",
+   "sample": {
+    "type": "zx_medicine",
+    "items": [
+     {
+      "n": "降压药",
+      "dose": "1 片",
+      "plan": [
+       "08:00",
+       "20:00"
+      ],
+      "times": [
+       "08:00"
+      ]
+     },
+     {
+      "n": "钙片",
+      "dose": "2 片",
+      "plan": [
+       "12:00"
+      ],
+      "times": [
+       "12:00"
+      ]
+     }
+    ]
+   }
+  },
+  "zx_parcel": {
+   "fields": [
+    "eta",
+    "t",
+    "ts"
+   ],
+   "arrays": [
+    "nodes"
+   ],
+   "fn": "parcel"
+  },
+  "zx_ticket": {
+   "fields": [
+    "max",
+    "n",
+    "s"
+   ],
+   "arrays": [
+    "picked",
+    "seats"
+   ],
+   "fn": "ticket",
+   "sample": {
+    "type": "zx_ticket",
+    "n": "音乐会",
+    "price": 380,
+    "max": 2,
+    "seats": [
+     {
+      "n": "A1",
+      "s": 0
+     },
+     {
+      "n": "A2",
+      "s": 0
+     },
+     {
+      "n": "A3",
+      "s": 1
+     },
+     {
+      "n": "B1",
+      "s": 0
+     },
+     {
+      "n": "B2",
+      "s": 2
+     },
+     {
+      "n": "B3",
+      "s": 0
+     }
+    ]
+   }
+  },
+  "zx_study": {
+   "fields": [
+    "a",
+    "lv",
+    "q"
+   ],
+   "arrays": [
+    "cards"
+   ],
+   "fn": "study",
+   "sample": {
+    "type": "zx_study",
+    "n": "单词",
+    "cards": [
+     {
+      "q": "ephemeral",
+      "a": "短暂的",
+      "lv": 1
+     },
+     {
+      "q": "ubiquitous",
+      "a": "无处不在的",
+      "lv": 3
+     },
+     {
+      "q": "pragmatic",
+      "a": "务实的",
+      "lv": 4
+     }
+    ]
+   }
+  },
+  "zx_plant": {
+   "fields": [
+    "iv",
+    "last",
+    "n"
+   ],
+   "arrays": [
+    "plants"
+   ],
+   "fn": "plant"
+  },
+  "zx_parking": {
+   "fields": [
+    "fee",
+    "floor",
+    "mins",
+    "spot"
+   ],
+   "arrays": [],
+   "fn": "parking",
+   "sample": {
+    "type": "zx_parking",
+    "floor": "B2",
+    "zone": "C 区",
+    "spot": "C-137",
+    "mins": 155,
+    "fee": 25
+   }
+  },
+  "zx_habit": {
+   "fields": [
+    "goal",
+    "v"
+   ],
+   "arrays": [
+    "days"
+   ],
+   "fn": "habit",
+   "sample": {
+    "type": "zx_habit",
+    "n": "早起",
+    "goal": 21,
+    "labels": [
+     "10-05",
+     "10-06",
+     "10-07",
+     "10-08",
+     "10-09",
+     "10-10"
+    ],
+    "days": [
+     {
+      "v": 1
+     },
+     {
+      "v": 1
+     },
+     {
+      "v": 0
+     },
+     {
+      "v": 1
+     },
+     {
+      "v": 1
+     },
+     {
+      "v": 1
+     }
+    ]
+   }
+  },
+  "zx_subscription": {
+   "fields": [
+    "cyc",
+    "n",
+    "next",
+    "use",
+    "v"
+   ],
+   "arrays": [
+    "subs"
+   ],
+   "fn": "subscription",
+   "sample": {
+    "type": "zx_subscription",
+    "n": "我的订阅",
+    "subs": [
+     {
+      "n": "音乐会员",
+      "v": 15,
+      "cyc": "月",
+      "next": 12,
+      "use": 2
+     },
+     {
+      "n": "云盘",
+      "v": 998,
+      "cyc": "年",
+      "next": 180,
+      "use": 95
+     },
+     {
+      "n": "健身卡",
+      "v": 199,
+      "cyc": "月",
+      "next": 5,
+      "use": 120
+     }
+    ]
+   }
+  },
+  "zx_pet": {
+   "fields": [
+    "iv",
+    "kind",
+    "last"
+   ],
+   "arrays": [
+    "pets"
+   ],
+   "fn": "pet",
+   "sample": {
+    "type": "zx_pet",
+    "n": "豆豆",
+    "pets": [
+     {
+      "n": "豆豆",
+      "kind": "喂食",
+      "iv": 12,
+      "last": 9
+     },
+     {
+      "n": "豆豆",
+      "kind": "遛弯",
+      "iv": 24,
+      "last": 26
+     },
+     {
+      "n": "豆豆",
+      "kind": "驱虫",
+      "iv": 720,
+      "last": 100
+     }
+    ]
+   }
+  },
+  "zx_utilitymeter": {
+   "fields": [
+    "d",
+    "v"
+   ],
+   "arrays": [
+    "reads"
+   ],
+   "fn": "utilitymeter",
+   "sample": {
+    "type": "zx_utilitymeter",
+    "kind": "电",
+    "unit": "度",
+    "reads": [
+     {
+      "d": "07月",
+      "v": 4210
+     },
+     {
+      "d": "08月",
+      "v": 4386
+     },
+     {
+      "d": "09月",
+      "v": 4622
+     },
+     {
+      "d": "10月",
+      "v": 4801
+     }
+    ]
+   }
+  },
+  "zx_sleep": {
+   "fields": [
+    "d",
+    "goal",
+    "q",
+    "v"
+   ],
+   "arrays": [
+    "nights"
+   ],
+   "fn": "sleep",
+   "sample": {
+    "type": "zx_sleep",
+    "n": "本周",
+    "goal": 8,
+    "nights": [
+     {
+      "d": "10-05",
+      "v": 7.2,
+      "q": 70
+     },
+     {
+      "d": "10-06",
+      "v": 6.4,
+      "q": 55
+     },
+     {
+      "d": "10-07",
+      "v": 8.1,
+      "q": 82
+     },
+     {
+      "d": "10-08",
+      "v": 5.9,
+      "q": 48
+     },
+     {
+      "d": "10-09",
+      "v": 7.8,
+      "q": 75
+     },
+     {
+      "d": "10-10",
+      "v": 8.4,
+      "q": 88
+     }
+    ]
+   }
+  },
+  "zx_coupon": {
+   "fields": [
+    "min",
+    "n",
+    "t",
+    "v"
+   ],
+   "arrays": [
+    "coupons"
+   ],
+   "fn": "coupon",
+   "sample": {
+    "type": "zx_coupon",
+    "n": "券包",
+    "coupons": [
+     {
+      "n": "满 200 减 30",
+      "v": 30,
+      "t": 0,
+      "min": 200,
+      "exp": 2
+     },
+     {
+      "n": "全场 8.5 折",
+      "v": 0.85,
+      "t": 1,
+      "min": 0,
+      "exp": 15
+     },
+     {
+      "n": "满 100 减 20",
+      "v": 20,
+      "t": 0,
+      "min": 100,
+      "exp": 0,
+      "used": true
+     }
+    ]
+   }
+  },
+  "zx_appointment": {
+   "fields": [
+    "dept",
+    "left",
+    "t"
+   ],
+   "arrays": [
+    "slots"
+   ],
+   "fn": "appointment",
+   "sample": {
+    "type": "zx_appointment",
+    "dept": "心内科",
+    "doctor": "李医生",
+    "date": "10-12",
+    "slots": [
+     {
+      "t": "09:00",
+      "left": 3
+     },
+     {
+      "t": "09:30",
+      "left": 0
+     },
+     {
+      "t": "10:00",
+      "left": 1
+     },
+     {
+      "t": "14:00",
+      "left": 6
+     },
+     {
+      "t": "14:30",
+      "left": 2
+     }
+    ]
+   }
+  },
+  "zx_recipe": {
+   "fields": [
+    "base",
+    "n",
+    "q"
+   ],
+   "arrays": [
+    "ing",
+    "steps"
+   ],
+   "fn": "recipe"
+  },
+  "zx_bookkeep": {
+   "fields": [
+    "budget",
+    "c",
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "ledger",
+   "sample": {
+    "type": "zx_bookkeep",
+    "n": "10 月",
+    "budget": 4000,
+    "items": [
+     {
+      "d": "10-02",
+      "n": "超市",
+      "c": "餐饮",
+      "v": 186
+     },
+     {
+      "d": "10-05",
+      "n": "打车",
+      "c": "交通",
+      "v": 43
+     },
+     {
+      "d": "10-08",
+      "n": "新鞋",
+      "c": "购物",
+      "v": 899
+     },
+     {
+      "d": "10-11",
+      "n": "聚餐",
+      "c": "餐饮",
+      "v": 320
+     }
+    ]
+   }
+  },
+  "zx_commute": {
+   "fields": [
+    "chg",
+    "delay",
+    "jam",
+    "n",
+    "t",
+    "walk"
+   ],
+   "arrays": [
+    "plans"
+   ],
+   "fn": "commute",
+   "sample": {
+    "type": "zx_commute",
+    "from": "天河",
+    "to": "珠江新城",
+    "plans": [
+     {
+      "n": "地铁",
+      "t": 32,
+      "walk": 8,
+      "chg": 1,
+      "delay": 0,
+      "jam": 65
+     },
+     {
+      "n": "打车",
+      "t": 24,
+      "walk": 3,
+      "chg": 0,
+      "delay": 12,
+      "jam": 0
+     },
+     {
+      "n": "公交",
+      "t": 45,
+      "walk": 12,
+      "chg": 0,
+      "delay": 0,
+      "jam": 40
+     }
+    ]
+   }
+  },
+  "zx_warranty": {
+   "fields": [
+    "buy",
+    "left",
+    "m",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "warranty",
+   "sample": {
+    "type": "zx_warranty",
+    "n": "家电",
+    "items": [
+     {
+      "n": "冰箱",
+      "buy": "2023-06",
+      "m": 36,
+      "left": 245,
+      "sn": "BX7788"
+     },
+     {
+      "n": "洗衣机",
+      "buy": "2021-03",
+      "m": 36,
+      "left": -180,
+      "sn": "XY1024"
+     },
+     {
+      "n": "电视",
+      "buy": "2024-11",
+      "m": 24,
+      "left": 32,
+      "sn": "TV3391"
+     }
+    ]
+   }
+  },
+  "zx_inspection": {
+   "fields": [
+    "n",
+    "s",
+    "why"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "inspection"
+  },
+  "zx_examprep": {
+   "fields": [
+    "days",
+    "done",
+    "n",
+    "need",
+    "w"
+   ],
+   "arrays": [
+    "subs"
+   ],
+   "fn": "examprep",
+   "sample": {
+    "type": "zx_examprep",
+    "n": "期末",
+    "days": 14,
+    "subs": [
+     {
+      "n": "高数",
+      "w": 3,
+      "done": 12,
+      "need": 40
+     },
+     {
+      "n": "英语",
+      "w": 2,
+      "done": 18,
+      "need": 25
+     },
+     {
+      "n": "专业课",
+      "w": 4,
+      "done": 6,
+      "need": 35
+     }
+    ]
+   }
+  },
+  "zx_tripkit": {
+   "fields": [
+    "c",
+    "must",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "tripkit",
+   "sample": {
+    "type": "zx_tripkit",
+    "n": "出差",
+    "items": [
+     {
+      "n": "身份证",
+      "c": "证件",
+      "must": true
+     },
+     {
+      "n": "充电器",
+      "c": "电子",
+      "must": true
+     },
+     {
+      "n": "换洗衣物",
+      "c": "衣物",
+      "must": true
+     },
+     {
+      "n": "雨伞",
+      "c": "杂物",
+      "must": false
+     }
+    ]
+   }
+  },
+  "zx_inventory": {
+   "fields": [
+    "min",
+    "n",
+    "q"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "inventory"
+  },
+  "zx_recycle": {
+   "fields": [
+    "n",
+    "t",
+    "tip"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "recycle"
+  },
+  "zx_carservice": {
+   "fields": [
+    "ivKm",
+    "ivM",
+    "km",
+    "lastKm",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "carservice",
+   "sample": {
+    "type": "zx_carservice",
+    "n": "保养",
+    "km": 48200,
+    "items": [
+     {
+      "n": "机油",
+      "ivKm": 10000,
+      "lastKm": 41000,
+      "ivM": 12,
+      "lastM": 9
+     },
+     {
+      "n": "刹车片",
+      "ivKm": 40000,
+      "lastKm": 12000,
+      "ivM": 0,
+      "lastM": 0
+     },
+     {
+      "n": "雨刷",
+      "ivKm": 0,
+      "lastKm": 0,
+      "ivM": 24,
+      "lastM": 26
+     }
+    ]
+   }
+  },
+  "zx_expiry": {
+   "fields": [
+    "left",
+    "n",
+    "q"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "expiry",
+   "sample": {
+    "type": "zx_expiry",
+    "n": "冰箱",
+    "items": [
+     {
+      "n": "牛奶",
+      "left": -2,
+      "q": 1
+     },
+     {
+      "n": "酸奶",
+      "left": 4,
+      "q": 3
+     },
+     {
+      "n": "鸡蛋",
+      "left": 21,
+      "q": 10
+     },
+     {
+      "n": "黄油",
+      "left": 90,
+      "q": 1
+     }
+    ]
+   }
+  },
+  "zx_splitbill": {
+   "fields": [
+    "p",
+    "v"
+   ],
+   "arrays": [
+    "items",
+    "people"
+   ],
+   "fn": "splitbill"
+  },
+  "zx_firstaid": {
+   "fields": [],
+   "arrays": [
+    "steps",
+    "warn"
+   ],
+   "fn": "firstaid",
+   "sample": {
+    "type": "zx_firstaid",
+    "n": "烫伤",
+    "call": false,
+    "steps": [
+     "立刻用流动冷水冲 15 分钟",
+     "小心脱去衣物，粘住的部分别硬扯",
+     "继续泡冷水降温",
+     "用干净纱布覆盖",
+     "不要挑破水泡"
+    ],
+    "warn": [
+     "不要涂牙膏酱油",
+     "不要冰敷",
+     "不要挑破水泡"
+    ]
+   }
+  },
+  "zx_sizing": {
+   "fields": [
+    "chest",
+    "size",
+    "waist"
+   ],
+   "arrays": [
+    "rows"
+   ],
+   "fn": "sizing",
+   "sample": {
+    "type": "zx_sizing",
+    "n": "衬衫",
+    "chest": 96,
+    "waist": 84,
+    "rows": [
+     {
+      "size": "S",
+      "chest": 92,
+      "waist": 78,
+      "len": 68
+     },
+     {
+      "size": "M",
+      "chest": 98,
+      "waist": 86,
+      "len": 70
+     },
+     {
+      "size": "L",
+      "chest": 104,
+      "waist": 90,
+      "len": 72
+     }
+    ]
+   }
+  },
+  "zx_gift": {
+   "fields": [
+    "dir",
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "gift"
+  },
+  "zx_renovation": {
+   "fields": [
+    "n",
+    "s",
+    "who"
+   ],
+   "arrays": [
+    "stages"
+   ],
+   "fn": "renovation"
+  },
+  "zx_clinic": {
+   "fields": [
+    "n",
+    "q",
+    "s",
+    "t",
+    "wait"
+   ],
+   "arrays": [
+    "steps"
+   ],
+   "fn": "clinic",
+   "sample": {
+    "type": "zx_clinic",
+    "n": "陪诊",
+    "steps": [
+     {
+      "n": "挂号",
+      "s": 2,
+      "t": "0830"
+     },
+     {
+      "n": "候诊",
+      "s": 1,
+      "q": 12,
+      "wait": 35,
+      "t": "0840"
+     },
+     {
+      "n": "看诊",
+      "s": 0,
+      "t": ""
+     },
+     {
+      "n": "缴费",
+      "s": 0,
+      "t": ""
+     },
+     {
+      "n": "检查",
+      "s": 0,
+      "t": ""
+     },
+     {
+      "n": "取药",
+      "s": 0,
+      "t": ""
+     }
+    ]
+   }
+  },
+  "zx_rental": {
+   "fields": [
+    "area",
+    "dist",
+    "n",
+    "price"
+   ],
+   "arrays": [
+    "houses"
+   ],
+   "fn": "rental"
+  },
+  "zx_repair": {
+   "fields": [
+    "m",
+    "s",
+    "t",
+    "w"
+   ],
+   "arrays": [
+    "logs",
+    "owners"
+   ],
+   "fn": "repair"
+  },
+  "zx_credential": {
+   "fields": [
+    "exp",
+    "n",
+    "need",
+    "org"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "credential"
+  },
+  "zx_ship": {
+   "fields": [
+    "n",
+    "s",
+    "t"
+   ],
+   "arrays": [
+    "nodes"
+   ],
+   "fn": "parcel",
+   "sample": {
+    "type": "zx_ship",
+    "n": "寄件",
+    "no": "SF1234567",
+    "nodes": [
+     {
+      "n": "已揽收",
+      "t": "1001",
+      "s": 2
+     },
+     {
+      "n": "到达转运中心",
+      "t": "1019",
+      "s": 2
+     },
+     {
+      "n": "运输中",
+      "t": "1108",
+      "s": 1
+     },
+     {
+      "n": "派送中",
+      "t": "",
+      "s": 0
+     },
+     {
+      "n": "已签收",
+      "t": "",
+      "s": 0
+     }
+    ]
+   }
+  },
+  "zx_interview": {
+   "fields": [
+    "n",
+    "s",
+    "t"
+   ],
+   "arrays": [
+    "rounds"
+   ],
+   "fn": "interview",
+   "sample": {
+    "type": "zx_interview",
+    "n": "面试",
+    "co": "某公司",
+    "rounds": [
+     {
+      "n": "笔试",
+      "s": 2,
+      "t": "0312"
+     },
+     {
+      "n": "一面",
+      "s": 2,
+      "t": "0318"
+     },
+     {
+      "n": "二面",
+      "s": 1,
+      "t": "0322"
+     },
+     {
+      "n": "HR 面",
+      "s": 0,
+      "t": ""
+     }
+    ]
+   }
+  },
+  "zx_visa": {
+   "fields": [
+    "must",
+    "n",
+    "s"
+   ],
+   "arrays": [
+    "docs"
+   ],
+   "fn": "visa",
+   "sample": {
+    "type": "zx_visa",
+    "n": "签证",
+    "docs": [
+     {
+      "n": "护照",
+      "must": true,
+      "s": 2
+     },
+     {
+      "n": "照片",
+      "must": true,
+      "s": 2
+     },
+     {
+      "n": "银行流水",
+      "must": true,
+      "s": 1
+     },
+     {
+      "n": "在职证明",
+      "must": true,
+      "s": 0
+     },
+     {
+      "n": "行程单",
+      "must": false,
+      "s": 0
+     }
+    ]
+   }
+  },
+  "zx_insurance": {
+   "fields": [
+    "amt",
+    "exp",
+    "n",
+    "used"
+   ],
+   "arrays": [
+    "covers"
+   ],
+   "fn": "insurance",
+   "sample": {
+    "type": "zx_insurance",
+    "n": "医疗险",
+    "exp": "2026-08",
+    "left": 295,
+    "covers": [
+     {
+      "n": "住院医疗",
+      "amt": 1000000,
+      "used": 0
+     },
+     {
+      "n": "门诊",
+      "amt": 20000,
+      "used": 3200
+     },
+     {
+      "n": "重疾",
+      "amt": 500000,
+      "used": 0
+     }
+    ]
+   }
+  },
+  "zx_reimburse": {
+   "fields": [
+    "n",
+    "s",
+    "total",
+    "v",
+    "why"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "reimburse",
+   "sample": {
+    "type": "zx_reimburse",
+    "n": "差旅",
+    "total": 1444,
+    "items": [
+     {
+      "n": "机票",
+      "v": 890,
+      "s": 1
+     },
+     {
+      "n": "住宿",
+      "v": 356,
+      "s": 1
+     },
+     {
+      "n": "打车",
+      "v": 78,
+      "s": 0
+     },
+     {
+      "n": "餐费",
+      "v": 120,
+      "s": 2,
+      "why": "超标准，限 80"
+     }
+    ]
+   }
+  },
+  "zx_relocation": {
+   "fields": [
+    "box",
+    "n",
+    "s"
+   ],
+   "arrays": [
+    "rooms"
+   ],
+   "fn": "relocation",
+   "sample": {
+    "type": "zx_relocation",
+    "n": "搬家",
+    "rooms": [
+     {
+      "n": "主卧",
+      "box": 6,
+      "s": 2
+     },
+     {
+      "n": "客厅",
+      "box": 8,
+      "s": 1
+     },
+     {
+      "n": "厨房",
+      "box": 4,
+      "s": 1
+     },
+     {
+      "n": "书房",
+      "box": 5,
+      "s": 0
+     }
+    ]
+   }
+  },
+  "zx_booking": {
+   "fields": [
+    "d",
+    "s",
+    "t"
+   ],
+   "arrays": [
+    "slots"
+   ],
+   "fn": "booking"
+  },
+  "zx_escort": {
+   "fields": [
+    "m",
+    "n"
+   ],
+   "arrays": [
+    "advice",
+    "recs"
+   ],
+   "fn": "escort"
+  },
+  "zx_lease": {
+   "fields": [
+    "dep",
+    "k",
+    "months",
+    "n",
+    "rent",
+    "v"
+   ],
+   "arrays": [
+    "terms"
+   ],
+   "fn": "lease",
+   "sample": {
+    "type": "zx_lease",
+    "n": "租房合同",
+    "rent": 3400,
+    "dep": 6800,
+    "months": 12,
+    "terms": [
+     {
+      "n": "租期与到期",
+      "v": "2026-03-01 到期，续租需提前 30 天",
+      "k": true
+     },
+     {
+      "n": "押金退还",
+      "v": "退租后 15 个工作日内，扣清洁费 200",
+      "k": true
+     },
+     {
+      "n": "提前解约",
+      "v": "需赔 1 个月租金",
+      "k": true
+     },
+     {
+      "n": "宠物",
+      "v": "允许养猫，不允许养狗",
+      "k": false
+     }
+    ]
+   }
+  },
+  "zx_overrun": {
+   "fields": [
+    "act",
+    "actTotal",
+    "cut",
+    "n",
+    "plan",
+    "planTotal",
+    "why"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "overrun"
+  },
+  "zx_vet": {
+   "fields": [
+    "dose",
+    "n",
+    "next",
+    "weight"
+   ],
+   "arrays": [
+    "recs"
+   ],
+   "fn": "vet",
+   "sample": {
+    "type": "zx_vet",
+    "n": "布偶",
+    "weight": 4.8,
+    "recs": [
+     {
+      "n": "猫三联",
+      "t": "0310",
+      "dose": "1 针",
+      "next": 180
+     },
+     {
+      "n": "体内驱虫",
+      "t": "0405",
+      "dose": "0.5 片",
+      "next": 30
+     },
+     {
+      "n": "体外驱虫",
+      "t": "0501",
+      "dose": "1 支",
+      "next": -8
+     }
+    ]
+   }
+  },
+  "zx_photospec": {
+   "fields": [
+    "bg",
+    "h",
+    "n",
+    "px",
+    "w"
+   ],
+   "arrays": [
+    "specs"
+   ],
+   "fn": "photospec"
+  },
+  "zx_claim": {
+   "fields": [
+    "leftH",
+    "miss",
+    "must",
+    "n"
+   ],
+   "arrays": [
+    "ev"
+   ],
+   "fn": "claim"
+  },
+  "zx_ivreview": {
+   "fields": [
+    "fix",
+    "n",
+    "s",
+    "why"
+   ],
+   "arrays": [
+    "qs"
+   ],
+   "fn": "ivreview"
+  },
+  "zx_claimprog": {
+   "fields": [
+    "leftH",
+    "miss",
+    "n",
+    "s"
+   ],
+   "arrays": [
+    "docs"
+   ],
+   "fn": "claimprog"
+  },
+  "zx_refile": {
+   "fields": [
+    "leftH",
+    "miss",
+    "n",
+    "why"
+   ],
+   "arrays": [
+    "need"
+   ],
+   "fn": "refile",
+   "sample": {
+    "type": "zx_refile",
+    "n": "重报",
+    "why": "餐费超标准（限 80，实报 120）",
+    "leftH": 504,
+    "miss": "超期作废，需自担",
+    "need": [
+     {
+      "n": "拆分餐费，只报 80",
+      "got": true
+     },
+     {
+      "n": "补部门负责人签字",
+      "got": false
+     },
+     {
+      "n": "重填报销单",
+      "got": false
+     }
+    ]
+   }
+  },
+  "zx_damage": {
+   "fields": [
+    "lv",
+    "miss",
+    "n",
+    "photo",
+    "who"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "damage"
+  },
+  "zx_slotconflict": {
+   "fields": [
+    "cost",
+    "n",
+    "slot",
+    "w",
+    "why"
+   ],
+   "arrays": [
+    "opts",
+    "sides"
+   ],
+   "fn": "slotconflict"
+  },
+  "zx_lostdoc": {
+   "fields": [
+    "lost",
+    "n",
+    "place",
+    "s"
+   ],
+   "arrays": [
+    "steps"
+   ],
+   "fn": "lostdoc"
+  },
+  "zx_handoff": {
+   "fields": [
+    "from",
+    "n",
+    "to",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "handoff",
+   "sample": {
+    "type": "zx_handoff",
+    "n": "寄养交接",
+    "from": "主人",
+    "to": "寄养家庭",
+    "items": [
+     {
+      "n": "猫粮",
+      "v": "剩 1.2kg",
+      "ok": true
+     },
+     {
+      "n": "猫砂",
+      "v": "刚换的新砂",
+      "ok": true
+     },
+     {
+      "n": "体重",
+      "v": "4.8kg",
+      "ok": true
+     },
+     {
+      "n": "疫苗本",
+      "v": "已交，年内有效",
+      "ok": false
+     }
+    ],
+    "diff": "疫苗本只有复印件"
+   }
+  },
+  "zx_moveout": {
+   "fields": [
+    "amt",
+    "dep",
+    "landlord",
+    "n",
+    "tenant",
+    "why"
+   ],
+   "arrays": [
+    "ded"
+   ],
+   "fn": "moveout",
+   "sample": {
+    "type": "zx_moveout",
+    "n": "退租结算",
+    "landlord": "房东",
+    "tenant": "租客",
+    "dep": 6800,
+    "ded": [
+     {
+      "n": "清洁费",
+      "amt": 200,
+      "why": "合同写明，固定",
+      "ok": true
+     },
+     {
+      "n": "墙面修补",
+      "amt": 800,
+      "why": "3 处钉眼，入住时已存在",
+      "ok": false
+     },
+     {
+      "n": "门锁更换",
+      "amt": 150,
+      "why": "钥匙少还一把",
+      "ok": true
+     }
+    ]
+   }
+  },
+  "zx_vehiclecare": {
+   "fields": [
+    "cur",
+    "km",
+    "mo",
+    "n",
+    "need"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "vehiclecare",
+   "sample": {
+    "type": "zx_vehiclecare",
+    "n": "维保",
+    "cur": 42000,
+    "items": [
+     {
+      "n": "机油机滤",
+      "km": 45000,
+      "mo": 6,
+      "need": true
+     },
+     {
+      "n": "刹车油",
+      "km": 60000,
+      "mo": 24,
+      "need": true
+     },
+     {
+      "n": "空气滤芯",
+      "km": 50000,
+      "mo": 12,
+      "need": false
+     },
+     {
+      "n": "刹车片",
+      "km": 43000,
+      "mo": 36,
+      "need": true
+     }
+    ]
+   }
+  },
+  "zx_medremote": {
+   "fields": [
+    "leftH",
+    "local",
+    "miss",
+    "must",
+    "n",
+    "place",
+    "rate"
+   ],
+   "arrays": [
+    "need"
+   ],
+   "fn": "medremote",
+   "sample": {
+    "type": "zx_medremote",
+    "n": "异地备案",
+    "place": "上海",
+    "leftH": 2160,
+    "rate": 0.7,
+    "local": 0.85,
+    "miss": "过期后全自费，需回去手工报销",
+    "need": [
+     {
+      "n": "备案表",
+      "must": true
+     },
+     {
+      "n": "转诊单",
+      "must": true
+     },
+     {
+      "n": "身份证",
+      "must": false
+     }
+    ]
+   }
+  },
+  "zx_housedeal": {
+   "fields": [
+    "amt",
+    "buyer",
+    "escrow",
+    "n",
+    "s",
+    "seller"
+   ],
+   "arrays": [
+    "nodes"
+   ],
+   "fn": "housedeal",
+   "sample": {
+    "type": "zx_housedeal",
+    "n": "交易节点",
+    "buyer": "买方",
+    "seller": "卖方",
+    "nodes": [
+     {
+      "n": "定金",
+      "amt": 10,
+      "escrow": true,
+      "s": 2
+     },
+     {
+      "n": "首付",
+      "amt": 120,
+      "escrow": true,
+      "s": 1
+     },
+     {
+      "n": "过户",
+      "amt": 0,
+      "escrow": false,
+      "s": 0
+     },
+     {
+      "n": "尾款",
+      "amt": 170,
+      "escrow": true,
+      "s": 0
+     }
+    ]
+   }
+  },
+  "zx_schoolup": {
+   "fields": [
+    "leftH",
+    "miss",
+    "must",
+    "n",
+    "win"
+   ],
+   "arrays": [
+    "need"
+   ],
+   "fn": "schoolup",
+   "sample": {
+    "type": "zx_schoolup",
+    "n": "升学",
+    "win": "05-06 至 05-12",
+    "leftH": 168,
+    "miss": "错过就是晚一年",
+    "need": [
+     {
+      "n": "户口本",
+      "got": true,
+      "must": true
+     },
+     {
+      "n": "房产证",
+      "got": true,
+      "must": true
+     },
+     {
+      "n": "预防接种证",
+      "got": false,
+      "must": true
+     },
+     {
+      "n": "照片",
+      "got": false,
+      "must": false
+     }
+    ]
+   }
+  },
+  "zx_carerota": {
+   "fields": [
+    "d",
+    "who"
+   ],
+   "arrays": [
+    "slots"
+   ],
+   "fn": "carerota",
+   "sample": {
+    "type": "zx_carerota",
+    "n": "照护排班",
+    "prevWho": "大姐",
+    "nextWho": "二姐",
+    "slots": [
+     {
+      "d": "05-13",
+      "who": "大姐",
+      "hand": true
+     },
+     {
+      "d": "05-14",
+      "who": "大姐",
+      "hand": true
+     },
+     {
+      "d": "05-15",
+      "who": "二姐",
+      "hand": false
+     },
+     {
+      "d": "05-16",
+      "who": "二姐",
+      "hand": false
+     }
+    ]
+   }
+  },
+  "zx_taxxborder": {
+   "fields": [
+    "free",
+    "n",
+    "price",
+    "qty",
+    "rate",
+    "sub"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "taxxborder",
+   "sample": {
+    "type": "zx_taxxborder",
+    "n": "跨境税",
+    "free": 5000,
+    "buyer": "买家",
+    "platform": "平台",
+    "items": [
+     {
+      "n": "奶粉",
+      "price": 280,
+      "qty": 6,
+      "rate": 0.13,
+      "sub": 1680
+     },
+     {
+      "n": "面霜",
+      "price": 420,
+      "qty": 2,
+      "rate": 0.3,
+      "sub": 840
+     },
+     {
+      "n": "维生素",
+      "price": 160,
+      "qty": 4,
+      "rate": 0.13,
+      "sub": 640
+     }
+    ]
+   }
+  },
+  "zx_rentreturn": {
+   "fields": [
+    "back",
+    "dmg",
+    "lessee",
+    "lessor",
+    "n",
+    "out"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "rentreturn",
+   "sample": {
+    "type": "zx_rentreturn",
+    "n": "设备归还",
+    "lessor": "出租方",
+    "lessee": "承租方",
+    "items": [
+     {
+      "n": "投影仪",
+      "out": "外壳无划痕",
+      "back": "底部有划痕",
+      "dmg": "新伤，扣 300",
+      "ok": false
+     },
+     {
+      "n": "三脚架",
+      "out": "完好",
+      "back": "完好",
+      "ok": true
+     },
+     {
+      "n": "镜头",
+      "out": "镀膜完好",
+      "back": "镀膜完好",
+      "ok": true
+     }
+    ]
+   }
+  },
+  "zx_dutyrota": {
+   "fields": [
+    "alt",
+    "d",
+    "swap",
+    "who"
+   ],
+   "arrays": [
+    "slots"
+   ],
+   "fn": "dutyrota"
+  },
+  "zx_annualaudit": {
+   "fields": [
+    "leftH",
+    "miss",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "annualaudit"
+  },
+  "zx_liability": {
+   "fields": [
+    "n",
+    "pa",
+    "pb",
+    "pct",
+    "why"
+   ],
+   "arrays": [
+    "parts"
+   ],
+   "fn": "liability"
+  },
+  "zx_radar": {
+   "fields": [
+    "n"
+   ],
+   "arrays": [
+    "dims",
+    "series",
+    "v"
+   ],
+   "fn": "radar",
+   "sample": {
+    "type": "zx_radar",
+    "dims": [
+     "性能",
+     "续航",
+     "拍照",
+     "价格",
+     "系统"
+    ],
+    "series": [
+     {
+      "n": "本机",
+      "v": [
+       0.9,
+       0.7,
+       0.8,
+       0.6,
+       0.85
+      ]
+     },
+     {
+      "n": "竞品",
+      "v": [
+       0.75,
+       0.85,
+       0.7,
+       0.8,
+       0.7
+      ]
+     }
+    ]
+   }
+  },
+  "zx_rank": {
+   "fields": [
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "rank",
+   "sample": {
+    "type": "zx_rank",
+    "items": [
+     {
+      "n": "首页",
+      "v": 12400,
+      "label": "12.4k"
+     },
+     {
+      "n": "搜索",
+      "v": 9800,
+      "label": "9.8k"
+     },
+     {
+      "n": "详情",
+      "v": 7600,
+      "label": "7.6k"
+     },
+     {
+      "n": "结算",
+      "v": 3100,
+      "label": "3.1k"
+     }
+    ]
+   }
+  },
+  "zx_org": {
+   "fields": [
+    "d",
+    "k",
+    "n"
+   ],
+   "arrays": [
+    "nodes"
+   ],
+   "fn": "org",
+   "sample": {
+    "type": "zx_org",
+    "nodes": [
+     {
+      "k": "ceo",
+      "n": "张总",
+      "r": "CEO",
+      "d": 0
+     },
+     {
+      "k": "tech",
+      "n": "李工",
+      "r": "技术",
+      "d": 1
+     },
+     {
+      "k": "ops",
+      "n": "王经理",
+      "r": "运营",
+      "d": 1
+     },
+     {
+      "k": "fe",
+      "n": "小陈",
+      "r": "前端",
+      "d": 2
+     },
+     {
+      "k": "be",
+      "n": "小刘",
+      "r": "后端",
+      "d": 2
+     }
+    ]
+   }
+  },
+  "zx_range": {
+   "fields": [
+    "hi",
+    "lo",
+    "max",
+    "min"
+   ],
+   "arrays": [],
+   "fn": "range",
+   "sample": {
+    "type": "zx_range",
+    "min": 0,
+    "max": 5000,
+    "lo": 1200,
+    "hi": 3400
+   }
+  },
+  "zx_color": {
+   "fields": [],
+   "arrays": [
+    "swatches"
+   ],
+   "fn": "color",
+   "sample": {
+    "type": "zx_color",
+    "swatches": [
+     "#5046E4",
+     "#3FBF7F",
+     "#E8A33D",
+     "#E5544B",
+     "#4A9BE8"
+    ]
+   }
+  },
+  "zx_pager": {
+   "fields": [
+    "cur",
+    "per",
+    "total"
+   ],
+   "arrays": [],
+   "fn": "pager",
+   "sample": {
+    "type": "zx_pager",
+    "total": 12,
+    "cur": 3,
+    "per": 20
+   }
+  },
+  "zx_countdown": {
+   "fields": [
+    "sec"
+   ],
+   "arrays": [],
+   "fn": "countdown",
+   "sample": {
+    "type": "zx_countdown",
+    "sec": 300,
+    "label": "验证码有效期",
+    "auto": true
+   }
+  },
+  "zx_sign": {
+   "fields": [
+    "onDone"
+   ],
+   "arrays": [],
+   "fn": "sign",
+   "sample": {
+    "type": "zx_sign",
+    "onDone": "zx_form_submit"
+   }
+  },
+  "zx_board": {
+   "fields": [
+    "k",
+    "t",
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "board",
+   "sample": {
+    "type": "zx_board",
+    "items": [
+     {
+      "k": "a",
+      "t": "想法 A",
+      "x": 0.15,
+      "y": 0.2
+     },
+     {
+      "k": "b",
+      "t": "想法 B",
+      "x": 0.55,
+      "y": 0.45
+     },
+     {
+      "k": "c",
+      "t": "想法 C",
+      "x": 0.3,
+      "y": 0.7
+     }
+    ]
+   }
+  },
+  "zx_housekeep": {
+   "fields": [
+    "cyc",
+    "d",
+    "who"
+   ],
+   "arrays": [
+    "visits"
+   ],
+   "fn": "housekeep",
+   "sample": {
+    "type": "zx_housekeep",
+    "n": "家政",
+    "cyc": 7,
+    "leftH": 120,
+    "visits": [
+     {
+      "d": "05-06",
+      "who": "王阿姨",
+      "ok": true
+     },
+     {
+      "d": "05-13",
+      "who": "王阿姨",
+      "ok": true
+     },
+     {
+      "d": "05-20",
+      "who": "李阿姨",
+      "ok": false
+     }
+    ]
+   }
+  },
+  "zx_finalpay": {
+   "fields": [
+    "fix",
+    "h",
+    "holdPct",
+    "n",
+    "total",
+    "warrH"
+   ],
+   "arrays": [
+    "issues"
+   ],
+   "fn": "finalpay",
+   "sample": {
+    "type": "zx_finalpay",
+    "n": "尾款",
+    "total": 128000,
+    "holdPct": 0.1,
+    "warrH": 2160,
+    "issues": [
+     {
+      "n": "主卧墙面开裂",
+      "h": 720,
+      "fix": true
+     },
+     {
+      "n": "卫生间渗水",
+      "h": 1440,
+      "fix": false
+     }
+    ]
+   }
+  },
+  "zx_fosterdaily": {
+   "fields": [
+    "d",
+    "eat",
+    "w"
+   ],
+   "arrays": [
+    "days"
+   ],
+   "fn": "fosterdaily"
+  },
+  "zx_wardhand": {
+   "fields": [
+    "from",
+    "n",
+    "obsH",
+    "to",
+    "v"
+   ],
+   "arrays": [
+    "todo",
+    "vitals"
+   ],
+   "fn": "wardhand",
+   "sample": {
+    "type": "zx_wardhand",
+    "n": "转科",
+    "from": "急诊",
+    "to": "心内科",
+    "obsH": 24,
+    "vitals": [
+     {
+      "n": "血压",
+      "v": "138/86"
+     },
+     {
+      "n": "心率",
+      "v": "92"
+     },
+     {
+      "n": "血氧",
+      "v": "96%"
+     }
+    ],
+    "todo": [
+     {
+      "n": "复查心电图",
+      "done": true
+     },
+     {
+      "n": "停急诊用药",
+      "done": false
+     }
+    ]
+   }
+  },
+  "zx_schoolnote": {
+   "fields": [
+    "n",
+    "who"
+   ],
+   "arrays": [
+    "notes"
+   ],
+   "fn": "schoolnote",
+   "sample": {
+    "type": "zx_schoolnote",
+    "n": "家校沟通",
+    "termH": 1440,
+    "notes": [
+     {
+      "n": "明天带运动服",
+      "who": "老师",
+      "h": 12,
+      "done": true
+     },
+     {
+      "n": "视力复查回执",
+      "who": "校医",
+      "h": -6,
+      "done": false
+     },
+     {
+      "n": "家长会确认",
+      "who": "班主任",
+      "h": 48,
+      "done": false
+     }
+    ]
+   }
+  },
+  "zx_sublet": {
+   "fields": [
+    "dep",
+    "n",
+    "new",
+    "ok",
+    "old"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "sublet",
+   "sample": {
+    "type": "zx_sublet",
+    "n": "转租",
+    "old": "原租客",
+    "new": "新租客",
+    "dep": 4200,
+    "ok": true,
+    "endH": 720,
+    "items": [
+     {
+      "n": "钥匙移交",
+      "done": true
+     },
+     {
+      "n": "物业登记变更",
+      "done": true
+     },
+     {
+      "n": "水电过户",
+      "done": false
+     }
+    ]
+   }
+  },
+  "zx_inspecthand": {
+   "fields": [
+    "cycD",
+    "last",
+    "lv",
+    "miss",
+    "n",
+    "sinceD"
+   ],
+   "arrays": [
+    "find"
+   ],
+   "fn": "inspecthand",
+   "sample": {
+    "type": "zx_inspecthand",
+    "n": "巡检",
+    "last": "04-15",
+    "cycD": 30,
+    "sinceD": 38,
+    "miss": "超期这段没人负责",
+    "find": [
+     {
+      "n": "消防通道堆放杂物",
+      "lv": "严重",
+      "fix": false
+     },
+     {
+      "n": "应急灯一盏不亮",
+      "lv": "注意",
+      "fix": true
+     },
+     {
+      "n": "灭火器压力正常",
+      "lv": "一般",
+      "fix": true
+     }
+    ]
+   }
+  },
+  "zx_projhandover": {
+   "fields": [
+    "n",
+    "new",
+    "old",
+    "oncallH",
+    "transH",
+    "who"
+   ],
+   "arrays": [
+    "open"
+   ],
+   "fn": "projhandover"
+  },
+  "zx_stocktake": {
+   "fields": [
+    "book",
+    "cycD",
+    "last",
+    "n",
+    "real",
+    "sinceD",
+    "why"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "stocktake"
+  },
+  "zx_offboard": {
+   "fields": [
+    "done",
+    "n",
+    "revoke",
+    "who"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "offboard",
+   "sample": {
+    "type": "zx_offboard",
+    "n": "离职交接",
+    "who": "王五",
+    "revoke": true,
+    "clawH": 2160,
+    "items": [
+     {
+      "n": "客户资料移交",
+      "done": true
+     },
+     {
+      "n": "未报销单据",
+      "done": true
+     },
+     {
+      "n": "门禁卡归还",
+      "done": false
+     }
+    ]
+   }
+  },
+  "zx_revoke": {
+   "fields": [
+    "done",
+    "lagH",
+    "n",
+    "off",
+    "t",
+    "who"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "revoke",
+   "sample": {
+    "type": "zx_revoke",
+    "n": "权限回收",
+    "who": "王五",
+    "items": [
+     {
+      "n": "OA 账号",
+      "t": "系统",
+      "off": true,
+      "lagH": 0
+     },
+     {
+      "n": "VPN 令牌",
+      "t": "令牌",
+      "off": true,
+      "lagH": 12
+     },
+     {
+      "n": "生产库密钥",
+      "t": "密钥",
+      "off": true,
+      "lagH": 24
+     },
+     {
+      "n": "办公室钥匙",
+      "t": "物理",
+      "off": false,
+      "lagH": 0
+     }
+    ]
+   }
+  },
+  "zx_warrtrack": {
+   "fields": [
+    "done",
+    "endH",
+    "item",
+    "n",
+    "told"
+   ],
+   "arrays": [
+    "issues"
+   ],
+   "fn": "warrtrack",
+   "sample": {
+    "type": "zx_warrtrack",
+    "n": "质保追踪",
+    "item": "洗碗机",
+    "endH": 360,
+    "issues": [
+     {
+      "n": "排水慢",
+      "h": 0,
+      "told": true
+     },
+     {
+      "n": "门封条老化",
+      "h": 120,
+      "told": false
+     }
+    ]
+   }
+  },
+  "zx_poll": {
+   "fields": [
+    "k",
+    "t",
+    "v"
+   ],
+   "arrays": [
+    "options"
+   ],
+   "fn": "poll",
+   "sample": {
+    "type": "zx_poll",
+    "q": "这次发布选哪个时间？",
+    "multi": false,
+    "options": [
+     {
+      "k": "fri",
+      "t": "周五晚",
+      "v": 12
+     },
+     {
+      "k": "sat",
+      "t": "周六早",
+      "v": 27
+     },
+     {
+      "k": "sun",
+      "t": "周日晚",
+      "v": 9
+     }
+    ]
+   }
+  },
+  "zx_transfer": {
+   "fields": [
+    "k",
+    "n",
+    "side"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "transfer"
+  },
+  "zx_chips": {
+   "fields": [],
+   "arrays": [
+    "tags"
+   ],
+   "fn": "chips",
+   "sample": {
+    "type": "zx_chips",
+    "tags": [
+     "性能",
+     "内存",
+     "启动速度",
+     "崩溃",
+     "UI",
+     "网络"
+    ]
+   }
+  },
+  "zx_pin": {
+   "fields": [
+    "len",
+    "mask"
+   ],
+   "arrays": [],
+   "fn": "pin",
+   "sample": {
+    "type": "zx_pin",
+    "len": 6,
+    "mask": "●"
+   }
+  },
+  "zx_dial": {
+   "fields": [
+    "max",
+    "min",
+    "v"
+   ],
+   "arrays": [],
+   "fn": "dial",
+   "sample": {
+    "type": "zx_dial",
+    "min": 0,
+    "max": 100,
+    "v": 62,
+    "label": "音量"
+   }
+  },
+  "zx_joystick": {
+   "fields": [
+    "dead"
+   ],
+   "arrays": [],
+   "fn": "joystick",
+   "sample": {
+    "type": "zx_joystick",
+    "dead": 0.08
+   }
+  },
+  "zx_timepicker": {
+   "fields": [
+    "h",
+    "m",
+    "step"
+   ],
+   "arrays": [],
+   "fn": "timepicker",
+   "sample": {
+    "type": "zx_timepicker",
+    "h": 9,
+    "m": 30,
+    "step": 5
+   }
+  },
+  "zx_slidergroup": {
+   "fields": [
+    "budget",
+    "k",
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "slidergroup",
+   "sample": {
+    "type": "zx_slidergroup",
+    "budget": 100,
+    "items": [
+     {
+      "k": "cpu",
+      "n": "CPU",
+      "v": 40
+     },
+     {
+      "k": "mem",
+      "n": "内存",
+      "v": 30
+     },
+     {
+      "k": "io",
+      "n": "IO",
+      "v": 30
+     }
+    ]
+   }
+  },
+  "zx_sortable": {
+   "fields": [
+    "k",
+    "n"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "sortable"
+  },
+  "zx_cardflip": {
+   "fields": [
+    "a",
+    "q"
+   ],
+   "arrays": [
+    "cards"
+   ],
+   "fn": "cardflip"
+  },
+  "zx_comment": {
+   "fields": [
+    "text",
+    "who"
+   ],
+   "arrays": [
+    "comments"
+   ],
+   "fn": "comment"
+  },
+  "zx_seek": {
+   "fields": [
+    "at",
+    "dur",
+    "t"
+   ],
+   "arrays": [
+    "marks"
+   ],
+   "fn": "seek"
+  },
+  "zx_wordcloud": {
+   "fields": [
+    "t",
+    "w"
+   ],
+   "arrays": [
+    "words"
+   ],
+   "fn": "wordcloud",
+   "sample": {
+    "type": "zx_wordcloud",
+    "words": [
+     {
+      "t": "性能",
+      "w": 42
+     },
+     {
+      "t": "内存",
+      "w": 31
+     },
+     {
+      "t": "启动",
+      "w": 27
+     },
+     {
+      "t": "崩溃",
+      "w": 18
+     },
+     {
+      "t": "UI",
+      "w": 14
+     },
+     {
+      "t": "网络",
+      "w": 11
+     }
+    ]
+   }
+  },
+  "zx_funnel": {
+   "fields": [
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "stages"
+   ],
+   "fn": "funnel",
+   "sample": {
+    "type": "zx_funnel",
+    "stages": [
+     {
+      "n": "访问",
+      "v": 12400
+     },
+     {
+      "n": "注册",
+      "v": 4200
+     },
+     {
+      "n": "激活",
+      "v": 1800
+     },
+     {
+      "n": "付费",
+      "v": 620
+     }
+    ]
+   }
+  },
+  "zx_treemap": {
+   "fields": [
+    "k",
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "treemap",
+   "sample": {
+    "type": "zx_treemap",
+    "items": [
+     {
+      "k": "img",
+      "n": "图片",
+      "v": 4200
+     },
+     {
+      "k": "js",
+      "n": "JS",
+      "v": 2100
+     },
+     {
+      "k": "css",
+      "n": "CSS",
+      "v": 800
+     },
+     {
+      "k": "font",
+      "n": "字体",
+      "v": 640
+     }
+    ]
+   }
+  },
+  "zx_chord": {
+   "fields": [
+    "from",
+    "to",
+    "v"
+   ],
+   "arrays": [
+    "links",
+    "nodes"
+   ],
+   "fn": "chord",
+   "sample": {
+    "type": "zx_chord",
+    "nodes": [
+     "首页",
+     "搜索",
+     "详情",
+     "结算"
+    ],
+    "links": [
+     {
+      "from": 0,
+      "to": 1,
+      "v": 52
+     },
+     {
+      "from": 1,
+      "to": 2,
+      "v": 38
+     },
+     {
+      "from": 2,
+      "to": 3,
+      "v": 21
+     },
+     {
+      "from": 0,
+      "to": 2,
+      "v": 14
+     }
+    ]
+   }
+  },
+  "zx_sparkline": {
+   "fields": [],
+   "arrays": [
+    "points"
+   ],
+   "fn": "sparkline",
+   "sample": {
+    "type": "zx_sparkline",
+    "label": "日活",
+    "points": [
+     88,
+     92,
+     85,
+     97,
+     103,
+     99,
+     112
+    ]
+   }
+  },
+  "zx_hotspot": {
+   "fields": [
+    "placeholder",
+    "src",
+    "t",
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "spots"
+   ],
+   "fn": "hotspot"
+  },
+  "zx_segmented": {
+   "fields": [
+    "rec",
+    "sel",
+    "t"
+   ],
+   "arrays": [
+    "segs"
+   ],
+   "fn": "segmented"
+  },
+  "zx_mention": {
+   "fields": [
+    "k",
+    "n"
+   ],
+   "arrays": [
+    "people"
+   ],
+   "fn": "mention"
+  },
+  "zx_dropzone": {
+   "fields": [
+    "maxSizeMb"
+   ],
+   "arrays": [
+    "accept"
+   ],
+   "fn": "dropzone",
+   "sample": {
+    "type": "zx_dropzone",
+    "accept": [
+     "png",
+     "jpg",
+     "pdf"
+    ],
+    "maxSizeMb": 10,
+    "hint": "拖入截图或日志文件"
+   }
+  },
+  "zx_resizable": {
+   "fields": [
+    "ratio"
+   ],
+   "arrays": [
+    "left",
+    "right"
+   ],
+   "fn": "resizable",
+   "sample": {
+    "type": "zx_resizable",
+    "ratio": 0.5,
+    "left": [
+     "改动前",
+     "旧逻辑"
+    ],
+    "right": [
+     "改动后",
+     "新逻辑"
+    ]
+   }
+  },
+  "zx_tour": {
+   "fields": [
+    "at",
+    "t"
+   ],
+   "arrays": [
+    "steps"
+   ],
+   "fn": "tour"
+  },
+  "zx_swipe": {
+   "fields": [
+    "k",
+    "t"
+   ],
+   "arrays": [
+    "acts",
+    "items"
+   ],
+   "fn": "swipe"
+  },
+  "zx_matrix": {
+   "fields": [
+    "k",
+    "n"
+   ],
+   "arrays": [
+    "cols",
+    "rows",
+    "v"
+   ],
+   "fn": "matrix",
+   "sample": {
+    "type": "zx_matrix",
+    "cols": [
+     "iOS",
+     "Android",
+     "Web"
+    ],
+    "rows": [
+     {
+      "k": "crash",
+      "n": "崩溃",
+      "v": [
+       12,
+       31,
+       4
+      ]
+     },
+     {
+      "k": "slow",
+      "n": "卡顿",
+      "v": [
+       8,
+       15,
+       22
+      ]
+     }
+    ]
+   }
+  },
+  "zx_autocomplete": {
+   "fields": [
+    "k",
+    "t"
+   ],
+   "arrays": [
+    "options"
+   ],
+   "fn": "autocomplete"
+  },
+  "zx_spin": {
+   "fields": [],
+   "arrays": [
+    "sectors"
+   ],
+   "fn": "spin",
+   "sample": {
+    "type": "zx_spin",
+    "sectors": [
+     "一等奖",
+     "二等奖",
+     "三等奖",
+     "谢谢参与"
+    ]
+   }
+  },
+  "zx_barcode": {
+   "fields": [
+    "code"
+   ],
+   "arrays": [],
+   "fn": "barcode",
+   "sample": {
+    "type": "zx_barcode",
+    "code": "ZORV-2026-0417"
+   }
+  },
+  "zx_dualist": {
+   "fields": [
+    "a",
+    "b"
+   ],
+   "arrays": [
+    "pairs"
+   ],
+   "fn": "dualist",
+   "sample": {
+    "type": "zx_dualist",
+    "leftTitle": "修改前",
+    "rightTitle": "修改后",
+    "pairs": [
+     {
+      "a": "minSdk 23",
+      "b": "minSdk 26"
+     },
+     {
+      "a": "Kotlin 1.9",
+      "b": "Kotlin 1.9"
+     }
+    ]
+   }
+  },
+  "zx_scrubber": {
+   "fields": [
+    "max",
+    "min",
+    "v"
+   ],
+   "arrays": [],
+   "fn": "scrubber",
+   "sample": {
+    "type": "zx_scrubber",
+    "label": "间距",
+    "min": 0,
+    "max": 48,
+    "v": 16
+   }
+  },
+  "zx_bento": {
+   "fields": [
+    "k",
+    "span",
+    "t"
+   ],
+   "arrays": [
+    "cells"
+   ],
+   "fn": "bento",
+   "sample": {
+    "type": "zx_bento",
+    "cells": [
+     {
+      "k": "dau",
+      "t": "日活",
+      "v": "12.4k",
+      "span": 2
+     },
+     {
+      "k": "crash",
+      "t": "崩溃率",
+      "v": "0.42%"
+     },
+     {
+      "k": "lat",
+      "t": "延迟",
+      "v": "86ms"
+     }
+    ]
+   }
+  },
+  "zx_minmap": {
+   "fields": [
+    "at",
+    "k",
+    "t"
+   ],
+   "arrays": [
+    "blocks"
+   ],
+   "fn": "minmap"
+  },
+  "zx_statelist": {
+   "fields": [
+    "at",
+    "n"
+   ],
+   "arrays": [
+    "states"
+   ],
+   "fn": "statelist"
+  },
+  "zx_legend": {
+   "fields": [
+    "k",
+    "n",
+    "on"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "legend",
+   "sample": {
+    "type": "zx_legend",
+    "items": [
+     {
+      "k": "ios",
+      "n": "iOS",
+      "on": true
+     },
+     {
+      "k": "and",
+      "n": "Android",
+      "on": true
+     },
+     {
+      "k": "web",
+      "n": "Web",
+      "on": false
+     }
+    ]
+   }
+  },
+  "zx_radiogroup": {
+   "fields": [
+    "d",
+    "k",
+    "sel",
+    "t"
+   ],
+   "arrays": [
+    "options"
+   ],
+   "fn": "radiogroup"
+  },
+  "zx_checklist": {
+   "fields": [
+    "k",
+    "t"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "checklist",
+   "sample": {
+    "type": "zx_checklist",
+    "items": [
+     {
+      "k": "t1",
+      "t": "引契约包",
+      "on": true
+     },
+     {
+      "k": "t2",
+      "t": "注册扩展点",
+      "on": false
+     },
+     {
+      "k": "t3",
+      "t": "对齐签名",
+      "on": false
+     }
+    ]
+   }
+  },
+  "zx_avatargroup": {
+   "fields": [
+    "max",
+    "n"
+   ],
+   "arrays": [
+    "people"
+   ],
+   "fn": "avatargroup"
+  },
+  "zx_meter": {
+   "fields": [
+    "at",
+    "max",
+    "min",
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "levels"
+   ],
+   "fn": "meter",
+   "sample": {
+    "type": "zx_meter",
+    "label": "内存占用",
+    "v": 62,
+    "min": 0,
+    "max": 100,
+    "levels": [
+     {
+      "n": "正常",
+      "at": 0
+     },
+     {
+      "n": "偏高",
+      "at": 60
+     },
+     {
+      "n": "危险",
+      "at": 85
+     }
+    ]
+   }
+  },
+  "zx_ring": {
+   "fields": [
+    "v"
+   ],
+   "arrays": [],
+   "fn": "ring",
+   "sample": {
+    "type": "zx_ring",
+    "v": 72,
+    "label": "构建进度",
+    "sub": "正在编译模块 4/7"
+   }
+  },
+  "zx_stat": {
+   "fields": [
+    "delta",
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "stat",
+   "sample": {
+    "type": "zx_stat",
+    "items": [
+     {
+      "n": "日活",
+      "v": "12.4k",
+      "delta": 8.2
+     },
+     {
+      "n": "崩溃率",
+      "v": "0.42%",
+      "delta": -0.3,
+      "lowerBetter": true
+     }
+    ]
+   }
+  },
+  "zx_swatch": {
+   "fields": [
+    "hex",
+    "sel"
+   ],
+   "arrays": [
+    "colors"
+   ],
+   "fn": "swatch"
+  },
+  "zx_notice": {
+   "fields": [
+    "d",
+    "lv",
+    "ttlMs"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "notice"
+  },
+  "zx_price": {
+   "fields": [
+    "k",
+    "n",
+    "price",
+    "rec"
+   ],
+   "arrays": [
+    "feats",
+    "plans"
+   ],
+   "fn": "price",
+   "sample": {
+    "type": "zx_price",
+    "plans": [
+     {
+      "k": "free",
+      "n": "免费",
+      "price": "0",
+      "unit": "/月",
+      "feats": [
+       "1 个会话"
+      ]
+     },
+     {
+      "k": "pro",
+      "n": "专业",
+      "price": "39",
+      "unit": "/月",
+      "rec": true,
+      "feats": [
+       "无限会话",
+       "本地模型",
+       "插件"
+      ]
+     }
+    ]
+   }
+  },
+  "zx_keyvalue": {
+   "fields": [
+    "k"
+   ],
+   "arrays": [
+    "rows"
+   ],
+   "fn": "keyvalue",
+   "sample": {
+    "type": "zx_keyvalue",
+    "rows": [
+     {
+      "k": "版本",
+      "v": "1.0.90"
+     },
+     {
+      "k": "包名",
+      "v": "com.ai.assistance.quro",
+      "mono": true
+     },
+     {
+      "k": "签名",
+      "v": "D9:5B:1B:EC",
+      "mono": true
+     }
+    ]
+   }
+  },
+  "zx_inputmask": {
+   "fields": [
+    "mask",
+    "ph",
+    "v"
+   ],
+   "arrays": [],
+   "fn": "inputmask",
+   "sample": {
+    "type": "zx_inputmask",
+    "label": "卡号",
+    "mask": "#### #### #### ####",
+    "ph": "#"
+   }
+  },
+  "zx_datalist": {
+   "fields": [
+    "maxLen"
+   ],
+   "arrays": [
+    "rows"
+   ],
+   "fn": "datalist",
+   "sample": {
+    "type": "zx_datalist",
+    "hint": "添加白名单域名",
+    "maxLen": 40,
+    "rows": [
+     "api.example.com",
+     "cdn.example.com"
+    ]
+   }
+  },
+  "zx_waterfall": {
+   "fields": [
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "steps"
+   ],
+   "fn": "waterfall",
+   "sample": {
+    "type": "zx_waterfall",
+    "steps": [
+     {
+      "n": "期初",
+      "v": 1200
+     },
+     {
+      "n": "新增",
+      "v": 380
+     },
+     {
+      "n": "流失",
+      "v": -150
+     },
+     {
+      "n": "期末",
+      "v": 1430
+     }
+    ]
+   }
+  },
+  "zx_pyramid": {
+   "fields": [
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "levels"
+   ],
+   "fn": "pyramid",
+   "sample": {
+    "type": "zx_pyramid",
+    "levels": [
+     {
+      "n": "全部访问",
+      "v": 10000
+     },
+     {
+      "n": "注册",
+      "v": 3200
+     },
+     {
+      "n": "付费",
+      "v": 480
+     }
+    ]
+   }
+  },
+  "zx_bubble": {
+   "fields": [
+    "n",
+    "r",
+    "x",
+    "y"
+   ],
+   "arrays": [
+    "points"
+   ],
+   "fn": "bubble",
+   "sample": {
+    "type": "zx_bubble",
+    "points": [
+     {
+      "x": 12,
+      "y": 80,
+      "r": 40,
+      "n": "A"
+     },
+     {
+      "x": 40,
+      "y": 35,
+      "r": 22,
+      "n": "B"
+     },
+     {
+      "x": 70,
+      "y": 60,
+      "r": 30,
+      "n": "C"
+     }
+    ]
+   }
+  },
+  "zx_venn": {
+   "fields": [
+    "hex",
+    "n",
+    "v"
+   ],
+   "arrays": [
+    "groups"
+   ],
+   "fn": "venn",
+   "sample": {
+    "type": "zx_venn",
+    "groups": [
+     {
+      "n": "用过 A",
+      "v": 820,
+      "hex": "#5046E4"
+     },
+     {
+      "n": "用过 B",
+      "v": 640,
+      "hex": "#3FBF7F"
+     }
+    ]
+   }
+  },
+  "zx_candle": {
+   "fields": [
+    "c",
+    "h",
+    "l",
+    "o"
+   ],
+   "arrays": [
+    "bars"
+   ],
+   "fn": "candle",
+   "sample": {
+    "type": "zx_candle",
+    "bars": [
+     {
+      "h": 42,
+      "l": 38,
+      "o": 39,
+      "c": 41
+     },
+     {
+      "h": 44,
+      "l": 40,
+      "o": 41,
+      "c": 40
+     }
+    ]
+   }
+  },
+  "zx_dag": {
+   "fields": [
+    "f",
+    "t"
+   ],
+   "arrays": [
+    "edges",
+    "nodes"
+   ],
+   "fn": "dag",
+   "sample": {
+    "type": "zx_dag",
+    "nodes": [
+     "取数据",
+     "清洗",
+     "聚合",
+     "出图"
+    ],
+    "edges": [
+     {
+      "f": 0,
+      "t": 1
+     },
+     {
+      "f": 1,
+      "t": 2
+     },
+     {
+      "f": 2,
+      "t": 3
+     }
+    ]
+   }
+  },
+  "zx_swimlane": {
+   "fields": [
+    "lv",
+    "n"
+   ],
+   "arrays": [
+    "cells",
+    "lanes"
+   ],
+   "fn": "swimlane",
+   "sample": {
+    "type": "zx_swimlane",
+    "lanes": [
+     {
+      "n": "前端",
+      "cells": [
+       {
+        "t": "搭骨架",
+        "lv": "done"
+       },
+       {
+        "t": "接接口",
+        "lv": "doing"
+       }
+      ]
+     },
+     {
+      "n": "后端",
+      "cells": [
+       {
+        "t": "建表",
+        "lv": "done"
+       },
+       {
+        "t": "写接口",
+        "lv": "block"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "zx_mindmap": {
+   "fields": [
+    "n",
+    "root"
+   ],
+   "arrays": [
+    "arms",
+    "kids"
+   ],
+   "fn": "mindmap"
+  },
+  "zx_gallery": {
+   "fields": [
+    "hex",
+    "k"
+   ],
+   "arrays": [
+    "items"
+   ],
+   "fn": "gallery",
+   "sample": {
+    "type": "zx_gallery",
+    "items": [
+     {
+      "k": "s1",
+      "n": "首屏",
+      "hex": "#5046E4"
+     },
+     {
+      "k": "s2",
+      "n": "对话",
+      "hex": "#3FBF7F"
+     }
+    ]
+   }
+  },
+  "zx_wizard": {
+   "fields": [
+    "k",
+    "q",
+    "t"
+   ],
+   "arrays": [
+    "options",
+    "steps"
+   ],
+   "fn": "wizard",
+   "sample": {
+    "type": "zx_wizard",
+    "steps": [
+     {
+      "k": "os",
+      "q": "目标系统？",
+      "options": [
+       {
+        "k": "a",
+        "t": "Android 11+"
+       }
+      ]
+     },
+     {
+      "k": "arch",
+      "q": "架构？",
+      "options": [
+       {
+        "k": "mvvm",
+        "t": "MVVM"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "zx_spreadsheet": {
+   "fields": [
+    "k"
+   ],
+   "arrays": [
+    "cols",
+    "rows",
+    "v"
+   ],
+   "fn": "spreadsheet",
+   "sample": {
+    "type": "zx_spreadsheet",
+    "cols": [
+     "预算",
+     "实际"
+    ],
+    "rows": [
+     {
+      "k": "dev",
+      "n": "研发",
+      "v": [
+       "12000",
+       "9800"
+      ]
+     },
+     {
+      "k": "ops",
+      "n": "运维",
+      "v": [
+       "4000",
+       "4300"
+      ]
+     }
+    ]
+   }
+  },
+  "zx_conversation": {
+   "fields": [
+    "t",
+    "who"
+   ],
+   "arrays": [
+    "turns"
+   ],
+   "fn": "conversation"
+  },
+  "zx_master": {
+   "fields": [],
+   "arrays": [],
+   "fn": "",
+   "sample": {
+    "type": "zx_master",
+    "ratio": 0.4,
+    "children": [
+     {
+      "type": "zx_tree",
+      "nodes": [
+       {
+        "n": "a",
+        "path": "a"
+       },
+       {
+        "n": "b",
+        "path": "b"
+       }
+      ]
+     },
+     {
+      "type": "zx_terminal",
+      "cmd": "cat a",
+      "lines": []
+     }
+    ]
+   }
+  },
+  "zx_stagger": {
+   "fields": [],
+   "arrays": [],
+   "fn": "",
+   "sample": {
+    "type": "zx_stagger",
+    "children": [
+     {
+      "type": "zx_media",
+      "kind": "image",
+      "src": "/a.png"
+     },
+     {
+      "type": "zx_terminal",
+      "cmd": "ls",
+      "lines": []
+     }
+    ]
+   }
+  },
+  "zx_accordion": {
+   "fields": [],
+   "arrays": [],
+   "fn": ""
+  },
+  "zx_carousel": {
+   "fields": [],
+   "arrays": [],
+   "fn": ""
+  },
+  "zx_grid": {
+   "fields": [],
+   "arrays": [],
+   "fn": ""
+  },
+  "zx_tabs": {
+   "fields": [],
+   "arrays": [],
+   "fn": ""
+  }
+ }
+}

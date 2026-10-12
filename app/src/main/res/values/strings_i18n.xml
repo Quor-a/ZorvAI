@@ -4066,4 +4066,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
 
     <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
     <string name="qk_04073" formatted="false">Web UI 卡片缺少 component 或 dsl 参数</string>
+
+    <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
+    <string name="qk_04074" formatted="false">ZorvAI · Web UI</string>
 </resources>

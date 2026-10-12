@@ -65,14 +65,22 @@ object ZxWebCard {
 
     const val ASSET_NAME = "zx_card_runtime.html"
 
+    /** zx 组件字段契约（从 zxwidget 的 ZxDsl* 提取），Web 运行时按它编译布局。 */
+    const val CONTRACTS_NAME = "zx_contracts.json"
+
     /**
      * 把运行时 HTML 与初始 payload 合成一份可直接加载的文档。
      *
      * payload 随 HTML 一起下发（而不是等 WebView 起来再 `evaluateJavascript`），
      * 少一次异步握手——卡片打开即渲染，不会闪一下空白。
+     *
+     * 组件契约走 `<script type="application/json">` 注入：JSON 原文只做
+     * `</script` 一类序列结束符转义，不必做整段字符串字面量转义
+     * （190 KB 的契约用字符串字面量注进来，转义漏一个就整段白屏）。
      */
     fun buildHtml(
         assetHtml: String,
+        contractsJson: String,
         component: String,
         title: String,
         dsl: String,
@@ -108,12 +116,22 @@ object ZxWebCard {
             })();
             </script>
         """.trimIndent()
+
+        // 契约注入：只挡序列结束符，其余原文直出
+        val contractsSafe = contractsJson
+            .replace("</", "<\\/")
+            .replace("<!--", "<\\!--")
+        val withContracts = assetHtml.replace(
+            "/*__ZX_CONTRACTS__*/",
+            contractsSafe.ifBlank { "{}" },
+        )
+
         val marker = "</body>"
-        val at = assetHtml.lastIndexOf(marker)
+        val at = withContracts.lastIndexOf(marker)
         return if (at >= 0) {
-            assetHtml.substring(0, at) + inject + "\n" + assetHtml.substring(at)
+            withContracts.substring(0, at) + inject + "\n" + withContracts.substring(at)
         } else {
-            assetHtml + inject
+            withContracts + inject
         }
     }
 
@@ -171,6 +189,13 @@ fun ZxWebCardDialog(
     val assetHtml = remember(context) {
         runCatching {
             context.assets.open(ZxWebCard.ASSET_NAME).bufferedReader().use { it.readText() }
+        }.getOrElse { "" }
+    }
+
+    // 组件契约单独读：190 KB，与运行时 HTML 分离，注入时只做序列结束符转义
+    val contractsJson = remember(context) {
+        runCatching {
+            context.assets.open(ZxWebCard.CONTRACTS_NAME).bufferedReader().use { it.readText() }
         }.getOrElse { "" }
     }
 
@@ -243,7 +268,14 @@ fun ZxWebCardDialog(
                     // 比在 update 里判断「是否真的变了」更直白，也不会漏掉初次加载。
                     key(reloadKey) {
                         ZxWebCardView(
-                            html = ZxWebCard.buildHtml(assetHtml, component, title, dsl, dark),
+                            html = ZxWebCard.buildHtml(
+                                assetHtml = assetHtml,
+                                contractsJson = contractsJson,
+                                component = component,
+                                title = title,
+                                dsl = dsl,
+                                dark = dark,
+                            ),
                             dark = dark,
                             onInteract = onInteract,
                             modifier = Modifier
@@ -267,9 +299,15 @@ private fun ZxWebCardView(
     modifier: Modifier = Modifier,
 ) {
     var webView by remember { mutableStateOf<WebView?>(null) }
+    /**
+     * 页面是否就绪。loadDataWithBaseURL 是异步的，webView 赋值 ≠ 页面脚本已定义；
+     * 不等 onPageFinished 就下发，首次深色主题会打在还没有 window.ZorvAI 的页面上而失效。
+     */
+    var wvReady by remember { mutableStateOf(false) }
 
     // 主题切换不重建 WebView，只切根节点 class —— 省一次整页重载，也不丢表单状态
-    LaunchedEffect(dark, webView) {
+    LaunchedEffect(dark, wvReady) {
+        if (!wvReady) return@LaunchedEffect
         webView?.evaluateJavascript(
             "if(window.ZorvAI&&window.ZorvAI.setDark)window.ZorvAI.setDark($dark);",
             null,
@@ -303,7 +341,11 @@ private fun ZxWebCardView(
                         },
                         "ZorvAIBridge",
                     )
-                    webViewClient = object : WebViewClient() { }
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            wvReady = true
+                        }
+                    }
                     loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
                 }
             },

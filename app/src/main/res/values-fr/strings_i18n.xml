@@ -3916,4 +3916,7 @@ Vos modèles configurés sont conservés ; vous pouvez aussi saisir un nom de mo
 
     <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
     <string name="qk_04073" formatted="false">Action carte Web UI : component ou dsl manquant</string>
+
+    <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
+    <string name="qk_04074" formatted="false">ZorvAI - Web UI</string>
 </resources>

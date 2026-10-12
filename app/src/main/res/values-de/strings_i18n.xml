@@ -3916,4 +3916,7 @@ Ihre konfigurierten Modelle bleiben erhalten; Sie können den Modellnamen auch m
 
     <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
     <string name="qk_04073" formatted="false">Web-UI-Kartenaktion ohne component oder dsl</string>
+
+    <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
+    <string name="qk_04074" formatted="false">ZorvAI - Web UI</string>
 </resources>
