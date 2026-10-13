@@ -166,7 +166,10 @@ function renderChrome(){
     document.documentElement.classList.toggle("dark",darkNow);
     pushDark();
   }
-  $send.textContent=state.composer.busy?"■":"➤";
+  var sendIco=document.getElementById("send-ico");
+  var stopIco=document.getElementById("stop-ico");
+  if(sendIco)sendIco.hidden=state.composer.busy;
+  if(stopIco)stopIco.hidden=!state.composer.busy;
   $send.className=state.composer.busy?"stop":"";
   $send.setAttribute("aria-label",state.composer.busy?"停止":"发送");
   $link.textContent=state.lan||(state.port?("127.0.0.1:"+state.port):"");

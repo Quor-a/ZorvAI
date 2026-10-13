@@ -5,7 +5,12 @@
 <!-- 有它才是真正的移动端布局视口；没有它 Android WebView 会按 980px 排版再缩 -->
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#C25A38">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>ZorvAI</title>
+<!-- 品牌标识：陶土圆点 + 纸环（内联 data URI，离线可用） -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23F4F1EA' stroke='%23C25A38' stroke-width='5'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23C25A38'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -59,11 +64,18 @@
       <button type="button" class="mode" id="ws">工作区</button>
     </div>
     <div class="crow">
-      <button id="btn-tools" type="button" class="tbtn" title="工具面板">+</button>
-      <button id="btn-attach" type="button" class="tbtn" title="上传文件">📎</button>
+      <button id="btn-tools" type="button" class="tbtn" title="工具面板" aria-label="工具面板">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button id="btn-attach" type="button" class="tbtn" title="上传文件" aria-label="上传文件">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      </button>
       <textarea id="inp" rows="1" placeholder="发消息…" autocomplete="off"
                 autocapitalize="sentences" spellcheck="false"></textarea>
-      <button id="send" type="button" aria-label="发送"></button>
+      <button id="send" type="button" aria-label="发送">
+        <svg id="send-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>
+        <svg id="stop-ico" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" hidden><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      </button>
     </div>
     <div id="cfoot">
       <span id="cnt">0 条消息</span>
