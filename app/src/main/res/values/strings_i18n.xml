@@ -4088,4 +4088,5 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_04090">地址</string>
     <string name="qk_04091" formatted="false">服务未启动。打开开关后 ZorvAI 会常驻后台，返回或切到别的应用都不影响这个链接。</string>
     <string name="qk_04092" formatted="false">地址暂时拿不到：先打开过一次 ZorvAI 对话框，服务才有内容可投。</string>
+    <string name="qk_04100">在浏览器打开</string>
 </resources>

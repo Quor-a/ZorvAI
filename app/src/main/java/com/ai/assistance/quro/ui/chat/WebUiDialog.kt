@@ -1,5 +1,8 @@
 package com.ai.assistance.quro.ui.chat
 
+import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -139,11 +142,20 @@ fun WebUiLinkDialog(
                                 .padding(vertical = 6.dp),
                         )
                         Spacer(Modifier.height(4.dp))
-                        TextButton(onClick = {
-                            clip.setText(AnnotatedString(u))
-                            copied = true
-                        }) {
-                            Text(if (copied) qstr(R.string.qk_04082) else qstr(R.string.qk_04081))
+                        Row {
+                            TextButton(onClick = {
+                                clip.setText(AnnotatedString(u))
+                                copied = true
+                            }) {
+                                Text(if (copied) qstr(R.string.qk_04082) else qstr(R.string.qk_04081))
+                            }
+                            TextButton(onClick = {
+                                runCatching {
+                                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)))
+                                }
+                            }) {
+                                Text(qstr(R.string.qk_04100))
+                            }
                         }
                     }
                     enabled -> Text(

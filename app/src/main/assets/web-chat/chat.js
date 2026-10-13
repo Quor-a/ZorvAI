@@ -748,7 +748,8 @@ var FEATURES=[
   {action:"ui_open_schedule",label:"调度"},
   {action:"ui_open_workflow",label:"工作流"},
   {action:"ui_open_bots",label:"Bots"},
-  {action:"ui_open_mcp",label:"MCP"}
+  {action:"ui_open_mcp",label:"MCP"},
+  {action:"ui_open_webui",label:"Web UI"}
 ];
 
 function fillList(boxId,items){
