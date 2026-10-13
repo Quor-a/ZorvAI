@@ -201,6 +201,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.SolidColor
@@ -231,11 +232,13 @@ import com.ai.assistance.quro.ui.data.SAMPLE_MESSAGES
 import com.ai.assistance.quro.ui.data.SAMPLE_PERSONAS
 import com.ai.assistance.quro.ui.data.ThinkBlock
 import com.ai.assistance.quro.ui.data.ToolCallUi
+import com.ai.assistance.quro.ui.data.ZxInlineSpec
 import com.ai.assistance.quro.ui.icons.LucideIcon
 import com.ai.assistance.quro.ui.chat.ChatPermissionModeBar
 import com.ai.assistance.quro.ui.chat.ZxWebCard
-import com.ai.assistance.quro.ui.chat.ZxWebCardDialog
-import com.ai.assistance.quro.ui.chat.ZxWebChatDialog
+import com.ai.assistance.quro.ui.chat.ZxWidgetInline
+import com.ai.assistance.quro.ui.chat.zxSpecOf
+import com.ai.assistance.quro.ui.chat.WebUiDialog
 import com.ai.assistance.quro.ui.chat.ChatTopBar
 import com.ai.assistance.quro.core.policy.QuroPolicy
 import com.ai.assistance.quro.core.policy.QuroPolicyStore
@@ -501,6 +504,15 @@ fun ChatScreen(
         val aggTools = mutableListOf<ToolCallUi>()
         val aggText = StringBuilder()
         val aggCards = mutableListOf<QuroChatCard>()
+        /**
+         * 本聚合段要内联渲染的 zxwidget。
+         *
+         * 🔴 zxwidget「不是卡片方式，是直接渲染在对话框的」（用户 2026-10-13 拍板）。
+         *   它的载体是模型那次 `zx_web_card` 工具调用——component/dsl 就在参数里，
+         *   所以在聚合阶段抽成 [ZxInlineSpec]，**不给 QuroMessage 加字段**，
+         *   历史重放与流式过程都能正常渲染。
+         */
+        val aggZx = mutableListOf<ZxInlineSpec>()
         val aggAttach = mutableListOf<Attachment>()
         // 🔴 当前聚合段的发言人（集群/子智能体的角色名）。null = 普通助手消息。
         // 见下方 else 分支：**发言人不同就 flush**，绝不把不同角色的话并进同一个气泡。
@@ -510,7 +522,9 @@ fun ChatScreen(
             if (!hasAgg) return
             val think = if (aggThinkLines.isNotEmpty()) ThinkBlock(aggThinkLines.toList()) else null
             val text = aggText.toString().takeIf { it.isNotBlank() }
-            if (think != null || aggTools.isNotEmpty() || text != null || aggCards.isNotEmpty() || aggAttach.isNotEmpty()) {
+            if (think != null || aggTools.isNotEmpty() || text != null || aggCards.isNotEmpty() ||
+                aggAttach.isNotEmpty() || aggZx.isNotEmpty()
+            ) {
                 // 🔴 发言人优先用聚合段自己的 senderName（集群/子智能体按角色分段后才非空），
                 // 没有才回退人格名。头像同理：集群角色用首字符当头像，
                 // 否则 8 个角色顶着同一张脸，用户根本分不清谁在说话。
@@ -530,11 +544,13 @@ fun ChatScreen(
                         think = think,
                         tools = if (aggTools.isEmpty()) null else aggTools.toList(),
                         cards = aggCards.toList(),
+                        zxWidgets = aggZx.toList(),
                     )
                 )
             }
             hasAgg = false
             aggThinkLines.clear(); aggTools.clear(); aggText.clear(); aggCards.clear(); aggAttach.clear(); aggIds.clear()
+            aggZx.clear()
             aggSpeaker = null
         }
 
@@ -578,6 +594,13 @@ fun ChatScreen(
                     m.reasoning?.takeIf { it.isNotBlank() }?.lineSequence()
                         ?.filter { it.isNotBlank() }?.forEach { aggThinkLines.add(it) }
                     m.toolCalls?.forEach { c ->
+                        // zxwidget：这不是「一次工具调用」，而是用户要看到的一块**动态交互界面**。
+                        // 抽成内联规格后就地渲染（撑满宽度、长在消息流里），
+                        // 并且**不再**往工具列表里塞一行原始 JSON —— 那正是「卡片方式」的残留观感。
+                        if (c.name == "zx_web_card") {
+                            zxSpecOf(c.arguments)?.let { aggZx.add(it) }
+                            return@forEach
+                        }
                         val r = (c.result ?: fallbackMap[c.id])?.takeIf { !isGarbageToolResult(it) }
                         aggTools.add(ToolCallUi(c.name, c.arguments, r, c.durationMs))
                         // v1057：run_code 的 html 产物 → 对话框内联实时网页预览卡片
@@ -837,48 +860,20 @@ fun ChatScreen(
     var visualAskPrompt by remember { mutableStateOf("") }
     var visualAskOptions by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    // zxwidget 单卡片对话框（zx 交互式卡片族）。与上面两个同族，都由 UiNavigationBus 触发
-    var showZxWebCard by remember { mutableStateOf(false) }
     // 第三个对话框：Web UI 对话框（ZorvAI 对话框的 Web UI 复制品，完整聊天端）
     var showZxWebChat by remember { mutableStateOf(false) }
-    var zxWebCardTitle by remember { mutableStateOf("") }
-    var zxWebCardComponent by remember { mutableStateOf("") }
-    var zxWebCardDsl by remember { mutableStateOf("") }
-    /**
-     * 当前卡片若来自 zx_web_card **工具**调用，这里是它在 [ZxWebCardQueue] 里的 ID。
-     *
-     * 两种来源必须分开处理，否则模型会被喂重复内容：
-     * ① 工具来源（本字段非空）→ 用户交互要作为**工具结果**回传（submitInteraction），本轮对话继续；
-     * ② 动态 UI 动作来源（本字段为空）→ 没有工具在等，交互要作为一条**用户消息**发出去。
-     */
-    var zxWebCardQueueId by remember { mutableStateOf<String?>(null) }
 
     /**
-     * ═══ zx_web_card 工具 → 单卡片对话框 ═══
-     * 工具在后台线程阻塞等用户（[ZxWebCardQueue]），这里消费队列把卡片弹出来。
-     * **没有这一段，工具会一直空等到超时**（120s）才返回——卡片根本不会出现。
-     * 与 visual_popup 走的是同一套「工具阻塞 + UI 消费」模式。
+     * zxwidget 没有「弹出层」了 —— 用户 2026-10-13 拍板：**直接渲染在对话框里**。
+     *
+     * 工具来源的 zxwidget 挂在自己那条 assistant 消息上，由消息流内联渲染
+     * （聚合阶段从 `zx_web_card` 工具调用抽出 [ZxInlineSpec]，见 `aggZx`）；
+     * 动态 UI 动作来源的那条没有消息可挂，走 `vm.showInlineZxWidget` 造一条
+     * 「只给用户看」的消息，同样落在消息流里。
+     *
+     * 所以这里**不再需要**消费 [ZxWebCardQueue] 的 CardAdded 去弹框：
+     * 渲染由消息流负责，工具照样阻塞等用户交互（交互一到就放行）。
      */
-    LaunchedEffect(Unit) {
-        ZxWebCardQueue.eventFlow.collect { ev ->
-            when (ev) {
-                is ZxWebCardQueue.CardEvent.CardAdded -> {
-                    // Web UI 第三个对话框开着：同一张卡已经在它的消息流里内联渲染成动态交互界面，
-                    // 再弹一个单卡片对话框只会挡在全屏页背后——用户看不见也无处可点，工具白等超时。
-                    if (showZxWebChat) return@collect
-                    val card = ZxWebCardQueue.getCurrentCard() ?: return@collect
-                    // 上一张还没关就来了新卡：先放行旧的，避免它空等超时
-                    zxWebCardQueueId?.let { old -> ZxWebCardQueue.dismiss(old) }
-                    zxWebCardQueueId = card.id
-                    zxWebCardTitle = card.title
-                    zxWebCardComponent = card.component
-                    zxWebCardDsl = card.dsl
-                    showZxWebCard = true
-                }
-                is ZxWebCardQueue.CardEvent.CardRemoved -> Unit
-            }
-        }
-    }
 
     // ═══ UI 动作桥：把 AI 调用的 ui_* 工具回调到本组合作用域，打开对应界面/弹层/开关 ═══
     fun handleUiAction(action: String) {
@@ -1127,18 +1122,20 @@ fun ChatScreen(
                         showVisualAsk = true
                     }
 
-                    // zxwidget 单卡片对话框。交互不回发固定文案，
-                    // 而是把「用户在卡片上做了什么」整理成结构化描述喂给模型。
+                    // zxwidget 动态交互界面：**直接渲染在对话框里**，不弹窗。
+                    // 交互不回发固定文案，而是把「用户在界面上做了什么」整理成
+                    // 结构化描述喂给模型。
                     is UiNavigationEvent.ZxWebCard -> {
                         if (event.component.isBlank() || event.dsl.isBlank()) {
-                            QuroDiag.log("ZXWEB", "ZxWebCard 事件缺 component/dsl，已忽略")
+                            QuroDiag.log("ZXWIDGET", "ZxWebCard 事件缺 component/dsl，已忽略")
                         } else {
-                            zxWebCardTitle = event.title
-                            zxWebCardComponent = event.component
-                            zxWebCardDsl = event.dsl
-                            // 动态 UI 动作来源：没有工具在等，交互要走 vm.send 而不是工具结果
-                            zxWebCardQueueId = null
-                            showZxWebCard = true
+                            // 动态 UI 动作来源：没有工具在等，交互走 vm.send；
+                            // 由 vm 造一条「只给用户看」的消息落进消息流，同样内联渲染。
+                            vm.showInlineZxWidget(
+                                component = event.component,
+                                dsl = event.dsl,
+                                title = event.title,
+                            )
                         }
                     }
 
@@ -2251,42 +2248,18 @@ fun ChatScreen(
             )
         }
 
-        // zxwidget 单卡片对话框（zx 交互式卡片族）
-        if (showZxWebCard) {
-            ZxWebCardDialog(
-                component = zxWebCardComponent,
-                title = zxWebCardTitle,
-                dsl = zxWebCardDsl,
-                dark = darkMode,
-                onInteract = { json ->
-                    // 交互即对话：关掉对话框，把「用户做了什么」结构化喂回模型接着推理。
-                    // 两条回路必须分开，否则模型会收到重复内容：
-                    // ① 卡片来自 zx_web_card 工具 → 作为**工具结果**回传，本轮对话直接继续；
-                    // ② 卡片来自动态 UI 动作 → 没有工具在等，作为一条**用户消息**发出去。
-                    showZxWebCard = false
-                    val text = ZxWebCard.summarize(zxWebCardComponent, json)
-                    QuroDiag.log("ZXWEB", text)
-                    val qid = zxWebCardQueueId
-                    val delivered = qid != null && ZxWebCardQueue.submitInteraction(qid, text)
-                    zxWebCardQueueId = null
-                    if (!delivered) vm.send(text)
-                },
-                onDismiss = {
-                    // 用户没交互就关掉：立刻放行工具，别让模型白等满超时
-                    zxWebCardQueueId?.let { ZxWebCardQueue.dismiss(it) }
-                    zxWebCardQueueId = null
-                    showZxWebCard = false
-                },
-            )
-        }
-
-        // 第三个对话框：Web UI 对话框 —— ZorvAI 对话框的 Web UI 复制品。
-        // 整套聊天 UI（消息流 / Markdown / 流式 / 工具调用 / zxwidget 动态交互界面）
-        // 都是网页，与主对话框共用同一个会话：这里发的消息、生成的回复，主对话框里也看得见。
+        // Web UI 对话框 —— **ZorvAI 对话框的投影**（用户 2026-10-13 拍板）。
+        // 它不是第二个聊天应用，也不是「zxwidget 的宿主」：
+        // 服务端（QuroWebUiServer + WebUiProjection）把**本对话框该被看见的块**投出去，
+        // 网页只负责呈现（同会话、同块序列、同顶栏字段）。
+        // 顶栏的 modelName / personaName 与原生 ChatTopBar 取自同两个变量，
+        // 保证投影顶栏不会与主对话框说的是两件事。
         if (showZxWebChat) {
-            ZxWebChatDialog(
+            WebUiDialog(
                 vm = vm,
                 dark = darkMode,
+                modelName = modelLabel,
+                personaName = selectedPersona.name,
                 onDismiss = { showZxWebChat = false },
             )
         }
@@ -3978,6 +3951,45 @@ private fun MessageRow(
             }
         }
         }   // 闭合内层 Box（悬浮头像 + 满宽内容列）
+        // ── zxwidget 动态交互界面：**直接内联渲染在对话框里**，撑满宽度。
+        //    不是弹窗、不进底部卡片栏、也不是气泡内小卡片（`cards` 槽位是那一类）。
+        //    用户 2026-10-13 拍板：「zxwidget 不是卡片方式，是直接渲染在对话框的」。
+        //    与上面 AIP 画布 / 卡片围栏同一套「全宽内联」机制——它们都不该被 280dp 气泡压窄。
+        if (!msg.mine && msg.zxWidgets.isNotEmpty()) {
+            // 暗色判定：zxwidget 页面靠这一位决定皮肤。这里**不**再穿一根 darkMode 参数——
+            // MessageRow / MessageList 都没有它，而 `MaterialTheme.colorScheme` 本身就是
+            // 由 darkMode 派生出来并作用于整棵 UI 树的，读它等价于读 darkMode，
+            // 且省掉两层转发（本仓既有写法：genui/aiapp/ui/RenderTypeBadge.kt）。
+            val zxDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+            Spacer(Modifier.height(8.dp))
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                msg.zxWidgets.forEachIndexed { i, zx ->
+                    key("zxw_${msg.id}_$i") {
+                        ZxWidgetInline(
+                            component = zx.component,
+                            dsl = zx.dsl,
+                            dark = zxDark,
+                            onInteract = { json ->
+                                // 交互即对话：把「用户做了什么」结构化喂回模型接着推理。
+                                // 两条回路必须分开，否则模型收到重复内容：
+                                // ① 有 zx_web_card 工具在等 → 作为**工具结果**回传，本轮直接继续；
+                                // ② 没有（历史重放 / 动态 UI 动作）→ 作为一条**用户消息**发出去。
+                                //
+                                // 🔴 ② 走 `onSend` 而不是 vm.send：MessageRow 是纯展示组件，
+                                //    参数表里没有 vm（写了编译不过）。onSend 在 ChatScreen 处
+                                //    接的就是同一个 send()。
+                                val text = ZxWebCard.summarize(zx.component, json)
+                                QuroDiag.log("ZXWIDGET", text)
+                                if (!ZxWebCardQueue.submitByComponent(zx.component, text)) onSend(text)
+                            },
+                        )
+                    }
+                }
+            }
+        }
         // ── AIP 排版引擎（B 通道）全宽内联：已移出 280dp 内容列，撑满对话框宽度渲染，
         //    与动态 UI / 生成式 UI / 富组件同源机制，避免 280dp 气泡压窄与"文字被覆盖一个盖一个"。
         if (!msg.mine && blocks.any { it is MsgBlock.Aip }) {
@@ -6460,7 +6472,14 @@ private fun parseColorOrNull(s: String): Color? = try {
 
 // ---------------- 消息分块（文本 / 代码块 / 块级 HTML / Markdown） ----------------
 
-private sealed class MsgBlock {
+/**
+ * 对话消息的**块模型**：原生对话框渲染的最小单元。
+ *
+ * 🔴 `internal` 而不是 `private`：Web UI 是 ZorvAI 对话框的**投影**，它必须复用
+ * 同一份块解析结果，而不是自己另写一套 Markdown/围栏解析。改成 internal 就是为了
+ * 让 `ui/webui/WebUiProjection.kt` 能调用同一个 [parseBlocks]。两侧同源 = 投影不会漂移。
+ */
+internal sealed class MsgBlock {
     data class Text(val text: String) : MsgBlock()
     data class Code(val lang: String, val code: String) : MsgBlock()
     data class Mermaid(val source: String) : MsgBlock()
@@ -6513,8 +6532,11 @@ private fun cardHasNoData(card: QuroChatCard): Boolean = when (card) {
  * 返回「去掉组件 JSON 后的干净文本」与「解析成功的组件列表」。
  * - 只有 type 属于已知组件类型才会被抽离并渲染，其它 JSON（如代码块里的 schema）原样保留；
  * - 抽离时连同 JSON 前后的多余空行一起裁掉，避免气泡里留下大段空白。
+ *
+ * 🔴 `internal` 的理由同 [MsgBlock] / [parseBlocks]：Web UI 投影必须走**同一个**清洗入口，
+ * 否则网页会把内联组件 JSON 当正文裸露出来（页面上就是一坨 JSON），与原生不一致。
  */
-private fun extractInlineComponents(text: String, protected: List<IntRange> = emptyList()): Pair<String, List<QuroChatCard>> {
+internal fun extractInlineComponents(text: String, protected: List<IntRange> = emptyList()): Pair<String, List<QuroChatCard>> {
     if (text.isBlank()) return text to emptyList()
     // 受保护区间（可视化组件围栏 ```card / ```cards / ```cardui）内的花括号就地抹成空格。
     // 长度与下标完全不变 —— 下面所有扫描逻辑一行都不用改；效果是围栏里的 JSON 不会被
@@ -6692,8 +6714,14 @@ private fun splitFenceHead(raw: String): Pair<String, String> {
     return if (i < 0) t to "" else t.substring(0, i) to t.substring(i + 1).trim()
 }
 
-/** 解析 ```lang ... ``` 围栏代码块；其余文本走 HTML/Markdown 块级解析。 */
-private fun parseBlocks(text: String, selfCard: Boolean = true): List<MsgBlock> {
+/**
+ * 解析 ```lang ... ``` 围栏代码块；其余文本走 HTML/Markdown 块级解析。
+ *
+ * 🔴 `internal` 的理由同 [MsgBlock]：Web UI 投影必须复用**同一个**解析入口，
+ * 否则「网页看到的块」与「原生看到的块」是两套实现，一定会漂移（这正是
+ * 上一轮 Web UI「像另一个应用」的根因之一）。
+ */
+internal fun parseBlocks(text: String, selfCard: Boolean = true): List<MsgBlock> {
     // v404 诊断：记录 AI 回复是否含 HTML 及其判定结果（排查「HTML 裸文本」问题）
     val trimmed = text.trim()
     if (quroDiagCtx != null && (trimmed.startsWith("<") || trimmed.contains("```html") || isFullHtmlDocument(text) || looksLikeHtmlStrict(trimmed))) {
@@ -7312,6 +7340,13 @@ fun handleDynamicUiAction(
                 Toast.makeText(ctx, qstr(R.string.qk_04073), Toast.LENGTH_SHORT).show()
                 return
             }
+            // zxwidget **直接渲染在对话框里**（不是弹窗、不是卡片）。
+            // 这条分支是「模型写 DSL 节点而不是调工具」的来源：它没有可挂的消息，
+            // 需要由 vm 造一条「只给用户看、不喂 LLM」的消息，落进消息流后同样内联渲染。
+            //
+            // 🔴 这里**只能发导航事件，不能直接调 vm**：本函数（handleDynamicUiAction）
+            //    是顶层函数，参数里没有 vm，写了编译不过（第一次改就栽在这）。
+            //    [UiNavigationBus] 存在的意义正是这条桥——ChatScreen 里消费该事件时才拿得到 vm。
             UiNavigationBus.navEvent = UiNavigationEvent.ZxWebCard(
                 title = action.title.ifBlank { values["title"] ?: "" },
                 component = component,

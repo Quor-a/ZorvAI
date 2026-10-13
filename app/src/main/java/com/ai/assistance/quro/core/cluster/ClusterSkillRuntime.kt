@@ -123,6 +123,9 @@ object ClusterSkillRuntime {
                 ToolCapabilityDirectory.ToolCategory.DYNAMIC_UI,
                 ToolCapabilityDirectory.ToolCategory.GENUI,
                 ToolCapabilityDirectory.ToolCategory.UI_CARDS,
+                // zxwidget 动态交互界面（zx_web_card / zx_catalog）：
+                // 与上面三类同属「交付一块界面」，缺了它执行者画不出可交互结果。
+                ToolCapabilityDirectory.ToolCategory.ZXWIDGET,
                 ToolCapabilityDirectory.ToolCategory.MEDIA,
                 ToolCapabilityDirectory.ToolCategory.CMS_DEVELOPMENT,
                 ToolCapabilityDirectory.ToolCategory.AIP_DOC,

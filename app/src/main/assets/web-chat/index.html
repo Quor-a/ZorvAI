@@ -5,48 +5,66 @@
 <!-- 有它才是真正的移动端布局视口；没有它 Android WebView 会按 980px 排版再缩 -->
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>ZorvAI · Web UI</title>
+<title>ZorvAI</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="zxwidget.css">
 </head>
 <body>
 
 <!-- ═══════════════════════════════════════════════════════════════════
-     Web UI 对话框 —— ZorvAI 对话框的 Web 复制品
-     ZorvAI 对话框有的东西这里都有：消息流 / Markdown / 流式输出 /
-     思考过程 / 工具调用 / 附件 / 输入框 / 停止 / 新对话。
-     zxwidget（动态交互界面）只是被它支持的一个能力，不是它的定义。
+     Web UI —— ZorvAI 对话框的**投影**
+     ═══════════════════════════════════════════════════════════════════
+
+     🔴 这个页面不是「一个网页版聊天应用」，所以它刻意**没有**自己的一套设计：
+        · 没有 logo、没有空状态插画、没有自创的页脚标语；
+        · 顶栏字段（标题/模型/人格）由宿主投影过来，与原生 ChatTopBar 同源；
+        · 消息一律按宿主投影的**块序列**渲染（块由原生 parseBlocks 产出），
+          本页不做任何 Markdown/围栏解析——一旦在这里解析，投影就退化成第二个实现；
+        · 底部是原生 PermissionModeBar + 输入行的投影。
+
+     这里只承担一件事：**把宿主投过来的东西画出来**。
+
+     互动UI界面（zxwidget）**不属于本页**：它是独立模块，宿主是原生对话框。
+     投影里它只表现为消息流中的「一块互动界面（组件名）」，本页不做编译、不发它的资源。
      ═══════════════════════════════════════════════════════════════════ -->
 <div id="app">
 
+  <!-- 顶栏 = 原生 ChatTopBar 的投影 -->
   <header id="hd">
-    <span class="dot" id="dot"></span>
     <div class="hd-main">
       <h1 id="title">ZorvAI</h1>
-      <span id="subtitle"></span>
+      <div class="hd-sub">
+        <span id="model" class="chip"></span>
+        <span id="persona" class="chip"></span>
+      </div>
     </div>
+    <span class="dot" id="dot"></span>
     <button id="btn-new" type="button">新对话</button>
   </header>
 
+  <!-- 消息流 = 原生 MessageList 的投影 -->
   <main id="stream" role="log" aria-live="polite"></main>
 
+  <!-- 底栏 = 原生 PermissionModeBar + 输入行的投影 -->
   <footer id="composer">
-    <div id="attachments"></div>
+    <div id="modes" class="modes">
+      <button type="button" class="mode" data-mode="deepThink">深度思考</button>
+      <button type="button" class="mode" data-mode="autoSaveMemory">自动记忆</button>
+      <button type="button" class="mode" data-mode="subAgent">子智能体</button>
+      <button type="button" class="mode" data-mode="vision">视觉</button>
+    </div>
     <div class="crow">
-      <textarea id="inp" rows="1" placeholder="发消息…（Enter 发送，Shift+Enter 换行）"
-                autocomplete="off" autocapitalize="sentences" spellcheck="false"></textarea>
+      <textarea id="inp" rows="1" placeholder="发消息…" autocomplete="off"
+                autocapitalize="sentences" spellcheck="false"></textarea>
       <button id="send" type="button" aria-label="发送"></button>
     </div>
     <div id="cfoot">
       <span id="cnt">0 条消息</span>
-      <span class="right" id="hint">Web UI · 由本地服务提供</span>
+      <span class="right" id="link"></span>
     </div>
   </footer>
 
 </div>
 
-<!-- zxwidget 动态交互界面：独立模块，ZorvAI 原生对话框与 Web UI 共用 -->
-<script src="zxwidget.js"></script>
 <script src="chat.js"></script>
 </body>
 </html>

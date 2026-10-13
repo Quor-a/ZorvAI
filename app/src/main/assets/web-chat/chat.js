@@ -1,16 +1,26 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   Web UI 聊天运行时 —— ZorvAI 对话框的 Web 复制品
+   Web UI 运行时 —— **ZorvAI 对话框投影的接收端**
    ═══════════════════════════════════════════════════════════════════════
 
    职责边界（用户 2026-10-13 拍板，别再混）：
-     · 本文件 = 「Web UI 对话框」。ZorvAI 对话框有的功能这里全有：
-       消息流 / Markdown / 流式输出 / 思考过程 / 工具调用 / 附件 /
-       输入框 / 停止 / 新对话。
-     · zxwidget（动态交互界面）= 另一个模块（zxwidget.js + zxwidget.css），
-       本文件只是「支持它」——把 zx_web_card 工具调用编译成活控件。
-     · 数据来自宿主的内嵌 HTTP 服务（同源，fetch 即可）。宿主不再往页面
-       里灌 JS、也不再往 HTML 里内联 195 KB 契约——少一层转义就少一类
-       「漏一个字符整页白」的故障。
+
+     · 本文件 = 「Web UI」= ZorvAI 对话框的投影接收端。
+       它**不设计界面**、**不解析对话**、**不拥有任何能力模块**。
+       消息怎么切成块、切出哪些块，全部由宿主 `parseBlocks` 决定
+       （见 ui/chat/WebUiProjection.kt）；这里只把投过来的块画出来。
+
+     · zxwidget（互动UI界面）= 独立模块（assets/zx/），宿主是原生对话框。
+       本文件**不加载它、不编译它、不为它发任何请求**。
+       投影里它只表现为 {t:"ui", component} 的「这里有一块互动界面」标记。
+
+   🔴 所以本文件里出现下列任何一样，都说明投影又退化成了「第二个实现」，必须删掉：
+        · 围栏嗅探（``` 的正则）
+        · 块级 Markdown 解析（标题/列表/表格/引用）
+        · 自造的空状态、标语、欢迎语
+        · 任何 zx 相关的加载或编译
+
+   数据来源：宿主内嵌的投影服务（同源，fetch 即可）。宿主不往页面里灌 JS，
+   HTML 也不内联任何大块数据——少一层转义就少一类「漏一个字符整页白」的故障。
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* ── 1. 基础工具 ─────────────────────────────────────────────────────── */
@@ -20,86 +30,31 @@ function esc(s){
     .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
     .replace(/"/g,"&quot;");
 }
-function el(tag,cls,html){
+function el(tag,cls,text){
   var n=document.createElement(tag);
   if(cls)n.className=cls;
-  if(html!==undefined&&html!==null)n.textContent=html;
+  if(text!==undefined&&text!==null)n.textContent=text;
   return n;
 }
 
-/* 无依赖 Markdown 渲染（移植自旧运行时，逻辑未改） */
-function md(src){
-  if(!src)return "";
-  var lines=String(src).replace(/\r\n/g,"\n").split("\n"),out=[],i=0;
-  function inline(s){
-    s=esc(s);
-    s=s.replace(/`([^`\n]+)`/g,function(m,c){return "<code>"+c+"</code>";});
-    s=s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
-    s=s.replace(/\*\*([^*\n]+)\*\*/g,"<b>$1</b>");
-    s=s.replace(/(^|[^*])\*([^*\n]+)\*/g,"$1<i>$2</i>");
-    s=s.replace(/~~([^~\n]+)~~/g,"<s>$1</s>");
-    return s;
-  }
-  function hl(code){
-    /* 一次扫描完成着色。
-       旧实现是「先插注释高亮、再插字符串高亮、再插数字、再插关键字」四轮 replace，
-       每一轮都会重扫上一轮插入的标签文本；而关键字表里有 class，
-       于是它把自己写的 <span class="tok-n"> 里的 class 又包了一层，
-       页面里直接漏出 `<class="tok-n">` 这种破损标签。
-       String.replace 不会重扫替换出来的文本，所以合并成一条 alternation 就是正解。 */
-    var re=new RegExp(
-      "(\\/\\/[^\\n]*|#[^\\n]*)" +
-      "|(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;)" +
-      "|\\b(\\d+\\.?\\d*)\\b" +
-      "|\\b(function|return|if|else|for|while|var|let|const|class|def|import|from|fun|val|object|when|is|in|try|catch|throw|new|async|await|public|private|static|void|int|string|bool|true|false|null)\\b",
-      "g");
-    return esc(code).replace(re,function(m,c,s,n,k){
-      if(c)return '<span class="tok-c">'+c+'</span>';
-      if(s)return '<span class="tok-s">'+s+'</span>';
-      if(n)return '<span class="tok-n">'+n+'</span>';
-      if(k)return '<span class="tok-k">'+k+'</span>';
-      return m;
-    });
-  }
-  while(i<lines.length){
-    var ln=lines[i];
-    var cm=/^```(\w*)\s*$/.exec(ln);
-    if(cm){
-      var buf=[],j=i+1;
-      while(j<lines.length&&!/^```\s*$/.test(lines[j])){buf.push(lines[j]);j++;}
-      var code=buf.join("\n");
-      out.push('<div class="code"><button type="button" class="code-c" data-code="'+esc(code)+'">复制</button>'+
-               '<pre><code>'+hl(code)+'</code></pre></div>');
-      i=j+1;continue;
-    }
-    if(/^\s*\|.*\|\s*$/.test(ln)&&i+1<lines.length&&/^\s*\|[\s:|-]+\|\s*$/.test(lines[i+1])){
-      var cells=function(r){return r.trim().replace(/^\||\|$/g,"").split("|").map(function(c){return c.trim();});};
-      var head=cells(ln),rows=[],k=i+2;
-      while(k<lines.length&&/^\s*\|.*\|\s*$/.test(lines[k])){rows.push(cells(lines[k]));k++;}
-      var t="<table><thead><tr>"+head.map(function(h){return "<th>"+inline(h)+"</th>";}).join("")+"</tr></thead><tbody>";
-      rows.forEach(function(r){t+="<tr>"+r.map(function(c){return "<td>"+inline(c)+"</td>";}).join("")+"</tr>";});
-      out.push(t+"</tbody></table>");i=k;continue;
-    }
-    var hm=/^(#{1,4})\s+(.*)$/.exec(ln);
-    if(hm){var lv=hm[1].length;out.push("<h"+lv+">"+inline(hm[2])+"</h"+lv+">");i++;continue;}
-    if(/^>\s?/.test(ln)){
-      var qb=[];while(i<lines.length&&/^>\s?/.test(lines[i])){qb.push(lines[i].replace(/^>\s?/,""));i++;}
-      out.push("<blockquote>"+qb.map(inline).join("<br>")+"</blockquote>");continue;
-    }
-    if(/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(ln)){out.push("<hr>");i++;continue;}
-    if(/^\s*[-*+]\s+/.test(ln)){
-      var lb=[];while(i<lines.length&&/^\s*[-*+]\s+/.test(lines[i])){lb.push(lines[i].replace(/^\s*[-*+]\s+/,""));i++;}
-      out.push("<ul>"+lb.map(function(x){return "<li>"+inline(x)+"</li>";}).join("")+"</ul>");continue;
-    }
-    if(/^\s*\d+[.)]\s+/.test(ln)){
-      var ob=[];while(i<lines.length&&/^\s*\d+[.)]\s+/.test(lines[i])){ob.push(lines[i].replace(/^\s*\d+[.)]\s+/,""));i++;}
-      out.push("<ol>"+ob.map(function(x){return "<li>"+inline(x)+"</li>";}).join("")+"</ol>");continue;
-    }
-    if(!ln.trim()){i++;continue;}
-    var pb=[];while(i<lines.length&&lines[i].trim()&&!/^\s*([-*+]\s|\d+[.)]\s|#{1,4}\s|>|```|\s*\|)/.test(lines[i])){pb.push(lines[i]);i++;}
-    out.push("<p>"+pb.map(inline).join("<br>")+"</p>");
-  }
-  return out.join("");
+/**
+ * 正文的**行内**格式化 —— 本页唯一一处碰文本的地方，理由必须讲清楚。
+ *
+ * 宿主投过来的块模型只到**块级**（text / heading / quote / code / table / rule …），
+ * 行内的 **加粗** / `代码` / [链接]() 不在块模型里（原生侧由 Compose RichText 现渲染）。
+ * 浏览器这边没有对应物，所以只能补一层最小的行内处理。
+ *
+ * 🔴 边界：只做行内。这里**不得**出现标题、列表、表格、围栏这类块级解析——
+ *    那些是宿主 parseBlocks 的职责，抢过来做就是两套实现。
+ */
+function inline(s){
+  var t=esc(s);
+  t=t.replace(/`([^`\n]+)`/g,function(_,c){return "<code>"+c+"</code>";});
+  t=t.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  t=t.replace(/\*\*([^*\n]+)\*\*/g,"<b>$1</b>");
+  t=t.replace(/(^|[^*])\*([^*\n]+)\*/g,"$1<i>$2</i>");
+  t=t.replace(/~~([^~\n]+)~~/g,"<s>$1</s>");
+  return t;
 }
 
 /* ── 2. 状态 ─────────────────────────────────────────────────────────── */
@@ -109,16 +64,32 @@ var $stream=document.getElementById("stream"),
     $send=document.getElementById("send"),
     $dot=document.getElementById("dot"),
     $title=document.getElementById("title"),
-    $subtitle=document.getElementById("subtitle"),
+    $model=document.getElementById("model"),
+    $persona=document.getElementById("persona"),
     $cnt=document.getElementById("cnt"),
-    $hint=document.getElementById("hint");
+    $link=document.getElementById("link"),
+    $modes=document.getElementById("modes");
 
-var state={title:"ZorvAI",subtitle:"",busy:false,dark:false,messages:[]};
+var state={
+  bar:{title:"ZorvAI",model:"",persona:""},
+  composer:{busy:false,deepThink:false,autoSaveMemory:false,subAgent:false,vision:false},
+  dark:false,lan:"",port:0,messages:[]
+};
 var nodes={};          /* id -> 渲染缓存 */
 var emptyBox=null;
 var pollTimer=null;
 
-/* ── 3. 渲染 ─────────────────────────────────────────────────────────── */
+/* 原生专属块的显示名：浏览器里没有对应渲染器，如实说明它是什么 */
+var NATIVE_LABEL={
+  aip:"AIP 排版（原生渲染）",
+  mermaid:"Mermaid 图（原生渲染）",
+  dynamic_ui:"动态 UI（原生渲染）",
+  self_card:"自研卡片（原生渲染）",
+  card:"组件卡片（原生渲染）",
+  miniapp:"MiniApp（原生渲染）"
+};
+
+/* ── 3. 渲染：块分派 ─────────────────────────────────────────────────── */
 
 function nearBottom(){
   return $stream.scrollHeight-$stream.scrollTop-$stream.clientHeight<140;
@@ -130,87 +101,132 @@ function scrollBottom(force){
 function showEmpty(on){
   if(!on){ if(emptyBox){emptyBox.remove();emptyBox=null;} return; }
   if(emptyBox)return;
-  emptyBox=el("div",null,null);
+  emptyBox=el("div",null);
   emptyBox.id="empty";
-  emptyBox.innerHTML=
-    '<div class="badge">Z</div>'+
-    '<h2>'+esc(state.title||"ZorvAI")+'</h2>'+
-    '<p>这是 ZorvAI 对话框的 Web UI 复制品。发条消息试试——'+
-    '消息流、思考过程、工具调用都会在这里实时出现。</p>';
+  emptyBox.textContent="这个会话还没有消息。投影与主对话框共用同一个会话。";
   $stream.appendChild(emptyBox);
 }
 
 function renderChrome(){
-  $title.textContent=state.title||"ZorvAI";
-  $subtitle.textContent=state.subtitle||"";
+  $title.textContent=state.bar.title||"ZorvAI";
+  $model.textContent=state.bar.model||"";
+  $persona.textContent=state.bar.persona||"";
   $cnt.textContent=state.messages.length+" 条消息";
-  $dot.className="dot"+(state.busy?" on":"");
+  $dot.className="dot"+(state.composer.busy?" on":"");
   document.documentElement.className=state.dark?"dark":"";
-  $send.textContent=state.busy?"■":"➤";
-  $send.className=state.busy?"stop":"";
-  $send.setAttribute("aria-label",state.busy?"停止":"发送");
+  $send.textContent=state.composer.busy?"■":"➤";
+  $send.className=state.composer.busy?"stop":"";
+  $send.setAttribute("aria-label",state.composer.busy?"停止":"发送");
+  // 底栏链接：从**别的设备**打开这个投影的入口（127.0.0.1 在别的设备上是打不开的）
+  $link.textContent=state.lan||(state.port?("127.0.0.1:"+state.port):"");
+  // 权限模式开关状态
+  var modes=$modes.querySelectorAll(".mode");
+  for(var i=0;i<modes.length;i++){
+    var k=modes[i].getAttribute("data-mode");
+    if(state.composer[k])modes[i].classList.add("on"); else modes[i].classList.remove("on");
+  }
   showEmpty(state.messages.length===0);
 }
 
-/* 消息内的元素顺序固定为：思考 → 正文 → 工具/卡片。
-   正文可能晚于工具到达（流式），所以插入点必须显式指定，
-   不能一路 appendChild —— 否则工具会跑到正文前面去。 */
-function mdSlot(nd){
-  if(nd.mdBox)return nd.mdBox;
-  var box=el("div","md");
-  if(nd.placeholder){nd.placeholder.remove();nd.placeholder=null;}
-  if(nd.toolsRoot)nd.bub.insertBefore(box,nd.toolsRoot);
-  else nd.bub.appendChild(box);
-  nd.mdBox=box;
-  return box;
+/** 单个块 → DOM。块类型由宿主给，这里只画，不猜。 */
+function blockNode(b){
+  if(!b||!b.t)return null;
+  switch(b.t){
+    case "text":{
+      var d=el("p"); d.innerHTML=inline(b.text||""); return d;
+    }
+    case "heading":{
+      var lv=Math.min(Math.max(b.level||3,1),4);
+      var h=el("h"+lv); h.innerHTML=inline(b.text||""); return h;
+    }
+    case "quote":{
+      var q=el("blockquote"); q.innerHTML=inline(b.text||""); return q;
+    }
+    case "rule": return el("hr");
+    case "code":{
+      var box=el("div","code");
+      var btn=el("button","code-c","复制");
+      btn.type="button";
+      btn.setAttribute("data-code",b.code||"");
+      var pre=el("pre"), cd=el("code",null,b.code||"");
+      pre.appendChild(cd); box.appendChild(btn); box.appendChild(pre);
+      return box;
+    }
+    case "table":{
+      var wrap=el("div","tw");
+      var t=el("table"), thead=el("thead"), tr=el("tr");
+      (b.header||[]).forEach(function(h){ var th=el("th"); th.innerHTML=inline(h); tr.appendChild(th); });
+      thead.appendChild(tr); t.appendChild(thead);
+      var tb=el("tbody");
+      (b.rows||[]).forEach(function(r){
+        var rtr=el("tr");
+        (r||[]).forEach(function(c){ var td=el("td"); td.innerHTML=inline(c); rtr.appendChild(td); });
+        tb.appendChild(rtr);
+      });
+      t.appendChild(tb); wrap.appendChild(t); return wrap;
+    }
+    /* 互动UI界面：只标明「这里有一块」。本页不编译、不渲染它——
+       那是独立模块，宿主是原生对话框。 */
+    case "ui":{
+      var u=el("div","ui");
+      var ut=el("div","ut","互动 UI 界面");
+      var un=el("div",null,"组件："+(b.component||"?")+"（在原生对话框里操作）");
+      u.appendChild(ut); u.appendChild(un); return u;
+    }
+    /* 原生专属渲染的块：如实说明 + 折叠展示源，不假装能画 */
+    case "native":{
+      var n=el("div","native");
+      var nt=el("div","nt",NATIVE_LABEL[b.kind]||("原生渲染："+b.kind));
+      n.appendChild(nt);
+      if(b.source){
+        var det=el("pre",null,b.source);
+        n.appendChild(det);
+      }
+      return n;
+    }
+    default: return null;
+  }
 }
 
-function renderAttachments(nd,m){
-  if(nd.attsDone)return;
-  if(!m.attachments||!m.attachments.length){nd.attsDone=true;return;}
-  var box=el("div","atts");
-  m.attachments.forEach(function(a){
-    var url=a.url||a.uri||a.path||"";
-    if(!url)return;
-    var name=a.name||url.split("/").pop()||"附件";
-    /* 只有 http(s) 的才敢当图片直接显示：附件在宿主私有目录里是 file://,
-       而本页由 http://127.0.0.1 提供，浏览器一律拦 file:// 子资源。
-       硬塞 <img> 只会得到一个碎图标——不如老实显示成附件名。 */
-    if(/^https?:/i.test(url)&&/\.(png|jpe?g|gif|webp|bmp)$/i.test(url.split("?")[0])){
-      var im=el("img","att-img");
-      im.src=url;im.loading="lazy";
-      // 即便 http 也可能 404：失败就退回收成附件行，不留碎图
-      im.onerror=function(){ var chip=el("div","att"); chip.appendChild(el("span",null,name)); im.replaceWith(chip); };
-      box.appendChild(im);
-    }else{
-      var chip=el("div","att");
-      chip.appendChild(el("span",null,name));
-      box.appendChild(chip);
-    }
+function renderBlocks(nd,m){
+  var blocks=m.blocks||[];
+  var sig=blocks.length+"|"+blocks.map(function(b){
+    return (b.t||"")+":"+String(b.text||b.code||b.source||"").length;
+  }).join(",");
+  if(sig===nd.blockSig)return;
+  nd.blockSig=sig;
+
+  if(!nd.mdBox){
+    nd.mdBox=el("div","md");
+    if(nd.uiBox&&nd.uiBox.parentNode===nd.bub)nd.bub.insertBefore(nd.mdBox,nd.uiBox);
+    else nd.bub.appendChild(nd.mdBox);
+  }
+  nd.mdBox.innerHTML="";
+  var any=false;
+  blocks.forEach(function(b){
+    var n=blockNode(b);
+    if(n){ nd.mdBox.appendChild(n); any=true; }
   });
-  if(box.children.length)nd.bub.appendChild(box);
-  nd.attsDone=true;
+  if(!any && m.reasoning){ /* 只有思考、没有正文：留空容器避免占位跳变 */ }
 }
 
 function renderThink(nd,m){
   var r=m.reasoning||"";
-  if(!r)return;
+  if(!r){ if(nd.thinkRoot){nd.thinkRoot.remove();nd.thinkRoot=null;nd.thinkSrc="";} return; }
   if(!nd.thinkRoot){
     var th=el("div","think open");
-    var hh=el("div","think-h");
-    hh.appendChild(el("span","caret","▶"));
-    hh.appendChild(el("span",null,"思考过程"));
+    var hh=el("div","think-h","思考过程");
     var tb=el("div","think-b");
     hh.addEventListener("click",function(){th.classList.toggle("open");});
-    th.appendChild(hh);th.appendChild(tb);
+    th.appendChild(hh); th.appendChild(tb);
     nd.bub.insertBefore(th,nd.bub.firstChild);
-    nd.thinkRoot=th;nd.thinkBody=tb;nd.thinkSrc="";
+    nd.thinkRoot=th; nd.thinkBody=tb; nd.thinkSrc="";
   }
-  if(nd.thinkSrc!==r){nd.thinkBody.textContent=r;nd.thinkSrc=r;}
+  if(nd.thinkSrc!==r){ nd.thinkBody.textContent=r; nd.thinkSrc=r; }
 }
 
 function renderTools(nd,m){
-  var calls=m.toolCalls||[];
+  var calls=m.tools||[];
   var sig=calls.map(function(t){
     return (t.name||"")+"|"+(t.result===null||t.result===undefined?"r":"d")+
            "|"+String(t.result===null||t.result===undefined?"":t.result).length+
@@ -219,30 +235,11 @@ function renderTools(nd,m){
   if(sig===nd.toolSig)return;
   nd.toolSig=sig;
 
-  if(!nd.toolsRoot){
-    nd.toolsRoot=el("div","tools");
-    nd.bub.appendChild(nd.toolsRoot);
-  }
-  nd.toolsRoot.innerHTML="";
-
+  if(nd.toolsRoot){ nd.toolsRoot.remove(); nd.toolsRoot=null; }
+  if(!calls.length)return;
+  nd.toolsRoot=el("div","tools");
+  nd.bub.appendChild(nd.toolsRoot);
   calls.forEach(function(tc){
-    /* zxwidget：zx_web_card 编译成活的动态交互界面，而不是一行 JSON */
-    if(tc.name==="zx_web_card"){
-      var comp="",dsl={};
-      try{var a=JSON.parse(tc.arguments||"{}");comp=a.component||"";dsl=a.dsl||{};}catch(e){}
-      if(comp&&typeof compile==="function"){
-        var wrap=el("div","zx-wrap");
-        var ctx={interact:function(action,payload){
-          var msg={action:action||"tap",component:comp,source:"webui"};
-          if(payload)for(var k in payload)msg[k]=payload[k];
-          msg.summary=comp+" · "+msg.action;
-          post("interact",msg);
-        }};
-        wrap.appendChild(compile(comp,dsl,ctx));
-        nd.toolsRoot.appendChild(wrap);
-        return;
-      }
-    }
     var done=!(tc.result===null||tc.result===undefined);
     var t=el("div","tool"+(done?" ok":""));
     var h=el("div","tool-h");
@@ -259,41 +256,76 @@ function renderTools(nd,m){
       b.appendChild(el("pre",null,String(tc.result)));
     }
     h.addEventListener("click",function(){t.classList.toggle("open");});
-    t.appendChild(h);t.appendChild(b);
+    t.appendChild(h); t.appendChild(b);
     nd.toolsRoot.appendChild(t);
   });
+}
 
-  if(!nd.toolsRoot.children.length){
-    nd.toolsRoot.remove();
-    nd.toolsRoot=null;
-  }
+function renderAttachments(nd,m){
+  var atts=m.attachments||[];
+  if(nd.attsDone)return;
+  if(!atts.length){nd.attsDone=true;return;}
+  var box=el("div","atts");
+  atts.forEach(function(a){
+    var url=a.uri||a.url||"";
+    if(!url)return;
+    var name=a.name||url.split("/").pop()||"附件";
+    /* 只有 http(s) 的才敢当图片直接显示：附件在宿主私有目录里是 file://，
+       而本页由 http:// 提供，浏览器一律拦 file:// 子资源。
+       硬塞 <img> 只会得到一个碎图标——不如老实显示成附件名。 */
+    if(/^https?:/i.test(url)&&/\.(png|jpe?g|gif|webp|bmp)$/i.test(url.split("?")[0])){
+      var im=el("img","att-img");
+      im.src=url; im.loading="lazy";
+      im.onerror=function(){ var chip=el("div","att"); chip.appendChild(el("span",null,name)); im.replaceWith(chip); };
+      box.appendChild(im);
+    }else{
+      var chip=el("div","att");
+      chip.appendChild(el("span",null,name));
+      box.appendChild(chip);
+    }
+  });
+  if(box.children.length)nd.bub.appendChild(box);
+  nd.attsDone=true;
+}
+
+/**
+ * 互动UI界面标记的插入点。
+ * 位置与原生一致：思考 → 正文 → 工具 → 互动界面。
+ * 这里只维护一个**锚点容器**，不往里放任何 zx 运行时。
+ */
+function uiAnchor(nd){
+  if(nd.uiBox)return nd.uiBox;
+  var box=el("div","ui-list");
+  nd.bub.appendChild(box);
+  nd.uiBox=box;
+  return box;
+}
+
+function renderUi(nd,m){
+  var list=m.ui||[];
+  var sig=list.map(function(u){return u.component||"";}).join("~");
+  if(sig===nd.uiSig)return;
+  nd.uiSig=sig;
+  if(nd.uiBox){ nd.uiBox.remove(); nd.uiBox=null; }
+  if(!list.length)return;
+  var box=uiAnchor(nd);
+  list.forEach(function(u){
+    box.appendChild(blockNode({t:"ui",component:u.component}));
+  });
 }
 
 function renderMessage(m){
   var nd=nodes[m.id];
-  var isLast=state.messages[state.messages.length-1]===m;
-
-  if(m.role==="user"){
-    var hu=md(m.content);
-    if(nd.mdSrc!==hu){ mdSlot(nd).innerHTML=hu; nd.mdSrc=hu; }
-    renderAttachments(nd,m);
-    return;
-  }
-
+  if(!nd)return;
+  nd.who.textContent=m.senderName||(m.mine?"我":(state.bar.title||"ZorvAI"));
   renderThink(nd,m);
-
-  if(m.content){
-    var ha=md(m.content);
-    if(nd.mdSrc!==ha){ mdSlot(nd).innerHTML=ha; nd.mdSrc=ha; }
-  }else if(!nd.mdBox&&!m.reasoning&&!(m.toolCalls&&m.toolCalls.length)&&!nd.placeholder){
-    nd.placeholder=el("div","md","");
-    nd.bub.appendChild(nd.placeholder);
-  }
-
+  renderBlocks(nd,m);
   renderTools(nd,m);
-
+  renderUi(nd,m);
+  renderAttachments(nd,m);
+  var isLast=state.messages[state.messages.length-1]===m;
   if(nd.mdBox){
-    if(state.busy&&isLast)nd.mdBox.classList.add("streaming");
+    if(state.composer.busy&&isLast)nd.mdBox.classList.add("streaming");
     else nd.mdBox.classList.remove("streaming");
   }
 }
@@ -301,12 +333,12 @@ function renderMessage(m){
 function ensureNode(m){
   var nd=nodes[m.id];
   if(nd)return nd;
-  var root=el("div","msg "+(m.role==="user"?"user":"ai"));
+  var root=el("div","msg "+(m.mine?"mine":"ai"));
+  var who=el("div","who");
   var bub=el("div","bub");
-  root.appendChild(bub);
-  nd={root:root,bub:bub,mdBox:null,mdSrc:null,placeholder:null,attsDone:false,
-      thinkRoot:null,thinkBody:null,thinkSrc:null,
-      toolsRoot:null,toolSig:null};
+  root.appendChild(who); root.appendChild(bub);
+  nd={root:root,who:who,bub:bub,mdBox:null,blockSig:null,thinkRoot:null,thinkBody:null,
+      thinkSrc:null,toolsRoot:null,toolSig:null,uiBox:null,uiSig:null,attsDone:false};
   nodes[m.id]=nd;
   $stream.appendChild(root);
   return nd;
@@ -322,30 +354,29 @@ function syncOrder(ids){
     if(c!==emptyBox)cur.push(c);
   }
   var same=cur.length===want.length;
-  if(same){
-    for(var j=0;j<want.length;j++){ if(cur[j]!==want[j]){same=false;break;} }
-  }
+  if(same){ for(var j=0;j<want.length;j++){ if(cur[j]!==want[j]){same=false;break;} } }
   if(same)return;
   want.forEach(function(n){$stream.appendChild(n);});
 }
 
 function prune(ids){
   Object.keys(nodes).forEach(function(id){
-    if(ids.indexOf(id)<0){nodes[id].root.remove();delete nodes[id];}
+    if(ids.indexOf(id)<0){ nodes[id].root.remove(); delete nodes[id]; }
   });
 }
 
-/* ── 4. 与宿主同步（轮询快照 + 按键谐和） ─────────────────────────────── */
+/* ── 4. 与宿主同步（轮询投影快照）────────────────────────────────────── */
 
 function apply(snap){
   if(!snap||!snap.ok)return;
   var stick=nearBottom();
-  var wasBusy=state.busy;
+  var wasBusy=state.composer.busy;
 
-  state.title=snap.title||"ZorvAI";
-  state.subtitle=snap.subtitle||"";
+  state.bar=snap.bar||state.bar;
+  state.composer=snap.composer||state.composer;
   state.dark=!!snap.dark;
-  state.busy=!!snap.busy;
+  state.lan=snap.lan||"";
+  state.port=snap.port||0;
   state.messages=(snap.messages||[]).filter(function(m){
     return m&&m.id&&(m.role==="user"||m.role==="assistant");
   });
@@ -355,7 +386,7 @@ function apply(snap){
   state.messages.forEach(function(m){ ensureNode(m); renderMessage(m); });
   syncOrder(ids);
   renderChrome();
-  if(stick||(!wasBusy&&state.busy))scrollBottom(true);
+  if(stick||(!wasBusy&&state.composer.busy))scrollBottom(true);
 }
 
 function poll(){
@@ -364,11 +395,10 @@ function poll(){
     .then(function(r){return r.json();})
     .then(function(j){
       apply(j);
-      if($hint)$hint.textContent="Web UI · 由本地服务提供";
-      schedule(state.busy?180:1200);
+      schedule(state.composer.busy?180:1200);
     })
     .catch(function(){
-      if($hint)$hint.textContent="连接不上本地服务，重试中…";
+      $cnt.textContent="连接不上投影服务，重试中…";
       schedule(1500);
     });
 }
@@ -378,7 +408,7 @@ function schedule(ms){
   pollTimer=setTimeout(poll,ms);
 }
 
-/* ── 5. 操作 ─────────────────────────────────────────────────────────── */
+/* ── 5. 操作（一律转成对同一个会话的动作）────────────────────────────── */
 
 function post(path,body){
   return fetch("api/"+path,{
@@ -393,7 +423,7 @@ function post(path,body){
 
 function doSend(){
   var t=$inp.value.trim();
-  if(!t||state.busy)return;
+  if(!t||state.composer.busy)return;
   $inp.value="";
   autoGrow();
   post("send",{text:t});
@@ -408,8 +438,22 @@ function autoGrow(){
 
 /* ── 6. 启动 ─────────────────────────────────────────────────────────── */
 
-$send.addEventListener("click",function(){ state.busy?doStop():doSend(); });
+$send.addEventListener("click",function(){ state.composer.busy?doStop():doSend(); });
 document.getElementById("btn-new").addEventListener("click",doNew);
+
+/* 权限模式开关：本页只做**只读投影**——点了不改模型行为，避免「网页上一点，
+   把主对话框下一条消息的行为改掉」这种跨介质副作用。原生侧才是配置入口。 */
+$modes.addEventListener("click",function(e){
+  var b=e.target;
+  while(b&&b!==$modes){
+    if(b.className&&String(b.className).indexOf("mode")>=0){
+      $cnt.textContent="权限开关请在 ZorvAI 原生对话框里设置";
+      setTimeout(renderChrome,1600);
+      return;
+    }
+    b=b.parentNode;
+  }
+});
 
 $inp.addEventListener("input",autoGrow);
 $inp.addEventListener("keydown",function(e){
@@ -434,14 +478,6 @@ $stream.addEventListener("click",function(e){
     b=b.parentNode;
   }
 });
-
-/* zxwidget 契约：独立模块自己的数据。拿不到也不影响聊天功能 */
-(function loadContracts(){
-  fetch("zx_contracts.json",{cache:"force-cache"})
-    .then(function(r){return r.json();})
-    .then(function(j){ if(typeof zxInstallContracts==="function")zxInstallContracts(j); })
-    .catch(function(){});
-})();
 
 autoGrow();
 poll();

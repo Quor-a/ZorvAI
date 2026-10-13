@@ -3909,16 +3909,23 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_04066" formatted="false">إعادة تحميل البطاقة</string>
     <string name="qk_04067" formatted="false">نسخ DSL البطاقة</string>
     <string name="qk_04068">مورد runtime البطاقة مفقود: %1$s</string>
-    <string name="qk_04069" formatted="false">في هذا الدور أجب بواجهة zxwidget التفاعلية الديناميكية: استدعِ zx_web_card (component = اسم يبدأ بـ zx_، وdsl = JSON الخاص بهذا المكوّن) واعرض النتيجة المنظمة كعناصر تحكم تفاعلية بدل سردها كنص عادي. ابحث أولاً عن أسماء المكوّنات وحقولها عبر zx_catalog.</string>
+    <string name="qk_04069" formatted="false">في هذا الدور أجب بواجهة zxwidget التفاعلية الديناميكية: استدعِ zx_web_card (component = اسم يبدأ بـ zx_، وdsl = JSON الخاص بهذا المكوّن) واعرض النتيجة المنظمة كعناصر تحكم تفاعلية بدل سردها كنص عادي. ابحث أولاً عن أسماء المكوّنات وحقولها عبر zx_catalog.\u062a\u064f\u0639\u0631\u0636 \u0627\u0644\u0648\u0627\u062c\u0647\u0629 **\u0645\u0628\u0627\u0634\u0631\u0629 \u062f\u0627\u062e\u0644 \u0627\u0644\u062d\u0648\u0627\u0631 \u0627\u0644\u062d\u0627\u0644\u064a** (\u0644\u064a\u0633\u062a \u0646\u0627\u0641\u0630\u0629 \u0645\u0646\u0628\u062b\u0642\u0629 \u0648\u0644\u0627 \u0628\u0637\u0627\u0642\u0629)\u060c \u0648\u0627\u0631\u0633\u0645 \u0643\u0644 \u0643\u062a\u0644\u0629 \u0645\u0631\u0629 \u0648\u0627\u062d\u062f\u0629.</string>
     <string name="qk_04070" formatted="false">تم تفعيل واجهة zxwidget التفاعلية: سيجيب هذا الدور ببطاقات تفاعلية</string>
     <string name="qk_04071" formatted="false">تم إيقاف واجهة zxwidget التفاعلية</string>
     <string name="qk_04072" formatted="false">Web UI</string>
     <string name="qk_04076">واجهة zxwidget التفاعلية الديناميكية</string>
 
     <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">إجراء بطاقة zxwidget يفتقد component أو dsl</string>
+    <string name="qk_04073" formatted="false">zxwidget يفتقد component أو dsl</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI - Web UI</string>
     <string name="qk_04075">فشل تشغيل خدمة Web UI: %1$s</string>
+    <string name="qk_04077">فشل تحميل صفحة Web UI (%1$s): %2$s</string>
+    <string name="qk_04078">جارٍ تحميل Web UI من %1$s…</string>
+    <string name="qk_04079">على نفس شبكة Wi-Fi، افتح هذا الرابط على جهاز آخر</string>
+    <string name="qk_04080">جارٍ البدء…</string>
+    <string name="qk_04081">نسخ الرابط</string>
+    <string name="qk_04082">تم النسخ</string>
+    <string name="qk_04083">فتح في المتصفح</string>
 </resources>

@@ -3909,16 +3909,23 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_04066" formatted="false">कार्ड पुनः लोड करें</string>
     <string name="qk_04067" formatted="false">कार्ड DSL कॉपी करें</string>
     <string name="qk_04068">कार्ड रनटाइम संसाधन गायब है: %1$s</string>
-    <string name="qk_04069" formatted="false">इस बार zxwidget डायनामिक इंटरफ़ेस से उत्तर दें: zx_web_card कॉल करें (component = zx_ से शुरू होने वाला नाम, dsl = उस कंपोनेंट का JSON) और संरचित परिणाम को सादे टेक्स्ट की जगह इंटरैक्टिव कंट्रोल के रूप में दिखाएँ। कंपोनेंट और फ़ील्ड नाम पहले zx_catalog से देखें।</string>
+    <string name="qk_04069" formatted="false">इस बार zxwidget डायनामिक इंटरफ़ेस से उत्तर दें: zx_web_card कॉल करें (component = zx_ से शुरू होने वाला नाम, dsl = उस कंपोनेंट का JSON) और संरचित परिणाम को सादे टेक्स्ट की जगह इंटरैक्टिव कंट्रोल के रूप में दिखाएँ। कंपोनेंट और फ़ील्ड नाम पहले zx_catalog से देखें। \u0907\u0902\u091f\u0930\u092b\u093c\u0947\u0938 **\u092e\u094c\u091c\u0942\u0926\u093e \u0921\u093e\u092f\u0932\u0949\u0917 \u0915\u0947 \u0905\u0902\u0926\u0930 \u0938\u0940\u0927\u0947 \u0930\u0947\u0902\u0921\u0930 \u0939\u094b\u0924\u093e \u0939\u0948** (\u092a\u0949\u092a\u0905\u092a \u092f\u093e \u0915\u093e\u0930\u094d\u0921 \u0928\u0939\u0940\u0902), \u0939\u0930 \u092c\u094d\u0932\u0949\u0915 \u090f\u0915 \u0939\u0940 \u092c\u093e\u0930 \u092c\u0928\u093e\u090f\u0901\u0964</string>
     <string name="qk_04070" formatted="false">zxwidget डायनामिक इंटरफ़ेस चालू: इस बार इंटरैक्टिव कार्ड से उत्तर मिलेगा</string>
     <string name="qk_04071" formatted="false">zxwidget डायनामिक इंटरफ़ेस बंद</string>
     <string name="qk_04072" formatted="false">Web UI</string>
     <string name="qk_04076">zxwidget डायनामिक इंटरफ़ेस</string>
 
     <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">zxwidget कार्ड एक्शन में component या dsl नहीं है</string>
+    <string name="qk_04073" formatted="false">zxwidget में component या dsl नहीं है</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI · Web UI</string>
     <string name="qk_04075">Web UI सेवा शुरू नहीं हो सकी: %1$s</string>
+    <string name="qk_04077">Web UI पृष्ठ लोड नहीं हो सका (%1$s): %2$s</string>
+    <string name="qk_04078">%1$s से Web UI लोड हो रहा है…</string>
+    <string name="qk_04079">उसी Wi-Fi पर, इस लिंक को किसी अन्य डिवाइस पर खोलें</string>
+    <string name="qk_04080">शुरू हो रहा है…</string>
+    <string name="qk_04081">लिंक कॉपी करें</string>
+    <string name="qk_04082">कॉपी हो गया</string>
+    <string name="qk_04083">ब्राउज़र में खोलें</string>
 </resources>

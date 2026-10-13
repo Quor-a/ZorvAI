@@ -3909,16 +3909,23 @@ Ihre konfigurierten Modelle bleiben erhalten; Sie können den Modellnamen auch m
     <string name="qk_04066" formatted="false">Karte neu laden</string>
     <string name="qk_04067" formatted="false">Karten-DSL kopieren</string>
     <string name="qk_04068">Karten-Runtime-Ressource fehlt: %1$s</string>
-    <string name="qk_04069" formatted="false">Antworte in dieser Runde mit der dynamischen zxwidget-Oberfläche: rufe zx_web_card auf (component = Name mit Präfix zx_, dsl = JSON dieser Komponente) und stelle das strukturierte Ergebnis als interaktive Bedienelemente dar statt als reinen Text. Komponenten- und Feldnamen zuerst über zx_catalog nachschlagen.</string>
+    <string name="qk_04069" formatted="false">Antworte in dieser Runde mit der dynamischen zxwidget-Oberfläche: rufe zx_web_card auf (component = Name mit Präfix zx_, dsl = JSON dieser Komponente) und stelle das strukturierte Ergebnis als interaktive Bedienelemente dar statt als reinen Text. Komponenten- und Feldnamen zuerst über zx_catalog nachschlagen.Die Oberfl\u00e4che wird **direkt im aktuellen Dialog** gerendert (kein Popup, keine Karte); jedes Element nur einmal zeichnen.</string>
     <string name="qk_04070" formatted="false">Dynamische zxwidget-Oberfläche aktiviert: Diese Runde antwortet mit interaktiven Karten</string>
     <string name="qk_04071" formatted="false">Dynamische zxwidget-Oberfläche deaktiviert</string>
     <string name="qk_04072" formatted="false">Web UI</string>
     <string name="qk_04076">zxwidget dynamische Oberfläche</string>
 
     <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">zxwidget-Kartenaktion ohne component oder dsl</string>
+    <string name="qk_04073" formatted="false">zxwidget: component oder dsl fehlt</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI - Web UI</string>
     <string name="qk_04075">Web-UI-Dienst konnte nicht gestartet werden: %1$s</string>
+    <string name="qk_04077">Web-UI-Seite konnte nicht geladen werden (%1$s): %2$s</string>
+    <string name="qk_04078">Web-UI wird von %1$s geladen…</string>
+    <string name="qk_04079">Im selben WLAN diesen Link auf einem anderen Gerät öffnen</string>
+    <string name="qk_04080">Wird gestartet…</string>
+    <string name="qk_04081">Link kopieren</string>
+    <string name="qk_04082">Kopiert</string>
+    <string name="qk_04083">Im Browser öffnen</string>
 </resources>

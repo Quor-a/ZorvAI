@@ -29,6 +29,7 @@ import com.ai.assistance.quro.core.memory.QuroMemoryRepository
 import com.ai.assistance.quro.core.experience.QuroExperienceEngine
 import com.ai.assistance.quro.core.experience.QuroExperienceRepository
 import com.ai.assistance.quro.core.QuroMessage
+import com.ai.assistance.quro.core.QuroToolCall
 import com.ai.assistance.quro.core.QuroChatMessage
 import com.ai.assistance.quro.core.QuroLlmResult
 import com.ai.assistance.quro.core.bot.BotConversationBinder
@@ -711,6 +712,48 @@ class QuroChatViewModel(context: Context) : ViewModel() {
      * ids 为该气泡携带的全�? QuroMessage 原始 id；删除助手消息时，连带清理其隐藏�?
      * tool 结果消息（role=="tool" �? toolCallId 命中被删消息�? toolCall），避免孤儿消息残留�?
      */
+    /**
+     * 把一块 zxwidget 动态交互界面**直接放进对话框**（用户 2026-10-13 拍板：
+     * 「zxwidget 不是卡片方式，是直接渲染在对话框的」——不弹窗、不进卡片栏）。
+     *
+     * 为什么造一条消息而不是新加一个 UI 槽位：
+     *   渲染层只认**一种载体**——消息上的 `zx_web_card` 工具调用
+     *   （component/dsl 就在其参数里）。两个对话框都从那里读，
+     *   所以这里复用同一形状，就同时满足「原生对话框内联渲染」与
+     *   「Web UI 快照里也看得到」，也顺带解决了历史重放。
+     *
+     * 只给用户看、**不喂 LLM**（`excludeFromLlm = true`）——否则模型会以为
+     * 「这块界面已经交给用户了」，下一轮莫名开始等回答。
+     *
+     * 用于「模型写 DSL 节点而不是调工具」这条来源；走工具的来源
+     * 本身就有工具调用可挂，不需要本方法。
+     */
+    fun showInlineZxWidget(component: String, dsl: String, title: String = "") {
+        val comp = component.trim()
+        if (comp.isEmpty()) return
+        val args = JSONObject().apply {
+            put("component", comp)
+            put("dsl", runCatching { JSONObject(dsl) }.getOrElse { JSONObject().put("_raw", dsl) })
+            if (title.isNotBlank()) put("title", title.trim())
+        }.toString()
+        val msg = QuroMessage(
+            role = "assistant",
+            content = "",
+            toolCalls = listOf(
+                QuroToolCall(
+                    id = "zxinline_${System.currentTimeMillis()}",
+                    name = "zx_web_card",
+                    arguments = args,
+                )
+            ),
+            excludeFromLlm = true,
+        )
+        store.addAll(listOf(msg))
+        _messages.value = store.all()
+        emitMeta()
+        QuroDiag.log("QuroChatViewModel", "内联 zxwidget：$comp")
+    }
+
     fun deleteMessage(ids: List<String>) {
         val cid = _currentId.value ?: return
         if (ids.isEmpty()) return

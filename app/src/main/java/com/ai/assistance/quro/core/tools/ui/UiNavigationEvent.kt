@@ -22,11 +22,14 @@ sealed class UiNavigationEvent {
     data class VisualAsk(val prompt: String, val options: List<String>) : UiNavigationEvent()
 
     /**
-     * zxwidget 单卡片对话框。
+     * zxwidget 动态交互界面（[component] + [dsl]）。
      *
-     * 与上面两个同族（都在输入框「工具」菜单、都走 [UiNavigationBus]），
-     * 差别是它用 WebView 承载 zx 交互式卡片族（[component] + [dsl]），
-     * 交互不回发固定文案，而是把用户做了什么结构化回传宿主。
+     * 🔴 它**不是弹窗、也不是卡片**：收到后由 ChatScreen 调 `vm.showInlineZxWidget(...)`
+     * 造一条只给用户看的消息，界面**直接渲染在对话框的消息流里**（撑满宽度）。
+     * 交互不回发固定文案，而是把「用户在界面上做了什么」结构化回传宿主。
+     *
+     * 之所以要绕这一跳：发事件的地方（`handleDynamicUiAction`）是顶层函数、拿不到 vm，
+     * 而 [UiNavigationBus] 正是为这种「深层 UI 事实 → ChatScreen 才能接的线」而存在的。
      */
     data class ZxWebCard(
         val title: String,

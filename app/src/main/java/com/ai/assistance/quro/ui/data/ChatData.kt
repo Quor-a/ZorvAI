@@ -58,6 +58,22 @@ data class ToolCallUi(
     val durationMs: Long = 0,
 )
 
+/**
+ * 一块要**内联渲染进对话框**的 zxwidget 动态交互界面。
+ *
+ * 它不是「卡片」：不复用 `cards` 槽位（那是气泡内小卡片），也不走弹窗。
+ * 用户 2026-10-13 拍板——zxwidget 是「直接渲染在对话框的」，
+ * 所以它像 AIP 画布那样撑满宽度、长在消息流里。
+ *
+ * 来源是模型的一次 `zx_web_card` 工具调用（component + dsl 就在其参数里），
+ * 聚合时从工具调用里抽出来，因此**不需要给 QuroMessage 加新字段**，
+ * 历史重放也能正常渲染。
+ */
+data class ZxInlineSpec(
+    val component: String,
+    val dsl: String,
+)
+
 data class Message(
     val id: Int,
     /** 底层 QuroMessage 的原始 id 列表（聚合气泡含多个），用于精确删除。 */
@@ -73,6 +89,11 @@ data class Message(
     val think: ThinkBlock? = null,
     val tools: List<ToolCallUi>? = null,  // 本消息关联的工具调用（可见化，而非隐藏管道）
     val cards: List<QuroChatCard> = emptyList(), // 气泡内富组件（一等公民，合体进聊天气泡）
+    /**
+     * 本消息要**内联渲染**的 zxwidget 动态交互界面（撑满宽度，长在消息流里）。
+     * 与 [cards] 是两回事：cards 是气泡内小卡片，zxwidget 是整块可交互界面。
+     */
+    val zxWidgets: List<ZxInlineSpec> = emptyList(),
     val genUiCardIds: List<String> = emptyList(), // 生成式 UI 卡片（:genui artifact id，WebView 内渲染进气泡）
     /** 等待指示：AI 尚未产出首条内容时的「等等」动态小组件标记（独立于头像/名字，仅内容区 loading）。 */
     val isWaiting: Boolean = false,
