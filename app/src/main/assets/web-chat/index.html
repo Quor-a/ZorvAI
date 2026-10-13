@@ -11,54 +11,43 @@
 <body>
 
 <!-- ═══════════════════════════════════════════════════════════════════
-     Web UI —— ZorvAI 对话框的**投影**
+     Web UI —— ZorvAI 的**对等客户端**（另一个 ZorvAI 对话框）
      ═══════════════════════════════════════════════════════════════════
 
-     🔴 这个页面不是「一个网页版聊天应用」，所以它刻意**没有**自己的一套设计：
-        · 没有 logo、没有空状态插画、没有自创的页脚标语；
-        · 顶栏字段（标题/模型/人格）由宿主投影过来，与原生 ChatTopBar 同源；
-        · 消息一律按宿主投影的**块序列**渲染（块由原生 parseBlocks 产出），
-          本页不做任何 Markdown/围栏解析——一旦在这里解析，投影就退化成第二个实现；
-        · 底部是原生 PermissionModeBar + 输入行的投影。
+     这个页面不是投影，而是 ZorvAI 对话框在浏览器里的**对等客户端**：
+     同一个会话、同一份状态、同一条渲染链，但这里可以像原生一样操作：
+       · 发消息 / 停止 / 新对话 / 清空；
+       · 深度思考 / 记忆 / 子智能体 / 自动朗读 / 看懂屏幕 开关直接切换；
+       · CMS / 特权 策略直接切换；
+       · 模型 / 人格选择弹层；
+       · 上传图片 / 文件 / 视频；
+       · 语音面板（TTS / STT）；
+       · 打开全部原生功能面板（终端 / 编辑器 / 工具箱 / 知识库 / …）。
 
-     这里只承担一件事：**把宿主投过来的东西画出来**。
-
-     互动UI界面（zxwidget）**在本页同样画得出来**：它不是「某个对话框的私产」，
-     而是一套被两个对话框一起支持的动态交互界面。本页用 iframe 引 `/zx/shell` ——
-     那一页就是原生 `ZxWidgetInline` 用的**同一份** `zx_card_runtime.html`
-     （同一份编译器/ CSS / 高度回报），服务端只把原生桥换成 postMessage。
-     所以网页上与手机上画出来的是同一个东西，不存在「网页看得到、手机画不出」的分叉。
-     交互回路也共用：界面里的操作走 POST /api/interact，
-     命中在等的 zx_web_card 工具就作为**工具结果**放行，否则作为一条用户消息发出。
+     消息渲染与原生同源：正文块由原生 parseBlocks 产出（见 WebUiProjection），
+     互动UI界面（zxwidget）用 iframe 引 /zx/shell —— 与原生同一份运行时。
      ═══════════════════════════════════════════════════════════════════ -->
 <div id="app">
 
-  <!-- 顶栏 = 原生 ChatTopBar 的投影 -->
+  <!-- 顶栏 = 原生 ChatTopBar 的对等实现（模型/人格可点） -->
   <header id="hd">
     <div class="hd-main">
       <h1 id="title">ZorvAI</h1>
       <div class="hd-sub">
-        <span id="model" class="chip"></span>
-        <span id="persona" class="chip"></span>
+        <button type="button" class="chip" id="model" title="切换模型"></button>
+        <button type="button" class="chip" id="persona" title="切换人格"></button>
       </div>
     </div>
     <span class="dot" id="dot"></span>
     <button id="btn-new" type="button">新对话</button>
   </header>
 
-  <!-- 消息流 = 原生 MessageList 的投影 -->
+  <!-- 消息流 = 原生 MessageList 的同源渲染 -->
   <main id="stream" role="log" aria-live="polite"></main>
 
-  <!-- 底栏 = 原生 PermissionModeBar + 输入行的投影 -->
+  <!-- 底栏 = 原生 PermissionModeBar + 输入行的对等实现 -->
   <footer id="composer">
-    <!-- 权限模式条 = 原生 ChatPermissionModeBar **收起态那一行摘要**的投影。
-         顺序与文案逐项对齐原生（qk_03219 / qk_03220 / qk_03221 / qk_03069 / qk_03223
-         / CMS / qk_03224 / qk_00025），一个不多一个不少：
-         上一版这里写的是「自动记忆」「视觉」，而原生是「记忆」「看懂屏幕」——
-         标签自己走偏也是投影失真，虽然不报错，但用户对着两边看就是两个说法。
-         CMS / 特权 是原生**常驻**显示的两个标签（它们直接决定 AI 能不能动能力），
-         投影少投就等于网页看到的权限状态是残缺的。
-         工作区在原生只出现在展开区；本页没有展开态，故并到同一行末尾。 -->
+    <!-- 权限模式条：可点击切换（对等客户端） -->
     <div id="modes" class="modes">
       <button type="button" class="mode" data-mode="deepThink">深度思考</button>
       <button type="button" class="mode" data-mode="autoSaveMemory">记忆</button>
@@ -70,18 +59,101 @@
       <button type="button" class="mode" id="ws">工作区</button>
     </div>
     <div class="crow">
+      <button id="btn-tools" type="button" class="tbtn" title="工具面板">+</button>
+      <button id="btn-attach" type="button" class="tbtn" title="上传文件">📎</button>
       <textarea id="inp" rows="1" placeholder="发消息…" autocomplete="off"
                 autocapitalize="sentences" spellcheck="false"></textarea>
       <button id="send" type="button" aria-label="发送"></button>
     </div>
     <div id="cfoot">
       <span id="cnt">0 条消息</span>
+      <span class="mid" id="btn-settings">设置</span>
       <span class="right" id="link"></span>
     </div>
-    <!-- 布局自检行：平时 hidden、不占位；只在「消息存在但渲染区高度塌成 0」时出现，
-         把实测数字摊出来。上一次真机白屏时我拿不到任何数字，只能让用户重装再截图。 -->
+    <!-- 布局自检行：平时 hidden、不占位 -->
     <div id="diag" hidden></div>
   </footer>
+
+  <!-- 已选附件条 -->
+  <div id="attbar" hidden></div>
+
+  <!-- ═══ 弹层 ═══ -->
+
+  <!-- 模型选择弹层 -->
+  <div class="overlay" id="modelSheet" hidden>
+    <div class="sheet">
+      <div class="sheet-h">
+        <span>切换模型</span>
+        <button type="button" class="x" data-close="modelSheet">✕</button>
+      </div>
+      <div class="sheet-b" id="modelList"></div>
+      <div class="sheet-f">
+        <button type="button" id="btn-fetch-models">从 API 拉取可用模型</button>
+        <button type="button" id="btn-add-model">添加模型</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 人格选择弹层 -->
+  <div class="overlay" id="personaSheet" hidden>
+    <div class="sheet">
+      <div class="sheet-h">
+        <span>切换人格</span>
+        <button type="button" class="x" data-close="personaSheet">✕</button>
+      </div>
+      <div class="sheet-b" id="personaList"></div>
+      <div class="sheet-f">
+        <button type="button" id="btn-add-persona">添加人格</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 工具面板（+） -->
+  <div class="overlay" id="toolSheet" hidden>
+    <div class="sheet">
+      <div class="sheet-h">
+        <span>工具面板</span>
+        <button type="button" class="x" data-close="toolSheet">✕</button>
+      </div>
+      <div class="sheet-b" id="toolList"></div>
+    </div>
+  </div>
+
+  <!-- 语音面板 -->
+  <div class="overlay" id="voiceSheet" hidden>
+    <div class="sheet">
+      <div class="sheet-h">
+        <span>语音</span>
+        <button type="button" class="x" data-close="voiceSheet">✕</button>
+      </div>
+      <div class="sheet-b" id="voiceList"></div>
+    </div>
+  </div>
+
+  <!-- 设置弹层 -->
+  <div class="overlay" id="settingsSheet" hidden>
+    <div class="sheet">
+      <div class="sheet-h">
+        <span>设置</span>
+        <button type="button" class="x" data-close="settingsSheet">✕</button>
+      </div>
+      <div class="sheet-b" id="settingsList"></div>
+    </div>
+  </div>
+
+  <!-- 功能面板入口网格 -->
+  <div class="overlay" id="featuresSheet" hidden>
+    <div class="sheet">
+      <div class="sheet-h">
+        <span>全部功能</span>
+        <button type="button" class="x" data-close="featuresSheet">✕</button>
+      </div>
+      <div class="sheet-b" id="featuresList"></div>
+    </div>
+  </div>
+
+  <!-- 文件选择（隐藏 input） -->
+  <input type="file" id="fileInput" multiple hidden>
 
 </div>
 

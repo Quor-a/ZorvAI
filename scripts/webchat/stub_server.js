@@ -346,9 +346,60 @@ function phaseStream(){
       say("服务端 SSE 订阅者 = "+p.sseClients+"，diag 回传 = "+p.diagReports+" 条");
       ok(p.sseClients>0,"页面确实挂在 SSE 长连接上（不是还在轮询）");
       ok(p.diagReports>0,"页面自检能回传宿主（真机白屏时手上才有东西）");
-      phase2();
+      phasePeer();
     });
   },25);
+}
+
+function phasePeer(){
+  say("—— ③b 对等客户端：开关可点、模型/人格可切、上传可用 ——");
+  var d=doc();
+  // 1. 点击深度思考开关：状态应翻转并写回服务端
+  var deepChip=d.querySelector('.mode[data-mode="deepThink"]');
+  var wasOn=deepChip.classList.contains("on");
+  deepChip.click();
+  setTimeout(function(){
+    fetch("api/snapshot",{cache:"no-store"}).then(function(r){return r.json();}).then(function(s){
+      say("deepThink 点击后 = "+s.composer.deepThink+"（原 "+wasOn+"）");
+      ok(s.composer.deepThink!==wasOn,"开关点击写回了服务端（deepThink 翻转）");
+      // 2. 打开模型弹层并选择
+      d.getElementById("model").click();
+      setTimeout(function(){
+        var rows=d.querySelectorAll("#modelList .model-row");
+        say("模型弹层行数 = "+rows.length);
+        ok(rows.length>0,"模型弹层渲染出可选项");
+        if(rows.length>0) rows[0].click();
+        setTimeout(function(){
+          fetch("api/snapshot",{cache:"no-store"}).then(function(r){return r.json();}).then(function(s2){
+            say("选择后 model = "+s2.bar.model);
+            ok(s2.bar.model.length>0,"模型选择写回服务端");
+            // 3. 打开人格弹层
+            d.getElementById("persona").click();
+            setTimeout(function(){
+              var prows=d.querySelectorAll("#personaList .model-row");
+              say("人格弹层行数 = "+prows.length);
+              ok(prows.length>0,"人格弹层渲染出可选项");
+              // 4. ui_action 打开功能面板
+              d.getElementById("btn-tools").click();
+              setTimeout(function(){
+                var tools=d.querySelectorAll("#toolList .feat-row");
+                say("工具面板行数 = "+tools.length);
+                ok(tools.length>0,"工具面板渲染出入口");
+                if(tools.length>0) tools[0].click();
+                setTimeout(function(){
+                  fetch("api/__probe").then(function(r){return r.json();}).then(function(p){
+                    say("ui_action 触发 = "+JSON.stringify(p.uiActions));
+                    ok(p.uiActions.length>0,"工具面板点击通过 ui_action 打开了功能");
+                    phase2();
+                  });
+                },200);
+              },200);
+            },200);
+          });
+        },200);
+      },200);
+    });
+  },300);
 }
 
 function phase2(){
@@ -466,6 +517,8 @@ let snap = JSON.parse(JSON.stringify(SNAPSHOT));
 const sseClients = [];
 const interactions = [];
 const diagReports = [];
+const uploaded = [];
+const uiActions = [];
 let lastRev = '';
 
 /* 指纹推送：只在**真的变了**时推（轮询是「不变也传」）。
@@ -620,6 +673,35 @@ http.createServer((req, res) => {
     return json(res, 200, snap);
   }
 
+  /* 对等客户端：模型分组列表 */
+  if (req.method === 'GET' && url === '/api/models') {
+    return json(res, 200, {
+      ok: true,
+      current: snap.bar.model || '',
+      groups: [
+        { name: '当前配置', models: [{ id: snap.bar.model || 'gpt-4o-mini', name: snap.bar.model || 'gpt-4o-mini', desc: '提供商: OPENAI', provider: 'OPENAI', mark: 'Q', group: 'current' }] },
+        { name: '从 API 拉取', models: [{ id: 'deepseek-v4-pro', name: 'deepseek-v4-pro', desc: '从 API 拉取', provider: 'OPENAI', mark: 'D', group: 'fetched' }] },
+      ],
+    });
+  }
+
+  /* 对等客户端：人格列表 */
+  if (req.method === 'GET' && url === '/api/personas') {
+    return json(res, 200, {
+      ok: true,
+      activeId: 'p1',
+      personas: [
+        { id: 'p1', name: '默认人格', avatarEmoji: '🤖', avatarType: 'emoji', avatarUri: '', description: '默认人格', active: true },
+        { id: 'p2', name: 'Zorv AI', avatarEmoji: '✦', avatarType: 'image', avatarUri: '', description: '全能助手', active: false },
+      ],
+    });
+  }
+
+  /* 对等客户端：已上传附件 */
+  if (req.method === 'GET' && url === '/api/attachments') {
+    return json(res, 200, { ok: true, attachments: uploaded });
+  }
+
   /* 仅测试用：把服务端侧的状态摊给 E2E 断言（交互有没有到、SSE 有没有挂上）。
      双下划线开头就是提醒：产品里没有这条路由。 */
   if (req.method === 'GET' && url === '/api/__probe') {
@@ -627,6 +709,8 @@ http.createServer((req, res) => {
       interactions: interactions,
       diagReports: diagReports.length,
       sseClients: sseClients.length,
+      uiActions: uiActions,
+      uploaded: uploaded,
     });
   }
 
@@ -693,6 +777,51 @@ http.createServer((req, res) => {
         return json(res, 200, { ok: true, delivered: 'tool' });
       }
       if (url === '/api/diag') { diagReports.push(body); return json(res, 200, { ok: true }); }
+      /* 对等客户端：开关写回 */
+      if (url === '/api/toggle') {
+        if (body.key && Object.prototype.hasOwnProperty.call(snap.composer, body.key)) {
+          snap.composer[body.key] = !!body.on;
+        }
+        return json(res, 200, { ok: true });
+      }
+      /* 对等客户端：策略写回 */
+      if (url === '/api/policy') {
+        if (body.key === 'cms' || body.key === 'priv') {
+          snap.composer[body.key] = body.value || 'ask';
+        }
+        return json(res, 200, { ok: true });
+      }
+      /* 对等客户端：工作区写回 */
+      if (url === '/api/workspace') {
+        snap.composer.workspace = body.path || '';
+        return json(res, 200, { ok: true });
+      }
+      /* 对等客户端：模型选择 */
+      if (url === '/api/models/select') {
+        snap.bar.model = body.id || snap.bar.model;
+        return json(res, 200, { ok: true });
+      }
+      /* 对等客户端：人格选择 */
+      if (url === '/api/personas/select') {
+        snap.bar.persona = body.id || snap.bar.persona;
+        return json(res, 200, { ok: true });
+      }
+      /* 对等客户端：上传 */
+      if (url === '/api/upload') {
+        var attId = 'att-' + Date.now();
+        uploaded.push({ id: attId, name: body.name || 'upload.bin', type: 'file', size: 123 });
+        return json(res, 200, { ok: true, id: attId, name: body.name || 'upload.bin', type: 'file', size: 123 });
+      }
+      /* 对等客户端：打开功能面板 */
+      if (url === '/api/ui_action') {
+        uiActions.push(body.action || '');
+        return json(res, 200, { ok: true });
+      }
+      /* 对等客户端：清空 */
+      if (url === '/api/clear') {
+        snap.messages = [];
+        return json(res, 200, { ok: true });
+      }
       /* 仅测试用：模拟宿主那边「正文在长」的一次推送，用来量流式延迟。
          产品里没有这条路由，名字前面双下划线就是提醒。 */
       if (url === '/api/__push') {

@@ -1,26 +1,18 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   Web UI 运行时 —— **ZorvAI 对话框投影的接收端**
+   Web UI 运行时 —— **ZorvAI 对话框的对等客户端**
    ═══════════════════════════════════════════════════════════════════════
 
-   职责边界（用户 2026-10-13 拍板，别再混）：
+   定位（用户 2026-10-13 拍板）：
+   「web ui拥有zorvAI所有功能，界面一样，功能一样，另外一个zorvAI对话框」。
 
-     · 本文件 = 「Web UI」= ZorvAI 对话框的投影接收端。
-       它**不设计界面**、**不解析对话**、**不拥有任何能力模块**。
-       消息怎么切成块、切出哪些块，全部由宿主 `parseBlocks` 决定
-       （见 ui/chat/WebUiProjection.kt）；这里只把投过来的块画出来。
+   本文件是 ZorvAI 对话框在浏览器里的**对等客户端**：
+     · 消息渲染与原生同源（块由宿主 parseBlocks 产出，这里只画）；
+     · 所有开关**可点击写回**（深度思考/记忆/子智能体/朗读/视觉/CMS/特权/工作区）；
+     · 模型 / 人格选择弹层，切换写回原生同一仓库；
+     · 上传图片/文件/视频（base64 → 应用私有目录 → 随消息发送）；
+     · 语音面板、工具面板、设置、全部功能面板入口。
 
-     · zxwidget（互动UI界面）= 独立模块（assets/zx/），宿主是原生对话框。
-       本文件**不加载它、不编译它、不为它发任何请求**。
-       投影里它只表现为 {t:"ui", component} 的「这里有一块互动界面」标记。
-
-   🔴 所以本文件里出现下列任何一样，都说明投影又退化成了「第二个实现」，必须删掉：
-        · 围栏嗅探（``` 的正则）
-        · 块级 Markdown 解析（标题/列表/表格/引用）
-        · 自造的空状态、标语、欢迎语
-        · 任何 zx 相关的加载或编译
-
-   数据来源：宿主内嵌的投影服务（同源，fetch 即可）。宿主不往页面里灌 JS，
-   HTML 也不内联任何大块数据——少一层转义就少一类「漏一个字符整页白」的故障。
+   数据来源：宿主内嵌的服务（同源，fetch + SSE）。
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* ── 1. 基础工具 ─────────────────────────────────────────────────────── */
@@ -38,14 +30,8 @@ function el(tag,cls,text){
 }
 
 /**
- * 正文的**行内**格式化 —— 本页唯一一处碰文本的地方，理由必须讲清楚。
- *
- * 宿主投过来的块模型只到**块级**（text / heading / quote / code / table / rule …），
- * 行内的 **加粗** / `代码` / [链接]() 不在块模型里（原生侧由 Compose RichText 现渲染）。
- * 浏览器这边没有对应物，所以只能补一层最小的行内处理。
- *
- * 🔴 边界：只做行内。这里**不得**出现标题、列表、表格、围栏这类块级解析——
- *    那些是宿主 parseBlocks 的职责，抢过来做就是两套实现。
+ * 正文的**行内**格式化 —— 本页唯一一处碰文本的地方。
+ * 块级解析（标题/列表/表格/引用）由宿主 parseBlocks 负责，这里不做。
  */
 function inline(s){
   var t=esc(s);
@@ -74,7 +60,9 @@ var $stream=document.getElementById("stream"),
     $ws=document.getElementById("ws"),
     $app=document.getElementById("app"),
     $composer=document.getElementById("composer"),
-    $diag=document.getElementById("diag");
+    $diag=document.getElementById("diag"),
+    $attbar=document.getElementById("attbar"),
+    $fileInput=document.getElementById("fileInput");
 
 var state={
   bar:{title:"ZorvAI",model:"",persona:""},
@@ -85,11 +73,7 @@ var state={
   dark:false,lan:"",port:0,messages:[]
 };
 
-/* 三态策略的显示词 —— 与原生 qk_03235 / qk_03236 / qk_03166 逐字一致。
-   契约里 cms/priv 投的是 `allow|deny|ask` 这种**规范化名**（投影只投状态、不投文案），
-   所以中文文案在这里落地；这里改字只影响本页，不会反向污染原生。
-   缺值一律按 ask 处理：宁可显示「询问」（最保守的读法），
-   也不要把未知状态画成「允许」——那会让用户以为 AI 可以放开动手。 */
+/* 三态策略的显示词 —— 与原生 qk_03235 / qk_03236 / qk_03166 逐字一致。 */
 var POLICY_WORD={allow:"允许",deny:"禁止",ask:"询问"};
 
 /** 规范化策略值 → 三态之一的 key；未知值退化为 "ask"。 */
@@ -100,8 +84,9 @@ function policyKey(v){
 var nodes={};          /* id -> 渲染缓存 */
 var emptyBox=null;
 var pollTimer=null;
+var selectedAttachments=[];   /* {id,name,type,size} */
 
-/* 原生专属块的显示名：浏览器里没有对应渲染器，如实说明它是什么 */
+/* 原生专属块的显示名 */
 var NATIVE_LABEL={
   aip:"AIP 排版（原生渲染）",
   mermaid:"Mermaid 图（原生渲染）",
@@ -113,44 +98,19 @@ var NATIVE_LABEL={
 
 /* ── 2b. 视口高度 + 布局自检（真机白屏事故的防线，别删）──────────────── */
 
-/**
- * 把 `#app` 高度钉成**实测的布局视口高度**。
- *
- * 🔴 为什么不用 CSS 的 `dvh`：真机（Android WebView）上页面在 WebView 拿到尺寸**之前**
- * 就开始加载（宿主在 `AndroidView.update` 里直接 `loadUrl`），那一刻动态视口极小，
- * `height:100dvh` 把 `#app` 钉死在那条极小值上；`#stream` 是 `flex:1`（=`flex-basis:0%`）
- * 又带 `min-height:0`，剩余空间一被吃光它就正好是 0，消息被 `overflow-y:auto` 全裁掉。
- * 桌面 headless Chrome 永远不存在「0 高度加载」，所以这条只有真机能发现。
- *
- * `document.documentElement.clientHeight` 是**实测值**，不参与「单位认不认识」的协商，
- * 且随 `resize` 更新（WebView 后拿到尺寸、旋屏、软键盘全都涵盖）。
- */
 function fit(){
   if(document.documentElement.classList.contains("flow"))return;
   var h=document.documentElement.clientHeight;
   if(h>0)$app.style.height=h+"px";
 }
 
-/**
- * 「宁可丑，不可白」兜底：消息存在、渲染区高度却是 0 → 高度链坏了。
- * 摘掉 flex 改回文档流（`html.flow`，见 style.css），消息可见可滚、底栏 sticky 在底部。
- *
- * 同时把实测数字摊到 `#diag`，并**回传宿主**（`POST /api/diag` → QuroDiag）。
- * 上一次白屏时我连一个数字都拿不到，只能让用户重装一版再截图 —— 这个代价不该付第二次。
- *
- * 🔴 必须回传，不能只 `console.log`：本页跑在**别的设备的浏览器**里，
- *    宿主的 console 看不见它（改前靠内嵌 WebView 的 WebChromeClient 收，
- *    那个内嵌界面已经被拿掉了）。只打日志 = 真机排查时手上什么都没有。
- */
 function guardCollapse(){
   if(state.messages.length===0)return;
   if($stream.clientHeight>=60)return;
-  // 🔴 数字必须在改布局**之前**取下来。改完再读会拿到修复后的值——那会把
-  //    「渲染区塌成 10px」记成「952px」，这条自检行就变成误导而不是线索了。
   var sh0=$stream.clientHeight, ah0=$app.clientHeight, vp0=document.documentElement.clientHeight;
   if(!document.documentElement.classList.contains("flow")){
     document.documentElement.classList.add("flow");
-    $app.style.height="";   // 清掉 fit() 写的 px，否则内联样式会压过 .flow 的 height:auto
+    $app.style.height="";
   }
   var msg="消息区高度塌陷：渲染区仅 "+sh0+"px（容器 "+ah0+"px / 视口 "+vp0+
     "px / 消息 "+state.messages.length+" 条）；已降级为文档流显示";
@@ -162,11 +122,9 @@ function guardCollapse(){
   }
 }
 
-/* 一次性的健康快照：真机出问题时，宿主的 logcat 里这一行就能定案（tag QuroWebUi）。 */
 var healthLogged=false;
 function logHealth(){
   if(healthLogged)return;
-  // 视口还是 0 = WebView 尚未被测量，这时的数字没有诊断价值，等下一轮
   if(document.documentElement.clientHeight<=0)return;
   healthLogged=true;
   var dvh=(window.CSS&&CSS.supports)?CSS.supports("height","100dvh"):"?";
@@ -175,7 +133,6 @@ function logHealth(){
     " stream="+$stream.clientHeight+" composer="+$composer.offsetHeight+
     " dvh支持="+dvh+" msgs="+state.messages.length;
   console.log("[webui] "+snap);
-  // 一次性回传：这一行是「白屏/塌陷」类问题唯一的现场数字，必须落在宿主日志里
   reportDiag(snap,"info");
 }
 
@@ -193,43 +150,36 @@ function showEmpty(on){
   if(emptyBox)return;
   emptyBox=el("div",null);
   emptyBox.id="empty";
-  emptyBox.textContent="这个会话还没有消息。投影与主对话框共用同一个会话。";
+  emptyBox.textContent="这个会话还没有消息。";
   $stream.appendChild(emptyBox);
 }
 
 function renderChrome(){
   $title.textContent=state.bar.title||"ZorvAI";
-  $model.textContent=state.bar.model||"";
-  $persona.textContent=state.bar.persona||"";
+  $model.textContent=state.bar.model||"选择模型";
+  $persona.textContent=state.bar.persona||"选择人格";
   $cnt.textContent=state.messages.length+" 条消息";
   $dot.className="dot"+(state.composer.busy?" on":"");
-  // 🔴 用 classList.toggle 而不是 `className=` 整体赋值：整体赋值会把 guardCollapse
-  //    加的 `flow` 降级类**一起抹掉**，于是每次轮询都白屏↔降级来回抖。
   var darkNow=!!state.dark;
   if(darkNow!==state.darkApplied){
     state.darkApplied=darkNow;
     document.documentElement.classList.toggle("dark",darkNow);
-    pushDark();   // 已画出来的 zxwidget 跟着换皮肤（不重建，保留交互状态）
+    pushDark();
   }
   $send.textContent=state.composer.busy?"■":"➤";
   $send.className=state.composer.busy?"stop":"";
   $send.setAttribute("aria-label",state.composer.busy?"停止":"发送");
-  // 底栏链接：从**别的设备**打开这个投影的入口（127.0.0.1 在别的设备上是打不开的）
   $link.textContent=state.lan||(state.port?("127.0.0.1:"+state.port):"");
-  // 权限模式开关状态（五个布尔 chip）
   var modes=$modes.querySelectorAll(".mode[data-mode]");
   for(var i=0;i<modes.length;i++){
     var k=modes[i].getAttribute("data-mode");
     if(state.composer[k])modes[i].classList.add("on"); else modes[i].classList.remove("on");
   }
-  // 三态策略 chip（CMS / 特权）。文案格式照抄原生摘要行：
-  // `CMS:允许`（前缀在原生里是硬编码的）与 `特权:允许`（qk_03224 = "特权:%1$s"）。
   var ck=policyKey(state.composer.cms), pk=policyKey(state.composer.priv);
   $cms.textContent="CMS:"+POLICY_WORD[ck];
   $cms.className="mode tri "+ck;
   $priv.textContent="特权:"+POLICY_WORD[pk];
   $priv.className="mode tri "+pk;
-  // 工作区（原生只显示 basename，这里保持一致）
   var ws=String(state.composer.workspace||"");
   $ws.textContent=ws?("工作区:"+ws.split("/").pop()):"工作区";
   if(ws)$ws.classList.add("on"); else $ws.classList.remove("on");
@@ -273,7 +223,6 @@ function blockNode(b){
       });
       t.appendChild(tb); wrap.appendChild(t); return wrap;
     }
-    /* 原生专属渲染的块：如实说明 + 折叠展示源，不假装能画 */
     case "native":{
       var n=el("div","native");
       var nt=el("div","nt",NATIVE_LABEL[b.kind]||("原生渲染："+b.kind));
@@ -307,7 +256,7 @@ function renderBlocks(nd,m){
     var n=blockNode(b);
     if(n){ nd.mdBox.appendChild(n); any=true; }
   });
-  if(!any && m.reasoning){ /* 只有思考、没有正文：留空容器避免占位跳变 */ }
+  if(!any && m.reasoning){ /* 只有思考、没有正文 */ }
 }
 
 function renderThink(nd,m){
@@ -370,9 +319,6 @@ function renderAttachments(nd,m){
     var url=a.uri||a.url||"";
     if(!url)return;
     var name=a.name||url.split("/").pop()||"附件";
-    /* 只有 http(s) 的才敢当图片直接显示：附件在宿主私有目录里是 file://，
-       而本页由 http:// 提供，浏览器一律拦 file:// 子资源。
-       硬塞 <img> 只会得到一个碎图标——不如老实显示成附件名。 */
     if(/^https?:/i.test(url)&&/\.(png|jpe?g|gif|webp|bmp)$/i.test(url.split("?")[0])){
       var im=el("img","att-img");
       im.src=url; im.loading="lazy";
@@ -388,10 +334,6 @@ function renderAttachments(nd,m){
   nd.attsDone=true;
 }
 
-/**
- * 互动UI界面（zxwidget）的插入点。
- * 位置与原生一致：思考 → 正文 → 工具 → 互动界面。
- */
 function uiAnchor(nd){
   if(nd.uiBox)return nd.uiBox;
   var box=el("div","ui-list");
@@ -400,23 +342,10 @@ function uiAnchor(nd){
   return box;
 }
 
-/** 把一行 JSON 编成 URL 安全的 base64（hash 里用；不经网络，所以不受长度限制）。 */
 function b64(s){
   try{ return btoa(unescape(encodeURIComponent(s))); }catch(e){ return ""; }
 }
 
-/**
- * 一块 zxwidget —— **真的画出来**，不是占位标记。
- *
- * 承载方式是 `<iframe src="/zx/shell#<base64>">`：那一页就是原生 `ZxWidgetInline`
- * 用的**同一份** `zx_card_runtime.html`（同一份编译器、同一份 CSS、同一套高度回报），
- * 服务端只把「原生桥」换成 postMessage，载荷从「随 HTML 内联」换成 hash。
- * 所以网页上和手机上画出来的是同一个东西 —— 不会出现
- * 「网页上看得到、手机上画不出」这类最难查的分叉。
- *
- * 载荷走 hash 而不是查询串：dsl 是模型给的任意 JSON，又长又含 &/#/中文，
- * 塞进 `?c=..&d=..` 会被截断，hash 不参与请求、没有长度限制。
- */
 function zxFrame(comp,dsl){
   var f=document.createElement("iframe");
   f.className="zxf";
@@ -428,8 +357,6 @@ function zxFrame(comp,dsl){
 
 function renderUi(nd,m){
   var list=m.ui||[];
-  // 指纹里带上 dsl 长度：同一组件换了数据也要重画；只有长度和组件名都没变才跳过，
-  // 这样流式过程中不会把已经画好的 iframe 反复重建（重建会丢用户填了一半的输入）。
   var sig=list.map(function(u){
     return (u.component||"")+":"+String(u.dsl||"").length;
   }).join("~");
@@ -441,20 +368,12 @@ function renderUi(nd,m){
   list.forEach(function(u){ box.appendChild(zxFrame(u.component,u.dsl)); });
 }
 
-/** 反查某个消息来自哪一个 zxwidget iframe（e.source → iframe 元素）。 */
 function frameOf(src){
   var fs=document.querySelectorAll("iframe.zxf");
   for(var i=0;i<fs.length;i++){ if(fs[i].contentWindow===src)return fs[i]; }
   return null;
 }
 
-/**
- * 高度与交互的统一入口。
- *
- * 🔴 高度必须由**页面自己**报（`document.body.scrollHeight`）：iframe 默认 150px，
- *    不报高度就只能靠猜 —— 猜大了是一块空白，猜小了内容被裁掉，
- *    两种都表现为「这块界面坏了」。原生侧用的是同一个脚本、同一个协议。
- */
 window.addEventListener("message",function(e){
   var d=e.data||{};
   if(!d||typeof d!=="object")return;
@@ -464,7 +383,7 @@ window.addEventListener("message",function(e){
     var h=parseInt(d.px,10);
     if(!isFinite(h)||h<=0)return;
     var cur=parseInt(f.getAttribute("data-h")||"0",10);
-    if(h===cur)return;                      // 只在变化时改，避免自激
+    if(h===cur)return;
     f.setAttribute("data-h",String(h));
     f.style.height=Math.max(120,Math.min(h+2,680))+"px";
   }else if(d.__zx==="i"){
@@ -477,7 +396,6 @@ window.addEventListener("message",function(e){
   }
 });
 
-/** 主题切换：不重建 iframe（会丢交互状态），只把新皮肤推给每个界面。 */
 function pushDark(){
   var fs=document.querySelectorAll("iframe.zxf");
   for(var i=0;i<fs.length;i++){
@@ -515,7 +433,6 @@ function ensureNode(m){
   return nd;
 }
 
-/* 只在顺序真的不对时才动 DOM —— 每次轮询都重排会让滚动抖、动画重放 */
 function syncOrder(ids){
   var want=[];
   ids.forEach(function(id){ if(nodes[id])want.push(nodes[id].root); });
@@ -536,14 +453,7 @@ function prune(ids){
   });
 }
 
-/* ── 4. 与宿主同步：SSE 长连接（流式），轮询只作兜底 ─────────────────────
-   旧做法是前端每 180ms（空闲 1200ms）拉一次全量快照，代价有两层：
-     · 延迟：空闲档 1200ms —— 这正是用户报的「消息同步延迟很大」；
-             而且「没有流式」：正文逐字增长时，肉眼看到的是整段整段跳。
-     · 浪费：不变也传，N 个客户端各拉各的。
-   现在由服务端在**投影指纹变化时**推（~80ms 粒度、只在真变了时推），
-   前端只管收。轮询降级为「SSE 连续失败」时的兜底，不再是主路径。
-*/
+/* ── 4. 与宿主同步：SSE 长连接（流式），轮询只作兜底 ───────────────────── */
 
 function apply(snap){
   if(!snap||!snap.ok)return;
@@ -564,7 +474,6 @@ function apply(snap){
   state.messages.forEach(function(m){ ensureNode(m); renderMessage(m); });
   syncOrder(ids);
   renderChrome();
-  // 自检放在 renderChrome 之后：它要量的是**这一轮渲染完**的真实高度
   guardCollapse();
   logHealth();
   if(stick||(!wasBusy&&state.composer.busy))scrollBottom(true);
@@ -580,8 +489,6 @@ function startStream(){
     try{ apply(JSON.parse(ev.data)); }catch(e){}
   };
   es.onerror=function(){
-    // EventSource 自己会重连；但若连续失败（服务被停过、网络切换），
-    // 就退回慢轮询 —— 保证「至少还能看到状态」，而不是页面永远停在旧内容。
     esFails++;
     if(esFails>=3){
       streamDead=true;
@@ -601,7 +508,7 @@ function poll(){
       schedule(2000);
     })
     .catch(function(){
-      $cnt.textContent="连接不上投影服务，重试中…";
+      $cnt.textContent="连接不上服务，重试中…";
       schedule(2000);
     });
 }
@@ -611,7 +518,7 @@ function schedule(ms){
   pollTimer=setTimeout(poll,ms);
 }
 
-/* ── 5. 操作（一律转成对同一个会话的动作）────────────────────────────── */
+/* ── 5. 操作（对等客户端：全部写回原生同一真源）────────────────────── */
 
 function post(path,body){
   return fetch("api/"+path,{
@@ -624,14 +531,6 @@ function post(path,body){
     .catch(function(){ return null; });
 }
 
-/**
- * 页面自检回传宿主的通道。
- *
- * 只在**异常时**调用：正常路径不发，避免把 logcat 刷成噪音。
- * 为什么需要它：本页在别的设备的浏览器里跑，宿主看不到它的 console ——
- * 高度链自检（guardCollapse）的结果如果只打在页面上，
- * 真机排查时就是「用户说白屏、开发者手上什么都没有」。
- */
 function reportDiag(msg,level){
   try{
     fetch("api/diag",{
@@ -644,10 +543,13 @@ function reportDiag(msg,level){
 
 function doSend(){
   var t=$inp.value.trim();
-  if(!t||state.composer.busy)return;
+  if((!t||state.composer.busy)&&selectedAttachments.length===0)return;
+  var body={text:t,attachments:selectedAttachments.map(function(a){return a.id;})};
   $inp.value="";
+  selectedAttachments=[];
+  renderAttBar();
   autoGrow();
-  post("send",{text:t});
+  post("send",body);
 }
 function doStop(){ post("stop",{}); }
 function doNew(){ post("new",{}); }
@@ -657,27 +559,284 @@ function autoGrow(){
   $inp.style.height=Math.min($inp.scrollHeight,168)+"px";
 }
 
+/* ── 5.1 开关写回（对等客户端核心）──────────────────────────────────── */
+
+function toggleMode(key,on){
+  return post("toggle",{key:key,on:on});
+}
+
+/* ── 5.2 模型 / 人格弹层 ────────────────────────────────────────────── */
+
+function openSheet(id){
+  var o=document.getElementById(id);
+  if(o)o.hidden=false;
+}
+function closeSheet(id){
+  var o=document.getElementById(id);
+  if(o)o.hidden=true;
+}
+document.querySelectorAll(".overlay").forEach(function(o){
+  o.addEventListener("click",function(e){
+    if(e.target===o)o.hidden=true;
+  });
+});
+document.querySelectorAll("[data-close]").forEach(function(b){
+  b.addEventListener("click",function(){closeSheet(b.getAttribute("data-close"));});
+});
+
+function loadModels(){
+  fetch("api/models",{cache:"no-store"})
+    .then(function(r){return r.json();})
+    .then(function(j){
+      if(!j||!j.ok)return;
+      var box=document.getElementById("modelList");
+      box.innerHTML="";
+      (j.groups||[]).forEach(function(g){
+        var gh=el("div","group-h",g.name);
+        box.appendChild(gh);
+        (g.models||[]).forEach(function(m){
+          var row=el("div","model-row");
+          var mark=el("span","mark",m.mark||"M");
+          var info=el("div","mi");
+          info.appendChild(el("div","mi-n",m.name));
+          info.appendChild(el("div","mi-d",m.desc||""));
+          row.appendChild(mark); row.appendChild(info);
+          if(m.id===j.current)row.classList.add("cur");
+          row.addEventListener("click",function(){
+            post("models/select",{id:m.id}).then(function(r){
+              if(r&&r.ok){ closeSheet("modelSheet"); refreshBar(); }
+            });
+          });
+          box.appendChild(row);
+        });
+      });
+    });
+}
+
+function loadPersonas(){
+  fetch("api/personas",{cache:"no-store"})
+    .then(function(r){return r.json();})
+    .then(function(j){
+      if(!j||!j.ok)return;
+      var box=document.getElementById("personaList");
+      box.innerHTML="";
+      (j.personas||[]).forEach(function(p){
+        var row=el("div","model-row");
+        var mark=el("span","mark",p.avatarEmoji||"🤖");
+        var info=el("div","mi");
+        info.appendChild(el("div","mi-n",p.name));
+        if(p.description)info.appendChild(el("div","mi-d",p.description||""));
+        row.appendChild(mark); row.appendChild(info);
+        if(p.active)row.classList.add("cur");
+        row.addEventListener("click",function(){
+          post("personas/select",{id:p.id}).then(function(r){
+            if(r&&r.ok){ closeSheet("personaSheet"); refreshBar(); }
+          });
+        });
+        box.appendChild(row);
+      });
+    });
+}
+
+function refreshBar(){
+  fetch("api/snapshot",{cache:"no-store"})
+    .then(function(r){return r.json();})
+    .then(function(j){ if(j&&j.ok){ state.bar=j.bar||state.bar; renderChrome(); } })
+    .catch(function(){});
+}
+
+/* ── 5.3 上传（base64）──────────────────────────────────────────────── */
+
+function renderAttBar(){
+  if(selectedAttachments.length===0){
+    $attbar.hidden=true;
+    $attbar.innerHTML="";
+    return;
+  }
+  $attbar.hidden=false;
+  $attbar.innerHTML="";
+  selectedAttachments.forEach(function(a){
+    var chip=el("span","att-chip",a.name);
+    var x=el("button","att-x","✕");
+    x.type="button";
+    x.addEventListener("click",function(){
+      post("attachments/remove",{id:a.id});
+      selectedAttachments=selectedAttachments.filter(function(t){return t.id!==a.id;});
+      renderAttBar();
+    });
+    chip.appendChild(x);
+    $attbar.appendChild(chip);
+  });
+}
+
+function handleFiles(files){
+  Array.prototype.forEach.call(files,function(file){
+    var reader=new FileReader();
+    reader.onload=function(){
+      var dataUrl=reader.result||"";
+      var b64=dataUrl.split(",")[1]||"";
+      post("upload",{name:file.name,mime:file.type||"",dataBase64:b64}).then(function(r){
+        if(r&&r.ok){
+          selectedAttachments.push({id:r.id,name:r.name,type:r.type,size:r.size});
+          renderAttBar();
+        }else{
+          $cnt.textContent="上传失败";
+        }
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ── 5.4 工具面板 / 语音 / 设置 / 功能入口 ──────────────────────────── */
+
+var TOOLS=[
+  {action:"ui_open_import_tool",label:"导入工具"},
+  {action:"ui_open_ai_search",label:"AI 搜索"},
+  {action:"ui_open_doc_generate",label:"文档生成"},
+  {action:"ui_open_upload",label:"上传文件"},
+  {action:"ui_open_sheet_voice",label:"语音面板"}
+];
+var VOICE_ITEMS=[
+  {action:"ui_open_tts",label:"文本转语音 (TTS)"},
+  {action:"ui_open_stt",label:"语音转文本 (STT)"},
+  {action:"ui_open_voice",label:"语音服务设置"},
+  {action:"ui_open_voice_service",label:"语音服务(高级)"}
+];
+var SETTINGS_ITEMS=[
+  {action:"ui_open_model_config",label:"模型配置"},
+  {action:"ui_open_appearance",label:"外观"},
+  {action:"ui_open_soul",label:"人格/灵魂"},
+  {action:"ui_open_memory",label:"记忆管理"},
+  {action:"ui_open_permission",label:"权限中心"},
+  {action:"ui_open_cms",label:"能力模块(CMS)"},
+  {action:"ui_open_about",label:"关于"},
+  {action:"__clear_chat__",label:"清空对话"}
+];
+var FEATURES=[
+  {action:"ui_open_onlyoffice",label:"文档查看器"},
+  {action:"ui_open_knowledge",label:"知识库"},
+  {action:"ui_open_terminal",label:"终端"},
+  {action:"ui_open_editor",label:"代码编辑器"},
+  {action:"ui_open_toolbox",label:"工具箱"},
+  {action:"ui_open_kaleidobox",label:"KaleidoBox"},
+  {action:"ui_open_build",label:"构建台"},
+  {action:"ui_open_plugins",label:"插件管理"},
+  {action:"ui_open_skills",label:"技能管理"},
+  {action:"ui_open_aci",label:"ACI 管理中心"},
+  {action:"ui_open_system_status",label:"系统状态"},
+  {action:"ui_open_component_gallery",label:"组件画廊"},
+  {action:"ui_open_cluster",label:"多角色集群"},
+  {action:"ui_open_browser",label:"浏览器"},
+  {action:"ui_open_file_manager",label:"文件管理器"},
+  {action:"ui_open_schedule",label:"调度"},
+  {action:"ui_open_workflow",label:"工作流"},
+  {action:"ui_open_bots",label:"Bots"},
+  {action:"ui_open_mcp",label:"MCP"}
+];
+
+function fillList(boxId,items){
+  var box=document.getElementById(boxId);
+  box.innerHTML="";
+  items.forEach(function(it){
+    var row=el("div","feat-row");
+    row.textContent=it.label;
+    row.addEventListener("click",function(){
+      if(it.action==="__clear_chat__"){
+        post("clear").then(function(r){
+          if(r&&r.ok){ closeSheet("settingsSheet"); }
+        });
+        return;
+      }
+      post("ui_action",{action:it.action}).then(function(r){
+        if(r&&r.ok){ closeSheet("toolSheet"); closeSheet("voiceSheet"); closeSheet("settingsSheet"); closeSheet("featuresSheet"); }
+      });
+    });
+    box.appendChild(row);
+  });
+}
+
 /* ── 6. 启动 ─────────────────────────────────────────────────────────── */
 
 $send.addEventListener("click",function(){ state.composer.busy?doStop():doSend(); });
 document.getElementById("btn-new").addEventListener("click",doNew);
 
-/* 权限模式开关：本页只做**只读投影**——点了不改模型行为，避免「网页上一点，
-   把主对话框下一条消息的行为改掉」这种跨介质副作用。原生侧才是配置入口。
-
-   注意这排 chip 显示的是**真实状态**（每次快照现读原生 prefs / 策略），
-   不是装饰：CMS 与特权直接决定 AI 能不能调用能力、能不能提权。
-   所以点不动的时候必须说清楚**去哪儿改**，否则用户会以为状态是坏的。 */
+/* 权限模式开关：对等客户端 —— 点击直接写回原生同一真源 */
 $modes.addEventListener("click",function(e){
   var b=e.target;
   while(b&&b!==$modes){
     if(b.className&&String(b.className).indexOf("mode")>=0){
-      $cnt.textContent="这里是投影，开关请回 ZorvAI 原生对话框设置";
-      setTimeout(renderChrome,1800);
+      var mode=b.getAttribute("data-mode");
+      if(mode){
+        var nowOn=!!state.composer[mode];
+        toggleMode(mode,!nowOn);
+      }
       return;
     }
     b=b.parentNode;
   }
+});
+
+/* CMS / 特权策略：点击循环切换 allow -> ask -> deny */
+function cyclePolicy(key,cur){
+  var order=["allow","ask","deny"];
+  var idx=order.indexOf(cur);
+  var next=order[(idx+1)%order.length];
+  return post("policy",{key:key,value:next});
+}
+$cms.addEventListener("click",function(){
+  var cur=policyKey(state.composer.cms);
+  cyclePolicy("cms",cur).then(function(r){ if(r&&r.ok){ state.composer.cms=nextPolicy("cms",cur); renderChrome(); } });
+});
+$priv.addEventListener("click",function(){
+  var cur=policyKey(state.composer.priv);
+  cyclePolicy("priv",cur).then(function(r){ if(r&&r.ok){ state.composer.priv=nextPolicy("priv",cur); renderChrome(); } });
+});
+function nextPolicy(key,cur){
+  var order=["allow","ask","deny"];
+  var idx=order.indexOf(cur);
+  return order[(idx+1)%order.length];
+}
+
+/* 工作区：点击弹 prompt 输入路径 */
+$ws.addEventListener("click",function(){
+  var cur=String(state.composer.workspace||"");
+  var path=window.prompt("输入工作区路径（留空恢复默认）",cur);
+  if(path===null)return;
+  post("workspace",{path:path}).then(function(r){
+    if(r&&r.ok){ state.composer.workspace=path; renderChrome(); }
+  });
+});
+
+/* 模型 / 人格点击 */
+$model.addEventListener("click",function(){ loadModels(); openSheet("modelSheet"); });
+$persona.addEventListener("click",function(){ loadPersonas(); openSheet("personaSheet"); });
+
+/* 工具面板 / 上传 / 语音 / 设置 */
+document.getElementById("btn-tools").addEventListener("click",function(){
+  fillList("toolList",TOOLS);
+  openSheet("toolSheet");
+});
+document.getElementById("btn-attach").addEventListener("click",function(){ $fileInput.click(); });
+$fileInput.addEventListener("change",function(){ handleFiles($fileInput.files); $fileInput.value=""; });
+document.getElementById("btn-add-model").addEventListener("click",function(){
+  post("ui_action",{action:"ui_open_model_config"});
+  closeSheet("modelSheet");
+});
+document.getElementById("btn-fetch-models").addEventListener("click",function(){
+  // 服务端暂无独立拉取接口，打开原生模型配置屏触发拉取
+  post("ui_action",{action:"ui_open_model_config"});
+  closeSheet("modelSheet");
+});
+document.getElementById("btn-add-persona").addEventListener("click",function(){
+  post("ui_action",{action:"ui_open_soul"});
+  closeSheet("personaSheet");
+});
+
+/* 设置入口 */
+document.getElementById("btn-settings").addEventListener("click",function(){
+  fillList("settingsList",SETTINGS_ITEMS);
+  openSheet("settingsSheet");
 });
 
 $inp.addEventListener("input",autoGrow);
@@ -686,7 +845,6 @@ $inp.addEventListener("keydown",function(e){
 });
 $inp.addEventListener("paste",function(){setTimeout(autoGrow,0);});
 
-/* 代码块复制：委托到 stream，流式重渲染也不会丢监听 */
 $stream.addEventListener("click",function(e){
   var b=e.target;
   while(b&&b!==$stream){
@@ -704,16 +862,11 @@ $stream.addEventListener("click",function(e){
   }
 });
 
-// 高度链的两条独立防线之一（另一条是 CSS 的 `height:100%`）：
-// 先按实测视口钉一次，再随 resize 更新 —— WebView「先 loadUrl 后拿到尺寸」那个
-// 时序缺陷就靠这两条兜住（真机白屏事故的成因）。
 fit();
 window.addEventListener("resize",fit);
-// 旋屏后 innerHeight 不会立刻更新，延后一拍再量
 window.addEventListener("orientationchange",function(){setTimeout(fit,120);});
 
 autoGrow();
-// 先拉一次全量（首屏不必等第一帧事件），再挂上流式通道
 fetch("api/snapshot",{cache:"no-store"})
   .then(function(r){return r.json();})
   .then(function(j){ apply(j); })
