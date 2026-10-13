@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.ui.chat
 
 import com.ai.assistance.quro.core.QuroMessage
+import com.ai.assistance.quro.core.policy.QuroPolicy
 import com.ai.assistance.quro.core.tools.QuroVoiceStyle
 import com.ai.assistance.quro.ui.MsgBlock
 import com.ai.assistance.quro.ui.extractInlineComponents
@@ -48,6 +49,16 @@ object WebUiProjection {
     /**
      * 输入区 = 原生 `ChatPermissionModeBar` + 输入行。
      * 这些开关在原生侧是胶囊按钮，投影只投**状态**，画法由接收端与原生保持一致。
+     *
+     * 字段与原生摘要行**逐项对应**，一个都不许少：
+     *   deepThink / autoSaveMemory / subAgent / autoRead / vision（五个布尔开关）
+     *   + [cms] / [priv]（两个三态策略，见下） + [workspace]。
+     *
+     * 🔴 [cms] / [priv] 不是可选项。原生摘要行把它们**常驻**显示，理由写在
+     *    `ChatPermissionModeBar` 里：「模式开关开没开直接改变消息发去哪，用户看不见
+     *    就等于消息莫名其妙不回」。既然如此，投影少了这两个标签，网页那边看到的
+     *    权限状态就是**残缺的**——而权限状态残缺正是「AI 明明能动手却报没权限」这类
+     *    困惑的源头。宁可多两个 chip，不可少。
      */
     fun composer(
         busy: Boolean,
@@ -57,6 +68,8 @@ object WebUiProjection {
         autoRead: Boolean,
         vision: Boolean,
         workspace: String,
+        cms: QuroPolicy,
+        priv: QuroPolicy,
     ): JSONObject = JSONObject()
         .put("busy", busy)
         .put("deepThink", deepThink)
@@ -65,6 +78,22 @@ object WebUiProjection {
         .put("autoRead", autoRead)
         .put("vision", vision)
         .put("workspace", workspace)
+        .put("cms", policyName(cms))
+        .put("priv", policyName(priv))
+
+    /**
+     * 三态策略 → 规范化小写名（`allow` / `deny` / `ask`）。
+     *
+     * 投**状态**不投**文案**：原生那三个标签用的是 i18n 字符串
+     * （`qk_03235` 允许 / `qk_03236` 禁止 / `qk_03166` 询问），
+     * 投影层一旦把中文写死，接收端换语言就跟着错。
+     * 与顶栏只投 `model`/`persona` 而不投「怎么画」是同一条规矩。
+     */
+    private fun policyName(p: QuroPolicy): String = when (p) {
+        QuroPolicy.ALLOW -> "allow"
+        QuroPolicy.DENY -> "deny"
+        QuroPolicy.ASK -> "ask"
+    }
 
     /**
      * 一条消息 → 该被看见的块。
