@@ -33,7 +33,8 @@ for (const m of mapBlock[1].matchAll(/"([^"]+)"\s+to\s+"([^"]+)"/g)) {
   staticMap[m[1]] = m[2];
 }
 const apiPaths = new Set();
-for (const m of serverSrc.matchAll(/"(\/api\/[a-z]+)"/g)) apiPaths.add(m[1]);
+// 匹配 "/api/xxx" 与 "/api/xxx/yyy"（对等客户端新增了带子路径的接口）
+for (const m of serverSrc.matchAll(/"(\/api\/[a-z][a-z/_-]*)/g)) apiPaths.add(m[1]);
 
 console.log('=== 1. 后端登记的路由 ===');
 console.log('  静态:', Object.keys(staticMap).join(' '));
@@ -177,6 +178,36 @@ console.log('  投影块类型:', [...blockTypes].join(' '));
 for (const t of blockTypes) {
   ok(new RegExp('case\\s+"' + t + '"').test(jsSrc), `前端有 case "${t}" 分支`);
 }
+
+/* ── 6c. 对等客户端写回 API：前端调用的每个写回接口，服务端都必须有 ──
+ * 对等客户端意味着网页上的操作要写回原生同一真源。这些接口不是投影字段，
+ * 而是 POST 动作——前端调用、服务端处理，两边缺一不可。 */
+console.log('=== 6c. 对等客户端写回 API 双向核对 ===');
+const writeApis = [
+  ['/api/toggle', 'toggleMode', '开关写回'],
+  ['/api/policy', 'cyclePolicy', '策略写回'],
+  ['/api/workspace', 'post("workspace"', '工作区写回'],
+  ['/api/models/select', 'post("models/select"', '模型选择'],
+  ['/api/personas/select', 'post("personas/select"', '人格选择'],
+  ['/api/upload', 'post("upload"', '上传'],
+  ['/api/attachments/remove', 'post("attachments/remove"', '移除附件'],
+  ['/api/ui_action', 'post("ui_action"', '打开功能面板'],
+  ['/api/clear', 'post("clear"', '清空对话'],
+];
+for (const [api, jsMarker, label] of writeApis) {
+  ok(apiPaths.has(api), `服务端有 ${api}（${label}）`);
+  ok(new RegExp(jsMarker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(jsSrc),
+    `前端调用 ${api}（${label}）`);
+}
+// 模型/人格列表 GET 接口（前端用 fetch("api/models") 无前导斜杠）
+for (const api of ['/api/models', '/api/personas']) {
+  ok(apiPaths.has(api), `服务端有 ${api}`);
+  const short = api.replace(/^\//, '');
+  ok(new RegExp('"' + short + '"').test(jsSrc), `前端调用 ${api}`);
+}
+// /api/attachments 是「已上传附件列表」调试/预留接口：前端上传后本地维护，
+// 不拉取列表，所以只要求服务端有即可（见第 4 节未调用接口）。
+ok(apiPaths.has('/api/attachments'), '服务端有 /api/attachments（预留列表接口）');
 
 /* ── 7. 视口高度链（2026-10-13 真机白屏事故的回归锁）──
  *

@@ -273,3 +273,93 @@ html.dark{
   padding:2px 2px 0;word-break:break-all;
 }
 #diag[hidden]{display:none}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   对等客户端新增：输入行工具按钮 / 附件条 / 弹层 / 模型人格行 / 功能网格
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* 输入行工具按钮（+ / 上传） */
+.tbtn{
+  flex:none;width:38px;height:42px;border-radius:12px;border:1px solid var(--line);
+  background:var(--surface);color:var(--fg-soft);font-size:17px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.tbtn:hover{border-color:var(--primary);color:var(--primary)}
+
+/* 已选附件条 */
+#attbar{
+  display:flex;flex-wrap:wrap;gap:6px;padding:6px 10px 0;
+  border-top:1px solid var(--line);background:var(--bg2);
+}
+#attbar[hidden]{display:none}
+.att-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:12px;color:var(--fg-soft);background:var(--surface);
+  border:1px solid var(--line);border-radius:999px;padding:3px 8px;
+}
+.att-x{
+  border:0;background:none;color:var(--muted);cursor:pointer;
+  font-size:11px;padding:0;
+}
+
+/* ── 弹层 ───────────────────────────────────────────────────────────── */
+.overlay{
+  position:fixed;inset:0;z-index:50;
+  background:rgba(0,0,0,.35);
+  display:flex;align-items:flex-end;justify-content:center;
+}
+.overlay[hidden]{display:none}
+.sheet{
+  width:100%;max-width:520px;max-height:82vh;
+  background:var(--surface);border-radius:18px 18px 0 0;
+  display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:0 -8px 30px rgba(0,0,0,.18);
+}
+.sheet-h{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px 10px;font-size:15px;font-weight:600;
+  border-bottom:1px solid var(--line);
+}
+.sheet-h .x{
+  border:0;background:none;color:var(--muted);font-size:16px;cursor:pointer;padding:4px;
+}
+.sheet-b{
+  flex:1;overflow-y:auto;padding:8px 10px;
+}
+.sheet-f{
+  display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line);
+}
+.sheet-f button{
+  flex:1;font:inherit;font-size:13px;color:var(--primary);
+  background:var(--primary-soft);border:0;border-radius:10px;padding:8px 10px;cursor:pointer;
+}
+
+/* 模型/人格行 */
+.group-h{
+  font-size:12px;color:var(--muted);margin:12px 6px 4px;font-weight:600;
+}
+.model-row{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 8px;border-radius:10px;cursor:pointer;
+  border:1px solid transparent;
+}
+.model-row:hover{background:var(--bg2)}
+.model-row.cur{background:var(--primary-soft);border-color:var(--primary)}
+.model-row .mark{
+  flex:none;width:34px;height:34px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--bg2);color:var(--secondary);font-weight:700;font-size:14px;
+}
+.model-row.cur .mark{background:var(--primary);color:#fff}
+.mi{min-width:0;flex:1}
+.mi-n{font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mi-d{font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+
+/* 功能面板入口行 */
+.feat-row{
+  padding:11px 10px;border-radius:10px;cursor:pointer;
+  font-size:14px;display:flex;align-items:center;gap:8px;
+  border:1px solid transparent;
+}
+.feat-row:hover{background:var(--bg2)}
+.feat-row:active{background:var(--primary-soft)}

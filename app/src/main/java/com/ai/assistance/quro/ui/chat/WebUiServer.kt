@@ -1,16 +1,26 @@
 package com.ai.assistance.quro.ui.chat
 
 import android.content.Context
-import com.ai.assistance.quro.core.QuroMessage
+import com.ai.assistance.quro.core.QuroAttachment
+import com.ai.assistance.quro.core.QuroAttachmentKit
+import com.ai.assistance.quro.core.QuroPersonaRepository
+import com.ai.assistance.quro.core.model.ApiProviderConfigs
+import com.ai.assistance.quro.core.model.QuroCustomProviderRepository
+import com.ai.assistance.quro.core.model.QuroLocalModelRepository
+import com.ai.assistance.quro.core.model.QuroModelConfigRepository
+import com.ai.assistance.quro.core.model.QuroSavedProfileRepository
+import com.ai.assistance.quro.core.policy.QuroPolicy
 import com.ai.assistance.quro.core.policy.QuroPolicyStore
 import com.ai.assistance.quro.core.tools.QuroVoiceFeaturePrefs
-import com.ai.assistance.quro.core.tools.ZxWebCardQueue
+import com.ai.assistance.quro.core.tools.QuroUiActionBridge
 import com.ai.assistance.quro.core.tools.WorkspacePreferences
+import com.ai.assistance.quro.core.tools.ZxWebCardQueue
 import com.ai.assistance.quro.ui.QuroChatViewModel
 import com.ai.assistance.quro.util.QuroDiag
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStreamReader
 import java.io.OutputStream
 import java.net.Inet4Address
@@ -20,43 +30,33 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
 import java.util.Collections
+import java.util.UUID
 
 /**
- * ZorvAI 对话框的**投影服务**。
+ * ZorvAI 的 Web 对话框服务端 —— **对等客户端**，不是投影。
  *
- * ── 它是什么（用户 2026-10-13 拍板的定位）──────────────────────────────
- * 「web ui 是 zorvAI 的投影」。所以本服务只做一件事：
- * **把 ZorvAI 对话框该被看见的东西投出去**（块模型见 [WebUiProjection]），
- * 让同一个会话能在手机之外的屏幕上被看见、被操作。
+ * ── 定位（用户 2026-10-13 拍板）──────────────────────────────────────
+ * 「web ui拥有zorvAI所有功能，界面一样，功能一样，另外一个zorvAI对话框」。
+ * 本服务把 ZorvAI 对话框**完整的能力**通过 HTTP/SSE 暴露给浏览器：
+ * 同一个会话、同一份状态、同一份渲染链，但网页是**可操作的对等客户端**：
+ * 消息收发、开关切换、模型/人格选择、上传、语音、以及全部功能面板入口。
  *
- * 它**不是**一个独立应用的服务器：不提供自己的 UI 设计、不提供自己的数据模型、
- * 不提供 zxwidget 的运行时。网页是投影的接收端，不是第二个产品。
+ * ── 与旧版（投影接收端）的关键差别 ──────────────────────────────────
+ * 旧版只把对话框「该被看见的东西」投出去，开关只读、无模型/人格选择、
+ * 无上传、无面板入口 —— 那是投影，不是对等客户端。本版：
+ * ① 所有开关可写回原生同一真源（vm / prefs / policy store / workspace）。
+ * ② 模型/人格列表与切换走原生同一仓库与同一分支逻辑。
+ * ③ 支持上传（multipart → 应用私有目录 → vm.send 附件）。
+ * ④ 全部功能面板入口经 [QuroUiActionBridge] 打开原生界面。
  *
- * ── 与上一版的关键差别 ────────────────────────────────────────────────
- * ① **对外可达**。旧版 `ServerSocket(0, 0, InetAddress.getByName("127.0.0.1"))`
- *    只绑回环、端口随机 —— 结果「外部怎么端口 web ui 链接都没有」（用户原话）。
- *    现在默认绑 `0.0.0.0` + 固定端口 [DEFAULT_PORT]（对齐 dsh web 的 3080），
- *    并对外给出局域网直链 [lanUrl]。
- * ② **不再拥有 zxwidget**。旧版有 `/zxwidget.css`、`/zxwidget.js`、`/zx_contracts.json`、
- *    `/api/interact` 四条 zx 专属路由 —— 那是「把 zxwidget 和 webui 混在一起」的
- *    最直接证据（用户原话：「你怎么老是把 zxwidget 和 webui 混合在一起」）。
- *    互动UI界面是独立模块，它的宿主是原生对话框，与本服务无关。
+ * ── 安全权衡（不变）────────────────────────────────────────────────
+ * 绑 `0.0.0.0` 意味着同局域网内任何设备都能打开这个对话，且没有任何鉴权。
+ * 这是「要外部链接」的必然代价，与 dsh web 同类做法一致。
+ * 传输层仍是最小 HTTP/1.1，明文（由 network_security_config.xml 放行）。
  *
- * ── 安全权衡（写在这里，不藏在注释角落）──────────────────────────────
- * 绑 `0.0.0.0` 意味着**同局域网内的任何设备都能打开这个对话**，且没有任何鉴权。
- * 这是「要外部链接」的必然代价，与 `dsh web` 同类做法一致。
- * 传输层仍是最小 HTTP/1.1，明文（由 network_security_config.xml 的 base-config 放行）。
- *
- * ── 谁来持有它（2026-10-13 改）────────────────────────────────────────
- * 🔴 改前：本服务在对话框 Composable 的 `remember` 里创建，**随对话框生灭**。
- *    后果是真机上「返回就断」——用户原话「返回 ZorvAI 内的 web ui 界面就不能链接了」。
- *    而 Web UI 的定位就是「在别的屏幕上看/用同一个对话框」，它天生要求
- *    「ZorvAI 在后台也一直服务」。
- * 现在由 [com.ai.assistance.quro.service.QuroWebUiService]（前台服务）持有，
+ * ── 谁来持有它（不变）────────────────────────────────────────────────
+ * 由 [com.ai.assistance.quro.service.QuroWebUiService]（前台服务）持有，
  * 经 [QuroWebUiHost] 这一处单例存取。界面只读它的状态，不再决定它的生死。
- *
- * 也因此，本类**不再**假设「实例生命周期 == 一次会话」：
- * [assetCache] / [cachedShell] 都是进程级缓存（资源随 APK 版本固定，安全）。
  */
 class QuroWebUiServer(
     private val context: Context,
@@ -104,26 +104,20 @@ class QuroWebUiServer(
     private var serverSocket: ServerSocket? = null
     private var acceptThread: Thread? = null
 
-    /**
-     * 静态资源内存缓存。
-     * 投影服务只发三个文件（index/style/chat），缓存它们可省掉每次请求的 assets 解压。
-     * 服务实例随对话框生灭，缓存不会跨版本残留。
-     */
+    /** 静态资源内存缓存。 */
     private val assetCache = HashMap<String, ByteArray>()
 
-    /**
-     * zxwidget 页壳缓存。契约 ~195 KB，每个 zxwidget 块各读一遍纯浪费；
-     * 资源随 APK 版本固定，进程内不会变，缓存安全。
-     */
+    /** zxwidget 页壳缓存。 */
     @Volatile private var cachedShell: String? = null
+
+    /** 上传文件存放目录（应用私有，与原生 quro_uploads 同目录）。 */
+    private val uploadsDir: File get() = QuroAttachmentKit.uploadsDir(context)
+
+    /** 已上传附件暂存：web 端选择文件后先上传，发送时按 id 引用。 */
+    private val pendingAttachments = Collections.synchronizedMap(mutableMapOf<String, QuroAttachment>())
 
     /**
      * 启动服务，返回监听端口；失败抛异常。
-     *
-     * 绑定顺序（每一步失败才走下一步，保证「能开就一定能访问」）：
-     *  ① 局域网 `0.0.0.0` + 固定端口 [DEFAULT_PORT]  —— 可复制链接给别人
-     *  ② 局域网 `0.0.0.0` + 系统临时端口            —— 固定端口被占（如另一个实例还开着）
-     *  ③ 回环 `127.0.0.1` + 系统临时端口            —— 环境不允许对外监听时的兜底
      */
     fun start(): Int {
         if (running) return port
@@ -145,7 +139,7 @@ class QuroWebUiServer(
                     it.isDaemon = true
                     it.start()
                 }
-                QuroDiag.log(TAG, "投影服务已启动 host=$host port=$port 回环=$loopbackUrl 局域网=$lanUrl")
+                QuroDiag.log(TAG, "Web 对话框服务已启动 host=$host port=$port 回环=$loopbackUrl 局域网=$lanUrl")
                 return port
             } catch (e: Throwable) {
                 last = e
@@ -162,8 +156,7 @@ class QuroWebUiServer(
         acceptThread = null
         assetCache.clear()
         cachedShell = null
-        // 长连接必须一起关：否则 stop 之后 SSE 线程还抱着 socket 写，
-        // 表现为「服务停了，网页那边还在收旧数据」。
+        pendingAttachments.clear()
         synchronized(subscribers) {
             subscribers.toList().forEach { sub ->
                 sub.alive = false
@@ -171,7 +164,7 @@ class QuroWebUiServer(
             }
             subscribers.clear()
         }
-        QuroDiag.log(TAG, "投影服务已停止")
+        QuroDiag.log(TAG, "Web 对话框服务已停止")
     }
 
     /* ── 连接处理 ─────────────────────────────────────────────────────── */
@@ -194,8 +187,6 @@ class QuroWebUiServer(
     }
 
     private fun handle(sock: Socket) {
-        // SSE（/api/events）要**长期持有**这条连接：把 socket 交给事件循环后
-        // 不能再走 finally 的 close，否则客户端刚连上就被关、EventSource 无限重连。
         var handedOver = false
         try {
             sock.soTimeout = SOCKET_TIMEOUT_MS
@@ -207,9 +198,12 @@ class QuroWebUiServer(
                 return
             }
             val method = parts[0].uppercase()
-            val path = parts[1].substringBefore('?')
+            val rawPath = parts[1]
+            val path = rawPath.substringBefore('?')
+            val query = rawPath.substringAfter('?', "")
 
             var contentLength = 0
+            var contentType = ""
             while (true) {
                 val line = input.readLine() ?: break
                 if (line.isEmpty()) break
@@ -217,12 +211,15 @@ class QuroWebUiServer(
                 if (lower.startsWith("content-length:")) {
                     contentLength = lower.substringAfter(":").trim().toIntOrNull() ?: 0
                 }
+                if (lower.startsWith("content-type:")) {
+                    contentType = lower.substringAfter(":").trim()
+                }
             }
             val body = if (contentLength > 0) readBody(input, contentLength) else ""
 
             when {
                 method == "GET" || method == "HEAD" -> handedOver = handleGet(sock, path)
-                method == "POST" -> handlePost(sock, path, body)
+                method == "POST" -> handlePost(sock, path, query, contentType, body)
                 method == "OPTIONS" -> respond(
                     sock, 204, "text/plain", ByteArray(0),
                     mapOf("Access-Control-Allow-Origin" to "*")
@@ -247,7 +244,7 @@ class QuroWebUiServer(
         return String(buf, 0, read)
     }
 
-    /* ── GET：投影快照 + 前端资源 ─────────────────────────────────────── */
+    /* ── GET：快照 + 前端资源 + 模型/人格列表 ─────────────────────────── */
 
     /**
      * @return true 表示**这条连接已被接管**（SSE 长连接），调用方不得再 close。
@@ -255,10 +252,14 @@ class QuroWebUiServer(
     private fun handleGet(sock: Socket, path: String): Boolean {
         when (path) {
             "/api/snapshot" -> respondJson(sock, snapshot())
-            // 流式通道：投影一变就推，前端不再轮询。见 [Subscriber]。
             "/api/events" -> return serveEvents(sock)
+            // 模型分组列表（对等客户端：模型选择弹层数据源）
+            "/api/models" -> respondJson(sock, modelsJson())
+            // 人格列表 + 当前激活
+            "/api/personas" -> respondJson(sock, personasJson())
+            // 已上传附件列表（本次服务生命周期内）
+            "/api/attachments" -> respondJson(sock, attachmentsJson())
             // zxwidget 页壳：与原生 `ZxWidgetInline` 用的是**同一份** `zx_card_runtime.html`
-            // （只换桥）。每块界面用 iframe 引它一次，hash 里带 component/dsl。
             "/zx/shell" -> {
                 val shell = zxShell()
                 if (shell.isEmpty()) {
@@ -302,25 +303,145 @@ class QuroWebUiServer(
         return shell
     }
 
-    /* ── SSE：投影变化即推 ─────────────────────────────────────────────── */
+    /** 模型分组列表（对等客户端弹层数据源）。 */
+    private fun modelsJson(): String {
+        val repo = QuroModelConfigRepository(context)
+        val cfg = repo.load()
+        val groups = JSONArray()
 
-    /** 一个在线的流式订阅者。断开即从集合移除，写失败即视为断开。 */
+        // 当前配置组
+        val current = JSONArray()
+        current.put(JSONObject()
+            .put("id", cfg.model.ifBlank { "gpt-4o-mini" })
+            .put("name", cfg.model.ifBlank { "未设置模型" })
+            .put("desc", "提供商: ${cfg.provider} · ${cfg.baseUrl.ifBlank { "未设置BaseURL" }}")
+            .put("provider", cfg.provider.ifBlank { "OPENAI" })
+            .put("mark", cfg.provider.firstOrNull()?.uppercase() ?: "Q")
+            .put("group", "current"))
+        groups.put(JSONObject().put("name", "当前配置").put("models", current))
+
+        // 已保存预设
+        val profileRepo = QuroSavedProfileRepository(context)
+        val profiles = profileRepo.loadAll()
+        if (profiles.isNotEmpty()) {
+            val arr = JSONArray()
+            profiles.forEach { p ->
+                arr.put(JSONObject()
+                    .put("id", "__profile__${p.id}")
+                    .put("name", p.name)
+                    .put("desc", "${p.model} @ ${p.provider} · ${p.baseUrl}")
+                    .put("provider", p.customProviderName.ifBlank { p.provider })
+                    .put("mark", p.name.firstOrNull()?.uppercase() ?: "S")
+                    .put("group", "profile"))
+            }
+            groups.put(JSONObject().put("name", "已保存预设").put("models", arr))
+        }
+
+        // 自定义供应商
+        val customRepo = QuroCustomProviderRepository(context)
+        val customs = customRepo.loadAll()
+        if (customs.isNotEmpty()) {
+            val arr = JSONArray()
+            customs.forEach { p ->
+                arr.put(JSONObject()
+                    .put("id", "__custom__${p.id}")
+                    .put("name", p.name.ifBlank { "自定义" })
+                    .put("desc", "${p.defaultModel.ifBlank { "请在模型配置填写默认模型" }} @ ${p.baseUrl.ifBlank { "未设置地址" }}")
+                    .put("provider", p.name.ifBlank { "OTHER" })
+                    .put("mark", p.name.firstOrNull()?.uppercase() ?: "C")
+                    .put("group", "custom"))
+            }
+            groups.put(JSONObject().put("name", "自定义供应商").put("models", arr))
+        }
+
+        // 本地离线模型
+        val localRepo = QuroLocalModelRepository(context)
+        val locals = localRepo.loadAll()
+        if (locals.isNotEmpty()) {
+            val arr = JSONArray()
+            locals.forEach { m ->
+                val typeLabel = if (m.type.name == "LLAMA_CPP") "llama.cpp" else "MNN"
+                arr.put(JSONObject()
+                    .put("id", "__local__${m.id}")
+                    .put("name", m.name.ifBlank { typeLabel })
+                    .put("desc", "$typeLabel 本地推理 · ${m.path.ifBlank { "未设置路径" }}${if (m.modelNames.isNotEmpty()) " · ${m.modelNames.first()}" else ""}")
+                    .put("provider", m.type.name)
+                    .put("mark", "L")
+                    .put("group", "local"))
+            }
+            groups.put(JSONObject().put("name", "本地离线模型").put("models", arr))
+        }
+
+        // API 拉取缓存
+        val fetched = repo.loadModelListCache(cfg.baseUrl)
+        if (fetched is com.ai.assistance.quro.core.network.QuroModelListResult.Success && fetched.models.isNotEmpty()) {
+            val arr = JSONArray()
+            fetched.models.forEach { info ->
+                arr.put(JSONObject()
+                    .put("id", info.id)
+                    .put("name", info.id)
+                    .put("desc", "从 API 拉取 · ${cfg.baseUrl}")
+                    .put("provider", cfg.provider.ifBlank { "OPENAI" })
+                    .put("mark", info.id.firstOrNull()?.uppercase() ?: "M")
+                    .put("group", "fetched"))
+            }
+            groups.put(JSONObject().put("name", "从 API 拉取").put("models", arr))
+        }
+
+        return JSONObject()
+            .put("ok", true)
+            .put("current", cfg.model)
+            .put("groups", groups)
+            .toString()
+    }
+
+    /** 人格列表 + 当前激活。 */
+    private fun personasJson(): String {
+        val repo = QuroPersonaRepository(context)
+        val all = repo.loadAll()
+        val activeId = repo.getActiveId()
+        val arr = JSONArray()
+        all.forEach { p ->
+            arr.put(JSONObject()
+                .put("id", p.id)
+                .put("name", p.name)
+                .put("avatarEmoji", p.avatarEmoji)
+                .put("avatarType", p.avatarType)
+                .put("avatarUri", p.avatarUri)
+                .put("description", p.description)
+                .put("active", p.id == activeId))
+        }
+        return JSONObject()
+            .put("ok", true)
+            .put("activeId", activeId)
+            .put("personas", arr)
+            .toString()
+    }
+
+    /** 已上传附件列表。 */
+    private fun attachmentsJson(): String {
+        val arr = JSONArray()
+        synchronized(pendingAttachments) {
+            pendingAttachments.forEach { (id, a) ->
+                arr.put(JSONObject()
+                    .put("id", id)
+                    .put("name", a.name)
+                    .put("type", a.type)
+                    .put("size", a.size)
+                    .put("mime", a.mime))
+            }
+        }
+        return JSONObject().put("ok", true).put("attachments", arr).toString()
+    }
+
+    /* ── SSE：状态变化即推 ─────────────────────────────────────────────── */
+
     private class Subscriber(val out: OutputStream) {
         @Volatile var alive = true
     }
 
     private val subscribers = Collections.synchronizedList(mutableListOf<Subscriber>())
 
-    /**
-     * 服务已有一条长连接，但**变化检测只跑一个线程**（不论几个客户端）：
-     * 它按 [REVISION_INTERVAL_MS] 采一次投影指纹，变了就把快照推给全部订阅者。
-     *
-     * 为什么用「服务端单点指纹」而不是「前端轮询」：
-     *   · 延迟：前端轮询最快的档位是 180 ms（还只在 busy 时），空闲档 1200 ms ——
-     *     后者正是用户报的「消息同步延迟很大」。这里稳定在 ~80 ms，且只在**真的变了**
-     *     时才传输（轮询是「不变也传」）。
-     *   · 一条连接、一个线程、一份快照，N 个客户端不再各自拉全量。
-     */
     private var revisionThread: Thread? = null
 
     private fun ensureRevisionWatch() {
@@ -338,7 +459,7 @@ class QuroWebUiServer(
                 } catch (_: InterruptedException) {
                     break
                 } catch (e: Throwable) {
-                    QuroDiag.log(TAG, "投影变化检测异常：${e.message}")
+                    QuroDiag.log(TAG, "状态变化检测异常：${e.message}")
                 }
             }
         }, "QuroWebUiRev").also {
@@ -348,17 +469,7 @@ class QuroWebUiServer(
     }
 
     /**
-     * 投影指纹：**故意便宜**（每 ~80 ms 一次，不能在里面做 JSON 序列化）。
-     *
-     * 覆盖「会让网页看到的东西变了的全部维度」：
-     *   · 消息条数 —— 新增/删除；
-     *   · 每条消息的长度组合 —— 正文在长（流式）、工具结果回填；
-     *   · 最后一条消息的 id —— 换会话；
-     *   · busy / 五个开关 / 两个策略 / 工作区 / 主题 —— 控制条与顶栏。
-     *
-     * 刻意**不**拼消息正文：那会把「检测变化」变成「每 80 ms 序列化整段对话」，
-     * 长会话下就是白烧 CPU。长度 + id 足以捕捉一切展示层变化
-     * （正文内容变而长度不变的情况只有「等长替换」，本产品的流式是纯追加）。
+     * 状态指纹：**故意便宜**（每 ~80 ms 一次，不能在里面做 JSON 序列化）。
      */
     private fun revision(): String = buildString {
         val msgs = vm.messages.value
@@ -391,7 +502,6 @@ class QuroWebUiServer(
         head.append("\r\n")
         return try {
             out.write(head.toString().toByteArray(Charsets.UTF_8))
-            // 首帧立刻给一份，页面不必等第一次变化才有内容
             out.write(sseFrame(snapshot()))
             out.flush()
         } catch (e: Throwable) {
@@ -402,9 +512,6 @@ class QuroWebUiServer(
             subscribers.add(sub)
             ensureRevisionWatch()
             QuroDiag.log(TAG, "SSE 订阅者接入，当前 ${subscribers.size} 个")
-            // 心跳线程：代理/系统会在空闲若干秒后掐掉「没有数据的连接」，
-            // 掐掉后 EventSource 会重连（表现为「过一会儿闪一下」）。注释行（`: ping`）
-            // 不触发前端 onmessage，但足以把连接养住。
             Thread({
                 while (running && sub.alive) {
                     try {
@@ -429,11 +536,9 @@ class QuroWebUiServer(
     private fun sseFrame(payload: String): ByteArray =
         "data: $payload\n\n".toByteArray(Charsets.UTF_8)
 
-    /** 把一份快照推给全部订阅者；写失败的当作已断开，就地清掉。 */
     private fun push(payload: String) {
         if (subscribers.isEmpty()) return
         val bytes = sseFrame(payload)
-        // 拷贝一份再遍历：写失败会从原集合里移除，遍历中改集合会炸
         val snapshotList = synchronized(subscribers) { subscribers.toList() }
         snapshotList.forEach { sub ->
             try {
@@ -448,39 +553,42 @@ class QuroWebUiServer(
         }
     }
 
-    /* ── POST：动作（一律转成对同一个会话的操作）──────────────────────── */
+    /* ── POST：动作（对等客户端：全部写回原生同一真源）──────────────── */
 
-    private fun handlePost(sock: Socket, path: String, body: String) {
+    private fun handlePost(sock: Socket, path: String, query: String, contentType: String, body: String) {
         when (path) {
-            "/api/send" -> {
-                val text = runCatching { JSONObject(body).optString("text") }.getOrDefault("").trim()
-                if (text.isEmpty()) {
-                    respondJson(sock, """{"ok":false,"error":"empty text"}""")
-                    return
-                }
-                // 与主对话框同一会话、同一模型配置：cfg 交给 vm.send 的默认值（repo.load()）
-                vm.send(text)
-                respondJson(sock, """{"ok":true}""")
-            }
-
+            "/api/send" -> handleSend(sock, body)
             "/api/stop" -> {
                 vm.stop()
                 respondJson(sock, """{"ok":true}""")
             }
-
             "/api/new" -> {
                 vm.newConversation()
                 respondJson(sock, """{"ok":true}""")
             }
-
-            // 页面自检回传。
-            //
-            // 🔴 这条路由是**替代品**，不是新增功能：改前页面跑在应用内嵌的 WebView 里，
-            //    它的 console 由 WebChromeClient.onConsoleMessage 收进 QuroDiag。
-            //    现在页面跑在**别的设备的浏览器**里 —— console 宿主根本看不见，
-            //    页面自己那套「高度链自检 / guardCollapse」在真机上就等于白写。
-            //    所以自检必须自己走回来：页面在检测到异常时 POST 一条，宿主写进诊断日志。
-            //    只在**异常时**发（正常不上报），避免把日志刷成噪音。
+            "/api/clear" -> {
+                vm.clear()
+                respondJson(sock, """{"ok":true}""")
+            }
+            // 开关写回（对等客户端：可点）
+            "/api/toggle" -> handleToggle(sock, body)
+            // 三态策略写回
+            "/api/policy" -> handlePolicy(sock, body)
+            // 工作区设置
+            "/api/workspace" -> handleWorkspace(sock, body)
+            // 模型选择（原生 onSelectModel 同一分支逻辑）
+            "/api/models/select" -> handleModelSelect(sock, body)
+            // 人格选择
+            "/api/personas/select" -> handlePersonaSelect(sock, body)
+            // 上传文件（multipart/form-data）
+            "/api/upload" -> handleUpload(sock, contentType, body)
+            // 删除暂存附件
+            "/api/attachments/remove" -> handleAttachmentRemove(sock, body)
+            // 打开原生功能面板
+            "/api/ui_action" -> handleUiAction(sock, body)
+            // 导出会话
+            "/api/export" -> handleExport(sock)
+            // 页面自检回传
             "/api/diag" -> {
                 val o = runCatching { JSONObject(body) }.getOrNull()
                 val msg = o?.optString("msg")?.trim().orEmpty()
@@ -492,12 +600,6 @@ class QuroWebUiServer(
                 QuroDiag.log(TAG, "页面自检[$lvl] $msg")
                 respondJson(sock, """{"ok":true}""")
             }
-
-            // 互动UI界面（zxwidget）里的一次操作 —— 与原生 `ZxWidgetInline.onInteract`
-            // **逐字同一套回路**（见 ChatScreen 里那段）：两条回路必须分开，
-            // 否则模型收到重复内容：
-            //   ① 有 zx_web_card 工具正在等 → 作为**工具结果**回传，本轮直接继续；
-            //   ② 没有（历史重放 / 动态 UI 动作来源）→ 作为一条**用户消息**发出去。
             "/api/interact" -> {
                 val o = runCatching { JSONObject(body) }.getOrNull()
                 val component = o?.optString("component")?.trim().orEmpty()
@@ -513,30 +615,253 @@ class QuroWebUiServer(
                     }
                     else -> JSONObject().put("action", "raw").put("summary", payload.toString())
                 }
-                // 组件名以 **URL 上带来的那个** 为准：页面里的 `ctx.interact` 也会塞一份，
-                // 但两者不一致时说明父页面与 iframe 的说法对不上，此时信父页面
-                // （它才是从投影快照里读出 component 的那一方）。
                 val text = ZxWebCard.summarize(component, json)
                 QuroDiag.log(TAG, "zxwidget 交互（web）：$text")
                 val hit = ZxWebCardQueue.submitByComponent(component, text)
                 if (!hit) vm.send(text)
                 respondJson(sock, """{"ok":true,"delivered":"${if (hit) "tool" else "chat"}"}""")
             }
-
             else -> respondJson(sock, """{"ok":false,"error":"unknown api: $path"}""", 404)
         }
     }
 
-    /* ── 投影快照 ─────────────────────────────────────────────────────── */
+    /** 发送消息：支持带附件 id 列表。 */
+    private fun handleSend(sock: Socket, body: String) {
+        val o = runCatching { JSONObject(body) }.getOrNull()
+        val text = o?.optString("text")?.trim().orEmpty()
+        val attIds = o?.optJSONArray("attachments")
+        if (text.isEmpty() && (attIds == null || attIds.length() == 0)) {
+            respondJson(sock, """{"ok":false,"error":"empty text"}""")
+            return
+        }
+        val atts = mutableListOf<QuroAttachment>()
+        if (attIds != null) {
+            synchronized(pendingAttachments) {
+                for (i in 0 until attIds.length()) {
+                    val id = attIds.optString(i)
+                    pendingAttachments.remove(id)?.let { atts.add(it) }
+                }
+            }
+        }
+        vm.send(text, atts)
+        respondJson(sock, """{"ok":true}""")
+    }
+
+    /** 开关写回。 */
+    private fun handleToggle(sock: Socket, body: String) {
+        val o = runCatching { JSONObject(body) }.getOrNull()
+        val key = o?.optString("key")?.trim().orEmpty()
+        val on = o?.optBoolean("on") ?: return respondJson(sock, """{"ok":false,"error":"need on"}""")
+        when (key) {
+            "deepThink" -> vm.setThinking(on)
+            "autoSaveMemory" -> vm.setAutoSaveMemory(on)
+            "subAgent" -> vm.setSubAgentEnabled(on)
+            "autoRead" -> QuroVoiceFeaturePrefs.setAutoRead(context, on)
+            "vision" -> vm.setVisionEnabled(on)
+            else -> {
+                respondJson(sock, """{"ok":false,"error":"unknown key: $key"}""", 404)
+                return
+            }
+        }
+        respondJson(sock, """{"ok":true}""")
+    }
+
+    /** 三态策略写回。 */
+    private fun handlePolicy(sock: Socket, body: String) {
+        val o = runCatching { JSONObject(body) }.getOrNull()
+        val key = o?.optString("key")?.trim().orEmpty()
+        val value = o?.optString("value")?.trim().orEmpty()
+        val policy = when (value) {
+            "allow" -> QuroPolicy.ALLOW
+            "deny" -> QuroPolicy.DENY
+            "ask" -> QuroPolicy.ASK
+            else -> {
+                respondJson(sock, """{"ok":false,"error":"bad value: $value"}""", 400)
+                return
+            }
+        }
+        when (key) {
+            "cms" -> QuroPolicyStore.setCms(context, policy)
+            "priv" -> QuroPolicyStore.setPriv(context, policy)
+            else -> {
+                respondJson(sock, """{"ok":false,"error":"unknown key: $key"}""", 404)
+                return
+            }
+        }
+        respondJson(sock, """{"ok":true}""")
+    }
+
+    /** 工作区设置。 */
+    private fun handleWorkspace(sock: Socket, body: String) {
+        val o = runCatching { JSONObject(body) }.getOrNull()
+        val path = o?.optString("path")?.trim().orEmpty()
+        WorkspacePreferences.setCurrentWorkspace(context, path.ifBlank { null })
+        respondJson(sock, """{"ok":true}""")
+    }
+
+    /** 模型选择：复刻原生 ChatScreen.onSelectModel 分支逻辑。 */
+    private fun handleModelSelect(sock: Socket, body: String) {
+        val o = runCatching { JSONObject(body) }.getOrNull()
+        val id = o?.optString("id")?.trim().orEmpty()
+        if (id.isEmpty()) {
+            respondJson(sock, """{"ok":false,"error":"empty id"}""")
+            return
+        }
+        val repo = QuroModelConfigRepository(context)
+        when {
+            id.startsWith("__profile__") -> {
+                val profileId = id.removePrefix("__profile__")
+                val profile = QuroSavedProfileRepository(context).loadAll().find { it.id == profileId }
+                if (profile != null) {
+                    QuroSavedProfileRepository(context).applyToConfig(profile, repo)
+                }
+            }
+            id.startsWith("__custom__") -> {
+                val cpId = id.removePrefix("__custom__")
+                val cp = QuroCustomProviderRepository(context).findById(cpId)
+                if (cp != null) {
+                    val cfg = repo.load()
+                    var newCfg = cfg.copy(
+                        provider = "OTHER",
+                        customProviderName = cp.name,
+                        baseUrl = cp.baseUrl,
+                        model = cp.defaultModel,
+                    )
+                    // 复刻 QuroModelConfigViewModel.update 的自动识别：
+                    // baseUrl 变化时用 ApiProviderConfigs 探测真实厂商并覆盖 provider。
+                    if (cfg.baseUrl != newCfg.baseUrl && newCfg.baseUrl.isNotBlank()) {
+                        val detected = ApiProviderConfigs.detectProviderFromUrl(newCfg.baseUrl)
+                        if (detected.name != newCfg.provider) {
+                            newCfg = newCfg.copy(provider = detected.name)
+                        }
+                    }
+                    repo.save(newCfg)
+                }
+            }
+            id.startsWith("__local__") -> {
+                val lmId = id.removePrefix("__local__")
+                val lm = QuroLocalModelRepository(context).findById(lmId)
+                if (lm != null) {
+                    val cfg = repo.load()
+                    repo.save(cfg.copy(
+                        provider = lm.type.name,
+                        localModelPath = lm.path,
+                        model = lm.modelNames.firstOrNull() ?: "",
+                    ))
+                }
+            }
+            else -> {
+                val cfg = repo.load()
+                repo.save(cfg.copy(model = id))
+            }
+        }
+        respondJson(sock, """{"ok":true}""")
+    }
+
+    /** 人格选择：写回仓库（vm.send 时 activePersona() 直接读仓库）。 */
+    private fun handlePersonaSelect(sock: Socket, body: String) {
+        val o = runCatching { JSONObject(body) }.getOrNull()
+        val id = o?.optString("id")?.trim().orEmpty()
+        if (id.isEmpty()) {
+            respondJson(sock, """{"ok":false,"error":"empty id"}""")
+            return
+        }
+        QuroPersonaRepository(context).setActiveId(id)
+        respondJson(sock, """{"ok":true}""")
+    }
 
     /**
-     * 快照 = 原生对话框的投影。
+     * 处理文件上传（base64 JSON 方式）。
      *
-     * 形状由 [WebUiProjection] 决定，这里只负责「取哪些消息」与「补顶栏/输入区」。
-     * 过滤规则与原生一致：`hidden` 的消息原生也不显示（用户看不见），
-     * 而 `excludeFromLlm` 的消息**必须投**——那正是「用户看得见」的那一类
-     * （集群发言、互动UI界面来源条都属于它）。
+     * 前端把文件读成 base64（FileReader.readAsDataURL），POST：
+     *   {"name":"photo.jpg","mime":"image/jpeg","dataBase64":"/9j/..."}
+     * 服务端解码写入应用私有 uploads 目录，构造 QuroAttachment 存入暂存表。
+     *
+     * 为什么不用 multipart：本服务是极简 HTTP/1.1 服务器，`readBody` 按 Char 读，
+     * 二进制经 String 中转再 split boundary 会有损（图片会坏）。base64 是纯文本，
+     * 与现有 readBody 完美兼容。
      */
+    private fun handleUpload(sock: Socket, contentType: String, body: String) {
+        val o = runCatching { JSONObject(body) }.getOrNull()
+        val name = o?.optString("name")?.trim().orEmpty()
+        val mime = o?.optString("mime")?.trim().orEmpty()
+        val dataB64 = o?.optString("dataBase64")?.trim().orEmpty()
+        if (name.isEmpty() || dataB64.isEmpty()) {
+            respondJson(sock, """{"ok":false,"error":"need name + dataBase64"}""", 400)
+            return
+        }
+        val bytes = runCatching { android.util.Base64.decode(dataB64, android.util.Base64.DEFAULT) }.getOrNull()
+        if (bytes == null || bytes.isEmpty()) {
+            respondJson(sock, """{"ok":false,"error":"bad base64"}""", 400)
+            return
+        }
+        uploadsDir.mkdirs()
+        val safeName = name.substringAfterLast('/').substringAfterLast('\\').takeIf { it.isNotBlank() } ?: "upload.bin"
+        val stored = File(uploadsDir, "web_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(8)}_${safeName}")
+        stored.writeBytes(bytes)
+        val att = QuroAttachmentKit.fromFile(context, stored, mime.ifBlank { "application/octet-stream" })
+        val id = UUID.randomUUID().toString()
+        pendingAttachments[id] = att
+        respondJson(sock, JSONObject()
+            .put("ok", true)
+            .put("id", id)
+            .put("name", att.name)
+            .put("type", att.type)
+            .put("size", att.size)
+            .put("mime", att.mime)
+            .toString())
+    }
+
+    /** 删除暂存附件。 */
+    private fun handleAttachmentRemove(sock: Socket, body: String) {
+        val o = runCatching { JSONObject(body) }.getOrNull()
+        val id = o?.optString("id")?.trim().orEmpty()
+        if (id.isEmpty()) {
+            respondJson(sock, """{"ok":false,"error":"empty id"}""")
+            return
+        }
+        synchronized(pendingAttachments) {
+            pendingAttachments.remove(id)
+        }
+        respondJson(sock, """{"ok":true}""")
+    }
+
+    /** 打开原生功能面板。 */
+    private fun handleUiAction(sock: Socket, body: String) {
+        val o = runCatching { JSONObject(body) }.getOrNull()
+        val action = o?.optString("action")?.trim().orEmpty()
+        if (action.isEmpty()) {
+            respondJson(sock, """{"ok":false,"error":"empty action"}""")
+            return
+        }
+        val d = QuroUiActionBridge.dispatch
+        if (d != null) {
+            d(action)
+            respondJson(sock, """{"ok":true}""")
+        } else {
+            // 桥未就绪：暂存待派发（ChatScreen 注入时补派）
+            QuroUiActionBridge.pendingAction = action
+            respondJson(sock, """{"ok":true,"queued":true}""")
+        }
+    }
+
+    /** 导出当前会话（生成文件路径）。 */
+    private fun handleExport(sock: Socket) {
+        val path = runCatching {
+            // 复用与原生导出相同的逻辑入口（ChatScreen 里 exportConversation 是私有函数，
+            // 这里退化为返回会话纯文本，供网页展示/复制）。
+            val sb = StringBuilder()
+            vm.messages.value.forEach { m ->
+                val who = if (m.role == "user") "我" else (m.senderName ?: "ZorvAI")
+                sb.append(who).append(": ").append(m.content).append("\n\n")
+            }
+            sb.toString()
+        }.getOrDefault("")
+        respondJson(sock, JSONObject().put("ok", true).put("text", path).toString())
+    }
+
+    /* ── 快照 ─────────────────────────────────────────────────────────── */
+
     private fun snapshot(): String {
         val arr = JSONArray()
         vm.messages.value
@@ -548,24 +873,11 @@ class QuroWebUiServer(
             .put("bar", WebUiProjection.bar(title, modelName, personaName))
             .put(
                 "composer", WebUiProjection.composer(
-                    // ── 真源在 ViewModel 的四个 ──
                     busy = vm.busy.value,
                     deepThink = vm.thinking.value,
                     autoSaveMemory = vm.autoSaveMemory.value,
                     subAgent = vm.subAgentEnabled.value,
                     vision = vm.visionEnabled.value,
-
-                    // ── 真源在持久化 prefs 的四个 ──
-                    // 🔴 这四个**不是** ViewModel 状态，而是原生 `ChatScreen` 的局部
-                    //    `remember` state，各自的真源都是 prefs（原生每次切换都写回）：
-                    //      autoRead  → QuroVoiceFeaturePrefs（ChatScreen.toggleAutoRead）
-                    //      workspace → WorkspacePreferences（WorkspaceSelectionDialog 回调）
-                    //      cms/priv  → QuroPolicyStore（PermissionModeBar 的策略 chips）
-                    //
-                    //    这里**每次快照现读**，绝不在服务里存一份缓存副本。缓存会在原生切换后
-                    //    变旧，症状正是「手机上开了、网页这边还显示关着」，而且零报错——
-                    //    查起来得横跨两个介质，属于典型的高代价低收益故障。
-                    //    现读的代价只是四次 SharedPreferences 命中，随快照频率（最快 180ms）无压力。
                     autoRead = QuroVoiceFeaturePrefs.getAutoRead(context),
                     workspace = WorkspacePreferences.getCurrentWorkspace(context).orEmpty(),
                     cms = QuroPolicyStore.getCms(context),
@@ -619,7 +931,7 @@ class QuroWebUiServer(
         val head = StringBuilder()
         head.append("HTTP/1.1 ").append(status).append(' ').append(statusText(status)).append("\r\n")
         head.append("Content-Type: ").append(contentType).append("\r\n")
-        head.append("Content-Length: ").append(bytes.size).append("\r\n")
+        head.append("Content-Length: ").append(bytes.size).append("\r")
         head.append("Connection: close\r\n")
         extraHeaders.forEach { (k, v) -> head.append(k).append(": ").append(v).append("\r\n") }
         head.append("\r\n")
@@ -645,31 +957,18 @@ class QuroWebUiServer(
         /** 对外监听地址：局域网可达。 */
         private const val ANY_HOST = "0.0.0.0"
 
-        /** 默认端口：对齐 dsh web 的 3080，便于记忆与「贴给别人打开」。 */
+        /** 默认端口：对齐 dsh web 的 3080。 */
         const val DEFAULT_PORT = 3080
 
         private const val SOCKET_TIMEOUT_MS = 20000
 
-        /**
-         * 投影指纹采样间隔。
-         *
-         * 80 ms ≈ 12.5 次/秒：比人眼分辨「打字机效果」所需还密一档，
-         * 而一次采样只做「消息条数 + id/长度 + 几个开关」的字符串拼接
-         * （不做 JSON 序列化，见 [revision]），长会话下也只是微秒级。
-         * 快照推送**只在指纹变化时**发生，所以空闲时这条线程几乎不产生流量。
-         */
         private const val REVISION_INTERVAL_MS = 80L
 
-        /** SSE 心跳：注释行不触发前端 onmessage，只用来防止长连接被空闲掐断。 */
         private const val HEARTBEAT_MS = 15000L
 
         private const val DEFAULT_TITLE = "ZorvAI"
 
-        /**
-         * URL 路径 → assets 相对路径。
-         * 🔴 这里**只**有投影自己的三个文件。任何 `zx` 开头的路径都不属于本服务
-         * —— 互动UI界面是独立模块，由原生对话框承载，不从这里发。
-         */
+        /** URL 路径 → assets 相对路径。 */
         private val STATIC = mapOf(
             "/" to "web-chat/index.html",
             "/index.html" to "web-chat/index.html",
@@ -677,11 +976,7 @@ class QuroWebUiServer(
             "/chat.js" to "web-chat/chat.js",
         )
 
-        /**
-         * 本机局域网 IPv4。
-         * 用于把「可复制给别人打开的链接」拼出来——没有它，用户只能看到
-         * `127.0.0.1`，而那个地址在**别的设备上打不开**，等于没有链接。
-         */
+        /** 本机局域网 IPv4。 */
         private fun lanAddress(): String? = runCatching {
             Collections.list(NetworkInterface.getNetworkInterfaces())
                 .filter { n -> runCatching { n.isUp && !n.isLoopback && !n.isVirtual }.getOrDefault(false) }
@@ -692,7 +987,6 @@ class QuroWebUiServer(
         }.getOrNull()
     }
 }
-
 
 /**
  * 进程级 Web UI 宿主 —— **唯一**持有 [QuroWebUiServer] 的地方。
