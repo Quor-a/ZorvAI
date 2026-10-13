@@ -396,6 +396,15 @@
             android:foregroundServiceType="mediaProjection" />
 
         <!-- 机器人开机保活服务：前台常驻，连接已启用的飞书/QQ/微信机器人 -->
+        <!-- Web UI 常驻宿主：把「投影服务」从对话框 Composable 的 remember 里搬出来。
+             改前它随对话框生灭，于是「返回（或切到别的应用）→ 链接就打不开了」——
+             而 Web UI 的定位恰恰是「在别的屏幕上看同一个对话框」，必须后台常驻。
+             类型 dataSync：它只做本机 HTTP 服务（读写会话状态、推送快照），不碰摄像头/麦克风。 -->
+        <service
+            android:name=".service.QuroWebUiService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <service
             android:name=".service.QuroBotBootstrapService"
             android:exported="false"

@@ -41,12 +41,67 @@ var COLOR_KEYS=["hex","color","c","tint"];
 var UNIT_KEYS=["unit","u"];
 var ICON_KEYS=["e","icon","emoji","i"];
 
-function pick(o,keys){for(var i=0;i<keys.length;i++){var v=o[keys[i]];if(v!==undefined&&v!==null&&v!=="")return v;}return "";}
+function normKey(k){return String(k).toLowerCase().replace(/[^a-z0-9]/g,"").replace(/[0-9]+$/,"");}
+/* 取槽位：先精确命中（保持既有行为与优先级），再归一命中。
+   🔴 只做精确比对是不够的：模型常给字段加后缀或换大小写
+      （title2 / owner_name / theCity），精确比对会全部落空，
+      于是每个对象里只有 harvest 捞到的第一个标量显示得出来 ——
+      表现就是「外壳照画、格子里空的」。
+   ⚠️ 本块与 zx_card_runtime.html 的那份必须逐 token 相同（parity 脚本按去空白后的 sha1 比对），
+      所以排版可以不同，**token 顺序一个字都不能差**。 */
+function pick(o, keys){
+  var i, k, v;
+  for(i=0;i<keys.length;i++){ v=o[keys[i]]; if(v!==undefined&&v!==null&&v!=="") return v; }
+  var nk={}, ks=Object.keys(o);
+  for(i=0;i<ks.length;i++) nk[ks[i]]=normKey(ks[i]);
+  for(i=0;i<keys.length;i++){
+    var w=normKey(keys[i]);
+    if(!w) continue;
+    for(k in o){
+      v=o[k];
+      if(v===undefined||v===null||v==="") continue;
+      if(typeof v==="object") continue;
+      var n=nk[k];
+      if(n===w) return v;
+      if(w.length>=3 && n.indexOf(w)>=0) return v;
+    }
+  }
+  return "";
+}
 function isObj(v){return v!==null&&typeof v==="object"&&!Array.isArray(v);}
 function isArr(v){return Array.isArray(v);}
 function esc(s){return String(s===undefined||s===null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
-function txt(o){var v=pick(o,TXT_KEYS);return v===""?"":String(v);}
-function val(o){var v=pick(o,VAL_KEYS);return v===""?"":String(v);}
+/* 兜底采集时要跳过的键：结构键、已在别的槽位取过的视觉键、布局标记。
+   不跳的话 txt 会把 "#5046E4" 当成标题显示出来。 */
+var HARVEST_SKIP=["items","rows","nodes","pts","steps","cols","columns","options","days","cells",
+"slots","groups","blocks","marks","stages","fields","links","opts","cards","levels","series",
+"people","labels","tags","tasks","children","kids","panels","sections","v","edges",
+"hex","color","c","tint","e","icon","emoji","i","unit","u","x","y","w","h","pct","p",
+"type","id","kind","k","_raw","ref","on","auto","must","me","done","checked"];
+/* 自造字段名的兜底采集：契约词汇（n/v/t/k…）之外的字段名是常态——模型按业务起名
+   （temp/high/low/city/weather/day），契约里没有这些词。此前这些数据一个都不显示：
+   组件外壳照画（格子、表头都在），格子里全是空的 ——
+   用户看到的正是「zxwidget 根本渲染不了 / 画出来是空的」。
+   数值槽取「第一个像数字的标量」，文本槽取「第一个不是数字的标量」，
+   两者取值域互补，同一个值不会被两个槽位重复显示。
+   ⚠ 本文件当前**没有任何代码加载**（对话框走 zx_card_runtime.html 内联的那份拷贝），
+     保留它是为了与那份拷贝逐块比对（scripts/zx/zxwidget_parity_check.js）。
+     改动必须两边同步，否则漂移面会继续扩大。 */
+function harvest(o,numOnly){
+  for(var k in o){
+    if(HARVEST_SKIP.indexOf(k)>=0)continue;
+    var v=o[k];
+    if(v===undefined||v===null||v==="")continue;
+    if(typeof v==="object")continue;
+    var sv=String(v);
+    var isNum=/^-?[0-9]+(\.[0-9]+)?$/.test(sv);
+    if(numOnly?!isNum:isNum)continue;
+    return sv;
+  }
+  return "";
+}
+function txt(o){var v=pick(o,TXT_KEYS);if(v!=="")return String(v);return harvest(o,false);}
+function val(o){var v=pick(o,VAL_KEYS);if(v!=="")return String(v);return harvest(o,true);}
 function sub(o){var v=pick(o,SUB_KEYS);return v===""?"":String(v);}
 function who(o){var v=pick(o,WHO_KEYS);return v===""?"":String(v);}
 function at(o){var v=pick(o,AT_KEYS);return v===""?"":String(v);}
@@ -75,20 +130,27 @@ function svg(tag,attrs){var n=document.createElementNS("http://www.w3.org/2000/s
 var LAYOUTS={};
 
 LAYOUTS.table=function(dsl,comp,ctx){
-  var cols=isArr(dsl.columns)?dsl.columns:[], rows=isArr(dsl.rows)?dsl.rows:mainArr(dsl,comp);
+  var cols=isArr(dsl.columns)?dsl.columns:(isArr(dsl.cols)?dsl.cols:[]), rows=isArr(dsl.rows)?dsl.rows:mainArr(dsl,comp);
   var box=el("div","sec"),wrap=el("div","tw"),tb=el("table"),thead=el("thead"),tr=el("tr");
   if(!cols.length&&!rows.length){box.appendChild(el("div","empty","暂无表格数据"));return box;}
-  cols.forEach(function(c){tr.appendChild(el("th",null,esc(isObj(c)?txt(c):String(c))));});
+  function colKey(c){return isObj(c)?(pick(c,["key","k","field","id"])||txt(c)||String(c)):String(c);}
+  cols.forEach(function(c){tr.appendChild(el("th",null,esc(isObj(c)?(txt(c)||colKey(c)):String(c))));});
   if(!cols.length&&rows.length&&isObj(rows[0]))Object.keys(rows[0]).forEach(function(k){tr.appendChild(el("th",null,esc(k)));});
   thead.appendChild(tr);tb.appendChild(thead);
   var tbody=el("tbody");
   rows.forEach(function(r,ri){
-    if(!isObj(r))return;var tr2=el("tr");
-    var cells=cols.length?cols.map(function(c){var key=isObj(c)?(pick(c,["key","k","field","id"])||txt(c)):String(c);return r[key];}):Object.keys(r).map(function(k){return r[k];});
+    var tr2=el("tr"),cells;
+    if(isArr(r)){var n=cols.length||r.length;cells=[];for(var ci0=0;ci0<n;ci0++)cells.push(r[ci0]);}
+    else if(isObj(r)){
+      if(cols.length){
+        var ks=Object.keys(r);
+        cells=cols.map(function(c,ci){var key=colKey(c);if(r[key]!==undefined)return r[key];var hit;ks.forEach(function(o2){if(hit===undefined&&normKey(key)&&String(normKey(o2)).indexOf(normKey(key))>=0)hit=r[o2];});if(hit!==undefined)return hit;return ci<ks.length?r[ks[ci]]:"";});
+      } else { cells=Object.keys(r).map(function(k){return r[k];}); }
+    } else { cells=[r]; }
     cells.forEach(function(cv,ci){
       var td=el("td");
-      td.innerHTML=isObj(cv)?esc(txt(cv)||JSON.stringify(cv)):esc(cv===null?"—":cv);
-      td.addEventListener("click",function(e){e.stopPropagation();ctx.interact("cell",{row:ri,col:ci,value:cv});});
+      td.innerHTML=isObj(cv)?esc(txt(cv)||JSON.stringify(cv)):esc(cv===null?"—":(cv===undefined?"":cv));
+      td.addEventListener("click",function(e){e.stopPropagation();ctx.interact("cell",{row:ri,col:ci,key:cols[ci]?colKey(cols[ci]):ci,value:cv});});
       tr2.appendChild(td);
     });
     tr2.addEventListener("click",function(){ctx.interact("row",{row:ri,data:r});});
@@ -679,7 +741,7 @@ var CONTAINERS=["zx_tabs","zx_accordion","zx_split","zx_carousel","zx_grid","zx_
 var OVERRIDE={
   zx_compare:"table",zx_table:"table",zx_datatable:"table",zx_matrix:"table",zx_pivot:"table",
   zx_metrics:"metrics",zx_stat:"metrics",zx_stats:"metrics",zx_kpi:"metrics",zx_counter:"metrics",
-  zx_list:"list",zx_feed:"list",zx_log:"list",zx_search:"list",zx_results:"list",
+  zx_list:"list",zx_feed:"list",zx_log:"list",zx_search:"list",zx_results:"list",zx_tasklist:"list",
   zx_timeline:"stepper",zx_steps:"stepper",zx_stepper:"stepper",zx_stages:"stepper",zx_process:"stepper",
   zx_form:"form",zx_survey:"form",zx_gridform:"form",
   zx_choice:"choice",zx_options:"choice",zx_pick:"choice",zx_vote:"choice",
@@ -709,7 +771,16 @@ function resolveLayout(comp,dsl){
   if(arrs.indexOf("columns")>=0&&arrs.indexOf("rows")>=0)return "table";
   if(arrs.indexOf("fields")>=0)return "form";
   if(arrs.indexOf("cols")>=0)return "kanban";
-  if(arrs.indexOf("tasks")>=0)return "gantt";
+  /* tasks → 甘特图必须要有起止证据：LAYOUTS.gantt 只读 s/e（或 from/to），
+     没有起止字段时每根条都塌成 0 宽，画出来是一条空轴 —— 等于「画不出来」。
+     全仓只有 3 个组件声明 arrays 含 tasks：zx_gantt 有 s/e；
+     zx_tasklist 只有 t/dep/pri（一份清单）；zx_critical 只有 d/n。 */
+  if(arrs.indexOf("tasks")>=0){
+    var tf=ct.fields||[], tl=mainArr(dsl, comp);
+    var head=isObj(tl[0])?tl[0]:null;
+    var hasSE=(tf.indexOf("s")>=0&&tf.indexOf("e")>=0)||(head&&(head.s!==undefined||head.from!==undefined)&&(head.e!==undefined||head.to!==undefined));
+    if(hasSE) return "gantt";
+  }
   if(arrs.indexOf("options")>=0||arrs.indexOf("opts")>=0)return "choice";
   if(arrs.indexOf("nodes")>=0||arrs.indexOf("people")>=0||arrs.indexOf("levels")>=0)return "tree";
   if(arrs.indexOf("pts")>=0||arrs.indexOf("series")>=0)return "chart";

@@ -135,8 +135,12 @@ function fit(){
  * 「宁可丑，不可白」兜底：消息存在、渲染区高度却是 0 → 高度链坏了。
  * 摘掉 flex 改回文档流（`html.flow`，见 style.css），消息可见可滚、底栏 sticky 在底部。
  *
- * 同时把实测数字摊到 `#diag` + `console.log`（宿主 `WebUiDialog` 收 console → QuroDiag）。
+ * 同时把实测数字摊到 `#diag`，并**回传宿主**（`POST /api/diag` → QuroDiag）。
  * 上一次白屏时我连一个数字都拿不到，只能让用户重装一版再截图 —— 这个代价不该付第二次。
+ *
+ * 🔴 必须回传，不能只 `console.log`：本页跑在**别的设备的浏览器**里，
+ *    宿主的 console 看不见它（改前靠内嵌 WebView 的 WebChromeClient 收，
+ *    那个内嵌界面已经被拿掉了）。只打日志 = 真机排查时手上什么都没有。
  */
 function guardCollapse(){
   if(state.messages.length===0)return;
@@ -154,6 +158,7 @@ function guardCollapse(){
     $diag.textContent=msg;
     $diag.hidden=false;
     console.log("[webui] "+msg);
+    reportDiag(msg,"warn");
   }
 }
 
@@ -165,10 +170,13 @@ function logHealth(){
   if(document.documentElement.clientHeight<=0)return;
   healthLogged=true;
   var dvh=(window.CSS&&CSS.supports)?CSS.supports("height","100dvh"):"?";
-  console.log("[webui] 健康快照 vp="+document.documentElement.clientHeight+
+  var snap="健康快照 vp="+document.documentElement.clientHeight+
     "x"+document.documentElement.clientWidth+" app="+$app.clientHeight+
     " stream="+$stream.clientHeight+" composer="+$composer.offsetHeight+
-    " dvh支持="+dvh+" msgs="+state.messages.length);
+    " dvh支持="+dvh+" msgs="+state.messages.length;
+  console.log("[webui] "+snap);
+  // 一次性回传：这一行是「白屏/塌陷」类问题唯一的现场数字，必须落在宿主日志里
+  reportDiag(snap,"info");
 }
 
 /* ── 3. 渲染：块分派 ─────────────────────────────────────────────────── */
@@ -197,7 +205,12 @@ function renderChrome(){
   $dot.className="dot"+(state.composer.busy?" on":"");
   // 🔴 用 classList.toggle 而不是 `className=` 整体赋值：整体赋值会把 guardCollapse
   //    加的 `flow` 降级类**一起抹掉**，于是每次轮询都白屏↔降级来回抖。
-  document.documentElement.classList.toggle("dark",!!state.dark);
+  var darkNow=!!state.dark;
+  if(darkNow!==state.darkApplied){
+    state.darkApplied=darkNow;
+    document.documentElement.classList.toggle("dark",darkNow);
+    pushDark();   // 已画出来的 zxwidget 跟着换皮肤（不重建，保留交互状态）
+  }
   $send.textContent=state.composer.busy?"■":"➤";
   $send.className=state.composer.busy?"stop":"";
   $send.setAttribute("aria-label",state.composer.busy?"停止":"发送");
@@ -259,14 +272,6 @@ function blockNode(b){
         tb.appendChild(rtr);
       });
       t.appendChild(tb); wrap.appendChild(t); return wrap;
-    }
-    /* 互动UI界面：只标明「这里有一块」。本页不编译、不渲染它——
-       那是独立模块，宿主是原生对话框。 */
-    case "ui":{
-      var u=el("div","ui");
-      var ut=el("div","ut","互动 UI 界面");
-      var un=el("div",null,"组件："+(b.component||"?")+"（在原生对话框里操作）");
-      u.appendChild(ut); u.appendChild(un); return u;
     }
     /* 原生专属渲染的块：如实说明 + 折叠展示源，不假装能画 */
     case "native":{
@@ -384,9 +389,8 @@ function renderAttachments(nd,m){
 }
 
 /**
- * 互动UI界面标记的插入点。
+ * 互动UI界面（zxwidget）的插入点。
  * 位置与原生一致：思考 → 正文 → 工具 → 互动界面。
- * 这里只维护一个**锚点容器**，不往里放任何 zx 运行时。
  */
 function uiAnchor(nd){
   if(nd.uiBox)return nd.uiBox;
@@ -396,17 +400,89 @@ function uiAnchor(nd){
   return box;
 }
 
+/** 把一行 JSON 编成 URL 安全的 base64（hash 里用；不经网络，所以不受长度限制）。 */
+function b64(s){
+  try{ return btoa(unescape(encodeURIComponent(s))); }catch(e){ return ""; }
+}
+
+/**
+ * 一块 zxwidget —— **真的画出来**，不是占位标记。
+ *
+ * 承载方式是 `<iframe src="/zx/shell#<base64>">`：那一页就是原生 `ZxWidgetInline`
+ * 用的**同一份** `zx_card_runtime.html`（同一份编译器、同一份 CSS、同一套高度回报），
+ * 服务端只把「原生桥」换成 postMessage，载荷从「随 HTML 内联」换成 hash。
+ * 所以网页上和手机上画出来的是同一个东西 —— 不会出现
+ * 「网页上看得到、手机上画不出」这类最难查的分叉。
+ *
+ * 载荷走 hash 而不是查询串：dsl 是模型给的任意 JSON，又长又含 &/#/中文，
+ * 塞进 `?c=..&d=..` 会被截断，hash 不参与请求、没有长度限制。
+ */
+function zxFrame(comp,dsl){
+  var f=document.createElement("iframe");
+  f.className="zxf";
+  f.setAttribute("data-zx",comp||"");
+  f.setAttribute("scrolling","no");
+  f.src="zx/shell#"+b64(JSON.stringify({component:comp||"",dsl:dsl||{},dark:!!state.dark}));
+  return f;
+}
+
 function renderUi(nd,m){
   var list=m.ui||[];
-  var sig=list.map(function(u){return u.component||"";}).join("~");
+  // 指纹里带上 dsl 长度：同一组件换了数据也要重画；只有长度和组件名都没变才跳过，
+  // 这样流式过程中不会把已经画好的 iframe 反复重建（重建会丢用户填了一半的输入）。
+  var sig=list.map(function(u){
+    return (u.component||"")+":"+String(u.dsl||"").length;
+  }).join("~");
   if(sig===nd.uiSig)return;
   nd.uiSig=sig;
   if(nd.uiBox){ nd.uiBox.remove(); nd.uiBox=null; }
   if(!list.length)return;
   var box=uiAnchor(nd);
-  list.forEach(function(u){
-    box.appendChild(blockNode({t:"ui",component:u.component}));
-  });
+  list.forEach(function(u){ box.appendChild(zxFrame(u.component,u.dsl)); });
+}
+
+/** 反查某个消息来自哪一个 zxwidget iframe（e.source → iframe 元素）。 */
+function frameOf(src){
+  var fs=document.querySelectorAll("iframe.zxf");
+  for(var i=0;i<fs.length;i++){ if(fs[i].contentWindow===src)return fs[i]; }
+  return null;
+}
+
+/**
+ * 高度与交互的统一入口。
+ *
+ * 🔴 高度必须由**页面自己**报（`document.body.scrollHeight`）：iframe 默认 150px，
+ *    不报高度就只能靠猜 —— 猜大了是一块空白，猜小了内容被裁掉，
+ *    两种都表现为「这块界面坏了」。原生侧用的是同一个脚本、同一个协议。
+ */
+window.addEventListener("message",function(e){
+  var d=e.data||{};
+  if(!d||typeof d!=="object")return;
+  var f=frameOf(e.source);
+  if(!f)return;
+  if(d.__zx==="h"){
+    var h=parseInt(d.px,10);
+    if(!isFinite(h)||h<=0)return;
+    var cur=parseInt(f.getAttribute("data-h")||"0",10);
+    if(h===cur)return;                      // 只在变化时改，避免自激
+    f.setAttribute("data-h",String(h));
+    f.style.height=Math.max(120,Math.min(h+2,680))+"px";
+  }else if(d.__zx==="i"){
+    var comp=f.getAttribute("data-zx")||"";
+    var payload=d.payload;
+    if(!comp||!payload)return;
+    var obj;
+    try{ obj=JSON.parse(payload); }catch(err){ obj={action:"raw",summary:String(payload)}; }
+    post("interact",{component:comp,payload:obj});
+  }
+});
+
+/** 主题切换：不重建 iframe（会丢交互状态），只把新皮肤推给每个界面。 */
+function pushDark(){
+  var fs=document.querySelectorAll("iframe.zxf");
+  for(var i=0;i<fs.length;i++){
+    try{ fs[i].contentWindow.postMessage({__zxc:"dark",dark:!!state.dark},"*"); }catch(e){}
+  }
 }
 
 function renderMessage(m){
@@ -460,7 +536,14 @@ function prune(ids){
   });
 }
 
-/* ── 4. 与宿主同步（轮询投影快照）────────────────────────────────────── */
+/* ── 4. 与宿主同步：SSE 长连接（流式），轮询只作兜底 ─────────────────────
+   旧做法是前端每 180ms（空闲 1200ms）拉一次全量快照，代价有两层：
+     · 延迟：空闲档 1200ms —— 这正是用户报的「消息同步延迟很大」；
+             而且「没有流式」：正文逐字增长时，肉眼看到的是整段整段跳。
+     · 浪费：不变也传，N 个客户端各拉各的。
+   现在由服务端在**投影指纹变化时**推（~80ms 粒度、只在真变了时推），
+   前端只管收。轮询降级为「SSE 连续失败」时的兜底，不再是主路径。
+*/
 
 function apply(snap){
   if(!snap||!snap.ok)return;
@@ -487,17 +570,39 @@ function apply(snap){
   if(stick||(!wasBusy&&state.composer.busy))scrollBottom(true);
 }
 
+var es=null, esFails=0, streamDead=false;
+
+function startStream(){
+  if(streamDead||!window.EventSource){ schedule(1200); return; }
+  try{ es=new EventSource("api/events"); }catch(e){ schedule(1200); return; }
+  es.onopen=function(){ esFails=0; };
+  es.onmessage=function(ev){
+    try{ apply(JSON.parse(ev.data)); }catch(e){}
+  };
+  es.onerror=function(){
+    // EventSource 自己会重连；但若连续失败（服务被停过、网络切换），
+    // 就退回慢轮询 —— 保证「至少还能看到状态」，而不是页面永远停在旧内容。
+    esFails++;
+    if(esFails>=3){
+      streamDead=true;
+      try{ es.close(); }catch(e){}
+      es=null;
+      schedule(2000);
+    }
+  };
+}
+
 function poll(){
-  if(document.hidden){ schedule(1200); return; }
+  if(document.hidden){ schedule(2000); return; }
   fetch("api/snapshot",{cache:"no-store"})
     .then(function(r){return r.json();})
     .then(function(j){
       apply(j);
-      schedule(state.composer.busy?180:1200);
+      schedule(2000);
     })
     .catch(function(){
       $cnt.textContent="连接不上投影服务，重试中…";
-      schedule(1500);
+      schedule(2000);
     });
 }
 
@@ -515,8 +620,26 @@ function post(path,body){
     body:JSON.stringify(body||{})
   })
     .then(function(r){return r.json();})
-    .then(function(j){ poll(); return j; })
+    .then(function(j){ return j; })
     .catch(function(){ return null; });
+}
+
+/**
+ * 页面自检回传宿主的通道。
+ *
+ * 只在**异常时**调用：正常路径不发，避免把 logcat 刷成噪音。
+ * 为什么需要它：本页在别的设备的浏览器里跑，宿主看不到它的 console ——
+ * 高度链自检（guardCollapse）的结果如果只打在页面上，
+ * 真机排查时就是「用户说白屏、开发者手上什么都没有」。
+ */
+function reportDiag(msg,level){
+  try{
+    fetch("api/diag",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({level:level||"warn",msg:String(msg).slice(0,900)})
+    }).catch(function(){});
+  }catch(e){}
 }
 
 function doSend(){
@@ -590,4 +713,9 @@ window.addEventListener("resize",fit);
 window.addEventListener("orientationchange",function(){setTimeout(fit,120);});
 
 autoGrow();
-poll();
+// 先拉一次全量（首屏不必等第一帧事件），再挂上流式通道
+fetch("api/snapshot",{cache:"no-store"})
+  .then(function(r){return r.json();})
+  .then(function(j){ apply(j); })
+  .catch(function(){})
+  .then(function(){ startStream(); });

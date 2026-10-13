@@ -3,8 +3,8 @@
   "module": "app/src/main/assets/zx/zxwidget.js",
   "card": "app/src/main/assets/zx_card_runtime.html",
   "total_blocks": {
-    "module": 58,
-    "card": 58
+    "module": 61,
+    "card": 61
   },
   "blocks": {
     "mainArr": {
@@ -14,10 +14,10 @@
       "nb": 593
     },
     "LAYOUTS.table": {
-      "a": "570c5aef53d6",
-      "b": "66c9d1967599",
-      "na": 1254,
-      "nb": 1421
+      "a": "cf5999e62427",
+      "b": "b23b190b3f33",
+      "na": 1751,
+      "nb": 1824
     },
     "LAYOUTS.metrics": {
       "a": "39b17e98118e",
@@ -140,10 +140,10 @@
       "nb": 1291
     },
     "resolveLayout": {
-      "a": "6e31adbb9e5e",
-      "b": "55e576b4dad2",
-      "na": 2667,
-      "nb": 2859
+      "a": "a5f3c7625956",
+      "b": "236ba4f544ca",
+      "na": 2897,
+      "nb": 3089
     },
     "compile": {
       "a": "d0a3e7186cc5",

@@ -4019,4 +4019,12 @@ Your configured models were kept; you can also type a model name manually.</stri
     <string name="qk_04081">Copy link</string>
     <string name="qk_04082">Copied</string>
     <string name="qk_04083">Open in browser</string>
+    <string name="qk_04085" formatted="false">No dialog session to project. Open the ZorvAI dialog first</string>
+    <string name="qk_04086" formatted="false">Failed to listen on the port. Please try again later</string>
+    <string name="qk_04087">Stop</string>
+    <string name="qk_04088">Web UI background service</string>
+    <string name="qk_04089" formatted="false">Open the same dialog on a screen other than this phone. This page holds settings only: the switch and the address. The real interface lives in the browser.</string>
+    <string name="qk_04090">Address</string>
+    <string name="qk_04091" formatted="false">Service not started. Once the switch is on, ZorvAI stays resident in the background, so going back or switching apps will not break this link.</string>
+    <string name="qk_04092" formatted="false">Address not available yet: open the ZorvAI dialog once so the service has something to serve.</string>
 </resources>

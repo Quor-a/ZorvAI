@@ -208,6 +208,15 @@ class QuroToolRegistry {
             "ui_card",
             // 对话框内联 UI 组件（v134：按钮/开关/滑块/进度/统计/提醒/表格/列表/分段/饼图/评分/倒计时/标签页/折叠/表单/标签/步骤/仪表/媒体/信息）
             "ui_widget",
+            // zxwidget 动态交互界面（477 个 zx 组件 → 可交互控件，**直接长在对话框消息流里**）。
+            // 🔴 必须进 coreNames，理由与上面 codecanvas_* / genui_* 两条**完全一样**：
+            //   coreSpecs 是「关掉完整工具集」时的下发集，也是 appendCapabilityAwareness
+            //   的同源输入 —— 漏在这里，默认配置下模型两处都看不到它。
+            //   2026-10-13 实测：两个 zx 工具只注册在 [QuroBuiltInTools]，
+            //   既不在 coreNames、也不在 [QuroToolRouter.ALWAYS_ON]，
+            //   于是 PROGRESSIVE 路由下它们**从不进 tools 字段**：
+            //   渲染链路整条完好，却因为「模型永远调不到」而表现为「根本渲染不了」。
+            "zx_web_card", "zx_catalog",
             // 生成式界面：两条通道必须都进核心集，否则默认配置（useFullTools=false）下模型看不到，
             // 用户说「做个界面/小应用」时只会去凑 ui_widget 卡片。
             //   · genui_agent_open → 内置完整 GenUI-Agent 独立应用（GenUI JSON DSL → 原生 Compose 组件）

@@ -3928,4 +3928,12 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_04081">نسخ الرابط</string>
     <string name="qk_04082">تم النسخ</string>
     <string name="qk_04083">فتح في المتصفح</string>
+    <string name="qk_04085" formatted="false">لا توجد جلسة حوار للإسقاط. افتح حوار ZorvAI أولاً</string>
+    <string name="qk_04086" formatted="false">فشل الاستماع إلى المنفذ. حاول مرة أخرى لاحقاً</string>
+    <string name="qk_04087">إيقاف</string>
+    <string name="qk_04088">خدمة Web UI في الخلفية</string>
+    <string name="qk_04089" formatted="false">افتح الحوار نفسه على شاشة غير هذا الهاتف. هنا إعدادات فقط: المفتاح والعنوان. أما الواجهة الحقيقية فهي في المتصفح.</string>
+    <string name="qk_04090">العنوان</string>
+    <string name="qk_04091" formatted="false">الخدمة غير مشغّلة. عند تشغيل المفتاح يبقى ZorvAI في الخلفية، لذا لن يؤدي الرجوع أو تبديل التطبيقات إلى قطع هذا الرابط.</string>
+    <string name="qk_04092" formatted="false">العنوان غير متاح بعد: افتح حوار ZorvAI مرة واحدة ليكون للخدمة محتوى تقدّمه.</string>
 </resources>

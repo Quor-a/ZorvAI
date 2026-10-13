@@ -238,7 +238,8 @@ import com.ai.assistance.quro.ui.chat.ChatPermissionModeBar
 import com.ai.assistance.quro.ui.chat.ZxWebCard
 import com.ai.assistance.quro.ui.chat.ZxWidgetInline
 import com.ai.assistance.quro.ui.chat.zxSpecOf
-import com.ai.assistance.quro.ui.chat.WebUiDialog
+import com.ai.assistance.quro.service.QuroWebUiService
+import com.ai.assistance.quro.ui.chat.WebUiLinkDialog
 import com.ai.assistance.quro.ui.chat.ChatTopBar
 import com.ai.assistance.quro.core.policy.QuroPolicy
 import com.ai.assistance.quro.core.policy.QuroPolicyStore
@@ -1593,6 +1594,11 @@ fun ChatScreen(
     // 这样动态 UI / 互动游戏的交互才会真正变成一条用户消息（集群模式下自动交给集群）。
     sendRef = { t -> send(t) }
 
+    // Web UI 常驻服务：用户开关开着时，回到前台补一次拉起。
+    // START_STICKY 只覆盖「进程被杀后重建」，部分 ROM 会连前台服务一起清掉，
+    // 回到前台补一次是最省事又最可靠的续命点（本人不发通知、不占资源）。
+    LaunchedEffect(Unit) { QuroWebUiService.ensureIfEnabled(ctx) }
+
     @Composable
     fun ChatOverlays() {
         // 模型选择 = 当前配置 + 已保存预设 + 从 API 拉取到的真实可用模型（彻底摒弃硬编码假示例）
@@ -2248,15 +2254,17 @@ fun ChatScreen(
             )
         }
 
-        // Web UI 对话框 —— **ZorvAI 对话框的投影**（用户 2026-10-13 拍板）。
-        // 它不是第二个聊天应用，也不是「zxwidget 的宿主」：
-        // 服务端（QuroWebUiServer + WebUiProjection）把**本对话框该被看见的块**投出去，
-        // 网页只负责呈现（同会话、同块序列、同顶栏字段）。
-        // 顶栏的 modelName / personaName 与原生 ChatTopBar 取自同两个变量，
-        // 保证投影顶栏不会与主对话框说的是两件事。
+        // Web UI 的**设置**（用户 2026-10-13 拍板：「ZorvAI 内的 web UI 只是设置，
+        // 通过外部打开」）。
+        // 🔴 这里刻意**不再**嵌 WebView：
+        //   ① 那个内嵌界面一关，服务就随之停掉 —— 于是「返回 → 链接打不开」；
+        //   ② 在手机上看手机上同一块屏幕本身就说明定位错了。
+        // 服务本体在前台服务里（QuroWebUiService），生命周期与本弹窗无关，
+        // 所以关掉它不会断掉任何链接。
+        // 顶栏的 modelName / personaName 仍与原生 ChatTopBar 取自同两个变量，
+        // 保证两边说的是同一件事（在弹窗里同步给服务）。
         if (showZxWebChat) {
-            WebUiDialog(
-                vm = vm,
+            WebUiLinkDialog(
                 dark = darkMode,
                 modelName = modelLabel,
                 personaName = selectedPersona.name,
@@ -2899,8 +2907,8 @@ fun ChatScreen(
                             Toast.makeText(ctx, if (pendingAipDoc.value) qstr(R.string.qk_00078) else qstr(R.string.qk_00079), Toast.LENGTH_SHORT).show()
                         },
                         onSelectZxWebCard = {
-                            // 只打开 Web UI 对话框（ZorvAI 对话框的 Web 复制品）。
-                            // 刻意**不改** pendingZxWebCard：打开一个界面不该改变主对话框
+                            // 打开 Web UI 的**设置**（开关 + 地址 + 复制），不是内嵌浏览器。
+                            // 刻意**不改** pendingZxWebCard：改设置不该改变主对话框
                             // 下一条消息的模型行为——那是另一件事，见下面的开关。
                             showZxWebChat = true
                         },
@@ -5241,9 +5249,10 @@ private fun ChatToolMenu(
                     onSelectAipDoc()
                 },
             )
-            // 第三个对话框：Web UI —— ZorvAI 对话框的 Web 复制品。
-            // 它不是「卡片」：zxwidget（动态交互界面）是另一个东西，
-            // 只是被这个对话框和 ZorvAI 原生对话框一起支持。
+            // Web UI 的**设置入口**（开关 / 地址 / 复制）。
+            // 🔴 它**不再**在应用内打开那个界面：Web UI 的定位是「在手机以外的屏幕上
+            //    用同一个对话框」，应用内嵌一个浏览器既没必要，也把服务寿命绑在了
+            //    那个界面上（一关就断链）。真正的界面在别的设备的浏览器里。
             DropdownMenuItem(
                 text = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -5251,7 +5260,7 @@ private fun ChatToolMenu(
                         // 落到 else -> ic_x，那一行就显示成一个大叉（这里踩过）
                         LucideIcon("maximize", null, Modifier.size(18.dp), tint = cs.primary)
                         Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.qk_04072))
+                        Text(stringResource(R.string.qk_04088))
                     }
                 },
                 onClick = {

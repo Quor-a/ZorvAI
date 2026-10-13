@@ -3928,4 +3928,12 @@ Vos modèles configurés sont conservés ; vous pouvez aussi saisir un nom de mo
     <string name="qk_04081">Copier le lien</string>
     <string name="qk_04082">Copié</string>
     <string name="qk_04083">Ouvrir dans le navigateur</string>
+    <string name="qk_04085" formatted="false">Aucune session de dialogue à projeter. Ouvrez le dialogue ZorvAI au préalable</string>
+    <string name="qk_04086" formatted="false">Le port ne peut pas être écouté. Réessayez plus tard</string>
+    <string name="qk_04087">Arrêter</string>
+    <string name="qk_04088">Service en arrière-plan Web UI</string>
+    <string name="qk_04089" formatted="false">Ouvrez le même dialogue sur un écran autre que ce téléphone. Ici, uniquement des réglages : le commutateur et son adresse. La véritable interface est dans le navigateur.</string>
+    <string name="qk_04090">Adresse</string>
+    <string name="qk_04091" formatted="false">Service non démarré. Une fois le commutateur activé, ZorvAI reste en arrière-plan, donc revenir en arrière ou passer à une autre application ne coupe pas ce lien.</string>
+    <string name="qk_04092" formatted="false">Adresse indisponible pour le moment : ouvrez une fois le dialogue ZorvAI pour que le service ait du contenu.</string>
 </resources>

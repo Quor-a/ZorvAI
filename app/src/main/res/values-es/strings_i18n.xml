@@ -3928,4 +3928,12 @@ Se conservaron tus modelos configurados; también puedes escribir el nombre del 
     <string name="qk_04081">Copiar enlace</string>
     <string name="qk_04082">Copiado</string>
     <string name="qk_04083">Abrir en el navegador</string>
+    <string name="qk_04085" formatted="false">No hay sesión de diálogo que proyectar. Abre primero el diálogo de ZorvAI</string>
+    <string name="qk_04086" formatted="false">No se pudo escuchar en el puerto. Inténtalo de nuevo más tarde</string>
+    <string name="qk_04087">Detener</string>
+    <string name="qk_04088">Servicio en segundo plano de Web UI</string>
+    <string name="qk_04089" formatted="false">Abre el mismo diálogo en una pantalla distinta a este teléfono. Aquí solo hay ajustes: el interruptor y la dirección. La interfaz real está en el navegador.</string>
+    <string name="qk_04090">Dirección</string>
+    <string name="qk_04091" formatted="false">Servicio no iniciado. Al activar el interruptor, ZorvAI permanece en segundo plano, así que volver atrás o cambiar de aplicación no rompe este enlace.</string>
+    <string name="qk_04092" formatted="false">Dirección aún no disponible: abre el diálogo de ZorvAI una vez para que el servicio tenga contenido.</string>
 </resources>

@@ -109,3 +109,69 @@ console.log('抛错: ' + fail);
 if (failures.length) console.log('问题组件:\n  ' + failures.join('\n  '));
 console.log('\n=== 布局分布 ===');
 Object.keys(dist).sort((a, b) => dist[b] - dist[a]).forEach(k => console.log('  ' + k + ': ' + dist[k]));
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   ③ 自造字段名兜底（「zxwidget 画出来是空的」回归锁）
+   ══════════════════════════════════════════════════════════════════════
+   真实场景：模型按业务给字段起名（temp / high / low / city / weather / day …），
+   而 zx 契约词汇是 n / v / t / k。此前这些值**一个都不显示**——
+   组件外壳照画（表头、格子都在），格子里全是空的，用户看到的就是
+   「zxwidget 根本渲染不了」。修法是 txt()/val() 的最后兜底采集（harvest）。
+
+   本段用「契约词汇之外、只含业务字段」的 DSL 渲染，断言**真的画得出字**。
+   注意断言必须落在「可见文本」上：只看元素数不够——空盒子也有元素。
+*/
+function collectText(node, out) {
+  if (!node) return out;
+  if (node._html) out.push(String(node._html).replace(/<[^>]*>/g, ' '));
+  if (node._text) out.push(String(node._text));
+  (node.children || []).forEach(c => collectText(c, out));
+  return out;
+}
+function rendersText(comp, dsl) {
+  const node = vm.runInContext('compile(' + JSON.stringify(comp) + ',' + JSON.stringify(dsl) + ',{interact:function(){}})', sb);
+  return collectText(node, []).join(' ').replace(/\s+/g, ' ').trim();
+}
+
+/* 每个用例都带上「必须看见的数据词」。
+   🔴 只断言「有字」是个假锁：表头/标签是契约给的，格子里全空也照样有字 ——
+      而「外壳照画、格子里空的」正是用户截图里那一态。必须断言**数据词**。 */
+const HARVEST_CASES = [
+  // 只给业务字段名，一个契约词汇都不给
+  // 度量卡就是「名 + 值」两个槽位，所以只要求这两项（weather 是多余的第三个）
+  ['zx_metrics',  { items: [{ city: '汕头', temp: 29, weather: '晴' }, { city: '广州', temp: 31, weather: '多云' }] }, ['汕头', '29', '广州', '31']],
+  // 自造后缀名：title2 靠 harvest 捞到，owner2 靠 pick 的归一匹配（owner2 → owner）。
+  // 契约数组真名是 tasks；它是一份清单，不是排期（曾被结构推断误判成甘特）
+  ['zx_tasklist', { tasks: [{ title2: '部署', owner2: '张三', cost: 1200 }, { title2: '联调', owner2: '李四', cost: 800 }] }, ['部署', '张三', '联调', '李四']],
+  // 数组行：契约 sample 就是这种形状，旧码 `if(!isObj(r)) return;` 把整行丢掉（只剩表头）
+  ['zx_table',    { title: '预算表', columns: ['项目', '金额'], rows: [['服务器', '1200'], ['域名', '80']] },
+                  ['项目', '金额', '服务器', '1200', '域名', '80']],
+  // cols 是模型常用别名；列名对不上对象键时按位置退让
+  ['zx_table',    { cols: ['服务器', 'P99'], rows: [{ server: 'web-1', p99: 612 }, { server: 'web-2', p99: 480 }] },
+                  ['web-1', '612', 'web-2', '480']],
+];
+let harvestFail = [];
+HARVEST_CASES.forEach(([comp, dsl, want]) => {
+  if (!contracts.components.includes(comp)) { harvestFail.push(comp + ' 不在名册'); return; }
+  const text = rendersText(comp, dsl);
+  if (!/[\u4e00-\u9fa5A-Za-z0-9]/.test(text)) {
+    harvestFail.push(comp + ' 渲染后可见文本为空（业务字段名被丢弃）→ ' + JSON.stringify(dsl).slice(0, 80));
+    return;
+  }
+  // 数据词必须真的落到可见文本里（只画了表头不算过）
+  const miss = (want || []).filter((w) => text.indexOf(String(w)) < 0);
+  if (miss.length) {
+    harvestFail.push(comp + ' 少了数据词 ' + JSON.stringify(miss) +
+      '（画了外壳没画数据）→ 实际: ' + text.slice(0, 90));
+  }
+});
+
+console.log('\n=== 自造字段名兜底（harvest）===');
+console.log('用例: ' + HARVEST_CASES.length + '  通过: ' + (HARVEST_CASES.length - harvestFail.length));
+if (harvestFail.length) {
+  console.log('❌ 失败:\n  ' + harvestFail.join('\n  '));
+  process.exitCode = 1;
+} else {
+  console.log('PASS 契约词汇之外的业务字段名也能显示出来');
+}

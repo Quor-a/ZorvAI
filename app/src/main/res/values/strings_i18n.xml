@@ -4078,4 +4078,14 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_04081">复制链接</string>
     <string name="qk_04082">已复制</string>
     <string name="qk_04083">在浏览器打开</string>
+
+    <!-- Web UI 后台常驻（前台服务）：通知文案与「设置」入口 -->
+    <string name="qk_04085" formatted="false">没有可投的对话框会话，请先打开 ZorvAI 对话框</string>
+    <string name="qk_04086" formatted="false">端口监听失败，请稍后重试</string>
+    <string name="qk_04087">停止</string>
+    <string name="qk_04088">Web UI 后台服务</string>
+    <string name="qk_04089" formatted="false">在手机以外的屏幕上打开同一个对话框。这里只是设置：开关与地址，真正的界面在浏览器那边。</string>
+    <string name="qk_04090">地址</string>
+    <string name="qk_04091" formatted="false">服务未启动。打开开关后 ZorvAI 会常驻后台，返回或切到别的应用都不影响这个链接。</string>
+    <string name="qk_04092" formatted="false">地址暂时拿不到：先打开过一次 ZorvAI 对话框，服务才有内容可投。</string>
 </resources>

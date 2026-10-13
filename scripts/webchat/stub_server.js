@@ -184,20 +184,26 @@ window.addEventListener("load",function(){
     ok(hasNative,"原生专属块如实标注（不假装能画）");
     ok(!!ai.querySelector(".native pre"),"原生专属块给出源");
 
-    // 互动UI界面：必须是标记，不能是编译出来的界面
-    var ui=ai.querySelector(".ui");
-    ok(!!ui,"互动UI界面被标为「一块界面」");
-    ok(!ai.querySelector(".ui table")&&!ai.querySelector(".ui tbody tr"),
-       "互动UI界面**没有**被本页编译渲染（zxwidget 与 webui 未耦合）");
-
-    // 页面不得加载任何 zx 资源
-    var zxLoaded=false;
+    // zxwidget：本页**要真画** —— 画不出正是用户投诉的「根本渲染不了」。
+    //   画法是 iframe 引 /zx/shell（承载**同一份** zx_card_runtime.html），
+    //   而不是在本页再写一套编译器；所以下面同时断言本页自己没有 zx 布局逻辑。
+    var ui=ai.querySelector(".ui-list");
+    ok(!!ui,"互动UI界面被标为「一块界面」（.ui-list 容器）");
+    var zf0=ai.querySelector("iframe.zxf");
+    ok(!!zf0,"这块界面用 iframe 承载（运行时不许塞进本页）");
+    var zsrc=zf0?(zf0.getAttribute("src")||""):"";
+    say("iframe src = "+zsrc.slice(0,54)+"…");
+    ok(zsrc.indexOf("zx/shell#")===0,"iframe 指向 /zx/shell 的 hash 载荷");
+    ok(zsrc.indexOf("?")<0,"载荷走 hash 而非查询串（dsl 里的 & # 中文不会被截断）");
+    // 这条断言本轮的**方向反转**：以前是「页面不许出现任何 zx」，
+    //   现在是「页面自己不许引 zx 资源，zx 只许活在 iframe 里」。
+    var zxRefs=[];
     var res=d.querySelectorAll("script[src],link[href]");
     for(var i=0;i<res.length;i++){
       var u=res[i].getAttribute("src")||res[i].getAttribute("href")||"";
-      if(u.toLowerCase().indexOf("zx")>=0)zxLoaded=true;
+      if(u.toLowerCase().indexOf("zx")>=0)zxRefs.push(u);
     }
-    ok(!zxLoaded,"页面未加载任何 zx 资源");
+    ok(zxRefs.length===0,"本页自己不引 zx 脚本/样式（zx 只活在 iframe 里）");
 
     // 正文**没有**裸露的内联组件 JSON / 围栏残留。
     // 🔴 这里不能直接写字面量三反引号：本段整体是一个 JS **模板字符串**，
@@ -214,7 +220,7 @@ window.addEventListener("load",function(){
       var n=doc().querySelectorAll("#stream .msg").length;
       say("发送后消息数 = "+n);
       ok(n>msgs.length,"发送进入同一个会话");
-      phase2();
+      phaseZx();
     },2500);
   },1200);
 });
@@ -241,6 +247,110 @@ function loadMode(q,cb){
   document.getElementById("f").src="/"+q;
   setTimeout(cb,1800);
 }
+/* —— 本轮新增：zxwidget 真画 / 高度回灌 / 交互回路 / 流式延迟 ——
+   ⚠️ 本段整体在 JS **模板字符串**里：正则的反斜杠要写双份，
+      且注释里不许出现反引号（会当场闭合模板，报错位置指向性极差）。 */
+function phaseZx(){
+  say("—— ① zxwidget 真画（空盒子回归锁）——");
+  loadMode("",function(){
+    var d=doc();
+    var ms=d.querySelectorAll("#stream .msg");
+    var zf=null;
+    for(var i=0;i<ms.length;i++){
+      var f=ms[i].querySelector("iframe.zxf");
+      if(f)zf=f;
+    }
+    ok(!!zf,"重新加载后仍找得到 zxwidget 承载框");
+    if(!zf){phaseStream();return;}
+    // iframe 载入是异步的，轮询到有文本为止（最多 4s）
+    var t0=Date.now();
+    var iv=setInterval(function(){
+      // 🔴 本段位于 JS **模板字符串**里：正则里的反斜杠必须写双份。
+      //    写单份的 \s 会被模板串吃成 s —— 正则静默变成 /s+/g，
+      //    于是「612ms」被改成「612m 」（我踩过一次，日志看着还挺像样）。
+      var real=0,txt="",h=0;
+      try{
+        var idoc=zf.contentDocument;
+        // 🔴 必须只读渲染容器 #app。
+        //    我第一版读的是 idoc.body.textContent，实测 214509 字符 ——
+        //    因为 textContent 会把 <script> 的**源码**一起算进来，
+        //    而页壳里内联着整份 zx 契约 JSON。结果「数据有没有画出来」
+        //    这条断言永远为假，且报错完全指不到真因。
+        var ap=idoc.getElementById("body");
+        real=ap?ap.querySelectorAll("*").length:0;
+        txt=(ap?ap.textContent:"")||"";
+        h=Math.ceil((idoc.body&&idoc.body.scrollHeight)||0);
+      }catch(e){ say("读 iframe 内部失败: "+e.message); }
+      if(!txt.replace(/\\s/g,"").length && Date.now()-t0<4000) return;
+      clearInterval(iv);
+      say("iframe 内部元素数 = "+real+"，可见文本长度 = "+txt.replace(/\\s/g,"").length+"，内容高 = "+h+"px");
+      // 把真画出来的字也摊进日志：断言失败时「画了别的什么」比「没画」好查得多。
+      say("界面文字 = "+JSON.stringify(txt.replace(/\\s+/g," ").slice(0,120)));
+      // 空盒子的判据正是「壳画出来了、却一个字都没有」——用户截图就是这一态，
+      //   所以两条必须一起断言，只断言元素数会被空盒子蒙过去。
+      ok(real>3,"zxwidget 真的生成了 DOM（不是空 iframe）");
+      ok(txt.replace(/\\s/g,"").length>0,"zxwidget 画出了可见文本（空盒子回归锁）");
+      ok(txt.indexOf("612ms")>=0,"dsl 里的数据出现在界面上（数据真穿到了渲染层）");
+      // ⚠️ 这里断言的是**内容区**的列名，不是 dsl 里的 title。
+      //    dsl.title 属于运行时**自带页眉**（.hd），而 web 壳把页眉隐藏了
+      //    （.hd{display:none}，页眉由宿主自己画）—— 所以那个 title 本来就不该出现。
+      ok(txt.indexOf("接口")>=0 && txt.indexOf("P99")>=0 && txt.indexOf("错误率")>=0,
+         "列名与 dsl 的 columns 对得上");
+      var sh=parseInt(zf.style.height||"0",10);
+      // chat.js 把回灌值夹在 120~680（太小会裁、太大会留白），所以期望值是夹取后的。
+      var exp=Math.min(680,Math.max(120,h));
+      say("iframe 声明高度 = "+sh+"px，内容 "+h+"px 夹取后应为 "+exp+"px（CSS 初始 140px）");
+      ok(Math.abs(sh-exp)<=2,"高度由 postMessage 按内容回灌（不是卡在 140px 默认值）");
+      phaseInteract(zf);
+    },120);
+  });
+}
+
+function phaseInteract(zf){
+  say("—— ② 界面里的操作回得到宿主 ——");
+  try{ zf.contentWindow.ZorvAIBridge.interact("e2e-click"); }
+  catch(e){ say("调桥失败: "+e.message); }
+  setTimeout(function(){
+    fetch("api/__probe").then(function(r){return r.json();}).then(function(p){
+      say("服务端收到交互 "+p.interactions.length+" 条 = "+JSON.stringify(p.interactions));
+      ok(p.interactions.length>0,"界面里的操作真的回到了宿主（POST /api/interact）");
+      ok(String((p.interactions[0]||{}).component||"").length>0,"交互带上了组件名（宿主才知道唤醒哪个界面）");
+      ok(String((p.interactions[0]||{}).payload||"").length>0,"交互带上了载荷（不然宿主不知道点了什么）");
+      phaseStream();
+    });
+  },400);
+}
+
+function phaseStream(){
+  say("—— ③ 流式：推送 → 上屏 的延迟 ——");
+  var d=doc();
+  var st=d.getElementById("stream");
+  var before=st.textContent.length;
+  var t0=Date.now();
+  fetch("api/__push",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({text:"·"})});
+  var iv=setInterval(function(){
+    var grew=st.textContent.length>before;
+    var late=Date.now()-t0>6000;
+    if(!grew&&!late)return;
+    clearInterval(iv);
+    var dt=Date.now()-t0;
+    say("流式上屏延迟 = "+dt+"ms"+(grew?"":"（超时未上屏）"));
+    // 旧实现是 1.2~2s 的轮询，用户投诉「消息延迟严重、没有流式」。
+    //   宿主指纹周期 80ms，所以这里给 800ms 的宽限（含渲染）。
+    ok(grew&&dt<800,"推送在 800ms 内上屏（不再是秒级轮询）");
+    fetch("api/diag",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({level:"info",msg:"e2e diag"})}).then(function(){
+      return fetch("api/__probe").then(function(r){return r.json();});
+    }).then(function(p){
+      say("服务端 SSE 订阅者 = "+p.sseClients+"，diag 回传 = "+p.diagReports+" 条");
+      ok(p.sseClients>0,"页面确实挂在 SSE 长连接上（不是还在轮询）");
+      ok(p.diagReports>0,"页面自检能回传宿主（真机白屏时手上才有东西）");
+      phase2();
+    });
+  },25);
+}
+
 function phase2(){
   say("—— 防线①：CSS 高度链死掉，靠 JS 实测视口救回来 ——");
   loadMode("?novh=1",function(){
@@ -279,9 +389,15 @@ function phase3(){
 
 /* 路由表：与 Kotlin 侧 QuroWebUiServer 必须逐条对应。
 
-   🔴 这里**只**有投影自己的三个文件。任何 zx 开头的路径都不该出现在本表里
-   —— 互动UI界面是独立模块（assets/zx/），宿主是原生对话框，
-   Web UI 既不提供它的运行时，也不发它的资源（用户明令：不许把两者混在一起）。 */
+   🔴 这里**只**有投影自己的三个文件。/zx/shell 是**动态**路由（见下方 GET 分支）：
+      它把 zx_card_runtime.html 现拼成页壳，所以不该、也不能进这张静态表。
+      两件事要分清：「不要第二份 zx 运行时」与「网页要能画出 zxwidget」并不矛盾 ——
+      网页用 iframe 引**同一份**运行时，而不是自己再写一套。
+   🔴 webui **要能画** zxwidget（用户原话：zxwidget根本渲染不了）。
+      做法是 iframe 引 /zx/shell —— 承载的是**同一份** zx_card_runtime.html，
+      网页侧一行渲染逻辑都不写（api_contract_check.js §5 会红）。
+      这条曾一度被写成「两者不许混在一起」，方向是反的：
+      要分开的是【源码归属】（assets/zx/ 独立模块），不是【能力】（网页当然要画得出）。 */
 const STATIC = {
   '/': ['web-chat/index.html', 'text/html; charset=utf-8'],
   '/index.html': ['web-chat/index.html', 'text/html; charset=utf-8'],
@@ -339,12 +455,110 @@ const SNAPSHOT = {
       tools: [
         { name: 'perf_query', arguments: '{"range":"7d","group_by":"api"}', result: '{"rows":14,"window":"2026-10-06..2026-10-13"}', durationMs: 820 },
       ],
-      ui: [{ component: 'zx_table', dsl: '{"title":"本周压测 · 劣化接口"}' }],
+      ui: [{ component: 'zx_table', dsl: '{"title":"本周压测 · 劣化接口","columns":["接口","P99","错误率"],"rows":[["POST /api/order","612ms","0.31%"],["GET /api/feed","388ms","1.80%"]]}' }],
     },
   ],
 };
 
 let snap = JSON.parse(JSON.stringify(SNAPSHOT));
+ /* SSE 客户端 + 指纹推送 + 页壳拼装：与宿主 QuroWebUiServer / ZxWebCard.buildWebShell 同语义。
+   两边是否同步由 api_contract_check.js 把关（它断言宿主走的是 buildWebShell、且只有一份运行时）。 */
+const sseClients = [];
+const interactions = [];
+const diagReports = [];
+let lastRev = '';
+
+/* 指纹推送：只在**真的变了**时推（轮询是「不变也传」）。
+   80ms 对齐宿主 QuroWebUiServer.REVISION_INTERVAL_MS。 */
+setInterval(function () {
+  if (!sseClients.length) { lastRev = ''; return; }
+  const rev = JSON.stringify(snap);
+  if (rev === lastRev) return;
+  lastRev = rev;
+  const frame = 'data: ' + rev + '\n\n';
+  for (const c of sseClients.slice()) {
+    try { c.write(frame); } catch (e) {
+      const i = sseClients.indexOf(c);
+      if (i >= 0) sseClients.splice(i, 1);
+    }
+  }
+}, 80);
+
+/* 页壳拼装：与 Kotlin 的 ZxWebCard.buildWebShell 逐段对应（只拼一次，和宿主一样缓存）。
+   它**不是**第二份 zx 运行时：运行时永远是 zx_card_runtime.html 那一份，
+   这里只做「注入契约 + 换桥 + 换载荷来源」。 */
+function buildWebShell() {
+  const htmlPath = path.join(ASSETS, 'zx_card_runtime.html');
+  const ctPath = path.join(ASSETS, 'zx_contracts.json');
+  if (!fs.existsSync(htmlPath) || !fs.existsSync(ctPath)) return '';
+  let html = fs.readFileSync(htmlPath, 'utf8');
+  const ct = fs.readFileSync(ctPath, 'utf8');
+  html = html.replace('/*__ZX_CONTRACTS__*/', ct.replace(/<\//g, '<\\/').replace(/<!--/g, '<\\!--'));
+  const style = [
+    '<style>',
+    '  .hd,.foot{display:none !important}',
+    '  html,body{height:auto !important;min-height:0 !important;background:transparent !important}',
+    '  #app{min-height:0 !important}',
+    '</style>',
+  ].join('\n');
+  const bridge = [
+    '<script>',
+    '(function(){',
+    '  function post(m){ try{ if(window.parent&&window.parent!==window) window.parent.postMessage(m,"*"); }catch(e){} }',
+    '  window.ZorvAIBridge={',
+    '    height:function(px){ post({__zx:"h",px:px}); },',
+    '    interact:function(p){ post({__zx:"i",payload:String(p==null?"":p)}); }',
+    '  };',
+    '  window.addEventListener("message",function(e){',
+    '    var d=e.data||{};',
+    '    if(d&&d.__zxc==="dark"&&window.ZorvAI&&window.ZorvAI.setDark) window.ZorvAI.setDark(!!d.dark);',
+    '  });',
+    '})();',
+    '<\/script>',
+  ].join('\n');
+  const boot = [
+    '<script>',
+    '(function(){',
+    '  function fail(m){ try{ if(window.ZorvAI&&window.ZorvAI.render)',
+    '    window.ZorvAI.render({component:"__error__",title:"界面数据无法解析",dsl:{message:String(m)}}); }catch(e){} }',
+    '  try{',
+    '    var h=String(location.hash||"").replace(/^#/,"");',
+    '    if(!h) return;',
+    '    var p=JSON.parse(decodeURIComponent(escape(atob(h))));',
+    '    p.dark=!!p.dark;',
+    // dsl 允许「对象」或「JSON 字符串」两种形状（网页侧投影给的是字符串），
+    //   归一语义与 Kotlin 的 ZxWidgetRuntime.WEB_HASH_BOOTSTRAP / buildHtml 严格对齐。
+    '    if(typeof p.dsl==="string"){ try{ p.dsl=JSON.parse(p.dsl||"{}"); }catch(e2){ p.dsl={_raw:String(p.dsl)}; } }',
+    '    if(!p.dsl||typeof p.dsl!=="object") p.dsl={};',
+    '    if(window.ZorvAI&&window.ZorvAI.render) window.ZorvAI.render(p);',
+    '    if(window.__zxReportHeight) setTimeout(window.__zxReportHeight,60);',
+    '  }catch(e){ fail(e&&e.message?e.message:e); }',
+    '})();',
+    '<\/script>',
+  ].join('\n');
+  const heightRep = [
+    '<script>',
+    '(function(){',
+    '  var last=0;',
+    '  function rep2(){',
+    '    try{',
+    '      var h=Math.ceil((document.body&&document.body.scrollHeight)||0);',
+    '      if(h>0&&h!==last&&window.ZorvAIBridge&&window.ZorvAIBridge.height){ last=h; window.ZorvAIBridge.height(h); }',
+    '    }catch(e){}',
+    '  }',
+    '  window.__zxReportHeight=rep2;',
+    '  setTimeout(rep2,60); setTimeout(rep2,320); setTimeout(rep2,900);',
+    '  window.addEventListener("load",rep2);',
+    '  document.addEventListener("click",function(){ setTimeout(rep2,90); },true);',
+    '  try{ if(window.ResizeObserver&&document.body){ new ResizeObserver(rep2).observe(document.body); } }catch(e){}',
+    '})();',
+    '<\/script>',
+  ].join('\n');
+  const extra = [style, bridge, boot, heightRep].join('\n');
+  const at = html.lastIndexOf('</body>');
+  return at >= 0 ? html.substring(0, at) + extra + '\n' + html.substring(at) : html + extra;
+}
+
 
 function json(res, code, obj) {
   const body = Buffer.from(JSON.stringify(obj), 'utf8');
@@ -406,6 +620,48 @@ http.createServer((req, res) => {
     return json(res, 200, snap);
   }
 
+  /* 仅测试用：把服务端侧的状态摊给 E2E 断言（交互有没有到、SSE 有没有挂上）。
+     双下划线开头就是提醒：产品里没有这条路由。 */
+  if (req.method === 'GET' && url === '/api/__probe') {
+    return json(res, 200, {
+      interactions: interactions,
+      diagReports: diagReports.length,
+      sseClients: sseClients.length,
+    });
+  }
+
+  /* 流式通道：与宿主 QuroWebUiServer 的 /api/events 同语义。
+     桩这里用 80ms 的指纹比对驱动推送（宿主也是 80ms），
+     所以 E2E 量到的延迟就是前端真实能拿到的延迟。 */
+  if (req.method === 'GET' && url === '/api/events') {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.write('data: ' + JSON.stringify(snap) + '\n\n');
+    sseClients.push(res);
+    req.on('close', function () {
+      var i = sseClients.indexOf(res);
+      if (i >= 0) sseClients.splice(i, 1);
+    });
+    return;
+  }
+
+  /* zxwidget 页壳：与宿主 /zx/shell 同语义 ——
+     同一份 zx_card_runtime.html，只把原生桥换成 postMessage、载荷换成 hash。 */
+  if (req.method === 'GET' && url === '/zx/shell') {
+    var shell = buildWebShell();
+    if (!shell) {
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      return res.end('zx runtime missing');
+    }
+    var sbuf = Buffer.from(shell, 'utf8');
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': sbuf.length });
+    return res.end(sbuf);
+  }
+
   if (req.method === 'POST') {
     let raw = '';
     req.on('data', (c) => (raw += c));
@@ -430,8 +686,24 @@ http.createServer((req, res) => {
         };
         return json(res, 200, { ok: true });
       }
-      /* 🔴 没有 /api/interact：那是 zxwidget 的交互回传，属于原生对话框，
-         不属于投影服务。这里显式不存在，正是「两个模块不许混」的证据。 */
+      /* zxwidget 里的一次操作 → 与原生 onInteract 同回路。
+         桩这里只记录，够 E2E 断言「点得动、且回传带上了组件名与动作」即可。 */
+      if (url === '/api/interact') {
+        interactions.push({ component: body.component, payload: body.payload });
+        return json(res, 200, { ok: true, delivered: 'tool' });
+      }
+      if (url === '/api/diag') { diagReports.push(body); return json(res, 200, { ok: true }); }
+      /* 仅测试用：模拟宿主那边「正文在长」的一次推送，用来量流式延迟。
+         产品里没有这条路由，名字前面双下划线就是提醒。 */
+      if (url === '/api/__push') {
+        var last = snap.messages[snap.messages.length - 1];
+        if (last && last.blocks && last.blocks.length) {
+          var blk = last.blocks[last.blocks.length - 1];
+          blk.text = String(blk.text || '') + String(body.text || '·');
+        }
+        snap.composer.busy = true;
+        return json(res, 200, { ok: true });
+      }
       return json(res, 404, { ok: false, error: 'unknown api: ' + url });
     });
     return;

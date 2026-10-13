@@ -165,13 +165,17 @@ html.flow #composer{position:sticky;bottom:0}
   font-size:11.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;
 }
 
-/* 互动UI界面（zxwidget）：只标明「这里有一块」，本页不渲染它 */
-.ui{
-  margin:8px 0;padding:8px 10px;
-  border-left:3px solid var(--primary);background:var(--primary-soft);
-  border-radius:0 8px 8px 0;font-size:12.5px;color:var(--fg-soft);
+/* 互动UI界面（zxwidget）：**真的画出来**（iframe 承载同一份运行时）。
+   与原生一致：撑满宽度、长在消息流里，不是气泡内小卡片、不是弹窗。 */
+.ui-list{margin:8px 0;display:flex;flex-direction:column;gap:8px}
+.zxf{
+  display:block;width:100%;border:0;
+  /* 初始高度只是个起跳值：页面一加载完就会把真实内容高度报上来（postMessage）。
+     不设的话 iframe 默认 150px，会先闪一下再撑开。 */
+  height:140px;
+  border-radius:12px;
+  background:transparent;
 }
-.ui .ut{font-weight:600;color:var(--fg)}
 
 /* 工具调用（镜像原生的「N 工具」胶囊） */
 .tools{margin:8px 0;display:flex;flex-direction:column;gap:6px}
