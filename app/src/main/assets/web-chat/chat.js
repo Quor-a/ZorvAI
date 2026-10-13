@@ -30,8 +30,8 @@ function el(tag,cls,text){
 }
 
 /**
- * 正文的**行内**格式化 —— 本页唯一一处碰文本的地方。
- * 块级解析（标题/列表/表格/引用）由宿主 parseBlocks 负责，这里不做。
+ * 正文的**行内**格式化 —— 表格单元格 / 标题 / 引用等行内场景用它。
+ * 块级渲染（列表 / 代码围栏 / 表格）见 [mdHtml]。
  */
 function inline(s){
   var t=esc(s);
@@ -41,6 +41,86 @@ function inline(s){
   t=t.replace(/(^|[^*])\*([^*\n]+)\*/g,"$1<i>$2</i>");
   t=t.replace(/~~([^~\n]+)~~/g,"<s>$1</s>");
   return t;
+}
+
+/**
+ * mini-markdown：**文本块与流式缓冲**的富文本渲染。
+ *
+ * 为什么不用宿主块：流式期间前端手里只有原始增量文本（宿主 parseBlocks
+ * 的块要等整条消息完成才在 assistant_done 里给）。这期间必须自己画，
+ * 否则用户看到的就是一坨裸 markdown —— 正是「渲染不完整」的差评来源。
+ * 支持：围栏代码块（带复制/语言标签）/ 表格 / 标题 / 引用 / 分割线 /
+ * 无序列表 / 有序列表 / 任务列表 / 段落 + 行内格式。
+ * 半截 markdown（流式中）也必须安全：未闭合围栏按代码块画到文末。
+ */
+function codeBoxHtml(lang,code){
+  return '<div class="code">'+
+    '<button type="button" class="code-c" data-code="'+esc(code)+'">复制</button>'+
+    (lang?'<span class="code-l">'+esc(lang)+'</span>':'')+
+    '<pre><code>'+esc(code)+'</code></pre></div>';
+}
+
+function tableHtml(rows){
+  if(!rows.length)return "";
+  var head=rows[0], body=rows.slice(1);
+  var h="<thead><tr>"+head.map(function(c){return "<th>"+inline(c)+"</th>";}).join("")+"</tr></thead>";
+  var b="<tbody>"+body.map(function(r){
+    return "<tr>"+r.map(function(c){return "<td>"+inline(c)+"</td>";}).join("")+"</tr>";
+  }).join("")+"</tbody>";
+  return '<div class="tw"><table>'+h+b+"</table></div>";
+}
+
+function mdHtml(src){
+  var lines=String(src||"").replace(/\r\n?/g,"\n").split("\n");
+  var out=[],para=[],list=null,quote=null,fence=null,tbl=null;
+  function flushPara(){ if(para.length){ out.push("<p>"+para.map(inline).join("<br>")+"</p>"); para=[]; } }
+  function flushList(){
+    if(!list)return;
+    if(list.type==="task"){
+      out.push('<ul class="md-task">'+list.items.map(function(it){
+        return '<li class="'+(it.done?"done":"")+'"><span class="qcheck">'+(it.done?"✓":"")+'</span><span>'+inline(it.text)+'</span></li>';
+      }).join("")+"</ul>");
+    }else{
+      out.push("<"+list.type+">"+list.items.map(function(it){return "<li>"+inline(it.text)+"</li>";}).join("")+"</"+list.type+">");
+    }
+    list=null;
+  }
+  function flushQuote(){ if(quote){ out.push("<blockquote>"+quote.map(inline).join("<br>")+"</blockquote>"); quote=null; } }
+  function flushTbl(){ if(tbl){ out.push(tableHtml(tbl)); tbl=null; } }
+  function flushAll(){ flushPara(); flushList(); flushQuote(); flushTbl(); }
+  for(var i=0;i<lines.length;i++){
+    var ln=lines[i];
+    if(fence){
+      if(/^\s*```/.test(ln)){ flushAll(); out.push(codeBoxHtml(fence.lang,fence.code.join("\n"))); fence=null; }
+      else fence.code.push(ln);
+      continue;
+    }
+    var fm=/^\s*```([\w+#.-]*)\s*$/.exec(ln);
+    if(fm){ flushAll(); fence={lang:fm[1]||"",code:[]}; continue; }
+    var raw=ln.replace(/^\s+/,"").replace(/\s+$/,"");
+    if(raw===""){ flushAll(); continue; }
+    var hm=/^(#{1,6})\s+(.*)$/.exec(raw);
+    if(hm){ flushAll(); var lv=Math.min(hm[1].length,4); out.push("<h"+lv+">"+inline(hm[2])+"</h"+lv+">"); continue; }
+    if(/^(-{3,}|\*{3,}|_{3,})$/.test(raw)){ flushAll(); out.push("<hr>"); continue; }
+    if(raw.charAt(0)===">"){ flushPara(); flushList(); flushTbl(); (quote=quote||[]).push(raw.slice(1).replace(/^\s+/,"")); continue; }
+    var km=/^[-*+]\s+\[([ xX])\]\s+(.*)$/.exec(raw);
+    var tm=/^[-*+]\s+(.*)$/.exec(raw);
+    var om=/^\d+[.)]\s+(.*)$/.exec(raw);
+    if(km){ flushPara(); flushQuote(); flushTbl(); if(!list||list.type!=="task"){flushList();list={type:"task",items:[]};} list.items.push({done:km[1]!==" ",text:km[2]}); continue; }
+    if(tm){ flushPara(); flushQuote(); flushTbl(); if(!list||list.type!=="ul"){flushList();list={type:"ul",items:[]};} list.items.push({text:tm[1]}); continue; }
+    if(om){ flushPara(); flushQuote(); flushTbl(); if(!list||list.type!=="ol"){flushList();list={type:"ol",items:[]};} list.items.push({text:om[1]}); continue; }
+    if(raw.charAt(0)==="|"&&raw.indexOf("|",1)>0){
+      flushPara(); flushList(); flushQuote();
+      if(/^[\s|:-]+$/.test(raw))continue; /* 表头分隔行 */
+      (tbl=tbl||[]).push(raw.replace(/^\|/,"").replace(/\|$/,"").split("|").map(function(c){return c.trim();}));
+      continue;
+    }
+    flushQuote(); flushList(); flushTbl();
+    para.push(raw);
+  }
+  if(fence)out.push(codeBoxHtml(fence.lang,fence.code.join("\n")));
+  flushAll();
+  return out.join("");
 }
 
 /* ── 2. 状态 ─────────────────────────────────────────────────────────── */
@@ -85,6 +165,17 @@ var nodes={};          /* id -> 渲染缓存 */
 var emptyBox=null;
 var pollTimer=null;
 var selectedAttachments=[];   /* {id,name,type,size} */
+
+/* ── 发送流状态（Operit 同款：fetch + reader 逐块读 SSE）──────────────
+   active   正在流式（此时快照的 messages 被忽略，由流独占）
+   ctrl     AbortController（停止按钮用）
+   localUserId / localAid   乐观气泡的本地 id，真实消息到达后迁移
+   segId    当前流式助手消息 id（跨工具轮次会换段）
+   text / reason  累计正文 / 思考增量
+   node     当前流式气泡的渲染缓存
+   raf      待执行的重绘帧（rAF 节流，防止每个 delta 都重排）      */
+var stream={active:false,ctrl:null,localUserId:null,localAid:null,
+            segId:null,text:"",reason:"",node:null,raf:0,gotDone:false};
 
 /* 原生专属块的显示名 */
 var NATIVE_LABEL={
@@ -194,7 +285,7 @@ function blockNode(b){
   if(!b||!b.t)return null;
   switch(b.t){
     case "text":{
-      var d=el("p"); d.innerHTML=inline(b.text||""); return d;
+      var d=el("div","md-text"); d.innerHTML=mdHtml(b.text||""); return d;
     }
     case "heading":{
       var lv=Math.min(Math.max(b.level||3,1),4);
@@ -209,6 +300,10 @@ function blockNode(b){
       var btn=el("button","code-c","复制");
       btn.type="button";
       btn.setAttribute("data-code",b.code||"");
+      if(b.lang){
+        var lg=el("span","code-l",b.lang);
+        box.appendChild(lg);
+      }
       var pre=el("pre"), cd=el("code",null,b.code||"");
       pre.appendChild(cd); box.appendChild(btn); box.appendChild(pre);
       return box;
@@ -481,6 +576,15 @@ function apply(snap){
   state.dark=!!snap.dark;
   state.lan=snap.lan||"";
   state.port=snap.port||0;
+  if(stream.active){
+    /* 流式期间消息由 /api/send 的 SSE 独占：快照只更新非消息状态。
+       若这里照旧全量重绘，会把增量上屏的气泡整体冲掉重来 —— 那正是
+       「AI 写到一半卡了 / 消息延迟」在前端侧的成因。 */
+    renderChrome();
+    guardCollapse();
+    if(!wasBusy&&state.composer.busy)scrollBottom(true);
+    return;
+  }
   state.messages=(snap.messages||[]).filter(function(m){
     return m&&m.id&&(m.role==="user"||m.role==="assistant");
   });
@@ -493,6 +597,13 @@ function apply(snap){
   guardCollapse();
   logHealth();
   if(stick||(!wasBusy&&state.composer.busy))scrollBottom(true);
+}
+
+function fetchSnapshot(){
+  fetch("api/snapshot",{cache:"no-store"})
+    .then(function(r){return r.json();})
+    .then(function(j){ apply(j); })
+    .catch(function(){});
 }
 
 var es=null, esFails=0, streamDead=false;
@@ -557,18 +668,247 @@ function reportDiag(msg,level){
   }catch(e){}
 }
 
+/* ── 5. 发送：SSE 增量流（Operit web-chat 同款协议）─────────────────── */
+
+/** 解析一个 SSE 帧（`event:` + `data:` 双字段）。 */
+function parseSseBlock(block){
+  var event="message",data="";
+  block.split(/\r?\n/).forEach(function(line){
+    if(line.indexOf("event:")===0)event=line.slice(6).trim();
+    else if(line.indexOf("data:")===0)data+=(data?"\n":"")+line.slice(5).replace(/^ /,"");
+  });
+  if(!data)return null;
+  try{ return {event:event,data:JSON.parse(data)}; }catch(e){ return null; }
+}
+
+/**
+ * 逐块读 SSE 流（**不用 EventSource**：POST 要带 body，还要能 AbortController 取消）。
+ * 每个 TCP 分片可能含多个事件帧，也可能半个 —— 按空行切帧、余量留在 buffer。
+ */
+function readSse(resp,onEvent){
+  if(!resp.body||!resp.body.getReader){
+    /* 兜底（老浏览器）：整读后按帧切。失去流式但协议不变。 */
+    return resp.text().then(function(all){
+      all.split(/\r?\n\r?\n/).forEach(function(b){
+        var ev=parseSseBlock(b.trim()); if(ev)onEvent(ev);
+      });
+    });
+  }
+  var reader=resp.body.getReader(),decoder=new TextDecoder(),buf="";
+  function pump(){
+    return reader.read().then(function(r){
+      if(r.done)return;
+      buf+=decoder.decode(r.value,{stream:true});
+      var blocks=buf.split(/\r?\n\r?\n/);
+      buf=blocks.pop()||"";
+      for(var i=0;i<blocks.length;i++){
+        var ev=parseSseBlock(blocks[i].trim());
+        if(ev)onEvent(ev);
+      }
+      return pump();
+    });
+  }
+  return pump();
+}
+
+/** 把本地占位节点改键到真实消息 id（DOM 不动，只换 nodes 表里的键）。 */
+function migrateNode(oldId,newId){
+  var nd=nodes[oldId];
+  if(!nd)return null;
+  delete nodes[oldId];
+  nodes[newId]=nd;
+  return nd;
+}
+
+/** rAF 节流的流式重绘：思考卡 + mini-markdown 正文 + 光标。 */
+function scheduleStreamRender(){
+  if(stream.raf)return;
+  stream.raf=requestAnimationFrame(function(){
+    stream.raf=0;
+    var nd=stream.node;
+    if(!nd)return;
+    if(stream.reason){
+      if(!nd.thinkRoot){
+        var th=el("div","think open");
+        var hh=el("div","think-h","思考过程");
+        var tb=el("div","think-b");
+        hh.addEventListener("click",function(){th.classList.toggle("open");});
+        th.appendChild(hh); th.appendChild(tb);
+        nd.bub.insertBefore(th,nd.bub.firstChild);
+        nd.thinkRoot=th; nd.thinkBody=tb;
+      }
+      nd.thinkBody.textContent=stream.reason;
+    }
+    if(!nd.mdBox){ nd.mdBox=el("div","md"); nd.bub.appendChild(nd.mdBox); }
+    nd.mdBox.classList.add("streaming");
+    /* 光标只贴在段落末尾：代码块/表格后面挂一个 inline 光标会掉到下一行，难看 */
+    var html=mdHtml(stream.text);
+    if(/<\/p>\s*$/.test(html))html+='<span class="cur"></span>';
+    nd.mdBox.innerHTML=html;
+    scrollBottom(false);
+  });
+}
+
+function onStreamEvent(ev){
+  if(!ev)return;
+  var i,idx;
+  switch(ev.event){
+    case "start":
+      stream.active=true; stream.gotDone=false;
+      state.composer.busy=true;
+      renderChrome();
+      /* 立即建助手占位气泡（三点跳动的等待态），首帧 delta 到达即迁移到真实 id */
+      var localAid="local-assistant-"+Date.now();
+      var am0={id:localAid,role:"assistant",mine:false,senderName:"",time:Date.now(),blocks:[]};
+      state.messages.push(am0);
+      ensureNode(am0);
+      var nd0=nodes[localAid];
+      nd0.who.textContent=state.bar.title||"ZorvAI";
+      var tp=el("div","typing");
+      tp.appendChild(el("span")); tp.appendChild(el("span")); tp.appendChild(el("span"));
+      nd0.bub.appendChild(tp);
+      stream.localAid=localAid;
+      scrollBottom(true);
+      break;
+    case "user_message":{
+      var m=ev.data;
+      if(!m||!m.id)break;
+      if(stream.localUserId&&nodes[stream.localUserId])migrateNode(stream.localUserId,m.id);
+      stream.localUserId=null;
+      if(!nodes[m.id])state.messages.push(m);
+      ensureNode(m); renderMessage(m);
+      scrollBottom(true);
+      break;
+    }
+    case "assistant_delta":{
+      var d=ev.data||{};
+      var id=d.id||"";
+      if(!id)break;
+      if(stream.segId!==id){
+        /* 新段：首 token 占位气泡 / 工具轮次后的新回复段。
+           把本地等待气泡迁移到真实 id，去掉三点等待态。 */
+        if(stream.localAid&&nodes[stream.localAid]){
+          migrateNode(stream.localAid,id);
+          var tpOld=nodes[id].bub.querySelector(".typing");
+          if(tpOld)tpOld.remove();
+          stream.localAid=null;
+        }
+        stream.segId=id; stream.text=""; stream.reason="";
+        var nm={id:id,role:"assistant",mine:false,senderName:"",time:Date.now(),blocks:[]};
+        if(!nodes[id])state.messages.push(nm);
+        ensureNode(nm);
+        stream.node=nodes[id];
+        if(!stream.node.who.textContent)stream.node.who.textContent=state.bar.title||"ZorvAI";
+      }
+      if(d.text)stream.text+=d.text;
+      if(d.reasoning)stream.reason+=d.reasoning;
+      scheduleStreamRender();
+      break;
+    }
+    case "assistant_done":{
+      stream.gotDone=true;
+      stream.active=false;
+      var fm=ev.data&&ev.data.message;
+      if(fm&&fm.id){
+        if(stream.segId&&stream.segId!==fm.id&&nodes[stream.segId]){
+          nodes[stream.segId].root.remove(); delete nodes[stream.segId];
+        }
+        idx=-1;
+        for(i=0;i<state.messages.length;i++){ if(state.messages[i].id===fm.id){idx=i;break;} }
+        if(idx>=0)state.messages[idx]=fm; else state.messages.push(fm);
+        ensureNode(fm); renderMessage(fm);
+        var fnd=nodes[fm.id];
+        if(fnd&&fnd.mdBox)fnd.mdBox.classList.remove("streaming");
+      }
+      stream.segId=null; stream.text=""; stream.reason=""; stream.node=null;
+      if(stream.localAid&&nodes[stream.localAid]){ nodes[stream.localAid].root.remove(); delete nodes[stream.localAid]; stream.localAid=null; }
+      renderChrome();
+      scrollBottom(true);
+      /* 重拉快照：对齐流式期间被忽略的离散变化（标题/开关/集群发言…） */
+      fetchSnapshot();
+      break;
+    }
+    case "error":{
+      stream.active=false;
+      var em={id:"local-error-"+Date.now(),role:"assistant",mine:false,senderName:"",
+              time:Date.now(),blocks:[{t:"text",text:"⚠️ "+((ev.data&&ev.data.error)||"连接中断")}]};
+      state.messages.push(em); ensureNode(em); renderMessage(em);
+      stream.segId=null; stream.text=""; stream.reason=""; stream.node=null;
+      renderChrome();
+      fetchSnapshot();
+      break;
+    }
+  }
+}
+
+/** 流结束（无论正常与否）：收尾并重拉快照对齐真相。 */
+function onStreamEnd(){
+  stream.active=false;
+  if(stream.localAid&&nodes[stream.localAid]){
+    /* 没等到任何 delta 就断了：保留占位没有意义，交给快照重建 */
+    nodes[stream.localAid].root.remove(); delete nodes[stream.localAid]; stream.localAid=null;
+  }
+  stream.node=null;
+  renderChrome();
+  if(!stream.gotDone)fetchSnapshot();
+}
+
 function doSend(){
   var t=$inp.value.trim();
-  if((!t||state.composer.busy)&&selectedAttachments.length===0)return;
+  if(((!t||state.composer.busy)&&selectedAttachments.length===0)||stream.active)return;
   var body={text:t,attachments:selectedAttachments.map(function(a){return a.id;})};
   $inp.value="";
   selectedAttachments=[];
   renderAttBar();
   autoGrow();
-  post("send",body);
+
+  /* 乐观用户气泡：立刻上屏（真实消息由 user_message 事件换键） */
+  var localId="local-user-"+Date.now();
+  var um={id:localId,role:"user",mine:true,senderName:"",time:Date.now(),
+          blocks:[{t:"text",text:t}]};
+  state.messages.push(um);
+  ensureNode(um); renderMessage(um);
+  scrollBottom(true);
+  stream.localUserId=localId;
+
+  var ctrl=new AbortController();
+  stream.ctrl=ctrl;
+  fetch("api/send",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body),
+    signal:ctrl.signal,
+    cache:"no-store"
+  })
+    .then(function(r){
+      if(!r.ok)throw new Error("HTTP "+r.status);
+      return readSse(r,onStreamEvent);
+    })
+    .then(function(){ onStreamEnd(); })
+    .catch(function(e){
+      if(e&&e.name==="AbortError"){ onStreamEnd(); return; }  /* 用户点停止：不算错误 */
+      onStreamEvent({event:"error",data:{error:(e&&e.message)||"发送失败"}});
+      onStreamEnd();
+    });
 }
-function doStop(){ post("stop",{}); }
-function doNew(){ post("new",{}); }
+
+function doStop(){
+  if(stream.ctrl){ try{ stream.ctrl.abort(); }catch(e){} }
+  stream.ctrl=null;
+  post("stop",{});
+  stream.active=false;
+  renderChrome();
+  setTimeout(fetchSnapshot,300);
+}
+function doNew(){
+  /* 新对话会整体换掉消息列表：先掐断可能还在跑的发送流，否则流的 delta
+     会继续往旧列表节点上写字，与新快照互相打架。 */
+  if(stream.ctrl){ try{ stream.ctrl.abort(); }catch(e){} stream.ctrl=null; }
+  stream.active=false; stream.segId=null; stream.text=""; stream.reason=""; stream.node=null;
+  stream.localAid=null; stream.localUserId=null;
+  post("new",{});
+  setTimeout(fetchSnapshot,250);
+}
 
 function autoGrow(){
   $inp.style.height="auto";
@@ -760,8 +1100,11 @@ function fillList(boxId,items){
     row.textContent=it.label;
     row.addEventListener("click",function(){
       if(it.action==="__clear_chat__"){
+        if(stream.ctrl){ try{ stream.ctrl.abort(); }catch(e){} stream.ctrl=null; }
+        stream.active=false; stream.segId=null; stream.text=""; stream.reason=""; stream.node=null;
+        stream.localAid=null; stream.localUserId=null;
         post("clear").then(function(r){
-          if(r&&r.ok){ closeSheet("settingsSheet"); }
+          if(r&&r.ok){ closeSheet("settingsSheet"); setTimeout(fetchSnapshot,250); }
         });
         return;
       }
@@ -884,8 +1227,5 @@ window.addEventListener("resize",fit);
 window.addEventListener("orientationchange",function(){setTimeout(fit,120);});
 
 autoGrow();
-fetch("api/snapshot",{cache:"no-store"})
-  .then(function(r){return r.json();})
-  .then(function(j){ apply(j); })
-  .catch(function(){})
-  .then(function(){ startStream(); });
+fetchSnapshot();
+startStream();

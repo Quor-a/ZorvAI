@@ -58,6 +58,7 @@ import java.net.Socket
 import java.net.SocketException
 import java.util.Collections
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -250,7 +251,8 @@ class QuroWebUiServer(
 
             when {
                 method == "GET" || method == "HEAD" -> handedOver = handleGet(sock, path)
-                method == "POST" -> handlePost(sock, path, query, contentType, body)
+                // POST 也可能接管连接：/api/send 是 SSE 长流（见 handleSend）
+                method == "POST" -> handedOver = handlePost(sock, path, query, contentType, body)
                 method == "OPTIONS" -> respond(
                     sock, 204, "text/plain", ByteArray(0),
                     mapOf("Access-Control-Allow-Origin" to "*")
@@ -482,13 +484,25 @@ class QuroWebUiServer(
 
     private var revisionThread: Thread? = null
 
+    /**
+     * 正在进行 SSE 发送流的连接数。
+     *
+     * 流式期间 revision 检测从 80ms 放宽到 1s：增量文本由发送流自己逐帧推送，
+     * 快照通道只负责离散状态（工具卡片挂载 / 集群发言 / 开关变化）。
+     * 不放宽就是旧病根 —— 每 80ms 全量序列化 + 浏览器整列表重绘，
+     * 消息越长越卡，直接表现为「AI 写到一半卡了」。
+     */
+    @Volatile private var activeSends = AtomicInteger(0)
+
     private fun ensureRevisionWatch() {
         if (revisionThread?.isAlive == true) return
         revisionThread = Thread({
             var last = ""
             while (running) {
                 try {
-                    Thread.sleep(REVISION_INTERVAL_MS)
+                    // 流式期间 1s 一次就够（增量走 /api/send 的 SSE）；空闲时 80ms 跟手
+                    val interval = if (activeSends.get() > 0) STREAM_REVISION_INTERVAL_MS else REVISION_INTERVAL_MS
+                    Thread.sleep(interval)
                     if (subscribers.isEmpty()) { last = ""; continue }
                     val rev = revision()
                     if (rev == last) continue
@@ -593,9 +607,12 @@ class QuroWebUiServer(
 
     /* ── POST：动作（对等客户端：全部写回原生同一真源）──────────────── */
 
-    private fun handlePost(sock: Socket, path: String, query: String, contentType: String, body: String) {
+    /**
+     * @return true 表示这条连接已被接管（SSE 长流），调用方不得再 close。
+     */
+    private fun handlePost(sock: Socket, path: String, query: String, contentType: String, body: String): Boolean {
         when (path) {
-            "/api/send" -> handleSend(sock, body)
+            "/api/send" -> return handleSend(sock, body)
             "/api/stop" -> {
                 vm.stop()
                 respondJson(sock, """{"ok":true}""")
@@ -634,7 +651,7 @@ class QuroWebUiServer(
                 val msg = o?.optString("msg")?.trim().orEmpty()
                 if (msg.isEmpty()) {
                     respondJson(sock, """{"ok":false,"error":"empty msg"}""")
-                    return
+                    return false
                 }
                 val lvl = o?.optString("level")?.trim().orEmpty().ifBlank { "info" }
                 QuroDiag.log(TAG, "页面自检[$lvl] $msg")
@@ -646,7 +663,7 @@ class QuroWebUiServer(
                 val payload = o?.opt("payload")
                 if (component.isEmpty() || payload == null) {
                     respondJson(sock, """{"ok":false,"error":"need component + payload"}""")
-                    return
+                    return false
                 }
                 val json = when (payload) {
                     is JSONObject -> payload
@@ -663,16 +680,38 @@ class QuroWebUiServer(
             }
             else -> respondJson(sock, """{"ok":false,"error":"unknown api: $path"}""", 404)
         }
+        return false
     }
 
-    /** 发送消息：支持带附件 id 列表。 */
-    private fun handleSend(sock: Socket, body: String) {
+    /* ── 发送：SSE 增量流（对齐 Operit web-chat 的 messages/stream 协议）─
+     *
+     * 为什么必须流式（用户 2026-10-14 反馈根因）：
+     *   旧实现 POST /api/send 只回 {"ok":true}，前端靠 80ms 轮询 revision +
+     *   **全量快照重推**看 AI 打字。消息越长，每次快照序列化 + 浏览器整列表
+     *   重绘的开销越大 → 表现为「消息延迟半天」「AI 写到一半卡了」。
+     *
+     * 新协议（事件流，逐帧只推增量）：
+     *   event: start            → 流已建立（此时用户消息已进 vm，可显示「已发送」）
+     *   event: user_message     → data = 该用户消息的完整投影 JSON（替换前端乐观气泡）
+     *   event: assistant_delta  → data = {id, text, reasoning} **增量**文本/思考
+     *   event: assistant_done   → data = {message} 最终完整投影（含 blocks/cards/tools）
+     *   event: error            → data = {error}
+     *
+     * 前端读法（Operit 同款）：fetch + response.body.getReader() 逐块解析，
+     * **不用 EventSource**（POST 带 body + 需 AbortController 取消）。
+     * ─────────────────────────────────────────────────────────────────── */
+
+    /**
+     * 发送消息：接管连接，输出 SSE 增量流。
+     * @return true = 连接已接管（调用方不得 close）；false = 已按普通 JSON 响应并关闭。
+     */
+    private fun handleSend(sock: Socket, body: String): Boolean {
         val o = runCatching { JSONObject(body) }.getOrNull()
         val text = o?.optString("text")?.trim().orEmpty()
         val attIds = o?.optJSONArray("attachments")
         if (text.isEmpty() && (attIds == null || attIds.length() == 0)) {
             respondJson(sock, """{"ok":false,"error":"empty text"}""")
-            return
+            return false
         }
         val atts = mutableListOf<QuroAttachment>()
         if (attIds != null) {
@@ -683,8 +722,159 @@ class QuroWebUiServer(
                 }
             }
         }
+
+        // 发送前的消息 id 集合：用于识别「本轮新增的用户消息」。
+        // 绝不用 size 判断——barge-in / 集群 / 语音球都会并发改列表。
+        val beforeIds = HashSet<String>().apply { vm.messages.value.forEach { add(it.id) } }
+
+        val out = try {
+            sock.getOutputStream()
+        } catch (e: Throwable) {
+            QuroDiag.log(TAG, "SSE 发送流取输出流失败：${e.message}")
+            respondJson(sock, """{"ok":false,"error":"stream unavailable"}""")
+            return false
+        }
+
+        // SSE 响应头（无 Content-Length，Connection: keep-alive）
+        val head = StringBuilder()
+        head.append("HTTP/1.1 200 OK\r\n")
+        head.append("Content-Type: text/event-stream; charset=utf-8\r\n")
+        head.append("Cache-Control: no-store\r\n")
+        head.append("Connection: keep-alive\r\n")
+        head.append("Access-Control-Allow-Origin: *\r\n")
+        head.append("X-Accel-Buffering: no\r\n")
+        head.append("\r\n")
+        try {
+            out.write(head.toString().toByteArray(Charsets.UTF_8))
+            out.flush()
+        } catch (e: Throwable) {
+            QuroDiag.log(TAG, "SSE 发送流首帧失败：${e.message}")
+            return false
+        }
+
+        // vm.send 会立刻把用户消息写进 _messages 并启动生成协程。
+        // 它内部只碰 MutableStateFlow / viewModelScope.launch，从 HTTP 线程调也安全
+        // （原生 ChatScreen 的发送按钮在主线程调，两条入口都通向同一条协程链）。
         vm.send(text, atts)
-        respondJson(sock, """{"ok":true}""")
+
+        val sends = activeSends.incrementAndGet()
+        QuroDiag.log(TAG, "SSE 发送流接入，当前 $sends 条")
+
+        // 本线程即流线程：轮询 vm.messages，只推增量。
+        var segId: String? = null          // 当前跟踪的助手消息 id（跨工具轮次会换段）
+        var segTextLen = 0                 // 已推送的正文长度
+        var segReasonLen = 0               // 已推送的思考长度
+        var idlePolls = 0                  // busy=false 后的静默轮次
+        val seenUsers = HashSet<String>()  // 已推送的用户消息 id
+        val deadline = System.currentTimeMillis() + SEND_STREAM_MAX_MS
+        var lastPing = System.currentTimeMillis()
+        var pushedAny = false
+        try {
+            writeSse(out, "start", JSONObject().put("ok", true))
+            while (running && System.currentTimeMillis() < deadline) {
+                Thread.sleep(SEND_POLL_MS)
+                val msgs = vm.messages.value
+
+                // ① 本轮新增用户消息（含 barge-in 场景下的多条）
+                for (m in msgs) {
+                    if (m.role == "user" && !m.hidden && m.id !in beforeIds && seenUsers.add(m.id)) {
+                        writeSse(out, "user_message", WebUiProjection.message(m, mine = true))
+                        pushedAny = true
+                    }
+                }
+
+                // ② 最后一条可见助手消息的增量
+                val am = msgs.lastOrNull { it.role == "assistant" && !it.hidden }
+                if (am != null) {
+                    if (am.id != segId) {
+                        // 新段（首 token 占位气泡 / 工具轮次后的新回复段）：
+                        // 前端尚未见过它，把已有全文当作首帧 delta 推过去。
+                        segId = am.id
+                        segTextLen = am.content.length
+                        segReasonLen = am.reasoning?.length ?: 0
+                        if (segTextLen > 0 || segReasonLen > 0) {
+                            writeSse(
+                                out, "assistant_delta",
+                                JSONObject()
+                                    .put("id", am.id)
+                                    .put("text", am.content)
+                                    .put("reasoning", am.reasoning ?: ""),
+                            )
+                            pushedAny = true
+                        }
+                    } else {
+                        val tLen = am.content.length
+                        if (tLen > segTextLen) {
+                            writeSse(
+                                out, "assistant_delta",
+                                JSONObject()
+                                    .put("id", am.id)
+                                    .put("text", am.content.substring(segTextLen))
+                                    .put("reasoning", ""),
+                            )
+                            segTextLen = tLen
+                            pushedAny = true
+                        }
+                        val rLen = am.reasoning?.length ?: 0
+                        if (rLen > segReasonLen) {
+                            writeSse(
+                                out, "assistant_delta",
+                                JSONObject()
+                                    .put("id", am.id)
+                                    .put("text", "")
+                                    .put("reasoning", am.reasoning!!.substring(segReasonLen)),
+                            )
+                            segReasonLen = rLen
+                            pushedAny = true
+                        }
+                    }
+                }
+
+                // ③ 结束判定：不忙 + 连续几轮无增量 → 本轮收敛
+                if (!vm.busy.value) {
+                    idlePolls++
+                    if (idlePolls >= SEND_IDLE_DONE_POLLS) break
+                } else {
+                    idlePolls = 0
+                }
+
+                // ④ 心跳：长工具调用期间前端不能看到连接假死
+                val now = System.currentTimeMillis()
+                if (now - lastPing >= HEARTBEAT_MS) {
+                    lastPing = now
+                    synchronized(out) { out.write(": ping\n\n".toByteArray(Charsets.UTF_8)); out.flush() }
+                }
+            }
+
+            // 终帧：最终完整投影（blocks/cards/tools/ui 全部就位），前端据此整段终渲
+            val finalMsg = vm.messages.value.lastOrNull { it.role == "assistant" && !it.hidden }
+            if (finalMsg != null) {
+                writeSse(
+                    out, "assistant_done",
+                    JSONObject().put("message", WebUiProjection.message(finalMsg, mine = false)),
+                )
+            } else {
+                writeSse(out, "assistant_done", JSONObject().put("message", JSONObject.NULL))
+            }
+            out.flush()
+        } catch (e: Throwable) {
+            // 前端断开 / 写失败：生成仍在原生侧继续，不影响对话本身
+            QuroDiag.log(TAG, "SSE 发送流异常断开（生成继续）：${e.javaClass.simpleName} ${e.message}")
+        } finally {
+            activeSends.decrementAndGet()
+            runCatching { sock.close() }
+            QuroDiag.log(TAG, "SSE 发送流结束（pushed=$pushedAny），剩 ${activeSends.get()} 条")
+        }
+        return true
+    }
+
+    /** 写一个 SSE 事件帧（`event:` + `data:` 双字段，前端按块切分）。 */
+    private fun writeSse(out: OutputStream, event: String, data: JSONObject) {
+        val frame = "event: $event\ndata: $data\n\n"
+        synchronized(out) {
+            out.write(frame.toByteArray(Charsets.UTF_8))
+            out.flush()
+        }
     }
 
     /** 开关写回。 */
@@ -1274,6 +1464,18 @@ class QuroWebUiServer(
         private const val SOCKET_TIMEOUT_MS = 20000
 
         private const val REVISION_INTERVAL_MS = 80L
+
+        /** 流式生成期间的 revision 检测间隔（增量由 /api/send SSE 负责，这里只兜离散状态）。 */
+        private const val STREAM_REVISION_INTERVAL_MS = 1000L
+
+        /** 发送流轮询 vm.messages 的间隔（≈16fps，肉眼顺滑且不烧 CPU）。 */
+        private const val SEND_POLL_MS = 60L
+
+        /** busy=false 后连续静默几轮才判定本轮结束（防抢跑：最后一个 delta 可能还没落）。 */
+        private const val SEND_IDLE_DONE_POLLS = 3
+
+        /** 单条发送流的最长寿命（10 分钟硬顶，防生成协程卡死拖住连接）。 */
+        private const val SEND_STREAM_MAX_MS = 600_000L
 
         private const val HEARTBEAT_MS = 15000L
 
