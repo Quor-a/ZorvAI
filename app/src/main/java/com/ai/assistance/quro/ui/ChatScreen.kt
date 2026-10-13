@@ -861,8 +861,12 @@ fun ChatScreen(
     var visualAskPrompt by remember { mutableStateOf("") }
     var visualAskOptions by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    // 第三个对话框：Web UI 对话框（ZorvAI 对话框的 Web UI 复制品，完整聊天端）
-    var showZxWebChat by remember { mutableStateOf(false) }
+    // Web UI 面板：开启/查看 Web UI 后台服务（只显示地址/复制/扫码，不再内嵌 WebView）。
+    // 旧实现把 WebView 嵌在对话框里（showZxWebChat + WebUiDialog）：
+    //   · 关掉对话框服务就停 → 无法后台；
+    //   · 投影（只读块序列）与「另一个功能相同的对话框」诉求冲突。
+    // 现在 Web UI 是**常驻前台服务**，手机上的入口只负责开关与给地址。
+    var showWebUiPanel by remember { mutableStateOf(false) }
 
     /**
      * zxwidget 没有「弹出层」了 —— 用户 2026-10-13 拍板：**直接渲染在对话框里**。
@@ -910,6 +914,8 @@ fun ChatScreen(
             "ui_open_sheet_upload" -> sheet = SheetType.Upload
             "ui_open_sheet_voice" -> sheet = SheetType.Voice
             "ui_open_upload", "ui_open_import_tool", "ui_open_ai_search", "ui_open_doc_generate" -> sheet = SheetType.Upload
+            // Web UI 后台服务：打开独立对话框，只显示地址/复制/扫码，不再内嵌 WebView
+            "ui_open_webui" -> showWebUiPanel = true
             "ui_toggle_deepthink" -> vm.setThinking(!vm.thinking.value)
             "ui_toggle_memory" -> vm.setAutoSaveMemory(!vm.autoSaveMemory.value)
             "ui_clear_chat" -> vm.clear()
@@ -2263,12 +2269,12 @@ fun ChatScreen(
         // 所以关掉它不会断掉任何链接。
         // 顶栏的 modelName / personaName 仍与原生 ChatTopBar 取自同两个变量，
         // 保证两边说的是同一件事（在弹窗里同步给服务）。
-        if (showZxWebChat) {
+        if (showWebUiPanel) {
             WebUiLinkDialog(
                 dark = darkMode,
                 modelName = modelLabel,
                 personaName = selectedPersona.name,
-                onDismiss = { showZxWebChat = false },
+                onDismiss = { showWebUiPanel = false },
             )
         }
 
@@ -2910,7 +2916,7 @@ fun ChatScreen(
                             // 打开 Web UI 的**设置**（开关 + 地址 + 复制），不是内嵌浏览器。
                             // 刻意**不改** pendingZxWebCard：改设置不该改变主对话框
                             // 下一条消息的模型行为——那是另一件事，见下面的开关。
-                            showZxWebChat = true
+                            showWebUiPanel = true
                         },
                         onToggleZxWidget = {
                             pendingZxWebCard.value = !pendingZxWebCard.value

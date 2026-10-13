@@ -81,6 +81,8 @@ private val UI_ACTIONS = listOf(
     UiActionSpec("ui_open_import_tool", "导入工具", "打开导入工具对话框（AI 自写/粘贴 JSON）"),
     UiActionSpec("ui_open_ai_search", "AI 搜索", "打开 AI 浏览器·联网搜索对话框"),
     UiActionSpec("ui_open_doc_generate", qstr(R.string.qk_02713), "打开文档生成对话框（生成 WPS/Office）"),
+    // Web UI 后台服务：开启 / 显示当前地址。
+    UiActionSpec("ui_open_webui", "Web UI 后台服务", "打开 Web UI 对话框：开启 ZorvAI 的 Web 前台服务（若未运行），显示局域网访问地址、扫码/复制链接。Web UI 是另一个 ZorvAI 对话框，功能与界面与主对话框一致。"),
     UiActionSpec("ui_toggle_deepthink", "切换深度思考", "切换对话框「深度思考」开关（更慢但更深）"),
     UiActionSpec("ui_toggle_memory", "切换自动记忆", "切换「AI 自动保存记忆」开关"),
     UiActionSpec("ui_clear_chat", "清空对话", "清空当前对话消息"),
