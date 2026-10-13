@@ -4055,18 +4055,20 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_04064" formatted="false">正在启动集群引擎，首次开启需要准备环境，请稍候…</string>
     <string name="qk_04065">Recruit roles, bind models, tune host limits</string>
 
-    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <!-- ZorvAI 第三个对话框：Web UI（ZorvAI 对话框的 Web 复制品） -->
     <string name="qk_04066" formatted="false">重新加载卡片</string>
     <string name="qk_04067" formatted="false">复制卡片 DSL</string>
     <string name="qk_04068">卡片运行时资源缺失：%1$s</string>
-    <string name="qk_04069" formatted="false">本轮必须用 Web UI 卡片对话框回答：调用 zx 交互式卡片组件（component 取 zx_ 开头的组件名，dsl 填该组件的 JSON），把结构化结果画成可交互卡片，不要用纯文本罗列。</string>
-    <string name="qk_04070" formatted="false">已开启 Web UI 卡片：本轮将用可交互卡片回答</string>
-    <string name="qk_04071" formatted="false">已关闭 Web UI 卡片</string>
-    <string name="qk_04072" formatted="false">Web UI 卡片</string>
+    <string name="qk_04069" formatted="false">本轮请用 zxwidget 动态交互界面回答：调用 zx_web_card（component 取 zx_ 开头的组件名，dsl 填该组件的 JSON），把结构化结果画成可交互控件，不要用纯文本罗列。组件名与字段先查 zx_catalog。</string>
+    <string name="qk_04070" formatted="false">已开启 zxwidget 动态交互界面：本轮将用可交互卡片回答</string>
+    <string name="qk_04071" formatted="false">已关闭 zxwidget 动态交互界面</string>
+    <string name="qk_04072" formatted="false">Web UI</string>
+    <string name="qk_04076">zxwidget 动态交互界面</string>
 
-    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">Web UI 卡片缺少 component 或 dsl 参数</string>
+    <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">zxwidget 卡片缺少 component 或 dsl 参数</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI · Web UI</string>
+    <string name="qk_04075">Web UI 服务启动失败：%1$s</string>
 </resources>

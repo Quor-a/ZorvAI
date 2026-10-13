@@ -3905,18 +3905,20 @@ Vos modèles configurés sont conservés ; vous pouvez aussi saisir un nom de mo
     <string name="qk_04061">集群 · %1$s</string>
     <string name="qk_04065">Recruter des rôles, lier des modèles, ajuster les limites de l’hôte</string>
 
-    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <!-- ZorvAI 第三个对话框：Web UI（ZorvAI 对话框的 Web 复制品） -->
     <string name="qk_04066" formatted="false">Recharger la carte</string>
     <string name="qk_04067" formatted="false">Copier le DSL de la carte</string>
     <string name="qk_04068">Ressource du runtime de carte manquante : %1$s</string>
-    <string name="qk_04069" formatted="false">Réponds à ce tour avec la boîte de dialogue de carte Web UI : appelle un composant de carte interactive zx (component = nom zx_*, dsl = son JSON) et rends le résultat structuré sous forme de carte interactive, pas en texte brut.</string>
-    <string name="qk_04070" formatted="false">Carte Web UI activée : ce tour utilisera une carte interactive</string>
-    <string name="qk_04071" formatted="false">Carte Web UI désactivée</string>
-    <string name="qk_04072" formatted="false">Carte Web UI</string>
+    <string name="qk_04069" formatted="false">Pour ce tour, réponds avec l\'interface dynamique zxwidget : appelle zx_web_card (component = un nom commençant par zx_, dsl = le JSON de ce composant) et affiche le résultat structuré sous forme de contrôles interactifs plutôt qu\'en texte brut. Vérifie d\'abord les noms de composant et de champ avec zx_catalog.</string>
+    <string name="qk_04070" formatted="false">Interface dynamique zxwidget activée : ce tour répondra avec des cartes interactives</string>
+    <string name="qk_04071" formatted="false">Interface dynamique zxwidget désactivée</string>
+    <string name="qk_04072" formatted="false">Web UI</string>
+    <string name="qk_04076">Interface dynamique zxwidget</string>
 
-    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">Action carte Web UI : component ou dsl manquant</string>
+    <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">Action carte zxwidget : component ou dsl manquant</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI - Web UI</string>
+    <string name="qk_04075">Échec du démarrage du service Web UI : %1$s</string>
 </resources>

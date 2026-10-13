@@ -3903,18 +3903,20 @@ Seus modelos configurados foram mantidos; você também pode digitar o nome do m
     <string name="qk_03918">Diretório vazio ou inacessível</string>
     <string name="qk_04065">Recrutar funções, vincular modelos, ajustar limites do anfitrião</string>
 
-    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <!-- ZorvAI 第三个对话框：Web UI（ZorvAI 对话框的 Web 复制品） -->
     <string name="qk_04066" formatted="false">Recarregar cartão</string>
     <string name="qk_04067" formatted="false">Copiar DSL do cartão</string>
     <string name="qk_04068">Recurso de runtime do cartão ausente: %1$s</string>
-    <string name="qk_04069" formatted="false">Responda este turno com a caixa de diálogo de cartões Web UI: chame um componente de cartão interativo zx (component = nome zx_*, dsl = seu JSON) e renderize o resultado estruturado como cartão interativo.</string>
-    <string name="qk_04070" formatted="false">Cartão Web UI ativado: este turno usará um cartão interativo</string>
-    <string name="qk_04071" formatted="false">Cartão Web UI desativado</string>
-    <string name="qk_04072" formatted="false">Cartão Web UI</string>
+    <string name="qk_04069" formatted="false">Neste turno responda com a interface dinâmica zxwidget: chame zx_web_card (component = nome começando com zx_, dsl = o JSON desse componente) e mostre o resultado estruturado como controles interativos em vez de texto simples. Consulte antes os nomes de componente e campos com zx_catalog.</string>
+    <string name="qk_04070" formatted="false">Interface dinâmica zxwidget ativada: este turno responderá com cartões interativos</string>
+    <string name="qk_04071" formatted="false">Interface dinâmica zxwidget desativada</string>
+    <string name="qk_04072" formatted="false">Web UI</string>
+    <string name="qk_04076">Interface dinâmica zxwidget</string>
 
-    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">Ação do cartão Web UI sem component ou dsl</string>
+    <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">Ação do cartão zxwidget sem component ou dsl</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI - Web UI</string>
+    <string name="qk_04075">Falha ao iniciar o serviço Web UI: %1$s</string>
 </resources>

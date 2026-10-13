@@ -20,7 +20,7 @@ class ZxCatalogTool : QuroTool {
 
     override val name = "zx_catalog"
 
-    override val description = """查询 zx 组件名册与字段契约（Web UI 卡片 / zxwidget 动态交互界面用）。
+    override val description = """查询 zx 组件名册与字段契约（zxwidget 动态交互界面用）。
 做卡片前**先用本工具确认组件名与字段**，不要凭印象写组件名或字段名。
 
 用法：

@@ -3996,18 +3996,20 @@ Your configured models were kept; you can also type a model name manually.</stri
     <string name="qk_04061">集群 · %1$s</string>
     <string name="qk_04065">Recruit roles, bind models, tune host limits</string>
 
-    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <!-- ZorvAI 第三个对话框：Web UI（ZorvAI 对话框的 Web 复制品） -->
     <string name="qk_04066" formatted="false">Reload card</string>
     <string name="qk_04067" formatted="false">Copy card DSL</string>
     <string name="qk_04068">Card runtime asset missing: %1$s</string>
-    <string name="qk_04069" formatted="false">This turn must be answered with the Web UI card dialog: call a zx interactive card component (component = a zx_* component name, dsl = that component\'s JSON) and render the structured result as an interactive card instead of plain text.</string>
-    <string name="qk_04070" formatted="false">Web UI card on: this turn will use an interactive card</string>
-    <string name="qk_04071" formatted="false">Web UI card off</string>
-    <string name="qk_04072" formatted="false">Web UI card</string>
+    <string name="qk_04069" formatted="false">For this turn answer with the zxwidget dynamic UI: call zx_web_card (component = a name starting with zx_, dsl = that component\'s JSON) and render the structured result as interactive controls instead of listing it as plain text. Look up component names and fields via zx_catalog first.</string>
+    <string name="qk_04070" formatted="false">zxwidget dynamic UI enabled: this turn will answer with interactive cards</string>
+    <string name="qk_04071" formatted="false">zxwidget dynamic UI disabled</string>
+    <string name="qk_04072" formatted="false">Web UI</string>
+    <string name="qk_04076">zxwidget dynamic UI</string>
 
-    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">Web UI card action is missing component or dsl</string>
+    <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">zxwidget card action is missing component or dsl</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI - Web UI</string>
+    <string name="qk_04075">Failed to start the Web UI server: %1$s</string>
 </resources>

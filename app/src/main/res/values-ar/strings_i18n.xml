@@ -3905,18 +3905,20 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_04061">集群 · %1$s</string>
     <string name="qk_04065">توظيف الأدوار وربط النماذج وضبط حدود المضيف</string>
 
-    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <!-- ZorvAI 第三个对话框：Web UI（ZorvAI 对话框的 Web 复制品） -->
     <string name="qk_04066" formatted="false">إعادة تحميل البطاقة</string>
     <string name="qk_04067" formatted="false">نسخ DSL البطاقة</string>
     <string name="qk_04068">مورد runtime البطاقة مفقود: %1$s</string>
-    <string name="qk_04069" formatted="false">أجب في هذه الدور عبر حوار بطاقة Web UI: استدعِ مكوّن بطاقة zx تفاعلي (component = اسم zx_*، dsl = JSON الخاص به) واعرض النتيجة المهيكلة كبطاقة تفاعلية.</string>
-    <string name="qk_04070" formatted="false">تم تشغيل بطاقة Web UI: ستستخدم هذه الدور بطاقة تفاعلية</string>
-    <string name="qk_04071" formatted="false">تم إيقاف بطاقة Web UI</string>
-    <string name="qk_04072" formatted="false">بطاقة Web UI</string>
+    <string name="qk_04069" formatted="false">في هذا الدور أجب بواجهة zxwidget التفاعلية الديناميكية: استدعِ zx_web_card (component = اسم يبدأ بـ zx_، وdsl = JSON الخاص بهذا المكوّن) واعرض النتيجة المنظمة كعناصر تحكم تفاعلية بدل سردها كنص عادي. ابحث أولاً عن أسماء المكوّنات وحقولها عبر zx_catalog.</string>
+    <string name="qk_04070" formatted="false">تم تفعيل واجهة zxwidget التفاعلية: سيجيب هذا الدور ببطاقات تفاعلية</string>
+    <string name="qk_04071" formatted="false">تم إيقاف واجهة zxwidget التفاعلية</string>
+    <string name="qk_04072" formatted="false">Web UI</string>
+    <string name="qk_04076">واجهة zxwidget التفاعلية الديناميكية</string>
 
-    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">إجراء بطاقة Web UI يفتقد component أو dsl</string>
+    <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">إجراء بطاقة zxwidget يفتقد component أو dsl</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI - Web UI</string>
+    <string name="qk_04075">فشل تشغيل خدمة Web UI: %1$s</string>
 </resources>

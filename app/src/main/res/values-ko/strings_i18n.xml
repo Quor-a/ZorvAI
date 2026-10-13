@@ -3905,18 +3905,20 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_04061">集群 · %1$s</string>
     <string name="qk_04065">역할 채용, 모델 바인딩, 호스트 제한 조정</string>
 
-    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <!-- ZorvAI 第三个对话框：Web UI（ZorvAI 对话框的 Web 复制品） -->
     <string name="qk_04066" formatted="false">카드 새로고침</string>
     <string name="qk_04067" formatted="false">카드 DSL 복사</string>
     <string name="qk_04068">카드 런타임 리소스 누락: %1$s</string>
-    <string name="qk_04069" formatted="false">이번 턴은 Web UI 카드 대화상자로 답변하세요: zx 인터랙티브 카드 컴포넌트(component 은 zx_ 로 시작하는 이름, dsl 은 해당 JSON)를 호출하고 구조화된 결과를 인터랙티브 카드로 그리며 일반 텍스트 나열은 피하세요.</string>
-    <string name="qk_04070" formatted="false">Web UI 카드 켜짐: 이번 턴은 인터랙티브 카드로 답변합니다</string>
-    <string name="qk_04071" formatted="false">Web UI 카드 꺼짐</string>
-    <string name="qk_04072" formatted="false">Web UI 카드</string>
+    <string name="qk_04069" formatted="false">이번에는 zxwidget 동적 인터랙티브 인터페이스로 답하세요: zx_web_card를 호출하고(component는 zx_로 시작하는 컴포넌트 이름, dsl은 해당 컴포넌트의 JSON) 구조화된 결과를 일반 텍스트가 아닌 조작 가능한 컨트롤로 그립니다. 컴포넌트와 필드 이름은 먼저 zx_catalog로 확인하세요.</string>
+    <string name="qk_04070" formatted="false">zxwidget 동적 인터랙티브 인터페이스 켜짐: 이번에는 조작 가능한 카드로 답합니다</string>
+    <string name="qk_04071" formatted="false">zxwidget 동적 인터랙티브 인터페이스 꺼짐</string>
+    <string name="qk_04072" formatted="false">Web UI</string>
+    <string name="qk_04076">zxwidget 동적 인터랙티브 인터페이스</string>
 
-    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">Web UI 카드 액션에 component 또는 dsl이 없습니다</string>
+    <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">zxwidget 카드 액션에 component 또는 dsl이 없습니다</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI · Web UI</string>
+    <string name="qk_04075">Web UI 서비스를 시작하지 못했습니다: %1$s</string>
 </resources>

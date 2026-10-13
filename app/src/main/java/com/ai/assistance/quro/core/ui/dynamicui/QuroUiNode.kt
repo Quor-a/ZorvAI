@@ -705,7 +705,7 @@ data class QuroVisualAskAction(
 ) : QuroUiAction
 
 /**
- * Web UI 卡片（ZorvAI 第三个对话框）：弹出 WebView 承载的 zx 交互式卡片。
+ * zxwidget 动态交互界面：弹出 WebView 承载的 zx 交互式卡片。
  *
  * 与 visual_popup / visual_ask 是同族动作，区别在于：
  *   · visual_popup 只展示、visual_ask 回发固定选项文本；

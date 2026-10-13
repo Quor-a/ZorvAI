@@ -49,17 +49,30 @@ import com.ai.assistance.quro.util.qstr
 import org.json.JSONObject
 
 /**
- * ZorvAI 第三个对话框 —— Web UI 卡片对话框。
+ * zxwidget 单卡片对话框 —— 「只装一张卡」的宿主。
  *
- * 家族关系（都在输入框「工具」菜单里、都由 `UiNavigationEvent` 触发）：
- *   · 第一个：可视化弹窗 `UiNavigationEvent.VisualPopup` —— 纯展示
- *   · 第二个：可视化询问 `UiNavigationEvent.VisualAsk` —— 选项回发模型
- *   · 第三个：本对话框 —— WebView 承载 zx 交互式卡片
+ * 术语先说清（这三个词在本仓经常被混着用）：
+ *   · **zxwidget** = 动态交互界面。它是一套独立的组件编译器（477 个 zx 组件），
+ *     既不是 ZorvAI 也不是 Web UI，只是**被这两个对话框一起支持**。
+ *     代码在 `assets/zx/zxwidget.js`。
+ *   · **ZorvAI 原生对话框** = 聊天主界面。模型调 `zx_web_card` 时由本类弹一张卡。
+ *   · **Web UI 对话框** = ZorvAI 对话框的 Web 复制品，卡片嵌在消息流里渲染。
+ *   所以卡片只有一个来源（zxwidget），区别只在「单独弹一张」还是「嵌在流里」。
  *
- * 为什么第三个走 Web UI 而不是原生 Compose：
+ * 触发路径：模型回复里调用 `zx_web_card` 工具 → `QuroZxWebCardAction`
+ *   → `UiNavigationEvent.ZxWebCard` → 本对话框。
+ *   它**不在**输入框「工具」菜单里（菜单里那几项是 AIP 文档 / 可视化弹窗 /
+ *   可视化询问 / Web UI 对话框 / zxwidget 能力开关）。
+ *
+ * 为什么走 WebView 而不是原生 Compose：
  *   zx 组件族有 477 个，原生逐个实现要写几十万行；而它们的 DSL 是同构 JSON。
  *   Web 侧一个运行时 + 一层形状推断就能全覆盖，改样式也不用发版。
  *   宿主只保留三件事：把 DSL 送进去、把交互接出来、决定交互之后干什么。
+ *
+ * 注意：本页（`zx_card_runtime.html`）走 `loadDataWithBaseURL` + 构建期内联，
+ *   `file://` 下加载不到外链脚本，所以它内联了一份编译器拷贝。
+ *   那份拷贝与新模块 `zx/zxwidget.js` **目前并不完全同源**——见
+ *   `scripts/zx/zxwidget_parity_check.js` 的 KNOWN-DRIFT 清单。
  */
 object ZxWebCard {
 
@@ -149,7 +162,7 @@ object ZxWebCard {
             if (k !in setOf("action", "summary", "component")) rest.put(k, json.opt(k))
         }
         return buildString {
-            append("【Web UI 卡片交互】组件 ")
+            append("【zxwidget 交互】组件 ")
             append(component)
             append("，动作 ")
             append(action)
@@ -164,7 +177,7 @@ object ZxWebCard {
 }
 
 /**
- * Web UI 卡片对话框本体。
+ * zxwidget 单卡片对话框本体。
  *
  * @param component  zx 组件名（zx_compare / zx_table / …）
  * @param title      对话框标题，空则用组件名

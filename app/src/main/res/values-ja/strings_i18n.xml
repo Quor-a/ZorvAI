@@ -3905,18 +3905,20 @@ Create a file or folder at top right</string>
     <string name="qk_04061">集群 · %1$s</string>
     <string name="qk_04065">役割の採用、モデルの割り当て、ホスト上限の調整</string>
 
-    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <!-- ZorvAI 第三个对话框：Web UI（ZorvAI 对话框的 Web 复制品） -->
     <string name="qk_04066" formatted="false">カードを再読み込み</string>
     <string name="qk_04067" formatted="false">カード DSL をコピー</string>
     <string name="qk_04068">カード実行時リソースが見つかりません：%1$s</string>
-    <string name="qk_04069" formatted="false">このターンは Web UI カードダイアログで回答してください：zx インタラクティブカードコンポーネント（component は zx_ 始まりの名前、dsl はその JSON）を呼び、構造化結果をインタラクティブカードとして描画し、プレーンテキストの羅列は避けてください。</string>
-    <string name="qk_04070" formatted="false">Web UI カード ON：このターンはインタラクティブカードで回答します</string>
-    <string name="qk_04071" formatted="false">Web UI カード OFF</string>
-    <string name="qk_04072" formatted="false">Web UI カード</string>
+    <string name="qk_04069" formatted="false">今回は zxwidget の動的インタラクティブ界面で回答してください：zx_web_card を呼び出し（component は zx_ で始まるコンポーネント名、dsl はそのコンポーネントの JSON）、構造化された結果をプレーンテキストではなく操作可能なコントロールとして描画します。コンポーネント名とフィールドは先に zx_catalog で確認してください。</string>
+    <string name="qk_04070" formatted="false">zxwidget 動的インタラクティブ界面を有効化：今回は操作可能なカードで回答します</string>
+    <string name="qk_04071" formatted="false">zxwidget 動的インタラクティブ界面を無効化</string>
+    <string name="qk_04072" formatted="false">Web UI</string>
+    <string name="qk_04076">zxwidget 動的インタラクティブ界面</string>
 
-    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">Web UI カードアクションに component または dsl がありません</string>
+    <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">zxwidget カードアクションに component または dsl がありません</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI・Web UI</string>
+    <string name="qk_04075">Web UI サービスを起動できませんでした：%1$s</string>
 </resources>

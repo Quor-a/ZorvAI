@@ -3905,18 +3905,20 @@ Ihre konfigurierten Modelle bleiben erhalten; Sie können den Modellnamen auch m
     <string name="qk_04061">集群 · %1$s</string>
     <string name="qk_04065">Rollen einstellen, Modelle binden, Host-Grenzen anpassen</string>
 
-    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <!-- ZorvAI 第三个对话框：Web UI（ZorvAI 对话框的 Web 复制品） -->
     <string name="qk_04066" formatted="false">Karte neu laden</string>
     <string name="qk_04067" formatted="false">Karten-DSL kopieren</string>
     <string name="qk_04068">Karten-Runtime-Ressource fehlt: %1$s</string>
-    <string name="qk_04069" formatted="false">Antworte in dieser Runde über den Web-UI-Kartendialog: rufe eine zx-interaktive Kartenkomponente auf (component = zx_* Name, dsl = deren JSON) und stelle das strukturierte Ergebnis als interaktive Karte dar, nicht als Fließtext.</string>
-    <string name="qk_04070" formatted="false">Web-UI-Karte ein: diese Runde wird mit einer interaktiven Karte geantwortet</string>
-    <string name="qk_04071" formatted="false">Web-UI-Karte aus</string>
-    <string name="qk_04072" formatted="false">Web-UI-Karte</string>
+    <string name="qk_04069" formatted="false">Antworte in dieser Runde mit der dynamischen zxwidget-Oberfläche: rufe zx_web_card auf (component = Name mit Präfix zx_, dsl = JSON dieser Komponente) und stelle das strukturierte Ergebnis als interaktive Bedienelemente dar statt als reinen Text. Komponenten- und Feldnamen zuerst über zx_catalog nachschlagen.</string>
+    <string name="qk_04070" formatted="false">Dynamische zxwidget-Oberfläche aktiviert: Diese Runde antwortet mit interaktiven Karten</string>
+    <string name="qk_04071" formatted="false">Dynamische zxwidget-Oberfläche deaktiviert</string>
+    <string name="qk_04072" formatted="false">Web UI</string>
+    <string name="qk_04076">zxwidget dynamische Oberfläche</string>
 
-    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">Web-UI-Kartenaktion ohne component oder dsl</string>
+    <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">zxwidget-Kartenaktion ohne component oder dsl</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI - Web UI</string>
+    <string name="qk_04075">Web-UI-Dienst konnte nicht gestartet werden: %1$s</string>
 </resources>

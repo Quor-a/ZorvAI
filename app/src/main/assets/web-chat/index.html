@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<!-- 有它才是真正的移动端布局视口；没有它 Android WebView 会按 980px 排版再缩 -->
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>ZorvAI · Web UI</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="zxwidget.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     Web UI 对话框 —— ZorvAI 对话框的 Web 复制品
+     ZorvAI 对话框有的东西这里都有：消息流 / Markdown / 流式输出 /
+     思考过程 / 工具调用 / 附件 / 输入框 / 停止 / 新对话。
+     zxwidget（动态交互界面）只是被它支持的一个能力，不是它的定义。
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <header id="hd">
+    <span class="dot" id="dot"></span>
+    <div class="hd-main">
+      <h1 id="title">ZorvAI</h1>
+      <span id="subtitle"></span>
+    </div>
+    <button id="btn-new" type="button">新对话</button>
+  </header>
+
+  <main id="stream" role="log" aria-live="polite"></main>
+
+  <footer id="composer">
+    <div id="attachments"></div>
+    <div class="crow">
+      <textarea id="inp" rows="1" placeholder="发消息…（Enter 发送，Shift+Enter 换行）"
+                autocomplete="off" autocapitalize="sentences" spellcheck="false"></textarea>
+      <button id="send" type="button" aria-label="发送"></button>
+    </div>
+    <div id="cfoot">
+      <span id="cnt">0 条消息</span>
+      <span class="right" id="hint">Web UI · 由本地服务提供</span>
+    </div>
+  </footer>
+
+</div>
+
+<!-- zxwidget 动态交互界面：独立模块，ZorvAI 原生对话框与 Web UI 共用 -->
+<script src="zxwidget.js"></script>
+<script src="chat.js"></script>
+</body>
+</html>

@@ -3905,18 +3905,20 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_04061">集群 · %1$s</string>
     <string name="qk_04065">भूमिकाएँ भर्ती करें, मॉडल बाइंड करें, होस्ट सीमाएँ समायोजित करें</string>
 
-    <!-- ZorvAI 第三个对话框：Web UI 卡片（zx 交互式卡片族） -->
+    <!-- ZorvAI 第三个对话框：Web UI（ZorvAI 对话框的 Web 复制品） -->
     <string name="qk_04066" formatted="false">कार्ड पुनः लोड करें</string>
     <string name="qk_04067" formatted="false">कार्ड DSL कॉपी करें</string>
     <string name="qk_04068">कार्ड रनटाइम संसाधन गायब है: %1$s</string>
-    <string name="qk_04069" formatted="false">इस चाल में Web UI कार्ड डायलॉग से उत्तर दें: zx इंटरैक्टिव कार्ड कंपोनेंट कॉल करें (component = zx_* नाम, dsl = उसका JSON) और संरचित परिणाम को इंटरैक्टिव कार्ड के रूप में दिखाएँ।</string>
-    <string name="qk_04070" formatted="false">Web UI कार्ड चालु: इस चाल में इंटरैक्टिव कार्ड का उपयोग होगा</string>
-    <string name="qk_04071" formatted="false">Web UI कार्ड बंद</string>
-    <string name="qk_04072" formatted="false">Web UI कार्ड</string>
+    <string name="qk_04069" formatted="false">इस बार zxwidget डायनामिक इंटरफ़ेस से उत्तर दें: zx_web_card कॉल करें (component = zx_ से शुरू होने वाला नाम, dsl = उस कंपोनेंट का JSON) और संरचित परिणाम को सादे टेक्स्ट की जगह इंटरैक्टिव कंट्रोल के रूप में दिखाएँ। कंपोनेंट और फ़ील्ड नाम पहले zx_catalog से देखें।</string>
+    <string name="qk_04070" formatted="false">zxwidget डायनामिक इंटरफ़ेस चालू: इस बार इंटरैक्टिव कार्ड से उत्तर मिलेगा</string>
+    <string name="qk_04071" formatted="false">zxwidget डायनामिक इंटरफ़ेस बंद</string>
+    <string name="qk_04072" formatted="false">Web UI</string>
+    <string name="qk_04076">zxwidget डायनामिक इंटरफ़ेस</string>
 
-    <!-- Web UI 卡片（第三个对话框）动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">Web UI कार्ड एक्शन में component या dsl नहीं है</string>
+    <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
+    <string name="qk_04073" formatted="false">zxwidget कार्ड एक्शन में component या dsl नहीं है</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI · Web UI</string>
+    <string name="qk_04075">Web UI सेवा शुरू नहीं हो सकी: %1$s</string>
 </resources>

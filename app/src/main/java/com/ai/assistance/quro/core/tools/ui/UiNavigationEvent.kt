@@ -22,7 +22,7 @@ sealed class UiNavigationEvent {
     data class VisualAsk(val prompt: String, val options: List<String>) : UiNavigationEvent()
 
     /**
-     * 第三个对话框：Web UI 卡片。
+     * zxwidget 单卡片对话框。
      *
      * 与上面两个同族（都在输入框「工具」菜单、都走 [UiNavigationBus]），
      * 差别是它用 WebView 承载 zx 交互式卡片族（[component] + [dsl]），
