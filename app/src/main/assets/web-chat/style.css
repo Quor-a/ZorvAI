@@ -109,6 +109,10 @@ html.dark{
 
 /* ── 2. 基础重置 ────────────────────────────────────────────────────── */
 *{box-sizing:border-box}
+/* 🔴 hidden 属性必须赢过任何 author display 规则：.waiting/.working/.acts/
+   .toolsbox 都是 display:flex，没有这条它们会「隐藏了还在屏幕上」
+   （2026-10-14 e2e 截图实见：done 后「AI 正在执行工具…」不肯退场）。 */
+[hidden]{display:none!important}
 html,body{margin:0;height:100%}
 body{
   background:var(--bg-gradient);
@@ -201,20 +205,83 @@ html.flow #composer{position:sticky;bottom:0}
 #stream::-webkit-scrollbar-thumb{background:var(--line2);border-radius:99px}
 #stream::-webkit-scrollbar-track{background:transparent}
 
-.msg{margin-bottom:18px;min-width:0;animation:msgIn var(--t-med) var(--ease-out) both}
+.msg{margin-bottom:18px;min-width:0;position:relative;animation:msgIn var(--t-med) var(--ease-out) both}
 @keyframes msgIn{
   from{opacity:0;transform:translateY(6px)}
   to{opacity:1;transform:translateY(0)}
 }
-.msg .who{
-  font-size:11.5px;color:var(--muted);margin-bottom:5px;
-  display:flex;gap:6px;align-items:baseline;
-  font-weight:600;letter-spacing:.02em;
+/* ── 头像：悬浮左上角（原生 Box overlay，不占流式空间）─────────────────
+   原生 AvatarContent：圆形、ink 底 (#211E1A)、白字首字母；有图用图。 */
+.av{
+  position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;
+  background:#211E1A;color:#fff;overflow:hidden;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:600;line-height:1;user-select:none;
 }
-.msg.mine .who{justify-content:flex-end}
-.bub{min-width:0}
-/* 与原生一致：正文直接铺满宽度，不做左右气泡窄栏（原生正文也是全宽的） */
+.av img{width:100%;height:100%;object-fit:cover;display:block}
+/* 内容列：名字行左侧让出头像宽度（原生 avatarIndentDp = avatarSize+10 = 38） */
+.mcol{padding-left:38px;min-width:0}
+/* ── 名字行：`作者 · 时间`（11sp muted）+ TinyChip 胶囊 ─────────────── */
+.nrow{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.02em;
+  padding:3px 0 4px;min-width:0;
+}
+.nname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60vw}
+.nchips{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap}
+/* TinyChip：20px 高、9px 字、10px 圆角（原生 ChatScreen.kt:4719） */
+.nchip{
+  display:inline-flex;align-items:center;gap:3px;height:20px;padding:0 8px;
+  font:inherit;font-size:9px;font-weight:600;line-height:1;
+  border:0;border-radius:10px;cursor:pointer;white-space:nowrap;
+  background:color-mix(in srgb,var(--secondary) 14%,transparent);
+  color:var(--secondary);
+  transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
+}
+.nchip .nc-ico{font-size:9px;line-height:1}
+.nchip.think{background:color-mix(in srgb,var(--secondary) 14%,transparent);color:var(--secondary)}
+.nchip.think.run{background:color-mix(in srgb,var(--secondary) 22%,transparent)}
+.nchip.tools{background:color-mix(in srgb,var(--primary) 10%,transparent);color:color-mix(in srgb,var(--primary) 75%,var(--fg))}
+/* 执行中（结果尚未回填）：原生蓝 #3B82F6 高亮 */
+.nchip.tools.run{background:rgba(59,130,246,.14);color:#3B82F6}
+.nchip.on{box-shadow:inset 0 0 0 1px currentColor}
+/* ── WaitingDots：7px 三点、primary 色、正弦相位跳动（900ms 循环）───── */
+.waiting{display:flex;align-items:center;gap:5px;padding:6px 0 6px 8px}
+.waiting span{
+  width:7px;height:7px;border-radius:50%;background:var(--primary);
+  animation:wdot 900ms linear infinite;
+}
+.waiting span:nth-child(2){animation-delay:-300ms}
+.waiting span:nth-child(3){animation-delay:-600ms}
+@keyframes wdot{
+  0%{transform:translateY(0)}
+  25%{transform:translateY(-5px)}
+  50%{transform:translateY(0)}
+  100%{transform:translateY(0)}
+}
+/* ── WorkingIndicator：「AI 正在执行工具…」（复用三点 + 12sp primary）── */
+.working{display:flex;align-items:center;gap:6px;padding:4px 0 4px 8px}
+.working .wdots{display:inline-flex;gap:5px}
+.working .wdots span{
+  width:7px;height:7px;border-radius:50%;background:var(--primary);
+  animation:wdot 900ms linear infinite;
+}
+.working .wdots span:nth-child(2){animation-delay:-300ms}
+.working .wdots span:nth-child(3){animation-delay:-600ms}
+.working .wtxt{font-size:12px;font-weight:500;color:var(--primary)}
+/* ── 思考展开区（原生 ThinkInlineContent：#FBF8F2 底、编号步骤、11sp）─ */
+.thinkbox{
+  margin:2px 0 8px;padding:8px 10px;border-radius:10px;
+  background:#FBF8F2;border:1px solid var(--line);
+}
+html.dark .thinkbox{background:#241F18;border-color:var(--line2)}
+.thinkbox .ts{display:flex;gap:6px;padding:1px 0;font-size:11px;line-height:16px;color:var(--fg-soft)}
+.thinkbox .ts-n{flex:none;color:var(--muted)}
+.thinkbox .ts-t{word-break:break-word}
+/* ── 正文（无气泡壳：用户消息暖褐 #5A3322，AI 消息主题色，统一靠左）── */
 .md{min-width:0;word-wrap:break-word;overflow-wrap:anywhere}
+.msg.mine .md{color:#5A3322}
+html.dark .msg.mine .md{color:#E8B9A0}
 
 /* 正文块 */
 .md p{margin:0 0 8px}
@@ -299,8 +366,8 @@ html.flow #composer{position:sticky;bottom:0}
   background:transparent;
 }
 
-/* 工具调用（镜像原生的「N 工具」胶囊） */
-.tools{margin:8px 0;display:flex;flex-direction:column;gap:6px}
+/* 工具调用展开区（原生 ToolCallGroup 的网页对等实现；由「· N 工具」胶囊展开） */
+.toolsbox{margin:2px 0 8px;display:flex;flex-direction:column;gap:6px}
 .tool{
   border:1px solid var(--line);border-radius:var(--r-ctl);
   background:var(--surface);overflow:hidden;
@@ -323,18 +390,38 @@ html.flow #composer{position:sticky;bottom:0}
   white-space:pre-wrap;word-break:break-all;color:var(--fg-soft);
 }
 
-/* 思考（镜像原生可折叠思考卡） */
-.think{
-  margin:0 0 10px;border-left:3px solid var(--secondary);
-  padding-left:12px;color:var(--fg-soft);
-  background:var(--secondary-soft);
-  background:linear-gradient(90deg,color-mix(in srgb,var(--secondary-soft) 35%,transparent),transparent);
-  border-radius:0 8px 8px 0;
+/* ── 操作栏（仅 AI 消息）：原生 BubbleActionButton 28dp 高 / 11sp ────── */
+.acts{display:flex;flex-wrap:wrap;gap:2px;margin:6px 0 2px}
+.ab{
+  font:inherit;font-size:11px;font-weight:500;line-height:1;
+  height:28px;padding:0 10px;border:0;border-radius:8px;cursor:pointer;
+  background:transparent;color:var(--muted);
+  transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
 }
-.think-h{font-size:12px;color:var(--muted);cursor:pointer;user-select:none;font-weight:600}
-.think-b{display:none;font-size:13px;white-space:pre-wrap;margin-top:4px}
-.think.open .think-b{display:block}
+.ab:hover{background:var(--bg2);color:var(--fg-soft)}
+.ab:active{transform:scale(.96)}
+.ab[data-act="ask"]{color:var(--primary)}
+/* ── 消息底部全宽内联区（动态 UI / AIP / 组件卡片 / 自研卡片 / zxwidget）──
+   原生这些块**不进正文列**（避免被 280dp 压窄），在消息底部撑满宽度。 */
+.fullbox{margin:8px 0 0;min-width:0}
+/* 富组件卡片 FlowRow：紧凑卡并排、宽型独占一行（原生同款排布） */
+.cardflow{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0}
+.cf-cell{min-width:0;max-width:100%}
+.cf-cell>.qcard{width:100%}
+/* ── 流式「界面生成中」占位（原生专属围栏未闭合时；闭合即让位给真渲染）── */
+.fence-wait{
+  display:inline-flex;align-items:center;gap:6px;margin:6px 0;
+  padding:6px 12px;border:1px dashed var(--line2);border-radius:10px;
+  font-size:11.5px;color:var(--muted);background:var(--bg2);
+}
+.fence-wait .fw-dot{
+  width:5px;height:5px;border-radius:50%;background:var(--primary);
+  animation:wdot 900ms linear infinite;
+}
+.fence-wait .fw-dot:nth-child(2){animation-delay:-300ms}
+.fence-wait .fw-dot:nth-child(3){animation-delay:-600ms}
 
+/* 附件（用户与 AI 消息通用） */
 .atts{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
 .att{
   font-size:12px;color:var(--fg-soft);background:var(--bg2);
@@ -587,18 +674,8 @@ html.flow #composer{position:sticky;bottom:0}
 }
 @keyframes blink{50%{opacity:0}}
 
-/* 等待态：首 token 到达前的三点跳动（占位气泡） */
-.typing{display:inline-flex;gap:5px;padding:7px 2px}
-.typing span{
-  width:7px;height:7px;border-radius:50%;background:var(--muted);
-  animation:tp 1.2s var(--ease-out) infinite;
-}
-.typing span:nth-child(2){animation-delay:.15s}
-.typing span:nth-child(3){animation-delay:.3s}
-@keyframes tp{
-  0%,60%,100%{opacity:.3;transform:translateY(0)}
-  30%{opacity:1;transform:translateY(-3px)}
-}
+/* 等待态三点已上移为 .waiting / .working .wdots（对齐原生 WaitingDots：
+   7dp、primary 色、900ms 正弦相位跳动）。此处不再保留旧的 .typing。 */
 
 /* ── markdown 列表 / 任务列表（mdHtml 输出，流式与终渲共用）────────── */
 .md ul,.md ol{margin:6px 0;padding-left:22px}
@@ -1341,14 +1418,11 @@ html.flow #composer{position:sticky;bottom:0}
   #btn-new{font-size:14px;padding:8px 18px}
   #stream{padding:24px 32px 12px}
   .msg{margin-bottom:26px}
-  .msg .who{font-size:12.5px}
-  .bub{max-width:82%}
-  .msg.mine .bub{margin-left:auto}
-  /* PC 端鼠标悬停才出现的细微反馈（触屏设备无 hover，不生效即无感） */
-  @media (hover:hover){
-    .msg .bub{transition:box-shadow var(--t-med) var(--ease-out)}
-    .bub:has(.md):hover{box-shadow:var(--shadow-1)}
-  }
+  .nrow{font-size:12px}
+  .av{width:34px;height:34px;font-size:14px}
+  /* 内容列限宽（原生 messageContentMaxWidth：屏宽-列表padding-头像-gap，封顶 720）；
+     底部全宽内联区不受此限——与原生一致，卡片/动态 UI 撑满整个对话列。 */
+  .mcol{max-width:720px}
   .md{font-size:15.5px}
   .md h1{font-size:24px}.md h2{font-size:21px}.md h3{font-size:18px}.md h4{font-size:16.5px}
   .md table{font-size:14.5px}
@@ -1368,7 +1442,6 @@ html.flow #composer{position:sticky;bottom:0}
 /* 超宽屏（≥1400px）：列再放宽，代码/表格更舒展 */
 @media (min-width:1400px){
   #app{max-width:1020px}
-  .bub{max-width:78%}
   #stream{padding:28px 44px 14px}
 }
 /* 打印 / 投影场景：去掉纸感渐变与阴影，纯白底黑字 */

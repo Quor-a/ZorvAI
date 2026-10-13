@@ -19,6 +19,10 @@ import com.ai.assistance.quro.ui.extractInlineComponents
 import com.ai.assistance.quro.ui.parseBlocks
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 /**
  * Web UI 投影层 —— 把 ZorvAI 对话框**该被看见的东西**序列化出去。
@@ -111,8 +115,19 @@ object WebUiProjection {
      *
      * 块顺序与原生 `MessageRow` 一致：**思考 → 正文块序列 → 工具 → 互动UI界面**。
      * 顺序在这里定死、不接受接收端重排：顺序就是原生对话的语义。
+     *
+     * 名字行兜底三件套（[authorFallback] / [avatarFallback] / [avatarUrl]）由调用方
+     * 一次性解析好再传进来 —— 人格/用户资料在仓库里，投影层**不自己翻**：
+     * 快照最频 1s 一次，每帧翻仓库会把投影变成磁盘扫描。规则见
+     * [com.ai.assistance.quro.ui.chat.QuroWebUiServer] 的 NameFallbacks 缓存。
      */
-    fun message(m: QuroMessage, mine: Boolean): JSONObject {
+    fun message(
+        m: QuroMessage,
+        mine: Boolean,
+        authorFallback: String = "",
+        avatarFallback: String = "",
+        avatarUrl: String = "",
+    ): JSONObject {
         val o = JSONObject()
             .put("id", m.id)
             .put("role", m.role)
@@ -120,11 +135,35 @@ object WebUiProjection {
             .put("senderName", m.senderName ?: "")
             .put("time", m.createdAt)
 
+        // ── 名字行（对齐原生 MessageRow 的 `作者 · 时间`）──
+        // 原生规则（ChatScreen.kt:538 / 8366-8368 / QuroSoulUi.AvatarContent）：
+        //   作者 = senderName（集群/子智能体角色名）?: 人格名 / 用户名；
+        //   头像 = 角色名首字母 / 人格 ava；有图才给 avatarUrl（无图退化成首字母圆标）。
+        val speaker = m.senderName?.takeIf { it.isNotBlank() }
+        o.put("author", speaker ?: authorFallback)
+            .put("avatar", speaker?.take(1) ?: avatarFallback)
+            .put("avatarUrl", if (speaker == null) avatarUrl else "")
+            .put("timeText", chatTimeText(m.createdAt))
+
         // ── 思考 ──
         m.reasoning?.takeIf { it.isNotBlank() }?.let { o.put("reasoning", it) }
 
-        // ── 正文块：与原生同一个解析入口，不重写 ──
-        blockList(m.content).let { if (it.length() > 0) o.put("blocks", it) }
+        // ── 正文块 + 富组件卡片：与原生同一个解析入口，不重写 ──
+        val raw = m.content.takeIf { it.isNotBlank() }
+        val clean = raw?.let { runCatching { QuroVoiceStyle.strip(it) }.getOrDefault(it) }
+        // extractInlineComponents 的第二个返回值就是「文本内联下发的富组件卡片」——
+        // 原生在消息底部全宽内联渲染它们（ChatScreen.kt:4091 inlineCards）。
+        // 旧投影只取 .first（剥完的文本），卡片**整条通道被丢弃**，那正是
+        // 「web ui 根本没有对话框渲染能力」的一处实锤：AI 下发了卡片，网页上看不见。
+        val extracted = clean?.let { runCatching { extractInlineComponents(it) }.getOrNull() }
+        blockList(extracted?.first ?: clean).let { if (it.length() > 0) o.put("blocks", it) }
+        val inlineCards = extracted?.second.orEmpty()
+        val allCards = m.cards + inlineCards
+        if (allCards.isNotEmpty()) {
+            val arr = JSONArray()
+            allCards.forEach { c -> runCatching { arr.put(serializeCard(c)) } }
+            if (arr.length() > 0) o.put("cards", arr)
+        }
 
         // ── 工具调用（原生是「N 工具」胶囊，投影投同样的条目）──
         m.toolCalls?.takeIf { it.isNotEmpty() }?.let { calls ->
@@ -170,20 +209,59 @@ object WebUiProjection {
     /**
      * 正文 → 块 JSON。
      *
-     * 对齐 `MessageRow` 的真实取法：先 [QuroVoiceStyle.strip] 去语音标记、
-     * 再 [extractInlineComponents] 抽走内联组件 JSON，最后交给 [parseBlocks]。
-     * 这三步**一步都不能省**，否则网页会比原生多出/少掉块
+     * 入参是**已经走过** [QuroVoiceStyle.strip] + [extractInlineComponents] 的文本
+     * （调用方 [message] 做，两个通道只解析一次）；这里只负责 [parseBlocks] 分派。
+     * 这三步一步都不能省，否则网页会比原生多出/少掉块
      * （内联组件 JSON 会裸露成正文文本，页面上就是一坨 JSON）。
      */
-    private fun blockList(text: String?): JSONArray {
+    internal fun blockList(text: String?): JSONArray {
         val arr = JSONArray()
         val t = text?.takeIf { it.isNotBlank() } ?: return arr
-        val clean = runCatching { QuroVoiceStyle.strip(t) }.getOrDefault(t)
-        val stripped = runCatching { extractInlineComponents(clean).first }.getOrDefault(clean)
-        runCatching { parseBlocks(stripped) }.getOrDefault(emptyList()).forEach { b ->
+        runCatching { parseBlocks(t) }.getOrDefault(emptyList()).forEach { b ->
             blockJson(b).let { arr.put(it) }
         }
         return arr
+    }
+
+    /**
+     * 消息时间 → 名字行显示文本，与原生 `formatChatTime`（ChatScreen.kt:8422）同规则：
+     * 当天 `HH:mm`，跨天 `MM/dd`。
+     */
+    private fun chatTimeText(ts: Long): String {
+        val now = Calendar.getInstance()
+        val c = Calendar.getInstance().also { it.timeInMillis = ts }
+        val sameDay = c.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
+            c.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
+        val pattern = if (sameDay) "HH:mm" else "MM/dd"
+        return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(ts))
+    }
+
+    /**
+     * 流式期间的**原生专属块**快照（任务 #255「边写边出界面」的服务端一半）。
+     *
+     * 与 [message] 共用同一条解析链（strip → extractInlineComponents → parseBlocks），
+     * 但只挑原生渲染的块（Mermaid / Aip / DynamicUi / SelfCard / MiniApp / Card）——
+     * 流式正文由前端 mini-markdown 画，这里补的正是它画不了的那部分。
+     *
+     * `sig` = 各块 JSON 长度串：围栏从「没闭合」到「闭合」、JSON 从半截到完整都会变，
+     * 纯文本增长不会变（调用方据此去重，不重复推）。
+     */
+    fun streamNativeBlocks(m: QuroMessage): JSONObject {
+        val arr = JSONArray()
+        val sig = StringBuilder()
+        val clean = m.content.takeIf { it.isNotBlank() }
+            ?.let { runCatching { QuroVoiceStyle.strip(it) }.getOrDefault(it) }
+        val stripped = clean?.let { runCatching { extractInlineComponents(it).first }.getOrDefault(it) }
+        runCatching { parseBlocks(stripped ?: "") }.getOrDefault(emptyList()).forEach { b ->
+            if (b is MsgBlock.Mermaid || b is MsgBlock.Aip || b is MsgBlock.DynamicUi ||
+                b is MsgBlock.SelfCard || b is MsgBlock.MiniApp || b is MsgBlock.Card
+            ) {
+                val j = blockJson(b)
+                arr.put(j)
+                sig.append(j.toString().length).append('|')
+            }
+        }
+        return JSONObject().put("sig", sig.toString()).put("blocks", arr)
     }
 
     /** 一种块 → 一个 JSON 对象。`t` 是块类型，接收端按它分派。 */
