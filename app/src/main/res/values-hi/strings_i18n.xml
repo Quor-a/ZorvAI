@@ -3928,4 +3928,12 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_04081">लिंक कॉपी करें</string>
     <string name="qk_04082">कॉपी हो गया</string>
     <string name="qk_04083">ब्राउज़र में खोलें</string>
+    <string name="qk_04085" formatted="false">प्रोजेक्ट करने के लिए कोई डायलॉग सत्र नहीं। पहले ZorvAI डायलॉग खोलें</string>
+    <string name="qk_04086" formatted="false">पोर्ट पर सुनना विफल रहा। बाद में फिर प्रयास करें</string>
+    <string name="qk_04087">रोकें</string>
+    <string name="qk_04088">Web UI पृष्ठभूमि सेवा</string>
+    <string name="qk_04089" formatted="false">इस फ़ोन के अलावा किसी और स्क्रीन पर वही डायलॉग खोलें। यहाँ केवल सेटिंग्स हैं: स्विच और पता। असली इंटरफ़ेस ब्राउज़र में है।</string>
+    <string name="qk_04090">पता</string>
+    <string name="qk_04091" formatted="false">सेवा शुरू नहीं हुई। स्विच चालू करने पर ZorvAI पृष्ठभूमि में बना रहता है, इसलिए वापस जाने या ऐप बदलने से यह लिंक नहीं टूटता।</string>
+    <string name="qk_04092" formatted="false">पता अभी उपलब्ध नहीं: एक बार ZorvAI डायलॉग खोलें ताकि सेवा के पास देने के लिए सामग्री हो।</string>
 </resources>

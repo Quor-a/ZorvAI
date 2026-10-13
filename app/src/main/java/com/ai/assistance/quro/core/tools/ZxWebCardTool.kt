@@ -82,6 +82,69 @@ object ZxWebCardQueue {
 }
 
 /**
+ * 组件契约索引（进程级缓存）。
+ *
+ * 🔴 存在的唯一理由：**在阻塞 [ZxWebCardTool] 那 120 秒之前**把两类必错拦下来。
+ *
+ * zxwidget 是「阻塞等用户交互」的形态：工具一进去就 `latch.await(120s)`。
+ * 若参数必错（组件名不在名册 / dsl 里一个可用值都没有），用户看到的是一块
+ * **空壳界面**（契约画出了表头与格子，格子里什么都没有）然后干等两分钟，
+ * 模型最后收到一句 timeout —— 这正是用户报的「zxwidget 根本渲染不了」。
+ *
+ * 拦在入口的收益是双向的：用户不再对着空盒子等，模型立刻拿到
+ * 「组件名不对，名册里最接近的是 X / 你应该先调 zx_catalog」并自行修正。
+ *
+ * 判据刻意**窄**：只拒「名册里没有的名字」与「一个标量都没有的 dsl」。
+ * 字段命名是否贴合契约**不在这里把关** —— 运行时已有自造字段名的兜底采集，
+ * 在这里多判一层只会把能画的数据判死。
+ */
+private object ZxContractIndex {
+    @Volatile private var root: JSONObject? = null
+    @Volatile private var names: Set<String> = emptySet()
+
+    fun ensure(context: Context): Boolean {
+        if (root != null) return true
+        return synchronized(this) {
+            if (root != null) return true
+            val r = runCatching {
+                JSONObject(context.assets.open("zx_contracts.json").bufferedReader().use { it.readText() })
+            }.getOrNull() ?: return false
+            val arr = r.optJSONArray("components") ?: return false
+            val set = HashSet<String>(arr.length() * 2)
+            for (i in 0 until arr.length()) arr.optString(i).takeIf { it.isNotBlank() }?.let { set.add(it) }
+            root = r
+            names = set
+            true
+        }
+    }
+
+    fun has(name: String): Boolean = names.contains(name)
+
+    /**
+     * 名册里最接近的几个名字，给模型一个能直接抄的替代。
+     * 先按「前缀相邻 / 共有词根」挑，挑不满再用字母序补足 ——
+     * 目的是让模型**看到真实存在的组件名**，而不是让它再猜一次。
+     */
+    fun nearest(name: String, limit: Int = 8): List<String> {
+        if (names.isEmpty()) return emptyList()
+        val lower = name.lowercase()
+        val body = lower.removePrefix("zx_")
+        val head = body.take(3)
+        val scored = names.map { n ->
+            val l = n.lowercase()
+            val b = l.removePrefix("zx_")
+            var score = 0
+            if (head.isNotEmpty() && b.startsWith(head)) score += 3
+            if (b.take(2) == body.take(2)) score += 2
+            if (l.contains(body) || body.contains(b)) score += 2
+            score to n
+        }.sortedWith(compareByDescending<Pair<Int, String>> { it.first }.thenBy { it.second })
+        val hit = scored.filter { it.first > 0 }.map { it.second }
+        return (hit + scored.map { it.second }).distinct().take(limit)
+    }
+}
+
+/**
  * zxwidget 动态交互界面工具 —— AI 侧入口。
  *
  * 交付形态（用户 2026-10-13 拍板，别改回去）：**不是卡片、不是弹窗**。
@@ -143,6 +206,29 @@ class ZxWebCardTool : QuroTool {
             return zxErr("zx_web_card 需要 dsl（组件的数据 JSON）")
         }
 
+        // ── 入口预检：把「必然画成空壳」的两种参数拦在阻塞之前 ──────────────
+        // 见 [ZxContractIndex] 的说明：不拦，就是一块空盒子 + 干等 120 秒 + 一句 timeout。
+        if (ZxContractIndex.ensure(context)) {
+            if (!ZxContractIndex.has(component)) {
+                val near = ZxContractIndex.nearest(component)
+                return JSONObject().put("ok", false)
+                    .put("error", "组件名 $component 不在 zxwidget 名册里（477 个组件，全部 zx_ 开头）")
+                    .put("nearest", org.json.JSONArray(near))
+                    .put("hint", "名册外的名字会落到通用渲染，画出来是一块空盒子。请先调 zx_catalog" +
+                        "（可传 component 拿字段契约与示例 DSL，或传 query 过滤），再用名册里的名字重调本工具。")
+                    .toString()
+            }
+        }
+        val dslObj = runCatching { JSONObject(dsl) }.getOrNull()
+        if (dslObj != null && !hasUsableValue(dslObj)) {
+            return JSONObject().put("ok", false)
+                .put("error", "dsl 里没有任何可用值（全为空对象/空数组/空串）")
+                .put("dslKeys", org.json.JSONArray(dslObj.keys().asSequence().toList()))
+                .put("hint", "请把要展示的数据真正填进 dsl：数组字段（items/rows/nodes…）至少一项、" +
+                    "或至少一个能显示的标量。空 dsl 会渲染成一块空盒子。")
+                .toString()
+        }
+
         val title = args.optString("title", "").trim().ifBlank { component }
         val timeout = args.optInt("timeout", 120).coerceIn(10, 600)
         val id = "zxcard_${System.currentTimeMillis()}_${(Math.random() * 10000).toInt()}"
@@ -171,6 +257,29 @@ class ZxWebCardTool : QuroTool {
 
     private fun zxErr(msg: String): String =
         JSONObject().put("ok", false).put("error", msg).toString()
+
+    /**
+     * dsl 里是否至少有一个「能显示出来的值」。
+     *
+     * 判据与运行时的可见性判据对齐：非空数组（≥1 项）算有、非空标量算有、
+     * 嵌套对象**递归看一层**也算有 —— 模型常写成 `{"data":{"items":[…]}}`，
+     * 那种是可用数据，不能误判成空。
+     *
+     * 只看「有没有值」，不看**字段名是否贴合契约** —— 后者由运行时的
+     * 自造字段名兜底采集（harvest）处理，在这里多判一层会把能画的数据判死。
+     */
+    private fun hasUsableValue(o: JSONObject): Boolean {
+        val keys = o.keys()
+        while (keys.hasNext()) {
+            when (val v = o.opt(keys.next())) {
+                null, JSONObject.NULL -> continue
+                is org.json.JSONArray -> if (v.length() > 0) return true
+                is JSONObject -> if (hasUsableValue(v)) return true
+                else -> if (v.toString().trim().isNotEmpty()) return true
+            }
+        }
+        return false
+    }
 
     companion object {
         private const val TAG = "ZxWebCardTool"

@@ -76,34 +76,42 @@ for (const p of apiPaths) {
   if (!used) console.log('  ℹ 未被前端调用（可能留给换端访问/调试）:', p);
 }
 
-/* ── 5. 投影边界：zxwidget（互动UI界面）不得出现在 Web UI 里 ──
+/* ── 5. zxwidget 在 Web UI 里的落点：**同一份运行时**，不许第二实现 ──
  *
- * 🔴 这一节的方向在本轮**反过来了**（用户 2026-10-13 原话：
- *    「你怎么老是把 zxwidget 和 webui 混合在一起」）。
- *    旧断言在检查「zxwidget 是否被正确接进 Web UI」（`/zxwidget.js` 有路由、
- *    chat.js 调用全局 compile()）——那正是**在守护缺陷**。
- *    现在要求的是：Web UI 侧一条 zx 痕迹都不许留。 */
-console.log('=== 5. zxwidget 与 Web UI 的边界（必须彻底分离）===');
-ok(fs.existsSync(path.join(ASSETS, 'zx/zxwidget.js')),
-  'zx/zxwidget.js 仍存在（互动UI界面是独立模块，本轮不该动它）');
-ok(!fs.existsSync(path.join(ASSETS, 'web-chat/zxwidget.css')),
-  'web-chat/ 下没有 zxwidget.css（它的样式不属于 Web UI）');
-for (const p of ['/zxwidget.js', '/zxwidget.css', '/zx_contracts.json']) {
-  ok(staticMap[p] === undefined, `静态路由里没有 ${p}`);
-}
-ok(!apiPaths.has('/api/interact'),
-  '接口里没有 /api/interact（交互回传属于原生对话框，不属于投影服务）');
-ok(!/LAYOUTS\.|resolveLayout|compile\(/.test(jsSrc),
-  'chat.js 里没有 zx 编译器/布局逻辑');
+ * 🔴 这一节的方向本轮再反了一次，说明白为什么，免得下一个人又把它翻回去：
+ *    · 更早一版：zxwidget 与 Web UI 混在一份文件里（`/zxwidget.js` 路由 + 全局 compile()）。
+ *    · 上一版：为了让两个模块解耦，Web UI 侧**一条 zx 痕迹都不留**。
+ *      结果是网页里那块「互动UI界面」退化成一个只写组件名的占位条 ——
+ *      用户原话：「web ui 没有 zorvAI 的所有功能」「zxwidget 根本渲染不了」。
+ *    · 本版（用户 2026-10-13 拍板）：**Web UI 要和 ZorvAI 看到同一个东西**，
+ *      所以 zxwidget 必须在网页上真画出来；但**不许另写一套渲染器** ——
+ *      两边共用同一份 `zx_card_runtime.html`（服务端 `/zx/shell` 就是它，
+ *      只把原生桥换成 postMessage）。既解决「画不出来」，也不重新引入漂移。
+ *
+ * 所以本节断言的是：**真画 + 同源**，而不是「不许出现 zx」。
+ */
+console.log('=== 5. zxwidget 在 Web UI 里的落点（真画 + 同源）===');
+ok(fs.existsSync(path.join(ASSETS, 'zx_card_runtime.html')),
+  'zx_card_runtime.html 仍在（两个对话框共用它）');
+ok(/"\/zx\/shell"/.test(serverSrc), '服务端有 /zx/shell 路由（网页用它承载每块界面）');
+ok(/buildWebShell/.test(serverSrc),
+  '/zx/shell 走 ZxWebCard.buildWebShell（与原生 buildHtml 同一份页壳）');
+ok(/ZxWebCard\.assets\(/.test(serverSrc),
+  '/zx/shell 取的是 ZxWebCard.assets（同一份运行时与契约，不是另一份拷贝）');
+ok(apiPaths.has('/api/interact'),
+  '有 /api/interact：界面里的操作能回到宿主（命中在等的工具就放行，否则作为用户消息发出）');
+ok(/submitByComponent/.test(serverSrc),
+  '/api/interact 复用 ZxWebCardQueue.submitByComponent（与原生 onInteract 同一套回路）');
+ok(!/LAYOUTS\.|resolveLayout/.test(jsSrc),
+  'chat.js 里没有 zx 布局/编译器逻辑（网页不另写一套渲染器）');
+ok(/iframe/.test(jsSrc) && /zx\/shell/.test(jsSrc),
+  'chat.js 用 iframe 引 /zx/shell（承载而非重写）');
+ok(/document\.querySelectorAll\("iframe\.zxf"\)/.test(jsSrc) || /iframe\.zxf/.test(jsSrc),
+  'chat.js 维护 iframe.zxf 集合（高度与交互的派发靠它反查来源）');
+ok(/m\.ui/.test(jsSrc) || /var list=m\.ui/.test(jsSrc),
+  'chat.js 真的消费投影里的 ui 字段（旧版从不读它 → 网页上永远看不到这块界面）');
 ok(!/zx_contracts/.test(jsSrc),
-  'chat.js 不请求 zx_contracts.json');
-/* 🔴 只看**资源引用**（src/href），不要扫全文：
-   本页的注释里**故意**提到 zxwidget（说明「它不属于本页」），
-   扫全文会把那段说明本身判成违规 —— 上一版校验器就是这么假阳性的。 */
-const htmlAssetRefs = [];
-for (const m of htmlSrc.matchAll(/(?:href|src)="([^"]+)"/g)) htmlAssetRefs.push(m[1]);
-ok(!htmlAssetRefs.some(u => /zx/i.test(u)),
-  'index.html 不引用任何 zx 资源（注释里的说明不算）');
+  'chat.js 不直接请求 zx_contracts.json（契约由服务端注入页壳，只有一处拼接）');
 
 /* ── 6. 投影协议：快照字段必须与渲染端用到的一致 ──
  * 投影的形状由 WebUiProjection 决定，前端按字段分派；
@@ -197,10 +205,20 @@ ok(/classList\.toggle\("dark"/.test(jsSrc),
   '主题用 classList.toggle 而非 className= 整体赋值（后者会抹掉 flow 降级类）');
 ok(/id="diag"/.test(htmlSrc) && /getElementById\("diag"\)/.test(jsSrc),
   '#diag 自检行两端都在（出问题时把实测数字摊到界面上）');
-const dialogSrc = fs.readFileSync(path.join(
-  ROOT, 'app/src/main/java/com/ai/assistance/quro/ui/chat/WebUiDialog.kt'), 'utf8');
-ok(/onConsoleMessage/.test(dialogSrc),
-  '宿主收页面 console → QuroDiag（否则页面自检在真机 logcat 里等于白写）');
+/* 页面自检必须有**回到宿主**的通道。
+   🔴 实现换过一次，别按旧写法去查 WebChromeClient：
+      改前页面跑在应用内嵌 WebView 里，靠 `onConsoleMessage` 收 console；
+      现在页面跑在**别的设备的浏览器**里，宿主看不见它的 console，
+      所以自检改为 `POST /api/diag` 由服务端写 QuroDiag（见 WebUiServer 的同名路由）。
+      没有这条通道，`guardCollapse` / `logHealth` 在真机上就等于白写。 */
+ok(apiPaths.has('/api/diag'),
+  '有 /api/diag：页面自检能回传宿主（否则真机白屏时开发者手上什么都没有）');
+ok(/QuroDiag\.log\(TAG, "页面自检/.test(serverSrc),
+  '/api/diag 落到 QuroDiag 日志（不是收下就丢）');
+ok(/function reportDiag/.test(jsSrc) && /"api\/diag"/.test(jsSrc),
+  'chat.js 有 reportDiag 并调 api/diag');
+ok(/reportDiag\(msg,"warn"\)/.test(jsSrc),
+  '高度塌陷时真的回传（自检结果不许只留在页面上）');
 
 console.log('---');
 console.log(bad === 0 ? '全部通过' : bad + ' 项不一致');

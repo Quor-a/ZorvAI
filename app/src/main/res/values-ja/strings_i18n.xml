@@ -3928,4 +3928,12 @@ Create a file or folder at top right</string>
     <string name="qk_04081">リンクをコピー</string>
     <string name="qk_04082">コピーしました</string>
     <string name="qk_04083">ブラウザで開く</string>
+    <string name="qk_04085" formatted="false">投影できるダイアログセッションがありません。先に ZorvAI ダイアログを開いてください</string>
+    <string name="qk_04086" formatted="false">ポートの待ち受けに失敗しました。しばらくして再試行してください</string>
+    <string name="qk_04087">停止</string>
+    <string name="qk_04088">Web UI バックグラウンドサービス</string>
+    <string name="qk_04089" formatted="false">スマートフォン以外の画面で同じダイアログを開きます。ここは設定のみ（スイッチとアドレス）で、実際の画面はブラウザ側にあります。</string>
+    <string name="qk_04090">アドレス</string>
+    <string name="qk_04091" formatted="false">サービスが起動していません。スイッチを入れると ZorvAI はバックグラウンドに常駐するため、戻ったり他のアプリに切り替えてもこのリンクは切れません。</string>
+    <string name="qk_04092" formatted="false">アドレスをまだ取得できません。ZorvAI ダイアログを一度開くと、サービスが提供できる内容を持ちます。</string>
 </resources>

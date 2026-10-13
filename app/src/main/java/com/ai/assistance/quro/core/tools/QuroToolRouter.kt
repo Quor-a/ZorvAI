@@ -94,6 +94,20 @@ class QuroToolRouter(
             // （与 image_gen 分工：确定性渲染 vs 厂商生图）。
             "codecanvas_probe", "codecanvas_script", "codecanvas_markup",
             "ui_card", "ui_widget", "ui_control",
+            // 🟥 zxwidget 动态交互界面（zx_web_card / zx_catalog）**必须常驻**。
+            //   它是「AI 把结构化结果画成可交互控件、直接长在对话框里」的唯一入口，
+            //   与 ui_card/ui_widget 同属「用户看得见的产出通道」，却漏在了常驻集之外。
+            //
+            //    漏掉的后果**不是「要 Model 先 discovery 一下」那么轻**：
+            //    PROGRESSIVE=true（默认）时每轮只下发 ALWAYS_ON ∪ loaded，
+            //    于是 tools 字段里根本没有 zx_web_card —— 模型即使从系统提示词的
+            //    工具清单里读到它、也照着调了，这次调用也落不到真实工具上
+            //    （真实表现：AI 说自己画了界面 / 退化成纯文本罗列 / 干脆不画），
+            //    用户报的「zxwidget 根本渲染不了」就是这个。
+            //    2026-10-13：渲染链路（[ZxWebCardTool] → 消息上的工具调用 →
+            //    [com.ai.assistance.quro.ui.chat.ZxWidgetInline]）整条是通的、
+            //    正是「入口没接线」把它废掉——本仓反复出现的同一类故障。
+            "zx_web_card", "zx_catalog",
             // 节点编辑器：AI 直接读写节点流工程（与工具中心面板共享 studio/flow/*.qne）
             "node_editor",
             "mcp_servers", "mcp_list_tools", "mcp_call", "mcp_deploy", "mcp_undeploy", "mcp_list_local",

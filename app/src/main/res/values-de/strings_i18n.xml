@@ -3928,4 +3928,12 @@ Ihre konfigurierten Modelle bleiben erhalten; Sie können den Modellnamen auch m
     <string name="qk_04081">Link kopieren</string>
     <string name="qk_04082">Kopiert</string>
     <string name="qk_04083">Im Browser öffnen</string>
+    <string name="qk_04085" formatted="false">Keine Dialog-Sitzung zum Projizieren. Bitte zuerst den ZorvAI-Dialog öffnen</string>
+    <string name="qk_04086" formatted="false">Port konnte nicht überwacht werden. Bitte später erneut versuchen</string>
+    <string name="qk_04087">Stoppen</string>
+    <string name="qk_04088">Web-UI-Hintergrunddienst</string>
+    <string name="qk_04089" formatted="false">Denselben Dialog auf einem anderen Bildschirm als diesem Telefon öffnen. Hier gibt es nur Einstellungen: den Schalter und die Adresse. Die eigentliche Oberfläche liegt im Browser.</string>
+    <string name="qk_04090">Adresse</string>
+    <string name="qk_04091" formatted="false">Dienst nicht gestartet. Sobald der Schalter aktiv ist, bleibt ZorvAI im Hintergrund aktiv, deshalb unterbricht Zurückgehen oder App-Wechsel diesen Link nicht.</string>
+    <string name="qk_04092" formatted="false">Adresse noch nicht verfügbar: Öffne den ZorvAI-Dialog einmal, damit der Dienst Inhalte hat.</string>
 </resources>

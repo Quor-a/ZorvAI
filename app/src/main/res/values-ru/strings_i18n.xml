@@ -3926,4 +3926,12 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_04081">Скопировать ссылку</string>
     <string name="qk_04082">Скопировано</string>
     <string name="qk_04083">Открыть в браузере</string>
+    <string name="qk_04085" formatted="false">Нет сессии диалога для проецирования. Сначала откройте диалог ZorvAI</string>
+    <string name="qk_04086" formatted="false">Не удалось начать прослушивание порта. Повторите попытку позже</string>
+    <string name="qk_04087">Остановить</string>
+    <string name="qk_04088">Фоновый сервис Web UI</string>
+    <string name="qk_04089" formatted="false">Откройте тот же диалог на экране, отличном от этого телефона. Здесь только настройки: переключатель и адрес. Настоящий интерфейс находится в браузере.</string>
+    <string name="qk_04090">Адрес</string>
+    <string name="qk_04091" formatted="false">Сервис не запущен. После включения переключателя ZorvAI остаётся в фоне, поэтому возврат или переключение приложений не разрывает эту ссылку.</string>
+    <string name="qk_04092" formatted="false">Адрес пока недоступен: откройте диалог ZorvAI один раз, чтобы сервису было что предоставить.</string>
 </resources>

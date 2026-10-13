@@ -333,15 +333,69 @@ var COLOR_KEYS= ["hex","color","c","tint"];
 var UNIT_KEYS = ["unit","u"];
 var ICON_KEYS = ["e","icon","emoji","i"];
 
-function pick(o, keys){ for(var i=0;i<keys.length;i++){ var v=o[keys[i]]; if(v!==undefined&&v!==null&&v!=="") return v; } return ""; }
+/* 归一化键名：小写、只留字母数字、去掉尾部的编号。
+   title2 / title_1 / TITLE → title，用来兜住模型自造的命名。 */
+function normKey(k){ return String(k).toLowerCase().replace(/[^a-z0-9]/g,"").replace(/[0-9]+$/,""); }
+/* 取槽位：先精确命中（保持既有行为与优先级），再归一命中。
+   🔴 只做精确比对是不够的：模型常给字段加后缀或换大小写
+      （title2 / owner_name / theCity），精确比对会全部落空，
+      于是每个对象里只有 harvest 捞到的第一个标量显示得出来 ——
+      表现就是「外壳照画、格子里空的」。 */
+function pick(o, keys){
+  var i, k, v;
+  for(i=0;i<keys.length;i++){ v=o[keys[i]]; if(v!==undefined&&v!==null&&v!=="") return v; }
+  var nk={}, ks=Object.keys(o);
+  for(i=0;i<ks.length;i++) nk[ks[i]]=normKey(ks[i]);
+  for(i=0;i<keys.length;i++){
+    var w=normKey(keys[i]);
+    if(!w) continue;
+    for(k in o){
+      v=o[k];
+      if(v===undefined||v===null||v==="") continue;
+      if(typeof v==="object") continue;
+      var n=nk[k];
+      if(n===w) return v;
+      /* 长键（>=3）允许包含匹配：owner_name / theCity */
+      if(w.length>=3 && n.indexOf(w)>=0) return v;
+    }
+  }
+  return "";
+}
+/* 兜底采集时要跳过的键：结构键（数组/子节点）、已在别的槽位取过的视觉键、
+   以及布局标记。不跳的话 txt 会把 "#5046E4" 当标题显示出来。 */
+var HARVEST_SKIP = ["items","rows","nodes","pts","steps","cols","columns","options","days","cells",
+  "slots","groups","blocks","marks","stages","fields","links","opts","cards","levels","series",
+  "people","labels","tags","tasks","children","kids","panels","sections","v","edges",
+  "hex","color","c","tint","e","icon","emoji","i","unit","u","x","y","w","h","pct","p",
+  "type","id","kind","k","_raw","ref","on","auto","must","me","done","checked"];
+/* 🔴 自造字段名的兜底采集。
+   契约词汇（n/v/t/k…）之外的字段名是**常态**——模型按业务起名（temp/high/low/city/
+   weather/day），而契约里没有这些词。此前这些数据**一个都不显示**：
+   组件外壳照画（格子、表头都在），格子里全是空的，
+   于是用户看到的就是「zxwidget 根本渲染不了 / 画出来是空的」。
+   现在补最后一跳：数值槽取「第一个像数字的标量」，文本槽取「第一个不是数字的标量」。
+   两者取值域互补，所以同一个值不会被两个槽位重复显示。 */
+function harvest(o, numOnly){
+  for(var k in o){
+    if(HARVEST_SKIP.indexOf(k)>=0) continue;
+    var v=o[k];
+    if(v===undefined||v===null||v==="") continue;
+    if(typeof v==="object") continue;
+    var sv=String(v);
+    var isNum=/^-?[0-9]+(\.[0-9]+)?$/.test(sv);
+    if(numOnly ? !isNum : isNum) continue;
+    return sv;
+  }
+  return "";
+}
 function isObj(v){ return v!==null&&typeof v==="object"&&!Array.isArray(v); }
 function isArr(v){ return Array.isArray(v); }
 function esc(s){
   return String(s===undefined||s===null?"":s)
     .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
-function txt(o){ var v=pick(o,TXT_KEYS); return v===""?"":String(v); }
-function val(o){ var v=pick(o,VAL_KEYS); return v===""?"":String(v); }
+function txt(o){ var v=pick(o,TXT_KEYS); if(v!=="") return String(v); return harvest(o,false); }
+function val(o){ var v=pick(o,VAL_KEYS); if(v!=="") return String(v); return harvest(o,true); }
 function sub(o){ var v=pick(o,SUB_KEYS); return v===""?"":String(v); }
 function who(o){ var v=pick(o,WHO_KEYS); return v===""?"":String(v); }
 function at(o){ var v=pick(o,AT_KEYS); return v===""?"":String(v); }
@@ -391,13 +445,15 @@ var LAYOUTS = {};
 
 /* ---- 4.1 表格：columns + rows ---- */
 LAYOUTS.table = function(dsl, comp, ctx){
-  var cols = isArr(dsl.columns)?dsl.columns:[];
+  /* cols 是模型常用的别名，一并认下（契约真名是 columns） */
+  var cols = isArr(dsl.columns)?dsl.columns:(isArr(dsl.cols)?dsl.cols:[]);
   var rows = isArr(dsl.rows)?dsl.rows:mainArr(dsl, comp);
   var box = el("div","sec"), wrap=el("div","tw"), tb=el("table","t");
   if(!cols.length && !rows.length){ box.appendChild(el("div","empty","暂无表格数据")); return box; }
+  function colKey(c){ return isObj(c)?(pick(c,["key","k","field","id"])||txt(c)||String(c)):String(c); }
   var thead=el("thead"), tr=el("tr");
   cols.forEach(function(c){
-    var h = isObj(c)?txt(c):String(c);
+    var h = isObj(c)?(txt(c)||colKey(c)):String(c);
     var th=el("th",null,esc(h)); tr.appendChild(th);
   });
   if(!cols.length && rows.length && isObj(rows[0])){
@@ -406,19 +462,44 @@ LAYOUTS.table = function(dsl, comp, ctx){
   thead.appendChild(tr); tb.appendChild(thead);
   var tbody=el("tbody");
   rows.forEach(function(r, ri){
-    if(!isObj(r)) return;
     var tr2=el("tr");
-    var cells = cols.length?cols.map(function(c){
-      var key = isObj(c)?(pick(c,["key","k","field","id"])||txt(c)):String(c);
-      return r[key];
-    }):Object.keys(r).map(function(k){ return r[k]; });
+    /* 🔴 旧码这里是 `if(!isObj(r)) return;` —— 把数组行**整行丢掉**。
+       而契约自己的 sample 就是数组行：
+         rows:[["服务器","1200","按月"],["域名","80","年付"]]
+       于是「照契约生成的表格」只剩表头、正文一格没有，也就是用户看到的空盒子。
+       现在：数组行按**位置**与 columns 对齐；标量行也照画，不许静默丢。 */
+    var cells;
+    if(isArr(r)){
+      var n = cols.length || r.length;
+      cells = [];
+      for(var ci0=0; ci0<n; ci0++) cells.push(r[ci0]);
+    } else if(isObj(r)){
+      if(cols.length){
+        var ks=Object.keys(r);
+        cells = cols.map(function(c, ci){
+          var key = colKey(c);
+          if(r[key]!==undefined) return r[key];
+          /* 列名与对象键对不上：先按位置退让，再如实留空 */
+          var hit;
+          ks.forEach(function(o2){
+            if(hit===undefined && String(normKey(o2)).indexOf(normKey(key))>=0 && normKey(key)) hit=r[o2];
+          });
+          if(hit!==undefined) return hit;
+          return ci<ks.length ? r[ks[ci]] : "";
+        });
+      } else {
+        cells = Object.keys(r).map(function(k){ return r[k]; });
+      }
+    } else {
+      cells = [r];
+    }
     cells.forEach(function(cv, ci){
       var td=el("td");
       if(typeof cv==="number") td.className="num";
-      td.innerHTML = isObj(cv)?esc(txt(cv)||JSON.stringify(cv)):esc(cv===null?"—":cv);
+      td.innerHTML = isObj(cv)?esc(txt(cv)||JSON.stringify(cv)):esc(cv===null?"—":(cv===undefined?"":cv));
       td.addEventListener("click", function(e){
         e.stopPropagation();
-        ctx.interact("cell", {row:ri, col:ci, key:(cols[ci]&&(isObj(cols[ci])?pick(cols[ci],["key","k"])||txt(cols[ci]):String(cols[ci])))||ci, value:cv});
+        ctx.interact("cell", {row:ri, col:ci, key:cols[ci]?colKey(cols[ci]):ci, value:cv});
       });
       tr2.appendChild(td);
     });
@@ -1131,6 +1212,9 @@ var OVERRIDE = {
   zx_compare:"table", zx_table:"table", zx_datatable:"table", zx_matrix:"table", zx_pivot:"table",
   zx_metrics:"metrics", zx_stat:"metrics", zx_stats:"metrics", zx_kpi:"metrics", zx_counter:"metrics",
   zx_list:"list", zx_feed:"list", zx_log:"list", zx_search:"list", zx_results:"list",
+  /* zx_tasklist 结构上声明了 tasks 数组，但语义是「一份清单」而不是排期，
+     没有起止字段可画 —— 显式归到 list，别交给结构推断去猜。 */
+  zx_tasklist:"list",
   zx_timeline:"stepper", zx_steps:"stepper", zx_stepper:"stepper", zx_stages:"stepper", zx_process:"stepper",
   zx_form:"form", zx_survey:"form", zx_gridform:"form",
   zx_choice:"choice", zx_options:"choice", zx_pick:"choice", zx_vote:"choice",
@@ -1164,7 +1248,18 @@ function resolveLayout(comp, dsl){
   if(arrs.indexOf("columns")>=0 && arrs.indexOf("rows")>=0) return "table";
   if(arrs.indexOf("fields")>=0) return "form";
   if(arrs.indexOf("cols")>=0 && (arrs.indexOf("cards")>=0||isArr(dsl.cols)&&isObj(dsl.cols[0])&&(isArr(dsl.cols[0].cards)||isArr(dsl.cols[0].items)))) return "kanban";
-  if(arrs.indexOf("tasks")>=0) return "gantt";
+  /* tasks → 甘特图**必须**有起止证据。
+     LAYOUTS.gantt 只读 s/e（或 from/to）；没有起止字段时每根条都塌成 0 宽，
+     画出来是一条空轴，用户看到的就是「画不出来」。
+     zx_gantt 的 fields 有 s/e；zx_tasklist 只有 t/dep/pri（一份清单）。 */
+  if(arrs.indexOf("tasks")>=0){
+    var tf=ct.fields||[], tl=mainArr(dsl, comp);
+    var head=isObj(tl[0])?tl[0]:null;
+    var hasSE = (tf.indexOf("s")>=0 && tf.indexOf("e")>=0)
+      || (head && (head.s!==undefined||head.from!==undefined)
+              && (head.e!==undefined||head.to!==undefined));
+    if(hasSE) return "gantt";
+  }
   if(arrs.indexOf("options")>=0 || arrs.indexOf("opts")>=0) return "choice";
   if(arrs.indexOf("nodes")>=0 && arrs.indexOf("edges")>=0) return "tree";
   if(arrs.indexOf("nodes")>=0 || arrs.indexOf("people")>=0 || arrs.indexOf("levels")>=0) return "tree";

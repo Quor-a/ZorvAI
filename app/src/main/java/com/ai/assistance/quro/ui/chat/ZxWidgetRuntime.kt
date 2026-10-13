@@ -164,6 +164,104 @@ object ZxWebCard {
     }
 
     /**
+     * Web 宿主桥（**只在 Web UI 的 iframe 里注入**，原生侧不注入）。
+     *
+     * 为什么必须有：页内的 [HEIGHT_REPORTER] 与整个运行时都只认
+     * `window.ZorvAIBridge` 这一个出口（那是单卡片页壳的历史命名，改了页面就调不到）。
+     * Web UI 侧没有 `addJavascriptInterface`，所以在这里**补一个同名实现**，
+     * 把两个出口翻译成 `postMessage` 发给父页面。
+     *
+     * 🔴 这就是「一套运行时、两个宿主」的落点：页面、CSS、编译器、高度回报
+     *    **逐字节相同**，差异只在这一个桥。若为 Web UI 另写一套渲染，
+     *    两边必然漂移，而漂移的症状是「网页上看得到、手机上画不出」这类最难查的分叉。
+     */
+    private val WEB_BRIDGE = """
+        <script>
+        (function(){
+          function post(msg){
+            try{ if(window.parent && window.parent!==window) window.parent.postMessage(msg,"*"); }catch(e){}
+          }
+          window.ZorvAIBridge = {
+            /* 与原生 @JavascriptInterface height(px) 同名同参 */
+            height: function(px){ post({__zx:"h", px: px}); },
+            /* 与原生 @JavascriptInterface interact(payload) 同名同参 */
+            interact: function(payload){ post({__zx:"i", payload: String(payload==null?"":payload)}); }
+          };
+        })();
+        </script>
+    """.trimIndent()
+
+    /**
+     * Web 宿主的入参引导：**载荷不走 URL 查询串，走 hash**。
+     *
+     * 理由：dsl 是模型给的任意 JSON，长且含 `&`/`#`/中文；塞进 `?c=..&d=..`
+     * 要么被截断、要么要服务端再解一次编码（多一处能错的地方）。
+     * hash 不参与请求、不落服务端日志、没有长度限制，父页面 `base64(JSON)` 一次，
+     * 子页面解回来即可。
+     *
+     * 🔴 `dsl` 必须在这里**归一成对象**，因为两侧给的形状不一样：
+     *    原生 [buildHtml] 传的是 `JSONObject(dsl)`（对象），
+     *    而 Web UI 的消息里 `ui[].dsl` 是**字符串**（投影直接搬工具参数）。
+     *    不归一的后果不是报错，而是运行时读不到 `title`/`rows` → 静默走
+     *    「暂无表格数据」那条兜底 —— 表现为「界面画出来了、但里面是空的」，
+     *    正是用户截图里那一态，且日志里一个字都没有。
+     *    这里的兜底语义与 buildHtml 的 `getOrElse { JSONObject().put("_raw", dsl) }`
+     *    严格对齐：能解析就解析，不能解析就把原文塞进 `_raw` 交给运行时如实显示。
+     */
+    private val WEB_HASH_BOOTSTRAP = """
+        <script>
+        (function(){
+          function fail(m){
+            try{ if(window.ZorvAI&&window.ZorvAI.render)
+              window.ZorvAI.render({component:"__error__",title:"界面数据无法解析",dsl:{message:String(m)}});
+            }catch(e){}
+          }
+          try{
+            var h = String(location.hash||"").replace(/^#/,"");
+            if(!h) return;
+            var json = decodeURIComponent(escape(atob(h)));
+            var p = JSON.parse(json);
+            p.dark = !!p.dark;
+            // dsl 允许是「对象」或「JSON 字符串」两种形状，统一成对象。
+            if(typeof p.dsl === "string"){
+              try{ p.dsl = JSON.parse(p.dsl || "{}"); }
+              catch(e2){ p.dsl = {_raw: String(p.dsl)}; }
+            }
+            if(!p.dsl || typeof p.dsl !== "object") p.dsl = {};
+            if(window.ZorvAI && window.ZorvAI.render) window.ZorvAI.render(p);
+            if(window.__zxReportHeight) setTimeout(window.__zxReportHeight, 60);
+          }catch(e){ fail(e && e.message ? e.message : e); }
+        })();
+        </script>
+    """.trimIndent()
+
+    /**
+     * Web UI 用的一整份页壳：**与原生同一个 `zx_card_runtime.html`**，
+     * 只把「原生桥」换成 [WEB_BRIDGE]、把「随 HTML 下发的载荷」换成 [WEB_HASH_BOOTSTRAP]。
+     *
+     * 服务端把它缓存在内存里（契约 195 KB，每块界面各读一遍纯浪费），
+     * 每个 zxwidget 块用 `<iframe src="/zx/shell#<base64>">` 承载。
+     */
+    fun buildWebShell(assetHtml: String, contractsJson: String): String {
+        if (assetHtml.isBlank()) return ""
+        val contractsSafe = contractsJson
+            .replace("</", "<\\/")
+            .replace("<!--", "<\\!--")
+        val withContracts = assetHtml.replace(
+            "/*__ZX_CONTRACTS__*/",
+            contractsSafe.ifBlank { "{}" },
+        )
+        val extra = INLINE_CSS + "\n" + WEB_BRIDGE + "\n" + WEB_HASH_BOOTSTRAP + "\n" + HEIGHT_REPORTER
+        val marker = "</body>"
+        val at = withContracts.lastIndexOf(marker)
+        return if (at >= 0) {
+            withContracts.substring(0, at) + extra + "\n" + withContracts.substring(at)
+        } else {
+            withContracts + extra
+        }
+    }
+
+    /**
      * 把一次 Web 交互整理成给模型看的一行结构化描述。
      *
      * 关键：**真实交互内容必须进正文**。只写「用户点了一下」模型无法接着推理，
