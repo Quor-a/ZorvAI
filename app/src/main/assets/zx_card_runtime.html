@@ -3,12 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>ZorvAI Web UI</title>
+<title>zxwidget · 动态交互界面</title>
 <style>
 /* ═══════════════════════════════════════════════════════════════
-   ZorvAI Web UI 设计系统
-   第三个对话框的网页渲染层：由 zx 组件契约编译生成，
-   不是预设卡片形状。所有视觉走 CSS 自定义属性，主题一键切换。
+   zxwidget 动态交互界面 · 单卡片渲染层
+   由 zx 组件契约编译生成，不是预设卡片形状。
+   所有视觉走 CSS 自定义属性，主题一键切换。
+   （它属于 zxwidget，不属于宿主对话框：本页只负责把一张卡片画好。）
    ═══════════════════════════════════════════════════════════════ */
 :root{
   --bg:#f6f7f9; --surface:#ffffff; --surface-2:#f1f3f6; --surface-3:#e9ecf1;
@@ -297,7 +298,7 @@ table.t td:last-child,table.t th:last-child{white-space:normal}
     <button class="hd-b" id="rawBtn">DSL</button>
   </div>
   <div id="body"></div>
-  <div class="foot">ZorvAI 第三个对话框 · Web UI · 交互会回传宿主</div>
+  <div class="foot">zxwidget 动态交互界面 · 交互会回传宿主</div>
 </div>
 
 <!-- zx 组件字段契约：宿主构建时把 zx_contracts.json 原文注入此处 -->
@@ -1252,7 +1253,7 @@ var ctx={
 };
 
 function render(){
-  $t.textContent = state.title || state.component || "Web UI";
+  $t.textContent = state.title || state.component || "zxwidget";
   $c.textContent = state.component || "";
   $body.innerHTML="";
   if(!state.component){

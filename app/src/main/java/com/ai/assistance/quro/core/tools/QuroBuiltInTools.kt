@@ -546,7 +546,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(VisualQuestionTool())   // 可视化问答弹窗
     r.register(VisualActionTool())     // 可视化操作弹窗
     r.register(VisualPopupTool())      // 自由可视化弹窗（固定UI组件）
-    r.register(ZxWebCardTool())        // Web UI 卡片（第三个对话框，zx 交互式卡片族）
+    r.register(ZxWebCardTool())        // zxwidget 卡片（动态交互界面，477 个 zx 组件）
     r.register(ZxCatalogTool())        // zx 组件名册与字段契约（做卡片前先查）
     r.register(VisualCustomPopupTool()) // AI自写UI可视化弹窗（完全自定义HTML）
     r.register(NodeEditorTool())       // 节点编辑器：AI 直接读写节点流工程（无需打开界面）

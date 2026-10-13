@@ -1,0 +1,307 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Web UI —— ZorvAI 对话框的 Web 复制品
+   ═══════════════════════════════════════════════════════════════════════
+
+   这个文件只管「聊天界面长什么样」。zxwidget（动态交互界面）的样式在
+   zxwidget.css 里，两者不混。
+
+   布局铁律（上一版就栽在这）：
+     · 竖向 flex 链上每一层都要 min-height:0，否则子元素撑不回去、滚不动；
+     · 横向 flex 里的输入框必须 flex:1 且 min-width:0，否则它只占内容宽度，
+       右边留一大片死白（上一版 #inp 只有 161px / 容器 504px 就是这个）；
+     · 用 dvh 而不是 100vh，避免移动端地址栏收放时底部被吃掉。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --surface-2:#f1f3f6; --surface-3:#e9ecf1;
+  --line:#e2e6ec; --line-strong:#cfd5de;
+  --fg:#12161c; --fg-2:#4a5462; --fg-3:#8a94a3;
+  --accent:#3b6cf6; --accent-fg:#ffffff; --accent-soft:#e8eeff;
+  --ok:#1f9d5a; --ok-soft:#e6f5ec;
+  --warn:#c77700; --warn-soft:#fdf1de;
+  --err:#d8423c; --err-soft:#fbe9e8;
+  --bubble-user:#3b6cf6; --bubble-ai:#ffffff;
+  --radius:16px; --radius-s:10px;
+  --shadow:0 1px 2px rgba(16,22,28,.05),0 4px 14px rgba(16,22,28,.05);
+  --tap:40px;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+}
+:root.dark{
+  --bg:#0d0f13; --surface:#171a20; --surface-2:#1e222a; --surface-3:#262b34;
+  --line:#2a2f39; --line-strong:#3a414e;
+  --fg:#eef1f6; --fg-2:#aeb6c4; --fg-3:#7d8595;
+  --accent:#6f9bff; --accent-fg:#0c1220; --accent-soft:#1b2438;
+  --ok:#3ecf8e; --ok-soft:#12291f;
+  --warn:#f0a63c; --warn-soft:#2b2113;
+  --err:#ff6b63; --err-soft:#2d1716;
+  --bubble-user:#3b6cf6; --bubble-ai:#1a1e25;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px rgba(0,0,0,.3);
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{height:100%}
+body{
+  margin:0;height:100%;
+  background:var(--bg);color:var(--fg);
+  font-family:var(--sans);font-size:15px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+#app{
+  flex:1;min-height:0;display:flex;flex-direction:column;
+  width:100%;max-width:820px;margin:0 auto;
+}
+button{font-family:inherit}
+
+/* ── 顶栏 ────────────────────────────────────────────────────────────── */
+#hd{
+  flex-shrink:0;display:flex;align-items:center;gap:10px;
+  padding:10px 12px;padding-right:52px;   /* 右侧留给宿主的关闭按钮 */
+  border-bottom:1px solid var(--line);background:var(--surface);
+}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--fg-3);flex-shrink:0}
+.dot.on{background:var(--ok);animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.hd-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+#title{
+  margin:0;font-size:15px;font-weight:650;line-height:1.3;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+#subtitle{
+  font-size:11px;color:var(--fg-3);font-family:var(--mono);line-height:1.3;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+#btn-new{
+  flex-shrink:0;height:32px;padding:0 12px;border-radius:9px;
+  border:1px solid var(--line);background:var(--surface-2);color:var(--fg-2);
+  font-size:12.5px;cursor:pointer;
+}
+#btn-new:active{background:var(--surface-3)}
+
+/* ── 消息流 ──────────────────────────────────────────────────────────── */
+#stream{
+  flex:1;min-height:0;min-width:0;overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+  padding:16px 14px 6px;
+  display:flex;flex-direction:column;gap:14px;
+}
+
+/* 空会话：给一个正经的欢迎块，不留一片白 */
+#empty{
+  margin:auto;padding:24px 18px;text-align:center;max-width:340px;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  animation:fade .25s ease-out;
+}
+#empty .badge{
+  width:44px;height:44px;border-radius:13px;background:var(--accent-soft);
+  color:var(--accent);display:flex;align-items:center;justify-content:center;
+  font-size:20px;font-weight:700;
+}
+#empty h2{margin:0;font-size:16px;font-weight:650}
+#empty p{margin:0;font-size:13px;color:var(--fg-3);line-height:1.65}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* 消息
+   横向必须能收敛：markdown 里的表格 min-content 宽度经常超过屏宽，
+   flex 子项默认不肯缩到 min-content 以下，于是整条消息把容器撑破、
+   右边一列连同工具卡的「完成/用时」一起被裁掉（截图里就是这样）。
+   min-width:0 + table-layout:fixed 是唯一稳的组合。 */
+.msg{display:flex;flex-direction:column;gap:6px;min-width:0;animation:fade .2s ease-out}
+.msg.user{align-items:flex-end}
+.msg.ai{align-items:stretch}
+
+.bub{
+  min-width:0;max-width:100%;
+  border-radius:var(--radius);padding:10px 13px;
+  box-shadow:var(--shadow);overflow-wrap:anywhere;word-break:break-word;
+}
+.bub .md{min-width:0;max-width:100%}
+.msg.user .bub{
+  background:var(--bubble-user);color:#fff;max-width:82%;
+  border-bottom-right-radius:5px;
+}
+.msg.ai .bub{
+  background:var(--bubble-ai);color:var(--fg);border:1px solid var(--line);
+  border-bottom-left-radius:5px;
+}
+.bub:empty{display:none}
+.bub .md p{margin:0 0 8px}
+.bub .md p:last-child{margin-bottom:0}
+.bub .md h1,.bub .md h2,.bub .md h3{margin:12px 0 6px;line-height:1.35}
+.bub .md h1{font-size:18px}.bub .md h2{font-size:16.5px}.bub .md h3{font-size:15.5px}
+.bub .md ul,.bub .md ol{margin:6px 0;padding-left:20px}
+.bub .md li{margin:2px 0}
+.bub .md code{
+  font-family:var(--mono);font-size:.88em;
+  background:var(--surface-2);border:1px solid var(--line);
+  border-radius:5px;padding:1px 4px;
+}
+.msg.user .bub .md code{background:rgba(255,255,255,.18);border-color:transparent;color:#fff}
+.bub .md pre{
+  margin:8px 0;padding:10px 12px;border-radius:var(--radius-s);
+  background:var(--surface-2);border:1px solid var(--line);
+  max-width:100%;overflow-x:auto;
+}
+.bub .md pre code{background:none;border:none;padding:0;font-size:12.5px;line-height:1.55}
+.bub .md blockquote{
+  margin:8px 0;padding:2px 0 2px 11px;border-left:3px solid var(--line-strong);
+  color:var(--fg-2);
+}
+.bub .md a{color:var(--accent)}
+.msg.user .bub .md a{color:#fff;text-decoration:underline}
+.bub .md table{
+  border-collapse:collapse;margin:8px 0;width:100%;font-size:13px;
+  table-layout:fixed;   /* 固定布局：单元格按容器宽换行，不再撑破气泡 */
+}
+.bub .md th,.bub .md td{
+  border:1px solid var(--line);padding:5px 8px;text-align:left;
+  overflow-wrap:anywhere;word-break:break-word;
+}
+.bub .md th{background:var(--surface-2);font-weight:600}
+.bub .md hr{border:none;border-top:1px solid var(--line);margin:10px 0}
+
+/* 流式光标 */
+.bub.streaming::after{
+  content:"";display:inline-block;width:7px;height:15px;margin-left:2px;
+  background:var(--accent);border-radius:1px;vertical-align:-2px;
+  animation:blink 1s steps(2,start) infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* 思考过程 */
+.think{
+  border:1px solid var(--line);border-radius:var(--radius-s);
+  background:var(--surface-2);overflow:hidden;
+}
+.think-h{
+  display:flex;align-items:center;gap:7px;padding:8px 11px;
+  font-size:12.5px;color:var(--fg-2);cursor:pointer;user-select:none;
+}
+.think-h .caret{transition:transform .15s;font-size:10px;color:var(--fg-3)}
+.think.open .think-h .caret{transform:rotate(90deg)}
+.think-b{
+  display:none;padding:0 12px 11px;font-size:12.5px;line-height:1.7;
+  color:var(--fg-2);white-space:pre-wrap;overflow-wrap:anywhere;
+  border-top:1px solid var(--line);padding-top:10px;
+}
+.think.open .think-b{display:block}
+.think-b:empty{display:none}
+
+/* 工具调用 */
+.tools{display:flex;flex-direction:column;gap:6px;min-width:0}
+.tool{
+  border:1px solid var(--line);border-radius:var(--radius-s);
+  background:var(--surface);overflow:hidden;
+}
+.tool-h{
+  display:flex;align-items:center;gap:8px;padding:8px 11px;
+  font-size:12.5px;cursor:pointer;user-select:none;
+}
+.tool-n{font-family:var(--mono);font-weight:600;flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tool-s{
+  flex-shrink:0;font-size:11px;padding:1px 7px;border-radius:20px;
+  background:var(--warn-soft);color:var(--warn);
+}
+.tool.ok .tool-s{background:var(--ok-soft);color:var(--ok)}
+.tool-d{flex-shrink:0;font-size:11px;color:var(--fg-3);font-family:var(--mono)}
+.tool-b{display:none;padding:0 12px 11px;border-top:1px solid var(--line)}
+.tool.open .tool-b{display:block}
+.tool-b pre{
+  margin:9px 0 0;padding:9px 10px;border-radius:8px;background:var(--surface-2);
+  font-family:var(--mono);font-size:11.5px;line-height:1.55;
+  overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;
+  max-height:280px;overflow-y:auto;
+}
+.tool-b .lb{font-size:10.5px;color:var(--fg-3);margin-top:9px;text-transform:uppercase;letter-spacing:.06em}
+
+/* 错误 */
+.err{
+  border:1px solid var(--err);background:var(--err-soft);color:var(--err);
+  border-radius:var(--radius-s);padding:9px 12px;font-size:13px;
+}
+
+/* 附件 */
+.atts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.atts:empty{display:none}
+.att-img{
+  max-width:200px;max-height:200px;border-radius:var(--radius-s);
+  border:1px solid var(--line);object-fit:cover;display:block;
+}
+
+/* 代码块（带复制） */
+.code{position:relative;margin:8px 0}
+.code>pre{margin:0}
+.code-c{
+  position:absolute;top:6px;right:6px;z-index:1;
+  padding:3px 9px;border-radius:7px;cursor:pointer;
+  border:1px solid var(--line);background:var(--surface);
+  color:var(--fg-2);font-size:11px;line-height:1.5;
+}
+.code-c:active{background:var(--surface-3)}
+.tok-c{color:var(--fg-3);font-style:italic}
+.tok-s{color:var(--ok)}
+.tok-n{color:var(--warn)}
+.tok-k{color:var(--accent);font-weight:600}
+
+/* zxwidget 卡片容器（卡片本身的样式在 zxwidget.css） */
+.zx-wrap{
+  min-width:0;max-width:100%;
+  border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--surface);overflow:hidden;box-shadow:var(--shadow);
+}
+
+/* ── 输入区 ──────────────────────────────────────────────────────────── */
+#composer{
+  flex-shrink:0;background:var(--bg);
+  padding:8px 14px calc(10px + env(safe-area-inset-bottom));
+  border-top:1px solid var(--line);
+}
+#attachments{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:7px}
+#attachments:empty{display:none}
+.att{
+  display:flex;align-items:center;gap:5px;max-width:200px;
+  padding:4px 9px;border-radius:20px;border:1px solid var(--line);
+  background:var(--surface);font-size:11.5px;color:var(--fg-2);
+}
+.att span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att img{width:26px;height:26px;border-radius:6px;object-fit:cover}
+
+.crow{display:flex;align-items:flex-end;gap:8px}
+/* 关键：flex:1 + min-width:0，否则输入框只占内容宽、右边留死白 */
+#inp{
+  flex:1;min-width:0;
+  min-height:var(--tap);max-height:168px;
+  padding:10px 13px;border-radius:14px;
+  border:1px solid var(--line-strong);background:var(--surface);color:var(--fg);
+  font-family:inherit;font-size:15px;line-height:1.45;
+  resize:none;overflow-y:auto;outline:none;
+}
+#inp::placeholder{color:var(--fg-3)}
+#inp:focus{border-color:var(--accent)}
+#send{
+  flex-shrink:0;width:var(--tap);height:var(--tap);border:none;border-radius:50%;
+  background:var(--accent);color:var(--accent-fg);
+  font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .12s,opacity .12s;
+}
+#send:active{transform:scale(.92)}
+#send:disabled{opacity:.4;cursor:default}
+#send.stop{background:var(--err)}
+#send.stop::before{content:"■";font-size:13px}
+
+#cfoot{
+  display:flex;justify-content:space-between;gap:10px;
+  padding:7px 3px 0;font-size:10.5px;color:var(--fg-3);
+}
+#cfoot .right{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 窄屏收敛 */
+@media (max-width:380px){
+  #hd{padding-left:10px;padding-right:48px}
+  #stream{padding:12px 10px 4px}
+  #composer{padding-left:10px;padding-right:10px}
+}

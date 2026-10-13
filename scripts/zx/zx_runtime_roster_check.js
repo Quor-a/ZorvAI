@@ -5,7 +5,7 @@
 // 用法（在仓库根目录执行）：
 //   node scripts/zx/zx_runtime_roster_check.js [运行时文件名]
 // 例：
-//   node scripts/zx/zx_runtime_roster_check.js                       # 默认测 zx_chat_runtime.html（第三个对话框）
+//   node scripts/zx/zx_runtime_roster_check.js                       # 默认测 zx_card_runtime.html（单卡片运行时）
 //   node scripts/zx/zx_runtime_roster_check.js zx_card_runtime.html  # 测卡片运行时
 //
 // 依赖：仅 node 内置模块（用桩 DOM 在 node 里跑运行时的 JS，不需要 WebView/浏览器）。
@@ -16,7 +16,7 @@ const ASSETS = path.resolve(__dirname, '../../app/src/main/assets') + '/';
 const fs = require('fs');
 const contracts = JSON.parse(fs.readFileSync(ASSETS + 'zx_contracts.json', 'utf8'));
 const real = new Set(contracts.components);
-for (const f of ['zx_chat_runtime.html', 'zx_card_runtime.html']) {
+for (const f of ['zx_card_runtime.html']) {
   const html = fs.readFileSync(ASSETS + '' + f, 'utf8');
   const m = /var\s+OVERRIDE\s*=\s*\{([\s\S]*?)\n\};/.exec(html);
   const c = /var\s+CONTAINERS\s*=\s*\[([\s\S]*?)\];/.exec(html);

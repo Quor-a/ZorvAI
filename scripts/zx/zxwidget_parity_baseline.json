@@ -1,0 +1,155 @@
+{
+  "__note": "zxwidget 两份编译器的已知漂移基线。由 zxwidget_parity_check.js --bless 生成。这不是「允许的差异」，而是「尚未收敛、且已冻结」：两侧任一改动都会让校验 FAIL，逼你同步另一边或再次 --bless（并说明为什么）。收敛掉一条就 --bless 一次。",
+  "module": "app/src/main/assets/zx/zxwidget.js",
+  "card": "app/src/main/assets/zx_card_runtime.html",
+  "total_blocks": {
+    "module": 58,
+    "card": 58
+  },
+  "blocks": {
+    "mainArr": {
+      "a": "701a7318b8d7",
+      "b": "a1911fb6aacc",
+      "na": 590,
+      "nb": 593
+    },
+    "LAYOUTS.table": {
+      "a": "570c5aef53d6",
+      "b": "66c9d1967599",
+      "na": 1254,
+      "nb": 1421
+    },
+    "LAYOUTS.metrics": {
+      "a": "39b17e98118e",
+      "b": "e97024f2a652",
+      "na": 735,
+      "nb": 679
+    },
+    "LAYOUTS.list": {
+      "a": "ddafdba20e42",
+      "b": "c468964e7d35",
+      "na": 823,
+      "nb": 1055
+    },
+    "LAYOUTS.stepper": {
+      "a": "d363a0abb488",
+      "b": "60506f618629",
+      "na": 741,
+      "nb": 742
+    },
+    "LAYOUTS.form": {
+      "a": "e1525eec8368",
+      "b": "6d210f3057a5",
+      "na": 2086,
+      "nb": 2051
+    },
+    "LAYOUTS.choice": {
+      "a": "4b777f1d0e32",
+      "b": "e5d456d39b9b",
+      "na": 488,
+      "nb": 513
+    },
+    "LAYOUTS.chart": {
+      "a": "5a31c1fbf8b7",
+      "b": "2027c4436894",
+      "na": 4150,
+      "nb": 2345
+    },
+    "LAYOUTS.gantt": {
+      "a": "82c8dae7b147",
+      "b": "f9929187915b",
+      "na": 1424,
+      "nb": 1356
+    },
+    "LAYOUTS.kanban": {
+      "a": "00f7bf762a98",
+      "b": "3fe7a2f8772d",
+      "na": 754,
+      "nb": 683
+    },
+    "LAYOUTS.calendar": {
+      "a": "4d3b3b61431d",
+      "b": "b756b0d8a0f3",
+      "na": 797,
+      "nb": 726
+    },
+    "LAYOUTS.tree": {
+      "a": "02f339471f99",
+      "b": "943cc3491915",
+      "na": 1137,
+      "nb": 1137
+    },
+    "LAYOUTS.terminal": {
+      "a": "5a8e810a853e",
+      "b": "14a2bdf542aa",
+      "na": 488,
+      "nb": 418
+    },
+    "LAYOUTS.diff": {
+      "a": "83adb8ce923d",
+      "b": "fe27607bf162",
+      "na": 709,
+      "nb": 663
+    },
+    "LAYOUTS.gauge": {
+      "a": "18a266e01cf0",
+      "b": "e11cc3a85649",
+      "na": 1187,
+      "nb": 1085
+    },
+    "LAYOUTS.media": {
+      "a": "37d76435920d",
+      "b": "2550563335f9",
+      "na": 461,
+      "nb": 464
+    },
+    "LAYOUTS.qr": {
+      "a": "35e57758d1c0",
+      "b": "da21a9301eb0",
+      "na": 414,
+      "nb": 417
+    },
+    "LAYOUTS.container": {
+      "a": "bd5150df57d0",
+      "b": "a1359c9271b3",
+      "na": 370,
+      "nb": 379
+    },
+    "LAYOUTS.generic": {
+      "a": "9874a9471231",
+      "b": "6c94b40a342f",
+      "na": 1448,
+      "nb": 1469
+    },
+    "LAYOUTS.spark": {
+      "a": "f6e2f8ebf11e",
+      "b": "e05272417268",
+      "na": 1736,
+      "nb": 1721
+    },
+    "LAYOUTS.objtree": {
+      "a": "fc71558bd831",
+      "b": "ff706c6e4e62",
+      "na": 1370,
+      "nb": 1322
+    },
+    "LAYOUTS.matrix": {
+      "a": "da061b8de1a5",
+      "b": "c369b5acb975",
+      "na": 1288,
+      "nb": 1291
+    },
+    "resolveLayout": {
+      "a": "6e31adbb9e5e",
+      "b": "55e576b4dad2",
+      "na": 2667,
+      "nb": 2859
+    },
+    "compile": {
+      "a": "d0a3e7186cc5",
+      "b": "a5f08f83bc6d",
+      "na": 265,
+      "nb": 270
+    }
+  }
+}

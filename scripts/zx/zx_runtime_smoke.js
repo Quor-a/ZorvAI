@@ -5,7 +5,7 @@
 // 用法（在仓库根目录执行）：
 //   node scripts/zx/zx_runtime_smoke.js [运行时文件名]
 // 例：
-//   node scripts/zx/zx_runtime_smoke.js                       # 默认测 zx_chat_runtime.html（第三个对话框）
+//   node scripts/zx/zx_runtime_smoke.js                       # 默认测 zx_card_runtime.html（单卡片运行时）
 //   node scripts/zx/zx_runtime_smoke.js zx_card_runtime.html  # 测卡片运行时
 //
 // 依赖：仅 node 内置模块（用桩 DOM 在 node 里跑运行时的 JS，不需要 WebView/浏览器）。
@@ -14,7 +14,7 @@ const ASSETS = path.resolve(__dirname, '../../app/src/main/assets') + '/';
 
 // 冒烟 v2：有 sample 用 sample；无 sample 按契约合成数据，覆盖全部 477 个组件的真实渲染路径
 const fs = require('fs'), vm = require('vm');
-const RUNTIME = process.argv[2] || 'zx_chat_runtime.html';
+const RUNTIME = process.argv[2] || 'zx_card_runtime.html';
 const html = fs.readFileSync(ASSETS + RUNTIME, 'utf8');
 const code = [...html.matchAll(/<script(?![^>]*application\/json)[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1])[0];
 const contracts = JSON.parse(fs.readFileSync(ASSETS + 'zx_contracts.json', 'utf8'));

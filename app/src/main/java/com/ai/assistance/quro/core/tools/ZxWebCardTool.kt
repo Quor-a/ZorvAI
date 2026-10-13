@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * 待弹出的 Web UI 卡片（ZorvAI 第三个对话框）。
+ * 待弹出的 zxwidget 动态交互界面。
  *
  * @param id       唯一 ID
  * @param component zx 组件名（zx_compare / zx_table / …）
@@ -31,7 +31,7 @@ data class ZxWebCardData(
 )
 
 /**
- * Web UI 卡片队列：工具线程提交，UI 线程（ChatScreen）消费。
+ * zxwidget 卡片队列：工具线程提交，UI 线程（ChatScreen）消费。
  *
  * 与 [VisualPopupQueue] 同一套思路——工具在后台线程阻塞等用户，
  * UI 侧 collect eventFlow 弹对话框，用户一交互就 submitResult 放行。
@@ -120,18 +120,18 @@ object ZxWebCardQueue {
 }
 
 /**
- * Web UI 卡片工具（ZorvAI 第三个对话框的 AI 侧入口）。
+ * zxwidget 卡片工具（ZorvAI 第三个对话框的 AI 侧入口）。
  *
  * 为什么必须有这个工具：此前只有「输入框工具菜单里的开关 + 一句提示词」，
  * 模型侧**没有任何可调用的入口**，它只会转用自己熟悉的 ui_card/ui_widget，
  * 第三个对话框因此永远弹不出来。本工具与 visual_popup 同族——
- * AI 调一次 → 弹 Web UI 卡片 → 用户在卡片上操作 → 交互结构化回传 → AI 接着推理。
+ * AI 调一次 → 弹 zxwidget 卡片 → 用户在卡片上操作 → 交互结构化回传 → AI 接着推理。
  */
 class ZxWebCardTool : QuroTool {
 
     override val name = "zx_web_card"
 
-    override val description = """Web UI 卡片（ZorvAI 第三个对话框）：弹出可交互卡片让用户当场操作。
+    override val description = """zxwidget 动态交互界面：弹出可交互卡片让用户当场操作。
 适用：需要用户在卡片上点选/填写/翻页/确认的场景（方案对比、数据表格、表单、时间线、看板、审批流、终端回放、仪表盘等）。
 参数：
 {
@@ -184,7 +184,7 @@ class ZxWebCardTool : QuroTool {
                 timeout = timeout, latch = latch, result = result,
             )
         )
-        Log.d(TAG, "弹出 Web UI 卡片: $component (ID: $id, 超时: ${timeout}s)")
+        Log.d(TAG, "弹出 zxwidget 卡片: $component (ID: $id, 超时: ${timeout}s)")
 
         val answered = latch.await(timeout.toLong(), TimeUnit.SECONDS)
         val summary = result.get()

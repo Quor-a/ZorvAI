@@ -751,7 +751,7 @@ fun ChatScreen(
     val pendingSelfCard = remember { mutableStateOf(false) }
     val pendingDynamicUi = remember { mutableStateOf(false) }
     val pendingAipDoc = remember { mutableStateOf(false) }
-    // 第三个对话框（Web UI 卡片）：选中后下一条消息强制 AI 走 zx 交互式卡片
+    // zxwidget 开关：选中后下一条消息强制 AI 走 zx 交互式卡片
     val pendingZxWebCard = remember { mutableStateOf(false) }
     // 定时任务管理入口
     var showSchedule by remember { mutableStateOf(false) }
@@ -837,7 +837,7 @@ fun ChatScreen(
     var visualAskPrompt by remember { mutableStateOf("") }
     var visualAskOptions by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    // 第三个对话框：Web UI 卡片（zx 交互式卡片族）。与上面两个同族，都由 UiNavigationBus 触发
+    // zxwidget 单卡片对话框（zx 交互式卡片族）。与上面两个同族，都由 UiNavigationBus 触发
     var showZxWebCard by remember { mutableStateOf(false) }
     // 第三个对话框：Web UI 对话框（ZorvAI 对话框的 Web UI 复制品，完整聊天端）
     var showZxWebChat by remember { mutableStateOf(false) }
@@ -1127,7 +1127,7 @@ fun ChatScreen(
                         showVisualAsk = true
                     }
 
-                    // 第三个对话框：Web UI 卡片。交互不回发固定文案，
+                    // zxwidget 单卡片对话框。交互不回发固定文案，
                     // 而是把「用户在卡片上做了什么」整理成结构化描述喂给模型。
                     is UiNavigationEvent.ZxWebCard -> {
                         if (event.component.isBlank() || event.dsl.isBlank()) {
@@ -2251,7 +2251,7 @@ fun ChatScreen(
             )
         }
 
-        // 第三个对话框：Web UI 卡片（zx 交互式卡片族）
+        // zxwidget 单卡片对话框（zx 交互式卡片族）
         if (showZxWebCard) {
             ZxWebCardDialog(
                 component = zxWebCardComponent,
@@ -2926,9 +2926,13 @@ fun ChatScreen(
                             Toast.makeText(ctx, if (pendingAipDoc.value) qstr(R.string.qk_00078) else qstr(R.string.qk_00079), Toast.LENGTH_SHORT).show()
                         },
                         onSelectZxWebCard = {
-                            // 第三个对话框（Web UI）：打开完整聊天端，同时给主对话框注入 zx 指令
-                            pendingZxWebCard.value = !pendingZxWebCard.value
+                            // 只打开 Web UI 对话框（ZorvAI 对话框的 Web 复制品）。
+                            // 刻意**不改** pendingZxWebCard：打开一个界面不该改变主对话框
+                            // 下一条消息的模型行为——那是另一件事，见下面的开关。
                             showZxWebChat = true
+                        },
+                        onToggleZxWidget = {
+                            pendingZxWebCard.value = !pendingZxWebCard.value
                             Toast.makeText(ctx, if (pendingZxWebCard.value) qstr(R.string.qk_04070) else qstr(R.string.qk_04071), Toast.LENGTH_SHORT).show()
                         },
                         pendingSelfCard = pendingSelfCard.value,
@@ -4816,6 +4820,7 @@ private fun Composer(
     onSelectDynamicUi: () -> Unit = {},
     onSelectAipDoc: () -> Unit = {},
     onSelectZxWebCard: () -> Unit = {},
+    onToggleZxWidget: () -> Unit = {},
     pendingSelfCard: Boolean = false,
     pendingDynamicUi: Boolean = false,
     pendingAipDoc: Boolean = false,
@@ -5002,6 +5007,7 @@ private fun Composer(
                 onSelectAipDoc = onSelectAipDoc,
                 pendingZxWebCard = pendingZxWebCard,
                 onSelectZxWebCard = onSelectZxWebCard,
+                onToggleZxWidget = onToggleZxWidget,
             )
             if (voiceInputEnabled) {
                 IconButton(onClick = onVoiceInput, Modifier.size(44.dp).padding(2.dp)) {
@@ -5095,6 +5101,7 @@ private fun ChatToolMenu(
     onSelectDynamicUi: () -> Unit,
     onSelectAipDoc: () -> Unit,
     onSelectZxWebCard: () -> Unit,
+    onToggleZxWidget: () -> Unit,
 ) {
     var showToolMenu by remember { mutableStateOf(false) }
     Box {
@@ -5222,13 +5229,34 @@ private fun ChatToolMenu(
                     onSelectAipDoc()
                 },
             )
-            // 第三个对话框：Web UI 卡片（zx 交互式卡片族，477 个组件）
+            // 第三个对话框：Web UI —— ZorvAI 对话框的 Web 复制品。
+            // 它不是「卡片」：zxwidget（动态交互界面）是另一个东西，
+            // 只是被这个对话框和 ZorvAI 原生对话框一起支持。
             DropdownMenuItem(
                 text = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        LucideIcon("layout-grid", null, Modifier.size(18.dp), tint = cs.primary)
+                        // 必须是 iconRes() 里登记过的名字：写不存在的名字会静默
+                        // 落到 else -> ic_x，那一行就显示成一个大叉（这里踩过）
+                        LucideIcon("maximize", null, Modifier.size(18.dp), tint = cs.primary)
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.qk_04072))
+                    }
+                },
+                onClick = {
+                    showToolMenu = false
+                    onSelectZxWebCard()
+                },
+            )
+            // zxwidget 能力开关 —— 与上一条是**两件事**：
+            // 上面那条是「打开 Web UI 对话框（只读的 Web 复制品）」，
+            // 这条才是「本轮让模型用 zxwidget 动态交互界面作答」。
+            // 曾经两者焊在一个 onClick 里，于是「打开一个界面」顺手改掉了主对话框的模型行为。
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LucideIcon("blocks", null, Modifier.size(18.dp), tint = cs.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.qk_04076))
                         if (pendingZxWebCard) {
                             Spacer(Modifier.width(8.dp))
                             Icon(Icons.Filled.Check, stringResource(R.string.qk_00168), Modifier.size(16.dp), tint = cs.primary)
@@ -5237,7 +5265,7 @@ private fun ChatToolMenu(
                 },
                 onClick = {
                     showToolMenu = false
-                    onSelectZxWebCard()
+                    onToggleZxWidget()
                 },
             )
         }
@@ -7275,7 +7303,7 @@ fun handleDynamicUiAction(
             )
         }
 
-        // Web UI 卡片（第三个对话框）：WebView 承载 zx 交互式卡片，
+        // zxwidget 卡片（第三个对话框）：WebView 承载 zx 交互式卡片，
         // 卡片内交互由 ZxWebCard.summarize 整理成结构化描述回发模型。
         is QuroZxWebCardAction -> {
             val component = action.component.ifBlank { values["component"] ?: "" }
