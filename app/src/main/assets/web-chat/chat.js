@@ -225,6 +225,19 @@ function blockNode(b){
     }
     case "native":{
       var n=el("div","native");
+      var R=window.WebRenderers;
+      if(R&&b.kind&&b.data){
+        var darkNow=!!state.dark;
+        if(b.kind==="mermaid"&&R.renderMermaid)R.renderMermaid(n,b.data,darkNow);
+        else if(b.kind==="aip"&&R.renderAip)R.renderAip(n,b.data);
+        else if(b.kind==="card"&&R.renderCard)R.renderCard(n,b.data);
+        else if(b.kind==="dynamic_ui"&&R.renderDynamicUi)R.renderDynamicUi(n,b.data);
+        else if(b.kind==="self_card"&&R.renderSelfCard)R.renderSelfCard(n,b.data);
+        else if(b.kind==="miniapp"&&R.renderMiniApp)R.renderMiniApp(n,b.data);
+        else return n;
+        return n;
+      }
+      /* 渲染器未就绪 / 数据缺失：保留占位说明，不破坏布局 */
       var nt=el("div","nt",NATIVE_LABEL[b.kind]||("原生渲染："+b.kind));
       n.appendChild(nt);
       if(b.source){
