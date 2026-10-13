@@ -56,6 +56,11 @@ window.addEventListener("load", function(){
  * 而截图只截 504 里的一段），于是"右边被切掉"这种假象会骗人——我上一轮就据此
  * 误判过一次溢出。用固定 390px 的 iframe 把应用按真手机宽度排版，
  * 同源可直接测量，截图也所见即所得。 */
+/* 🔴 用它验布局可以，用它验**主题**会骗人（2026-10-13 实测）：
+ *    同一时刻、同一份快照下，`/` 直连截图是深色正确（#16130F 底 + 浅字 + CMS 绿 chip），
+ *    而 `/__frame` 里那个 iframe 截出来是**浅色**——DOM dump 却显示 `<html class="dark">` 已生效。
+ *    即无头 Chrome 对 iframe 的合成帧落后于其文档状态，截到的是 JS 跑之前的首绘。
+ *    所以：布局/溢出用本夹具，主题一律直接截 `/`（真实 WebView 加载的也正是 `/`，不经 iframe）。 */
 const FRAME = (w, h) => `<!doctype html><html><head><meta charset="utf-8">
 <title>frame</title><style>
 html,body{margin:0;background:#5b6472}
@@ -121,6 +126,22 @@ window.addEventListener("load",function(){
     say("底栏链接 = \\""+lk+"\\"");
     ok(/^http:\\/\\/\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+\\/$/.test(lk)&&lk.indexOf("127.0.0.1")<0,
        "底栏给出的是**局域网**直链（不是 127.0.0.1）");
+
+    // 权限模式条 = 原生 PermissionModeBar 摘要行的投影。
+    // 🔴 夹具的 composer 全是**非默认值**，所以这里每一条都在证明
+    //    「页面确实消费了快照字段」而不是「恰好撞上页面自己的默认值」。
+    var cms=d.getElementById("cms").textContent;
+    var priv=d.getElementById("priv").textContent;
+    var ws=d.getElementById("ws").textContent;
+    say("CMS chip = \\""+cms+"\\" / 特权 chip = \\""+priv+"\\" / "+ws);
+    ok(cms==="CMS:允许","CMS 三态由快照投影（allow → 允许）");
+    ok(priv==="特权:禁止","特权三态由快照投影（deny → 禁止）");
+    ok(d.getElementById("priv").className.indexOf("deny")>=0,
+       "禁止态带 deny 配色类（红=AI 会被拒，颜色在这里有语义）");
+    ok(ws==="工作区:QuroWorkspace","工作区显示 basename 而非全路径");
+    var ar=null,mds=d.querySelectorAll(".mode[data-mode]");
+    for(var q=0;q<mds.length;q++){ if(mds[q].getAttribute("data-mode")==="autoRead")ar=mds[q]; }
+    ok(!!ar&&ar.className.indexOf("on")>=0,"自动朗读 chip 反映快照的 autoRead=true");
 
     // 正文块序列
     var ai=msgs[msgs.length-1];
@@ -195,9 +216,16 @@ const STATIC = {
 const SNAPSHOT = {
   ok: true,
   bar: { title: 'ZorvAI · Web UI', model: 'deepseek-v4-pro', persona: '默认人格' },
+  /* 🔴 这里的值**刻意全部取非默认值**。
+     页面自己的 state 默认是 {deepThink:false,autoRead:false,cms:"ask",priv:"ask",workspace:""}；
+     如果夹具也用这一套默认值，那么「页面读到了快照」与「页面压根没读、用的就是自己的默认值」
+     两种情况的输出**完全一样**，E2E 会全绿地放过一个死投影。
+     取反之后，任何一个字段没被消费都会当场 FAIL。 */
   composer: {
     busy: false, deepThink: true, autoSaveMemory: false,
-    subAgent: false, autoRead: false, vision: false, workspace: '',
+    subAgent: false, autoRead: true, vision: false,
+    workspace: '/storage/emulated/0/QuroWorkspace',
+    cms: 'allow', priv: 'deny',
   },
   dark: true,
   lan: 'http://192.168.1.7:3080/',

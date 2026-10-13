@@ -68,13 +68,32 @@ var $stream=document.getElementById("stream"),
     $persona=document.getElementById("persona"),
     $cnt=document.getElementById("cnt"),
     $link=document.getElementById("link"),
-    $modes=document.getElementById("modes");
+    $modes=document.getElementById("modes"),
+    $cms=document.getElementById("cms"),
+    $priv=document.getElementById("priv"),
+    $ws=document.getElementById("ws");
 
 var state={
   bar:{title:"ZorvAI",model:"",persona:""},
-  composer:{busy:false,deepThink:false,autoSaveMemory:false,subAgent:false,vision:false},
+  composer:{
+    busy:false,deepThink:false,autoSaveMemory:false,subAgent:false,autoRead:false,
+    vision:false,workspace:"",cms:"ask",priv:"ask"
+  },
   dark:false,lan:"",port:0,messages:[]
 };
+
+/* 三态策略的显示词 —— 与原生 qk_03235 / qk_03236 / qk_03166 逐字一致。
+   契约里 cms/priv 投的是 `allow|deny|ask` 这种**规范化名**（投影只投状态、不投文案），
+   所以中文文案在这里落地；这里改字只影响本页，不会反向污染原生。
+   缺值一律按 ask 处理：宁可显示「询问」（最保守的读法），
+   也不要把未知状态画成「允许」——那会让用户以为 AI 可以放开动手。 */
+var POLICY_WORD={allow:"允许",deny:"禁止",ask:"询问"};
+
+/** 规范化策略值 → 三态之一的 key；未知值退化为 "ask"。 */
+function policyKey(v){
+  var k=String(v===undefined||v===null?"":v);
+  return POLICY_WORD[k]?k:"ask";
+}
 var nodes={};          /* id -> 渲染缓存 */
 var emptyBox=null;
 var pollTimer=null;
@@ -119,12 +138,23 @@ function renderChrome(){
   $send.setAttribute("aria-label",state.composer.busy?"停止":"发送");
   // 底栏链接：从**别的设备**打开这个投影的入口（127.0.0.1 在别的设备上是打不开的）
   $link.textContent=state.lan||(state.port?("127.0.0.1:"+state.port):"");
-  // 权限模式开关状态
-  var modes=$modes.querySelectorAll(".mode");
+  // 权限模式开关状态（五个布尔 chip）
+  var modes=$modes.querySelectorAll(".mode[data-mode]");
   for(var i=0;i<modes.length;i++){
     var k=modes[i].getAttribute("data-mode");
     if(state.composer[k])modes[i].classList.add("on"); else modes[i].classList.remove("on");
   }
+  // 三态策略 chip（CMS / 特权）。文案格式照抄原生摘要行：
+  // `CMS:允许`（前缀在原生里是硬编码的）与 `特权:允许`（qk_03224 = "特权:%1$s"）。
+  var ck=policyKey(state.composer.cms), pk=policyKey(state.composer.priv);
+  $cms.textContent="CMS:"+POLICY_WORD[ck];
+  $cms.className="mode tri "+ck;
+  $priv.textContent="特权:"+POLICY_WORD[pk];
+  $priv.className="mode tri "+pk;
+  // 工作区（原生只显示 basename，这里保持一致）
+  var ws=String(state.composer.workspace||"");
+  $ws.textContent=ws?("工作区:"+ws.split("/").pop()):"工作区";
+  if(ws)$ws.classList.add("on"); else $ws.classList.remove("on");
   showEmpty(state.messages.length===0);
 }
 
@@ -442,13 +472,17 @@ $send.addEventListener("click",function(){ state.composer.busy?doStop():doSend()
 document.getElementById("btn-new").addEventListener("click",doNew);
 
 /* 权限模式开关：本页只做**只读投影**——点了不改模型行为，避免「网页上一点，
-   把主对话框下一条消息的行为改掉」这种跨介质副作用。原生侧才是配置入口。 */
+   把主对话框下一条消息的行为改掉」这种跨介质副作用。原生侧才是配置入口。
+
+   注意这排 chip 显示的是**真实状态**（每次快照现读原生 prefs / 策略），
+   不是装饰：CMS 与特权直接决定 AI 能不能调用能力、能不能提权。
+   所以点不动的时候必须说清楚**去哪儿改**，否则用户会以为状态是坏的。 */
 $modes.addEventListener("click",function(e){
   var b=e.target;
   while(b&&b!==$modes){
     if(b.className&&String(b.className).indexOf("mode")>=0){
-      $cnt.textContent="权限开关请在 ZorvAI 原生对话框里设置";
-      setTimeout(renderChrome,1600);
+      $cnt.textContent="这里是投影，开关请回 ZorvAI 原生对话框设置";
+      setTimeout(renderChrome,1800);
       return;
     }
     b=b.parentNode;

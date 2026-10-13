@@ -2,6 +2,9 @@ package com.ai.assistance.quro.ui.chat
 
 import android.content.Context
 import com.ai.assistance.quro.core.QuroMessage
+import com.ai.assistance.quro.core.policy.QuroPolicyStore
+import com.ai.assistance.quro.core.tools.QuroVoiceFeaturePrefs
+import com.ai.assistance.quro.core.tools.WorkspacePreferences
 import com.ai.assistance.quro.ui.QuroChatViewModel
 import com.ai.assistance.quro.util.QuroDiag
 import org.json.JSONArray
@@ -286,13 +289,28 @@ class QuroWebUiServer(
             .put("bar", WebUiProjection.bar(title, modelName, personaName))
             .put(
                 "composer", WebUiProjection.composer(
+                    // ── 真源在 ViewModel 的四个 ──
                     busy = vm.busy.value,
                     deepThink = vm.thinking.value,
                     autoSaveMemory = vm.autoSaveMemory.value,
                     subAgent = vm.subAgentEnabled.value,
-                    autoRead = false,      // TODO: 接通原生 PermissionModeBar 的 autoRead 状态
                     vision = vm.visionEnabled.value,
-                    workspace = "",
+
+                    // ── 真源在持久化 prefs 的四个 ──
+                    // 🔴 这四个**不是** ViewModel 状态，而是原生 `ChatScreen` 的局部
+                    //    `remember` state，各自的真源都是 prefs（原生每次切换都写回）：
+                    //      autoRead  → QuroVoiceFeaturePrefs（ChatScreen.toggleAutoRead）
+                    //      workspace → WorkspacePreferences（WorkspaceSelectionDialog 回调）
+                    //      cms/priv  → QuroPolicyStore（PermissionModeBar 的策略 chips）
+                    //
+                    //    这里**每次快照现读**，绝不在服务里存一份缓存副本。缓存会在原生切换后
+                    //    变旧，症状正是「手机上开了、网页这边还显示关着」，而且零报错——
+                    //    查起来得横跨两个介质，属于典型的高代价低收益故障。
+                    //    现读的代价只是四次 SharedPreferences 命中，随快照频率（最快 180ms）无压力。
+                    autoRead = QuroVoiceFeaturePrefs.getAutoRead(context),
+                    workspace = WorkspacePreferences.getCurrentWorkspace(context).orEmpty(),
+                    cms = QuroPolicyStore.getCms(context),
+                    priv = QuroPolicyStore.getPriv(context),
                 )
             )
             .put("dark", dark)

@@ -46,11 +46,23 @@
 
   <!-- 底栏 = 原生 PermissionModeBar + 输入行的投影 -->
   <footer id="composer">
+    <!-- 权限模式条 = 原生 ChatPermissionModeBar **收起态那一行摘要**的投影。
+         顺序与文案逐项对齐原生（qk_03219 / qk_03220 / qk_03221 / qk_03069 / qk_03223
+         / CMS / qk_03224 / qk_00025），一个不多一个不少：
+         上一版这里写的是「自动记忆」「视觉」，而原生是「记忆」「看懂屏幕」——
+         标签自己走偏也是投影失真，虽然不报错，但用户对着两边看就是两个说法。
+         CMS / 特权 是原生**常驻**显示的两个标签（它们直接决定 AI 能不能动能力），
+         投影少投就等于网页看到的权限状态是残缺的。
+         工作区在原生只出现在展开区；本页没有展开态，故并到同一行末尾。 -->
     <div id="modes" class="modes">
       <button type="button" class="mode" data-mode="deepThink">深度思考</button>
-      <button type="button" class="mode" data-mode="autoSaveMemory">自动记忆</button>
+      <button type="button" class="mode" data-mode="autoSaveMemory">记忆</button>
       <button type="button" class="mode" data-mode="subAgent">子智能体</button>
-      <button type="button" class="mode" data-mode="vision">视觉</button>
+      <button type="button" class="mode" data-mode="autoRead">自动朗读</button>
+      <button type="button" class="mode" data-mode="vision">看懂屏幕</button>
+      <button type="button" class="mode tri" id="cms">CMS</button>
+      <button type="button" class="mode tri" id="priv">特权</button>
+      <button type="button" class="mode" id="ws">工作区</button>
     </div>
     <div class="crow">
       <textarea id="inp" rows="1" placeholder="发消息…" autocomplete="off"

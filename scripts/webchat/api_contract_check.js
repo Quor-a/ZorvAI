@@ -119,6 +119,49 @@ for (const field of ['bar', 'composer', 'messages', 'blocks', 'tools', 'ui', 'at
     `投影层产出 ${field}`);
   ok(new RegExp(field).test(jsSrc), `前端消费 ${field}`);
 }
+/* 权限模式条：把 composer 的**产出字段**与页面的**chip** 做双向核对。
+ *
+ * 为什么单拎出来：这一排 chip 是「投了没人画」与「画了没人投」两种死代码的高发地。
+ *   · 投了没人画 → 用户看不到状态（本轮开盘时的 autoRead / workspace 就是这类，
+ *     服务里写死 false/""，页面连 chip 都没有）；
+ *   · 画了没人投 → chip 永远停在页面自己的默认值，看着有、其实一动不动。
+ * 单向核对抓不到第二种，所以这里两个方向都跑。 */
+console.log('=== 6b. 权限模式条双向核对 ===');
+const composerBody = projSrc.match(/fun composer\(([\s\S]*?)private fun policyName/);
+if (!composerBody) {
+  ok(false, '抽不到 WebUiProjection.composer 的函数体');
+} else {
+  const emitted = new Set();
+  for (const m of composerBody[1].matchAll(/\.put\("([a-zA-Z]+)"/g)) emitted.add(m[1]);
+  console.log('  composer 投出:', [...emitted].join(' '));
+  for (const f of emitted) {
+    ok(new RegExp('\\b' + f + '\\b').test(jsSrc), `投出的 ${f} 被前端消费`);
+  }
+  // 反向：布尔 chip 必须都有字段投它
+  const chips = [];
+  for (const m of htmlSrc.matchAll(/data-mode="([a-zA-Z]+)"/g)) chips.push(m[1]);
+  console.log('  页面布尔 chip:', chips.join(' '));
+  for (const c of chips) {
+    ok(emitted.has(c), `chip ${c} 有对应投影字段`);
+  }
+  // 三态策略：两个 chip 必须都在，且投影投的是规范化名（不是中文文案）
+  ok(emitted.has('cms') && emitted.has('priv'),
+    'CMS / 特权 两个三态策略都被投影（权限状态不许残缺）');
+  ok(/QuroPolicy\.(ALLOW|DENY|ASK)\s*->\s*"(allow|deny|ask)"/.test(projSrc),
+    '策略投的是 allow/deny/ask 规范化名（文案留给接收端，换语言不会错）');
+  // 真源：这四个不是 ViewModel 状态，服务层必须从 prefs / 策略库现读
+  for (const [src, why] of [
+    ['QuroVoiceFeaturePrefs\\.getAutoRead', 'autoRead'],
+    ['WorkspacePreferences\\.getCurrentWorkspace', 'workspace'],
+    ['QuroPolicyStore\\.getCms', 'cms'],
+    ['QuroPolicyStore\\.getPriv', 'priv'],
+  ]) {
+    ok(new RegExp(src).test(serverSrc), `${why} 的真源现读（不是写死占位）`);
+  }
+  ok(!/autoRead\s*=\s*false\s*,/.test(serverSrc) && !/workspace\s*=\s*""\s*,/.test(serverSrc),
+    '服务层没有残留的写死占位');
+}
+
 // 块类型：投影层投出的每种 t，前端必须都有分支
 const blockTypes = new Set();
 for (const m of projSrc.matchAll(/put\("t",\s*"([a-z_]+)"\)/g)) blockTypes.add(m[1]);

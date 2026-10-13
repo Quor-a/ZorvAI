@@ -194,6 +194,23 @@ body{
   border-radius:999px;padding:4px 11px;cursor:pointer;white-space:nowrap;
 }
 .mode.on{background:var(--primary-soft);border-color:var(--primary);color:var(--primary)}
+
+/* 三态策略 chip（CMS / 特权）：配色与文案都照抄原生摘要行的 SummaryTag ——
+   允许=绿、禁止=红、询问=主题色。颜色在这里有语义（红=AI 会被拒），
+   不是装饰，所以单独给 token，不混进 .mode.on 那一套。 */
+:root{
+  --policy-allow-bg:rgba(52,199,89,.18);
+  --policy-allow-fg:#1A7A38;      /* ChatPermissionModeBar.OkGreenText */
+  --policy-deny-bg:rgba(255,59,48,.18);
+  --policy-deny-fg:#FF3B30;       /* DenyRed */
+}
+html.dark{
+  --policy-allow-fg:#5BD97C;      /* 暗底上 #1A7A38 对比度不够，提亮一档 */
+}
+.mode.tri{font-variant-numeric:tabular-nums}
+.mode.tri.allow{background:var(--policy-allow-bg);border-color:transparent;color:var(--policy-allow-fg)}
+.mode.tri.deny{background:var(--policy-deny-bg);border-color:transparent;color:var(--policy-deny-fg)}
+.mode.tri.ask{background:var(--primary-soft);border-color:transparent;color:var(--primary)}
 .crow{display:flex;gap:8px;align-items:flex-end}
 #inp{
   flex:1;min-width:0;                      /* min-width:0 不能少，否则右侧死白 */
