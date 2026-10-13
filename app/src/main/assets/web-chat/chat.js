@@ -71,7 +71,10 @@ var $stream=document.getElementById("stream"),
     $modes=document.getElementById("modes"),
     $cms=document.getElementById("cms"),
     $priv=document.getElementById("priv"),
-    $ws=document.getElementById("ws");
+    $ws=document.getElementById("ws"),
+    $app=document.getElementById("app"),
+    $composer=document.getElementById("composer"),
+    $diag=document.getElementById("diag");
 
 var state={
   bar:{title:"ZorvAI",model:"",persona:""},
@@ -108,6 +111,66 @@ var NATIVE_LABEL={
   miniapp:"MiniApp（原生渲染）"
 };
 
+/* ── 2b. 视口高度 + 布局自检（真机白屏事故的防线，别删）──────────────── */
+
+/**
+ * 把 `#app` 高度钉成**实测的布局视口高度**。
+ *
+ * 🔴 为什么不用 CSS 的 `dvh`：真机（Android WebView）上页面在 WebView 拿到尺寸**之前**
+ * 就开始加载（宿主在 `AndroidView.update` 里直接 `loadUrl`），那一刻动态视口极小，
+ * `height:100dvh` 把 `#app` 钉死在那条极小值上；`#stream` 是 `flex:1`（=`flex-basis:0%`）
+ * 又带 `min-height:0`，剩余空间一被吃光它就正好是 0，消息被 `overflow-y:auto` 全裁掉。
+ * 桌面 headless Chrome 永远不存在「0 高度加载」，所以这条只有真机能发现。
+ *
+ * `document.documentElement.clientHeight` 是**实测值**，不参与「单位认不认识」的协商，
+ * 且随 `resize` 更新（WebView 后拿到尺寸、旋屏、软键盘全都涵盖）。
+ */
+function fit(){
+  if(document.documentElement.classList.contains("flow"))return;
+  var h=document.documentElement.clientHeight;
+  if(h>0)$app.style.height=h+"px";
+}
+
+/**
+ * 「宁可丑，不可白」兜底：消息存在、渲染区高度却是 0 → 高度链坏了。
+ * 摘掉 flex 改回文档流（`html.flow`，见 style.css），消息可见可滚、底栏 sticky 在底部。
+ *
+ * 同时把实测数字摊到 `#diag` + `console.log`（宿主 `WebUiDialog` 收 console → QuroDiag）。
+ * 上一次白屏时我连一个数字都拿不到，只能让用户重装一版再截图 —— 这个代价不该付第二次。
+ */
+function guardCollapse(){
+  if(state.messages.length===0)return;
+  if($stream.clientHeight>=60)return;
+  // 🔴 数字必须在改布局**之前**取下来。改完再读会拿到修复后的值——那会把
+  //    「渲染区塌成 10px」记成「952px」，这条自检行就变成误导而不是线索了。
+  var sh0=$stream.clientHeight, ah0=$app.clientHeight, vp0=document.documentElement.clientHeight;
+  if(!document.documentElement.classList.contains("flow")){
+    document.documentElement.classList.add("flow");
+    $app.style.height="";   // 清掉 fit() 写的 px，否则内联样式会压过 .flow 的 height:auto
+  }
+  var msg="消息区高度塌陷：渲染区仅 "+sh0+"px（容器 "+ah0+"px / 视口 "+vp0+
+    "px / 消息 "+state.messages.length+" 条）；已降级为文档流显示";
+  if($diag.textContent!==msg){
+    $diag.textContent=msg;
+    $diag.hidden=false;
+    console.log("[webui] "+msg);
+  }
+}
+
+/* 一次性的健康快照：真机出问题时，宿主的 logcat 里这一行就能定案（tag QuroWebUi）。 */
+var healthLogged=false;
+function logHealth(){
+  if(healthLogged)return;
+  // 视口还是 0 = WebView 尚未被测量，这时的数字没有诊断价值，等下一轮
+  if(document.documentElement.clientHeight<=0)return;
+  healthLogged=true;
+  var dvh=(window.CSS&&CSS.supports)?CSS.supports("height","100dvh"):"?";
+  console.log("[webui] 健康快照 vp="+document.documentElement.clientHeight+
+    "x"+document.documentElement.clientWidth+" app="+$app.clientHeight+
+    " stream="+$stream.clientHeight+" composer="+$composer.offsetHeight+
+    " dvh支持="+dvh+" msgs="+state.messages.length);
+}
+
 /* ── 3. 渲染：块分派 ─────────────────────────────────────────────────── */
 
 function nearBottom(){
@@ -132,7 +195,9 @@ function renderChrome(){
   $persona.textContent=state.bar.persona||"";
   $cnt.textContent=state.messages.length+" 条消息";
   $dot.className="dot"+(state.composer.busy?" on":"");
-  document.documentElement.className=state.dark?"dark":"";
+  // 🔴 用 classList.toggle 而不是 `className=` 整体赋值：整体赋值会把 guardCollapse
+  //    加的 `flow` 降级类**一起抹掉**，于是每次轮询都白屏↔降级来回抖。
+  document.documentElement.classList.toggle("dark",!!state.dark);
   $send.textContent=state.composer.busy?"■":"➤";
   $send.className=state.composer.busy?"stop":"";
   $send.setAttribute("aria-label",state.composer.busy?"停止":"发送");
@@ -416,6 +481,9 @@ function apply(snap){
   state.messages.forEach(function(m){ ensureNode(m); renderMessage(m); });
   syncOrder(ids);
   renderChrome();
+  // 自检放在 renderChrome 之后：它要量的是**这一轮渲染完**的真实高度
+  guardCollapse();
+  logHealth();
   if(stick||(!wasBusy&&state.composer.busy))scrollBottom(true);
 }
 
@@ -512,6 +580,14 @@ $stream.addEventListener("click",function(e){
     b=b.parentNode;
   }
 });
+
+// 高度链的两条独立防线之一（另一条是 CSS 的 `height:100%`）：
+// 先按实测视口钉一次，再随 resize 更新 —— WebView「先 loadUrl 后拿到尺寸」那个
+// 时序缺陷就靠这两条兜住（真机白屏事故的成因）。
+fit();
+window.addEventListener("resize",fit);
+// 旋屏后 innerHeight 不会立刻更新，延后一拍再量
+window.addEventListener("orientationchange",function(){setTimeout(fit,120);});
 
 autoGrow();
 poll();

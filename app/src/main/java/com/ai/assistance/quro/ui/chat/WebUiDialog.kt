@@ -6,6 +6,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.webkit.ConsoleMessage
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -338,6 +340,21 @@ private fun WebPane(
                 settings.loadWithOverviewMode = false
                 settings.textZoom = 100
                 setBackgroundColor(0x00000000)
+
+                // 🔴 把页面 console 收进宿主日志（tag QuroWebUi）。
+                //    页面里那两行自检（「健康快照」与「消息区高度塌陷降级」）就是为真机排障
+                //    写的，而真机上开不了 DevTools —— 不接这一步它们等于白写。
+                //    上一次真机白屏的代价是「零信息 + 让用户重装一版再截图」，不能再付。
+                webChromeClient = object : WebChromeClient() {
+                    override fun onConsoleMessage(m: ConsoleMessage?): Boolean {
+                        if (m == null) return false
+                        QuroDiag.log(
+                            TAG,
+                            "console[${m.messageLevel()}] ${m.message()} @${m.sourceId()}:${m.lineNumber()}"
+                        )
+                        return true
+                    }
+                }
 
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, u: String?) {

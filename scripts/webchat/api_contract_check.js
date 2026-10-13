@@ -170,5 +170,37 @@ for (const t of blockTypes) {
   ok(new RegExp('case\\s+"' + t + '"').test(jsSrc), `前端有 case "${t}" 分支`);
 }
 
+/* ── 7. 视口高度链（2026-10-13 真机白屏事故的回归锁）──
+ *
+ * 事故：`#app{height:100dvh}` 在真机上被钉死在「页面加载那一刻」的极小动态视口上，
+ * `#stream`（`flex:1` + `min-height:0`）跟着塌成 0，5 条消息被 `overflow` 全裁掉
+ * → 界面只剩顶栏 + 底栏 + 一片空白；桌面 headless Chrome 全绿，只有真机能发现。
+ * 下面这些是**不许回退**的结构约束：谁把它们改红了，就说明又踩回去了。 */
+console.log('=== 7. 视口高度链（真机白屏事故回归锁）===');
+/* 🔴 先剥注释再断言。CSS 注释里是**故意**提到 `dvh` 的（说明为什么不能用），
+   直接扫全文会把那段说明本身判成违规 —— 上一轮 zx 边界断言就是这么假阳性的。 */
+const cssSrc = fs.readFileSync(path.join(ASSETS, 'web-chat/style.css'), 'utf8');
+const cssCode = cssSrc.replace(/\/\*[\s\S]*?\*\//g, '');
+ok(!/\bdvh\b/.test(cssCode), 'CSS 声明里没有 dvh 单位（它就是本次事故的根因）');
+ok(/#app\{[^}]*height:100%/.test(cssCode), '#app 高度走 height:100%（布局视口，无单位协商）');
+ok(/#stream\{[\s\S]{0,60}?flex:1 1 auto/.test(cssCode),
+  '#stream 是 flex:1 1 auto（flex:1 的 0 基准在高度链坏掉时正好塌成 0）');
+ok(/html\.flow #app\{height:auto\}/.test(cssCode), '有 html.flow 降级：摘掉 flex 高度链');
+ok(/html\.flow #stream\{flex:0 0 auto/.test(cssCode), '有 html.flow 降级：消息改回文档流');
+ok(/function fit\(\)/.test(jsSrc) && /clientHeight/.test(jsSrc),
+  'chat.js 有 fit()，且用实测 clientHeight 而不是视口单位');
+ok(/addEventListener\("resize",fit\)/.test(jsSrc),
+  'fit() 挂在 resize 上（WebView 后拿到尺寸/旋屏都能纠正）');
+ok(/function guardCollapse\(\)/.test(jsSrc),
+  'chat.js 有 guardCollapse（宁可丑不可白：塌陷时可见降级，不许静默白屏）');
+ok(/classList\.toggle\("dark"/.test(jsSrc),
+  '主题用 classList.toggle 而非 className= 整体赋值（后者会抹掉 flow 降级类）');
+ok(/id="diag"/.test(htmlSrc) && /getElementById\("diag"\)/.test(jsSrc),
+  '#diag 自检行两端都在（出问题时把实测数字摊到界面上）');
+const dialogSrc = fs.readFileSync(path.join(
+  ROOT, 'app/src/main/java/com/ai/assistance/quro/ui/chat/WebUiDialog.kt'), 'utf8');
+ok(/onConsoleMessage/.test(dialogSrc),
+  '宿主收页面 console → QuroDiag（否则页面自检在真机 logcat 里等于白写）');
+
 console.log('---');
 console.log(bad === 0 ? '全部通过' : bad + ' 项不一致');
