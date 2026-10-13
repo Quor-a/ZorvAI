@@ -1,6 +1,6 @@
 /* Web UI 前后端契约同步校验
  *
- * 为什么需要：前端（assets/web-chat/）与后端（QuroWebChatServer.kt）是两份独立文件，
+ * 为什么需要：前端（assets/web-chat/）与后端（QuroWebUiServer.kt）是两份独立文件，
  * 靠字符串路径对接。这种地方一旦对不上，表现是「页面能打开但某个功能静默不动」，
  * 而不是报错——正是这个项目里反复吃过的「线没接上」。
  * 本脚本把两边的路径抽出来逐条核对，对不上就 exitCode=1。
@@ -13,7 +13,7 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '../..');
 const ASSETS = path.join(ROOT, 'app/src/main/assets');
 const SERVER = path.join(
-  ROOT, 'app/src/main/java/com/ai/assistance/quro/ui/chat/QuroWebChatServer.kt');
+  ROOT, 'app/src/main/java/com/ai/assistance/quro/ui/chat/WebUiServer.kt');
 
 let bad = 0;
 function ok(cond, msg) {
@@ -64,7 +64,6 @@ for (const m of jsSrc.matchAll(/fetch\(\s*"([^"]+)"(?!\s*\+)/g)) calls.add(m[1])
 for (const m of jsSrc.matchAll(/post\(\s*"([^"]+)"/g)) calls.add('api/' + m[1]);
 for (const c of calls) {
   const full = c.startsWith('/') ? c : '/' + c;
-  // 静态资源也走 fetch（zx_contracts.json），两条路都算数
   ok(staticMap[full] !== undefined || apiPaths.has(full),
     `${c} → ${staticMap[full] ? '静态 ' + staticMap[full] : (apiPaths.has(full) ? '接口' : '（两边都没有）')}`);
 }
@@ -74,20 +73,59 @@ console.log('=== 4. 后端有但前端不调的接口 ===');
 for (const p of apiPaths) {
   const short = p.replace(/^\//, '');
   const used = [...calls].some(c => c === short || c === p);
-  if (!used) console.log('  ℹ 未被前端调用（可能留给外部链接/调试）:', p);
+  if (!used) console.log('  ℹ 未被前端调用（可能留给换端访问/调试）:', p);
 }
 
-/* ── 5. zxwidget 必须是独立模块，不能被焊进 Web UI ── */
-console.log('=== 5. zxwidget 与 Web UI 的边界 ===');
-ok(fs.existsSync(path.join(ASSETS, 'zx/zxwidget.js')), 'zx/zxwidget.js 存在（独立模块）');
-ok(staticMap['/zxwidget.js'] === 'zx/zxwidget.js',
-  'zxwidget 由 /zxwidget.js 提供，不在 web-chat 目录里');
-ok(!/var ZX_CONTRACTS = \(function/.test(htmlSrc) && !/LAYOUTS\./.test(htmlSrc),
-  'index.html 里没有内联 zx 编译器');
-ok(!/LAYOUTS\.|resolveLayout/.test(jsSrc),
-  'chat.js 里没有 zx 布局逻辑（只调用 compile()）');
-ok(/typeof\s+compile\s*===?\s*"function"/.test(jsSrc),
-  'chat.js 通过全局 compile() 使用 zxwidget，缺了也不影响聊天');
+/* ── 5. 投影边界：zxwidget（互动UI界面）不得出现在 Web UI 里 ──
+ *
+ * 🔴 这一节的方向在本轮**反过来了**（用户 2026-10-13 原话：
+ *    「你怎么老是把 zxwidget 和 webui 混合在一起」）。
+ *    旧断言在检查「zxwidget 是否被正确接进 Web UI」（`/zxwidget.js` 有路由、
+ *    chat.js 调用全局 compile()）——那正是**在守护缺陷**。
+ *    现在要求的是：Web UI 侧一条 zx 痕迹都不许留。 */
+console.log('=== 5. zxwidget 与 Web UI 的边界（必须彻底分离）===');
+ok(fs.existsSync(path.join(ASSETS, 'zx/zxwidget.js')),
+  'zx/zxwidget.js 仍存在（互动UI界面是独立模块，本轮不该动它）');
+ok(!fs.existsSync(path.join(ASSETS, 'web-chat/zxwidget.css')),
+  'web-chat/ 下没有 zxwidget.css（它的样式不属于 Web UI）');
+for (const p of ['/zxwidget.js', '/zxwidget.css', '/zx_contracts.json']) {
+  ok(staticMap[p] === undefined, `静态路由里没有 ${p}`);
+}
+ok(!apiPaths.has('/api/interact'),
+  '接口里没有 /api/interact（交互回传属于原生对话框，不属于投影服务）');
+ok(!/LAYOUTS\.|resolveLayout|compile\(/.test(jsSrc),
+  'chat.js 里没有 zx 编译器/布局逻辑');
+ok(!/zx_contracts/.test(jsSrc),
+  'chat.js 不请求 zx_contracts.json');
+/* 🔴 只看**资源引用**（src/href），不要扫全文：
+   本页的注释里**故意**提到 zxwidget（说明「它不属于本页」），
+   扫全文会把那段说明本身判成违规 —— 上一版校验器就是这么假阳性的。 */
+const htmlAssetRefs = [];
+for (const m of htmlSrc.matchAll(/(?:href|src)="([^"]+)"/g)) htmlAssetRefs.push(m[1]);
+ok(!htmlAssetRefs.some(u => /zx/i.test(u)),
+  'index.html 不引用任何 zx 资源（注释里的说明不算）');
+
+/* ── 6. 投影协议：快照字段必须与渲染端用到的一致 ──
+ * 投影的形状由 WebUiProjection 决定，前端按字段分派；
+ * 字段改名而另一边没跟，表现就是「页面能开、某些块静默不出现」。 */
+console.log('=== 6. 投影快照字段 vs 前端消费 ===');
+const PROJ = path.join(ROOT, 'app/src/main/java/com/ai/assistance/quro/ui/chat/WebUiProjection.kt');
+const projSrc = fs.readFileSync(PROJ, 'utf8');
+// `messages` 是在服务层组装的（WebUiProjection 只负责单条消息 → 块），
+// 所以「产出方」要在两份文件里找，只查投影层会假阳性。
+const producers = projSrc + '\n' + serverSrc;
+for (const field of ['bar', 'composer', 'messages', 'blocks', 'tools', 'ui', 'attachments']) {
+  ok(new RegExp('"' + field + '"').test(producers) || new RegExp(field).test(producers),
+    `投影层产出 ${field}`);
+  ok(new RegExp(field).test(jsSrc), `前端消费 ${field}`);
+}
+// 块类型：投影层投出的每种 t，前端必须都有分支
+const blockTypes = new Set();
+for (const m of projSrc.matchAll(/put\("t",\s*"([a-z_]+)"\)/g)) blockTypes.add(m[1]);
+console.log('  投影块类型:', [...blockTypes].join(' '));
+for (const t of blockTypes) {
+  ok(new RegExp('case\\s+"' + t + '"').test(jsSrc), `前端有 case "${t}" 分支`);
+}
 
 console.log('---');
 console.log(bad === 0 ? '全部通过' : bad + ' 项不一致');
