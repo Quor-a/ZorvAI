@@ -571,13 +571,60 @@ html.flow #composer{position:sticky;bottom:0}
 .qflow-node:hover{border-color:var(--primary);color:var(--primary)}
 .qring{display:block}
 .qsvg{display:block;max-width:100%}
-/* 流式输入中的最后一条消息：右侧光标脉冲，复刻原生打字光标 */
-.md.streaming>p:last-child::after{
+/* 流式输入中的最后一条消息：右侧光标脉冲，复刻原生打字光标。
+   两条路径二选一，绝不双光标：
+   ① 发送流路径（chat.js scheduleStreamRender）显式插 <span class="cur">
+   ② 快照路径（app 侧生成，renderBlocks 只填块）靠最后一段的 ::after   */
+.md.streaming>.cur{
+  display:inline-block;width:2px;height:1em;
+  background:var(--primary);margin-left:2px;vertical-align:-.15em;
+  animation:blink 1s steps(2) infinite;
+}
+.md.streaming:not(:has(>.cur))>p:last-child::after{
   content:"";display:inline-block;width:2px;height:1em;
   background:var(--primary);margin-left:2px;vertical-align:-.15em;
   animation:blink 1s steps(2) infinite;
 }
 @keyframes blink{50%{opacity:0}}
+
+/* 等待态：首 token 到达前的三点跳动（占位气泡） */
+.typing{display:inline-flex;gap:5px;padding:7px 2px}
+.typing span{
+  width:7px;height:7px;border-radius:50%;background:var(--muted);
+  animation:tp 1.2s var(--ease-out) infinite;
+}
+.typing span:nth-child(2){animation-delay:.15s}
+.typing span:nth-child(3){animation-delay:.3s}
+@keyframes tp{
+  0%,60%,100%{opacity:.3;transform:translateY(0)}
+  30%{opacity:1;transform:translateY(-3px)}
+}
+
+/* ── markdown 列表 / 任务列表（mdHtml 输出，流式与终渲共用）────────── */
+.md ul,.md ol{margin:6px 0;padding-left:22px}
+.md li{margin:3px 0}
+.md li>ul,.md li>ol{margin:2px 0}
+.md ul.md-task{list-style:none;padding-left:2px}
+.md-task li{display:flex;align-items:flex-start;gap:8px;margin:5px 0}
+.md-task .qcheck{
+  flex:none;width:16px;height:16px;margin-top:4px;
+  border:1.5px solid var(--line2);border-radius:4px;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;line-height:1;
+  color:#fff;background:var(--surface);cursor:default;
+}
+.md-task li.done .qcheck{background:var(--primary);border-color:var(--primary)}
+.md-task li.done>span:last-child{color:var(--muted);text-decoration:line-through}
+
+/* 代码块语言标签（mdHtml / blockNode 共用）：贴在复制按钮左侧 */
+.code .code-l{
+  position:absolute;top:8px;right:64px;font:inherit;font-size:11px;
+  font-family:var(--font-mono);color:var(--muted);
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-tag);padding:3px 10px;line-height:1.4;
+  max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.code:has(.code-l) pre{padding-top:36px}
 
 /* ── 组件卡片围栏（renderCard 输出）────────────────────────────────── */
 .qcard{
@@ -1269,3 +1316,65 @@ html.flow #composer{position:sticky;bottom:0}
 .qchart{max-width:100%}
 .qtable-wrap{max-width:100%}
 .qcard{max-width:100%}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ── PC / 平板横屏适配（≥900px）────────────────────────────────────
+   用户 2026-10-14 原话：「不只设计 pc 端还做移动端的」。
+   移动端是「满屏窄列」；PC 端若还是同一条 100% 宽的列，一行 100+ 字
+   没法读。这里把对话收成一条居中长列（Operit web-chat 同款思路），
+   两侧留纸感背景，字号/间距/气泡宽度同步放大。
+   铁律不变：高度链仍走 height:100% + JS fit()（dvh 事故不许复现）。
+   ═══════════════════════════════════════════════════════════════════ */
+@media (min-width:900px){
+  body{font-size:16px}
+  #app{
+    max-width:880px;margin:0 auto;
+    height:100%;
+    border-left:1px solid var(--line);
+    border-right:1px solid var(--line);
+    background:color-mix(in srgb,var(--bg) 55%,transparent);
+    box-shadow:var(--shadow-2);
+  }
+  #hd{padding:16px 28px;padding-top:calc(16px + env(safe-area-inset-top))}
+  #hd h1{font-size:21px}
+  .chip{font-size:12px;max-width:30vw}
+  #btn-new{font-size:14px;padding:8px 18px}
+  #stream{padding:24px 32px 12px}
+  .msg{margin-bottom:26px}
+  .msg .who{font-size:12.5px}
+  .bub{max-width:82%}
+  .msg.mine .bub{margin-left:auto}
+  /* PC 端鼠标悬停才出现的细微反馈（触屏设备无 hover，不生效即无感） */
+  @media (hover:hover){
+    .msg .bub{transition:box-shadow var(--t-med) var(--ease-out)}
+    .bub:has(.md):hover{box-shadow:var(--shadow-1)}
+  }
+  .md{font-size:15.5px}
+  .md h1{font-size:24px}.md h2{font-size:21px}.md h3{font-size:18px}.md h4{font-size:16.5px}
+  .md table{font-size:14.5px}
+  .code code{font-size:13px}
+  #composer{padding:14px 32px;padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+  #inp{font-size:15.5px}
+  .mode{font-size:13px;padding:7px 15px}
+  #cfoot{font-size:12.5px}
+  .zxf{max-width:100%}
+  /* 弹层在 PC 端居中且限宽，不再占满全屏 */
+  .overlay{align-items:center;justify-content:center;padding:32px}
+  .sheet{
+    max-width:560px;border-radius:var(--r-sheet);
+    max-height:min(76vh,640px);
+  }
+}
+/* 超宽屏（≥1400px）：列再放宽，代码/表格更舒展 */
+@media (min-width:1400px){
+  #app{max-width:1020px}
+  .bub{max-width:78%}
+  #stream{padding:28px 44px 14px}
+}
+/* 打印 / 投影场景：去掉纸感渐变与阴影，纯白底黑字 */
+@media print{
+  body{background:#fff}
+  #hd,#composer,.overlay,#attbar{display:none!important}
+  #app{max-width:none;border:0;box-shadow:none}
+  .msg{break-inside:avoid}
+}
