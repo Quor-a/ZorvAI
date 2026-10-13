@@ -250,7 +250,7 @@ class QuroWebUiServer(
             val body = if (contentLength > 0) readBody(input, contentLength) else ""
 
             when {
-                method == "GET" || method == "HEAD" -> handedOver = handleGet(sock, path)
+                method == "GET" || method == "HEAD" -> handedOver = handleGet(sock, path, query)
                 // POST 也可能接管连接：/api/send 是 SSE 长流（见 handleSend）
                 method == "POST" -> handedOver = handlePost(sock, path, query, contentType, body)
                 method == "OPTIONS" -> respond(
@@ -280,12 +280,15 @@ class QuroWebUiServer(
     /* ── GET：快照 + 前端资源 + 模型/人格列表 ─────────────────────────── */
 
     /**
+     * @param query 请求行里的 query string（`/api/avatar?n=` 用它）
      * @return true 表示**这条连接已被接管**（SSE 长连接），调用方不得再 close。
      */
-    private fun handleGet(sock: Socket, path: String): Boolean {
+    private fun handleGet(sock: Socket, path: String, query: String = ""): Boolean {
         when (path) {
             "/api/snapshot" -> respondJson(sock, snapshot())
             "/api/events" -> return serveEvents(sock)
+            // 头像图（人格/用户）：只透出 filesDir/quro_avatars/ 内的文件名，防路径穿越
+            "/api/avatar" -> serveAvatar(sock, query)
             // 模型分组列表（对等客户端：模型选择弹层数据源）
             "/api/models" -> respondJson(sock, modelsJson())
             // 人格列表 + 当前激活
@@ -643,6 +646,8 @@ class QuroWebUiServer(
             "/api/ui_action" -> handleUiAction(sock, body)
             // 卡片按钮 / 动态 UI 交互写回（对等客户端：复刻 ChatScreen.handleCardCommand + handleDynamicUiAction）
             "/api/card_action" -> handleCardAction(sock, body)
+            // 消息操作（对等客户端：AI 消息操作栏的删除/重试，与原生同语义）
+            "/api/msg_action" -> handleMsgAction(sock, body)
             // 导出会话
             "/api/export" -> handleExport(sock)
             // 页面自检回传
@@ -758,12 +763,15 @@ class QuroWebUiServer(
         vm.send(text, atts)
 
         val sends = activeSends.incrementAndGet()
+        val nf = nameFallbacks()
         QuroDiag.log(TAG, "SSE 发送流接入，当前 $sends 条")
 
         // 本线程即流线程：轮询 vm.messages，只推增量。
         var segId: String? = null          // 当前跟踪的助手消息 id（跨工具轮次会换段）
         var segTextLen = 0                 // 已推送的正文长度
         var segReasonLen = 0               // 已推送的思考长度
+        var lastBlockSig = ""              // 已推送的原生专属块签名（见下方 ②）
+        var lastBlockAt = 0L               // 上次推块的时间（节流：≤3.3 次/秒）
         var idlePolls = 0                  // busy=false 后的静默轮次
         val seenUsers = HashSet<String>()  // 已推送的用户消息 id
         val deadline = System.currentTimeMillis() + SEND_STREAM_MAX_MS
@@ -778,7 +786,15 @@ class QuroWebUiServer(
                 // ① 本轮新增用户消息（含 barge-in 场景下的多条）
                 for (m in msgs) {
                     if (m.role == "user" && !m.hidden && m.id !in beforeIds && seenUsers.add(m.id)) {
-                        writeSse(out, "user_message", WebUiProjection.message(m, mine = true))
+                        writeSse(
+                            out, "user_message",
+                            WebUiProjection.message(
+                                m, mine = true,
+                                authorFallback = nf.userName,
+                                avatarFallback = nf.userAvatar,
+                                avatarUrl = nf.userAvatarUrl,
+                            ),
+                        )
                         pushedAny = true
                     }
                 }
@@ -786,45 +802,52 @@ class QuroWebUiServer(
                 // ② 最后一条可见助手消息的增量
                 val am = msgs.lastOrNull { it.role == "assistant" && !it.hidden }
                 if (am != null) {
+                    // 流式期间把「已可解析的原生专属块」随 delta 推给前端 —— 这就是
+                    // 「边写边出界面」：围栏一闭合，宿主 parseBlocks 立刻产出块，
+                    // 网页不等 assistant_done 就把动态 UI / 卡片画到消息底部全宽区。
+                    // 两重节流：300ms 一次（parseBlocks 是整段正则扫描，每帧跑会 O(n²)）
+                    // + 签名去重（没变不推，前端沿用已画好的块）。
+                    var blockJson: JSONObject? = null
+                    val nowMs = System.currentTimeMillis()
+                    if (nowMs - lastBlockAt >= BLOCK_PUSH_INTERVAL_MS) {
+                        val snap = WebUiProjection.streamNativeBlocks(am)
+                        val sig = snap.optString("sig")
+                        if (sig != lastBlockSig) {
+                            lastBlockSig = sig
+                            lastBlockAt = nowMs
+                            blockJson = snap
+                        }
+                    }
                     if (am.id != segId) {
                         // 新段（首 token 占位气泡 / 工具轮次后的新回复段）：
                         // 前端尚未见过它，把已有全文当作首帧 delta 推过去。
                         segId = am.id
                         segTextLen = am.content.length
                         segReasonLen = am.reasoning?.length ?: 0
-                        if (segTextLen > 0 || segReasonLen > 0) {
-                            writeSse(
-                                out, "assistant_delta",
-                                JSONObject()
-                                    .put("id", am.id)
-                                    .put("text", am.content)
-                                    .put("reasoning", am.reasoning ?: ""),
-                            )
+                        lastBlockSig = ""   // 新段的块从头推，别沿用上一段的签名
+                        if (segTextLen > 0 || segReasonLen > 0 || blockJson != null) {
+                            val d = JSONObject()
+                                .put("id", am.id)
+                                .put("text", am.content)
+                                .put("reasoning", am.reasoning ?: "")
+                            if (blockJson != null) d.put("blocks", blockJson.optJSONArray("blocks"))
+                            writeSse(out, "assistant_delta", d)
                             pushedAny = true
                         }
                     } else {
                         val tLen = am.content.length
-                        if (tLen > segTextLen) {
-                            writeSse(
-                                out, "assistant_delta",
-                                JSONObject()
-                                    .put("id", am.id)
-                                    .put("text", am.content.substring(segTextLen))
-                                    .put("reasoning", ""),
-                            )
-                            segTextLen = tLen
-                            pushedAny = true
-                        }
+                        val textGrew = tLen > segTextLen
                         val rLen = am.reasoning?.length ?: 0
-                        if (rLen > segReasonLen) {
-                            writeSse(
-                                out, "assistant_delta",
-                                JSONObject()
-                                    .put("id", am.id)
-                                    .put("text", "")
-                                    .put("reasoning", am.reasoning!!.substring(segReasonLen)),
-                            )
-                            segReasonLen = rLen
+                        val reasonGrew = rLen > segReasonLen
+                        if (textGrew || reasonGrew || blockJson != null) {
+                            val d = JSONObject()
+                                .put("id", am.id)
+                                .put("text", if (textGrew) am.content.substring(segTextLen) else "")
+                                .put("reasoning", if (reasonGrew) am.reasoning!!.substring(segReasonLen) else "")
+                            if (blockJson != null) d.put("blocks", blockJson.optJSONArray("blocks"))
+                            writeSse(out, "assistant_delta", d)
+                            if (textGrew) segTextLen = tLen
+                            if (reasonGrew) segReasonLen = rLen
                             pushedAny = true
                         }
                     }
@@ -851,7 +874,15 @@ class QuroWebUiServer(
             if (finalMsg != null) {
                 writeSse(
                     out, "assistant_done",
-                    JSONObject().put("message", WebUiProjection.message(finalMsg, mine = false)),
+                    JSONObject().put(
+                        "message",
+                        WebUiProjection.message(
+                            finalMsg, mine = false,
+                            authorFallback = nf.aiName,
+                            avatarFallback = nf.aiAvatar,
+                            avatarUrl = nf.aiAvatarUrl,
+                        ),
+                    ),
                 )
             } else {
                 writeSse(out, "assistant_done", JSONObject().put("message", JSONObject.NULL))
@@ -874,6 +905,52 @@ class QuroWebUiServer(
         synchronized(out) {
             out.write(frame.toByteArray(Charsets.UTF_8))
             out.flush()
+        }
+    }
+
+    /**
+     * 消息操作：对等客户端的「删除 / 重试」。
+     *
+     * 语义与原生操作栏（ChatScreen.kt:3914-3918）逐条对齐：
+     *   · `delete`     → `vm.deleteMessage(ids)`（原生 onDelete(msg.uids)）
+     *   · `regenerate` → 取**最后一条用户消息**重新 send（原生 onRegenerate 同义：
+     *     重问一遍同一个问题，让 AI 重新回答）
+     */
+    private fun handleMsgAction(sock: Socket, body: String) {
+        val o = runCatching { JSONObject(body) }.getOrNull()
+        when (o?.optString("action")) {
+            "delete" -> {
+                val ids = mutableListOf<String>()
+                o.optJSONArray("ids")?.let { arr ->
+                    for (i in 0 until arr.length()) {
+                        arr.optString(i).takeIf { it.isNotBlank() }?.let { ids.add(it) }
+                    }
+                }
+                if (ids.isEmpty()) {
+                    respondJson(sock, """{"ok":false,"error":"no ids"}""")
+                    return
+                }
+                vm.deleteMessage(ids)
+                respondJson(sock, """{"ok":true}""")
+            }
+
+            "regenerate" -> {
+                // 与原生一致：重发最后一条用户消息的原文（不带附件重放——附件在原生
+                // 重试里同样不重发，onRegenerate 只取 text）。
+                val last = vm.messages.value.lastOrNull { it.role == "user" && !it.hidden }
+                if (last == null || last.content.isBlank()) {
+                    respondJson(sock, """{"ok":false,"error":"no user message"}""")
+                    return
+                }
+                if (vm.busy.value) {
+                    respondJson(sock, """{"ok":false,"error":"busy"}""")
+                    return
+                }
+                vm.send(last.content, emptyList())
+                respondJson(sock, """{"ok":true}""")
+            }
+
+            else -> respondJson(sock, """{"ok":false,"error":"unknown action"}""")
         }
     }
 
@@ -1363,11 +1440,121 @@ class QuroWebUiServer(
 
     /* ── 快照 ─────────────────────────────────────────────────────────── */
 
+    /**
+     * 名字行兜底信息（对齐原生 MessageRow 的 `作者 · 时间`）。
+     *
+     * 原生规则（ChatScreen.kt:538 / 8366-8368 + QuroSoulUi.AvatarContent）：
+     *   · AI 消息：senderName 为空 → 作者=人格名，头像=人格 ava（emoji 或首字母），
+     *     图片型人格才给 avatarUrl；
+     *   · 用户消息：作者=用户昵称（空则「我」），头像同名首字母，avatarUrl=用户头像图。
+     *
+     * 🔴 仓库读取带 2s TTL：快照最频 1s 一次，每帧翻仓库会把投影变成磁盘扫描。
+     */
+    private data class NameFallbacks(
+        val aiName: String, val aiAvatar: String, val aiAvatarUrl: String,
+        val userName: String, val userAvatar: String, val userAvatarUrl: String,
+    )
+
+    @Volatile private var nameFallbacksCache: NameFallbacks? = null
+    @Volatile private var nameFallbacksAt = 0L
+
+    private fun nameFallbacks(): NameFallbacks {
+        val now = System.currentTimeMillis()
+        nameFallbacksCache?.takeIf { now - nameFallbacksAt < 2000 }?.let { return it }
+        val fresh = runCatching {
+            val repo = QuroPersonaRepository(context)
+            val activeId = repo.getActiveId()
+            val p = repo.loadAll().firstOrNull { it.id == activeId }
+            val aiName = p?.name?.ifBlank { "Zorv" } ?: "Zorv"
+            // 与 ChatScreen.kt:8392 toPersona() 逐字同规则：emoji 型用 emoji，否则首字母
+            val aiAvatar = if (p != null && p.avatarType == "emoji" && p.avatarEmoji.isNotBlank()) {
+                p.avatarEmoji
+            } else {
+                aiName.first().toString()
+            }
+            val aiAvatarUrl =
+                if (p != null && p.avatarType == "image" && p.avatarUri.isNotBlank()) {
+                    avatarUrlOf(p.avatarUri)
+                } else {
+                    ""
+                }
+            val up = vm.userProfile.value
+            val userName = up.name.ifBlank { "我" }
+            NameFallbacks(
+                aiName = aiName,
+                aiAvatar = aiAvatar,
+                aiAvatarUrl = aiAvatarUrl,
+                userName = userName,
+                userAvatar = userName.first().toString(),
+                userAvatarUrl = avatarUrlOf(up.avatarUri),
+            )
+        }.getOrDefault(
+            NameFallbacks("Zorv", "Z", "", "我", "我", "")
+        )
+        nameFallbacksCache = fresh
+        nameFallbacksAt = now
+        return fresh
+    }
+
+    /**
+     * 内部头像路径 → 网页可加载的 URL。
+     *
+     * 头像图只落在 `filesDir/quro_avatars/`（见 QuroPersonaRepository.builtinAvatar
+     * 与灵魂卡编辑器的 copyAvatarToInternal），所以只透出**文件名**，
+     * 由 [/api/avatar] 在该目录内取文件 —— 路径穿越在这条缝上就被堵死。
+     */
+    private fun avatarUrlOf(internalPath: String?): String {
+        val p = internalPath?.takeIf { it.isNotBlank() } ?: return ""
+        val dir = File(context.filesDir, "quro_avatars").absolutePath
+        if (!p.startsWith(dir)) return ""
+        val name = p.removePrefix(dir).trimStart('/', '\\')
+        if (name.isEmpty() || name.contains("..") || name.contains('/') || name.contains('\\')) return ""
+        return "api/avatar?n=" + java.net.URLEncoder.encode(name, "UTF-8")
+    }
+
+    /** 头像文件读取（只认 quro_avatars 目录内的文件名）。 */
+    private fun serveAvatar(sock: Socket, query: String) {
+        val name = query.substringAfter("n=", "").substringBefore("&")
+            .let { runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault("") }
+        if (name.isEmpty() || name.contains("..") || name.contains('/') || name.contains('\\')) {
+            respond(sock, 400, "text/plain", "bad avatar name".toByteArray())
+            return
+        }
+        val file = File(File(context.filesDir, "quro_avatars"), name)
+        val bytes = runCatching { file.takeIf { it.isFile }?.readBytes() }.getOrNull()
+        if (bytes == null) {
+            respond(sock, 404, "text/plain", "avatar not found".toByteArray())
+            return
+        }
+        val type = when (file.extension.lowercase()) {
+            "png" -> "image/png"
+            "jpg", "jpeg" -> "image/jpeg"
+            "webp" -> "image/webp"
+            "gif" -> "image/gif"
+            else -> "application/octet-stream"
+        }
+        respond(
+            sock, 200, type, bytes,
+            mapOf("Access-Control-Allow-Origin" to "*", "Cache-Control" to "max-age=300")
+        )
+    }
+
     private fun snapshot(): String {
+        val nf = nameFallbacks()
         val arr = JSONArray()
         vm.messages.value
             .filter { !it.hidden && (it.role == "user" || it.role == "assistant") }
-            .forEach { m -> arr.put(WebUiProjection.message(m, mine = m.role == "user")) }
+            .forEach { m ->
+                val mine = m.role == "user"
+                arr.put(
+                    WebUiProjection.message(
+                        m, mine = mine,
+                        authorFallback = if (mine) nf.userName else nf.aiName,
+                        avatarFallback = if (mine) nf.userAvatar else nf.aiAvatar,
+                        avatarUrl = if (mine) nf.userAvatarUrl else nf.aiAvatarUrl,
+                    )
+                )
+            }
 
         return JSONObject()
             .put("ok", true)
@@ -1470,6 +1657,12 @@ class QuroWebUiServer(
 
         /** 发送流轮询 vm.messages 的间隔（≈16fps，肉眼顺滑且不烧 CPU）。 */
         private const val SEND_POLL_MS = 60L
+
+        /**
+         * 流式期间推送「原生专属块」的最小间隔（任务 #255：边写边出界面）。
+         * parseBlocks 是整段正则扫描，压到这个间隔以上才不会 O(n²)。
+         */
+        private const val BLOCK_PUSH_INTERVAL_MS = 300L
 
         /** busy=false 后连续静默几轮才判定本轮结束（防抢跑：最后一个 delta 可能还没落）。 */
         private const val SEND_IDLE_DONE_POLLS = 3
