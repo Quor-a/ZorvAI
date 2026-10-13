@@ -55,7 +55,30 @@ body{
   -webkit-text-size-adjust:100%;
   overflow-x:hidden;          /* 任何块都不许把页面顶宽 */
 }
-#app{display:flex;flex-direction:column;height:100dvh;min-height:0}
+/* 🔴 高度**不许再用 `dvh`**（2026-10-13 真机事故，别再改回去）。
+ *
+ * 真机截图：`#stream` 被压成 **0 高度**，5 条消息全被 `overflow-y:auto` 裁掉，
+ * 界面只剩「顶栏 + 底栏 + 一大片空白」——而桌面 headless Chrome 一切正常，
+ * 典型的「桌面全绿、真机全白」。
+ *
+ * 根因：`dvh` 是**动态视口**单位。Android WebView 里页面往往在 WebView 拿到尺寸
+ * **之前**就开始加载（Compose `AndroidView.update` 里直接 `loadUrl`），那一刻动态
+ * 视口极小，`height:100dvh` 就把 `#app` 钉死在那条极小值上；`#stream` 是 `flex:1`
+ * （=`flex-basis:0%`）+ `min-height:0`，剩余空间一被吃光它就正好是 0。
+ *
+ * 现在走两条各自独立的线，任一条活着页面就是对的：
+ *   ① CSS 兜底 `height:100%`：继承 `html,body{height:100%}`，取自**布局视口**，
+ *      不参与「单位认识不认识」的协商，老 WebView 也认；
+ *   ② JS `fit()` 用 `document.documentElement.clientHeight` 显式写 px，并监听 `resize`。
+ * 万一两条都不可靠，还有 [html.flow] 降级把消息改回文档流 —— **宁可丑，不可白**。 */
+#app{display:flex;flex-direction:column;height:100%;min-height:0}
+
+/* 视口高度链坏掉时的降级态（由 chat.js 的 guardCollapse 加 `html.flow`）：
+ * 摘掉 flex 高度链、消息改回文档流可见可滚；底栏改 sticky 钉在视口底部，
+ * 保证「看得见消息」的同时输入框还能用。 */
+html.flow #app{height:auto}
+html.flow #stream{flex:0 0 auto;overflow-y:visible}
+html.flow #composer{position:sticky;bottom:0}
 
 /* ── 顶栏（镜像 ChatTopBar）──────────────────────────────────────────── */
 #hd{
@@ -81,8 +104,11 @@ body{
 }
 
 /* ── 消息流（镜像 MessageList / MessageRow）──────────────────────────── */
+/* `flex:1 1 auto` 而不是 `flex:1`：`flex:1` 等价 `flex-basis:0%`，容器高度一旦
+   退化成 auto（上面的 `dvh` 事故就是），它对本容器自身高度的贡献就是 0 —— 静默全白。
+   用 `auto` 基准时它的内容高度会参与容器高度计算，最坏也只是页面变长可滚。 */
 #stream{
-  flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;
+  flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;
   padding:12px 14px 6px;
 }
 .msg{margin-bottom:14px;min-width:0}
@@ -233,3 +259,13 @@ html.dark{
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   font-family:ui-monospace,Menlo,monospace;
 }
+
+/* 布局自检行：**只在真的出问题时出现**，平时 `hidden` 不占位。
+   存在的理由：上一次真机故障的表现是「一片空白 + 零信息」，我连它为什么白都不知道，
+   只能让用户重装一版再截图。以后凡是「消息有 N 条但渲染区高度为 0」，这行会自己
+   把实测数字摊在界面上，并同步 `console.log` 给宿主日志（WebUiDialog 收 console）。 */
+#diag{
+  font-size:11px;line-height:1.5;color:var(--err);
+  padding:2px 2px 0;word-break:break-all;
+}
+#diag[hidden]{display:none}

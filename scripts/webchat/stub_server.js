@@ -50,6 +50,28 @@ window.addEventListener("load", function(){
 </script>
 </body>`;
 
+/* 🔴 真机白屏事故的两条防线，各配一个模拟注入（改样式时必须两种模式都过）。
+ *
+ * 事故事实（2026-10-13 真机）：`#stream` 高度 **0**、5 条消息被 `overflow-y:auto`
+ * 全裁掉，界面只剩「顶栏 + 底栏 + 一大片空白」；而桌面 headless Chrome 完全正常
+ * —— 典型的「桌面全绿、真机全白」。
+ * 成因：`#app{height:100dvh}`。`dvh` 是**动态视口**单位，而页面在 WebView 拿到尺寸
+ * **之前**就开始加载（宿主在 `AndroidView.update` 里直接 `loadUrl`），那一刻动态视口
+ * 极小，`dvh` 把 `#app` 钉死在那个值上；`#stream` 是 `flex:1`（=`flex-basis:0%`）
+ * 又带 `min-height:0`，剩余空间一被吃光它就正好是 0。
+ *
+ * 现在两条**互相独立**的防线：
+ *   ① CSS `#app{height:100%}`（继承 `html,body{height:100%}`，取自布局视口，无单位协商）
+ *   ② JS `fit()` 用 `document.documentElement.clientHeight` 写 px + 监听 resize
+ * 外加一条「宁可丑不可白」的可见降级（`html.flow`）。
+ *
+ * 对应两个夹具模式：
+ *   `?novh=1`   掐掉 `html,body` 高度 → **防线①死**，断言防线② 单独能把布局救回来；
+ *   `?tinyvh=1` 把 `#app` 强钉 200px → **两条都死**，断言**可见地降级**
+ *               （`#diag` 摊出实测数字 + 消息改文档流可见），而不是零信息白屏。 */
+const NOVH = `<style>html,body{height:auto !important}</style></body>`;
+const TINYVH = `<style>#app{height:200px !important}</style></body>`;
+
 /* 手机宽度取景框。
  *
  * 为什么需要它：本机 headless Chrome 无视 --window-size（实测视口恒为 ~504px，
@@ -192,10 +214,67 @@ window.addEventListener("load",function(){
       var n=doc().querySelectorAll("#stream .msg").length;
       say("发送后消息数 = "+n);
       ok(n>msgs.length,"发送进入同一个会话");
-      say("—— 结束 ——");
+      phase2();
     },2500);
   },1200);
 });
+
+/* 真机白屏事故的两条防线（成因与模式定义见本文件顶部 NOVH / TINYVH 的注释）。
+   这两段是**回归锁**：谁把 #app 的高度改回 viewport 单位、或把 guardCollapse 删了，
+   这里立刻红。 */
+function metrics(){
+  var d=doc();
+  var m=d.querySelectorAll("#stream .msg");
+  var tallest=0;
+  for(var i=0;i<m.length;i++){
+    var h=m[i].getBoundingClientRect().height;
+    if(h>tallest)tallest=h;
+  }
+  return {
+    msgs:m.length,
+    streamH:d.getElementById("stream").clientHeight,
+    tallest:tallest,
+    diag:d.getElementById("diag")
+  };
+}
+function loadMode(q,cb){
+  document.getElementById("f").src="/"+q;
+  setTimeout(cb,1800);
+}
+function phase2(){
+  say("—— 防线①：CSS 高度链死掉，靠 JS 实测视口救回来 ——");
+  loadMode("?novh=1",function(){
+    var r=metrics();
+    say("novh: msgs="+r.msgs+" streamH="+r.streamH+" tallestMsg="+Math.round(r.tallest));
+    ok(r.msgs>0,"novh：消息仍在");
+    ok(r.streamH>=100,"novh：JS 实测视口把渲染区撑起来了（"+r.streamH+"px）");
+    ok(r.tallest>10,"novh：消息实际可见（最高一条 "+Math.round(r.tallest)+"px）");
+    ok(r.diag.hidden,"novh：布局正常，自检行不显示");
+    phase3();
+  });
+}
+function phase3(){
+  say("—— 防线②：两条高度线都死掉，必须**可见地**降级（宁可丑不可白）——");
+  loadMode("?tinyvh=1",function(){
+    var r=metrics();
+    say("tinyvh: msgs="+r.msgs+" streamH="+r.streamH+" tallestMsg="+Math.round(r.tallest));
+    say("tinyvh: 自检行 = "+(r.diag.hidden?"（隐藏）":r.diag.textContent));
+    ok(r.msgs>0,"tinyvh：消息仍在");
+    ok(!r.diag.hidden,"tinyvh：自检行摊出了原因（不再是零信息白屏）");
+    ok(/塌陷/.test(r.diag.textContent),"tinyvh：自检行说明了高度塌陷");
+    // 🔴 自检行必须报**触发时**的塌陷值，不能报降级后的值 —— 否则记出来的是
+    //    「渲染区仅 952px」这种把病因写成结果的自相矛盾数字（我自己先踩了一次）。
+    // 🔴 这段整体在 JS 模板字符串里：单反斜杠的 \d 会被吃掉、正则静默变成 (d+)，
+    //    所以必须写双反斜杠。同理，本文件模板字符串内部的注释里**不许出现反引号**
+    //    —— 哪怕只是行注释，也会当场把模板闭合（我刚踩了一次）。
+    var m=/渲染区仅 (\\d+)px/.exec(r.diag.textContent);
+    say("tinyvh: 自检行报的塌陷值 = "+(m?m[1]+"px":"（没解析到）")+"，降级后 streamH="+r.streamH);
+    ok(m&&Number(m[1])<60,"tinyvh：自检行报的是触发时的塌陷值（"+ (m?m[1]+"px":"?") +"），不是降级后的值");
+    ok(r.streamH>Number(m?m[1]:0),"tinyvh：降级后渲染区确实被撑开了");
+    ok(r.tallest>10,"tinyvh：降级后消息仍可见（没有静默裁掉）");
+    say("—— 结束 ——");
+  });
+}
 </script></body></html>`;
 
 /* 路由表：与 Kotlin 侧 QuroWebUiServer 必须逐条对应。
@@ -293,6 +372,8 @@ function file(res, rel, type) {
 http.createServer((req, res) => {
   const [url, query] = req.url.split('?');
   const probe = (query || '').indexOf('probe=1') >= 0;
+  const novh = (query || '').indexOf('novh=1') >= 0;
+  const tinyvh = (query || '').indexOf('tinyvh=1') >= 0;
 
   if (req.method === 'GET' && url === '/__e2e') {
     const buf = Buffer.from(E2E, 'utf8');
@@ -310,8 +391,11 @@ http.createServer((req, res) => {
 
   if (req.method === 'GET' && STATIC[url]) {
     const [rel, type] = STATIC[url];
-    if (probe && type.startsWith('text/html')) {
-      const html = fs.readFileSync(path.join(ASSETS, rel), 'utf8').replace('</body>', PROBE);
+    const inject = type.startsWith('text/html')
+      ? (probe ? PROBE : (novh ? NOVH : (tinyvh ? TINYVH : null)))
+      : null;
+    if (inject) {
+      const html = fs.readFileSync(path.join(ASSETS, rel), 'utf8').replace('</body>', inject);
       const buf = Buffer.from(html, 'utf8');
       res.writeHead(200, { 'Content-Type': type, 'Content-Length': buf.length });
       return res.end(buf);
