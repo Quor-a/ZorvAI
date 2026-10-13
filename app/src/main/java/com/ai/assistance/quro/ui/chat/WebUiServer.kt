@@ -1,6 +1,9 @@
 package com.ai.assistance.quro.ui.chat
 
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.widget.Toast
 import com.ai.assistance.quro.core.QuroAttachment
 import com.ai.assistance.quro.core.QuroAttachmentKit
 import com.ai.assistance.quro.core.QuroPersonaRepository
@@ -11,11 +14,35 @@ import com.ai.assistance.quro.core.model.QuroModelConfigRepository
 import com.ai.assistance.quro.core.model.QuroSavedProfileRepository
 import com.ai.assistance.quro.core.policy.QuroPolicy
 import com.ai.assistance.quro.core.policy.QuroPolicyStore
+import com.ai.assistance.quro.core.QuroBrowserBridge
+import com.ai.assistance.quro.core.cards.CardAction
+import com.ai.assistance.quro.core.cards.CardActionRouter
+import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.tools.LaunchAppTool
+import com.ai.assistance.quro.core.tools.QuroSkillTool
+import com.ai.assistance.quro.core.tools.QuroToolRegistry
 import com.ai.assistance.quro.core.tools.QuroVoiceFeaturePrefs
 import com.ai.assistance.quro.core.tools.QuroUiActionBridge
+import com.ai.assistance.quro.core.tools.UiNavigationBus
 import com.ai.assistance.quro.core.tools.WorkspacePreferences
 import com.ai.assistance.quro.core.tools.ZxWebCardQueue
+import com.ai.assistance.quro.core.tools.ui.UiNavigationEvent
+import com.ai.assistance.quro.core.ui.dynamicui.QuroCallbackAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroCopyAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroOpenAppAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroOpenScreenAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroOpenUrlAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroRenderHtmlAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroRenderVisproAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroSkillAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroToggleAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroToolCallAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroUiAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroVisualAskAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroVisualPopupAction
+import com.ai.assistance.quro.core.ui.dynamicui.QuroZxWebCardAction
 import com.ai.assistance.quro.ui.QuroChatViewModel
+import com.ai.assistance.quro.util.qstr
 import com.ai.assistance.quro.util.QuroDiag
 import org.json.JSONArray
 import org.json.JSONObject
@@ -31,6 +58,10 @@ import java.net.Socket
 import java.net.SocketException
 import java.util.Collections
 import java.util.UUID
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * ZorvAI 的 Web 对话框服务端 —— **对等客户端**，不是投影。
@@ -270,7 +301,14 @@ class QuroWebUiServer(
                 }
             }
             else -> {
-                val asset = STATIC[path]
+                // /runtimes/xxx 与 /www/xxx：把 assets/runtimes、assets/www 下的前端运行时
+                // （mermaid.min.js / mermaid_render.html / marked.min.js / echarts.min.js …）
+                // 暴露给 Web 前端，用于**真渲染** Mermaid / AIP / 卡片 / MiniApp。
+                val asset = when {
+                    path.startsWith("/runtimes/") -> "runtimes/" + path.removePrefix("/runtimes/")
+                    path.startsWith("/www/") -> "www/" + path.removePrefix("/www/")
+                    else -> STATIC[path]
+                }
                 if (asset == null) {
                     respond(sock, 404, "text/plain", "Not Found: $path".toByteArray())
                     return false
@@ -586,6 +624,8 @@ class QuroWebUiServer(
             "/api/attachments/remove" -> handleAttachmentRemove(sock, body)
             // 打开原生功能面板
             "/api/ui_action" -> handleUiAction(sock, body)
+            // 卡片按钮 / 动态 UI 交互写回（对等客户端：复刻 ChatScreen.handleCardCommand + handleDynamicUiAction）
+            "/api/card_action" -> handleCardAction(sock, body)
             // 导出会话
             "/api/export" -> handleExport(sock)
             // 页面自检回传
@@ -845,6 +885,277 @@ class QuroWebUiServer(
         }
     }
 
+    /**
+     * 卡片按钮 / 动态 UI 交互写回（对等客户端核心）。
+     *
+     * 复刻 `ChatScreen.handleCardCommand`（卡片按钮）与 `handleDynamicUiAction`（动态 UI 节点）：
+     *  - `command` 字段 → `CardAction.parse` + `CardActionRouter.dispatch`，未命中则走老链路 `when`
+     *    （reply:/ui_/linux:install/run:/open:/copy:/ai:/screen:/ui_reply:/ui_open_music_player/__edit_soul_card__）
+     *  - `action` 字段（`{type,...}`）→ 映射回 `QuroUiAction` 子类，复刻原生分发
+     *    （callback→ui_reply:/tool_call→QuroToolRegistry/skill→QuroSkillTool/copy→剪贴板/
+     *      open_app→LaunchAppTool/open_url→内置浏览器/open_screen/render_html/render_vispro/
+     *      visual_popup/visual_ask/zx_web_card→UiNavigationBus/toggle→Unit）
+     *  - `values` 是渲染器收集的控件值（text_input/select/slider 等）。
+     */
+    private fun handleCardAction(sock: Socket, body: String) {
+        val o = runCatching { JSONObject(body) }.getOrNull()
+            ?: return respondJson(sock, """{"ok":false,"error":"bad json"}""", 400)
+        // 前端格式：{cmd:"reply:xxx"} / {cmd:"...", value, checked, selected, index, values} /
+        //           {ui:{event,data,collectFrom}} / {ui:{tool,arguments}} / {ui:{skill,input}} ...
+        val command = o.optString("cmd").ifBlank { o.optString("command") }.trim()
+        val values = mutableMapOf<String, String>()
+        o.optJSONObject("values")?.let { v ->
+            v.keys().forEach { k -> values[k] = v.optString(k) }
+        }
+
+        // 路径一：卡片按钮命令（裸串 / JSON 信封）——cmdButton/cmdChip/selfCardAction/表单提交都走这里
+        if (command.isNotEmpty()) {
+            handleCardCommand(sock, command)
+            return
+        }
+
+        // 路径二：动态 UI 动作 JSON（uiActionClick 发送的 {ui:{...}}，靠键名推断类型）
+        val ui = o.optJSONObject("ui") ?: o.optJSONObject("action") ?: o.optJSONObject("uiAction")
+            ?: return respondJson(sock, """{"ok":false,"error":"need cmd or ui"}""", 400)
+        handleDynamicUiActionJson(sock, ui, values)
+    }
+
+    /** 复刻 `ChatScreen.handleCardCommand`（老链路 + 结构化动作）。 */
+    private fun handleCardCommand(sock: Socket, cmd: String) {
+        val action = CardAction.parse(cmd)
+        if (CardActionRouter.dispatch(action) { a -> handleCardAction(a) }) {
+            respondJson(sock, """{"ok":true}""")
+            return
+        }
+        when {
+            cmd.startsWith("reply:") -> {
+                val t = cmd.removePrefix("reply:").trim()
+                if (t.isNotEmpty()) vm.send(t)
+            }
+            cmd.startsWith("ui_") -> {
+                val d = QuroUiActionBridge.dispatch
+                if (d != null) d(cmd) else QuroUiActionBridge.pendingAction = cmd
+            }
+            cmd == "linux:install" -> QuroLinuxEnv.setup(context)
+            cmd.startsWith("run:") -> {
+                val t = cmd.removePrefix("run:").trim()
+                UiNavigationBus.send(UiNavigationEvent.OpenScreen("terminal"))
+            }
+            cmd.startsWith("open:") -> QuroBrowserBridge.open(cmd.removePrefix("open:").trim())
+            cmd.startsWith("copy:") -> {
+                copyToClipboard(cmd.removePrefix("copy:").trim())
+            }
+            cmd.startsWith("ai:") -> {
+                val t = cmd.removePrefix("ai:").trim()
+                if (t.isNotEmpty()) vm.send(t)
+            }
+            cmd.startsWith("screen:") -> {
+                val d = QuroUiActionBridge.dispatch
+                if (d != null) d(cmd.removePrefix("screen:").trim()) else QuroUiActionBridge.pendingAction = cmd.removePrefix("screen:").trim()
+            }
+            cmd.startsWith(UI_REPLY_PREFIX) -> {
+                val t = cmd.removePrefix(UI_REPLY_PREFIX).trim()
+                if (t.isNotEmpty()) vm.send(t)
+            }
+            cmd == "ui_open_music_player" -> {
+                UiNavigationBus.send(UiNavigationEvent.OpenScreen("music_player"))
+            }
+            cmd == "__edit_soul_card__" -> {
+                UiNavigationBus.send(UiNavigationEvent.OpenScreen("soul"))
+            }
+        }
+        respondJson(sock, """{"ok":true}""")
+    }
+
+    /** 复刻 `ChatScreen.handleCardAction` 的结构化动作分支。返回 true=已处理。 */
+    private fun handleCardAction(a: CardAction.Action): Boolean = when (a.kind) {
+        CardAction.Kind.REPLY, CardAction.Kind.AI -> {
+            val t = a.payload()
+            if (t.isNotEmpty()) { vm.send(t); true } else false
+        }
+        CardAction.Kind.UI, CardAction.Kind.SCREEN -> {
+            val d = QuroUiActionBridge.dispatch
+            if (d != null) d(a.payload()) else QuroUiActionBridge.pendingAction = a.payload()
+            true
+        }
+        CardAction.Kind.INSTALL -> { QuroLinuxEnv.setup(context); true }
+        CardAction.Kind.RUN -> { UiNavigationBus.send(UiNavigationEvent.OpenScreen("terminal")); true }
+        CardAction.Kind.OPEN -> { QuroBrowserBridge.open(a.payload()); true }
+        CardAction.Kind.COPY -> { copyToClipboard(a.payload()); true }
+        CardAction.Kind.NAVIGATE -> {
+            val t = a.payload()
+            if (t.isNotEmpty()) { UiNavigationBus.send(UiNavigationEvent.NavigateTo(t)); true } else false
+        }
+        CardAction.Kind.TOAST -> {
+            val t = a.payload()
+            if (t.isNotEmpty()) { Toast.makeText(context, t, Toast.LENGTH_SHORT).show(); true } else false
+        }
+        CardAction.Kind.EMIT, CardAction.Kind.UNKNOWN -> false
+    }
+
+    /**
+     * 复刻 `handleDynamicUiAction`：把前端 `{ui:{...}}` 动作映射回 [QuroUiAction] 子类并分发。
+     *
+     * 前端 `uiActionClick` 发送的对象**没有 type 字段**，靠键名推断：
+     *  - has(event) → [QuroCallbackAction]
+     *  - has(tool) → [QuroToolCallAction]
+     *  - has(skill) → [QuroSkillAction]
+     *  - has(openUrl) → [QuroOpenUrlAction]
+     *  - has(copy) → [QuroCopyAction]
+     *  - has(openApp) → [QuroOpenAppAction]
+     *  - has(openScreen) → [QuroOpenScreenAction]
+     *  - has(renderHtml) → [QuroRenderHtmlAction]
+     *  - has(renderVispro) → [QuroRenderVisproAction]
+     *  - has(visualPopup) → [QuroVisualPopupAction]
+     *  - has(visualAsk) → [QuroVisualAskAction]
+     *  - has(zxWebCard) → [QuroZxWebCardAction]
+     *  - has(toggle) → [QuroToggleAction]
+     */
+    private fun handleDynamicUiActionJson(sock: Socket, a: JSONObject, values: Map<String, String>) {
+        val scope = CoroutineScope(Dispatchers.IO)
+        val onCommand: (String) -> Unit = { c ->
+            val t = c.removePrefix(UI_REPLY_PREFIX).trim()
+            if (t.isNotEmpty()) vm.send(t)
+        }
+        val onOpenLink: (String) -> Unit = { url -> QuroBrowserBridge.open(url) }
+
+        when {
+            a.has("event") -> { // callback
+                val event = a.optString("event")
+                val data = mutableMapOf<String, String>()
+                a.optJSONObject("data")?.let { d -> d.keys().forEach { k -> data[k] = d.optString(k) } }
+                val merged = LinkedHashMap<String, String>(values).apply { putAll(data) }
+                val body = if (merged.isNotEmpty()) merged.entries.joinToString("\n") { "${it.key}: ${it.value}" } else event
+                val payload = if (event.isNotBlank()) "【$event】\n$body" else body
+                onCommand(UI_REPLY_PREFIX + payload)
+            }
+            a.has("toggle") -> Unit // 渲染器内部已处理
+            a.has("openUrl") -> {
+                val url = a.optString("openUrl").ifBlank { values.values.firstOrNull() ?: "" }
+                if (url.isNotBlank()) onOpenLink(url)
+            }
+            a.has("copy") -> {
+                val text = a.optString("copy").ifBlank { values.values.firstOrNull() ?: "" }
+                if (text.isNotBlank()) copyToClipboard(text) else Toast.makeText(context, "没有可复制的内容", Toast.LENGTH_SHORT).show()
+            }
+            a.has("tool") -> { // tool_call
+                val toolName = a.optString("tool").ifBlank { values["tool"] ?: "" }
+                if (toolName.isBlank()) { Toast.makeText(context, "缺少工具名", Toast.LENGTH_SHORT).show(); return }
+                val args = LinkedHashMap<String, String>()
+                a.optJSONObject("arguments")?.let { d -> d.keys().forEach { k -> args[k] = d.optString(k) } }
+                args.putAll(values)
+                scope.launch(Dispatchers.IO) {
+                    val tool = QuroToolRegistry.active?.get(toolName)
+                    if (tool == null) {
+                        withContext(Dispatchers.Main) { onCommand("[ui_tool_request] {\"tool\":\"$toolName\",\"args\":{}}") }
+                        return@launch
+                    }
+                    if (tool.requiredPermissions.isNotEmpty()) {
+                        val argsJson = JSONObject().apply { args.forEach { (k, v) -> put(k, v) } }.toString()
+                        withContext(Dispatchers.Main) { onCommand("[ui_tool_request] {\"tool\":\"$toolName\",\"args\":$argsJson}") }
+                        return@launch
+                    }
+                    val argsJson = JSONObject().apply { args.forEach { (k, v) -> put(k, v) } }.toString()
+                    val result = runCatching { tool.run(context, argsJson) }.getOrDefault("工具执行失败")
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "工具 $toolName 已执行", Toast.LENGTH_SHORT).show()
+                        val feedback = if (result.length > 2000) result.take(2000) + "…" else result
+                        onCommand("工具 $toolName 返回：$feedback")
+                    }
+                }
+            }
+            a.has("skill") -> {
+                val skillName = (a.optString("skill").ifBlank { values["skill"] ?: "" }).removePrefix("skill__")
+                if (skillName.isBlank()) { Toast.makeText(context, "缺少技能名", Toast.LENGTH_SHORT).show(); return }
+                val input = a.optString("input").takeIf { it.isNotBlank() } ?: values.values.joinToString("，")
+                scope.launch(Dispatchers.IO) {
+                    val directive = runCatching {
+                        (QuroToolRegistry.active?.get("skill__$skillName") ?: QuroSkillTool(skillName, context))
+                            .run(context, JSONObject().apply { put("input", input) }.toString())
+                    }.getOrDefault("技能 $skillName 执行失败")
+                    withContext(Dispatchers.Main) { onCommand(directive) }
+                }
+            }
+            a.has("openApp") -> {
+                val target = a.optString("openApp").ifBlank { values.values.firstOrNull() ?: "" }
+                if (target.isBlank()) { Toast.makeText(context, "缺少应用名", Toast.LENGTH_SHORT).show(); return }
+                scope.launch(Dispatchers.Main) {
+                    val result = runCatching {
+                        LaunchAppTool().run(context, JSONObject().apply {
+                            if (target.contains(".")) put("package", target) else put("name", target)
+                        }.toString())
+                    }.getOrDefault("启动失败")
+                    Toast.makeText(context, result.take(120), Toast.LENGTH_SHORT).show()
+                }
+            }
+            a.has("openScreen") -> {
+                val target = a.optString("openScreen").ifBlank { values["target"] ?: "" }
+                if (target.isBlank()) { Toast.makeText(context, "缺少目标界面", Toast.LENGTH_SHORT).show(); return }
+                UiNavigationBus.send(UiNavigationEvent.OpenScreen(target))
+            }
+            a.has("renderHtml") -> {
+                val html = a.optString("renderHtml").ifBlank { values.values.firstOrNull() ?: "" }
+                if (html.isBlank()) { Toast.makeText(context, "缺少 HTML", Toast.LENGTH_SHORT).show(); return }
+                UiNavigationBus.send(UiNavigationEvent.RenderWidget(
+                    type = "miniapp",
+                    id = "dyn_html_${System.nanoTime()}",
+                    label = "HTML",
+                    value = html,
+                ))
+            }
+            a.has("renderVispro") -> {
+                val source = a.optString("renderVispro").ifBlank { values.values.firstOrNull() ?: "" }
+                if (source.isBlank()) { Toast.makeText(context, "缺少 mermaid 源码", Toast.LENGTH_SHORT).show(); return }
+                UiNavigationBus.send(UiNavigationEvent.RenderWidget(
+                    type = "mermaid",
+                    id = "dyn_mermaid_${System.nanoTime()}",
+                    label = "Mermaid",
+                    value = source,
+                ))
+            }
+            a.has("visualPopup") -> {
+                val vp = a.optJSONObject("visualPopup")
+                UiNavigationBus.send(UiNavigationEvent.VisualPopup(
+                    title = vp?.optString("title") ?: "",
+                    content = vp?.optString("content") ?: "",
+                ))
+            }
+            a.has("visualAsk") -> {
+                val va = a.optJSONObject("visualAsk")
+                val options = mutableListOf<String>()
+                va?.optJSONArray("options")?.let { arr -> for (i in 0 until arr.length()) options.add(arr.optString(i)) }
+                UiNavigationBus.send(UiNavigationEvent.VisualAsk(
+                    prompt = va?.optString("prompt") ?: "",
+                    options = options,
+                ))
+            }
+            a.has("zxWebCard") -> {
+                val zx = a.optJSONObject("zxWebCard")
+                val component = zx?.optString("component").orEmpty().ifBlank { values["component"] ?: "" }
+                val dsl = zx?.optString("dsl").orEmpty().ifBlank { values["dsl"] ?: "" }
+                if (component.isBlank() || dsl.isBlank()) { Toast.makeText(context, "缺少 zx 组件信息", Toast.LENGTH_SHORT).show(); return }
+                UiNavigationBus.send(UiNavigationEvent.ZxWebCard(
+                    title = zx?.optString("title").orEmpty().ifBlank { values["title"] ?: "" },
+                    component = component,
+                    dsl = dsl,
+                ))
+            }
+            else -> {
+                respondJson(sock, """{"ok":false,"error":"unknown ui action: ${a.keys().asSequence().toList()}"}""", 400)
+                return
+            }
+        }
+        respondJson(sock, """{"ok":true}""")
+    }
+
+    /** 写系统剪贴板（复刻 ChatScreen.copyPlain）。 */
+    private fun copyToClipboard(text: String) {
+        if (text.isBlank()) return
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("Zorv", text))
+        Toast.makeText(context, qstr(com.ai.assistance.quro.R.string.qk_00023), Toast.LENGTH_SHORT).show()
+    }
+
     /** 导出当前会话（生成文件路径）。 */
     private fun handleExport(sock: Socket) {
         val path = runCatching {
@@ -968,12 +1279,16 @@ class QuroWebUiServer(
 
         private const val DEFAULT_TITLE = "ZorvAI"
 
+        /** 动态 UI 回发模型的前缀（对齐 ChatScreen.UI_REPLY_PREFIX）。 */
+        private const val UI_REPLY_PREFIX = "ui_reply:"
+
         /** URL 路径 → assets 相对路径。 */
         private val STATIC = mapOf(
             "/" to "web-chat/index.html",
             "/index.html" to "web-chat/index.html",
             "/style.css" to "web-chat/style.css",
             "/chat.js" to "web-chat/chat.js",
+            "/renderers.js" to "web-chat/renderers.js",
         )
 
         /** 本机局域网 IPv4。 */
