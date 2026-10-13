@@ -457,6 +457,11 @@ class QuroToolRouter(
         return when {
             name == "apk_plugin" -> ToolCapabilityDirectory.ToolCategory.PLUGIN
             name.startsWith("aip_") -> ToolCapabilityDirectory.ToolCategory.AIP_DOC
+            // zxwidget 动态交互界面：与 ToolCapabilityDirectory.inferCategory **同源**（两处都加）。
+            // 🔴 本函数最后是 `else -> null`，所以漏掉这条 = 从路由索引里彻底消失：
+            //   tool_router 的 match_intent / list_tools 都查不到 zx_catalog / zx_web_card，
+            //   模型即使想用也无从发现（用户报的「AI 根本不会用 zxwidget」就是这条）。
+            name.startsWith("zx_") -> ToolCapabilityDirectory.ToolCategory.ZXWIDGET
             name in setOf("ui_dsl_spec", "ui_validate") -> ToolCapabilityDirectory.ToolCategory.DYNAMIC_UI
             name == "game_ui" -> ToolCapabilityDirectory.ToolCategory.DYNAMIC_UI
             // 生成式 UI 画布 + Web 应用工程：与 ToolCapabilityDirectory.inferCategory 同源，

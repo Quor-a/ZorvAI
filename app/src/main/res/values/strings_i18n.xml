@@ -4059,16 +4059,23 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_04066" formatted="false">重新加载卡片</string>
     <string name="qk_04067" formatted="false">复制卡片 DSL</string>
     <string name="qk_04068">卡片运行时资源缺失：%1$s</string>
-    <string name="qk_04069" formatted="false">本轮请用 zxwidget 动态交互界面回答：调用 zx_web_card（component 取 zx_ 开头的组件名，dsl 填该组件的 JSON），把结构化结果画成可交互控件，不要用纯文本罗列。组件名与字段先查 zx_catalog。</string>
+    <string name="qk_04069" formatted="false">本轮请用 zxwidget 动态交互界面回答：调用 zx_web_card（component 取 zx_ 开头的组件名，dsl 填该组件的 JSON），把结构化结果画成可交互控件，不要用纯文本罗列。组件名与字段先查 zx_catalog。界面会**直接渲染在当前对话框里**（不是弹窗、不是卡片），一块只画一次。</string>
     <string name="qk_04070" formatted="false">已开启 zxwidget 动态交互界面：本轮将用可交互卡片回答</string>
     <string name="qk_04071" formatted="false">已关闭 zxwidget 动态交互界面</string>
     <string name="qk_04072" formatted="false">Web UI</string>
     <string name="qk_04076">zxwidget 动态交互界面</string>
 
     <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">zxwidget 卡片缺少 component 或 dsl 参数</string>
+    <string name="qk_04073" formatted="false">zxwidget 缺少 component 或 dsl 参数</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI · Web UI</string>
     <string name="qk_04075">Web UI 服务启动失败：%1$s</string>
+    <string name="qk_04077">Web UI 页面加载失败（%1$s）：%2$s</string>
+    <string name="qk_04078">正在从 %1$s 加载 Web UI…</string>
+    <string name="qk_04079">同一 Wi-Fi 下，可用这个链接在别的设备打开</string>
+    <string name="qk_04080">正在启动…</string>
+    <string name="qk_04081">复制链接</string>
+    <string name="qk_04082">已复制</string>
+    <string name="qk_04083">在浏览器打开</string>
 </resources>

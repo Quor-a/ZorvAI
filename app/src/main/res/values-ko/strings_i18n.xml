@@ -3909,16 +3909,23 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_04066" formatted="false">카드 새로고침</string>
     <string name="qk_04067" formatted="false">카드 DSL 복사</string>
     <string name="qk_04068">카드 런타임 리소스 누락: %1$s</string>
-    <string name="qk_04069" formatted="false">이번에는 zxwidget 동적 인터랙티브 인터페이스로 답하세요: zx_web_card를 호출하고(component는 zx_로 시작하는 컴포넌트 이름, dsl은 해당 컴포넌트의 JSON) 구조화된 결과를 일반 텍스트가 아닌 조작 가능한 컨트롤로 그립니다. 컴포넌트와 필드 이름은 먼저 zx_catalog로 확인하세요.</string>
+    <string name="qk_04069" formatted="false">이번에는 zxwidget 동적 인터랙티브 인터페이스로 답하세요: zx_web_card를 호출하고(component는 zx_로 시작하는 컴포넌트 이름, dsl은 해당 컴포넌트의 JSON) 구조화된 결과를 일반 텍스트가 아닌 조작 가능한 컨트롤로 그립니다. 컴포넌트와 필드 이름은 먼저 zx_catalog로 확인하세요.\uc778\ud130\ud398\uc774\uc2a4\ub294 **\ud604\uc7ac \ub300\ud654\ucc3d \uc548\uc5d0 \uc9c1\uc811 \ub80c\ub354\ub9c1\ub429\ub2c8\ub2e4** (\ud31d\uc5c5\ub3c4 \uce74\ub4dc\ub3c4 \uc544\ub2d9\ub2c8\ub2e4). \uac01 \ube14\ub85d\uc740 \ud55c \ubc88\ub9cc \uadf8\ub9ac\uc138\uc694.</string>
     <string name="qk_04070" formatted="false">zxwidget 동적 인터랙티브 인터페이스 켜짐: 이번에는 조작 가능한 카드로 답합니다</string>
     <string name="qk_04071" formatted="false">zxwidget 동적 인터랙티브 인터페이스 꺼짐</string>
     <string name="qk_04072" formatted="false">Web UI</string>
     <string name="qk_04076">zxwidget 동적 인터랙티브 인터페이스</string>
 
     <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">zxwidget 카드 액션에 component 또는 dsl이 없습니다</string>
+    <string name="qk_04073" formatted="false">zxwidget에 component 또는 dsl이 없습니다</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI · Web UI</string>
     <string name="qk_04075">Web UI 서비스를 시작하지 못했습니다: %1$s</string>
+    <string name="qk_04077">Web UI 페이지를 불러오지 못했습니다 (%1$s): %2$s</string>
+    <string name="qk_04078">%1$s에서 Web UI를 불러오는 중…</string>
+    <string name="qk_04079">같은 Wi-Fi에서 이 링크를 다른 기기로 열 수 있습니다</string>
+    <string name="qk_04080">시작 중…</string>
+    <string name="qk_04081">링크 복사</string>
+    <string name="qk_04082">복사됨</string>
+    <string name="qk_04083">브라우저에서 열기</string>
 </resources>

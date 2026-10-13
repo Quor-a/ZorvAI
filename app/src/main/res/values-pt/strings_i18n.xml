@@ -3907,16 +3907,23 @@ Seus modelos configurados foram mantidos; você também pode digitar o nome do m
     <string name="qk_04066" formatted="false">Recarregar cartão</string>
     <string name="qk_04067" formatted="false">Copiar DSL do cartão</string>
     <string name="qk_04068">Recurso de runtime do cartão ausente: %1$s</string>
-    <string name="qk_04069" formatted="false">Neste turno responda com a interface dinâmica zxwidget: chame zx_web_card (component = nome começando com zx_, dsl = o JSON desse componente) e mostre o resultado estruturado como controles interativos em vez de texto simples. Consulte antes os nomes de componente e campos com zx_catalog.</string>
+    <string name="qk_04069" formatted="false">Neste turno responda com a interface dinâmica zxwidget: chame zx_web_card (component = nome começando com zx_, dsl = o JSON desse componente) e mostre o resultado estruturado como controles interativos em vez de texto simples. Consulte antes os nomes de componente e campos com zx_catalog.A interface \u00e9 renderizada **diretamente no di\u00e1logo atual** (n\u00e3o \u00e9 popup nem cart\u00e3o); desenhe cada bloco uma s\u00f3 vez.</string>
     <string name="qk_04070" formatted="false">Interface dinâmica zxwidget ativada: este turno responderá com cartões interativos</string>
     <string name="qk_04071" formatted="false">Interface dinâmica zxwidget desativada</string>
     <string name="qk_04072" formatted="false">Web UI</string>
     <string name="qk_04076">Interface dinâmica zxwidget</string>
 
     <!-- zxwidget 单卡片对话框：动作参数缺失提示 -->
-    <string name="qk_04073" formatted="false">Ação do cartão zxwidget sem component ou dsl</string>
+    <string name="qk_04073" formatted="false">zxwidget: falta component ou dsl</string>
 
     <!-- Web UI 对话框（第三个对话框，ZorvAI 对话框的 Web UI 复制品） -->
     <string name="qk_04074" formatted="false">ZorvAI - Web UI</string>
     <string name="qk_04075">Falha ao iniciar o serviço Web UI: %1$s</string>
+    <string name="qk_04077">Falha ao carregar a página Web UI (%1$s): %2$s</string>
+    <string name="qk_04078">Carregando a Web UI de %1$s…</string>
+    <string name="qk_04079">No mesmo Wi-Fi, abra este link em outro dispositivo</string>
+    <string name="qk_04080">Iniciando…</string>
+    <string name="qk_04081">Copiar link</string>
+    <string name="qk_04082">Copiado</string>
+    <string name="qk_04083">Abrir no navegador</string>
 </resources>

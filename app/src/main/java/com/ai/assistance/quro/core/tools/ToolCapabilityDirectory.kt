@@ -41,6 +41,17 @@ object ToolCapabilityDirectory {
         SECURITY("安全/权限", "Shizuku、ROOT、设备管理员"),
         CMS_DEVELOPMENT("CMS开发", "CMS模块、引擎、开发环境管理与部署"),
         AIP_DOC(qstr(R.string.qk_00121), "长文档/PPT/报告/思维导图的 AIP 结构化排版与文档生成"),
+        /**
+         * zxwidget 动态交互界面。
+         *
+         * 🔴 必须单列一类，不能并进 UI_CARDS / DYNAMIC_UI：
+         *  - `UI_CARDS` 是**气泡内富卡片**（ui_card / ui_widget，101 种，原生 Compose 渲染）；
+         *  - `DYNAMIC_UI` 是 `quro-ui` 原生组件；
+         *  - 本类是 **zxwidget**：477 个 zx 组件，由 `assets/zx/zxwidget.js` 编译，
+         *    **直接渲染在对话框的消息流里**（不弹窗、不进卡片栏），两个对话框都支持它。
+         * 三者常被混为一谈，分类上分开才能让 tool_discovery / tool_router 讲清「该用哪个」。
+         */
+        ZXWIDGET("zxwidget", "zxwidget 动态交互界面：477 个 zx 组件直接编译渲染进对话框消息流（方案对比、数据表、表单、看板、时间线、仪表盘…）"),
         PLUGIN("插件扩展", "APK 级插件框架：装独立 APK 给 AI 加能力（AI 工具 / ACI 能力 / 界面 / 指令）")
     }
     
@@ -1098,6 +1109,70 @@ object ToolCapabilityDirectory {
             tips = listOf("支持17种格式", "文本类文档优先用此工具", "创建后自动渲染预览"),
             relatedTools = listOf("aiwps_create", "chat_doc", "workspace_doc"),
             priority = 4
+        ),
+
+        // ═══════════════ zxwidget 动态交互界面（477 个 zx 组件）═══════════════
+        // 这两个工具此前没有任何分类规则命中，落到 BASIC，导致 tool_router 的
+        // match_intent / list_tools 与 tool_discovery **都查不到 zxwidget**
+        // → 模型根本不知道有这个能力 → 用户报「AI 不会用 zxwidget / 渲染不出来」。
+        "zx_catalog" to ToolInfo(
+            name = "zx_catalog",
+            category = ToolCategory.ZXWIDGET,
+            description = "查 zxwidget 组件名册与字段契约（477 个 zx_ 组件）。做动态交互界面前**先查这里**，不要凭印象编组件名/字段名",
+            useCases = listOf(
+                "有哪些 zx 组件", "zx 组件怎么用", "这个组件的字段是什么", "zxwidget 名册",
+                "方案对比用什么组件", "数据表格用什么组件", "表单用什么组件", "看板/时间线/仪表盘用什么组件",
+                "查一下 zx_table 的字段", "查一下 zx_compare 的示例"
+            ),
+            examples = listOf(
+                "zx_catalog()",
+                "zx_catalog(component=\"zx_table\")",
+                "zx_catalog(keyword=\"对比\")",
+                "zx_catalog(keyword=\"时间线\")"
+            ),
+            parameters = mapOf(
+                "component" to "组件名（传了就返回该组件的字段契约 + 示例 DSL）",
+                "keyword" to "按用途检索组件（中文即可，如「对比」「看板」「进度」）"
+            ),
+            tips = listOf(
+                "**先查名册再下组件**：477 个组件 + 195 KB 契约塞不进提示词，只能按需查。",
+                "名册外的名字会落到通用渲染（generic），效果差——所以别猜组件名。",
+                "拿到字段契约后按契约填 dsl，字段用了别名（n/v/d/t/k…）也有兜底，但按契约填最稳。"
+            ),
+            relatedTools = listOf("zx_web_card", "ui_dsl_spec", "ui_widget"),
+            priority = 4
+        ),
+
+        "zx_web_card" to ToolInfo(
+            name = "zx_web_card",
+            category = ToolCategory.ZXWIDGET,
+            description = "zxwidget 动态交互界面：把结构化结果编译成**可交互控件直接渲染在对话框消息流里**（方案对比、数据表、表单、看板、时间线、仪表盘、审批流…），用户在界面上点选/填写，交互结构化回传",
+            useCases = listOf(
+                "我要能点选对比的方案", "画个可交互的表格（能点行）", "做个表单让我填",
+                "时间线/流程可视化", "看板/看板拖拽那种", "仪表盘/进度可视化",
+                "让我在界面上选一个", "把这个数据做成能操作的界面", "审批流/步骤条",
+                "不要一大段文字，做成能点的东西"
+            ),
+            examples = listOf(
+                "zx_web_card(component=\"zx_compare\", dsl={\"items\":[{\"n\":\"方案A\",\"v\":92,\"d\":\"成本低\"},{\"n\":\"方案B\",\"v\":78,\"d\":\"扩展好\"}]}, title=\"方案对比\")",
+                "zx_web_card(component=\"zx_table\", dsl={\"cols\":[\"接口\",\"P99\",\"错误率\"],\"rows\":[[\"POST /api/order\",\"612ms\",\"0.31%\"]]}, title=\"接口指标\")",
+                "zx_web_card(component=\"zx_form\", dsl={\"fields\":[{\"k\":\"name\",\"label\":\"姓名\",\"type\":\"text\"}],\"submit\":\"提交\"}, title=\"登记\")"
+            ),
+            parameters = mapOf(
+                "component" to "zx 组件名，必须来自 zx_catalog 名册（477 个，全部 zx_ 开头）",
+                "dsl" to "该组件的数据 JSON（对象）；字段按 zx_catalog component=X 返回的契约与 example 填",
+                "title" to "界面标题（可选，缺省用组件名）",
+                "timeout" to "等待用户交互的超时秒数，默认 120"
+            ),
+            tips = listOf(
+                "🔴 **它是「直接渲染在对话框里」，不是弹窗、也不是气泡内卡片栏**——调完就在当前对话流里长出一块可交互界面。",
+                "动笔前先用 `zx_catalog` 确认组件名与字段（可传 component 拿契约 + 示例 DSL），别凭印象拼。",
+                "用于「要用户动手操作」的场景；纯展示用 `visual_popup`，气泡内小卡片用 `ui_card` / `ui_widget`。",
+                "用户点完之后交互会作为**本工具的结果**回来，你据此继续推理——不要重复再画一遍同一块界面。",
+                "一块界面只画一次；需要多块就多次调用，它们会依次内联在消息流里。"
+            ),
+            relatedTools = listOf("zx_catalog", "ui_widget", "ui_card", "visual_popup"),
+            priority = 5
         )
     )
     
@@ -1150,6 +1225,13 @@ object ToolCapabilityDirectory {
     /** 命名推断分类（兜底；handbook 已含手写分类优先）。与 QuroToolRouter.categorize 同源逻辑。 */
     private fun inferCategory(name: String): ToolCategory {
         return when {
+            // zxwidget 动态交互界面（zx_catalog / zx_web_card）。
+            // 🔴 这条以前不存在，两个工具一路掉到 `else -> BASIC`，
+            //   tool_discovery / tool_router 按分类列举时**根本列不出 zxwidget**，
+            //   模型因此不知道有这个能力（用户报「AI 不会用 / 渲染不出来」）。
+            //   与 QuroToolRouter.categorize 必须同源——那边最后是 `else -> null`，
+            //   漏掉即从路由索引里彻底消失，后果比这里更重。
+            name.startsWith("zx_") -> ToolCategory.ZXWIDGET
             name in setOf("ui_dsl_spec", "ui_validate") -> ToolCategory.DYNAMIC_UI
             // 生成式 UI 画布 + Web 应用工程：归一类（都是"交付一件界面"的能力，查起来在同一个篮子里）
             name.startsWith("genui_") || name == "miniapp" -> ToolCategory.GENUI
