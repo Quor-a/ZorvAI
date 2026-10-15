@@ -16,57 +16,67 @@
 <body>
 
 <!-- ═══════════════════════════════════════════════════════════════════
-     Web UI —— ZorvAI 的**对等客户端**（另一个 ZorvAI 对话框）
-     ═══════════════════════════════════════════════════════════════════
-
-     这个页面不是投影，而是 ZorvAI 对话框在浏览器里的**对等客户端**：
-     同一个会话、同一份状态、同一条渲染链，但这里可以像原生一样操作：
-       · 发消息 / 停止 / 新对话 / 清空；
-       · 深度思考 / 记忆 / 子智能体 / 自动朗读 / 看懂屏幕 开关直接切换；
-       · CMS / 特权 策略直接切换；
-       · 模型 / 人格选择弹层；
-       · 上传图片 / 文件 / 视频；
-       · 语音面板（TTS / STT）；
-       · 打开全部原生功能面板（终端 / 编辑器 / 工具箱 / 知识库 / …）。
-
-     消息渲染与原生同源：正文块由原生 parseBlocks 产出（见 WebUiProjection），
-     互动UI界面（zxwidget）用 iframe 引 /zx/shell —— 与原生同一份运行时。
+     Web UI —— ZorvAI 对话框的**对等客户端**（另一个 ZorvAI 对话框）
+     布局对齐原生 ChatScreen：
+       · 顶栏 = 原生 ChatTopBar：单行（左菜单 / 中人格+模型胶囊 / 右语音·设置·新对话）
+       · 消息流 = 原生 MessageList 同源渲染
+       · 权限条 = 原生 ChatPermissionModeBar：默认收起单行摘要，点开展开
+       · 输入行 = 原生输入区
+     「功能」抽屉（左菜单打开）= 全部在 Web 端真能跑的动作，不再唤起原生深链。
      ═══════════════════════════════════════════════════════════════════ -->
+
 <div id="app">
 
-  <!-- 顶栏 = 原生 ChatTopBar 的对等实现（模型/人格可点） -->
+  <!-- 顶栏 = 原生 ChatTopBar 单行对等实现 -->
   <header id="hd">
-    <div class="hd-main">
-      <h1 id="title">ZorvAI</h1>
-      <div class="hd-sub">
-        <button type="button" class="chip" id="model" title="切换模型"></button>
-        <button type="button" class="chip" id="persona" title="切换人格"></button>
-      </div>
+    <button id="btn-menu" class="hd-ico" type="button" aria-label="功能" title="功能">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <div class="hd-chips">
+      <button type="button" class="chip" id="persona" title="切换人格"></button>
+      <span class="hd-sep" aria-hidden="true"></span>
+      <button type="button" class="chip" id="model" title="切换模型"></button>
     </div>
-    <span class="dot" id="dot"></span>
-    <button id="btn-new" type="button">新对话</button>
+    <div class="hd-right">
+      <button id="btn-voice" class="hd-ico" type="button" aria-label="语音" title="语音">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <button id="btn-settings" class="hd-ico" type="button" aria-label="设置" title="设置">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <button id="btn-new" class="hd-ico" type="button" aria-label="新对话" title="新对话">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
   </header>
 
   <!-- 消息流 = 原生 MessageList 的同源渲染 -->
   <main id="stream" role="log" aria-live="polite"></main>
 
-  <!-- 底栏 = 原生 PermissionModeBar + 输入行的对等实现 -->
+  <!-- 底栏 = 原生 ChatPermissionModeBar（默认收起）+ 输入行 -->
   <footer id="composer">
-    <!-- 权限模式条：可点击切换（对等客户端） -->
-    <div id="modes" class="modes">
-      <button type="button" class="mode" data-mode="deepThink">深度思考</button>
-      <button type="button" class="mode" data-mode="autoSaveMemory">记忆</button>
-      <button type="button" class="mode" data-mode="subAgent">子智能体</button>
-      <button type="button" class="mode" data-mode="autoRead">自动朗读</button>
-      <button type="button" class="mode" data-mode="vision">看懂屏幕</button>
-      <button type="button" class="mode tri" id="cms">CMS</button>
-      <button type="button" class="mode tri" id="priv">特权</button>
-      <button type="button" class="mode" id="ws">工作区</button>
-    </div>
-    <div class="crow">
-      <button id="btn-tools" type="button" class="tbtn" title="工具面板" aria-label="工具面板">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+
+    <!-- 权限模式条：默认收起单行摘要（对等客户端，可展开直接切换） -->
+    <div id="perm" class="perm">
+      <button id="permHead" class="perm-head" type="button" aria-expanded="false">
+        <span class="perm-title">能力</span>
+        <span class="perm-tags" id="permTags"></span>
+        <span class="perm-chev" id="permChev" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
       </button>
+      <div id="permBody" class="perm-body" hidden>
+        <div class="perm-modes" id="permModes"><!-- JS 注入 5 个开关行 --></div>
+        <div class="perm-policy">
+          <button type="button" class="pp" id="cms">CMS</button>
+          <button type="button" class="pp" id="priv">特权</button>
+        </div>
+        <button type="button" class="perm-ws" id="ws">工作区</button>
+      </div>
+    </div>
+
+    <!-- 输入行 -->
+    <div class="crow">
       <button id="btn-attach" type="button" class="tbtn" title="上传文件" aria-label="上传文件">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       </button>
@@ -77,17 +87,16 @@
         <svg id="stop-ico" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" hidden><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
       </button>
     </div>
-    <div id="cfoot">
-      <span id="cnt">0 条消息</span>
-      <span class="mid" id="btn-settings">设置</span>
-      <span class="right" id="link"></span>
-    </div>
+
     <!-- 布局自检行：平时 hidden、不占位 -->
     <div id="diag" hidden></div>
   </footer>
 
   <!-- 已选附件条 -->
   <div id="attbar" hidden></div>
+
+  <!-- 轻提示 -->
+  <div id="toast" class="toast" hidden></div>
 
   <!-- ═══ 弹层 ═══ -->
 
@@ -120,25 +129,40 @@
     </div>
   </div>
 
-  <!-- 工具面板（+） -->
-  <div class="overlay" id="toolSheet" hidden>
-    <div class="sheet">
+  <!-- 功能抽屉（左菜单打开，全部 Web 端真功能） -->
+  <div class="overlay drawer" id="drawerSheet" hidden>
+    <div class="sheet drawer-sheet">
       <div class="sheet-h">
-        <span>工具面板</span>
-        <button type="button" class="x" data-close="toolSheet">✕</button>
+        <span>功能</span>
+        <button type="button" class="x" data-close="drawerSheet">✕</button>
       </div>
-      <div class="sheet-b" id="toolList"></div>
+      <div class="sheet-b" id="drawerList"></div>
     </div>
   </div>
 
-  <!-- 语音面板 -->
+  <!-- 语音面板（Web Speech API 真功能） -->
   <div class="overlay" id="voiceSheet" hidden>
     <div class="sheet">
       <div class="sheet-h">
         <span>语音</span>
         <button type="button" class="x" data-close="voiceSheet">✕</button>
       </div>
-      <div class="sheet-b" id="voiceList"></div>
+      <div class="sheet-b">
+        <div class="voice-sec">
+          <div class="voice-sec-t">朗读（TTS）</div>
+          <textarea id="ttsText" rows="3" class="voice-ta" placeholder="输入要朗读的文字，或点「朗读最后回复」"></textarea>
+          <div class="voice-btns">
+            <button type="button" class="qbtn filled" id="btn-tts-speak">朗读</button>
+            <button type="button" class="qbtn" id="btn-tts-last">朗读最后回复</button>
+            <button type="button" class="qbtn ghost" id="btn-tts-stop">停止</button>
+          </div>
+        </div>
+        <div class="voice-sec">
+          <div class="voice-sec-t">语音输入（STT）</div>
+          <button type="button" class="qbtn" id="btn-stt">开始说话</button>
+          <div class="voice-stt" id="sttStatus">点「开始说话」后对着麦克风讲话，文字会进入输入框。</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -149,18 +173,18 @@
         <span>设置</span>
         <button type="button" class="x" data-close="settingsSheet">✕</button>
       </div>
-      <div class="sheet-b" id="settingsList"></div>
-    </div>
-  </div>
-
-  <!-- 功能面板入口网格 -->
-  <div class="overlay" id="featuresSheet" hidden>
-    <div class="sheet">
-      <div class="sheet-h">
-        <span>全部功能</span>
-        <button type="button" class="x" data-close="featuresSheet">✕</button>
+      <div class="sheet-b">
+        <label class="set-row">
+          <span>深色模式</span>
+          <span class="dui-switch"><input type="checkbox" id="sw-dark" class="dui-switch-input"></span>
+        </label>
+        <button type="button" class="set-row link" id="btn-export">导出对话</button>
+        <button type="button" class="set-row link" id="btn-clear">清空对话</button>
+        <div class="set-about">
+          <div class="set-about-t">ZorvAI Web 对等端</div>
+          <div class="set-about-d">浏览器里的另一个 ZorvAI 对话框，与原生同源渲染、同一份状态。</div>
+        </div>
       </div>
-      <div class="sheet-b" id="featuresList"></div>
     </div>
   </div>
 

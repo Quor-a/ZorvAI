@@ -140,11 +140,11 @@ html.flow #app{height:auto}
 html.flow #stream{flex:0 0 auto;overflow-y:visible}
 html.flow #composer{position:sticky;bottom:0}
 
-/* ── 3. 顶栏（对等 ChatTopBar）──────────────────────────────────────── */
+/* ── 3. 顶栏（对等 ChatTopBar，单行紧凑）────────────────────────────── */
 #hd{
-  display:flex;align-items:center;gap:10px;flex:none;
-  padding:12px 16px;
-  padding-top:calc(12px + env(safe-area-inset-top));
+  display:flex;align-items:center;gap:6px;flex:none;
+  padding:7px 8px;
+  padding-top:calc(7px + env(safe-area-inset-top));
   background:var(--bg2);
   background:color-mix(in srgb,var(--bg2) 82%,transparent);
   -webkit-backdrop-filter:blur(14px) saturate(1.2);
@@ -152,46 +152,28 @@ html.flow #composer{position:sticky;bottom:0}
   border-bottom:1px solid var(--line);
   position:relative;z-index:5;
 }
-.hd-main{min-width:0;flex:1}
-#hd h1{
-  margin:0;font-size:18px;font-weight:600;
-  font-family:var(--font-serif);
-  letter-spacing:.01em;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  color:var(--fg);
+.hd-ico{
+  flex:none;display:inline-flex;align-items:center;justify-content:center;
+  width:38px;height:38px;border-radius:11px;border:1px solid transparent;
+  background:none;color:var(--fg-soft);cursor:pointer;
+  transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out),transform var(--t-fast) var(--ease-out);
 }
-.hd-sub{display:flex;gap:6px;margin-top:3px;flex-wrap:wrap}
+.hd-ico:hover{background:var(--surface);color:var(--primary);border-color:var(--line)}
+.hd-ico:active{transform:scale(.92)}
+.hd-chips{display:flex;align-items:center;gap:6px;min-width:0;flex:1 1 auto;overflow:hidden}
+.hd-sep{width:1px;height:18px;background:var(--line2);flex:none}
+.hd-right{display:flex;align-items:center;gap:2px;flex:none}
 .chip{
-  font-size:11px;line-height:1.5;color:var(--fg-soft);
+  font-size:12px;line-height:1.4;color:var(--fg-soft);
   background:var(--surface);border:1px solid var(--line);
-  border-radius:var(--r-pill);padding:3px 10px;
-  max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  border-radius:var(--r-pill);padding:5px 11px;
+  max-width:38vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   box-shadow:0 1px 2px rgba(33,30,26,.03);
   transition:border-color var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
   cursor:pointer;
 }
 .chip:empty{display:none}
 .chip:hover{border-color:var(--primary);color:var(--primary)}
-.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none;position:relative}
-.dot.on{background:var(--primary)}
-.dot.on::after{
-  content:"";position:absolute;inset:-3px;border-radius:50%;
-  border:1px solid var(--primary);
-  border:1px solid color-mix(in srgb,var(--primary) 55%,transparent);
-  animation:pulse 2s var(--ease-out) infinite;
-}
-@keyframes pulse{
-  0%,100%{transform:scale(.85);opacity:.9}
-  50%{transform:scale(1.15);opacity:.35}
-}
-#btn-new{
-  flex:none;font:inherit;font-size:13px;font-weight:600;color:var(--primary);
-  background:var(--primary-soft);border:0;border-radius:var(--r-pill);padding:7px 14px;
-  cursor:pointer;
-  transition:background var(--t-fast) var(--ease-out),transform var(--t-fast) var(--ease-out);
-}
-#btn-new:hover{background:color-mix(in srgb,var(--primary-soft) 82%,var(--primary))}
-#btn-new:active{transform:scale(.96)}
 
 /* ── 4. 消息流（对等 MessageList / MessageRow）─────────────────────── */
 /* `flex:1 1 auto` 而不是 `flex:1`：`flex:1` 等价 `flex-basis:0%`，容器高度一旦
@@ -442,32 +424,65 @@ html.dark .msg.mine .md{color:#E8B9A0}
   background:color-mix(in srgb,var(--bg2) 86%,transparent);
   -webkit-backdrop-filter:blur(14px) saturate(1.2);
   backdrop-filter:blur(14px) saturate(1.2);
-  padding:10px 12px;
-  padding-bottom:calc(10px + env(safe-area-inset-bottom));
-}
-.modes{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px;padding-bottom:2px}
-.modes::-webkit-scrollbar{display:none}
-.mode{
-  flex:none;font:inherit;font-size:12px;color:var(--fg-soft);
-  background:var(--surface);border:1px solid var(--line);
-  border-radius:var(--r-pill);padding:5px 13px;cursor:pointer;white-space:nowrap;
-  box-shadow:0 1px 2px rgba(33,30,26,.03);
-  transition:all var(--t-fast) var(--ease-out);
-}
-.mode:hover{border-color:var(--line2);color:var(--fg)}
-.mode.on{
-  background:var(--primary-soft);border-color:var(--primary);color:var(--primary);
-  font-weight:600;
-  box-shadow:0 0 0 1px color-mix(in srgb,var(--primary) 22%,transparent) inset;
+  padding:8px 10px;
+  padding-bottom:calc(8px + env(safe-area-inset-bottom));
 }
 
-/* 三态策略 chip（CMS / 特权）：配色与文案都照抄原生摘要行的 SummaryTag ——
-   允许=绿、禁止=红、询问=主题色。颜色在这里有语义（红=AI 会被拒），
-   不是装饰，所以单独给 token，不混进 .mode.on 那一套。 */
-.mode.tri{font-variant-numeric:tabular-nums}
-.mode.tri.allow{background:var(--policy-allow-bg);border-color:transparent;color:var(--policy-allow-fg)}
-.mode.tri.deny{background:var(--policy-deny-bg);border-color:transparent;color:var(--policy-deny-fg)}
-.mode.tri.ask{background:var(--primary-soft);border-color:transparent;color:var(--primary)}
+/* 权限条：默认收起单行摘要（对等原生 ChatPermissionModeBar） */
+.perm{
+  border:1px solid var(--line);border-radius:14px;
+  background:var(--surface);margin-bottom:8px;overflow:hidden;
+}
+.perm-head{
+  display:flex;align-items:center;gap:8px;width:100%;
+  padding:9px 12px;border:0;background:none;cursor:pointer;
+  font:inherit;color:var(--fg-soft);text-align:left;
+}
+.perm-title{flex:none;font-size:12px;font-weight:700;color:var(--fg);letter-spacing:.02em}
+.perm-tags{flex:1 1 auto;min-width:0;display:flex;gap:5px;overflow-x:auto;scrollbar-width:none}
+.perm-tags::-webkit-scrollbar{display:none}
+.stag{
+  flex:none;font-size:11px;line-height:1.4;color:var(--primary);
+  background:var(--primary-soft);border-radius:var(--r-pill);padding:2px 9px;white-space:nowrap;
+}
+.stag-empty{color:var(--muted);background:var(--bg2)}
+.perm-chev{flex:none;display:inline-flex;color:var(--muted);transition:transform var(--t-fast) var(--ease-out)}
+.perm-head.open .perm-chev{transform:rotate(180deg)}
+.perm-body{padding:4px 12px 12px;border-top:1px solid var(--line)}
+.perm-modes{display:flex;flex-direction:column}
+.pm{
+  display:flex;align-items:center;gap:10px;padding:9px 4px;cursor:pointer;
+  border-bottom:1px solid var(--line);
+}
+.pm:last-child{border-bottom:0}
+.pm-l{flex:1 1 auto;min-width:0;font-size:14px;color:var(--fg)}
+.pm-sw{
+  flex:none;width:42px;height:24px;border-radius:99px;
+  background:var(--line2);position:relative;transition:background var(--t-fast) var(--ease-out);
+}
+.pm-sw .pm-knob{
+  position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform var(--t-fast) var(--ease-out);
+}
+.pm.on .pm-sw{background:var(--primary)}
+.pm.on .pm-sw .pm-knob{transform:translateX(18px)}
+.perm-policy{display:flex;gap:8px;margin-top:10px}
+.pp{
+  flex:1 1 0;font:inherit;font-size:13px;font-weight:600;cursor:pointer;
+  border:1px solid var(--line);border-radius:10px;padding:9px 10px;color:var(--fg-soft);
+  background:var(--bg2);transition:all var(--t-fast) var(--ease-out);
+}
+.pp.allow{background:var(--policy-allow-bg);border-color:transparent;color:var(--policy-allow-fg)}
+.pp.deny{background:var(--policy-deny-bg);border-color:transparent;color:var(--policy-deny-fg)}
+.pp.ask{background:var(--primary-soft);border-color:transparent;color:var(--primary)}
+.perm-ws{
+  width:100%;margin-top:8px;font:inherit;font-size:13px;cursor:pointer;
+  border:1px dashed var(--line2);border-radius:10px;padding:9px 10px;color:var(--fg-soft);
+  background:var(--bg2);transition:all var(--t-fast) var(--ease-out);
+}
+.perm-ws:hover{border-color:var(--primary);color:var(--primary)}
+.perm-ws.on{border-style:solid;border-color:var(--primary);color:var(--primary);background:var(--primary-soft)}
+
 .crow{display:flex;gap:8px;align-items:flex-end}
 #inp{
   flex:1;min-width:0;                      /* min-width:0 不能少，否则右侧死白 */
@@ -491,14 +506,6 @@ html.dark .msg.mine .md{color:#E8B9A0}
 #send[hidden] svg{display:none}
 #send:active{transform:scale(.92)}
 #send.stop{background:var(--err);box-shadow:0 2px 8px color-mix(in srgb,var(--err) 35%,transparent)}
-#cfoot{
-  display:flex;justify-content:space-between;gap:8px;
-  font-size:11px;color:var(--muted);margin-top:7px;min-width:0;
-}
-#cfoot .right{
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-family:var(--font-mono);
-}
 
 /* 布局自检行：**只在真的出问题时出现**，平时 `hidden` 不占位。 */
 #diag{
@@ -534,6 +541,63 @@ html.dark .msg.mine .md{color:#E8B9A0}
   font-size:11px;padding:0;
 }
 .att-x:hover{color:var(--err)}
+
+/* ── 6b. 功能抽屉 / 语音 / 设置 / 轻提示 ───────────────────────────── */
+.drawer-sheet{max-height:84vh}
+.drawer-g{
+  font-size:11.5px;color:var(--muted);margin:14px 6px 4px;font-weight:700;
+  letter-spacing:.04em;
+}
+.drawer-row{
+  display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  border:0;background:none;padding:12px 6px;cursor:pointer;font:inherit;
+  color:var(--fg);border-bottom:1px solid var(--line);
+  transition:background var(--t-fast) var(--ease-out);
+}
+.drawer-row:active{background:var(--bg2)}
+.dr-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
+.dr-l{font-size:14.5px;color:var(--fg)}
+.dr-s{font-size:11.5px;color:var(--muted)}
+.dr-r{flex:none;display:flex;align-items:center}
+.dr-pill{
+  font-size:12px;font-weight:600;color:var(--muted);
+  background:var(--bg2);border-radius:var(--r-pill);padding:3px 12px;
+}
+.dr-pill.on{color:var(--primary);background:var(--primary-soft)}
+.dr-go{font-size:20px;color:var(--muted);line-height:1}
+
+.voice-sec{margin:12px 0}
+.voice-sec-t{font-size:12px;font-weight:700;color:var(--fg-soft);margin-bottom:7px}
+.voice-ta{
+  width:100%;font:inherit;font-size:14px;color:var(--fg);
+  background:var(--bg);border:1px solid var(--line2);border-radius:var(--r-ctl);
+  padding:9px 11px;resize:none;outline:none;box-sizing:border-box;
+}
+.voice-ta:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 12%,transparent)}
+.voice-btns{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
+.voice-btns .qbtn{flex:1 1 auto}
+.voice-stt{font-size:12px;color:var(--muted);margin-top:9px;line-height:1.5}
+
+.set-row{
+  display:flex;align-items:center;justify-content:space-between;width:100%;
+  font:inherit;font-size:14.5px;color:var(--fg);background:none;border:0;
+  border-bottom:1px solid var(--line);padding:14px 2px;cursor:pointer;text-align:left;
+}
+.set-row.link:hover{color:var(--primary)}
+.set-about{margin-top:14px;padding:12px;background:var(--bg2);border-radius:12px}
+.set-about-t{font-size:13px;font-weight:700;color:var(--fg)}
+.set-about-d{font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px}
+
+.toast{
+  position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));
+  transform:translateX(-50%) translateY(10px);
+  background:var(--fg);color:var(--bg);
+  font-size:13px;font-weight:600;padding:10px 18px;border-radius:var(--r-pill);
+  box-shadow:0 6px 22px rgba(0,0,0,.28);z-index:90;opacity:0;pointer-events:none;
+  transition:opacity var(--t-fast) var(--ease-out),transform var(--t-fast) var(--ease-out);
+  max-width:84vw;text-align:center;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* ── 7. 弹层（品牌化 bottom sheet）─────────────────────────────────── */
 .overlay{
@@ -1412,10 +1476,9 @@ html.dark .msg.mine .md{color:#E8B9A0}
     background:color-mix(in srgb,var(--bg) 55%,transparent);
     box-shadow:var(--shadow-2);
   }
-  #hd{padding:16px 28px;padding-top:calc(16px + env(safe-area-inset-top))}
-  #hd h1{font-size:21px}
+  #hd{padding:10px 20px;padding-top:calc(10px + env(safe-area-inset-top))}
+  .hd-ico{width:42px;height:42px}
   .chip{font-size:12px;max-width:30vw}
-  #btn-new{font-size:14px;padding:8px 18px}
   #stream{padding:24px 32px 12px}
   .msg{margin-bottom:26px}
   .nrow{font-size:12px}
@@ -1427,10 +1490,9 @@ html.dark .msg.mine .md{color:#E8B9A0}
   .md h1{font-size:24px}.md h2{font-size:21px}.md h3{font-size:18px}.md h4{font-size:16.5px}
   .md table{font-size:14.5px}
   .code code{font-size:13px}
-  #composer{padding:14px 32px;padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+  #composer{padding:10px 32px;padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   #inp{font-size:15.5px}
-  .mode{font-size:13px;padding:7px 15px}
-  #cfoot{font-size:12.5px}
+  .pm-l{font-size:15px}
   .zxf{max-width:100%}
   /* 弹层在 PC 端居中且限宽，不再占满全屏 */
   .overlay{align-items:center;justify-content:center;padding:32px}

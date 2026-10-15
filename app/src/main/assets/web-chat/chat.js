@@ -181,21 +181,35 @@ function mdHtml(src,streaming){
 var $stream=document.getElementById("stream"),
     $inp=document.getElementById("inp"),
     $send=document.getElementById("send"),
-    $dot=document.getElementById("dot"),
-    $title=document.getElementById("title"),
     $model=document.getElementById("model"),
     $persona=document.getElementById("persona"),
-    $cnt=document.getElementById("cnt"),
-    $link=document.getElementById("link"),
-    $modes=document.getElementById("modes"),
     $cms=document.getElementById("cms"),
     $priv=document.getElementById("priv"),
     $ws=document.getElementById("ws"),
+    $permHead=document.getElementById("permHead"),
+    $permTags=document.getElementById("permTags"),
+    $permBody=document.getElementById("permBody"),
+    $permModes=document.getElementById("permModes"),
     $app=document.getElementById("app"),
     $composer=document.getElementById("composer"),
     $diag=document.getElementById("diag"),
     $attbar=document.getElementById("attbar"),
+    $toast=document.getElementById("toast"),
     $fileInput=document.getElementById("fileInput");
+
+/* 轻提示 */
+var toastTimer=0;
+function toast(msg,ms){
+  if(!$toast)return;
+  $toast.textContent=msg;
+  $toast.hidden=false;
+  $toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){
+    $toast.classList.remove("show");
+    setTimeout(function(){ $toast.hidden=true; },220);
+  }, ms||1600);
+}
 
 var state={
   bar:{title:"ZorvAI",model:"",persona:""},
@@ -306,12 +320,24 @@ function showEmpty(on){
   $stream.appendChild(emptyBox);
 }
 
+function renderPermTags(){
+  if(!$permTags)return;
+  var tags=[];
+  for(var i=0;i<MODE_DEFS.length;i++){
+    if(state.composer[MODE_DEFS[i].key])tags.push(MODE_DEFS[i].label);
+  }
+  var ck=policyKey(state.composer.cms), pk=policyKey(state.composer.priv);
+  if(ck!=="ask")tags.push("CMS:"+POLICY_WORD[ck]);
+  if(pk!=="ask")tags.push("特权:"+POLICY_WORD[pk]);
+  var ws=String(state.composer.workspace||"").split("/").pop();
+  if(ws)tags.push("工作区:"+ws);
+  $permTags.innerHTML = tags.length
+    ? tags.map(function(t){return '<span class="stag">'+esc(t)+'</span>';}).join("")
+    : '<span class="stag stag-empty">默认</span>';
+}
 function renderChrome(){
-  $title.textContent=state.bar.title||"ZorvAI";
   $model.textContent=state.bar.model||"选择模型";
   $persona.textContent=state.bar.persona||"选择人格";
-  $cnt.textContent=state.messages.length+" 条消息";
-  $dot.className="dot"+(state.composer.busy?" on":"");
   var darkNow=!!state.dark;
   if(darkNow!==state.darkApplied){
     state.darkApplied=darkNow;
@@ -324,19 +350,22 @@ function renderChrome(){
   if(stopIco)stopIco.hidden=!state.composer.busy;
   $send.className=state.composer.busy?"stop":"";
   $send.setAttribute("aria-label",state.composer.busy?"停止":"发送");
-  $link.textContent=state.lan||(state.port?("127.0.0.1:"+state.port):"");
-  var modes=$modes.querySelectorAll(".mode[data-mode]");
-  for(var i=0;i<modes.length;i++){
-    var k=modes[i].getAttribute("data-mode");
-    if(state.composer[k])modes[i].classList.add("on"); else modes[i].classList.remove("on");
+  /* 权限条：收起态摘要标签 + 展开态开关行 */
+  renderPermTags();
+  if($permModes){
+    var rows=$permModes.querySelectorAll(".pm");
+    for(var i=0;i<rows.length;i++){
+      var k=rows[i].getAttribute("data-mode");
+      rows[i].classList.toggle("on", !!state.composer[k]);
+    }
   }
   var ck=policyKey(state.composer.cms), pk=policyKey(state.composer.priv);
-  $cms.textContent="CMS:"+POLICY_WORD[ck];
-  $cms.className="mode tri "+ck;
-  $priv.textContent="特权:"+POLICY_WORD[pk];
-  $priv.className="mode tri "+pk;
+  $cms.textContent="CMS "+POLICY_WORD[ck];
+  $cms.className="pp "+ck;
+  $priv.textContent="特权 "+POLICY_WORD[pk];
+  $priv.className="pp "+pk;
   var ws=String(state.composer.workspace||"");
-  $ws.textContent=ws?("工作区:"+ws.split("/").pop()):"工作区";
+  $ws.textContent=ws?("工作区 · "+ws.split("/").pop()):"工作区";
   if(ws)$ws.classList.add("on"); else $ws.classList.remove("on");
   showEmpty(state.messages.length===0);
 }
@@ -532,7 +561,7 @@ function onAct(nd,m,act,btn){
   else if(act==="retry"){
     post("msg_action",{action:"regenerate"}).then(function(r){
       if(r&&r.ok){ /* 新回答经 SSE 流自然上屏 */ }
-      else if(r&&r.error)$cnt.textContent="重试失败："+r.error;
+      else if(r&&r.error)toast("重试失败："+r.error);
     });
   }
 }
@@ -1019,7 +1048,7 @@ function poll(){
       schedule(2000);
     })
     .catch(function(){
-      $cnt.textContent="连接不上服务，重试中…";
+      toast("连接不上服务，重试中…");
       schedule(2000);
     });
 }
@@ -1510,7 +1539,7 @@ function handleFiles(files){
           selectedAttachments.push({id:r.id,name:r.name,type:r.type,size:r.size});
           renderAttBar();
         }else{
-          $cnt.textContent="上传失败";
+          toast("上传失败："+file.name);
         }
       });
     };
@@ -1518,77 +1547,197 @@ function handleFiles(files){
   });
 }
 
-/* ── 5.4 工具面板 / 语音 / 设置 / 功能入口 ──────────────────────────── */
+/* ── 5.4 功能抽屉 / 语音 / 设置（全部 Web 端真功能，不再唤起原生深链）─── */
 
-var TOOLS=[
-  {action:"ui_open_import_tool",label:"导入工具"},
-  {action:"ui_open_ai_search",label:"AI 搜索"},
-  {action:"ui_open_doc_generate",label:"文档生成"},
-  {action:"ui_open_upload",label:"上传文件"},
-  {action:"ui_open_sheet_voice",label:"语音面板"}
-];
-var VOICE_ITEMS=[
-  {action:"ui_open_tts",label:"文本转语音 (TTS)"},
-  {action:"ui_open_stt",label:"语音转文本 (STT)"},
-  {action:"ui_open_voice",label:"语音服务设置"},
-  {action:"ui_open_voice_service",label:"语音服务(高级)"}
-];
-var SETTINGS_ITEMS=[
-  {action:"ui_open_model_config",label:"模型配置"},
-  {action:"ui_open_appearance",label:"外观"},
-  {action:"ui_open_soul",label:"人格/灵魂"},
-  {action:"ui_open_memory",label:"记忆管理"},
-  {action:"ui_open_permission",label:"权限中心"},
-  {action:"ui_open_cms",label:"能力模块(CMS)"},
-  {action:"ui_open_about",label:"关于"},
-  {action:"__clear_chat__",label:"清空对话"}
-];
-var FEATURES=[
-  {action:"ui_open_onlyoffice",label:"文档查看器"},
-  {action:"ui_open_knowledge",label:"知识库"},
-  {action:"ui_open_terminal",label:"终端"},
-  {action:"ui_open_editor",label:"代码编辑器"},
-  {action:"ui_open_toolbox",label:"工具箱"},
-  {action:"ui_open_kaleidobox",label:"KaleidoBox"},
-  {action:"ui_open_build",label:"构建台"},
-  {action:"ui_open_plugins",label:"插件管理"},
-  {action:"ui_open_skills",label:"技能管理"},
-  {action:"ui_open_aci",label:"ACI 管理中心"},
-  {action:"ui_open_system_status",label:"系统状态"},
-  {action:"ui_open_component_gallery",label:"组件画廊"},
-  {action:"ui_open_cluster",label:"多角色集群"},
-  {action:"ui_open_browser",label:"浏览器"},
-  {action:"ui_open_file_manager",label:"文件管理器"},
-  {action:"ui_open_schedule",label:"调度"},
-  {action:"ui_open_workflow",label:"工作流"},
-  {action:"ui_open_bots",label:"Bots"},
-  {action:"ui_open_mcp",label:"MCP"},
-  {action:"ui_open_webui",label:"Web UI"}
+/* 权限条里的 5 个开关：键对齐 /api/toggle，标签对齐原生 PermissionModeBar。 */
+var MODE_DEFS=[
+  {key:"deepThink",     label:"深度思考"},
+  {key:"autoSaveMemory",label:"记忆"},
+  {key:"subAgent",      label:"子智能体"},
+  {key:"autoRead",      label:"自动朗读"},
+  {key:"vision",        label:"看懂屏幕"}
 ];
 
-function fillList(boxId,items){
-  var box=document.getElementById(boxId);
-  box.innerHTML="";
-  items.forEach(function(it){
-    var row=el("div","feat-row");
-    row.textContent=it.label;
+/* 把权限条展开区里的 5 个开关行注入一次（点击直接写回原生同一真源）。 */
+function buildPermModes(){
+  if(!$permModes)return;
+  $permModes.innerHTML="";
+  MODE_DEFS.forEach(function(m){
+    var row=el("div","pm");
+    row.setAttribute("data-mode",m.key);
+    var lb=el("span","pm-l",m.label);
+    var sw=el("span","pm-sw");
+    sw.innerHTML='<span class="pm-knob"></span>';
+    row.appendChild(lb); row.appendChild(sw);
     row.addEventListener("click",function(){
-      if(it.action==="__clear_chat__"){
-        if(stream.ctrl){ try{ stream.ctrl.abort(); }catch(e){} stream.ctrl=null; }
-        stopStreamWatchdog();
-        stream.active=false; stream.segId=null; stream.text=""; stream.reason=""; stream.node=null;
-        stream.localAid=null; stream.localUserId=null;
-        post("clear").then(function(r){
-          if(r&&r.ok){ closeSheet("settingsSheet"); setTimeout(fetchSnapshot,250); }
-        });
-        return;
-      }
-      post("ui_action",{action:it.action}).then(function(r){
-        if(r&&r.ok){ closeSheet("toolSheet"); closeSheet("voiceSheet"); closeSheet("settingsSheet"); closeSheet("featuresSheet"); }
-      });
+      var nowOn=!!state.composer[m.key];
+      toggleMode(m.key,!nowOn);
     });
-    box.appendChild(row);
+    $permModes.appendChild(row);
   });
+}
+
+/* 抽屉里的功能分组：每一项都是 Web 端真能跑的动作。 */
+var DRAWER_GROUPS=[
+  {title:"会话", items:[
+    {fn:"new",     label:"新对话",   sub:"开始一个空白会话"},
+    {fn:"clear",   label:"清空对话", sub:"删除当前会话全部消息"},
+    {fn:"export",  label:"导出对话", sub:"下载为 .txt 文本"}
+  ]},
+  {title:"能力开关", items:[
+    {fn:"toggle:deepThink",     label:"深度思考"},
+    {fn:"toggle:autoSaveMemory",label:"记忆"},
+    {fn:"toggle:subAgent",      label:"子智能体"},
+    {fn:"toggle:autoRead",      label:"自动朗读"},
+    {fn:"toggle:vision",        label:"看懂屏幕"}
+  ]},
+  {title:"策略", items:[
+    {fn:"policy:cms",  label:"CMS 内容安全"},
+    {fn:"policy:priv", label:"特权访问"}
+  ]},
+  {title:"资源", items:[
+    {fn:"model",     label:"切换模型"},
+    {fn:"persona",   label:"切换人格"},
+    {fn:"workspace", label:"设置工作区"},
+    {fn:"upload",    label:"上传文件"}
+  ]},
+  {title:"外观", items:[
+    {fn:"dark", label:"深色模式", dark:true}
+  ]}
+];
+
+function clearChat(){
+  if(stream.ctrl){ try{ stream.ctrl.abort(); }catch(e){} stream.ctrl=null; }
+  stopStreamWatchdog();
+  stream.active=false; stream.segId=null; stream.text=""; stream.reason=""; stream.node=null;
+  stream.localAid=null; stream.localUserId=null;
+  post("clear").then(function(r){
+    if(r&&r.ok){ closeSheet("drawerSheet"); closeSheet("settingsSheet"); setTimeout(fetchSnapshot,250); }
+  });
+}
+
+function exportChat(){
+  post2("api/export").then(function(j){
+    if(!j||!j.ok){ toast("导出失败"); return; }
+    var text=String(j.text||"");
+    var blob=new Blob([text],{type:"text/plain;charset=utf-8"});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");
+    var ts=new Date();
+    var pad=function(n){return (n<10?"0":"")+n;};
+    a.href=url;
+    a.download="ZorvAI-对话-"+ts.getFullYear()+pad(ts.getMonth()+1)+pad(ts.getDate())+"-"+pad(ts.getHours())+pad(ts.getMinutes())+".txt";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); },1000);
+    toast("对话已导出");
+    closeSheet("settingsSheet");
+  }).catch(function(){ toast("导出失败"); });
+}
+
+/* 纯 JSON POST（导出不走 .ok 包裹外的逻辑，单独取 body）。 */
+function post2(path){
+  return fetch("api/"+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({})})
+    .then(function(r){return r.json();})
+    .catch(function(){ return null; });
+}
+
+function toggleDark(){
+  state.dark=!state.dark;
+  var sw=document.getElementById("sw-dark");
+  if(sw)sw.checked=!!state.dark;
+  renderChrome();
+}
+
+function runDrawerFn(fn){
+  if(fn==="new"){ doNew(); return; }
+  if(fn==="clear"){ clearChat(); return; }
+  if(fn==="export"){ exportChat(); return; }
+  if(fn==="model"){ closeSheet("drawerSheet"); loadModels(); openSheet("modelSheet"); return; }
+  if(fn==="persona"){ closeSheet("drawerSheet"); loadPersonas(); openSheet("personaSheet"); return; }
+  if(fn==="workspace"){ closeSheet("drawerSheet"); if($ws)$ws.click(); return; }
+  if(fn==="upload"){ closeSheet("drawerSheet"); $fileInput.click(); return; }
+  if(fn==="dark"){ toggleDark(); renderDrawer(); return; }
+  if(fn.indexOf("toggle:")===0){
+    var k=fn.slice(7);
+    toggleMode(k,!state.composer[k]).then(function(){ renderChrome(); });
+    return;
+  }
+  if(fn.indexOf("policy:")===0){
+    var pk=fn.slice(7);
+    var cur=policyKey(state.composer[pk]);
+    cyclePolicy(pk,cur).then(function(r){
+      if(r&&r.ok){ state.composer[pk]=nextPolicy(pk,cur); renderChrome(); }
+    });
+    return;
+  }
+}
+
+function renderDrawer(){
+  var box=document.getElementById("drawerList");
+  if(!box)return;
+  box.innerHTML="";
+  DRAWER_GROUPS.forEach(function(g){
+    box.appendChild(el("div","drawer-g",g.title));
+    g.items.forEach(function(it){
+      var row=el("button","drawer-row");
+      row.type="button";
+      var main=el("div","dr-main");
+      main.appendChild(el("span","dr-l",it.label));
+      if(it.sub)main.appendChild(el("span","dr-s",it.sub));
+      row.appendChild(main);
+      var right=el("span","dr-r");
+      if(it.toggle||it.dark){
+        var on=it.dark?!!state.dark:!!state.composer[it.fn.slice(7)];
+        right.className="dr-pill "+(on?"on":"");
+        right.textContent=on?"开":"关";
+      }else if(it.fn.indexOf("policy:")===0){
+        var pk=it.fn.slice(7);
+        var w=POLICY_WORD[policyKey(state.composer[pk])];
+        right.className="dr-pill";
+        right.textContent=w;
+      }else{
+        right.className="dr-go";
+        right.textContent="›";
+      }
+      row.appendChild(right);
+      row.addEventListener("click",function(){ runDrawerFn(it.fn); });
+      box.appendChild(row);
+    });
+  });
+}
+
+/* 语音面板：Web Speech API 真功能（不依赖原生）。 */
+function ttsSpeak(text){
+  if(!("speechSynthesis" in window)){ toast("当前浏览器不支持朗读"); return; }
+  window.speechSynthesis.cancel();
+  var u=new SpeechSynthesisUtterance(text||"");
+  u.lang="zh-CN";
+  window.speechSynthesis.speak(u);
+}
+function ttsLastReply(){
+  var last=null;
+  for(var i=state.messages.length-1;i>=0;i--){ if(state.messages[i].role!=="user"){ last=state.messages[i]; break; } }
+  var t=last?plainTextOf(last):"";
+  var ta=document.getElementById("ttsText");
+  if(ta)ta.value=t;
+  if(!t){ toast("还没有可朗读的回复"); return; }
+  ttsSpeak(t);
+}
+function sttStart(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  var st=document.getElementById("sttStatus");
+  if(!SR){ if(st)st.textContent="当前浏览器不支持语音输入（可用 Chrome / Edge）。"; toast("不支持语音输入"); return; }
+  var rec=new SR();
+  rec.lang="zh-CN"; rec.interimResults=true; rec.continuous=false;
+  rec.onresult=function(e){
+    var t="";
+    for(var i=0;i<e.results.length;i++)t+=e.results[i][0].transcript;
+    $inp.value=t; autoGrow();
+  };
+  rec.onend=function(){ if(st)st.textContent="已结束，文字已填入输入框，可直接发送。"; };
+  rec.onerror=function(e){ if(st)st.textContent="识别出错："+(e.error||"未知"); };
+  rec.start();
+  if(st)st.textContent="正在聆听…请对着麦克风说话";
 }
 
 /* ── 6. 启动 ─────────────────────────────────────────────────────────── */
@@ -1596,21 +1745,16 @@ function fillList(boxId,items){
 $send.addEventListener("click",function(){ state.composer.busy?doStop():doSend(); });
 document.getElementById("btn-new").addEventListener("click",doNew);
 
-/* 权限模式开关：对等客户端 —— 点击直接写回原生同一真源 */
-$modes.addEventListener("click",function(e){
-  var b=e.target;
-  while(b&&b!==$modes){
-    if(b.className&&String(b.className).indexOf("mode")>=0){
-      var mode=b.getAttribute("data-mode");
-      if(mode){
-        var nowOn=!!state.composer[mode];
-        toggleMode(mode,!nowOn);
-      }
-      return;
-    }
-    b=b.parentNode;
-  }
-});
+/* 权限条：收起态点标题行展开/收起（对等原生 ChatPermissionModeBar） */
+if($permHead){
+  $permHead.addEventListener("click",function(){
+    var open=!$permBody.hidden;
+    $permBody.hidden=open;
+    $permHead.setAttribute("aria-expanded",String(!open));
+    $permHead.classList.toggle("open",!open);
+  });
+}
+buildPermModes();
 
 /* CMS / 特权策略：点击循环切换 allow -> ask -> deny */
 function cyclePolicy(key,cur){
@@ -1647,11 +1791,12 @@ $ws.addEventListener("click",function(){
 $model.addEventListener("click",function(){ loadModels(); openSheet("modelSheet"); });
 $persona.addEventListener("click",function(){ loadPersonas(); openSheet("personaSheet"); });
 
-/* 工具面板 / 上传 / 语音 / 设置 */
-document.getElementById("btn-tools").addEventListener("click",function(){
-  fillList("toolList",TOOLS);
-  openSheet("toolSheet");
+/* 功能抽屉 / 上传 / 语音 / 设置（全部 Web 端真功能） */
+document.getElementById("btn-menu").addEventListener("click",function(){
+  renderDrawer();
+  openSheet("drawerSheet");
 });
+document.getElementById("btn-voice").addEventListener("click",function(){ openSheet("voiceSheet"); });
 document.getElementById("btn-attach").addEventListener("click",function(){ $fileInput.click(); });
 $fileInput.addEventListener("change",function(){ handleFiles($fileInput.files); $fileInput.value=""; });
 document.getElementById("btn-add-model").addEventListener("click",function(){
@@ -1670,9 +1815,25 @@ document.getElementById("btn-add-persona").addEventListener("click",function(){
 
 /* 设置入口 */
 document.getElementById("btn-settings").addEventListener("click",function(){
-  fillList("settingsList",SETTINGS_ITEMS);
+  var sw=document.getElementById("sw-dark");
+  if(sw)sw.checked=!!state.dark;
   openSheet("settingsSheet");
 });
+var $swDark=document.getElementById("sw-dark");
+if($swDark)$swDark.addEventListener("change",function(){ toggleDark(); });
+document.getElementById("btn-export").addEventListener("click",exportChat);
+document.getElementById("btn-clear").addEventListener("click",clearChat);
+
+/* 语音面板（Web Speech API） */
+document.getElementById("btn-tts-speak").addEventListener("click",function(){
+  var ta=document.getElementById("ttsText");
+  ttsSpeak(ta?ta.value:"");
+});
+document.getElementById("btn-tts-stop").addEventListener("click",function(){
+  if("speechSynthesis" in window)window.speechSynthesis.cancel();
+});
+document.getElementById("btn-tts-last").addEventListener("click",ttsLastReply);
+document.getElementById("btn-stt").addEventListener("click",sttStart);
 
 $inp.addEventListener("input",autoGrow);
 $inp.addEventListener("keydown",function(e){
