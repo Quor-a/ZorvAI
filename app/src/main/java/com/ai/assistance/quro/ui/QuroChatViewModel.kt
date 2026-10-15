@@ -231,6 +231,27 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             )
         )
     }
+
+    /**
+     * issue #13：把一条「外部事件」作为**系统提醒**注入当前对话。
+     * 与 [appendClusterMessage] 不同：role=system 且 excludeFromLlm=false —— 既对用户可见、
+     * 又进入 LLM 上下文，但**不伪造用户消息**（用户可直接分辨这是外部事件而非自己说的）。
+     * 注入后刷新内存消息列表，使气泡立即出现。
+     */
+    fun injectExternalReminder(text: String) {
+        val ownerId = activeConversationId.ifBlank { _currentId.value }
+        store.add(
+            QuroMessage(
+                role = "system",
+                content = text,
+                excludeFromLlm = false,
+                senderName = "外部事件",
+            )
+        )
+        // 不论归属，强制刷新可见列表（外部事件应立即可见）。
+        _messages.value = store.all()
+        Log.i("QuroChatViewModel", "外部事件系统提醒已注入（owner=$ownerId）")
+    }
     // 共享工具注册表：assistant 下发 tools 字段 �? 系统提示词菜�? 都从这里取，保证二者严格一致�?
     private val registry = buildQuroRegistry(appContext).also { QuroToolRegistry.active = it }
     // 统一附件管理器：管理所有上下文附件（工作区/ACI/技�?/屏幕/通知/位置等）
@@ -792,6 +813,9 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // 🔴 集群投影解绑：ViewModel 销毁后再往这个 store 写气泡，
         // 用户会看到「已死会话」的发言冒出来。
         runCatching { com.ai.assistance.quro.core.cluster.ClusterChatBridge.unregisterSink() }
+        // 🔴 issue #11 问题 8：ViewModel 销毁时全局清杀在册工具进程
+        // （proot / su / sh -c 等），防止会话没了子进程还在跑。
+        runCatching { com.ai.assistance.quro.core.tools.QuroToolProcesses.killAllActive() }
         super.onCleared()
     }
 

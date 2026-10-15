@@ -76,11 +76,58 @@ object CommandDispatcher {
         // 解析
         val parsed = CommandParser.parse(input)
 
+        return executeParsed(sessionId, parsed)
+    }
+
+    /** 执行一个已解析的命令树（序列段递归走这里，避免与入口的 parse 重复）。 */
+    private fun executeParsed(sessionId: String, parsed: ParsedCommand): CommandResult {
         return when (parsed.type) {
             CommandType.SIMPLE -> executeSimple(sessionId, parsed.mainCommand)
             CommandType.PIPELINE -> executePipeline(sessionId, parsed.pipeline)
             CommandType.REDIRECTION -> executeRedirection(sessionId, parsed)
+            // 命令序列（issue #11 ④）：`a; b` / `a && b` / `a || b`。
+            // 旧解析器没有这一层，整串被当作单条命令的参数静默吞掉。
+            CommandType.SEQUENCE -> executeSequence(sessionId, parsed)
         }
+    }
+
+    /**
+     * 命令序列执行：
+     *  · `;`  无条件顺序执行；
+     *  · `&&` 上一段成功（无 error）才执行；
+     *  · `||` 上一段失败才执行。
+     * 任一段为空（如 `a;;b` 的中间段）直接跳过；任一段报错不中断后续 `;` 段，
+     * 与真实 shell 语义一致，最终输出按段拼接。
+     */
+    private fun executeSequence(sessionId: String, parsed: ParsedCommand): CommandResult {
+        val sb = StringBuilder()
+        var lastOk = true
+        parsed.sequence.forEachIndexed { i, seg ->
+            // 空段跳过（`a;;b` / 行尾多余分隔符）
+            if (seg.type == CommandType.SIMPLE && seg.mainCommand.name.isEmpty()) return@forEachIndexed
+            val op = parsed.operators.getOrElse(i) { "" }
+            val shouldRun = when (op) {
+                "&&" -> lastOk
+                "||" -> !lastOk
+                else -> true
+            }
+            if (!shouldRun) return@forEachIndexed
+            val result = executeParsed(sessionId, seg)
+            lastOk = result is CommandResult.Text && !result.isError
+            val text = when (result) {
+                is CommandResult.Text -> result.output
+                is CommandResult.RichText -> result.lines.joinToString("\n") { it.text }
+                is CommandResult.Structured -> result.data.joinToString("\n") { m ->
+                    m.entries.joinToString(" | ") { (k, v) -> "$k=$v" }
+                }
+                else -> ""
+            }
+            if (text.isNotEmpty()) {
+                if (sb.isNotEmpty()) sb.append('\n')
+                sb.append(text)
+            }
+        }
+        return CommandResult.ok(sb.toString())
     }
 
     private fun executeSimple(sessionId: String, cmd: Command): CommandResult {

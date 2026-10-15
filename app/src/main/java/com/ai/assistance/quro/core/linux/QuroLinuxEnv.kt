@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.core.linux
 import com.ai.assistance.quro.R
+import com.ai.assistance.quro.core.tools.QuroToolProcesses
 import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
@@ -225,6 +226,20 @@ object QuroLinuxEnv {
 
     /** 共享存储在 proot 内的挂载点（Agora 同为 /sdcard）。 */
     const val SHARED_STORAGE_MOUNT = "/sdcard"
+
+    /**
+     * 应用私有目录（context.filesDir）在 proot 内的挂载点（issue #11 ③）。
+     *
+     * 旧实现只绑 /root（sandbox-home）、/tmp、/sdcard，**完全没绑 filesDir** ——
+     * 于是构建台产物（filesDir/buildproject）、AI 经 workspace 工具写的数据在容器里
+     * 一律「不存在」，ls/cat 全落空。缺的只是启动参数里的一个 `-b`，不是 Android 限制。
+     *
+     * ⚠️ 已知边界：rootfs 自身位于 filesDir/linux-sandbox/rootfs，故容器内
+     * `/quro/linux-sandbox/rootfs` 就是沙箱自己（自包含挂载）。proot 的路径翻译是
+     * 有限深度前缀替换，不会死循环；但 `du /quro` / `find /quro` 会把 rootfs
+     * 重复计入一遍，属预期内损耗。
+     */
+    const val APP_PRIVATE_MOUNT = "/quro"
 
     /** proot 二进制：nativeLibraryDir 内，Android 在此授予 .so 可执行权限。 */
     fun prootPath(context: Context): String = findNativeLibWithAssetsFallback(context, "libproot.so")
@@ -551,6 +566,22 @@ object QuroLinuxEnv {
             runProot(context, "apt-get update -o Acquire::http::No-Cache=true -o Acquire::ForceIPv4=true", timeoutMs = 180_000)
             r = runProotInstall(context, DEVTOOLS_CORE)
         }
+        if (r.first != 0) {
+            // issue #11 问题7：整批两次都失败 → 逐包回退。开发工具链全是增强项，
+            // 能装几个装几个，不让一个缺包（如某镜像缺 nodejs 索引）毁掉整条工具链。
+            Log.w(TAG, "installDevToolchain: 整批安装失败，改逐包回退")
+            val perPkg = aptInstallPerPackage(
+                context, rootfs, DEVTOOLS_CORE, getSelectedAptMirror(context), 420_000,
+                criticalPackages = emptySet(),
+            )
+            val anyInstalled = perPkg.first == 0
+            Log.w(TAG, "installDevToolchain: 逐包回退结果 exit=${perPkg.first}（部分成功即返回 true，不写 marker 等下次自愈补全）：${perPkg.second.take(300)}")
+            if (!anyInstalled) {
+                Log.e(TAG, "❌ installDevToolchain: 核心工具链安装失败(exit ${r.first}): ${r.second.take(400)}")
+                return false
+            }
+            r = perPkg
+        }
         val coreOk = r.first == 0
         if (!coreOk) {
             Log.e(TAG, "❌ installDevToolchain: 核心工具链安装失败(exit ${r.first}): ${r.second.take(400)}")
@@ -595,6 +626,110 @@ object QuroLinuxEnv {
             diagLog(context, "apt install 失败(镜像 $m): ${last.second.take(400)}")
         }
         return last
+    }
+
+    /**
+     * 逐包安装（issue #11 问题7 改善建议3：不要整批失败）。
+     *
+     * 每个包独立走 [aptInstallWithMirrorRetry]（含镜像回退 + ForceIPv4），
+     * 单个包「源不可用」只跳过它自己，并记录 apt 输出的关键行作为原因。
+     *
+     * @param criticalPackages 关键包集合：失败即使整体失败；空集 = 全部非关键（能装几个装几个）。
+     * @return Pair(exit, 摘要)。exit=0 = 关键包已齐；非 0 = 关键包失败。
+     */
+    private suspend fun aptInstallPerPackage(
+        context: Context,
+        rootfsDir: File,
+        pkgs: String,
+        userMirror: String,
+        timeoutMs: Long,
+        criticalPackages: Set<String> = emptySet(),
+    ): Pair<Int, String> {
+        diagLog(context, "逐包安装: $pkgs（关键包: ${criticalPackages.ifEmpty { setOf("无") }}）")
+        val pkgList = pkgs.split(" ").filter { it.isNotBlank() }
+        val failedOptional = mutableListOf<String>()
+        val failedCritical = mutableListOf<String>()
+        var okCount = 0
+        for (p in pkgList) {
+            val r = aptInstallWithMirrorRetry(context, rootfsDir, p, userMirror, timeoutMs)
+            if (r.first == 0) {
+                okCount++
+                diagLog(context, "✅ 逐包安装成功: $p")
+                continue
+            }
+            // 抽取失败的关键行（Unable to locate / not available / no candidate / E:），
+            // 让用户与诊断日志都能看到「到底是哪个包、因为什么」。
+            val why = r.second.lineSequence().firstOrNull { line ->
+                line.contains("Unable to locate") || line.contains("not available") ||
+                    line.contains("has no installation candidate") || line.trimStart().startsWith("E:")
+            } ?: r.second.take(200)
+            diagLog(context, "⚠️ 逐包安装失败: $p —— $why")
+            (if (p in criticalPackages) failedCritical else failedOptional).add("$p（$why）")
+        }
+
+        // 退出码契约：① 关键包失败 → 1；② 一个都没装上（全失败）→ 1（不能让「啥都没装」冒充成功）；
+        // ③ 其余（含「部分成功」）→ 0，摘要里列明跳过项。
+        val allFailed = pkgList.isNotEmpty() && okCount == 0
+        return if (failedCritical.isEmpty() && !allFailed) {
+            val summary = buildString {
+                append("已按逐包回退方式安装完成（成功 $okCount/${pkgList.size}）。")
+                if (failedOptional.isNotEmpty()) {
+                    append("\n以下包当前源不可用，已跳过（不影响环境可用性）：")
+                    failedOptional.forEach { append("\n  · $it") }
+                }
+            }
+            Pair(0, summary)
+        } else {
+            val summary = buildString {
+                if (failedCritical.isNotEmpty()) {
+                    append("关键包安装失败：")
+                    failedCritical.forEach { append("\n  · $it") }
+                } else {
+                    append("所有包均安装失败（成功 0/${pkgList.size}）：")
+                    failedOptional.forEach { append("\n  · $it") }
+                }
+                if (failedOptional.isNotEmpty() && failedCritical.isNotEmpty()) {
+                    append("\n同时跳过的非关键包：")
+                    failedOptional.forEach { append("\n  · $it") }
+                }
+            }
+            Pair(1, summary)
+        }
+    }
+
+    /**
+     * 基础包安装（issue #11 问题7 改善建议3：**逐包回退，不要整批失败**）。
+     *
+     * 旧行为：`apt-get install bash ca-certificates libcurl4 curl wget` 一把梭——
+     * 只要一个包 "Unable to locate / has no installation candidate"（源缺组件、
+     * 或镜像缺对应架构索引），整批 exit 100 → 整个 Linux 环境初始化失败，
+     * 全新设备上「开箱不可用」（用户实测复现，v1.1.4）。
+     *
+     * 新行为：
+     *  1. 先整批试一次（快路径，绝大多数镜像一次成功）；
+     *  2. 整批失败 → 逐包单独装（[aptInstallPerPackage]）；
+     *  3. [criticalPackages]（bash——持久 shell 的基石）失败才硬失败；
+     *     其余包装不上只记录明确原因并继续（ca-certificates 有 Android CA 库兜底，
+     *     curl/wget 只是便利工具），绝不因一个非关键包葬送整个环境。
+     *
+     * @return Pair(exit, 摘要)。exit=0 = 关键包已齐（摘要列跳过的非关键包及原因）；
+     *   exit≠0 = 关键包失败，摘要含每个失败包的原因（apt 输出的关键行）。
+     */
+    private suspend fun aptInstallBasePackages(
+        context: Context,
+        rootfsDir: File,
+        pkgs: String,
+        userMirror: String,
+        timeoutMs: Long,
+        criticalPackages: Set<String> = setOf("bash"),
+    ): Pair<Int, String> {
+        // 1) 整批快路径（含镜像回退）
+        val batch = aptInstallWithMirrorRetry(context, rootfsDir, pkgs, userMirror, timeoutMs)
+        if (batch.first == 0) return batch
+
+        // 2) 整批失败 → 逐包回退
+        diagLog(context, "⛔ 整批安装失败（exit ${batch.first}），改逐包安装…")
+        return aptInstallPerPackage(context, rootfsDir, pkgs, userMirror, timeoutMs, criticalPackages)
     }
 
     /**
@@ -1096,9 +1231,10 @@ object QuroLinuxEnv {
         // 真机 5G 下 connection-reset → exit 100（截图实证「update 成功、install 失败」）。
         // 故 install 强制 ForceIPv4，并按镜像回退重试（先 rewrite sources + update 再装），--fix-missing 容单包 404。
         _state.value = SandboxState.Installing("安装 bash / ca-certificates / libcurl4…")
-        diagLog(context, "安装基础包 (ForceIPv4 + 镜像回退)...")
-        val bash = aptInstallWithMirrorRetry(context, rootfsDir, "bash ca-certificates libcurl4 curl wget", userMirror, 240_000)
-        diagLog(context, "基础包安装结果: exit=${bash.first}, output前 60 行=\n${bash.second.take(60 * 120)}")
+        diagLog(context, "安装基础包 (ForceIPv4 + 镜像回退 + 逐包回退)...")
+        // issue #11 问题7：整批失败时逐包回退——单个包「源不可用」不再葬送整个环境
+        val bash = aptInstallBasePackages(context, rootfsDir, "bash ca-certificates libcurl4 curl wget", userMirror, 240_000)
+        diagLog(context, "基础包安装结果: exit=${bash.first}, 摘要=\n${bash.second.take(60 * 120)}")
         if (bash.first != 0) {
             val detail = "基础包安装失败（exit ${bash.first}）：\n${bash.second}"
             diagLog(context, "⛔ $detail")
@@ -1227,6 +1363,9 @@ object QuroLinuxEnv {
             "--bind=/sys",
             "--bind=$home:/root",
             "--bind=$tmp:/tmp",
+            // issue #11 ③：应用私有目录整个绑进沙箱（挂载点 /quro，见 APP_PRIVATE_MOUNT）。
+            // 缺这一条 = 构建台产物 / 工作区数据在容器里完全不可见。
+            "--bind=${context.filesDir.absolutePath}:$APP_PRIVATE_MOUNT",
         )
         // 设备共享存储（/sdcard）绑进沙箱，让 Linux 终端能访问 Downloads/DCIM/Documents 等（参考 Agora SharedFolderMounts）。
         sharedStorageHostDir(context)?.let { args.add("--bind=${it.absolutePath}:$SHARED_STORAGE_MOUNT") }
@@ -1365,7 +1504,12 @@ object QuroLinuxEnv {
             pb.directory(launch.workDir)
             pb.environment().putAll(launch.env)
             pb.redirectErrorStream(true)
+            val before = QuroToolProcesses.snapshotPids()
             val p = pb.start()
+            // issue #11 问题 8：登记派生进程。用户点「停止生成」/工具超时时，
+            // QuroToolProcesses 会在取消方线程强杀它（destroy + 杀子孙 + SIGKILL），
+            // 让阻塞在 waitFor 的本函数立刻返回 —— 否则取消只能干等命令自己跑完。
+            QuroToolProcesses.register(p)
             Log.i(TAG, "proot 进程已启动")
 
             // 关键修复（#911 根因）：必须先 waitFor(timeout) 再读输出。原先 readText() 会阻塞到
@@ -1388,6 +1532,8 @@ object QuroLinuxEnv {
                 -1
             }
             try { readThread.join(2000) } catch (_: Throwable) {} // 进程已结束/被强杀，stdout 已关闭，回收读取线程
+            // issue #11 问题 9：命令返回后强杀残留后台进程（nohup/setsid … & 脱离 shell 的漏网进程）
+            QuroToolProcesses.reapLeakedSince("proot", before)
             val trimmed = outBuilder.toString().trim()
             Log.i(TAG, "proot 执行完成，耗时: ${duration}ms，退出码: $code，输出长度: ${trimmed.length}")
             if (trimmed.isNotEmpty()) {
@@ -1422,7 +1568,12 @@ object QuroLinuxEnv {
             pb.directory(launch.workDir)
             pb.environment().putAll(launch.env)
             pb.redirectErrorStream(true)
+            val before = QuroToolProcesses.snapshotPids()
             val p = pb.start()
+            // issue #11 问题 8：登记派生进程。用户点「停止生成」/工具超时时，
+            // QuroToolProcesses 会在取消方线程强杀它（destroy + 杀子孙 + SIGKILL），
+            // 让阻塞在 waitFor 的本函数立刻返回 —— 否则取消只能干等命令自己跑完。
+            QuroToolProcesses.register(p)
             Log.i(TAG, "chroot 进程已启动（通过 su）")
 
             val outBuilder = StringBuilder()
@@ -1442,6 +1593,8 @@ object QuroLinuxEnv {
                 -1
             }
             try { readThread.join(2000) } catch (_: Throwable) {}
+            // issue #11 问题 9：命令返回后强杀残留后台进程（nohup/setsid … & 脱离 shell 的漏网进程）
+            QuroToolProcesses.reapLeakedSince("chroot", before)
             val trimmed = outBuilder.toString().trim()
             Log.i(TAG, "chroot 执行完成，耗时: ${duration}ms，退出码: $code，输出长度: ${trimmed.length}")
             if (trimmed.isNotEmpty()) {
@@ -1489,6 +1642,10 @@ object QuroLinuxEnv {
             pb.environment().putAll(launch.env)
             pb.redirectErrorStream(true)
             val p = pb.start()
+            // issue #11 问题 8：登记派生进程。用户点「停止生成」/工具超时时，
+            // QuroToolProcesses 会在取消方线程强杀它（destroy + 杀子孙 + SIGKILL），
+            // 让阻塞在 waitFor 的本函数立刻返回 —— 否则取消只能干等命令自己跑完。
+            QuroToolProcesses.register(p)
             Log.i(TAG, "spawnPersistent 常驻 proot 已启动，命令: ${command.take(100)}")
             p
         } catch (e: Exception) {
@@ -1518,6 +1675,10 @@ object QuroLinuxEnv {
             pb.environment().putAll(launch.env)
             pb.redirectErrorStream(true)
             val p = pb.start()
+            // issue #11 问题 8：登记派生进程。用户点「停止生成」/工具超时时，
+            // QuroToolProcesses 会在取消方线程强杀它（destroy + 杀子孙 + SIGKILL），
+            // 让阻塞在 waitFor 的本函数立刻返回 —— 否则取消只能干等命令自己跑完。
+            QuroToolProcesses.register(p)
             Log.i(TAG, "spawnPersistent 常驻 chroot 已启动（通过 su），命令: ${command.take(100)}")
             p
         } catch (e: Exception) {
@@ -1562,6 +1723,8 @@ object QuroLinuxEnv {
                 "--bind=$tmp:/tmp",
             )
             sharedStorageHostDir(context)?.let { args.add("--bind=${it.absolutePath}:$SHARED_STORAGE_MOUNT") }
+            // issue #11 ③：应用私有目录绑进沙箱（挂载点见 APP_PRIVATE_MOUNT 的边界说明）
+            args.add("--bind=${context.filesDir.absolutePath}:$APP_PRIVATE_MOUNT")
             if (File("/system/build.prop").canRead()) {
                 args.add("--bind=/system/build.prop:/system/build.prop")
             }
@@ -1580,8 +1743,13 @@ object QuroLinuxEnv {
                 put("PROOT_LOADER", loader)
             }
             pb.redirectErrorStream(true)
+            val before = QuroToolProcesses.snapshotPids()
             val p = pb.start()
-            
+            // issue #11 问题 8：登记派生进程。用户点「停止生成」/工具超时时，
+            // QuroToolProcesses 会在取消方线程强杀它（destroy + 杀子孙 + SIGKILL），
+            // 让阻塞在 waitFor 的本函数立刻返回 —— 否则取消只能干等命令自己跑完。
+            QuroToolProcesses.register(p)
+
             val outBuilder = StringBuilder()
             val reader = p.inputStream.bufferedReader()
             // 实时读取并回调每一行
@@ -1607,6 +1775,8 @@ object QuroLinuxEnv {
                 -1
             }
             try { readThread.join(2000) } catch (_: Throwable) {}
+            // issue #11 问题 9：命令返回后强杀残留后台进程（nohup/setsid … & 脱离 shell 的漏网进程）
+            QuroToolProcesses.reapLeakedSince("proot", before)
             val trimmed = outBuilder.toString().trim()
             Log.i(TAG, "runProotWithLog 执行完成，耗时: ${duration}ms，退出码: $code")
             code to (if (trimmed.isBlank()) (if (finished) "(no output)" else "⏱ 超时") else trimmed)
@@ -1643,7 +1813,12 @@ object QuroLinuxEnv {
             pb.directory(launch.workDir)
             pb.environment().putAll(launch.env)
             pb.redirectErrorStream(true)
+            val before = QuroToolProcesses.snapshotPids()
             val p = pb.start()
+            // issue #11 问题 8：登记派生进程。用户点「停止生成」/工具超时时，
+            // QuroToolProcesses 会在取消方线程强杀它（destroy + 杀子孙 + SIGKILL），
+            // 让阻塞在 waitFor 的本函数立刻返回 —— 否则取消只能干等命令自己跑完。
+            QuroToolProcesses.register(p)
             Log.i(TAG, "chroot 进程已启动（通过 su，带日志回调）")
 
             val outBuilder = StringBuilder()
@@ -1671,6 +1846,8 @@ object QuroLinuxEnv {
                 -1
             }
             try { readThread.join(2000) } catch (_: Throwable) {}
+            // issue #11 问题 9：命令返回后强杀残留后台进程（nohup/setsid … & 脱离 shell 的漏网进程）
+            QuroToolProcesses.reapLeakedSince("chroot", before)
             val trimmed = outBuilder.toString().trim()
             Log.i(TAG, "runChrootWithLog 执行完成，耗时: ${duration}ms，退出码: $code")
             code to (if (trimmed.isBlank()) (if (finished) "(no output)" else "⏱ 超时") else trimmed)
@@ -1742,6 +1919,9 @@ object QuroLinuxEnv {
                     appendLine("mkdir -p $rootfsPath/sdcard 2>/dev/null || true")
                     appendLine("mount -o bind ${ss.absolutePath} $rootfsPath/sdcard")
                 }
+                // 应用私有目录绑进沙箱（issue #11 ③，与 proot 路径的 /quro 对齐）。
+                appendLine("mkdir -p $rootfsPath${APP_PRIVATE_MOUNT} 2>/dev/null || true")
+                appendLine("mount -o bind ${context.filesDir.absolutePath} $rootfsPath${APP_PRIVATE_MOUNT}")
             }
 
             val chrootCmd = "chroot $rootfsPath /bin/sh -c 'cd /root && exec /bin/sh'"
@@ -1778,6 +1958,9 @@ object QuroLinuxEnv {
         )
         // 设备共享存储（/sdcard）绑进沙箱，让终端能访问 Downloads/DCIM/Documents 等（参考 Agora SharedFolderMounts）。
         sharedStorageHostDir(context)?.let { args.add("--bind=${it.absolutePath}:$SHARED_STORAGE_MOUNT") }
+        // issue #11 ③：应用私有目录（filesDir）绑进沙箱，容器内可见为 /quro。
+        // 缺这一条 = 构建台产物 / 工作区数据在容器里一律「不存在」（ls/cat 全落空）。
+        args.add("--bind=${context.filesDir.absolutePath}:$APP_PRIVATE_MOUNT")
         args.add("-0")
         args.add("-w"); args.add("/root")
         args.add("/bin/sh")
@@ -3034,6 +3217,9 @@ fi
             scope.launch(Dispatchers.IO) { ensureDnsProxy(context, rootfs) }
             // 创建共享存储挂载点（/sdcard），否则 proot --bind 因目标不存在而整体启动失败。
             File(rootfs, SHARED_STORAGE_MOUNT.trimStart('/')).mkdirs()
+            // 创建应用私有目录挂载点（/quro，issue #11 ③），理由同上：
+            // proot 的 --bind 要求 guest 侧路径已存在，否则整条启动参数作废。
+            File(rootfs, APP_PRIVATE_MOUNT.trimStart('/')).mkdirs()
             val props = buildProps(context)
             File(rootfs, "etc").mkdirs()
             File(rootfs, "etc/quro_props.prop").writeText(

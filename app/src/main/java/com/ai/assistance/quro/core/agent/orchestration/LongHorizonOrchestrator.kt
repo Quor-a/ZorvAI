@@ -106,6 +106,19 @@ class LongHorizonOrchestrator(
                 .joinToString(" | ") { "${it.failureType}: ${it.message.take(120)}" }
                 .takeIf { it.isNotBlank() }
 
+            // 🔴 确定性失败短路（issue #11 问题6 第2步「停止重试」）：步骤产出
+            //    terminal Failure（如 LLM 上下文超限）时，重跑必然同样失败——
+            //    旧行为会 continue@loop 重新规划再整趟执行，界面持续转圈、
+            //    用户等到天荒地老。这里立即升级交回用户，绝不再跑一轮。
+            val terminalFailure = stepOutcomes.filterIsInstance<ToolOutcome.Failure>()
+                .firstOrNull { it.terminal }
+            if (terminalFailure != null) {
+                trace.deliver("assistant", "确定性失败·停止重试并升级", terminalFailure.message.take(120))
+                history.add("i$iteration 确定性失败（不重试）：${terminalFailure.message.take(80)}")
+                diag.dump(context, taskBrief.take(40), summary, history, "orchestration-terminal")
+                return TaskResult.Escalated(stepOutcomes, terminalFailure.message, iteration, terminalFailure.message)
+            }
+
             // ③ 交付闸门：不立即交付，先判定产物是否真正可交付。
             //   🔴 判定输入必须是**产物原文**，不能是上面那个带 "OK: " 前缀且 take(200)
             //   截断过的 summary —— 闸门判的是「这段答复本身是不是失败回执」，

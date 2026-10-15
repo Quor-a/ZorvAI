@@ -3,6 +3,7 @@ import com.ai.assistance.quro.R
 import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
+import com.ai.assistance.quro.core.agent.QuroAgentTrace
 
 /**
  * 闭环执行器（感知-判断-执行-反馈-校验-修正 的统一主循环）。
@@ -19,6 +20,12 @@ class ClosedLoopExecutor(
     private val trace: LoopTrace = LoopTrace,
     private val diag: ClosedLoopDiag = ClosedLoopDiag,
 ) {
+
+    /** issue #16：长耗时工具/子代理的进度心跳间隔（毫秒）。工具跑超过此阈值后开始每间隔发一条「执行中」。 */
+    private companion object {
+        const val HEARTBEAT_INTERVAL_MS = 5000L
+    }
+
 
     /**
      * 单工具调用的闭环运行。
@@ -58,7 +65,23 @@ class ClosedLoopExecutor(
             }
 
             trace.act(name, "执行 第${attempt}次", arguments.take(200))
+            // issue #16：长耗时工具/子代理的进度心跳。工具/子代理跑超过阈值后，
+            // 每 HEARTBEAT_INTERVAL_MS 发一条「执行中」状态到 AI 行动追踪面板，
+            // 用户不再面对「转圈但不知在干嘛」的黑洞。子代理复用本执行器，自动获得心跳。
+            val hbStart = System.currentTimeMillis()
+            val heartbeat = Thread {
+                try {
+                    while (!Thread.currentThread().isInterrupted) {
+                        Thread.sleep(HEARTBEAT_INTERVAL_MS)
+                        val secs = (System.currentTimeMillis() - hbStart) / 1000
+                        QuroAgentTrace.status(name, "⏳ 执行中·心跳", "工具 $name 已运行 ${secs}s")
+                    }
+                } catch (_: InterruptedException) { /* 正常结束 */
+                } catch (_: Throwable) { }
+            }
+            heartbeat.start()
             val r = execOnce(attempt)
+            heartbeat.interrupt()
 
             when (r) {
                 is ExecResult.Completed -> {
@@ -117,7 +140,12 @@ class ClosedLoopExecutor(
         val action = policy.decide(failure.failureType, attempt)
         return when (action) {
             RecoveryAction.RETRY -> {
-                trace.status(name, "决策·重试", "第${attempt}次失败，按策略重试")
+                // issue #16：重试对用户可见 —— 明确告知第几次失败、失败类型、还剩几次机会，
+                // 避免「同一工具静默重试多次」让用户以为卡死。
+                trace.status(
+                    name, "↻ 重试",
+                    "第${attempt}次执行失败（${failure.failureType}），正在自动重试（共 ${policy.maxAttempts} 次）",
+                )
                 history.add("a$attempt ${failure.failureType}→重试")
                 null
             }

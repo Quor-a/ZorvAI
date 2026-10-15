@@ -22,6 +22,9 @@ sealed interface ToolOutcome {
      * @param raw 工具原始返回（若有），便于诊断与回滚判定。
      * @param cause 异常（若有）。
      * @param attempt 进入本次失败时已尝试的轮次（含本次）。
+     * @param terminal 确定性失败（如 LLM 上下文超限，issue #11 问题6）：重试/重规划
+     *   必然同样失败。true 时编排器必须**立即升级**，不得继续循环——
+     *   否则「一边弹提示、一边继续转圈」，正是用户实测的死循环体感。
      */
     data class Failure(
         val failureType: FailureType,
@@ -29,6 +32,7 @@ sealed interface ToolOutcome {
         val raw: String? = null,
         val cause: Throwable? = null,
         val attempt: Int = 1,
+        val terminal: Boolean = false,
     ) : ToolOutcome
 }
 

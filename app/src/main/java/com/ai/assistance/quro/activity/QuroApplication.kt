@@ -14,6 +14,7 @@ import com.ai.assistance.quro.core.shizuku.QuroShizuku
 import com.ai.assistance.quro.core.privilege.QuroTerminalPrivilegeBridge
 import com.ai.assistance.quro.terminal.privilege.TerminalPrivilegeBridgeHolder
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager
+import com.ai.assistance.quro.core.QuroInboxWatcher
 import com.ai.assistance.quro.service.QuroTerminalKeepAliveService
 import com.ai.assistance.quro.service.QuroTerminalAciService
 import com.ai.assistance.quro.ui.QuroPersonaViewModel
@@ -269,6 +270,13 @@ class QuroApplication : Application(), Configuration.Provider {
             android.util.Log.i("QuroApplication", "KaleidoBox 初始化完成（已注入 AI/终端桥）")
         } catch (e: Throwable) {
             android.util.Log.e("QuroApplication", "KaleidoBox 初始化失败（不影响主流程）", e)
+        }
+        // issue #13：外部事件唤醒 / 前置钩子。监听 quro_inbox/ 目录，把外部写入的文件
+        // 作为「系统提醒」注入当前对话（去重/静音/限流内置）。失败绝不影响主流程。
+        try {
+            QuroInboxWatcher.start(applicationContext)
+        } catch (e: Throwable) {
+            android.util.Log.e("QuroApplication", "InboxWatcher 启动失败（不影响主流程）", e)
         }
     }
 }

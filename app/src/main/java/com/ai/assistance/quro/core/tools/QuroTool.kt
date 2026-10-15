@@ -14,10 +14,13 @@ import com.ai.assistance.quro.core.agent.loop.ToolOutcome
 import com.ai.assistance.quro.core.mcp.DroidMcp
 import com.ai.assistance.quro.core.mcp.McpTool
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlin.coroutines.coroutineContext
 
 /**
  * 工具接口：名称 + 描述 + 参数 JSON-Schema + 执行。
@@ -464,6 +467,10 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
                     launch(Dispatchers.IO) {
                         results[i] = runCatching { runOne(context, calls[i]) }
                             .getOrElse { e ->
+                                // 🔴 issue #11 问题 8：用户停止不是「某个工具失败」。
+                                // 并行分支的 runCatching 同样会吞掉 CancellationException，
+                                // 把「已停止」染成一条错误结果回灌 → 原样上抛，让上层短路。
+                                if (e is kotlinx.coroutines.CancellationException) throw e
                                 QuroToolResult.Failed(
                                     "tool_error",
                                     QuroToolFeedback.compose(calls[i].name, "工具执行异常：${e.message}"),
@@ -642,20 +649,40 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
             }
         }
         val argsMap = runCatching { jsonToMap(call.arguments) }.getOrElse { emptyMap() }
+        // 🔴 issue #11 问题 8：attempt 开始前先检查取消。
+        // 闭环允许在同一调用上重试，若用户在上一 attempt 后点了「停止」，
+        // 这里必须直接结束，而不是又拉起一个新进程（旧实现会）。
+        coroutineContext[Job]?.ensureActive()
         // 工具执行带超时保护（60s）：防止单个工具卡住吃满 180s 总超时。
         // 重试/升级由闭环执行器按失败类型统一决策，这里只负责单次干净执行。
+        //
+        // 🔴 本轮同时接上 [QuroToolProcesses]（issue #11 问题 8 核心）：
+        // withTimeout 内侧建进程登记 Run，工具 spawn 的进程（proot / su / sh -c /
+        // python / 抓包…）全部在册；job 取消时（用户停止 / barge-in 切会话 /
+        // **本 withTimeout 超时**）在取消方线程上强杀在册进程。
+        // 此前取消与超时都只能干等 `Process.waitFor` 自己返回 —— proot 里跑个
+        // apt install 一等就是一分多钟，用户点停止毫无反应，根因就在这里。
         val execResult = runCatching {
             withTimeout(TOOL_EXEC_TIMEOUT_MS) {
-                droidMcp.callTool(call.name, argsMap)
+                val run = QuroToolProcesses.beginRun(coroutineContext[Job])
+                try {
+                    droidMcp.callTool(call.name, argsMap)
+                } finally {
+                    QuroToolProcesses.endRun(run)
+                }
             }
         }.getOrElse { e ->
             if (e is kotlinx.coroutines.TimeoutCancellationException) {
-                android.util.Log.e("QuroToolEngine", "工具「${call.name}」执行超时（${TOOL_EXEC_TIMEOUT_MS}ms）")
+                android.util.Log.e("QuroToolEngine", "工具「${call.name}」执行超时（${TOOL_EXEC_TIMEOUT_MS}ms），已强杀派生进程")
                 return ExecResult.Failed(
                     FailureType.TIMEOUT,
                     "工具执行超时（超过60秒），已自动终止。如需执行长时间任务，请分步操作。",
                 )
             }
+            // 🔴 用户停止（父 job 取消）不是「工具失败」：绝不当成错误结果回灌给模型
+            // （否则界面会看到一条莫名的「工具执行异常」且下一轮还会跑），原样上抛，
+            // 由 QuroAssistant 的「回灌前短路」结束本轮 ReAct。
+            if (e is kotlinx.coroutines.CancellationException) throw e
             android.util.Log.e("QuroToolEngine", "工具「${call.name}」执行异常: ${e.message}")
             return ExecResult.Failed(FailureType.TRANSPORT, "工具执行异常: ${e.message}")
         }

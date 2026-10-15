@@ -229,7 +229,14 @@ var selectedAttachments=[];   /* {id,name,type,size} */
    node     当前流式气泡的渲染缓存
    raf      待执行的重绘帧（rAF 节流，防止每个 delta 都重排）      */
 var stream={active:false,ctrl:null,localUserId:null,localAid:null,
-            segId:null,text:"",reason:"",blocks:[],node:null,raf:0,gotDone:false};
+            segId:null,text:"",reason:"",blocks:[],node:null,raf:0,gotDone:false,
+            lastAt:0,watchdog:0};
+
+/* 流式假死阈值：发送流在飞但 45s 没有任何字节（含服务端 ": ping" 注释帧）→
+   判定连接已死，abort 并走 error 路径。没有它就是 issue 里那个死锁：
+   SSE 断线后 stream.active / composer.busy 卡住，后续每次点发送都被
+   doSend 守卫悄悄拒绝 —— 表现即「消息半天发不到后端」。 */
+var STREAM_STALL_MS=45000, STREAM_WATCHDOG_TICK_MS=5000;
 
 /* 原生专属块的显示名 */
 var NATIVE_LABEL={
@@ -941,9 +948,14 @@ function apply(snap){
     if(!wasBusy&&state.composer.busy)scrollBottom(true);
     return;
   }
-  state.messages=(snap.messages||[]).filter(function(m){
-    return m&&m.id&&(m.role==="user"||m.role==="assistant");
-  });
+  /* chrome-only 快照（服务端流式期间只推非消息字段）：没有 messages 键时
+     保持现有消息列表原样不动，只更新 chrome。绝不能当成空列表替换——
+     那会把流式期间刚上屏的气泡/别处tab正在看的会话整体清掉。 */
+  if(Array.isArray(snap.messages)){
+    state.messages=(snap.messages||[]).filter(function(m){
+      return m&&m.id&&(m.role==="user"||m.role==="assistant");
+    });
+  }
 
   var ids=state.messages.map(function(m){return m.id;});
   prune(ids);
@@ -1044,6 +1056,7 @@ function parseSseBlock(block){
 function readSse(resp,onEvent){
   if(!resp.body||!resp.body.getReader){
     /* 兜底（老浏览器）：整读后按帧切。失去流式但协议不变。 */
+    stream.lastAt=Date.now();
     return resp.text().then(function(all){
       all.split(/\r?\n\r?\n/).forEach(function(b){
         var ev=parseSseBlock(b.trim()); if(ev)onEvent(ev);
@@ -1054,6 +1067,9 @@ function readSse(resp,onEvent){
   function pump(){
     return reader.read().then(function(r){
       if(r.done)return;
+      /* 收到任何字节即算活着 —— 含服务端每 15s 的 ": ping" 注释帧
+         （注释帧过不了 parseSseBlock，不刷新就会误杀长工具调用期间的活连接） */
+      stream.lastAt=Date.now();
       buf+=decoder.decode(r.value,{stream:true});
       var blocks=buf.split(/\r?\n\r?\n/);
       buf=blocks.pop()||"";
@@ -1212,6 +1228,10 @@ function onStreamEvent(ev){
     case "assistant_done":{
       stream.gotDone=true;
       stream.active=false;
+      /* 本地立即解除发送锁：不能干等服务端快照来纠正。若 VM 侧 busy 因故
+         不收敛（ issue #11 报的「界面持续转圈」），快照会在下一 tick 把它
+         重新置 true —— 真忙才锁，假死必须放行。 */
+      state.composer.busy=false;
       var fm=ev.data&&ev.data.message;
       if(fm&&fm.id){
         if(stream.segId&&stream.segId!==fm.id&&nodes[stream.segId]){
@@ -1235,6 +1255,7 @@ function onStreamEvent(ev){
     }
     case "error":{
       stream.active=false;
+      state.composer.busy=false;
       var em={id:"local-error-"+Date.now(),role:"assistant",mine:false,author:"",avatar:"",
               timeText:fmtTime(Date.now()),time:Date.now(),
               blocks:[{t:"text",text:"⚠️ "+((ev.data&&ev.data.error)||"连接中断")}]};
@@ -1247,9 +1268,14 @@ function onStreamEvent(ev){
   }
 }
 
-/** 流结束（无论正常与否）：收尾并重拉快照对齐真相。 */
+/** 流结束（无论正常与否）：收尾并重拉快照对齐真相。所有终态路径的唯一收口。 */
 function onStreamEnd(){
+  stopStreamWatchdog();
   stream.active=false;
+  stream.ctrl=null;
+  /* 解除发送锁：与 assistant_done / error 同旨。VM 真忙时随后的快照会重新置 true，
+     假死（busy 卡 true）必须在这里放行，否则后续每次点发送都被 doSend 守卫拒绝。 */
+  state.composer.busy=false;
   if(stream.localAid&&nodes[stream.localAid]){
     /* 没等到任何 delta 就断了：保留占位没有意义，交给快照重建 */
     nodes[stream.localAid].root.remove(); delete nodes[stream.localAid]; stream.localAid=null;
@@ -1257,6 +1283,26 @@ function onStreamEnd(){
   stream.node=null;
   renderChrome();
   if(!stream.gotDone)fetchSnapshot();
+}
+
+/** 假死看门狗：发送流在飞但 45s 没有任何字节（含 ": ping" 注释帧）→ 判定连接已死。
+    没有它就是 issue 里那个死锁：SSE 断线后 stream.active / composer.busy 卡住，
+    后续每次点发送都被 doSend 守卫悄悄拒绝 —— 表现即「消息半天发不到后端」。 */
+function startStreamWatchdog(){
+  stopStreamWatchdog();
+  stream.lastAt=Date.now();
+  stream.watchdog=setInterval(function(){
+    if(!stream.ctrl)return;                      /* 没有在飞的发送流 */
+    if(Date.now()-stream.lastAt<STREAM_STALL_MS)return;
+    var c=stream.ctrl; stream.ctrl=null;
+    try{ c.abort(); }catch(e){}
+    /* abort 的 AbortError 会被 doSend 的 catch 当「用户点停止」直接收尾、不弹错误，
+       这里先补一个可见的错误事件（它自带 busy 复位 + 快照对齐），再让 abort 触发收尾。 */
+    onStreamEvent({event:"error",data:{error:"连接无响应（"+(STREAM_STALL_MS/1000)+"s 无数据），已自动中断"}});
+  },STREAM_WATCHDOG_TICK_MS);
+}
+function stopStreamWatchdog(){
+  if(stream.watchdog){ clearInterval(stream.watchdog); stream.watchdog=0; }
 }
 
 function doSend(){
@@ -1281,6 +1327,7 @@ function doSend(){
 
   var ctrl=new AbortController();
   stream.ctrl=ctrl;
+  startStreamWatchdog();   /* 假死保护：45s 无字节自动中断并解锁发送 */
   fetch("api/send",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
@@ -1303,8 +1350,10 @@ function doSend(){
 function doStop(){
   if(stream.ctrl){ try{ stream.ctrl.abort(); }catch(e){} }
   stream.ctrl=null;
+  stopStreamWatchdog();
   post("stop",{});
   stream.active=false;
+  state.composer.busy=false;
   renderChrome();
   setTimeout(fetchSnapshot,300);
 }
@@ -1312,6 +1361,7 @@ function doNew(){
   /* 新对话会整体换掉消息列表：先掐断可能还在跑的发送流，否则流的 delta
      会继续往旧列表节点上写字，与新快照互相打架。 */
   if(stream.ctrl){ try{ stream.ctrl.abort(); }catch(e){} stream.ctrl=null; }
+  stopStreamWatchdog();
   stream.active=false; stream.segId=null; stream.text=""; stream.reason=""; stream.node=null;
   stream.localAid=null; stream.localUserId=null;
   post("new",{});
@@ -1509,6 +1559,7 @@ function fillList(boxId,items){
     row.addEventListener("click",function(){
       if(it.action==="__clear_chat__"){
         if(stream.ctrl){ try{ stream.ctrl.abort(); }catch(e){} stream.ctrl=null; }
+        stopStreamWatchdog();
         stream.active=false; stream.segId=null; stream.text=""; stream.reason=""; stream.node=null;
         stream.localAid=null; stream.localUserId=null;
         post("clear").then(function(r){

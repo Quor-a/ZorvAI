@@ -14,15 +14,23 @@ import java.io.PrintWriter
 import java.io.StringWriter
 import java.lang.reflect.Constructor
 import java.lang.reflect.Method
+import java.math.BigInteger
+import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.PrivateKey
 import java.security.cert.X509Certificate
+import java.util.Date
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import java.util.zip.CRC32
 import java.util.zip.Deflater
 import java.nio.ByteOrder
+import org.bouncycastle.asn1.x500.X500Name
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
+import org.bouncycastle.jce.provider.BouncyCastleProvider
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
 
 /**
  * 端侧 APK 构建引擎（真实可用的工具链）。
@@ -285,37 +293,55 @@ object BuildEngine {
         ))
 
     /**
-     * 端内生成自定义签名 keystore（PKCS12）。自签证书需要 BouncyCastle（Android 运行时自带，
-     * 但不在编译 SDK stub 中），故用反射调用，保证可编译；若设备不可达 BC 则抛异常由上层提示改用导入。
+     * 端内生成自定义签名 keystore（PKCS12，自签证书）。
+     *
+     * 🔴 issue #14 根因：旧实现用**反射**调 `org.bouncycastle.jce.provider.BouncyCastleProvider`
+     * 与 `org.bouncycastle.x509.X509V3CertificateGenerator`。但 Android 从 API 28 起把平台自带的
+     * BC 命名空间化为 `com.android.org.bouncycastle`，应用侧 `Class.forName` 只能拿到
+     * **ClassNotFoundException: BouncyCastleProvider** → 端侧生成密钥必挂；且
+     * X509V3CertificateGenerator 在新版 BC 早已移除，即使摸到 BC 也会 NoSuchMethodError。
+     *
+     * 修法（v2）：`gradle/libs.versions.toml` + `app/build.gradle.kts` 显式依赖
+     * bcpkix-jdk18on / bcprov-jdk18on（见 [BouncyCastleProvider] 的 import），改为
+     * **编译期直接引用**现代 BC API（JcaX509v3CertificateBuilder + JcaContentSignerBuilder）：
+     *  · 不再依赖任何反射，编译期即可发现 API 不存在的问题；
+     *  · 不依赖平台 BC 是否可见、是否被 ROM 阉割。
+     *
+     * 若设备不可达 BC（理论上自带依赖后不可能），异常直接抛给上层 —— 由调用方如实报错，
+     * 绝不静默回退到 debug.keystore（那正是 issue 里「传了参数却被忽略」的观感来源）。
      */
     fun generateKeystore(file: File, alias: String, storePass: String, keyPass: String) {
-        val bcProv = Class.forName("org.bouncycastle.jce.provider.BouncyCastleProvider")
-        val provider = bcProv.getDeclaredConstructor().newInstance() as java.security.Provider
-        if (java.security.Security.getProvider("BC") == null) {
-            java.security.Security.addProvider(provider)
+        val bc = BouncyCastleProvider.PROVIDER_NAME
+        if (java.security.Security.getProvider(bc) == null) {
+            java.security.Security.addProvider(BouncyCastleProvider())
         }
-        val kpg = java.security.KeyPairGenerator.getInstance("RSA")
+        val kpg = KeyPairGenerator.getInstance("RSA", bc)
         kpg.initialize(2048)
         val kp = kpg.generateKeyPair()
-        val genCls = Class.forName("org.bouncycastle.x509.X509V3CertificateGenerator")
-        val gen = genCls.getDeclaredConstructor().newInstance()
-        val dn = javax.security.auth.x500.X500Principal("CN=$alias, OU=BuildAci, O=BuildAci, C=CN")
-        genCls.getMethod("setSerialNumber", java.math.BigInteger::class.java)
-            .invoke(gen, java.math.BigInteger.valueOf(System.currentTimeMillis()))
-        genCls.getMethod("setSubjectDN", javax.security.auth.x500.X500Principal::class.java).invoke(gen, dn)
-        genCls.getMethod("setIssuerDN", javax.security.auth.x500.X500Principal::class.java).invoke(gen, dn)
-        genCls.getMethod("setNotBefore", java.util.Date::class.java).invoke(gen, java.util.Date())
-        genCls.getMethod("setNotAfter", java.util.Date::class.java)
-            .invoke(gen, java.util.Date(System.currentTimeMillis() + 10000L * 86400000L))
-        genCls.getMethod("setPublicKey", java.security.PublicKey::class.java).invoke(gen, kp.public)
-        genCls.getMethod("setSignatureAlgorithm", String::class.java).invoke(gen, "SHA256WithRSA")
-        val cert = genCls.getMethod("generate", java.security.PrivateKey::class.java, String::class.java)
-            .invoke(gen, kp.private, "BC") as java.security.cert.X509Certificate
-        val ks = java.security.KeyStore.getInstance("PKCS12")
+        // X500Name（BC 原生）而非 javax X500Principal：JcaX509v3CertificateBuilder 的
+        // 构造器收 BC 的 X500Name；JDK 的 X500Principal 反而要多转一道。
+        val dn = X500Name("CN=$alias, OU=ZorvAI, O=ZorvAI, C=CN")
+        val now = System.currentTimeMillis()
+        val certBuilder = JcaX509v3CertificateBuilder(
+            /* issuer = */ dn,
+            /* serial = */ BigInteger.valueOf(now),
+            /* notBefore = */ Date(now - 86_400_000L),
+            /* notAfter = */ Date(now + 10_000L * 86_400_000L),
+            /* subject = */ dn,
+            /* publicKey = */ kp.public,
+        )
+        val signer = JcaContentSignerBuilder("SHA256WithRSA").setProvider(bc).build(kp.private)
+        // build() 出来的是 BC 的 X509CertificateHolder，KeyStore.setKeyEntry 要 JDK 的
+        // java.security.cert.X509Certificate —— 必须过一遍 JcaX509CertificateConverter。
+        val holder = certBuilder.build(signer)
+        val cert: X509Certificate = org.bouncycastle.cert.jcajce.JcaX509CertificateConverter()
+            .setProvider(bc)
+            .getCertificate(holder)
+        val ks = KeyStore.getInstance("PKCS12")
         ks.load(null, null)
-        ks.setKeyEntry(alias, kp.private, keyPass.toCharArray(), arrayOf(cert))
+        ks.setKeyEntry(alias, kp.private, keyPass.toCharArray(), arrayOf<java.security.cert.Certificate>(cert))
         file.parentFile?.mkdirs()
-        ks.store(java.io.FileOutputStream(file), storePass.toCharArray())
+        ks.store(FileOutputStream(file), storePass.toCharArray())
     }
 
     /**
@@ -453,10 +479,12 @@ object BuildEngine {
     private fun loadKeyStore(ksFile: File, pass: String): KeyStore {
         // ★ BKS 依赖 BouncyCastle，必须先注册 provider；
         //   另外有些 ROM 的 PKCS12/BKS 实现较弱，带 BC 再试一遍能救回一批"Wrong version of key store"。
+        // 🔴 issue #14：旧实现用 Class.forName 反射找 BC，Android 8+ 平台 BC 被命名空间化后
+        // 必然 ClassNotFoundException，BKS 分支静默全废。现已显式依赖 bcpkix/bcprov（见 import），
+        // 直接引用即可；runCatching 仅剩「极端情况下 addProvider 被 ROM 策略拦截」的兜底。
         runCatching {
-            val bc = Class.forName("org.bouncycastle.jce.provider.BouncyCastleProvider")
-            if (java.security.Security.getProvider("BC") == null) {
-                java.security.Security.addProvider(bc.getDeclaredConstructor().newInstance() as java.security.Provider)
+            if (java.security.Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
+                java.security.Security.addProvider(BouncyCastleProvider())
             }
         }
         val exceptions = mutableListOf<Throwable>()

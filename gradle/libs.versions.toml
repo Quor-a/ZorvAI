@@ -29,6 +29,10 @@ coil = "2.6.0"
 # GenUI-Agent 内置（去品牌化移植）所需：Markdown 渲染 / YAML 解析
 markwon = "4.6.2"
 kaml = "0.55.0"
+# 构建台端侧签名（issue #14）：Android 平台自带的 org.bouncycastle 从 API 28 起被
+# 命名空间化为 com.android.org.bouncycastle，应用 Class.forName 不到 —— 端侧生成
+# 自签 keystore / BKS 读取必须自带一份 BC（bcpkix 依赖 bcprov）。
+bouncycastle = "1.78.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -102,6 +106,12 @@ markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "mark
 markwon-ext-tables = { group = "io.noties.markwon", name = "ext-tables", version.ref = "markwon" }
 markwon-ext-strikethrough = { group = "io.noties.markwon", name = "ext-strikethrough", version.ref = "markwon" }
 kaml = { group = "com.charleskorn.kaml", name = "kaml", version.ref = "kaml" }
+
+# 构建台端侧签名（issue #14：ClassNotFoundException BouncyCastleProvider → 签名全挂）：
+# 平台 BC 被命名空间化（com.android.org.bouncycastle）后应用摸不到，必须自带。
+# bcpkix 提供 X.509 证书构建 / CMS；bcprov 是它的 ASN.1 与 JCE 底座。
+bouncycastle-bcpkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
+bouncycastle-bcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
 
 # 端侧 ASR 引擎 Sherpa-NCNN：未使用版本目录条目。
 # 原因：Sherpa-NCNN 无 Maven Central / JitPack AAR（仓库根仅含 CMake，JitPack 构建全部失败）。

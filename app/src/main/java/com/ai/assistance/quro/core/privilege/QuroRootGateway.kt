@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.privilege
 
 import android.content.Context
 import com.ai.assistance.quro.core.shizuku.QuroShizuku
+import com.ai.assistance.quro.core.tools.QuroToolProcesses
 import com.ai.assistance.quro.util.QuroDiag
 import java.util.concurrent.TimeUnit
 
@@ -235,6 +236,8 @@ object QuroRootGateway {
         return try {
             val p = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
             process = p
+            // issue #11 问题 8：登记派生进程，用户停止/超时即被强杀
+            QuroToolProcesses.register(p)
 
             val outB = StringBuilder()
             val errB = StringBuilder()

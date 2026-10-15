@@ -451,6 +451,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(LinuxStopTool())
     r.register(LinuxStatusTool())
     r.register(LinuxPackageTool())   // 统一包管理：自动适配 apt/apk/dnf/pacman
+    r.register(LinuxProcessTool())   // 查看/终止 Linux 环境残留后台进程（issue #11 问题 9 入口）
     // 隔离沙箱（应用私有目录隔离，路径穿越防护）
     r.register(QuroSandboxTool())
     // 应用私有数据库只读查询（应用私有目录隔离，只读安全）

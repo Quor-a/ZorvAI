@@ -94,6 +94,8 @@ class PythonRunTool : QuroTool {
         } catch (e: Exception) {
             return "python_run 启动失败：${e.javaClass.simpleName} ${e.message ?: ""}"
         }
+        // issue #11 问题 8：登记派生进程，用户停止/超时即被强杀
+        QuroToolProcesses.register(proc)
         val outSb = StringBuilder()
         val errSb = StringBuilder()
         val outThread = Thread { proc.inputStream.bufferedReader().forEachLine { if (outSb.length < 12_000) outSb.appendLine(it) } }

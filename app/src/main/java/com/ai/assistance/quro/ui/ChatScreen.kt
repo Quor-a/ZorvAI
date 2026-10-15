@@ -2757,6 +2757,8 @@ fun ChatScreen(
                             if (!lastUser.isNullOrBlank()) send(lastUser)
                         },
                         onDelete = { vm.deleteMessage(it) },
+                        // 上下文超限错误气泡的「新建对话」一键入口（issue #11 问题6 第3步）
+                        onNewConversation = { vm.newConversation() },
                         onAttachmentActivate = { att ->
                             when (att.type) {
                                 "image" -> {
@@ -3015,6 +3017,8 @@ private fun MessageList(
     onShare: (String) -> Unit = {},
     onRegenerate: () -> Unit = {},
     onDelete: (List<String>) -> Unit = {},
+    /** 「新建对话」一键入口：上下文超限类错误气泡专用（issue #11 问题6 第3步）。 */
+    onNewConversation: () -> Unit = {},
     onAttachmentActivate: (Attachment) -> Unit = {},
     onAttachmentDownload: (Attachment) -> Unit = {},
     onSend: (String) -> Unit = {},
@@ -3142,6 +3146,7 @@ private fun MessageList(
                         onShare = onShare,
                         onRegenerate = onRegenerate,
                         onDelete = onDelete,
+                        onNewConversation = onNewConversation,
                         narrow = narrow,
                         onAttachmentActivate = onAttachmentActivate,
                         onAttachmentDownload = onAttachmentDownload,
@@ -3283,6 +3288,8 @@ private fun MessageRow(
     onShare: (String) -> Unit = {},
     onRegenerate: () -> Unit = {},
     onDelete: (List<String>) -> Unit = {},
+    /** 「新建对话」一键入口：上下文超限类错误气泡专用（issue #11 问题6 第3步）。 */
+    onNewConversation: () -> Unit = {},
     narrow: Boolean = false,
     /** 附件点击：图片→全屏预览 / 视频→播放器 / 文档→系统查看器（由 ChatScreen 处理具体路由）。 */
     onAttachmentActivate: (Attachment) -> Unit = {},
@@ -3910,12 +3917,20 @@ private fun MessageRow(
                 // 气泡操作任务栏（仅 AI 消息）：复制 / 追问 / 分享 / 重试
                 if (!msg.mine) {
                     Spacer(Modifier.height(6.dp))
+                    // 上下文超限错误气泡（issue #11 问题6）：识别稳定前缀，给「新建对话」一键入口——
+                    // 旧行为只有一句「请求失败」，用户既不知道原因、也没有自救办法。
+                    val isContextLimitError = msg.text
+                        ?.startsWith(com.ai.assistance.quro.core.network.QuroLlmErrors.CONTEXT_LIMIT_MESSAGE_PREFIX) == true
                     val bubbleActions: @Composable () -> Unit = {
                         BubbleActionButton(stringResource(R.string.qk_00088), Muted) { copyToClipboard(displayText) }
                         BubbleActionButton(stringResource(R.string.qk_00089), cs.primary) { onAskFollowup(msg.text ?: "") }
                         BubbleActionButton(stringResource(R.string.qk_00090), Muted) { onShare(msg.text ?: "") }
                         BubbleActionButton(stringResource(R.string.qk_00091), Muted) { onDelete(msg.uids) }
-                        BubbleActionButton(stringResource(R.string.qk_00092), Muted) { onRegenerate() }
+                        if (isContextLimitError) {
+                            BubbleActionButton(stringResource(R.string.qk_00062), cs.primary) { onNewConversation() }
+                        } else {
+                            BubbleActionButton(stringResource(R.string.qk_00092), Muted) { onRegenerate() }
+                        }
                     }
                     if (narrow) {
                         FlowRow(
