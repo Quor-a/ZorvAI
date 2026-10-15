@@ -498,9 +498,10 @@ class QuroToolRouter(
             name.startsWith("codecanvas_") -> ToolCapabilityDirectory.ToolCategory.AI_CAPABILITIES
             // 新集群（tool-first 重写）：一组 cluster_* 工具，归到 AI 能力类，避免从路由索引消失。
             name.startsWith("cluster_") -> ToolCapabilityDirectory.ToolCategory.AI_CAPABILITIES
+            name in setOf("visual_analysis", "visual_question", "visual_action", "visual_popup", "visual_custom_popup") ->
+                ToolCapabilityDirectory.ToolCategory.VISUAL_INTERACT
             name in setOf("read_screen", "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen",
-                "input_text", "get_foreground_app", "get_screen_state", "screenshot", "screenshot_base64",
-                "visual_analysis", "visual_question", "visual_action", "visual_popup", "visual_custom_popup") ->
+                "input_text", "get_foreground_app", "get_screen_state", "screenshot", "screenshot_base64") ->
                 ToolCapabilityDirectory.ToolCategory.ACCESSIBILITY
             name.startsWith("send_sms") || name.startsWith("read_contacts") || name.startsWith("read_sms") ||
                 name.contains("calendar") -> ToolCapabilityDirectory.ToolCategory.COMMUNICATION

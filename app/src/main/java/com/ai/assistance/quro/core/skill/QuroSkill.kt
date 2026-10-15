@@ -23,6 +23,8 @@ data class QuroSkill(
     val id: String,
     val name: String,
     val description: String = "",
+    /** 技能中文简介（优先于 description 在技能选择界面展示；内置技能由官方维护，开源导入时从 SKILL.md 的 description_zh 字段读取）。 */
+    val descriptionZh: String = "",
     /** 技能指令正文：注入系统提示词，作为 AI 的额外行为约束 / 能力说明。 */
     val prompt: String = "",
     /** 是否启用（仅启用的技能注入系统提示词）。 */
@@ -54,6 +56,7 @@ data class QuroSkill(
     /** 导出为应用内 JSON 格式（与 parseSkillJson 互为反向，可被本 App 重新导入）。 */
     fun toExportJson(): JSONObject = JSONObject().apply {
         put("id", id); put("name", name); put("description", description)
+        if (descriptionZh.isNotBlank()) put("description_zh", descriptionZh)
         put("prompt", prompt); put("enabled", enabled); put("trigger", trigger)
         put("updatedAt", updatedAt); put("parametersJson", parametersJson)
         put("callable", callable); put("alwaysOn", alwaysOn)
@@ -66,6 +69,7 @@ data class QuroSkill(
         appendLine("---")
         appendLine("name: $name")
         if (description.isNotBlank()) appendLine("description: $description")
+        if (descriptionZh.isNotBlank()) appendLine("description_zh: $descriptionZh")
         appendLine("---")
         appendLine()
         appendLine(prompt)
@@ -290,6 +294,7 @@ object QuroSkillStore {
                         id = o.optString("id", UUID.randomUUID().toString()),
                         name = o.optString("name", ""),
                         description = o.optString("description", ""),
+                        descriptionZh = o.optString("description_zh", ""),
                         prompt = o.optString("prompt", ""),
                         enabled = o.optBoolean("enabled", true),
                         trigger = o.optString("trigger", ""),
@@ -595,6 +600,7 @@ object QuroSkillStore {
                         id = o.optString("id", UUID.randomUUID().toString()),
                         name = o.optString("name", ""),
                         description = o.optString("description", ""),
+                        descriptionZh = o.optString("description_zh", ""),
                         prompt = o.optString("prompt", ""),
                         enabled = o.optBoolean("enabled", true),
                         trigger = o.optString("trigger", ""),
@@ -658,6 +664,7 @@ object QuroSkillStore {
                         put("id", s.id)
                         put("name", s.name)
                         put("description", s.description)
+                        if (s.descriptionZh.isNotBlank()) put("description_zh", s.descriptionZh)
                         put("prompt", s.prompt)
                         put("enabled", s.enabled)
                         put("trigger", s.trigger)
@@ -729,6 +736,7 @@ object QuroSkillStore {
             ?: Regex("^name:\\s*(.+)$", RegexOption.MULTILINE).find(text)?.groupValues?.get(1)?.trim()
             ?: return emptyList()
         val description = Regex("^description:\\s*(.+)$", RegexOption.MULTILINE).find(frontmatter)?.groupValues?.get(1)?.trim() ?: ""
+        val descriptionZh = Regex("^description_zh:\\s*(.+)$", RegexOption.MULTILINE).find(frontmatter)?.groupValues?.get(1)?.trim() ?: ""
         // 触发词：开放标准 SKILL.md 的可选字段，逗号分隔。缺省回落到技能名，
         // 这样内置技能（随包 SKILL.md）也能被 matchTriggerSkills 命中，做到「默认启用 + 按需注入」。
         val trigger = Regex("^trigger:\\s*(.+)$", RegexOption.MULTILINE).find(frontmatter)?.groupValues?.get(1)?.trim()
@@ -739,6 +747,7 @@ object QuroSkillStore {
                 id = UUID.randomUUID().toString(),
                 name = name,
                 description = description,
+                descriptionZh = descriptionZh,
                 trigger = trigger,
                 prompt = prompt,
                 enabled = true,

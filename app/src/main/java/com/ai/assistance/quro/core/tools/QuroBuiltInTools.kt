@@ -283,6 +283,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(FileReadTool())
     r.register(OpenWebTool())
     r.register(RunCodeTool())
+    // 宿主技能库管理：让 AI 可列举 / 启用 / 禁用用户技能（issue #17 问题 3）
+    r.register(SkillListTool())
+    r.register(SkillEnableTool())
+    r.register(SkillDisableTool())
     // SandboxPackage 完整脚本运行时：code_runner（JS/TS + Tools.* 宿主 API + CommonJS）+ ToolPkg 脚本包 + 项目模板
     r.register(CodeRunnerTool())
     r.register(ToolPkgListTool())

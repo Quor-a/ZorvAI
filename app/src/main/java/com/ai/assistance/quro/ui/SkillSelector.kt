@@ -107,9 +107,10 @@ private fun SkillItem(
                 fontWeight = FontWeight.Medium,
                 color = if (skill.enabled) cs.onSurface else cs.onSurfaceVariant,
             )
-            if (skill.description.isNotBlank()) {
+            val skillDesc = if (skill.descriptionZh.isNotBlank()) skill.descriptionZh else skill.description
+            if (skillDesc.isNotBlank()) {
                 Text(
-                    text = skill.description,
+                    text = skillDesc,
                     fontSize = 12.sp,
                     color = cs.onSurfaceVariant,
                     maxLines = 2,
