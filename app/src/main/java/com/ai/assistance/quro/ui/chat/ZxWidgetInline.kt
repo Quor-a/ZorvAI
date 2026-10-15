@@ -136,6 +136,15 @@ private fun InlineZxWebView(
         )
     }
 
+    // 🔴 关键修复：dsl 随流式补全会变化（模型边写边生成 zx_web_card 参数），
+    // `html` 随之重建。但 AndroidView 的 factory 只在 WebView 首次创建时执行一次，
+    // 若不在这里随 html 重载，组件会永远停在「首次渲染时的半截 dsl」上 ——
+    // 表现为「能渲染但渲染不完整 / AI 写完了界面却卡在半成品」。
+    // 因此把加载放进 LaunchedEffect(html)：html 一变就重新 loadDataWithBaseURL。
+    LaunchedEffect(html) {
+        webView?.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+    }
+
     AndroidView(
         modifier = modifier.height(heightDp.dp),
         factory = { ctx ->
@@ -178,7 +187,6 @@ private fun InlineZxWebView(
                         wvReady = true
                     }
                 }
-                loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
             }
         },
     )
