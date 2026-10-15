@@ -8,7 +8,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /** 弹窗按钮 */
@@ -47,6 +46,11 @@ data class VisualPopupData(
     val timeout: Int = 60,
     val latch: CountDownLatch,
     val result: AtomicReference<PopupResult?>,
+    /**
+     * 主 App 工具入队时设置：用户操作后由 [VisualPopupQueue.submitResult] 调用，
+     * 把结果（JSON）作为新用户消息回流触发 AI 续跑（非阻塞）。取消操作时不触发。
+     */
+    val onDeliver: ((String) -> Unit)? = null,
     var status: PopupStatus = PopupStatus.PENDING  // 弹窗状态
 )
 
@@ -88,6 +92,12 @@ object VisualPopupQueue {
                 pending.result.set(result)
                 pending.status = if (result.cancelled) PopupStatus.CANCELLED else PopupStatus.COMPLETED
                 pending.latch.countDown()
+                val onDeliver = pending.onDeliver
+                val answer = JSONObject().apply {
+                    put("button", result.buttonValue)
+                    put("inputs", JSONObject(result.inputValues))
+                    put("cancelled", result.cancelled)
+                }.toString()
                 Log.d(TAG, "用户提交弹窗结果: $result")
                 // 修复：原逻辑 postDelayed 2s 才 removeAt，期间 getCurrentPopup 已过滤掉 COMPLETED
                 // 弹窗能继续显示，但 currentPopup?.first 还指向旧 id，导致新弹窗进不来。
@@ -95,6 +105,8 @@ object VisualPopupQueue {
                 _eventChannel.trySend(PopupEvent.PopupUpdated(id))
                 pendingPopups.removeAt(index)
                 _eventChannel.trySend(PopupEvent.PopupRemoved(id))
+                // 非取消才回流：取消=用户跳过/关闭，不触发新一轮。
+                if (!result.cancelled) onDeliver?.invoke(answer)
             }
         }
     }
@@ -286,14 +298,10 @@ class VisualPopupTool : QuroTool {
         val popupId = "popup_${System.currentTimeMillis()}_${(Math.random() * 1000).toInt()}"
 
         return try {
-            val result = showPopup(popupId, title, content, buttons, inputs, imageUrl, width, height, cardTitle, cardDescription, iconName, subtitle, tags, progress, cancelable, timeout)
-            result?.let {
-                val resultMap = mutableMapOf<String, Any?>()
-                resultMap["button"] = it.buttonValue
-                resultMap["inputs"] = it.inputValues
-                resultMap["cancelled"] = it.cancelled
-                JSONObject(resultMap as Map<String, Any>).toString()
-            } ?: "{\"cancelled\":true,\"error\":\"timeout\"}"
+            showPopup(popupId, title, content, buttons, inputs, imageUrl, width, height, cardTitle, cardDescription, iconName, subtitle, tags, progress, cancelable, timeout)
+            // 注意：返回值不再是用户操作结果，而是「已弹出」提示。
+            // 用户操作结果会在其操作后通过 VisualAnswerBridge 作为新用户消息回流，触发新一轮对话。
+            "（已向用户弹出可视化弹窗「$title」，等待用户操作；操作结果会作为新消息继续对话，无需等待计时）"
         } catch (e: Exception) {
             Log.e(TAG, "弹窗失败", e)
             "{\"cancelled\":true,\"error\":\"${e.message}\"}"
@@ -317,7 +325,7 @@ class VisualPopupTool : QuroTool {
         progress: Float?,
         cancelable: Boolean,
         timeout: Int
-    ): PopupResult? {
+    ): String {
         val latch = CountDownLatch(1)
         val result = AtomicReference<PopupResult?>(null)
 
@@ -339,23 +347,19 @@ class VisualPopupTool : QuroTool {
             cancelable = cancelable,
             timeout = timeout,
             latch = latch,
-            result = result
+            result = result,
+            // 非阻塞回流：用户操作后由 submitResult 回调，结果作为新用户消息触发 AI 续跑。
+            onDeliver = { VisualAnswerBridge.deliver(it) }
         )
 
         // 使用新的 addPopup 方法（会发送事件通知 UI）
         VisualPopupQueue.addPopup(popup)
 
-        Log.d(TAG, "显示弹窗: $title (ID: $id, 超时: ${timeout}s)")
+        Log.d(TAG, "显示弹窗（非阻塞）: $title (ID: $id, 旧超时: ${timeout}s 已不再阻塞等待)")
 
-        val answered = latch.await(timeout.toLong(), TimeUnit.SECONDS)
-
-        return if (answered) {
-            result.get()
-        } else {
-            // 超时：从队列中移除
-            VisualPopupQueue.removePopup(id)
-            null
-        }
+        // 不再用 latch.await 阻塞 agent 循环：用户无需在固定时间内操作，
+        // 操作后结果会作为新用户消息回流，由 AI 在下一轮继续。
+        return "（已向用户弹出可视化弹窗「$title」，等待用户操作；操作结果会作为新消息继续对话，无需等待计时）"
     }
 
     companion object {

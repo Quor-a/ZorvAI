@@ -5,7 +5,6 @@ import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -72,8 +71,7 @@ style可选: primary(主要), secondary(次要), danger(危险)
         val timeout = args.optInt("timeout", 60)
 
         return try {
-            val result = showActionDialog(title, message, buttons, timeout)
-            result ?: "用户未选择（超时或取消）"
+            showActionDialog(title, message, buttons, timeout)
         } catch (e: Exception) {
             Log.e(TAG, "操作弹窗失败", e)
             "操作弹窗失败: ${e.message}"
@@ -85,7 +83,7 @@ style可选: primary(主要), secondary(次要), danger(危险)
         message: String,
         buttons: List<VisualButtonConfig>,
         timeout: Int
-    ): String? {
+    ): String {
         val latch = CountDownLatch(1)
         val result = AtomicReference<String?>(null)
 
@@ -94,7 +92,9 @@ style可选: primary(主要), secondary(次要), danger(危险)
             message = message,
             buttons = buttons,
             latch = latch,
-            result = result
+            result = result,
+            // 非阻塞回流：用户选择操作后由 submitAction 回调，值作为新用户消息触发 AI 续跑。
+            onDeliver = { VisualAnswerBridge.deliver(it) }
         )
 
         synchronized(VisualActionQueue.pendingActions) {
@@ -103,18 +103,11 @@ style可选: primary(主要), secondary(次要), danger(危险)
         // 修复：通知 UI 有新操作加入
         VisualActionQueue.signalAdded()
 
-        Log.d(TAG, "等待用户操作: $title (按钮数: ${buttons.size}, 超时: ${timeout}s)")
+        Log.d(TAG, "已弹出可视化操作弹窗（非阻塞）: $title (按钮数: ${buttons.size}, 旧超时: ${timeout}s 已不再阻塞等待)")
 
-        val answered = latch.await(timeout.toLong(), TimeUnit.SECONDS)
-
-        return if (answered) {
-            result.get()
-        } else {
-            synchronized(VisualActionQueue.pendingActions) {
-                VisualActionQueue.pendingActions.remove(pending)
-            }
-            null
-        }
+        // 不再用 latch.await 阻塞 agent 循环：用户无需在固定时间内操作，
+        // 操作后值会作为新用户消息回流，由 AI 在下一轮继续。
+        return "（已向用户弹出可视化操作弹窗「$title」，等待用户操作；用户选择后会作为新消息继续对话，无需等待计时）"
     }
 
     companion object {
