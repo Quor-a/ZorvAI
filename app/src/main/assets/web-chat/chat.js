@@ -959,7 +959,10 @@ function apply(snap){
 
   var ids=state.messages.map(function(m){return m.id;});
   prune(ids);
-  state.messages.forEach(function(m){ ensureNode(m); renderMessage(m); });
+  state.messages.forEach(function(m){
+    try{ ensureNode(m); renderMessage(m); }
+    catch(e){ reportDiag("render message "+m.id+" failed: "+(e&&e.stack||e), "error"); }
+  });
   syncOrder(ids);
   renderChrome();
   guardCollapse();
@@ -971,7 +974,20 @@ function fetchSnapshot(){
   fetch("api/snapshot",{cache:"no-store"})
     .then(function(r){return r.json();})
     .then(function(j){ apply(j); })
-    .catch(function(){});
+    .catch(function(e){
+      reportDiag("fetchSnapshot failed: "+(e&&e.message||e), "error");
+      showDiag("快照同步失败："+(e&&e.message||e));
+    });
+}
+
+/* 把诊断信息显示到页面底部自检行（平时 hidden），便于真机直接看到同步/渲染错误，
+   不再被 .catch(()=>{}) 静默吞掉。 */
+function showDiag(text){
+  try{
+    if(!$diag)return;
+    $diag.hidden=false;
+    $diag.textContent=String(text).slice(0,300);
+  }catch(e){}
 }
 
 var es=null, esFails=0, streamDead=false;
@@ -981,7 +997,7 @@ function startStream(){
   try{ es=new EventSource("api/events"); }catch(e){ schedule(1200); return; }
   es.onopen=function(){ esFails=0; };
   es.onmessage=function(ev){
-    try{ apply(JSON.parse(ev.data)); }catch(e){}
+    try{ apply(JSON.parse(ev.data)); }catch(e){ reportDiag("sse apply failed: "+(e&&e.stack||e), "error"); }
   };
   es.onerror=function(){
     esFails++;
