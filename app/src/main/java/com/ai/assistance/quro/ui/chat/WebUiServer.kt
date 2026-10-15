@@ -330,7 +330,18 @@ class QuroWebUiServer(
      */
     private fun handleGet(sock: Socket, path: String, query: String = ""): Boolean {
         when (path) {
-            "/api/snapshot" -> respondJson(sock, snapshot())
+            "/api/snapshot" -> {
+                val body = runCatching { snapshot() }.getOrNull()
+                if (body == null) {
+                    QuroDiag.log(TAG, "快照生成失败（详见上方堆栈）")
+                    respondJson(sock, """{"ok":false,"error":"snapshot_failed"}""")
+                } else {
+                    // 🔴 诊断：打印服务端可见消息条数。若长期为 0 → vm 没拿到会话（骨架/实例问题）；
+                    //   若 >0 → 消息已进入快照，问题在前端渲染或传输。
+                    QuroDiag.log(TAG, "GET /api/snapshot：服务端可见消息 ${vm.messages.value.size} 条")
+                    respondJson(sock, body)
+                }
+            }
             "/api/events" -> return serveEvents(sock)
             // 头像图（人格/用户）：只透出 filesDir/quro_avatars/ 内的文件名，防路径穿越
             "/api/avatar" -> serveAvatar(sock, query)
@@ -611,6 +622,7 @@ class QuroWebUiServer(
             out.flush()
         } catch (e: Throwable) {
             QuroDiag.log(TAG, "SSE 首帧失败：${e.message}")
+            QuroDiag.log(TAG, e.stackTraceToString())
             return false
         }.let {
             val sub = Subscriber(out)
@@ -1631,14 +1643,21 @@ class QuroWebUiServer(
                 .filter { !it.hidden && (it.role == "user" || it.role == "assistant") }
                 .forEach { m ->
                     val mine = m.role == "user"
-                    arr.put(
-                        WebUiProjection.message(
-                            m, mine = mine,
-                            authorFallback = if (mine) nf.userName else nf.aiName,
-                            avatarFallback = if (mine) nf.userAvatar else nf.aiAvatar,
-                            avatarUrl = if (mine) nf.userAvatarUrl else nf.aiAvatarUrl,
+                    runCatching {
+                        arr.put(
+                            WebUiProjection.message(
+                                m, mine = mine,
+                                authorFallback = if (mine) nf.userName else nf.aiName,
+                                avatarFallback = if (mine) nf.userAvatar else nf.aiAvatar,
+                                avatarUrl = if (mine) nf.userAvatarUrl else nf.aiAvatarUrl,
+                            )
                         )
-                    )
+                    }.onFailure { e ->
+                        // 🔴 一条消息投影失败绝不能再炸掉整屏快照：跳过它并打完整堆栈，
+                        // 否则前端整条 apply() 因拿不到合法快照而静默早退，表现为「消息整屏不通」。
+                        QuroDiag.log(TAG, "单条消息投影失败 id=${m.id} role=${m.role}: ${e.message}")
+                        QuroDiag.log(TAG, e.stackTraceToString())
+                    }
                 }
         }
 
