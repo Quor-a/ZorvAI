@@ -1069,12 +1069,18 @@ class QuroAssistant(
                         val planText = buildString {
                             appendLine("【任务方案】")
                             plan.strategy.takeIf { it.isNotBlank() }?.let { appendLine("· 策划方案：$it") }
+                            appendLine("· 拆解策略：${plan.strategyKind.label}")
                             plan.plan.takeIf { it.isNotBlank() }?.let { appendLine("· 规划方案：$it") }
                             plan.design.takeIf { it.isNotBlank() }?.let { appendLine("· 设计方案：$it") }
                             if (plan.steps.isNotEmpty()) {
                                 appendLine("· 执行步骤：")
                                 plan.steps.forEachIndexed { i, st -> appendLine("  ${i + 1}. ${st.description}") }
                             }
+                            if (plan.decomposition.isNotEmpty()) {
+                                appendLine("· 子目标拆解（参考，不必拘泥顺序）：")
+                                plan.decomposition.forEachIndexed { i, d -> appendLine("  ${i + 1}. $d") }
+                            }
+                            plan.verification.takeIf { it.isNotBlank() }?.let { appendLine("· 完成判据：$it") }
                         }
                         store.add(QuroMessage(role = "system", content = planText, hidden = true))
                         emit()
