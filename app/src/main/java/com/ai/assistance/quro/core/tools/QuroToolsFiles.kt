@@ -38,7 +38,8 @@ class ReadTextFileTool : QuroTool {
         val max = obj.optInt("maxBytes", 4096).coerceIn(1, FileChunkReader.MAX_CHUNK_BYTES)
         val offset = obj.optLong("offset", 0L)
         val root = context.getExternalFilesDir(null) ?: return "无法访问外部存储"
-        val f = File(root, rel)
+        // issue #17 问题 2：支持绝对路径（以 / 开头），否则视作相对 getExternalFilesDir 的子路径，与 file_read 对齐
+        val f = if (java.io.File(rel).isAbsolute) java.io.File(rel) else File(root, rel)
         return try {
             val chunk = FileChunkReader.read(f, offset, max)
             FileChunkReader.pageHeader(f, chunk) + chunk.text

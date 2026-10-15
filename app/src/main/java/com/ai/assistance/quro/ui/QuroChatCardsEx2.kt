@@ -79,7 +79,7 @@ import kotlin.math.ceil
 internal fun GanttCardView(card: GanttCard, onCommand: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     // 没给 total 就按最晚任务推，避免模型漏填字段导致整张轴只剩一格
-    val total = (card.total.takeIf { it > 0 } ?: (card.tasks.maxOf { it.start + it.duration })).coerceAtLeast(1)
+    val total = (card.total.takeIf { it > 0 } ?: card.tasks.maxOfOrNull { it.start + it.duration } ?: 1).coerceAtLeast(1)
     CardShell(card.title) {
         if (card.axisStart.isNotBlank()) {
             Text(
@@ -87,6 +87,9 @@ internal fun GanttCardView(card: GanttCard, onCommand: (String) -> Unit) {
                 style = MaterialTheme.typography.labelSmall,
                 color = cs.onSurfaceVariant,
             )
+        }
+        if (card.tasks.isEmpty()) {
+            Text("(暂无任务数据)", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         card.tasks.forEach { t ->
             Spacer(Modifier.height(6.dp))

@@ -289,6 +289,8 @@ class QuroToolRegistry {
             "git", "syntax_check",
             // 自动化集成：Tasker 双向（#39）
             "tasker",
+            // 宿主技能库管理：让 AI 可列举 / 启用 / 禁用用户技能（issue #17 问题 3）
+            "skill_list", "skill_enable", "skill_disable",
         ) + uiActionToolNames() // 并入「UI 动作工具」：对话框界面/弹层/开关 → AI 可调用（见 QuroToolsUiActions）
         val base = map.values.filter { it.name in coreNames }.map {
             QuroToolSpec(it.name, it.description, it.parametersJson)

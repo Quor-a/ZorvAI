@@ -52,7 +52,14 @@ object ToolCapabilityDirectory {
          * 三者常被混为一谈，分类上分开才能让 tool_discovery / tool_router 讲清「该用哪个」。
          */
         ZXWIDGET("zxwidget", "zxwidget 动态交互界面：477 个 zx 组件直接编译渲染进对话框消息流（方案对比、数据表、表单、看板、时间线、仪表盘…）"),
-        PLUGIN("插件扩展", "APK 级插件框架：装独立 APK 给 AI 加能力（AI 工具 / ACI 能力 / 界面 / 指令）")
+        PLUGIN("插件扩展", "APK 级插件框架：装独立 APK 给 AI 加能力（AI 工具 / ACI 能力 / 界面 / 指令）"),
+        /**
+         * 可视化交互：对话框内的可视化询问 / 弹窗 / 确认
+         * （visual_question / visual_action / visual_popup / visual_custom_popup）。
+         * 与 UI_CARDS（气泡内富卡片）/ DYNAMIC_UI（quro-ui 原生组件）区分开，
+         * 避免 tool_discovery / tool_router 把"该用哪个"讲混（issue #12）。
+         */
+        VISUAL_INTERACT("可视化交互", "对话框内可视化询问/弹窗/确认：visual_question/visual_action/visual_popup/visual_custom_popup")
     }
     
     /**
@@ -541,9 +548,31 @@ object ToolCapabilityDirectory {
         ),
 
         // ═══════════════ 可视化交互（强制使用） ═══════════════
+        "visual_popup" to ToolInfo(
+            name = "visual_popup",
+            category = ToolCategory.VISUAL_INTERACT,
+            description = "弹出可视化对话框（信息展示 / 确认 / 选择），不阻塞对话流，适合向用户呈现结构化内容或收集简单输入",
+            useCases = listOf("展示一段信息或结果", "需要用户确认", "收集用户简单输入"),
+            examples = listOf("visual_popup(title=\"结果\", content=\"...\")"),
+            parameters = mapOf("title" to "标题", "content" to "内容", "buttons" to "可选按钮列表"),
+            tips = listOf("适合呈现结构化内容", "返回用户操作结果"),
+            relatedTools = listOf("visual_question", "visual_action", "visual_custom_popup"),
+            priority = 5
+        ),
+        "visual_custom_popup" to ToolInfo(
+            name = "visual_custom_popup",
+            category = ToolCategory.VISUAL_INTERACT,
+            description = "弹出高度自定义的可视化对话框（自由布局的 UI 组件），用于复杂交互或专属呈现",
+            useCases = listOf("复杂结构化交互", "专属可视化呈现"),
+            examples = listOf("visual_custom_popup(spec=\"{...}\")"),
+            parameters = mapOf("spec" to "自定义 UI 规格 JSON"),
+            tips = listOf("适合复杂交互场景", "返回用户操作结果"),
+            relatedTools = listOf("visual_popup", "visual_question"),
+            priority = 5
+        ),
         "visual_question" to ToolInfo(
             name = "visual_question",
-            category = ToolCategory.UI_CARDS,
+            category = ToolCategory.VISUAL_INTERACT,
             description = qstr(R.string.qk_03464),
             useCases = listOf("用户指令模糊", "缺少关键信息", "需要确认不可逆操作", "多个选项需要用户选择", "多种理解需要确认"),
             examples = listOf("visual_question(question=\"你想要什么风格？\", options=[\"正式\",\"轻松\"])"),
@@ -555,7 +584,7 @@ object ToolCapabilityDirectory {
         
         "visual_action" to ToolInfo(
             name = "visual_action",
-            category = ToolCategory.UI_CARDS,
+            category = ToolCategory.VISUAL_INTERACT,
             description = qstr(R.string.qk_03481),
             useCases = listOf("选择操作", "确认/取消", "选择打开方式"),
             examples = listOf("visual_action(title=\"选择操作\", buttons=[{\"text\":\"查看\",\"value\":\"view\"}])"),
@@ -1252,9 +1281,10 @@ object ToolCapabilityDirectory {
             //   按分类列举时根本查不到它们（用户报「AI 根本查不到新加的生图工具」）。
             //   归 AI_CAPABILITIES（与 image_gen/video_gen 同类：都是「产出图像」）。
 name.startsWith("codecanvas_") -> ToolCategory.AI_CAPABILITIES
+            name in setOf("visual_analysis", "visual_question", "visual_action", "visual_popup", "visual_custom_popup") ->
+                ToolCategory.VISUAL_INTERACT
             name in setOf("read_screen", "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen",
-                "input_text", "get_foreground_app", "get_screen_state", "screenshot", "screenshot_base64",
-                "visual_analysis", "visual_question", "visual_action", "visual_popup", "visual_custom_popup") ->
+                "input_text", "get_foreground_app", "get_screen_state", "screenshot", "screenshot_base64") ->
                 ToolCategory.ACCESSIBILITY
             name.startsWith("send_sms") || name.startsWith("read_contacts") || name.startsWith("read_sms") ||
                 name.contains("calendar") -> ToolCategory.COMMUNICATION

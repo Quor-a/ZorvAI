@@ -281,13 +281,14 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
         SkillEditorDialog(
             initial = editing,
             onDismiss = { showEditor = false; editing = null },
-            onSave = { name, description, prompt, enabled, trigger, parametersJson, callable, alwaysOn ->
+            onSave = { name, description, descriptionZh, prompt, enabled, trigger, parametersJson, callable, alwaysOn ->
                 val base = editing ?: QuroSkill(id = UUID.randomUUID().toString(), name = "")
                 QuroSkillStore.addOrUpdate(
                     ctx,
                     base.copy(
                         name = name,
                         description = description,
+                        descriptionZh = descriptionZh,
                         prompt = prompt,
                         enabled = enabled,
                         trigger = trigger,
@@ -333,8 +334,9 @@ private fun SkillRow(
     ) {
         Column(Modifier.weight(1f)) {
             Text(skill.name, style = MaterialTheme.typography.bodyLarge, color = cs.onSurface)
-            if (skill.description.isNotBlank()) {
-                Text(skill.description, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 2)
+            val skillDesc = if (skill.descriptionZh.isNotBlank()) skill.descriptionZh else skill.description
+            if (skillDesc.isNotBlank()) {
+                Text(skillDesc, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 2)
             }
             Text(
                 if (skill.prompt.isBlank()) stringResource(R.string.qk_02433) else stringResource(R.string.qk_02434, (skill.prompt.length).toString()),
@@ -391,10 +393,11 @@ private fun SuiteHeader(suiteId: String, count: Int) {
 private fun SkillEditorDialog(
     initial: QuroSkill?,
     onDismiss: () -> Unit,
-    onSave: (name: String, description: String, prompt: String, enabled: Boolean, trigger: String, parametersJson: String, callable: Boolean, alwaysOn: Boolean) -> Unit,
+    onSave: (name: String, description: String, descriptionZh: String, prompt: String, enabled: Boolean, trigger: String, parametersJson: String, callable: Boolean, alwaysOn: Boolean) -> Unit,
 ) {
     var name by remember { mutableStateOf(TextFieldValue(initial?.name ?: "")) }
     var description by remember { mutableStateOf(TextFieldValue(initial?.description ?: "")) }
+    var descriptionZh by remember { mutableStateOf(TextFieldValue(initial?.descriptionZh ?: "")) }
     var prompt by remember { mutableStateOf(TextFieldValue(initial?.prompt ?: "")) }
     var trigger by remember { mutableStateOf(TextFieldValue(initial?.trigger ?: "")) }
     var parametersJson by remember { mutableStateOf(TextFieldValue(initial?.parametersJson ?: DEFAULT_SKILL_PARAMS)) }
@@ -408,7 +411,7 @@ private fun SkillEditorDialog(
         confirmButton = {
             Button(onClick = {
                 val n = name.text.trim()
-                if (n.isNotEmpty()) onSave(n, description.text.trim(), prompt.text, enabled, trigger.text.trim(), parametersJson.text.ifBlank { DEFAULT_SKILL_PARAMS }, callable, alwaysOn)
+                if (n.isNotEmpty()) onSave(n, description.text.trim(), descriptionZh.text.trim(), prompt.text, enabled, trigger.text.trim(), parametersJson.text.ifBlank { DEFAULT_SKILL_PARAMS }, callable, alwaysOn)
             }) { Text(qstr(R.string.qk_00198)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } },
@@ -424,6 +427,12 @@ private fun SkillEditorDialog(
                 OutlinedTextField(
                     value = description, onValueChange = { description = it },
                     label = { Text(stringResource(R.string.qk_02442)) }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = descriptionZh, onValueChange = { descriptionZh = it },
+                    label = { Text(stringResource(R.string.qk_02442) + "(中文)") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
@@ -491,6 +500,7 @@ private fun parseSkillJson(json: String): List<QuroSkill> {
                 id = UUID.randomUUID().toString(),
                 name = name,
                 description = o.optString("description", "").trim(),
+                descriptionZh = o.optString("description_zh", "").trim(),
                 prompt = o.optString("prompt", "").trim(),
                 enabled = o.optBoolean("enabled", true),
                 trigger = o.optString("trigger", "").trim(),

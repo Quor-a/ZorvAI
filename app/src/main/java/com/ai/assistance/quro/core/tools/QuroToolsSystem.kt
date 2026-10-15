@@ -28,6 +28,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.os.Build
 import com.ai.assistance.quro.core.scripting.SandboxRuntime
 import com.ai.assistance.quro.core.python.PyEngine
+import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 
 /** 电量与充电状态（无权限）。 */
@@ -657,15 +658,27 @@ class RunCodeTool : QuroTool {
         }
     }
 
-    private fun execShell(ctx: Context, cmd: String): String = try {
+    /** shell 执行：带超时（默认 180s），避免 run_code 读大文件等场景无限挂死（issue #17 问题 1）。 */
+    private fun execShell(ctx: Context, cmd: String, timeoutMs: Long = 180_000): String = try {
         val proc = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
         // issue #11 问题 8：登记派生进程，用户停止/超时即被强杀
         QuroToolProcesses.register(proc)
-        val out = proc.inputStream.bufferedReader().use { it.readText() }.trim()
-        val err = proc.errorStream.bufferedReader().use { it.readText() }.trim()
-        val code = proc.waitFor()
-        val body = (out + "\n" + err).trim()
-        if (body.isBlank()) "(退出码=$code，无输出)" else "退出码=$code\n$body"
+        val out = StringBuilder()
+        val err = StringBuilder()
+        val tOut = Thread { runCatching { proc.inputStream.bufferedReader().forEachLine { out.appendLine(it) } } }
+        val tErr = Thread { runCatching { proc.errorStream.bufferedReader().forEachLine { err.appendLine(it) } } }
+        tOut.start(); tErr.start()
+        val finished = proc.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
+        if (!finished) {
+            proc.destroyForcibly()
+            tOut.join(2000); tErr.join(2000)
+            "⏱ 执行超时（>${timeoutMs / 1000}s），进程已强制终止：${cmd.take(200)}"
+        } else {
+            tOut.join(2000); tErr.join(2000)
+            val code = proc.exitValue()
+            val body = (out.toString() + "\n" + err.toString()).trim()
+            if (body.isBlank()) "(退出码=$code，无输出)" else "退出码=$code\n$body"
+        }
     } catch (e: Exception) { "执行失败：${e.message}" }
 
     /**

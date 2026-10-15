@@ -1314,6 +1314,9 @@ class QuroAssistant(
         "github_search", "github_read", "crossref_search",
     )
 
+    /** 子智能体上下文预算（token）：接入与主循环同款压缩，避免长任务上下文只增不减导致超限失败（issue #15）。 */
+    private val SUBAGENT_CONTEXT_WINDOW_TOKENS = 120_000
+
     /**
      * 派发并运行一个子智能体，完成 [arguments] 中描述的聚焦子任务，返回其最终精炼结果。
      * 由 [ask] 的工具执行分支（模型调用 [SUBAGENT_TOOL_NAME] 时）调用；在主会话的 IO 协程内同步等待完成。
@@ -1382,7 +1385,7 @@ class QuroAssistant(
         val maxRounds = 6
         var lastText = ""
         for (round in 0 until maxRounds) {
-            val msgs = subStore.toLlmMessages(system, 0, 0)
+            val msgs = subStore.toLlmMessages(system, SUBAGENT_CONTEXT_WINDOW_TOKENS, 0)
             val res = runCatching {
                 client.chat(
                     baseUrl = cfg.baseUrl,
