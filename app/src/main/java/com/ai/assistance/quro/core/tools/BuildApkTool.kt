@@ -78,6 +78,9 @@ class BuildApkTool : QuroTool {
             return "网页工程目录不存在或未找到 index.html。请用 workspace_write 把 index.html（及 js/css/资源）写到工作区，例如 workspace_write(path=\"MyWeb/index.html\", content=...)，再调用 build_apk 时传 src_path=\"MyWeb\"；或把 index.html 直接放在工作区根目录（不传 src_path 会自动查找）。"
         }
         val signing = resolveSigning(context, args)
+        if (signing.error != null) {
+            return "❌ 签名配置失败，已中止构建（不会偷偷用内置 debug.keystore 顶替）：\n${signing.error}"
+        }
         val cfg = BuildEngine.BuildConfig(
             packageName = args.optString("package_name", "com.example.webapp").ifBlank { "com.example.webapp" },
             appLabel = args.optString("app_label", "WebApp").ifBlank { "WebApp" },
@@ -125,6 +128,9 @@ class BuildApkTool : QuroTool {
         }
         // 2) 注入 base.apk 模板并签名打包
         val signing = resolveSigning(context, args)
+        if (signing.error != null) {
+            return "❌ 签名配置失败，已中止构建（不会偷偷用内置 debug.keystore 顶替）：\n${signing.error}"
+        }
         val cfg = BuildEngine.BuildConfig(
             packageName = args.optString("package_name", "com.example.buildapp").ifBlank { "com.example.buildapp" },
             appLabel = args.optString("app_label", "BuildApp").ifBlank { "BuildApp" },
@@ -238,6 +244,12 @@ class BuildApkTool : QuroTool {
         val alias: String,
         val storePassword: String,
         val keyPassword: String,
+        /**
+         * 用户**显式要求**了自定义签名（keystore_path / generate_keystore）却没成功时的失败原因。
+         * 非 null = 必须中止构建并原样报出，绝不能静默回退内置 debug.keystore ——
+         * 那正是 issue #14 里「传了 keystore_path 却被忽略、出来的还是 debug 签名」的观感来源。
+         */
+        val error: String? = null,
     )
 
     private fun resolveSigning(context: Context, args: JSONObject): ResolvedSigning {
@@ -248,7 +260,13 @@ class BuildApkTool : QuroTool {
         val kp = args.optString("keystore_path", "").trim()
         if (kp.isNotEmpty()) {
             val f = File(kp)
-            if (f.isFile) return ResolvedSigning(f, alias, storePass, keyPass)
+            // 传了路径却不存在：如实报错。旧实现静默落到 generate/debug 分支，
+            // 用户以为用了自己的密钥，实际出来的是 debug 签名包（issue #14 实报）。
+            if (!f.isFile) {
+                return ResolvedSigning(null, alias, storePass, keyPass,
+                    error = "keystore_path 指向的文件不存在或不是普通文件：$kp。请确认路径（支持 .jks/.p12/.bks），或改传 generate_keystore=true 由端侧生成。")
+            }
+            return ResolvedSigning(f, alias, storePass, keyPass)
         }
         // 2) 端侧自动生成自定义 release keystore
         val gen = args.optBoolean("generate_keystore", false)
@@ -258,7 +276,11 @@ class BuildApkTool : QuroTool {
             return runCatching {
                 BuildEngine.generateKeystore(f, alias, storePass, keyPass)
                 ResolvedSigning(f, alias, storePass, keyPass)
-            }.getOrElse { ResolvedSigning(null, alias, storePass, keyPass) }
+            }.getOrElse { e ->
+                ResolvedSigning(null, alias, storePass, keyPass,
+                    error = "端侧生成自定义 keystore 失败（${e.javaClass.simpleName}: ${e.message}）。" +
+                        "可改传 keystore_path 指向已有的 .jks/.p12 密钥库。")
+            }
         }
         // 3) 未指定：引擎默认用内置 debug.keystore（keystore=null）
         return ResolvedSigning(null, alias, storePass, keyPass)

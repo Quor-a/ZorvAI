@@ -8,7 +8,8 @@
  *     · 相对路径：require("./utils") → 工作区内解析 .js / .ts（.ts 自动经 TsTranspiler 转译——由宿主在 fs.read 时完成）
  *     · 内置模块："lodash" / "_"（Lodash-lite）、"datautils"（数据工具）、"tools"（Tools 宿主 API）
  *  3. Tools.*          —— 宿主 API 网关：
- *     · Tools.Files  : read / write / append / list / exists / remove / mkdir / stat
+ *     · Tools.Files  : read（原始文本 string）/ write（字节数 number）/ append（bool）/
+ *                     list（{name,isDir,size} 数组）/ exists（bool）/ remove（bool）/ mkdir（bool）/ stat（元信息对象）
  *     · Tools.Net    : fetch(url, options) —— GET/POST/PUT/DELETE，返回 {status, headers, body}
  *     · Tools.System : info() / now() / env() / clipboard(text?) / notify(title, msg)
  *     · Tools.calc   : eval(expr) —— 安全数学表达式求值（sin/cos/sqrt/pow/log…）
@@ -57,18 +58,72 @@ function __hostCall(api, params) {
 /* ===================== Tools：宿主 API ===================== */
 var Tools = {
   Files: {
-    /** 读文件（文本）。.ts 文件由宿主自动转译为 JS 后返回。 */
-    read: function (path) { return __hostCall("fs.read", { path: path }); },
-    /** 写文件（整体覆盖），返回写入字节数。 */
-    write: function (path, content) { return __hostCall("fs.write", { path: path, content: String(content) }); },
-    /** 追加写入。 */
-    append: function (path, content) { return __hostCall("fs.append", { path: path, content: String(content) }); },
-    /** 列目录，返回 {name, isDir, size}[]。 */
-    list: function (path) { return __hostCall("fs.list", { path: path }) || []; },
-    exists: function (path) { return __hostCall("fs.exists", { path: path }) === true; },
-    remove: function (path) { return __hostCall("fs.remove", { path: path }); },
-    mkdir: function (path) { return __hostCall("fs.mkdir", { path: path }); },
-    /** 文件/目录元信息 {name, isDir, size, lastModified}。 */
+    /** 读文件，返回**原始文本**（string，不是包装对象）。
+     *  历史缺陷（issue #11 问题2）：旧实现把宿主回的 {content} 对象直接抛给脚本，
+     *  按字符串用会抛 "TypeError: xxx is not a function" 且报错不指向根因。
+     *  现在调用点统一解包；任何失败都抛带「实际类型/期望类型」的 Error。 */
+    read: function (path) {
+      var r = __hostCall("fs.read", { path: path });
+      if (typeof r === "string") return r;
+      if (r === null || r === undefined) {
+        throw new Error("Tools.Files.read 无响应（宿主桥未返回数据）：'" + path +
+          "'（期望 string 或 {content:string}）");
+      }
+      if (r.error) throw new Error("Tools.Files.read 失败：" + r.error + "（路径 '" + path + "'）");
+      if (typeof r.content === "string") return r.content;
+      throw new Error("Tools.Files.read 返回类型无法解包：" + Object.prototype.toString.call(r) +
+        "（期望 string 或 {content:string}）：'" + path + "'");
+    },
+    /** 写文件（整体覆盖），返回写入字节数（number）。 */
+    write: function (path, content) {
+      var r = __hostCall("fs.write", { path: path, content: String(content) });
+      if (r && typeof r === "object" && r.error) {
+        throw new Error("Tools.Files.write 失败：" + r.error + "（路径 '" + path + "'）");
+      }
+      return r && typeof r === "object" ? r.bytes : r;
+    },
+    /** 追加写入，成功返回 true。 */
+    append: function (path, content) {
+      var r = __hostCall("fs.append", { path: path, content: String(content) });
+      if (r && typeof r === "object" && r.error) {
+        throw new Error("Tools.Files.append 失败：" + r.error + "（路径 '" + path + "'）");
+      }
+      return !!(r && typeof r === "object" ? r.ok : r);
+    },
+    /** 列目录，返回 {name, isDir, size} 数组（不是 {entries} 包装对象）。 */
+    list: function (path) {
+      var r = __hostCall("fs.list", { path: path });
+      if (r === null || r === undefined) return [];
+      if (r.error) throw new Error("Tools.Files.list 失败：" + r.error + "（路径 '" + path + "'）");
+      if (Object.prototype.toString.call(r.entries) === "[object Array]") return r.entries;
+      if (Object.prototype.toString.call(r) === "[object Array]") return r;
+      return [];
+    },
+    /** 存在性判定，返回 boolean。宿主走**真实文件系统查询**（File.exists()，无缓存/索引层）。
+     *  历史缺陷（issue #11 问题1）：旧实现拿宿主回的 {exists:true} 对象直接 === true，
+     *  对象恒不等于 true → 判定恒 false（而 stat/read 正常）。路径越界/非法时宿主回
+     *  {exists:false}，同样判 false——与「不存在」同效，分支/幂等/去重逻辑不会误判为存在。 */
+    exists: function (path) {
+      var r = __hostCall("fs.exists", { path: path });
+      return !!(r && typeof r === "object" && r.exists === true);
+    },
+    /** 删除文件/目录，成功返回 true。 */
+    remove: function (path) {
+      var r = __hostCall("fs.remove", { path: path });
+      if (r && typeof r === "object" && r.error) {
+        throw new Error("Tools.Files.remove 失败：" + r.error + "（路径 '" + path + "'）");
+      }
+      return !!(r && typeof r === "object" ? r.ok : r);
+    },
+    /** 建目录（含父级，幂等），成功返回 true。 */
+    mkdir: function (path) {
+      var r = __hostCall("fs.mkdir", { path: path });
+      if (r && typeof r === "object" && r.error) {
+        throw new Error("Tools.Files.mkdir 失败：" + r.error + "（路径 '" + path + "'）");
+      }
+      return !!(r && typeof r === "object" ? r.ok : r);
+    },
+    /** 文件/目录元信息 {name, isDir, size, lastModified}；不存在时返回 {error}（size 为 undefined）。 */
     stat: function (path) { return __hostCall("fs.stat", { path: path }); },
   },
   Net: {

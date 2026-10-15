@@ -100,6 +100,8 @@ class QuroSandboxTool : QuroTool {
         pb.directory(home)
         pb.redirectErrorStream(false)
         val p = pb.start()
+        // issue #11 问题 8：登记派生进程，用户停止/超时即被 QuroToolProcesses 强杀
+        QuroToolProcesses.register(p)
         // stdout/stderr 各起独立线程读取：
         // 1) 若先同步读满 stdout 再读 stderr，进程 stderr 管道缓冲写满后会阻塞 → 死锁；
         // 2) 若主线程先读流再 waitFor，永不退出的命令（sleep/top 等）会阻塞在 readText，

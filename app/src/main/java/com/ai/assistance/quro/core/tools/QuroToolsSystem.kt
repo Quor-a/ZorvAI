@@ -363,24 +363,35 @@ class BrowseFilesTool : QuroTool {
     }
 }
 
-/** 读取文件内容（增强版：支持更大文件）。 */
+/** 读取文件内容（增强版：支持 offset/maxBytes 分段读取，大文件不再整读进上下文）。 */
 class FileReadTool : QuroTool {
     override val name = "file_read"
-    override val description = "读取文本文件完整内容。参数 {\"path\":\"文件路径\"}。支持读取应用私有目录内的任何文本文件。用于 IDE/代码查看场景。"
+    override val description = "读取文本文件内容，支持 offset/maxBytes **分段读取**大文件（如 13MB 的会话数据 quro_conversations.json）。参数 {\"path\":\"文件路径\",\"offset\":0,\"maxBytes\":32768}。支持读取应用私有目录内的任何文本文件。用于 IDE/代码查看场景。大文件请按返回里的 nextOffset 循环分段读，不要试图一次读全。"
     override val parametersJson = """{
         "type":"object",
-        "properties":{"path":{"type":"string","description":"要读取的文件完整路径"}},
+        "properties":{
+            "path":{"type":"string","description":"要读取的文件完整路径"},
+            "offset":{"type":"integer","description":"（可选）起始字节偏移，默认 0；分段读取时传上一段返回的 nextOffset"},
+            "maxBytes":{"type":"integer","description":"（可选）本段最大字节数，默认 32768，上限 262144"}
+        },
         "required":["path"]
     }"""
     override fun run(context: Context, arguments: String): String {
-        val path = JSONObject(arguments).optString("path", "").trim()
+        val obj = JSONObject(arguments)
+        val path = obj.optString("path", "").trim()
         if (path.isEmpty()) return "缺少 path 参数"
         val file = java.io.File(path)
-        if (!file.exists()) return "文件不存在：$path"
-        if (file.length() > 512 * 1024) return "文件过大（${file.length() / 1024}KB），建议分段读取或用其他方式查看"
+        val offset = obj.optLong("offset", 0L)
+        val maxBytes = obj.optInt("maxBytes", com.ai.assistance.quro.core.util.FileChunkReader.DEFAULT_CHUNK_BYTES)
         return try {
-            file.readText(Charsets.UTF_8).takeIf { it.isNotBlank() } ?: "(空文件)"
-        } catch (e: Exception) { "读取失败：${e.message}" }
+            val chunk = com.ai.assistance.quro.core.util.FileChunkReader.read(file, offset, maxBytes)
+            com.ai.assistance.quro.core.util.FileChunkReader.pageHeader(file, chunk) + chunk.text
+        } catch (e: com.ai.assistance.quro.core.util.FileChunkReader.ChunkError) {
+            // 分段读取后 >512KB 不再是死结（旧实现直接拒绝读取，issue #11 问题5）
+            "⚠️ ${e.message}"
+        } catch (e: Exception) {
+            "读取失败：${e.message}"
+        }
     }
 }
 
@@ -648,6 +659,8 @@ class RunCodeTool : QuroTool {
 
     private fun execShell(ctx: Context, cmd: String): String = try {
         val proc = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
+        // issue #11 问题 8：登记派生进程，用户停止/超时即被强杀
+        QuroToolProcesses.register(proc)
         val out = proc.inputStream.bufferedReader().use { it.readText() }.trim()
         val err = proc.errorStream.bufferedReader().use { it.readText() }.trim()
         val code = proc.waitFor()

@@ -61,7 +61,14 @@ sealed interface QuroLlmResult {
         /** 停止原因 + token 用量（N3）。工具轮被截断时 [QuroLlmMeta.truncated] 为真。 */
         val meta: QuroLlmMeta = QuroLlmMeta.EMPTY,
     ) : QuroLlmResult
-    data class Error(val message: String) : QuroLlmResult
+    /**
+     * 请求失败。
+     *
+     * @param terminal 是否为**确定性失败**（重试/重规划必然同样失败）——如上下文超限
+     *   （issue #11 问题6）。true 时：LLM 客户端不重试、任务编排器不重新规划重跑、
+     *   直接带着原因升级给用户。默认 false 保持旧行为（临时故障，交给既有重试策略）。
+     */
+    data class Error(val message: String, val terminal: Boolean = false) : QuroLlmResult
 }
 
 /**

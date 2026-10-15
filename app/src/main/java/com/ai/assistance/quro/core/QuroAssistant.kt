@@ -36,6 +36,7 @@ import com.ai.assistance.quro.core.agent.orchestration.LongHorizonOrchestrator
 import com.ai.assistance.quro.core.agent.orchestration.TaskResult
 import com.ai.assistance.quro.core.agent.orchestration.TaskStep
 import com.ai.assistance.quro.core.agent.loop.ToolOutcome
+import com.ai.assistance.quro.core.agent.loop.FailureType
 import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.util.QuroStageHints
 import com.ai.assistance.quro.core.fluidcloud.FluidCloudBridge
@@ -387,6 +388,11 @@ class QuroAssistant(
             // 🔐 一趟 ReAct = 编排器的一个执行步骤。轮次上限按趟重置：
             //   闸门打回后重新策划再跑一趟，每趟都该有完整预算（共用一个计数器会让第二趟直接被腰斩）。
             val roundLimit = if (isLocal) 12 else if (cfg.maxToolRounds in 1..2000) cfg.maxToolRounds else 2000
+
+            // 🔴 issue #11 问题6：本趟 ReAct 若撞上「确定性失败」（LLM 上下文超限等），
+            //   记在这里供 stepExecutor 包成 terminal Failure——编排器据此立即升级，
+            //   不再重新规划整趟重跑（旧行为：界面持续转圈，用户等到天荒地老）。
+            var terminalLlmFailure: String? = null
 
             suspend fun reactPass(): String {
             var round = 0
@@ -772,7 +778,9 @@ class QuroAssistant(
                             if (normalCalls.isNotEmpty()) {
                                 runCatching { engine.execute(context, normalCalls) }
                                     // N4：catch 兜底只有裸文本、没有类型，交给关键词分类补出种类与「下一步」。
+                                    // 🔴 issue #11 问题 8：CancellationException 绝不被吞成错误结果回灌。
                                     .getOrElse { e ->
+                                        if (e is CancellationException) throw e
                                         normalCalls.map {
                                             QuroToolResult.Failed(
                                             "tool_error",
@@ -793,6 +801,9 @@ class QuroAssistant(
                         } else {
                             runCatching { engine.execute(context, callsWithId) }
                                 .getOrElse { e ->
+                                    // 🔴 issue #11 问题 8：用户停止（CancellationException）原样上抛，
+                                    // 不被吞成「工具执行异常」错误结果回灌给模型。
+                                    if (e is CancellationException) throw e
                                     callsWithId.map {
                                         QuroToolResult.Failed(
                                             "tool_error",
@@ -802,11 +813,28 @@ class QuroAssistant(
                                 }
                         }
                         val dur = System.currentTimeMillis() - t0
+                        // 🔴🔴 issue #11 问题 8「回灌前短路」：工具结果写回 store / 检查点 /
+                        // 下一轮上下文**之前**检查停止标志。命中即丢弃本轮全部工具结果、
+                        // 把气泡上的工具块标记为「已停止」并结束本轮 ReAct。
+                        // 没有这一条，即使用户秒点停止，工具返回的错误结果仍会被当普通
+                        // 产物回灌，界面继续转圈、模型继续跑下一轮 —— 即用户实测的
+                        // 「点停止没用，半天还在跑」。
+                        if (coroutineContext[Job]?.isActive == false) {
+                            val stoppedCalls = callsWithId.map {
+                                it.copy(result = "⏹ 已停止（用户取消了生成）", durationMs = dur)
+                            }
+                            store.update(assistantMsg.id) { it.copy(toolCalls = stoppedCalls) }
+                            emit()
+                            OrchestrationTrace.execute("assistant", "停止生成：丢弃本轮工具结果", "round=$round")
+                            break
+                        }
                         // 自动更新流体云进度：基于轮次计算进度（每轮+10%，上限90%）
                         val fluidProgress = minOf(round * 10, 90)
                         val toolNames = callsWithId.joinToString(",") { it.name }
                         OrchestrationTrace.execute("assistant", "执行工具：$toolNames", "$dur ms")
-                        updateFluidCloudSafe(context, "ZorvAI", "执行工具: $toolNames", fluidProgress)
+                        // issue #11 问题 8（建议 4「工具阶段可视」）：进度气泡带已耗时秒数，
+                        // 长命令（proot/apt install）不再像卡死一样无声无息。
+                        updateFluidCloudSafe(context, "ZorvAI", "执行工具: $toolNames（${dur / 1000}s）", fluidProgress)
                         // 🔑 关键：把执行结果**回填进 assistant 消息的 toolCalls**（自包含）。
                         // UI 之后直接从这一条 assistant 消息读出「工具名 + 参数 + 结果」三件套，
                         // 彻底不再依赖「跨消息 resultMap 按 toolCallId 匹配 role=tool 结果」这种脆弱写法——
@@ -976,6 +1004,9 @@ class QuroAssistant(
                     }
                     is QuroLlmResult.Error -> {
                         // 纯同步：chat() 自带 5xx/429 重试与友好错误提示，失败即明确展示报错气泡。
+                        // 🔴 terminal（上下文超限等确定性失败）：标记后由 stepExecutor 包成
+                        //    terminal Failure，阻止编排器重跑（issue #11 问题6 第2步）。
+                        if (result.terminal) terminalLlmFailure = result.message
                         lastText = "⚠️ ${result.message}"
                         // #1113：若流式占位气泡已创建（本地路径的「⏳ 正在加载…」或云端已冒出的半截文本），
                         // 必须**复用**它写入错误，否则会残留一条占位气泡 + 再多一条错误气泡（两条并排）。
@@ -1051,7 +1082,17 @@ class QuroAssistant(
                     plan
                 },
                 steps = listOf(TaskStep(REACT_PASS_STEP_ID, "执行一轮 ReAct 工具循环并给出答复")),
-                stepExecutor = { _, _ -> ToolOutcome.Success(reactPass()) },
+                // 🔴 确定性失败（terminalLlmFailure 非空）= 本趟撞上上下文超限等重试无用的错误：
+                //    包成 terminal Failure 让编排器立即升级，绝不再跑一趟（issue #11 问题6）。
+                stepExecutor = { _, _ ->
+                    val text = reactPass()
+                    val terminal = terminalLlmFailure
+                    if (terminal != null) {
+                        ToolOutcome.Failure(FailureType.BUSINESS, terminal, raw = text, terminal = true)
+                    } else {
+                        ToolOutcome.Success(text)
+                    }
+                },
                 judge = deliverabilityJudge,
                 maxIterations = maxDeliverAttempts,
                 // 🔴 工具层失败明细只有这里看得到（执行体把整趟 ReAct 压成一步，
@@ -1381,11 +1422,21 @@ class QuroAssistant(
                     val results = calls.map { c ->
                         if (c.name in SUBAGENT_SAFE_TOOLS) {
                             runCatching { engine.execute(context, listOf(c)) }
-                                .getOrElse { e -> listOf(QuroToolResult.Error("子智能体工具执行异常：${e.message}")) }
+                                // 🔴 issue #11 问题 8：用户停止原样上抛，不吞成错误结果。
+                                .getOrElse { e ->
+                                    if (e is CancellationException) throw e
+                                    listOf(QuroToolResult.Error("子智能体工具执行异常：${e.message}"))
+                                }
                                 .firstOrNull() ?: QuroToolResult.Error("子智能体工具无结果")
                         } else {
                             QuroToolResult.Error("子智能体无权使用该工具：${c.name}")
                         }
+                    }
+                    // 🔴 回灌前短路：用户已停止生成时，子智能体的工具结果同样不回灌，
+                    // 直接结束并给出可见的「已停止」结论（主智能体会把它当工具结果收下）。
+                    if (coroutineContext[Job]?.isActive == false) {
+                        publish("⏹ 已停止（用户取消了生成）")
+                        return "⏹ 已停止（用户取消了生成）"
                     }
                     calls.zip(results).forEach { (c, r) ->
                         subStore.add(

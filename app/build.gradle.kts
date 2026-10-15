@@ -211,6 +211,14 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.serialization.json)
 
+    // 构建台端侧签名（issue #14）：Android 平台自带的 org.bouncycastle 从 API 28 起被
+    // 命名空间化为 com.android.org.bouncycastle，应用侧 Class.forName / 反射全摸不到
+    // → generateKeystore 抛 ClassNotFoundException: BouncyCastleProvider、
+    // BKS 密钥库读不了，端侧签名引擎全链路不可用。自带一份 BC 根治。
+    // bcpkix 传递依赖 bcprov，这里显式声明便于 R8 规则与排查。
+    implementation(libs.bouncycastle.bcpkix)
+    implementation(libs.bouncycastle.bcprov)
+
     // ACI（Agent Capability Interface）协议层：让 QuroAI 成为 ACI 控制方（AI 中枢），
     // 发现并调用第三方 App 通过 ACI Service 暴露的能力。源码现已收进本仓 :aci-core 模块
     // （ai.aci.core.*：IAidlAciService / IAidlAciCallback AIDL、AidlAciRequest / AidlAciResponse / Capability），

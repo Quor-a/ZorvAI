@@ -294,6 +294,16 @@ class QuroLlmClient(
                     Log.i(TAG, "<<< RESPONSE HTTP=${resp.code} body=${text.length}ch preview=$preview")
                     if (!resp.isSuccessful) {
                         lastErr = "HTTP ${resp.code}"
+                        // 🔴 issue #11 问题6 第1步「识别」+ 第2步「停止重试」：上下文超限是
+                        //    **确定性失败**（重试必然同样失败，只会让界面持续转圈）。必须在
+                        //    重试判定【之前】拦截——部分网关把超限透传为 500（本仓实测：
+                        //    QuroConversation「上游直接 500 context length exceeded」），
+                        //    落在 retryableCodes 里就会被无脑重试 2 轮。
+                        if (QuroLlmErrors.isContextLengthExceeded(text)) {
+                            Log.w(TAG, "<<< CONTEXT LIMIT HTTP=${resp.code}：确定性失败，不重试")
+                            dumpLlmErrorPayload(resp.code, text, bodyStr, url)
+                            return@use QuroLlmResult.Error(QuroLlmErrors.contextLimitMessage(text), terminal = true)
+                        }
                         if (resp.code in retryableCodes && attempt < maxRetries) {
                             return@use null // 临时故障 → 进入下一次重试
                         }
@@ -334,6 +344,9 @@ class QuroLlmClient(
 
     /** 把网关 HTML/JSON 错误体转成简洁中文提示，避免把 <html>502</html> 甩给用户。 */
     private fun friendlyHttpError(code: Int, raw: String): String {
+        // 上下文超限（issue #11 问题6）：任何路径到这里都统一给「可执行」提示，
+        // 而不是把上游的 token 数字原样甩给用户（用户看了也不知道该怎么办）。
+        if (QuroLlmErrors.isContextLengthExceeded(raw)) return QuroLlmErrors.contextLimitMessage(raw)
         val plain = raw.replace(Regex("<[^>]+>"), " ")
             .replace(Regex("""\s+"""), " ")
             .trim()
@@ -912,6 +925,14 @@ class QuroLlmClient(
                     if (!resp.isSuccessful) {
                         val respText = resp.body?.string().orEmpty()
                         val code = resp.code
+                        // 🔴 issue #11 问题6：上下文超限 = 确定性失败，重试必然同样失败。
+                        //   必须在重试判定【之前】拦截（部分网关透传为 500，会落入
+                        //   retryableCodes 被无脑重试，界面持续转圈）。
+                        if (QuroLlmErrors.isContextLengthExceeded(respText)) {
+                            Log.w(TAG, "<<< STREAM CONTEXT LIMIT HTTP=$code：确定性失败，不重试")
+                            dumpLlmErrorPayload(code, respText, requestBody, req.url.toString())
+                            return@use QuroLlmResult.Error(QuroLlmErrors.contextLimitMessage(respText), terminal = true)
+                        }
                         // 🔧 toolfix9：流式首 token 前遇到可重试状态码（5xx/429）→ 重试，
                         //   对齐非流式 chat() 路径。此前流式 500 直接判死甩给用户，
                         //   而上游（token-plan 中转）常间歇性 500，重试大多能恢复。

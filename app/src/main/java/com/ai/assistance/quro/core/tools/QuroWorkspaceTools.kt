@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.core.tools
 import com.ai.assistance.quro.R
+import com.ai.assistance.quro.core.util.FileChunkReader
 import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
@@ -81,11 +82,15 @@ class WorkspaceReadTool : QuroTool {
     override val description =
         qstr(R.string.qk_03631) +
             "用于：把源码写进去前先看现有内容、或构建台 build_apk 后回读产物细节。" +
-            "参数：{\"path\":\"相对路径，如 MyApp/src/Main.java\"}。"
+            "支持 offset/maxBytes **分段读取**大文件（默认只读前 32KB，不会把整个大文件灌进上下文）；" +
+            "未读完时按返回里的 nextOffset 继续传 offset 循环读。" +
+            "参数：{\"path\":\"相对路径，如 MyApp/src/Main.java\",\"offset\":0,\"maxBytes\":32768}。"
     override val parametersJson = """{
         "type":"object",
         "properties":{
-            "path":{"type":"string","description":"工作区内的相对文件路径，例如 MyApp/src/Main.java"}
+            "path":{"type":"string","description":"工作区内的相对文件路径，例如 MyApp/src/Main.java"},
+            "offset":{"type":"integer","description":"（可选）起始字节偏移，默认 0；分段读取时传上一段返回的 nextOffset"},
+            "maxBytes":{"type":"integer","description":"（可选）本段最大字节数，默认 32768，上限 262144"}
         },
         "required":["path"]
     }"""
@@ -98,8 +103,16 @@ class WorkspaceReadTool : QuroTool {
         val rel = (obj.optString("path", "")).trim()
         if (rel.isEmpty()) return "缺少 path。"
         val file = resolveInWorkspace(root, rel) ?: return "⚠️ path 越界：$rel"
-        if (!file.isFile) return "⚠️ 文件不存在或不是普通文件：${file.absolutePath}"
-        return runCatching { file.readText() }.getOrElse { "⚠️ 读取失败：${it.message}" }
+        val offset = obj.optLong("offset", 0L)
+        val maxBytes = obj.optInt("maxBytes", FileChunkReader.DEFAULT_CHUNK_BYTES)
+        return try {
+            val chunk = FileChunkReader.read(file, offset, maxBytes)
+            FileChunkReader.pageHeader(file, chunk) + chunk.text
+        } catch (e: FileChunkReader.ChunkError) {
+            "⚠️ ${e.message}"
+        } catch (e: Exception) {
+            "⚠️ 读取失败：${e.message}"
+        }
     }
 }
 

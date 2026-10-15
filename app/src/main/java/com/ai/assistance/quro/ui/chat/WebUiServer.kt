@@ -46,9 +46,9 @@ import com.ai.assistance.quro.util.qstr
 import com.ai.assistance.quro.util.QuroDiag
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedReader
+import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.InputStreamReader
+import java.io.InputStream
 import java.io.OutputStream
 import java.net.Inet4Address
 import java.net.InetAddress
@@ -222,8 +222,9 @@ class QuroWebUiServer(
         var handedOver = false
         try {
             sock.soTimeout = SOCKET_TIMEOUT_MS
-            val input = BufferedReader(InputStreamReader(sock.getInputStream(), Charsets.UTF_8))
-            val requestLine = input.readLine() ?: return
+            val rawIn = sock.getInputStream()
+            val req = readFullRequest(rawIn) ?: return
+            val requestLine = req.requestLine
             val parts = requestLine.split(" ")
             if (parts.size < 2) {
                 respond(sock, 400, "text/plain", "Bad Request".toByteArray())
@@ -234,20 +235,8 @@ class QuroWebUiServer(
             val path = rawPath.substringBefore('?')
             val query = rawPath.substringAfter('?', "")
 
-            var contentLength = 0
-            var contentType = ""
-            while (true) {
-                val line = input.readLine() ?: break
-                if (line.isEmpty()) break
-                val lower = line.lowercase()
-                if (lower.startsWith("content-length:")) {
-                    contentLength = lower.substringAfter(":").trim().toIntOrNull() ?: 0
-                }
-                if (lower.startsWith("content-type:")) {
-                    contentType = lower.substringAfter(":").trim()
-                }
-            }
-            val body = if (contentLength > 0) readBody(input, contentLength) else ""
+            val contentType = req.headers["content-type"] ?: ""
+            val body = req.body
 
             when {
                 method == "GET" || method == "HEAD" -> handedOver = handleGet(sock, path, query)
@@ -266,15 +255,71 @@ class QuroWebUiServer(
         }
     }
 
-    private fun readBody(input: BufferedReader, len: Int): String {
-        val buf = CharArray(len)
-        var read = 0
-        while (read < len) {
-            val n = input.read(buf, read, len - read)
-            if (n < 0) break
-            read += n
+    /**
+     * 从原始字节流读取整个 HTTP 请求（请求行 + 头部 + body）。
+     *
+     * 🔴 不能用 BufferedReader 读 body：HTTP `Content-Length` 是**字节**数，而
+     *    BufferedReader 按**字符**解码 UTF-8；中文等多字节字符会让「要读的字符数」
+     *    远小于「字节数」，导致 body 一直读不满、阻塞到 SOCKET_TIMEOUT（20s）才超时失败
+     *    —— 表现即「消息半天发不到后端」（中文消息几乎必现），连带「半天不回复到前端」。
+     *    这里统一按字节读，最后一次性 UTF-8 解码 body（上传走 base64-in-JSON，纯 ASCII，
+     *    解码无损）。
+     */
+    private data class ParsedRequest(
+        val requestLine: String,
+        val headers: Map<String, String>,
+        val body: String,
+    )
+
+    private fun readFullRequest(rawIn: InputStream): ParsedRequest? {
+        val acc = ByteArrayOutputStream()
+        val buf = ByteArray(8192)
+        var headerEnd = -1
+        val maxHeader = 64 * 1024
+        // 1) 读到头部结束符 \r\n\r\n（头部都很短，先累积到内存再切分）
+        while (headerEnd < 0) {
+            val n = rawIn.read(buf, 0, buf.size)
+            if (n < 0) return null
+            acc.write(buf, 0, n)
+            val bytes = acc.toByteArray()
+            for (i in 3 until bytes.size) {
+                if (bytes[i - 3] == 13.toByte() && bytes[i - 2] == 10.toByte()
+                    && bytes[i - 1] == 13.toByte() && bytes[i] == 10.toByte()
+                ) {
+                    headerEnd = i + 1
+                    break
+                }
+            }
+            if (acc.size() > maxHeader) return null
         }
-        return String(buf, 0, read)
+        val all = acc.toByteArray()
+        val headerText = String(all.copyOfRange(0, headerEnd), Charsets.UTF_8)
+        val headerLines = headerText.split("\r\n")
+        val requestLine = headerLines.firstOrNull()?.trim() ?: return null
+        val headers = HashMap<String, String>()
+        for (line in headerLines.drop(1)) {
+            if (line.isEmpty()) continue
+            val idx = line.indexOf(':')
+            if (idx > 0) headers[line.substring(0, idx).lowercase().trim()] = line.substring(idx + 1).trim()
+        }
+        val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
+        // 2) 读恰好 contentLength 字节的 body（头部缓冲里可能已含前段，先复用，再补读）
+        val bodyBytes = if (contentLength > 0) {
+            val bodyOut = ByteArrayOutputStream()
+            val fromHeader = all.size - headerEnd
+            if (fromHeader > 0) bodyOut.write(all, headerEnd, minOf(fromHeader, contentLength))
+            var need = contentLength - bodyOut.size()
+            while (need > 0) {
+                val n = rawIn.read(buf, 0, minOf(buf.size, need))
+                if (n < 0) break
+                bodyOut.write(buf, 0, n)
+                need -= n
+            }
+            bodyOut.toByteArray()
+        } else {
+            ByteArray(0)
+        }
+        return ParsedRequest(requestLine, headers, String(bodyBytes, Charsets.UTF_8))
     }
 
     /* ── GET：快照 + 前端资源 + 模型/人格列表 ─────────────────────────── */
@@ -510,7 +555,12 @@ class QuroWebUiServer(
                     val rev = revision()
                     if (rev == last) continue
                     last = rev
-                    push(snapshot())
+                    // 🔴 流式期间只推 chrome-only 快照（不带 messages）：
+                    // 大会会话下全量序列化是「消息延迟」的服务端根因，详见 snapshot() 注释。
+                    // 前端流式期间本就忽略 messages，零损失；流结束后指纹仍差一次，
+                    // 下一 tick（80ms）自动补推全量，新消息/工具卡片不会漏。
+                    val streaming = activeSends.get() > 0
+                    push(snapshot(includeMessages = !streaming))
                 } catch (_: InterruptedException) {
                     break
                 } catch (e: Throwable) {
@@ -757,14 +807,38 @@ class QuroWebUiServer(
             return false
         }
 
-        // vm.send 会立刻把用户消息写进 _messages 并启动生成协程。
-        // 它内部只碰 MutableStateFlow / viewModelScope.launch，从 HTTP 线程调也安全
-        // （原生 ChatScreen 的发送按钮在主线程调，两条入口都通向同一条协程链）。
-        vm.send(text, atts)
-
+        // 🔴 start 帧 + 流式计数必须先于 vm.send：
+        // ① 前端等待态（busy + WaitingDots）零延迟出现，点击发送即有反馈；
+        // ② revision 线程立即切到流式档（chrome-only 快照），大会话下不再每 80ms/1s
+        //    全量序列化噎住浏览器主线程 ——「半天发不到后端、半天不回复」根因即此；
+        // ③ vm.send 的同步段在大会会话下有 store 全量拷贝开销（barge-in 分支的
+        //    loadSilently + commitCurrent），绝不能被它挡在 start 帧前面。
         val sends = activeSends.incrementAndGet()
         val nf = nameFallbacks()
         QuroDiag.log(TAG, "SSE 发送流接入，当前 $sends 条")
+        try {
+            writeSse(out, "start", JSONObject().put("ok", true))
+        } catch (e: Throwable) {
+            // 客户端已断开：没有生成任务要起，直接收尾（计数回退，连接关闭）。
+            QuroDiag.log(TAG, "SSE 发送流 start 帧失败（客户端已断开）：${e.message}")
+            activeSends.decrementAndGet()
+            runCatching { sock.close() }
+            return true
+        }
+
+        // vm.send 会立刻把用户消息写进 _messages 并启动生成协程。
+        // 它内部只碰 MutableStateFlow / viewModelScope.launch，从 HTTP 线程调也安全
+        // （原生 ChatScreen 的发送按钮在主线程调，两条入口都通向同一条协程链）。
+        // 🔴 必须在 try 内：计数已递增，vm.send 若抛异常而没人回退 activeSends，
+        // revision 线程会永久停在流式档（只推 chrome-only），快照通道再也不推消息。
+        try {
+            vm.send(text, atts)
+        } catch (e: Throwable) {
+            QuroDiag.log(TAG, "SSE 发送流 vm.send 失败：${e.message}")
+            activeSends.decrementAndGet()
+            runCatching { sock.close() }
+            return true
+        }
 
         // 本线程即流线程：轮询 vm.messages，只推增量。
         var segId: String? = null          // 当前跟踪的助手消息 id（跨工具轮次会换段）
@@ -778,7 +852,6 @@ class QuroWebUiServer(
         var lastPing = System.currentTimeMillis()
         var pushedAny = false
         try {
-            writeSse(out, "start", JSONObject().put("ok", true))
             while (running && System.currentTimeMillis() < deadline) {
                 Thread.sleep(SEND_POLL_MS)
                 val msgs = vm.messages.value
@@ -1539,24 +1612,37 @@ class QuroWebUiServer(
         )
     }
 
-    private fun snapshot(): String {
+    /**
+     * 全量状态快照。
+     *
+     * 🔴 @param includeMessages 流式期间**必须传 false**：
+     * 大会话（issue #11 实测单文件 13MB）下每条消息的投影是几百字节到几十 KB，
+     * 流式期间每秒全量序列化一次 + 浏览器主线程反复 JSON.parse，直接把发送点击
+     * 与 delta 渲染噎住 —— 用户报的「半天发不到后端、半天不回复到前端」根因即此。
+     * 流式期间增量文本由 /api/send 的 SSE 独占推送，前端 apply() 在 stream.active
+     * 时本就忽略 messages（chat.js 流式早退分支），推 chrome-only 零信息损失；
+     * 流结束后 revision 指纹仍差一次，下一 tick（80ms）自动补推全量快照。
+     */
+    private fun snapshot(includeMessages: Boolean = true): String {
         val nf = nameFallbacks()
         val arr = JSONArray()
-        vm.messages.value
-            .filter { !it.hidden && (it.role == "user" || it.role == "assistant") }
-            .forEach { m ->
-                val mine = m.role == "user"
-                arr.put(
-                    WebUiProjection.message(
-                        m, mine = mine,
-                        authorFallback = if (mine) nf.userName else nf.aiName,
-                        avatarFallback = if (mine) nf.userAvatar else nf.aiAvatar,
-                        avatarUrl = if (mine) nf.userAvatarUrl else nf.aiAvatarUrl,
+        if (includeMessages) {
+            vm.messages.value
+                .filter { !it.hidden && (it.role == "user" || it.role == "assistant") }
+                .forEach { m ->
+                    val mine = m.role == "user"
+                    arr.put(
+                        WebUiProjection.message(
+                            m, mine = mine,
+                            authorFallback = if (mine) nf.userName else nf.aiName,
+                            avatarFallback = if (mine) nf.userAvatar else nf.aiAvatar,
+                            avatarUrl = if (mine) nf.userAvatarUrl else nf.aiAvatarUrl,
+                        )
                     )
-                )
-            }
+                }
+        }
 
-        return JSONObject()
+        val jo = JSONObject()
             .put("ok", true)
             .put("bar", WebUiProjection.bar(title, modelName, personaName))
             .put(
@@ -1575,8 +1661,10 @@ class QuroWebUiServer(
             .put("dark", dark)
             .put("lan", lanUrl ?: "")
             .put("port", port)
-            .put("messages", arr)
-            .toString()
+        // 缺 messages 键 = chrome-only 快照（前端据此保持现有消息列表不动）。
+        // 绝不能放空数组——那会被前端当成「消息被清空」整体重绘。
+        if (includeMessages) jo.put("messages", arr)
+        return jo.toString()
     }
 
     /* ── 静态资源 ─────────────────────────────────────────────────────── */

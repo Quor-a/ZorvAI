@@ -1,10 +1,10 @@
 package com.ai.assistance.quro.core.tools
 import com.ai.assistance.quro.R
+import com.ai.assistance.quro.core.util.FileChunkReader
 import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import java.io.File
-import kotlin.text.Charsets
 import org.json.JSONObject
 
 /**
@@ -29,19 +29,21 @@ class ListFilesTool : QuroTool {
 
 class ReadTextFileTool : QuroTool {
     override val name = "read_text_file"
-    override val description = "读取应用专属目录下的文本文件内容，参数为 {\"path\":\"sub/a.txt\",\"maxBytes\":4096}。"
-    override val parametersJson = """{"type":"object","properties":{"path":{"type":"string","description":"相对 getExternalFilesDir 的路径"},"maxBytes":{"type":"integer","description":"最多读取字节数默认4096"}},"required":["path"]}"""
+    override val description = "读取应用专属目录下的文本文件内容，支持 offset/maxBytes 分段读取大文件。参数为 {\"path\":\"sub/a.txt\",\"maxBytes\":4096,\"offset\":0}。大文件按返回里的 nextOffset 循环分段读。"
+    override val parametersJson = """{"type":"object","properties":{"path":{"type":"string","description":"相对 getExternalFilesDir 的路径"},"maxBytes":{"type":"integer","description":"本段最多读取字节数默认4096，上限262144"},"offset":{"type":"integer","description":"（可选）起始字节偏移，默认 0；分段读取时传上一段返回的 nextOffset"}},"required":["path"]}"""
     override fun run(context: Context, arguments: String): String {
-        val rel = JSONObject(arguments).optString("path", "")
+        val obj = JSONObject(arguments)
+        val rel = obj.optString("path", "")
         if (rel.isEmpty()) return "缺少 path 参数"
-        val max = JSONObject(arguments).optInt("maxBytes", 4096).coerceIn(1, 200_000)
+        val max = obj.optInt("maxBytes", 4096).coerceIn(1, FileChunkReader.MAX_CHUNK_BYTES)
+        val offset = obj.optLong("offset", 0L)
         val root = context.getExternalFilesDir(null) ?: return "无法访问外部存储"
         val f = File(root, rel)
-        if (!f.exists() || !f.isFile) return "文件不存在: $rel"
-        if (f.length() > 10_000_000) return "文件过大，拒绝读取"
         return try {
-            val bytes = f.readBytes().take(max).toByteArray()
-            String(bytes, Charsets.UTF_8)
+            val chunk = FileChunkReader.read(f, offset, max)
+            FileChunkReader.pageHeader(f, chunk) + chunk.text
+        } catch (e: FileChunkReader.ChunkError) {
+            "⚠️ ${e.message}"
         } catch (e: Exception) {
             qstr(R.string.qk_03169, (e.message).toString())
         }

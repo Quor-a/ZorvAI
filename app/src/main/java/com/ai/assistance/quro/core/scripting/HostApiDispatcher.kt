@@ -31,6 +31,9 @@ class HostApiDispatcher(
     /** 单次 HTTP 响应最大字节数（防脚本把内存打爆）。 */
     var maxResponseBytes: Int = 1 shl 20
 
+    /** fs.read 整读上限（16MB）：QuickJS 运行时堆 64MB，更大文本 readText 会直接 OOM。 */
+    var maxReadBytes: Long = 16L shl 20
+
     fun dispatch(api: String, paramsJson: String): String {
         val params = runCatching { JSONObject(paramsJson) }.getOrElse { JSONObject() }
         val result = runCatching { route(api, params) }
@@ -43,10 +46,19 @@ class HostApiDispatcher(
     private fun route(api: String, p: JSONObject): JSONObject = when (api) {
         /* ---------- Tools.Files ---------- */
         "fs.read" -> {
-            val f = resolve(p.optString("path"))
-                ?: return error("路径越界或非法：${p.optString("path")}")
-            if (!f.isFile) error("文件不存在：${p.optString("path")}")
-            else JSONObject().put("content", f.readText())
+            val raw = p.optString("path")
+            val f = resolve(raw) ?: return error("路径越界或非法：$raw")
+            when {
+                // 区分「不存在」与「是目录」——旧实现统一报「文件不存在」，目录场景误导排查方向
+                !f.exists() -> error("文件不存在：$raw")
+                f.isDirectory -> error("是目录不是文件（读取请给文件路径）：$raw")
+                // 超大文本整读会当场 OOM（QuickJS 运行时堆 64MB），提前拒绝并给出可执行建议
+                f.length() > maxReadBytes -> error(
+                    "文件过大（${f.length() / 1024 / 1024}MB > ${maxReadBytes / 1024 / 1024}MB 上限）：" +
+                        "整读会撑爆脚本运行时，请改用 fs.readModule 分段处理或换更小的数据文件：$raw"
+                )
+                else -> JSONObject().put("content", f.readText())
+            }
         }
         "fs.readModule" -> readModule(p.optString("path"))
         "fs.write" -> {
@@ -73,6 +85,9 @@ class HostApiDispatcher(
             }
             JSONObject().put("entries", arr)
         }
+        // 存在性判定：**真实文件系统查询**（File.exists()，无缓存/索引层）——issue #11 问题1。
+        // 曾经的缺陷在桥接层（JS 拿 {exists:true} 对象 === true 恒 false），不在这里；
+        // 本方法返回的 {exists:bool} 契约由 prelude.js 的 Tools.Files.exists 解包消费。
         "fs.exists" -> JSONObject().put("exists", resolve(p.optString("path"))?.exists() == true)
         "fs.remove" -> {
             val f = resolve(p.optString("path")) ?: return error("路径越界或非法")
