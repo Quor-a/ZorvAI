@@ -53,7 +53,11 @@
 
 </div>
 
-> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.1.5`（`versionCode 1001005`）
+<p align="center">
+  <b>☕ 如果这个项目对你有帮助，欢迎到 <a href="https://afdian.com/a/zorvAI">爱发电 (afdian)</a> 支持我们，助力持续开发 ❤️</b>
+</p>
+
+> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.1.6`（`versionCode 1001006`）
 >
 > Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **235 个内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
 >
@@ -336,7 +340,15 @@ cd ZorvAI
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[v1.1.5 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
+- 🟢 **[v1.1.6 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
+
+  **动态交互界面（zxwidget）渲染/交互缺陷全面修复**
+
+  - **条码/二维码组件修复**：`zx_barcode` 正确路由到新增条码布局（确定性竖条 + 可读文本）；`zx_qr` 重写为确定性伪 QR 矩阵（定位角 + 哈希散点 + 下方可读文本），彻底解决空白问题。
+  - **路由错配纠正**：OVERRIDE 表修正 `zx_barcode→barcode`、`zx_decision→decision`、`zx_topology`/`zx_sankey2→graph`。
+  - **回归体系闭环**：新增敏感空白检测脚本，三道回归闸门（blankcheck / sweep / audit）全绿，A/B 编译器同源 0 漂移。
+
+- 🟢 **[v1.1.5 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名）
 
   **AI 集群技能全面升级：独立技能引擎 + RAG + 工具主通道**
 
