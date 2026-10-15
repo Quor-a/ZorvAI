@@ -63,10 +63,14 @@ fun VisualQuestionDialog() {
 
     currentQuestion?.let { (index, pending) ->
         Dialog(
-            onDismissRequest = { /* 不允许关闭，必须回答 */ },
+            // 用户不想作答时可关闭（=跳过）：点返回/点外部即视为跳过，不再强制等待 120 秒。
+            onDismissRequest = {
+                VisualQuestionQueue.submitAnswer(index, "")
+                currentQuestion = null
+            },
             properties = DialogProperties(
-                dismissOnBackPress = false,
-                dismissOnClickOutside = false
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
             )
         ) {
             VisualQuestionCard(
@@ -172,6 +176,21 @@ fun VisualQuestionCard(
                         }
                     }
 
+                    // 跳过按钮：用户不想作答时关闭弹窗；空白答案不回流，不触发新一轮。
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = {
+                            VisualQuestionQueue.submitAnswer(index, "")
+                            onAnswered()
+                        }) {
+                            Text(stringResource(R.string.qk_00011))
+                        }
+                    }
+
                     // 自定义输入
                     if (pending.allowCustom) {
                         Spacer(modifier = Modifier.height(12.dp))
@@ -258,10 +277,14 @@ fun VisualActionDialog() {
 
     currentAction?.let { (index, pending) ->
         Dialog(
-            onDismissRequest = { /* 不允许关闭，必须选择 */ },
+            // 用户不想操作时可关闭（=跳过）：点返回/点外部即视为跳过，不再强制等待。
+            onDismissRequest = {
+                VisualActionQueue.submitAction(index, "")
+                currentAction = null
+            },
             properties = DialogProperties(
-                dismissOnBackPress = false,
-                dismissOnClickOutside = false
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
             )
         ) {
             VisualActionCard(index = index, pending = pending, onDone = { currentAction = null })
@@ -322,6 +345,21 @@ fun VisualActionCard(
                         color = cs.onSurface,
                         modifier = Modifier.padding(bottom = 20.dp)
                     )
+
+                    // 跳过按钮：用户不想操作时关闭弹窗；空白值不回流，不触发新一轮。
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = {
+                            VisualActionQueue.submitAction(index, "")
+                            onDone()
+                        }) {
+                            Text(stringResource(R.string.qk_00011))
+                        }
+                    }
 
                     // 按钮列表
                     pending.buttons.forEach { button ->

@@ -8,7 +8,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -25,7 +24,12 @@ data class VisualCustomPopupData(
     val cancelable: Boolean = true,
     val timeout: Int = 120,         // 默认2分钟
     val latch: CountDownLatch,
-    val result: AtomicReference<String?>  // 返回AI自定义的结果
+    val result: AtomicReference<String?>,  // 返回AI自定义的结果
+    /**
+     * 主 App 工具入队时设置：用户操作后由 [VisualCustomPopupQueue.submitResult] 调用，
+     * 把结果（JSON）作为新用户消息回流触发 AI 续跑（非阻塞）。取消时不触发。
+     */
+    val onDeliver: ((String) -> Unit)? = null
 )
 
 /**
@@ -51,11 +55,16 @@ object VisualCustomPopupQueue {
                 val pending = pendingPopups[index]
                 pending.result.set(result)
                 pending.latch.countDown()
+                val onDeliver = pending.onDeliver
+                // 取消（如 close 触发 {"cancelled":true}）不回流；正常提交才回流。
+                val cancelled = runCatching { JSONObject(result).optBoolean("cancelled", false) }
+                    .getOrDefault(false)
                 Log.d(TAG, "用户提交自定义弹窗结果: $result")
                 // 修复：与 VisualPopupTool.submitResult 对齐，立即移除并发事件，
                 // 避免旧弹窗卡住 currentPopup 导致新弹窗进不来。
                 pendingPopups.removeAt(index)
                 _eventChannel.trySend(PopupEvent.PopupRemoved(id))
+                if (!cancelled) onDeliver?.invoke(result)
             }
         }
     }
@@ -180,8 +189,10 @@ visual_custom_popup({
         val popupId = "popup_${System.currentTimeMillis()}_${(Math.random() * 1000).toInt()}"
 
         return try {
-            val result = showCustomPopup(popupId, title, html, cardTitle, cardDescription, width, height, cancelable, timeout, overlay, context)
-            result ?: "{\"cancelled\":true,\"error\":\"timeout\"}"
+            showCustomPopup(popupId, title, html, cardTitle, cardDescription, width, height, cancelable, timeout, overlay, context)
+            // 注意：返回值不再是用户操作结果，而是「已弹出」提示。
+            // 用户操作结果会在其操作后通过 VisualAnswerBridge 作为新用户消息回流，触发新一轮对话。
+            "（已向用户弹出自定义可视化弹窗「$title」，等待用户操作；操作结果会作为新消息继续对话，无需等待计时）"
         } catch (e: Exception) {
             Log.e(TAG, "自定义弹窗失败", e)
             "{\"cancelled\":true,\"error\":\"${e.message}\"}"
@@ -200,7 +211,7 @@ visual_custom_popup({
         timeout: Int,
         overlay: Boolean,
         context: Context
-    ): String? {
+    ): String {
         val latch = CountDownLatch(1)
         val result = AtomicReference<String?>(null)
 
@@ -215,13 +226,15 @@ visual_custom_popup({
             cancelable = cancelable,
             timeout = timeout,
             latch = latch,
-            result = result
+            result = result,
+            // 非阻塞回流：用户操作后由 submitResult 回调，结果作为新用户消息触发 AI 续跑。
+            onDeliver = { VisualAnswerBridge.deliver(it) }
         )
 
         // 使用新的 addPopup 方法（会发送事件通知 UI）
         VisualCustomPopupQueue.addPopup(popup)
 
-        Log.d(TAG, "显示自定义弹窗: $title (ID: $id, 超时: ${timeout}s, 悬浮窗: $overlay)")
+        Log.d(TAG, "显示自定义弹窗（非阻塞）: $title (ID: $id, 悬浮窗: $overlay, 旧超时: ${timeout}s 已不再阻塞等待)")
 
         // 如果需要悬浮窗模式，启动悬浮窗服务
         if (overlay) {
@@ -235,15 +248,9 @@ visual_custom_popup({
             }
         }
 
-        val answered = latch.await(timeout.toLong(), TimeUnit.SECONDS)
-
-        return if (answered) {
-            result.get()
-        } else {
-            // 超时：从队列中移除
-            VisualCustomPopupQueue.removePopup(id)
-            null
-        }
+        // 不再用 latch.await 阻塞 agent 循环：用户无需在固定时间内操作，
+        // 操作后结果会作为新用户消息回流，由 AI 在下一轮继续。
+        return "（已向用户弹出自定义可视化弹窗「$title」，等待用户操作；操作结果会作为新消息继续对话，无需等待计时）"
     }
 
     companion object {

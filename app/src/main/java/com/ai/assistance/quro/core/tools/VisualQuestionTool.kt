@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /** 待处理的问答问题 */
@@ -19,7 +18,13 @@ data class VisualPendingQuestion(
     val allowCustom: Boolean,
     val title: String,
     val latch: CountDownLatch,
-    val result: AtomicReference<String?>
+    val result: AtomicReference<String?>,
+    /**
+     * 主 App 工具入队时设置：用户作答后由 [VisualQuestionQueue.submitAnswer] 调用，
+     * 把答案作为新用户消息回流触发 AI 续跑（非阻塞）。
+     * GenUI 直接构造 pending 时不设此值，保持原有阻塞消费语义。
+     */
+    val onDeliver: ((String) -> Unit)? = null
 )
 
 /** 待处理的操作弹窗 */
@@ -28,7 +33,12 @@ data class VisualPendingAction(
     val message: String,
     val buttons: List<VisualButtonConfig>,
     val latch: CountDownLatch,
-    val result: AtomicReference<String?>
+    val result: AtomicReference<String?>,
+    /**
+     * 主 App 工具入队时设置：用户选择操作后由 [VisualActionQueue.submitAction] 调用，
+     * 把值作为新用户消息回流触发 AI 续跑（非阻塞）。
+     */
+    val onDeliver: ((String) -> Unit)? = null
 )
 
 /** 按钮配置 */
@@ -62,6 +72,9 @@ object VisualQuestionQueue {
                 pendingQuestions.removeAt(index)
                 Log.d(TAG, "用户提交答案: $answer")
                 _eventChannel.trySend(QuestionEvent.QuestionRemoved(index))
+                // 主 App 工具入队（onDeliver != null）→ 答案作为新用户消息回流，下一轮 AI 续跑。
+                // GenUI 不设置 onDeliver，不触发回流，保持阻塞消费。
+                pending.onDeliver?.invoke(answer)
             }
         }
     }
@@ -120,6 +133,7 @@ object VisualActionQueue {
                 pendingActions.removeAt(index)
                 Log.d(TAG, "用户选择操作: $value")
                 _eventChannel.trySend(ActionEvent.ActionRemoved(index))
+                pending.onDeliver?.invoke(value)
             }
         }
     }
@@ -193,8 +207,7 @@ class VisualQuestionTool : QuroTool {
         val timeout = args.optInt("timeout", 60)
 
         return try {
-            val result = askUser(question, options, allowCustom, title, timeout)
-            result ?: "用户未回答（超时或取消）"
+            askUser(question, options, allowCustom, title, timeout)
         } catch (e: Exception) {
             Log.e(TAG, "问答失败", e)
             "问答失败: ${e.message}"
@@ -207,7 +220,7 @@ class VisualQuestionTool : QuroTool {
         allowCustom: Boolean,
         title: String,
         timeout: Int
-    ): String? {
+    ): String {
         val latch = CountDownLatch(1)
         val result = AtomicReference<String?>(null)
 
@@ -217,7 +230,9 @@ class VisualQuestionTool : QuroTool {
             allowCustom = allowCustom,
             title = title,
             latch = latch,
-            result = result
+            result = result,
+            // 非阻塞回流：用户作答后由 submitAnswer 回调，答案作为新用户消息触发 AI 续跑。
+            onDeliver = { VisualAnswerBridge.deliver(it) }
         )
 
         synchronized(VisualQuestionQueue.pendingQuestions) {
@@ -226,18 +241,11 @@ class VisualQuestionTool : QuroTool {
         // 修复：通知 UI 有新问题加入，让 UI 用 eventFlow 立即拉取
         VisualQuestionQueue.signalAdded()
 
-        Log.d(TAG, "等待用户回答: $question (超时: ${timeout}s)")
+        Log.d(TAG, "已弹出可视化询问（非阻塞，等待用户交互）: $question (旧超时参数 ${timeout}s 已不再阻塞等待)")
 
-        val answered = latch.await(timeout.toLong(), TimeUnit.SECONDS)
-
-        return if (answered) {
-            result.get()
-        } else {
-            synchronized(VisualQuestionQueue.pendingQuestions) {
-                VisualQuestionQueue.pendingQuestions.remove(pending)
-            }
-            null
-        }
+        // 不再用 latch.await 阻塞 agent 循环：用户无需在固定时间内作答，
+        // 作答/跳过后答案作为新用户消息回流，由 AI 在下一轮继续。
+        return "（已向用户弹出可视化询问「$question」，等待用户交互；用户作答后会作为新消息继续对话，无需等待计时）"
     }
 
     companion object {

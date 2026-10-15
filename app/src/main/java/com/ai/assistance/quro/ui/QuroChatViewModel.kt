@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.ui
 
 import com.ai.assistance.quro.core.cards.CardSdk
+import com.ai.assistance.quro.core.tools.VisualAnswerBridge
 import com.ai.assistance.quro.R
 import com.ai.assistance.quro.util.qstr
 
@@ -176,6 +177,10 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 it
             )
         }
+
+        // 🔴 可视化工具答案回流桥：用户作答/操作可视化弹窗后，把答案作为新用户消息发回主对话，
+        // 由 AI 在下一轮继续（非阻塞、非时间等待）。避免「AI 傻等 120 秒」的阻塞性工具行为。
+        VisualAnswerBridge.onAnswer = { answer -> send(answer) }
     }
 
     /**
