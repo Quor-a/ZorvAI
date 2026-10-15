@@ -100,6 +100,12 @@ data class Message(
     /** 执行指示：AI 正在执行工具（存在结果尚未回填的工具调用）时的「工作中」标记，
      *  对话框据此显示「AI 正在执行工具…」，避免多轮工具循环期间无任何「进行中」反馈。 */
     val isWorking: Boolean = false,
+    /**
+     * 执行指示时携带的「正在执行的工具名」列表（[isWorking]=true 时有效）。
+     * 把笼统的"AI 正在执行工具…"细化为"AI 正在执行工具：web_search · read_url …"，
+     * 让用户清楚看到当前卡在哪些工具上（多轮工具循环期间的细节反馈）。
+     */
+    val workingTools: List<String> = emptyList(),
     /** 用户消息的上下文标识（工作区/ACI/技能），从 [上下文|...] 注入标记中提取，用于气泡内可见化展示。 */
     val context: String? = null,
     /**

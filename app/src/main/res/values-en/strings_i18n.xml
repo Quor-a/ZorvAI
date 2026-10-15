@@ -165,6 +165,7 @@
     <string name="qk_00160">🧩 %1$s skills</string>
     <string name="qk_00161" formatted="false">Upload file</string>
     <string name="qk_00162" formatted="false">Voice input</string>
+    <string name="qk_04101">AI is executing tools: %1$s …</string>
     <string name="qk_00163" formatted="false">Say something to Zorv…</string>
     <string name="qk_00164" formatted="false">Stop generating</string>
     <string name="qk_00165" formatted="false">Send</string>

@@ -167,6 +167,114 @@ class WebSearchOrchestrator(
         return bundle
     }
 
+    /**
+     * 显式检索入口：模型主动调用 web_search 时走这里。
+     *
+     * 与 [searchL2] 的区别：不挂 IntentRouter 意图门控——
+     * 既然模型已显式要求联网，无需再判断"该不该搜"（那是为被动自动检索准备的）。
+     * 复用 L2 全部成熟组件（RRF 多查询融合 → 结果级预排序 → 并发抓取 → 语义切块 → 证据级排序 → 证据打包），
+     * 相比 [search] 的整篇截断，证据级打包让关键结论不再因排在文末而被裁掉（RAG 长尾突破）。
+     *
+     * 安全兜底：若检索层就空（所有引擎不可达）→ 回退 [search]；
+     * 若证据打包为空（极端情况）→ 回退整篇打包。绝不退化成"无结果"。
+     */
+    suspend fun searchExplicit(question: String): SearchBundle {
+        val t0 = System.currentTimeMillis()
+        val timings = HashMap<String, Long>()
+
+        val t1 = System.currentTimeMillis()
+        val now = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA).format(Date())
+        val rw = QueryRewriter.rewrite(completer, question, now)
+        val queries = rw.queries.take(config.maxQueries)
+        timings["rewrite"] = System.currentTimeMillis() - t1
+
+        // 多查询并发检索
+        val t2 = System.currentTimeMillis()
+        val perQuery = ArrayList<Pair<List<SearchHit>, Double>>()
+        coroutineScope {
+            val jobs = queries.mapIndexed { i, q ->
+                async {
+                    val hits = cache.getHits(q) ?: EngineRouter.search(
+                        engines, q, config.perQueryLimit, config.searchTimeoutMs
+                    ).also { if (it.isNotEmpty()) cache.putHits(q, it) }
+                    hits to if (i == 0) 1.0 else 0.7
+                }
+            }
+            for (j in jobs) perQuery.add(j.await())
+        }
+        timings["retrieve"] = System.currentTimeMillis() - t2
+
+        // RRF 多查询融合（替代投票计数）
+        val t3 = System.currentTimeMillis()
+        val fused = Fusion.rrfMultiQuery(perQuery)
+        timings["fuse"] = System.currentTimeMillis() - t3
+        if (fused.isEmpty()) return search(question)
+
+        // 结果级预排序后择优抓取
+        val ranked = ResultReranker.rerank(
+            fused, question,
+            recencyBias = when (rw.recency) {
+                "day" -> 1.0; "week" -> 0.8; "month" -> 0.5; else -> 0.3
+            },
+            maxPerDomain = 2
+        )
+        val candidates = ranked.take(config.readTopK + config.oversample)
+
+        val t4 = System.currentTimeMillis()
+        val fetched = LinkedHashMap<String, Article>(candidates.size)
+        coroutineScope {
+            val jobs = candidates.map { h -> async { h.url to fetchArticle(h) } }
+            for (j in jobs) { val (u, a) = j.await(); fetched[u] = a }
+        }
+        timings["read"] = System.currentTimeMillis() - t4
+        timings["readOk"] = fetched.count { it.value.ok }.toLong()
+
+        // 语义切块 + 片段级证据排序
+        val t5 = System.currentTimeMillis()
+        val pairs = ArrayList<Pair<SemanticChunker.Chunk, SearchHit>>()
+        for (h in candidates) {
+            val art = fetched[h.url] ?: continue
+            if (!art.ok || art.markdown.isBlank()) continue
+            val blocks = toBlocks(art.markdown)
+            val chunks = SemanticChunker.chunk(
+                docId = EngineRouter.normalizeUrl(h.url),
+                blocks = blocks,
+                maxChars = config.chunkMaxChars,
+                overlapChars = config.chunkOverlap
+            )
+            for (c in chunks) pairs.add(c to h)
+        }
+        val evidence = EvidenceReranker.rank(
+            chunks = pairs,
+            query = question,
+            recencyBias = if (rw.recency == "day") 0.8 else 0.4,
+            maxPerDoc = config.maxChunksPerDoc
+        ).take(config.evidenceTopK)
+        timings["evidence"] = System.currentTimeMillis() - t5
+
+        // 按证据打包；证据为空时退回整篇打包（复用已抓正文，不浪费带宽）
+        val t6 = System.currentTimeMillis()
+        val bundle = if (evidence.isNotEmpty()) {
+            ContextPacker.packEvidence(
+                evidence = evidence,
+                queries = queries,
+                tokenBudget = config.tokenBudget,
+                timings = timings
+            )
+        } else {
+            ContextPacker.pack(
+                hits = ranked,
+                articles = fetched,
+                queries = queries,
+                tokenBudget = config.tokenBudget,
+                perArticleCap = config.perArticleCap,
+                timings = timings
+            )
+        }
+        timings["pack"] = System.currentTimeMillis() - t6
+        return bundle
+    }
+
     /** 单篇抓取：供 read_url 工具独立使用 */
     suspend fun readUrl(url: String, titleHint: String = ""): Article =
         fetchArticle(SearchHit(titleHint, url, "", "direct", 0))

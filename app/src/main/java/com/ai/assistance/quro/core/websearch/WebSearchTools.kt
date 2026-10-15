@@ -67,7 +67,7 @@ class WebSearchTool(private val toolName: String) : QuroTool {
                         val q = runCatching { JSONObject(arguments) }.getOrNull()
                             ?.optString("query", "")?.trim().orEmpty()
                         if (q.isBlank()) return@runBlocking "错误：query 不能为空"
-                        render(orchestrator.search(q))
+                        render(orchestrator.searchExplicit(q))
                     }
                     "read_url" -> {
                         val u = runCatching { JSONObject(arguments) }.getOrNull()
