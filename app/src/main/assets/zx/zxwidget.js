@@ -112,6 +112,37 @@ function colorOf(o){ var v=pick(o,COLOR_KEYS); return (typeof v==="string"&&/^#[
 function iconOf(o){ var v=pick(o,ICON_KEYS); return (typeof v==="string"&&v.length<=4)?v:""; }
 function num(v, d){ var n=parseFloat(v); return isFinite(n)?n:(d||0); }
 
+/* 键名汉化：杜绝把英文内部字段名当界面内容原样摆出来
+   （用户截图里的 init / dead / dept / doctor / date / data / bench 等泄漏来源）。
+   约定：HUMANIZE 命中的键 → 显示中文标签；未映射的英文键一律不显示（只显值）。 */
+var HUMANIZE = {
+  bench:"基准", method:"方法", data:"数据", stale:"过期天数", sig:"显著性",
+  reserve:"底价", prior:"先验概率", offer:"报价", mymax:"我方上限", max:"上限",
+  level:"级别", items:"序列", init:"初始", hismin:"对方下限", doctor:"医生",
+  detail:"说明", dept:"科室", date:"日期", cur:"当前", budget:"预算",
+  n:"名称", v:"值", k:"键", t:"标题", d:"说明", s:"起始", e:"结束",
+  st:"状态", at:"时间", who:"负责人", op:"操作", eq:"等权",
+  lp:"似然+", ln:"似然-", np:"先验+", nn:"先验-",
+  name:"名称", title:"标题", desc:"描述", value:"值", count:"数量", total:"合计",
+  status:"状态", time:"时间", owner:"负责人", amount:"金额", price:"价格",
+  result:"结果", score:"得分", reason:"原因", operator:"操作人",
+  supply:"供给", demand:"需求", prices:"价格", lhs:"左式", expr:"表达式",
+  ctrl:"对照组", subs:"替换", treat:"处理组", shares:"份额", points:"点数",
+  hist:"历史", cand:"候选", text:"正文", reposts:"转发", quote:"引用",
+  likes:"赞", bands:"频段", key:"键", period:"周期", periods:"周期",
+  unit:"单位", tol:"容差", src:"来源", servers:"服务节点", ratio:"比率",
+  prevWho:"前序负责人", nextWho:"后序负责人", p1x:"点1X", p1y:"点1Y", p2x:"点2X", p2y:"点2Y",
+  maxq:"最大量", maxLen:"最大长度", lambda:"参数", hiscost:"历史成本",
+  fixed:"固定值", err:"错误", cost:"成本", claim:"申领", benefit:"收益",
+  from:"起始", hint:"提示"
+};
+function humanKey(k){ if(!k) return ""; if(HUMANIZE[k]!==undefined) return HUMANIZE[k]; return String(k); }
+/* 仅返回已汉化的标签；未映射的英文键一律不显示（只显值），杜绝键名泄漏 */
+function renderKvLabel(k){
+  if(HUMANIZE[k]!==undefined) return HUMANIZE[k];
+  return null;
+}
+
 /* 主数组：取契约里声明的第一个数组字段，回退到常见名 */
 function mainArr(dsl, comp){
   var ct = ZX_CONTRACTS[comp] || {};
@@ -221,7 +252,13 @@ LAYOUTS.table = function(dsl, comp, ctx){
 /* ---- 4.2 指标卡组：items[k+v] ---- */
 LAYOUTS.metrics = function(dsl, comp, ctx){
   var items = mainArr(dsl, comp);
-  var box=el("div","sec"), g=el("div","mgrid");
+  var box=el("div","sec");
+  if(!items.length){
+    var mph = txt(dsl)||dsl.title||dsl.label||"";
+    box.appendChild(el("div","empty", mph?esc(mph):"（暂无指标）"));
+    return box;
+  }
+  var g=el("div","mgrid");
   items.forEach(function(it, i){
     if(!isObj(it)) return;
     var m=el("div","met");
@@ -533,6 +570,7 @@ LAYOUTS.gantt = function(dsl, comp, ctx){
 LAYOUTS.kanban = function(dsl, comp, ctx){
   var cols = isArr(dsl.cols)?dsl.cols:mainArr(dsl, comp);
   var box=el("div","sec"), kb=el("div","kb");
+  if(!cols.length){ box.appendChild(el("div","empty","（暂无看板列）")); return box; }
   cols.forEach(function(c, ci){
     var col=el("div","kb-c");
     var name=isObj(c)?(txt(c)||("列 "+(ci+1))):String(c);
@@ -623,6 +661,7 @@ LAYOUTS.note = function(dsl, comp, ctx){
   if(t) b.appendChild(el("div",null,"<b>"+esc(t)+"</b>"));
   var d=sub(dsl)||dsl.content||dsl.body||"";
   if(d) b.appendChild(el("div",null,esc(d)));
+  if(!t && !d) b.appendChild(el("div",null,esc("（暂无内容）")));
   box.appendChild(b);
   box.addEventListener("click",function(){ ctx.interact("note",{}); });
   return box;
@@ -819,6 +858,7 @@ LAYOUTS.keyvalue = function(dsl, comp, ctx){
     r.appendChild(el("div","kv-k",esc(k)));
     var vv=el("div","kv-v",esc(v===null?"—":(v===undefined?"":v)));
     if(mono) vv.style.fontFamily="var(--mono)";
+    r.appendChild(vv);
     r.addEventListener("click",function(){ ctx.interact("kv",{key:k,value:v}); });
     dl.appendChild(r);
   }
@@ -838,7 +878,8 @@ LAYOUTS.keyvalue = function(dsl, comp, ctx){
     if(k==="type") return;
     var v=dsl[k];
     if(isObj(v)||isArr(v)) return;
-    addRow(k, v, false);
+    var lab=renderKvLabel(k);
+    addRow(lab===null?"":lab, v, false);
   });
   box.appendChild(dl);
   return box;
@@ -873,15 +914,21 @@ LAYOUTS.generic = function(dsl, comp, ctx){
     if(isObj(v)||isArr(v)) return;
     scalars.push([k,v]);
   });
+  var rendered=false;
   if(scalars.length>=1){
+    rendered=true;
     var dl=el("dl","kv");
     scalars.forEach(function(p){
-      dl.appendChild(el("div","kv-r","<div class='kv-k'>"+esc(p[0])+"</div><div class='kv-v'>"+esc(p[1])+"</div>"));
+      var lab=renderKvLabel(p[0]);
+      var cls=(HUMANIZE[p[0]]!==undefined)?"kv-k":"kv-k mute";
+      var kh=lab===null?"":"<div class='"+cls+"'>"+esc(lab)+"</div>";
+      dl.appendChild(el("div","kv-r", kh+"<div class='kv-v'>"+esc(p[1])+"</div>"));
     });
     box.appendChild(dl);
   }
   arrs.forEach(function(a){
     if(!isArr(dsl[a])||!dsl[a].length) return;
+    rendered=true;
     var items=dsl[a];
     if(isObj(items[0])){
       var keys=Object.keys(items[0]);
@@ -895,7 +942,7 @@ LAYOUTS.generic = function(dsl, comp, ctx){
         m.addEventListener("click",function(){ ctx.interact(a,{index:i,data:it}); });
         g.appendChild(m);
       });
-      box.appendChild(el("div","sec-t",esc(a)));
+      box.appendChild(el("div","sec-t",esc(humanKey(a))));
       box.appendChild(g);
     } else {
       var row=el("div","chips");
@@ -904,11 +951,11 @@ LAYOUTS.generic = function(dsl, comp, ctx){
         c.addEventListener("click",function(){ ctx.interact(a,{index:i,value:it}); });
         row.appendChild(c);
       });
-      box.appendChild(el("div","sec-t",esc(a)));
+      box.appendChild(el("div","sec-t",esc(humanKey(a))));
       box.appendChild(row);
     }
   });
-  if(!scalars.length && !arrs.length) box.appendChild(el("div","empty","该组件没有可渲染字段"));
+  if(!rendered) box.appendChild(el("div","empty", esc(txt(dsl)||dsl.title||dsl.label||"（暂无内容）")));
   return box;
 };
 
@@ -947,7 +994,8 @@ LAYOUTS.spark = function(dsl, comp, ctx){
   box.appendChild(s);
   var lg=el("div","legend");
   series.forEach(function(sr,si){
-    lg.appendChild(el("span","lg-i","<i style='display:inline-block;width:9px;height:9px;border-radius:50%;background:"+cols[si%cols.length]+"'></i>"+esc(sr[0])+"（"+esc(sr[1].length)+" 点）"));
+    var sname = HUMANIZE[sr[0]]!==undefined ? HUMANIZE[sr[0]] : ("序列"+(si+1));
+    lg.appendChild(el("span","lg-i","<i style='display:inline-block;width:9px;height:9px;border-radius:50%;background:"+cols[si%cols.length]+"'></i>"+esc(sname)+"（"+esc(sr[1].length)+" 点）"));
   });
   box.appendChild(lg);
   return box;
@@ -968,7 +1016,7 @@ LAYOUTS.objtree = function(dsl, comp, ctx){
       var ks=Object.keys(o);
       var row=el("div","tn");
       row.appendChild(el("div","tn-tw",ks.length?"▸":""));
-      row.appendChild(el("div","tn-t",esc(key)+(ks.length?"（"+ks.length+" 项）":"")));
+      row.appendChild(el("div","tn-t",esc(humanKey(key))+(ks.length?"（"+ks.length+" 项）":"")));
       row.addEventListener("click",function(){ ctx.interact("node",{key:key,data:o}); });
       holder.appendChild(row);
       if(ks.length){
@@ -980,15 +1028,26 @@ LAYOUTS.objtree = function(dsl, comp, ctx){
     }
     var leaf=el("div","tn");
     leaf.appendChild(el("div","tn-tw",""));
-    leaf.appendChild(el("div","tn-t","<b>"+esc(key)+"</b> = "+esc(String(o))));
+    leaf.appendChild(el("div","tn-t","<b>"+esc(humanKey(key))+"</b> = "+esc(String(o))));
     leaf.addEventListener("click",function(){ ctx.interact("leaf",{key:key,value:o}); });
     holder.appendChild(leaf);
     return holder;
   }
+  /* 顶层只有一个对象键（如 root）时直接展开其内容，不把这个内部结构名当标题摆出来 */
+  if(topKeys.length===1 && isObj(dsl[topKeys[0]])){
+    var inner=dsl[topKeys[0]];
+    Object.keys(inner).forEach(function(k){
+      var v=inner[k];
+      if(isObj(v)||isArr(v)) wrap.appendChild(draw(v,k));
+      else wrap.appendChild(el("div","tn","<div class='tn-tw'></div><div class='tn-t'><b>"+esc(humanKey(k))+"</b> = "+esc(String(v))+"</div>"));
+    });
+    box.appendChild(wrap);
+    return box;
+  }
   topKeys.forEach(function(k){
     var v=dsl[k];
-    if(isObj(v)||isArr(v)) wrap.appendChild(draw(v,k));
-    else wrap.appendChild(el("div","tn","<div class='tn-tw'></div><div class='tn-t'><b>"+esc(k)+"</b> = "+esc(String(v))+"</div>"));
+    if(isObj(v)||isArr(v)) wrap.appendChild(draw(v,humanKey(k)));
+    else wrap.appendChild(el("div","tn","<div class='tn-tw'></div><div class='tn-t'><b>"+esc(humanKey(k))+"</b> = "+esc(String(v))+"</div>"));
   });
   box.appendChild(wrap);
   return box;
@@ -1174,7 +1233,7 @@ LAYOUTS.grid = function(dsl, comp, ctx){
     });
     return box;
   }
-  var cells = isArr(dsl.cells)?dsl.cells:(isArr(dsl.nodes)?dsl.nodes:[]);
+  var cells = isArr(dsl.cells)?dsl.cells:(isArr(dsl.nodes)?dsl.nodes:mainArr(dsl, comp));
   if(!cells.length){ box.appendChild(el("div","empty","没有网格数据")); return box; }
   /* 散点：x/y 定位（zx_wxradar） */
   if(isObj(cells[0]) && cells[0].x!==undefined && cells[0].y!==undefined){
@@ -1501,6 +1560,15 @@ function prepDsl(comp, dsl){
 
 function compile(comp, dsl, ctx){
   dsl = prepDsl(comp, dsl);
+  /* 安全网：组件只发了一个 type、完全没有可渲染内容时，给一个友好占位，
+     而不是渲染出一块肉眼看不见的空白卡。 */
+  var _keys = Object.keys(dsl).filter(function(k){ return k!=="type"; });
+  if(!_keys.length){
+    var _ph = el("div","note");
+    _ph.appendChild(el("div","note-i","!"));
+    _ph.appendChild(el("div",null,esc("（该组件暂无可显示内容）")));
+    return _ph;
+  }
   var layout = resolveLayout(comp, dsl);
   var fn = LAYOUTS[layout];
   if(!fn){ layout="generic"; fn=LAYOUTS.generic; }
