@@ -686,6 +686,57 @@ LAYOUTS.chips = function(dsl, comp, ctx){
 LAYOUTS.chart = function(dsl, comp, ctx){
   var box=el("div","sec");
   var pts = isArr(dsl.pts)?dsl.pts:(isArr(dsl.series)?dsl.series:mainArr(dsl, comp));
+  /* ── 多系列：每项自带数值数组（{n:"乐观",v:[100,128,…]}）──
+     契约里有 22 个组件长这样（zx_radar / zx_stream / zx_scenario /
+     zx_ridgeline / zx_cohort / zx_lane …）。没有这条分支时，整组数值数组
+     会被喂给 num() → NaN → 坐标轴与折线全是 NaN，画出来是一块空白；
+     用户看到的就是「zxwidget 渲染不出图表」。
+     检测到「每项都有一个数值数组字段」就按多系列折线画：至少可见、可交互。 */
+  var sk=null;
+  if(pts.length && isObj(pts[0])){
+    Object.keys(pts[0]).forEach(function(k){
+      var v=pts[0][k];
+      if(!sk && isArr(v) && v.length && typeof v[0]==="number") sk=k;
+    });
+  }
+  if(sk){
+    var mW=660,mH=200,mP=30,mAll=[];
+    pts.forEach(function(p){ (isArr(p[sk])?p[sk]:[]).forEach(function(x){ mAll.push(num(x)); }); });
+    var Mx=Math.max.apply(null,mAll.concat([1])), Mn=Math.min.apply(null,mAll.concat([0]));
+    if(Mx===Mn) Mx=Mn+1;
+    var ms=svg("svg",{viewBox:"0 0 "+mW+" "+mH,class:"chart",preserveAspectRatio:"xMidYMid meet"});
+    for(var mg=0;mg<=4;mg++){
+      var mgy=mP+(mH-mP*2)*mg/4;
+      ms.appendChild(svg("line",{x1:mP,y1:mgy,x2:mW-mP,y2:mgy,stroke:"var(--line)","stroke-width":"1"}));
+      var mtv=el("text",null,esc((Mx-(Mx-Mn)*mg/4).toFixed(Mx>10?0:1)));
+      mtv.setAttribute("x",2); mtv.setAttribute("y",mgy+4); mtv.setAttribute("fill","var(--fg-3)"); mtv.setAttribute("font-size","9.5");
+      ms.appendChild(mtv);
+    }
+    var mCols=["var(--accent)","#e8590c","#1c7ed6","#0ca678","#ae3ec9","#f03e9c"];
+    var mN=(isArr(pts[0][sk])?pts[0][sk].length:0), mBw=(mW-mP*2)/Math.max(mN,1);
+    pts.forEach(function(p,si){
+      var col=mCols[si%mCols.length], d="";
+      (isArr(p[sk])?p[sk]:[]).forEach(function(x,i){
+        var y=mH-mP-(num(x)-Mn)/(Mx-Mn)*(mH-mP*2);
+        d+=(i?"L":"M")+(mP+mBw*i+mBw/2).toFixed(1)+" "+y.toFixed(1);
+      });
+      ms.appendChild(svg("path",{d:d,fill:"none",stroke:col,"stroke-width":"2","stroke-linejoin":"round","stroke-linecap":"round",opacity:.9}));
+      (isArr(p[sk])?p[sk]:[]).forEach(function(x,i){
+        var cx=mP+mBw*i+mBw/2, cy=mH-mP-(num(x)-Mn)/(Mx-Mn)*(mH-mP*2);
+        var c=svg("circle",{cx:cx,cy:cy,r:3.2,fill:"var(--surface)",stroke:col,"stroke-width":"2"});
+        c.style.cursor="pointer";
+        c.addEventListener("click",function(){ ctx.interact("point",{series:txt(p)||("系列"+(si+1)),index:i,value:num(x)}); });
+        ms.appendChild(c);
+      });
+    });
+    box.appendChild(ms);
+    var mlg=el("div","legend");
+    pts.forEach(function(p,si){
+      mlg.appendChild(el("span",null,"<i style='display:inline-block;width:9px;height:9px;border-radius:50%;background:"+mCols[si%mCols.length]+";margin-right:5px'></i>"+esc(txt(p)||("系列"+(si+1)))));
+    });
+    box.appendChild(mlg);
+    return box;
+  }
   var W=680,H=220,P=32;
   var s=svg("svg",{viewBox:"0 0 "+W+" "+H,class:"chart",preserveAspectRatio:"xMidYMid meet"});
   var nums = pts.map(function(p){ return isObj(p)?num(pick(p,VAL_KEYS)||p.v||p.y||0):num(p); });
