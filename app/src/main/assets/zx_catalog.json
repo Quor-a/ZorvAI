@@ -2,7 +2,7 @@
  "categories": {
   "chart_basic": {
    "label": "统计图表",
-   "count": 35,
+   "count": 36,
    "members": [
     "zx_arc",
     "zx_beeswarm",
@@ -18,6 +18,7 @@
     "zx_ecdf",
     "zx_explode",
     "zx_funnel",
+    "zx_headline",
     "zx_histogram",
     "zx_horizon",
     "zx_ladder",
@@ -328,7 +329,7 @@
   },
   "text": {
    "label": "文本代码日志",
-   "count": 19,
+   "count": 18,
    "members": [
     "zx_annotate",
     "zx_ast",
@@ -341,7 +342,6 @@
     "zx_editor",
     "zx_formula",
     "zx_glossary",
-    "zx_headline",
     "zx_knowledge",
     "zx_logview",
     "zx_schoolnote",
@@ -795,9 +795,21 @@
    "category": "card",
    "title": "Accordion",
    "zh": [],
-   "description": "zx 组件「zx_accordion」（Accordion）：用于呈现Accordion相关数据。关键字段 []、数组 []。",
+   "description": "zx 组件「zx_accordion」（Accordion）：用于呈现Accordion相关数据。关键字段 []、数组 []。 示例 type=zx_accordion。",
    "keywords": [
-    "accordion"
+    "1",
+    "accordion",
+    "children",
+    "container",
+    "items",
+    "name",
+    "title",
+    "type",
+    "value",
+    "zx_list",
+    "zx_note",
+    "子卡片A",
+    "甲"
    ],
    "triggers": [
     "展示Accordion",
@@ -809,10 +821,10 @@
     "卡片",
     "容器"
    ],
-   "fn": "",
+   "fn": "container",
    "fields": [],
    "arrays": [],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_activity": {
    "category": "list",
@@ -827,6 +839,7 @@
     "edit",
     "items",
     "k",
+    "metrics",
     "t",
     "type",
     "v",
@@ -845,7 +858,7 @@
     "数据",
     "列表"
    ],
-   "fn": "activity",
+   "fn": "metrics",
    "fields": [
     "k",
     "v",
@@ -875,6 +888,7 @@
     "blocks",
     "c",
     "e",
+    "gantt",
     "n",
     "s",
     "t",
@@ -893,7 +907,7 @@
     "数据",
     "列表"
    ],
-   "fn": "agenda",
+   "fn": "gantt",
    "fields": [
     "e",
     "s",
@@ -949,14 +963,23 @@
    "zh": [
     "告警"
    ],
-   "description": "zx 组件「zx_alert」（Alert）：用于呈现Alert相关数据。关键字段 ['act', 'lv', 'n']、数组 ['alerts']。",
+   "description": "zx 组件「zx_alert」（Alert）：用于呈现Alert相关数据。关键字段 ['act', 'lv', 'n']、数组 ['alerts']。 示例 type=zx_alert。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "act",
     "alert",
     "alerts",
     "lv",
     "n",
-    "告警"
+    "name",
+    "type",
+    "value",
+    "告警",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Alert",
@@ -978,7 +1001,7 @@
    "arrays": [
     "alerts"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_align": {
    "category": "nav",
@@ -996,6 +1019,7 @@
     "85",
     "90",
     "align",
+    "chart",
     "mode",
     "n",
     "series",
@@ -1016,7 +1040,7 @@
     "布局",
     "结构"
    ],
-   "fn": "align",
+   "fn": "chart",
    "fields": [
     "mode",
     "n"
@@ -1038,7 +1062,7 @@
     "0.6",
     "0.8",
     "0.9",
-    "1.0",
+    "1",
     "100",
     "a",
     "alloc",
@@ -1078,8 +1102,9 @@
    "category": "text",
    "title": "Annotate",
    "zh": [],
-   "description": "zx 组件「zx_annotate」（Annotate）：用于呈现Annotate相关数据。关键字段 ['c', 'e', 'h', 'n', 's', 't', 'text', 'w', 'x', 'y']、数组 ['marks']。",
+   "description": "zx 组件「zx_annotate」（Annotate）：用于呈现Annotate相关数据。关键字段 ['c', 'e', 'h', 'n', 's', 't', 'text', 'w', 'x', 'y']、数组 ['marks']。 示例 type=zx_annotate。",
    "keywords": [
+    "3",
     "annotate",
     "c",
     "e",
@@ -1089,9 +1114,17 @@
     "s",
     "t",
     "text",
+    "type",
     "w",
     "x",
-    "y"
+    "y",
+    "文本",
+    "标签一",
+    "标签三",
+    "标签二",
+    "止",
+    "示例",
+    "起"
    ],
    "triggers": [
     "展示Annotate",
@@ -1119,19 +1152,28 @@
    "arrays": [
     "marks"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_annualaudit": {
    "category": "devops",
    "title": "Annualaudit",
    "zh": [],
-   "description": "zx 组件「zx_annualaudit」（Annualaudit）：用于呈现Annualaudit相关数据。关键字段 ['leftH', 'miss', 'n']、数组 ['items']。",
+   "description": "zx 组件「zx_annualaudit」（Annualaudit）：用于呈现Annualaudit相关数据。关键字段 ['leftH', 'miss', 'n']、数组 ['items']。 示例 type=zx_annualaudit。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "annualaudit",
     "items",
     "leftH",
     "miss",
-    "n"
+    "n",
+    "name",
+    "type",
+    "value",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Annualaudit",
@@ -1152,7 +1194,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_anomaly": {
    "category": "devops",
@@ -1182,6 +1224,7 @@
     "data",
     "method",
     "n",
+    "spark",
     "type",
     "z",
     "响应耗时异常"
@@ -1196,7 +1239,7 @@
     "工程",
     "监控"
    ],
-   "fn": "anomaly",
+   "fn": "spark",
    "fields": [
     "method"
    ],
@@ -1361,6 +1404,7 @@
     "e.kt",
     "edges",
     "f",
+    "graph",
     "n",
     "nodes",
     "t",
@@ -1377,7 +1421,7 @@
     "图表",
     "统计"
    ],
-   "fn": "arc",
+   "fn": "graph",
    "fields": [
     "f",
     "t"
@@ -1404,6 +1448,7 @@
     "k",
     "lit",
     "n",
+    "objtree",
     "root",
     "type"
    ],
@@ -1417,7 +1462,7 @@
     "代码",
     "日志"
    ],
-   "fn": "ast",
+   "fn": "objtree",
    "fields": [
     "k",
     "n",
@@ -1491,11 +1536,12 @@
     "0.6",
     "0.7",
     "0.9",
-    "1.0",
+    "1",
     "184",
     "at",
     "audio",
     "dur",
+    "media",
     "peaks",
     "title",
     "type",
@@ -1513,7 +1559,7 @@
     "图像",
     "音视频"
    ],
-   "fn": "audio",
+   "fn": "media",
    "fields": [
     "dur"
    ],
@@ -1575,12 +1621,22 @@
    "category": "form",
    "title": "Autocomplete",
    "zh": [],
-   "description": "zx 组件「zx_autocomplete」（Autocomplete）：用于呈现Autocomplete相关数据。关键字段 ['k', 't']、数组 ['options']。",
+   "description": "zx 组件「zx_autocomplete」（Autocomplete）：用于呈现Autocomplete相关数据。关键字段 ['k', 't']、数组 ['options']。 示例 type=zx_autocomplete。",
    "keywords": [
+    "a",
     "autocomplete",
+    "b",
+    "choice",
     "k",
+    "label",
     "options",
-    "t"
+    "t",
+    "type",
+    "value",
+    "示例",
+    "选项一",
+    "选项二",
+    "键"
    ],
    "triggers": [
     "展示Autocomplete",
@@ -1592,7 +1648,7 @@
     "输入",
     "表单"
    ],
-   "fn": "autocomplete",
+   "fn": "choice",
    "fields": [
     "k",
     "t"
@@ -1600,18 +1656,32 @@
    "arrays": [
     "options"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_avatargroup": {
    "category": "list",
    "title": "Avatargroup",
    "zh": [],
-   "description": "zx 组件「zx_avatargroup」（Avatargroup）：用于呈现Avatargroup相关数据。关键字段 ['max', 'n']、数组 ['people']。",
+   "description": "zx 组件「zx_avatargroup」（Avatargroup）：用于呈现Avatargroup相关数据。关键字段 ['max', 'n']、数组 ['people']。 示例 type=zx_avatargroup。",
    "keywords": [
+    "3",
     "avatargroup",
+    "children",
+    "id",
+    "label",
     "max",
     "n",
-    "people"
+    "n1",
+    "n1a",
+    "n1b",
+    "n2",
+    "people",
+    "type",
+    "子节点",
+    "子节点二",
+    "示例",
+    "节点一",
+    "节点二"
    ],
    "triggers": [
     "展示Avatargroup",
@@ -1630,7 +1700,7 @@
    "arrays": [
     "people"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_backtest": {
    "category": "compare",
@@ -1656,6 +1726,7 @@
     "bench",
     "eq",
     "n",
+    "spark",
     "type",
     "动量策略回测"
    ],
@@ -1669,7 +1740,7 @@
     "对比",
     "决策"
    ],
-   "fn": "backtest",
+   "fn": "spark",
    "fields": [],
    "arrays": [
     "bench",
@@ -1761,6 +1832,7 @@
     "balance",
     "covs",
     "n",
+    "tree",
     "type",
     "两组可不可比",
     "余额",
@@ -1779,7 +1851,7 @@
     "财务",
     "会计"
    ],
-   "fn": "balance",
+   "fn": "tree",
    "fields": [
     "n"
    ],
@@ -1797,7 +1869,6 @@
    "description": "zx 组件「zx_bandit」（Bandit）：用于呈现Bandit相关数据。关键字段 ['k', 'mu', 'n']、数组 ['arms']。 示例 type=zx_bandit。",
    "keywords": [
     "0",
-    "0.0",
     "0.28",
     "0.31",
     "38",
@@ -2093,7 +2164,7 @@
     "0.15",
     "0.35",
     "1",
-    "4.0",
+    "4",
     "bayes",
     "ln",
     "lp",
@@ -2180,6 +2251,7 @@
     "cells",
     "crash",
     "dau",
+    "grid",
     "k",
     "lat",
     "span",
@@ -2200,7 +2272,7 @@
     "卡片",
     "容器"
    ],
-   "fn": "bento",
+   "fn": "grid",
    "fields": [
     "k",
     "span",
@@ -2272,6 +2344,7 @@
     "demand",
     "n",
     "prices",
+    "spark",
     "supply",
     "type",
     "算力竞价"
@@ -2286,7 +2359,7 @@
     "对比",
     "决策"
    ],
-   "fn": "bidcurve",
+   "fn": "spark",
    "fields": [],
    "arrays": [
     "demand",
@@ -2317,6 +2390,7 @@
     "b",
     "bland",
     "n",
+    "spark",
     "type",
     "两种测压法一致性"
    ],
@@ -2330,7 +2404,7 @@
     "占位",
     "基础"
    ],
-   "fn": "bland",
+   "fn": "spark",
    "fields": [],
    "arrays": [],
    "has_sample": true
@@ -2352,6 +2426,7 @@
     "blast",
     "edges",
     "f",
+    "graph",
     "n",
     "nodes",
     "root",
@@ -2369,7 +2444,7 @@
     "数据科学",
     "模型"
    ],
-   "fn": "blast",
+   "fn": "graph",
    "fields": [
     "f",
     "n",
@@ -2400,6 +2475,7 @@
     "c",
     "items",
     "k",
+    "kanban",
     "t",
     "type",
     "x",
@@ -2418,7 +2494,7 @@
     "协作",
     "团队"
    ],
-   "fn": "board",
+   "fn": "kanban",
    "fields": [
     "k",
     "t",
@@ -2434,13 +2510,22 @@
    "category": "timeline",
    "title": "Booking",
    "zh": [],
-   "description": "zx 组件「zx_booking」（Booking）：用于呈现Booking相关数据。关键字段 ['d', 's', 't']、数组 ['slots']。",
+   "description": "zx 组件「zx_booking」（Booking）：用于呈现Booking相关数据。关键字段 ['d', 's', 't']、数组 ['slots']。 示例 type=zx_booking。",
    "keywords": [
+    "4",
+    "8",
     "booking",
     "d",
+    "name",
     "s",
     "slots",
-    "t"
+    "t",
+    "type",
+    "value",
+    "分组一",
+    "分组二",
+    "示例",
+    "起"
    ],
    "triggers": [
     "展示Booking",
@@ -2461,7 +2546,7 @@
    "arrays": [
     "slots"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_bookkeep": {
    "category": "finance",
@@ -2546,6 +2631,7 @@
     "data",
     "median",
     "n",
+    "spark",
     "stat",
     "type",
     "响应耗时中位数"
@@ -2560,7 +2646,7 @@
     "工程",
     "监控"
    ],
-   "fn": "boot",
+   "fn": "spark",
    "fields": [
     "b",
     "stat"
@@ -2585,6 +2671,7 @@
     "bottleneck",
     "n",
     "stages",
+    "stepper",
     "thr",
     "type",
     "wip",
@@ -2604,7 +2691,7 @@
     "图表",
     "统计"
    ],
-   "fn": "bottleneck",
+   "fn": "stepper",
    "fields": [
     "n",
     "thr",
@@ -2623,12 +2710,12 @@
    "keywords": [
     "0.4",
     "1.2",
-    "2.0",
+    "2",
     "2.4",
-    "3.0",
+    "3",
     "3.1",
     "3.8",
-    "4.0",
+    "4",
     "4.6",
     "5.6",
     "6.1",
@@ -2636,6 +2723,7 @@
     "A",
     "B",
     "boxplot",
+    "chart",
     "hi",
     "items",
     "lo",
@@ -2656,7 +2744,7 @@
     "图表",
     "统计"
    ],
-   "fn": "boxplot",
+   "fn": "chart",
    "fields": [
     "n"
    ],
@@ -2682,6 +2770,7 @@
     "a",
     "b",
     "bracket",
+    "matrix",
     "names",
     "rounds",
     "sa",
@@ -2701,7 +2790,7 @@
     "卡片",
     "容器"
    ],
-   "fn": "bracket",
+   "fn": "matrix",
    "fields": [
     "a",
     "b",
@@ -2729,6 +2818,7 @@
     "cols",
     "commit",
     "feature",
+    "grid",
     "head",
     "k",
     "main",
@@ -2748,7 +2838,7 @@
     "工程",
     "监控"
    ],
-   "fn": "branch",
+   "fn": "grid",
    "fields": [
     "c",
     "cols",
@@ -2878,6 +2968,7 @@
     "hi",
     "lo",
     "n",
+    "spark",
     "type"
    ],
    "triggers": [
@@ -2890,7 +2981,7 @@
     "图像",
     "音视频"
    ],
-   "fn": "brush",
+   "fn": "spark",
    "fields": [
     "hi",
     "lo"
@@ -2962,6 +3053,7 @@
     "80",
     "bad",
     "bullet",
+    "gauge",
     "items",
     "max",
     "n",
@@ -2982,7 +3074,7 @@
     "仪表",
     "占比"
    ],
-   "fn": "bullet",
+   "fn": "gauge",
    "fields": [
     "bad",
     "max",
@@ -3014,7 +3106,7 @@
     "act",
     "bands",
     "bullet",
-    "bullet2",
+    "chart",
     "items",
     "max",
     "n",
@@ -3033,7 +3125,7 @@
     "仪表",
     "占比"
    ],
-   "fn": "bullet2",
+   "fn": "chart",
    "fields": [
     "act",
     "max",
@@ -3116,6 +3208,7 @@
     "W1",
     "W2",
     "W3",
+    "calendar",
     "calheat",
     "cells",
     "labels",
@@ -3131,7 +3224,7 @@
     "关系",
     "网络"
    ],
-   "fn": "calheat",
+   "fn": "calendar",
    "fields": [],
    "arrays": [
     "cells",
@@ -3162,6 +3255,7 @@
     "5",
     "bins",
     "calib",
+    "chart",
     "n",
     "p",
     "pts",
@@ -3179,7 +3273,7 @@
     "数据科学",
     "模型"
    ],
-   "fn": "calib",
+   "fn": "chart",
    "fields": [
     "bins",
     "p",
@@ -3240,6 +3334,7 @@
     "loadUser",
     "n",
     "onResume",
+    "stepper",
     "type",
     "崩溃栈"
    ],
@@ -3253,7 +3348,7 @@
     "代码",
     "日志"
    ],
-   "fn": "callstack",
+   "fn": "stepper",
    "fields": [
     "at",
     "err",
@@ -3393,12 +3488,24 @@
    "category": "card",
    "title": "Cardflip",
    "zh": [],
-   "description": "zx 组件「zx_cardflip」（Cardflip）：用于呈现Cardflip相关数据。关键字段 ['a', 'q']、数组 ['cards']。",
+   "description": "zx 组件「zx_cardflip」（Cardflip）：用于呈现Cardflip相关数据。关键字段 ['a', 'q']、数组 ['cards']。 示例 type=zx_cardflip。",
    "keywords": [
+    "1",
     "a",
     "cardflip",
     "cards",
-    "q"
+    "children",
+    "items",
+    "name",
+    "q",
+    "title",
+    "type",
+    "value",
+    "zx_list",
+    "zx_note",
+    "子卡片A",
+    "甲",
+    "示例"
    ],
    "triggers": [
     "展示Cardflip",
@@ -3418,7 +3525,7 @@
    "arrays": [
     "cards"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_carerota": {
    "category": "health",
@@ -3471,9 +3578,21 @@
    "zh": [
     "轮播"
    ],
-   "description": "zx 组件「zx_carousel」（Carousel）：用于呈现Carousel相关数据。关键字段 []、数组 []。",
+   "description": "zx 组件「zx_carousel」（Carousel）：用于呈现Carousel相关数据。关键字段 []、数组 []。 示例 type=zx_carousel。",
    "keywords": [
+    "1",
     "carousel",
+    "children",
+    "container",
+    "items",
+    "name",
+    "title",
+    "type",
+    "value",
+    "zx_list",
+    "zx_note",
+    "子卡片A",
+    "甲",
     "轮播"
    ],
    "triggers": [
@@ -3487,10 +3606,10 @@
     "卡片",
     "容器"
    ],
-   "fn": "",
+   "fn": "container",
    "fields": [],
    "arrays": [],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_carservice": {
    "category": "property",
@@ -3559,6 +3678,7 @@
     "confounder",
     "edges",
     "f",
+    "graph",
     "mediator",
     "n",
     "nodes",
@@ -3582,7 +3702,7 @@
     "数据科学",
     "模型"
    ],
-   "fn": "causal",
+   "fn": "graph",
    "fields": [
     "f",
     "n",
@@ -3600,15 +3720,25 @@
    "category": "aiml",
    "title": "Cfactual",
    "zh": [],
-   "description": "zx 组件「zx_cfactual」（Cfactual）：用于呈现Cfactual相关数据。关键字段 ['n', 'v', 'y0', 'y1']、数组 ['cf', 'cur']。",
+   "description": "zx 组件「zx_cfactual」（Cfactual）：用于呈现Cfactual相关数据。关键字段 ['n', 'v', 'y0', 'y1']、数组 ['cf', 'cur']。 示例 type=zx_cfactual。",
    "keywords": [
+    "10",
+    "20",
+    "3",
+    "42",
     "cf",
     "cfactual",
     "cur",
     "n",
+    "name",
+    "type",
     "v",
+    "value",
     "y0",
-    "y1"
+    "y1",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Cfactual",
@@ -3631,7 +3761,7 @@
     "cf",
     "cur"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_cforest": {
    "category": "aiml",
@@ -3727,13 +3857,22 @@
    "category": "compare",
    "title": "Changerisk",
    "zh": [],
-   "description": "zx 组件「zx_changerisk」（Changerisk）：用于呈现Changerisk相关数据。关键字段 ['n', 'w', 'why']、数组 ['factors']。",
+   "description": "zx 组件「zx_changerisk」（Changerisk）：用于呈现Changerisk相关数据。关键字段 ['n', 'w', 'why']、数组 ['factors']。 示例 type=zx_changerisk。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "changerisk",
     "factors",
     "n",
+    "name",
+    "type",
+    "value",
     "w",
-    "why"
+    "why",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Changerisk",
@@ -3754,7 +3893,7 @@
    "arrays": [
     "factors"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_chart": {
    "category": "chart_basic",
@@ -3940,13 +4079,25 @@
    "category": "timeline",
    "title": "Checkpoint",
    "zh": [],
-   "description": "zx 组件「zx_checkpoint」（Checkpoint）：用于呈现Checkpoint相关数据。关键字段 ['n', 'p', 'total']、数组 ['pts']。",
+   "description": "zx 组件「zx_checkpoint」（Checkpoint）：用于呈现Checkpoint相关数据。关键字段 ['n', 'p', 'total']、数组 ['pts']。 示例 type=zx_checkpoint。",
    "keywords": [
+    "1",
+    "10",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "chart",
     "checkpoint",
     "n",
     "p",
     "pts",
-    "total"
+    "total",
+    "type",
+    "示例"
    ],
    "triggers": [
     "展示Checkpoint",
@@ -3958,7 +4109,7 @@
     "进度",
     "计划"
    ],
-   "fn": "checkpoint",
+   "fn": "chart",
    "fields": [
     "n",
     "p",
@@ -3967,7 +4118,7 @@
    "arrays": [
     "pts"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_chips": {
    "category": "form",
@@ -4063,6 +4214,7 @@
     "links",
     "nodes",
     "to",
+    "tree",
     "type",
     "v",
     "搜索",
@@ -4080,7 +4232,7 @@
     "关系",
     "网络"
    ],
-   "fn": "chord",
+   "fn": "tree",
    "fields": [
     "from",
     "to",
@@ -4106,6 +4258,7 @@
     "cells",
     "choro",
     "cols",
+    "grid",
     "n",
     "type",
     "v",
@@ -4125,7 +4278,7 @@
     "关系",
     "网络"
    ],
-   "fn": "choro",
+   "fn": "grid",
    "fields": [
     "cols",
     "n",
@@ -4140,14 +4293,24 @@
    "category": "finance",
    "title": "Claim",
    "zh": [],
-   "description": "zx 组件「zx_claim」（Claim）：用于呈现Claim相关数据。关键字段 ['leftH', 'miss', 'must', 'n']、数组 ['ev']。",
+   "description": "zx 组件「zx_claim」（Claim）：用于呈现Claim相关数据。关键字段 ['leftH', 'miss', 'must', 'n']、数组 ['ev']。 示例 type=zx_claim。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "3",
+    "at",
     "claim",
     "ev",
     "leftH",
     "miss",
     "must",
-    "n"
+    "n",
+    "stepper",
+    "title",
+    "type",
+    "步骤一",
+    "步骤二",
+    "示例"
    ],
    "triggers": [
     "展示Claim",
@@ -4159,7 +4322,7 @@
     "财务",
     "会计"
    ],
-   "fn": "claim",
+   "fn": "stepper",
    "fields": [
     "leftH",
     "miss",
@@ -4169,20 +4332,31 @@
    "arrays": [
     "ev"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_claimprog": {
    "category": "finance",
    "title": "Claimprog",
    "zh": [],
-   "description": "zx 组件「zx_claimprog」（Claimprog）：用于呈现Claimprog相关数据。关键字段 ['leftH', 'miss', 'n', 's']、数组 ['docs']。",
+   "description": "zx 组件「zx_claimprog」（Claimprog）：用于呈现Claimprog相关数据。关键字段 ['leftH', 'miss', 'n', 's']、数组 ['docs']。 示例 type=zx_claimprog。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "3",
+    "at",
     "claimprog",
     "docs",
     "leftH",
     "miss",
     "n",
-    "s"
+    "s",
+    "stepper",
+    "title",
+    "type",
+    "步骤一",
+    "步骤二",
+    "示例",
+    "起"
    ],
    "triggers": [
     "展示Claimprog",
@@ -4194,7 +4368,7 @@
     "财务",
     "会计"
    ],
-   "fn": "claimprog",
+   "fn": "stepper",
    "fields": [
     "leftH",
     "miss",
@@ -4204,7 +4378,7 @@
    "arrays": [
     "docs"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_clinic": {
    "category": "health",
@@ -4223,6 +4397,7 @@
     "n",
     "q",
     "s",
+    "stepper",
     "steps",
     "t",
     "type",
@@ -4245,7 +4420,7 @@
     "健康",
     "护理"
    ],
-   "fn": "clinic",
+   "fn": "stepper",
    "fields": [
     "n",
     "q",
@@ -4386,12 +4561,22 @@
    "category": "text",
    "title": "Codetheme",
    "zh": [],
-   "description": "zx 组件「zx_codetheme」（Codetheme）：用于呈现Codetheme相关数据。关键字段 ['lang', 'src']、数组 ['themes']。",
+   "description": "zx 组件「zx_codetheme」（Codetheme）：用于呈现Codetheme相关数据。关键字段 ['lang', 'src']、数组 ['themes']。 示例 type=zx_codetheme。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "at",
     "codetheme",
     "lang",
     "src",
-    "themes"
+    "stepper",
+    "themes",
+    "title",
+    "type",
+    "来源",
+    "步骤一",
+    "步骤二",
+    "示例"
    ],
    "triggers": [
     "展示Codetheme",
@@ -4403,7 +4588,7 @@
     "代码",
     "日志"
    ],
-   "fn": "codetheme",
+   "fn": "stepper",
    "fields": [
     "lang",
     "src"
@@ -4411,7 +4596,7 @@
    "arrays": [
     "themes"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_cohort": {
    "category": "compare",
@@ -4428,6 +4613,7 @@
     "45",
     "58",
     "62",
+    "chart",
     "cohort",
     "n",
     "periods",
@@ -4450,7 +4636,7 @@
     "对比",
     "决策"
    ],
-   "fn": "cohort",
+   "fn": "chart",
    "fields": [
     "n",
     "periods",
@@ -4570,13 +4756,22 @@
    "zh": [
     "评论"
    ],
-   "description": "zx 组件「zx_comment」（Comment）：用于呈现Comment相关数据。关键字段 ['text', 'who']、数组 ['comments']。",
+   "description": "zx 组件「zx_comment」（Comment）：用于呈现Comment相关数据。关键字段 ['text', 'who']、数组 ['comments']。 示例 type=zx_comment。",
    "keywords": [
+    "10",
+    "20",
     "comment",
     "comments",
+    "name",
     "text",
+    "type",
+    "value",
     "who",
-    "评论"
+    "文本",
+    "示例",
+    "评论",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Comment",
@@ -4597,7 +4792,7 @@
    "arrays": [
     "comments"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_commit": {
    "category": "devops",
@@ -4710,6 +4905,7 @@
     "k",
     "onPick",
     "rows",
+    "table",
     "title",
     "type",
     "v",
@@ -4730,7 +4926,7 @@
     "对比",
     "决策"
    ],
-   "fn": "compare",
+   "fn": "table",
    "fields": [
     "onPick"
    ],
@@ -4747,14 +4943,24 @@
    "zh": [
     "合规"
    ],
-   "description": "zx 组件「zx_compliance」（Compliance）：用于呈现Compliance相关数据。关键字段 ['n', 's', 'who']、数组 ['items']。",
+   "description": "zx 组件「zx_compliance」（Compliance）：用于呈现Compliance相关数据。关键字段 ['n', 's', 'who']、数组 ['items']。 示例 type=zx_compliance。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "compliance",
     "items",
     "n",
+    "name",
     "s",
+    "type",
+    "value",
     "who",
-    "合规"
+    "合规",
+    "示例",
+    "起",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Compliance",
@@ -4776,7 +4982,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_conflict": {
    "category": "compare",
@@ -4833,6 +5039,7 @@
     "c",
     "confront",
     "n",
+    "objtree",
     "t",
     "type",
     "v2.1 会崩",
@@ -4852,7 +5059,7 @@
     "对比",
     "决策"
    ],
-   "fn": "confront",
+   "fn": "objtree",
    "fields": [
     "a",
     "b",
@@ -4874,6 +5081,7 @@
    "keywords": [
     "console",
     "hist",
+    "terminal",
     "type",
     "zorv> 就绪",
     "控制台"
@@ -4889,7 +5097,7 @@
     "代码",
     "日志"
    ],
-   "fn": "console",
+   "fn": "terminal",
    "fields": [],
    "arrays": [
     "hist"
@@ -5005,6 +5213,7 @@
     "contour",
     "grid",
     "levels",
+    "matrix",
     "n",
     "type",
     "地形"
@@ -5019,7 +5228,7 @@
     "图表",
     "统计"
    ],
-   "fn": "contour",
+   "fn": "matrix",
    "fields": [],
    "arrays": [
     "grid",
@@ -5045,6 +5254,7 @@
     "97",
     "98",
     "99",
+    "chart",
     "cl",
     "control",
     "lcl",
@@ -5062,7 +5272,7 @@
     "布局",
     "结构"
    ],
-   "fn": "control",
+   "fn": "chart",
    "fields": [
     "cl",
     "lcl",
@@ -5077,12 +5287,21 @@
    "category": "list",
    "title": "Conversation",
    "zh": [],
-   "description": "zx 组件「zx_conversation」（Conversation）：用于呈现Conversation相关数据。关键字段 ['t', 'who']、数组 ['turns']。",
+   "description": "zx 组件「zx_conversation」（Conversation）：用于呈现Conversation相关数据。关键字段 ['t', 'who']、数组 ['turns']。 示例 type=zx_conversation。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "at",
     "conversation",
+    "stepper",
     "t",
+    "title",
     "turns",
-    "who"
+    "type",
+    "who",
+    "步骤一",
+    "步骤二",
+    "示例"
    ],
    "triggers": [
     "展示Conversation",
@@ -5093,7 +5312,7 @@
     "数据",
     "列表"
    ],
-   "fn": "conversation",
+   "fn": "stepper",
    "fields": [
     "t",
     "who"
@@ -5101,7 +5320,7 @@
    "arrays": [
     "turns"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_corr": {
    "category": "aiml",
@@ -5115,6 +5334,7 @@
     "1",
     "corr",
     "m",
+    "matrix",
     "n",
     "names",
     "type",
@@ -5133,7 +5353,7 @@
     "数据科学",
     "模型"
    ],
-   "fn": "corr",
+   "fn": "matrix",
    "fields": [],
    "arrays": [
     "m",
@@ -5213,6 +5433,7 @@
     "7",
     "9",
     "budget",
+    "chart",
     "costtrack",
     "d",
     "days",
@@ -5232,7 +5453,7 @@
     "财务",
     "会计"
    ],
-   "fn": "costtrack",
+   "fn": "chart",
    "fields": [
     "budget",
     "d",
@@ -5256,6 +5477,7 @@
     "True",
     "auto",
     "countdown",
+    "hero",
     "label",
     "sec",
     "type",
@@ -5273,7 +5495,7 @@
     "进度",
     "计划"
    ],
-   "fn": "countdown",
+   "fn": "hero",
    "fields": [
     "sec"
    ],
@@ -5338,15 +5560,24 @@
    "zh": [
     "凭证"
    ],
-   "description": "zx 组件「zx_credential」（Credential）：用于呈现Credential相关数据。关键字段 ['exp', 'n', 'need', 'org']、数组 ['items']。",
+   "description": "zx 组件「zx_credential」（Credential）：用于呈现Credential相关数据。关键字段 ['exp', 'n', 'need', 'org']、数组 ['items']。 示例 type=zx_credential。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "credential",
     "exp",
     "items",
     "n",
+    "name",
     "need",
     "org",
-    "凭证"
+    "type",
+    "value",
+    "凭证",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Credential",
@@ -5369,7 +5600,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_critical": {
    "category": "compare",
@@ -5467,6 +5698,7 @@
     "dag",
     "edges",
     "f",
+    "graph",
     "nodes",
     "t",
     "type",
@@ -5485,7 +5717,7 @@
     "关系",
     "网络"
    ],
-   "fn": "dag",
+   "fn": "graph",
    "fields": [
     "f",
     "t"
@@ -5500,15 +5732,24 @@
    "category": "property",
    "title": "Damage",
    "zh": [],
-   "description": "zx 组件「zx_damage」（Damage）：用于呈现Damage相关数据。关键字段 ['lv', 'miss', 'n', 'photo', 'who']、数组 ['items']。",
+   "description": "zx 组件「zx_damage」（Damage）：用于呈现Damage相关数据。关键字段 ['lv', 'miss', 'n', 'photo', 'who']、数组 ['items']。 示例 type=zx_damage。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "damage",
     "items",
     "lv",
     "miss",
     "n",
+    "name",
     "photo",
-    "who"
+    "type",
+    "value",
+    "who",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Damage",
@@ -5531,18 +5772,28 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_dataclass": {
    "category": "aiml",
    "title": "Dataclass",
    "zh": [],
-   "description": "zx 组件「zx_dataclass」（Dataclass）：用于呈现Dataclass相关数据。关键字段 ['lv', 'n']、数组 ['cols']。",
+   "description": "zx 组件「zx_dataclass」（Dataclass）：用于呈现Dataclass相关数据。关键字段 ['lv', 'n']、数组 ['cols']。 示例 type=zx_dataclass。",
    "keywords": [
+    "3",
+    "cards",
     "cols",
     "dataclass",
+    "desc",
+    "kanban",
     "lv",
-    "n"
+    "n",
+    "title",
+    "type",
+    "任务",
+    "待办",
+    "描述",
+    "示例"
    ],
    "triggers": [
     "展示Dataclass",
@@ -5554,7 +5805,7 @@
     "数据科学",
     "模型"
    ],
-   "fn": "dataclass",
+   "fn": "kanban",
    "fields": [
     "lv",
     "n"
@@ -5562,7 +5813,7 @@
    "arrays": [
     "cols"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_datalist": {
    "category": "table",
@@ -5682,14 +5933,33 @@
    "category": "compare",
    "title": "Decision",
    "zh": [],
-   "description": "zx 组件「zx_decision」（Decision）：用于呈现Decision相关数据。关键字段 ['c', 'leaf', 'r']、数组 ['b', 'nodes']。",
+   "description": "zx 组件「zx_decision」（Decision）：用于呈现Decision相关数据。关键字段 ['c', 'leaf', 'r']、数组 ['b', 'nodes']。 示例 type=zx_decision。",
    "keywords": [
+    "10",
+    "20",
     "b",
     "c",
+    "children",
     "decision",
+    "id",
+    "label",
     "leaf",
+    "n1",
+    "n1a",
+    "n1b",
+    "n2",
+    "name",
     "nodes",
-    "r"
+    "r",
+    "type",
+    "value",
+    "子节点",
+    "子节点二",
+    "示例",
+    "节点一",
+    "节点二",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Decision",
@@ -5711,18 +5981,27 @@
     "b",
     "nodes"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_decisionlog": {
    "category": "compare",
    "title": "Decisionlog",
    "zh": [],
-   "description": "zx 组件「zx_decisionlog」（Decisionlog）：用于呈现Decisionlog相关数据。关键字段 ['n', 'why']、数组 ['items']。",
+   "description": "zx 组件「zx_decisionlog」（Decisionlog）：用于呈现Decisionlog相关数据。关键字段 ['n', 'why']、数组 ['items']。 示例 type=zx_decisionlog。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "decisionlog",
     "items",
     "n",
-    "why"
+    "name",
+    "type",
+    "value",
+    "why",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Decisionlog",
@@ -5742,7 +6021,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_decompose": {
    "category": "chart_graph",
@@ -5774,6 +6053,7 @@
     "decompose",
     "n",
     "period",
+    "spark",
     "type",
     "日活量"
    ],
@@ -5787,7 +6067,7 @@
     "关系",
     "网络"
    ],
-   "fn": "decompose",
+   "fn": "spark",
    "fields": [
     "period"
    ],
@@ -5798,15 +6078,33 @@
    "category": "chart_graph",
    "title": "Depgraph",
    "zh": [],
-   "description": "zx 组件「zx_depgraph」（Depgraph）：用于呈现Depgraph相关数据。关键字段 ['f', 'k', 'n', 't']、数组 ['edges', 'nodes']。",
+   "description": "zx 组件「zx_depgraph」（Depgraph）：用于呈现Depgraph相关数据。关键字段 ['f', 'k', 'n', 't']、数组 ['edges', 'nodes']。 示例 type=zx_depgraph。",
    "keywords": [
+    "3",
+    "children",
     "depgraph",
     "edges",
     "f",
+    "from",
+    "id",
     "k",
+    "label",
     "n",
+    "n1",
+    "n1a",
+    "n1b",
+    "n2",
     "nodes",
-    "t"
+    "t",
+    "to",
+    "tree",
+    "type",
+    "子节点",
+    "子节点二",
+    "示例",
+    "节点一",
+    "节点二",
+    "键"
    ],
    "triggers": [
     "展示Depgraph",
@@ -5818,7 +6116,7 @@
     "关系",
     "网络"
    ],
-   "fn": "depgraph",
+   "fn": "tree",
    "fields": [
     "f",
     "k",
@@ -5829,7 +6127,7 @@
     "edges",
     "nodes"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_deviation": {
    "category": "devops",
@@ -5884,6 +6182,7 @@
     "100",
     "62",
     "dial",
+    "hero",
     "label",
     "max",
     "min",
@@ -5903,7 +6202,7 @@
     "仪表",
     "占比"
    ],
-   "fn": "dial",
+   "fn": "hero",
    "fields": [
     "max",
     "min",
@@ -5927,9 +6226,9 @@
     "72",
     "75",
     "dial",
-    "dial2",
     "err",
     "f",
+    "hero",
     "k",
     "max",
     "min",
@@ -5953,7 +6252,7 @@
     "仪表",
     "占比"
    ],
-   "fn": "dial2",
+   "fn": "hero",
    "fields": [
     "f",
     "k",
@@ -5984,8 +6283,8 @@
     "CPU",
     "bad",
     "dial",
-    "dial3",
     "dials",
+    "gauge",
     "max",
     "n",
     "type",
@@ -6007,7 +6306,7 @@
     "仪表",
     "占比"
    ],
-   "fn": "dial3",
+   "fn": "gauge",
    "fields": [
     "bad",
     "max",
@@ -6028,6 +6327,7 @@
    "keywords": [
     "1380000",
     "dialpad",
+    "hero",
     "n",
     "num",
     "type",
@@ -6043,7 +6343,7 @@
     "输入",
     "表单"
    ],
-   "fn": "dialpad",
+   "fn": "hero",
    "fields": [
     "num"
    ],
@@ -6072,6 +6372,7 @@
     "ctrl",
     "did",
     "n",
+    "spark",
     "treat",
     "type",
     "改版对留存的 DID"
@@ -6086,7 +6387,7 @@
     "占位",
     "基础"
    ],
-   "fn": "did",
+   "fn": "spark",
    "fields": [
     "at"
    ],
@@ -6190,6 +6491,7 @@
    "keywords": [
     "divider",
     "n",
+    "rule",
     "type",
     "以下为可选"
    ],
@@ -6203,7 +6505,7 @@
     "卡片",
     "容器"
    ],
-   "fn": "divider",
+   "fn": "rule",
    "fields": [],
    "arrays": [],
    "has_sample": true
@@ -6338,14 +6640,24 @@
    "category": "aiml",
    "title": "Drift",
    "zh": [],
-   "description": "zx 组件「zx_drift」（Drift）：用于呈现Drift相关数据。关键字段 ['n', 'psi', 'retrain', 'warn']、数组 ['cols']。",
+   "description": "zx 组件「zx_drift」（Drift）：用于呈现Drift相关数据。关键字段 ['n', 'psi', 'retrain', 'warn']、数组 ['cols']。 示例 type=zx_drift。",
    "keywords": [
+    "3",
+    "cards",
     "cols",
+    "desc",
     "drift",
+    "kanban",
     "n",
     "psi",
     "retrain",
-    "warn"
+    "title",
+    "type",
+    "warn",
+    "任务",
+    "待办",
+    "描述",
+    "示例"
    ],
    "triggers": [
     "展示Drift",
@@ -6357,7 +6669,7 @@
     "数据科学",
     "模型"
    ],
-   "fn": "drift",
+   "fn": "kanban",
    "fields": [
     "n",
     "psi",
@@ -6367,7 +6679,7 @@
    "arrays": [
     "cols"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_dropzone": {
    "category": "form",
@@ -6489,14 +6801,22 @@
    "category": "health",
    "title": "Dutyrota",
    "zh": [],
-   "description": "zx 组件「zx_dutyrota」（Dutyrota）：用于呈现Dutyrota相关数据。关键字段 ['alt', 'd', 'swap', 'who']、数组 ['slots']。",
+   "description": "zx 组件「zx_dutyrota」（Dutyrota）：用于呈现Dutyrota相关数据。关键字段 ['alt', 'd', 'swap', 'who']、数组 ['slots']。 示例 type=zx_dutyrota。",
    "keywords": [
+    "4",
+    "8",
     "alt",
     "d",
     "dutyrota",
+    "name",
     "slots",
     "swap",
-    "who"
+    "type",
+    "value",
+    "who",
+    "分组一",
+    "分组二",
+    "示例"
    ],
    "triggers": [
     "展示Dutyrota",
@@ -6518,7 +6838,7 @@
    "arrays": [
     "slots"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_ecdf": {
    "category": "chart_basic",
@@ -6675,12 +6995,20 @@
    "category": "timeline",
    "title": "Escalation",
    "zh": [],
-   "description": "zx 组件「zx_escalation」（Escalation）：用于呈现Escalation相关数据。关键字段 ['min', 'who']、数组 ['levels']。",
+   "description": "zx 组件「zx_escalation」（Escalation）：用于呈现Escalation相关数据。关键字段 ['min', 'who']、数组 ['levels']。 示例 type=zx_escalation。",
    "keywords": [
+    "3",
+    "5",
     "escalation",
     "levels",
     "min",
-    "who"
+    "name",
+    "type",
+    "value",
+    "who",
+    "一级",
+    "二级",
+    "示例"
    ],
    "triggers": [
     "展示Escalation",
@@ -6700,19 +7028,29 @@
    "arrays": [
     "levels"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_escort": {
    "category": "general",
    "title": "Escort",
    "zh": [],
-   "description": "zx 组件「zx_escort」（Escort）：用于呈现Escort相关数据。关键字段 ['m', 'n']、数组 ['advice', 'recs']。",
+   "description": "zx 组件「zx_escort」（Escort）：用于呈现Escort相关数据。关键字段 ['m', 'n']、数组 ['advice', 'recs']。 示例 type=zx_escort。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "3",
     "advice",
+    "at",
     "escort",
     "m",
     "n",
-    "recs"
+    "recs",
+    "stepper",
+    "title",
+    "type",
+    "步骤一",
+    "步骤二",
+    "示例"
    ],
    "triggers": [
     "展示Escort",
@@ -6724,7 +7062,7 @@
     "占位",
     "基础"
    ],
-   "fn": "escort",
+   "fn": "stepper",
    "fields": [
     "m",
     "n"
@@ -6733,7 +7071,7 @@
     "advice",
     "recs"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_evidence": {
    "category": "general",
@@ -6879,14 +7217,24 @@
    "category": "aiml",
    "title": "Explain",
    "zh": [],
-   "description": "zx 组件「zx_explain」（Explain）：用于呈现Explain相关数据。关键字段 ['base', 'n', 'pred', 'v']、数组 ['attrs']。",
+   "description": "zx 组件「zx_explain」（Explain）：用于呈现Explain相关数据。关键字段 ['base', 'n', 'pred', 'v']、数组 ['attrs']。 示例 type=zx_explain。",
    "keywords": [
+    "10",
+    "20",
+    "3",
+    "42",
     "attrs",
     "base",
     "explain",
     "n",
+    "name",
     "pred",
-    "v"
+    "type",
+    "v",
+    "value",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Explain",
@@ -6908,19 +7256,28 @@
    "arrays": [
     "attrs"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_explode": {
    "category": "chart_basic",
    "title": "Explode",
    "zh": [],
-   "description": "zx 组件「zx_explode」（Explode）：用于呈现Explode相关数据。关键字段 ['n', 'spread', 'w']、数组 ['parts']。",
+   "description": "zx 组件「zx_explode」（Explode）：用于呈现Explode相关数据。关键字段 ['n', 'spread', 'w']、数组 ['parts']。 示例 type=zx_explode。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "explode",
     "n",
+    "name",
     "parts",
     "spread",
-    "w"
+    "type",
+    "value",
+    "w",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Explode",
@@ -6941,7 +7298,7 @@
    "arrays": [
     "parts"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_export": {
    "category": "general",
@@ -7241,6 +7598,7 @@
     "root",
     "src",
     "sz",
+    "tree",
     "type",
     "文件"
    ],
@@ -7254,7 +7612,7 @@
     "卡片",
     "容器"
    ],
-   "fn": "filemgr",
+   "fn": "tree",
    "fields": [
     "n",
     "p"
@@ -7358,6 +7716,7 @@
     "call",
     "firstaid",
     "n",
+    "stepper",
     "steps",
     "type",
     "warn",
@@ -7378,7 +7737,7 @@
     "健康",
     "护理"
    ],
-   "fn": "firstaid",
+   "fn": "stepper",
    "fields": [],
    "arrays": [
     "steps",
@@ -7443,12 +7802,22 @@
    "category": "metric",
    "title": "Flipnum",
    "zh": [],
-   "description": "zx 组件「zx_flipnum」（Flipnum）：用于呈现Flipnum相关数据。关键字段 ['n', 'v']、数组 ['items']。",
+   "description": "zx 组件「zx_flipnum」（Flipnum）：用于呈现Flipnum相关数据。关键字段 ['n', 'v']、数组 ['items']。 示例 type=zx_flipnum。",
    "keywords": [
+    "10",
+    "20",
+    "3",
+    "42",
     "flipnum",
+    "hero",
     "items",
     "n",
-    "v"
+    "name",
+    "type",
+    "v",
+    "value",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Flipnum",
@@ -7460,7 +7829,7 @@
     "KPI",
     "数字"
    ],
-   "fn": "flipnum",
+   "fn": "hero",
    "fields": [
     "n",
     "v"
@@ -7468,7 +7837,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_floor": {
    "category": "property",
@@ -7535,6 +7904,7 @@
     "edges",
     "flow",
     "from",
+    "graph",
     "n",
     "nodes",
     "run",
@@ -7559,7 +7929,7 @@
     "关系",
     "网络"
    ],
-   "fn": "flow",
+   "fn": "graph",
    "fields": [
     "from",
     "n",
@@ -7588,6 +7958,7 @@
     "edges",
     "f",
     "flowedit",
+    "graph",
     "n",
     "nodes",
     "t",
@@ -7608,7 +7979,7 @@
     "关系",
     "网络"
    ],
-   "fn": "flowedit",
+   "fn": "graph",
    "fields": [
     "f",
     "n",
@@ -7649,6 +8020,7 @@
     "hist",
     "lo",
     "n",
+    "spark",
     "type",
     "下周单量预测",
     "预测"
@@ -7664,7 +8036,7 @@
     "数据科学",
     "模型"
    ],
-   "fn": "forecast",
+   "fn": "spark",
    "fields": [
     "h"
    ],
@@ -7796,6 +8168,7 @@
     "k",
     "lhs",
     "m",
+    "objtree",
     "op",
     "pow",
     "subs",
@@ -7813,7 +8186,7 @@
     "代码",
     "日志"
    ],
-   "fn": "formula",
+   "fn": "objtree",
    "fields": [
     "expr",
     "op",
@@ -7828,13 +8201,20 @@
    "category": "health",
    "title": "Fosterdaily",
    "zh": [],
-   "description": "zx 组件「zx_fosterdaily」（Fosterdaily）：用于呈现Fosterdaily相关数据。关键字段 ['d', 'eat', 'w']、数组 ['days']。",
+   "description": "zx 组件「zx_fosterdaily」（Fosterdaily）：用于呈现Fosterdaily相关数据。关键字段 ['d', 'eat', 'w']、数组 ['days']。 示例 type=zx_fosterdaily。",
    "keywords": [
+    "2026-10-16",
+    "2026-10-17",
+    "calendar",
     "d",
     "days",
     "eat",
     "fosterdaily",
-    "w"
+    "type",
+    "w",
+    "事项A",
+    "事项B",
+    "示例"
    ],
    "triggers": [
     "展示Fosterdaily",
@@ -7846,7 +8226,7 @@
     "健康",
     "护理"
    ],
-   "fn": "fosterdaily",
+   "fn": "calendar",
    "fields": [
     "d",
     "eat",
@@ -7855,7 +8235,7 @@
    "arrays": [
     "days"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_funnel": {
    "category": "chart_basic",
@@ -7870,6 +8250,7 @@
     "funnel",
     "n",
     "stages",
+    "stepper",
     "type",
     "v",
     "付费",
@@ -7887,7 +8268,7 @@
     "图表",
     "统计"
    ],
-   "fn": "funnel",
+   "fn": "stepper",
    "fields": [
     "n",
     "v"
@@ -8105,6 +8486,7 @@
     "6",
     "8",
     "9",
+    "chart",
     "geo",
     "la",
     "lo",
@@ -8128,7 +8510,7 @@
     "地图",
     "地理"
    ],
-   "fn": "geo",
+   "fn": "chart",
    "fields": [
     "la",
     "lo",
@@ -8163,6 +8545,7 @@
     "edges",
     "f",
     "geoflow",
+    "graph",
     "n",
     "nodes",
     "t",
@@ -8186,7 +8569,7 @@
     "地图",
     "地理"
    ],
-   "fn": "geoflow",
+   "fn": "graph",
    "fields": [
     "f",
     "n",
@@ -8207,14 +8590,24 @@
    "zh": [
     "礼物"
    ],
-   "description": "zx 组件「zx_gift」（Gift）：用于呈现Gift相关数据。关键字段 ['dir', 'n', 'v']、数组 ['items']。",
+   "description": "zx 组件「zx_gift」（Gift）：用于呈现Gift相关数据。关键字段 ['dir', 'n', 'v']、数组 ['items']。 示例 type=zx_gift。",
    "keywords": [
+    "10",
+    "20",
+    "3",
+    "42",
     "dir",
     "gift",
     "items",
     "n",
+    "name",
+    "type",
     "v",
-    "礼物"
+    "value",
+    "示例",
+    "礼物",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Gift",
@@ -8236,18 +8629,26 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_glossary": {
    "category": "text",
    "title": "Glossary",
    "zh": [],
-   "description": "zx 组件「zx_glossary」（Glossary）：用于呈现Glossary相关数据。关键字段 ['d', 't']、数组 ['terms']。",
+   "description": "zx 组件「zx_glossary」（Glossary）：用于呈现Glossary相关数据。关键字段 ['d', 't']、数组 ['terms']。 示例 type=zx_glossary。",
    "keywords": [
+    "10",
+    "20",
     "d",
     "glossary",
+    "name",
     "t",
-    "terms"
+    "terms",
+    "type",
+    "value",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Glossary",
@@ -8267,19 +8668,27 @@
    "arrays": [
     "terms"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_glyph": {
    "category": "card",
    "title": "Glyph",
    "zh": [],
-   "description": "zx 组件「zx_glyph」（Glyph）：用于呈现Glyph相关数据。关键字段 ['n']、数组 ['dims', 'items', 'v']。",
+   "description": "zx 组件「zx_glyph」（Glyph）：用于呈现Glyph相关数据。关键字段 ['n']、数组 ['dims', 'items', 'v']。 示例 type=zx_glyph。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "dims",
     "glyph",
     "items",
     "n",
-    "v"
+    "name",
+    "type",
+    "v",
+    "value",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Glyph",
@@ -8300,15 +8709,27 @@
     "items",
     "v"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_grid": {
    "category": "table",
    "title": "Grid",
    "zh": [],
-   "description": "zx 组件「zx_grid」（Grid）：用于呈现Grid相关数据。关键字段 []、数组 []。",
+   "description": "zx 组件「zx_grid」（Grid）：用于呈现Grid相关数据。关键字段 []、数组 []。 示例 type=zx_grid。",
    "keywords": [
-    "grid"
+    "1",
+    "children",
+    "container",
+    "grid",
+    "items",
+    "name",
+    "title",
+    "type",
+    "value",
+    "zx_list",
+    "zx_note",
+    "子卡片A",
+    "甲"
    ],
    "triggers": [
     "展示Grid",
@@ -8319,22 +8740,45 @@
     "数据",
     "表格"
    ],
-   "fn": "",
+   "fn": "container",
    "fields": [],
    "arrays": [],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_gridform": {
    "category": "table",
    "title": "Gridform",
    "zh": [],
-   "description": "zx 组件「zx_gridform」（Gridform）：用于呈现Gridform相关数据。关键字段 ['cols', 'k', 'n']、数组 ['fields']。",
+   "description": "zx 组件「zx_gridform」（Gridform）：用于呈现Gridform相关数据。关键字段 ['cols', 'k', 'n']、数组 ['fields']。 示例 type=zx_gridform。",
    "keywords": [
+    "1",
+    "3",
+    "children",
     "cols",
+    "f1",
+    "f2",
     "fields",
+    "form",
     "gridform",
+    "id",
+    "items",
     "k",
-    "n"
+    "label",
+    "n",
+    "name",
+    "number",
+    "text",
+    "title",
+    "type",
+    "value",
+    "zx_list",
+    "zx_note",
+    "子卡片A",
+    "字段一",
+    "字段二",
+    "甲",
+    "示例",
+    "键"
    ],
    "triggers": [
     "展示Gridform",
@@ -8345,7 +8789,7 @@
     "数据",
     "表格"
    ],
-   "fn": "gridform",
+   "fn": "form",
    "fields": [
     "cols",
     "k",
@@ -8354,7 +8798,7 @@
    "arrays": [
     "fields"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_habit": {
    "category": "health",
@@ -8371,6 +8815,7 @@
     "10-09",
     "10-10",
     "21",
+    "calendar",
     "days",
     "goal",
     "habit",
@@ -8390,7 +8835,7 @@
     "健康",
     "护理"
    ],
-   "fn": "habit",
+   "fn": "calendar",
    "fields": [
     "goal",
     "v"
@@ -8453,11 +8898,12 @@
    "has_sample": true
   },
   "zx_headline": {
-   "category": "text",
+   "category": "chart_basic",
    "title": "Headline",
    "zh": [],
    "description": "zx 组件「zx_headline」（Headline）：用于呈现Headline相关数据。关键字段 ['s', 'sum', 't', 'ts']、数组 ['pts']。 示例 type=zx_headline。",
    "keywords": [
+    "chart",
     "headline",
     "pts",
     "s",
@@ -8477,11 +8923,11 @@
     "绘制Headline"
    ],
    "concepts": [
-    "文本",
-    "代码",
-    "日志"
+    "可视化",
+    "图表",
+    "统计"
    ],
-   "fn": "headline",
+   "fn": "chart",
    "fields": [
     "s",
     "sum",
@@ -8497,12 +8943,21 @@
    "category": "devops",
    "title": "Healthcheck",
    "zh": [],
-   "description": "zx 组件「zx_healthcheck」（Healthcheck）：用于呈现Healthcheck相关数据。关键字段 ['n', 's']、数组 ['items']。",
+   "description": "zx 组件「zx_healthcheck」（Healthcheck）：用于呈现Healthcheck相关数据。关键字段 ['n', 's']、数组 ['items']。 示例 type=zx_healthcheck。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "healthcheck",
     "items",
     "n",
-    "s"
+    "name",
+    "s",
+    "type",
+    "value",
+    "起",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Healthcheck",
@@ -8522,7 +8977,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_heatmap": {
    "category": "chart_graph",
@@ -8541,7 +8996,8 @@
     "0.7",
     "0.8",
     "0.9",
-    "1.0",
+    "1",
+    "calendar",
     "heatmap",
     "rows",
     "type",
@@ -8558,7 +9014,7 @@
     "关系",
     "网络"
    ],
-   "fn": "heatmap",
+   "fn": "calendar",
    "fields": [],
    "arrays": [
     "rows"
@@ -8622,6 +9078,7 @@
     "C",
     "cells",
     "cols",
+    "grid",
     "hexgrid",
     "n",
     "type",
@@ -8637,7 +9094,7 @@
     "地图",
     "地理"
    ],
-   "fn": "hexgrid",
+   "fn": "grid",
    "fields": [
     "cols",
     "n",
@@ -8700,6 +9157,7 @@
     "6-8",
     "8",
     "bins",
+    "chart",
     "histogram",
     "mean",
     "n",
@@ -8717,7 +9175,7 @@
     "图表",
     "统计"
    ],
-   "fn": "histogram",
+   "fn": "chart",
    "fields": [
     "n",
     "to",
@@ -8749,6 +9207,7 @@
     "95",
     "QPS",
     "bands",
+    "chart",
     "horizon",
     "n",
     "pts",
@@ -8764,7 +9223,7 @@
     "图表",
     "统计"
    ],
-   "fn": "horizon",
+   "fn": "chart",
    "fields": [
     "bands"
    ],
@@ -8777,15 +9236,24 @@
    "category": "chart_geo",
    "title": "Hotspot",
    "zh": [],
-   "description": "zx 组件「zx_hotspot」（Hotspot）：用于呈现Hotspot相关数据。关键字段 ['placeholder', 'src', 't', 'x', 'y']、数组 ['spots']。",
+   "description": "zx 组件「zx_hotspot」（Hotspot）：用于呈现Hotspot相关数据。关键字段 ['placeholder', 'src', 't', 'x', 'y']、数组 ['spots']。 示例 type=zx_hotspot。",
    "keywords": [
+    "10",
+    "20",
     "hotspot",
+    "name",
     "placeholder",
     "spots",
     "src",
     "t",
+    "type",
+    "value",
     "x",
-    "y"
+    "y",
+    "来源",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Hotspot",
@@ -8808,7 +9276,7 @@
    "arrays": [
     "spots"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_housedeal": {
    "category": "property",
@@ -8832,6 +9300,7 @@
     "nodes",
     "s",
     "seller",
+    "tree",
     "type",
     "买方",
     "交易节点",
@@ -8851,7 +9320,7 @@
     "物业",
     "租赁"
    ],
-   "fn": "housedeal",
+   "fn": "tree",
    "fields": [
     "amt",
     "buyer",
@@ -8928,6 +9397,7 @@
     "c",
     "icicle",
     "n",
+    "objtree",
     "root",
     "type",
     "v",
@@ -8945,7 +9415,7 @@
     "关系",
     "网络"
    ],
-   "fn": "icicle",
+   "fn": "objtree",
    "fields": [],
    "arrays": [],
    "has_sample": true
@@ -8954,15 +9424,24 @@
    "category": "compare",
    "title": "Impact",
    "zh": [],
-   "description": "zx 组件「zx_impact」（Impact）：用于呈现Impact相关数据。关键字段 ['change', 'fix', 'n', 'sev', 't']、数组 ['items']。",
+   "description": "zx 组件「zx_impact」（Impact）：用于呈现Impact相关数据。关键字段 ['change', 'fix', 'n', 'sev', 't']、数组 ['items']。 示例 type=zx_impact。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "change",
     "fix",
     "impact",
     "items",
     "n",
+    "name",
     "sev",
-    "t"
+    "t",
+    "type",
+    "value",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Impact",
@@ -8985,7 +9464,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_incident": {
    "category": "timeline",
@@ -8993,13 +9472,23 @@
    "zh": [
     "事件"
    ],
-   "description": "zx 组件「zx_incident」（Incident）：用于呈现Incident相关数据。关键字段 ['k', 't']、数组 ['ev']。",
+   "description": "zx 组件「zx_incident」（Incident）：用于呈现Incident相关数据。关键字段 ['k', 't']、数组 ['ev']。 示例 type=zx_incident。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "at",
     "ev",
     "incident",
     "k",
+    "stepper",
     "t",
-    "事件"
+    "title",
+    "type",
+    "事件",
+    "步骤一",
+    "步骤二",
+    "示例",
+    "键"
    ],
    "triggers": [
     "展示Incident",
@@ -9012,7 +9501,7 @@
     "进度",
     "计划"
    ],
-   "fn": "incident",
+   "fn": "stepper",
    "fields": [
     "k",
     "t"
@@ -9020,7 +9509,7 @@
    "arrays": [
     "ev"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_inputmask": {
    "category": "form",
@@ -9070,6 +9559,7 @@
     "default",
     "derived",
     "fields",
+    "form",
     "from",
     "inspect",
     "k",
@@ -9095,7 +9585,7 @@
     "工程",
     "监控"
    ],
-   "fn": "inspect",
+   "fn": "form",
    "fields": [
     "k",
     "src"
@@ -9163,13 +9653,23 @@
    "category": "devops",
    "title": "Inspection",
    "zh": [],
-   "description": "zx 组件「zx_inspection」（Inspection）：用于呈现Inspection相关数据。关键字段 ['n', 's', 'why']、数组 ['items']。",
+   "description": "zx 组件「zx_inspection」（Inspection）：用于呈现Inspection相关数据。关键字段 ['n', 's', 'why']、数组 ['items']。 示例 type=zx_inspection。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "inspection",
     "items",
     "n",
+    "name",
     "s",
-    "why"
+    "type",
+    "value",
+    "why",
+    "示例",
+    "起",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Inspection",
@@ -9190,7 +9690,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_insurance": {
    "category": "finance",
@@ -9291,13 +9791,22 @@
    "category": "commerce",
    "title": "Inventory",
    "zh": [],
-   "description": "zx 组件「zx_inventory」（Inventory）：用于呈现Inventory相关数据。关键字段 ['min', 'n', 'q']、数组 ['items']。",
+   "description": "zx 组件「zx_inventory」（Inventory）：用于呈现Inventory相关数据。关键字段 ['min', 'n', 'q']、数组 ['items']。 示例 type=zx_inventory。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "inventory",
     "items",
     "min",
     "n",
-    "q"
+    "name",
+    "q",
+    "type",
+    "value",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Inventory",
@@ -9318,7 +9827,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_isometric": {
    "category": "chart_geo",
@@ -9380,6 +9889,7 @@
     "7",
     "8",
     "9",
+    "chart",
     "iv",
     "n",
     "pts",
@@ -9399,7 +9909,7 @@
     "健康",
     "护理"
    ],
-   "fn": "iv",
+   "fn": "chart",
    "fields": [
     "x",
     "y",
@@ -9414,14 +9924,25 @@
    "category": "health",
    "title": "Ivreview",
    "zh": [],
-   "description": "zx 组件「zx_ivreview」（Ivreview）：用于呈现Ivreview相关数据。关键字段 ['fix', 'n', 's', 'why']、数组 ['qs']。",
+   "description": "zx 组件「zx_ivreview」（Ivreview）：用于呈现Ivreview相关数据。关键字段 ['fix', 'n', 's', 'why']、数组 ['qs']。 示例 type=zx_ivreview。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "3",
+    "at",
     "fix",
     "ivreview",
     "n",
     "qs",
     "s",
-    "why"
+    "stepper",
+    "title",
+    "type",
+    "why",
+    "步骤一",
+    "步骤二",
+    "示例",
+    "起"
    ],
    "triggers": [
     "展示Ivreview",
@@ -9433,7 +9954,7 @@
     "健康",
     "护理"
    ],
-   "fn": "ivreview",
+   "fn": "stepper",
    "fields": [
     "fix",
     "n",
@@ -9443,7 +9964,7 @@
    "arrays": [
     "qs"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_joystick": {
    "category": "game",
@@ -9454,6 +9975,7 @@
     "0.08",
     "dead",
     "joystick",
+    "keyvalue",
     "type"
    ],
    "triggers": [
@@ -9466,7 +9988,7 @@
     "娱乐",
     "互动"
    ],
-   "fn": "joystick",
+   "fn": "keyvalue",
    "fields": [
     "dead"
    ],
@@ -9635,6 +10157,7 @@
     "n",
     "src",
     "stale",
+    "stepper",
     "type",
     "大促前必须做容量评估",
     "网关超时设 3s",
@@ -9650,7 +10173,7 @@
     "代码",
     "日志"
    ],
-   "fn": "knowledge",
+   "fn": "stepper",
    "fields": [
     "at",
     "n",
@@ -9710,6 +10233,7 @@
     "2",
     "3",
     "6",
+    "chart",
     "lane",
     "lanes",
     "n",
@@ -9730,7 +10254,7 @@
     "进度",
     "计划"
    ],
-   "fn": "lane",
+   "fn": "chart",
    "fields": [
     "n",
     "slots"
@@ -9757,6 +10281,7 @@
     "dep",
     "k",
     "lease",
+    "metrics",
     "months",
     "n",
     "rent",
@@ -9783,7 +10308,7 @@
     "财务",
     "会计"
    ],
-   "fn": "lease",
+   "fn": "metrics",
    "fields": [
     "dep",
     "k",
@@ -9886,15 +10411,24 @@
    "category": "finance",
    "title": "Liability",
    "zh": [],
-   "description": "zx 组件「zx_liability」（Liability）：用于呈现Liability相关数据。关键字段 ['n', 'pa', 'pb', 'pct', 'why']、数组 ['parts']。",
+   "description": "zx 组件「zx_liability」（Liability）：用于呈现Liability相关数据。关键字段 ['n', 'pa', 'pb', 'pct', 'why']、数组 ['parts']。 示例 type=zx_liability。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "liability",
     "n",
+    "name",
     "pa",
     "parts",
     "pb",
     "pct",
-    "why"
+    "type",
+    "value",
+    "why",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Liability",
@@ -9917,7 +10451,7 @@
    "arrays": [
     "parts"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_lift": {
    "category": "metric",
@@ -9931,6 +10465,7 @@
     "42",
     "8",
     "bins",
+    "chart",
     "hit",
     "lift",
     "n",
@@ -9952,7 +10487,7 @@
     "KPI",
     "数字"
    ],
-   "fn": "lift",
+   "fn": "chart",
    "fields": [
     "hit",
     "n",
@@ -9980,6 +10515,7 @@
     "dws_user_1d",
     "edges",
     "f",
+    "graph",
     "lineage",
     "n",
     "nodes",
@@ -9998,7 +10534,7 @@
     "关系",
     "网络"
    ],
-   "fn": "lineage",
+   "fn": "graph",
    "fields": [
     "f",
     "n",
@@ -10032,6 +10568,7 @@
     "800",
     "85",
     "92",
+    "chart",
     "lat",
     "loadtest",
     "n",
@@ -10051,7 +10588,7 @@
     "工程",
     "监控"
    ],
-   "fn": "loadtest",
+   "fn": "chart",
    "fields": [
     "lat",
     "q",
@@ -10066,12 +10603,22 @@
    "category": "text",
    "title": "Logview",
    "zh": [],
-   "description": "zx 组件「zx_logview」（Logview）：用于呈现Logview相关数据。关键字段 ['lv', 'v']、数组 ['rows']。",
+   "description": "zx 组件「zx_logview」（Logview）：用于呈现Logview相关数据。关键字段 ['lv', 'v']、数组 ['rows']。 示例 type=zx_logview。",
    "keywords": [
+    "42",
+    "k",
     "logview",
     "lv",
+    "metrics",
     "rows",
-    "v"
+    "type",
+    "v",
+    "中",
+    "低",
+    "示例",
+    "行一",
+    "行二",
+    "高"
    ],
    "triggers": [
     "展示Logview",
@@ -10083,7 +10630,7 @@
     "代码",
     "日志"
    ],
-   "fn": "logview",
+   "fn": "metrics",
    "fields": [
     "lv",
     "v"
@@ -10091,7 +10638,7 @@
    "arrays": [
     "rows"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_lorenz": {
    "category": "chart_basic",
@@ -10109,6 +10656,7 @@
     "lorenz",
     "n",
     "shares",
+    "spark",
     "type",
     "订单集中度"
    ],
@@ -10122,7 +10670,7 @@
     "图表",
     "统计"
    ],
-   "fn": "lorenz",
+   "fn": "spark",
    "fields": [],
    "arrays": [],
    "has_sample": true
@@ -10131,14 +10679,25 @@
    "category": "pm",
    "title": "Lostdoc",
    "zh": [],
-   "description": "zx 组件「zx_lostdoc」（Lostdoc）：用于呈现Lostdoc相关数据。关键字段 ['lost', 'n', 'place', 's']、数组 ['steps']。",
+   "description": "zx 组件「zx_lostdoc」（Lostdoc）：用于呈现Lostdoc相关数据。关键字段 ['lost', 'n', 'place', 's']、数组 ['steps']。 示例 type=zx_lostdoc。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "3",
+    "at",
     "lost",
     "lostdoc",
     "n",
     "place",
     "s",
-    "steps"
+    "stepper",
+    "steps",
+    "title",
+    "type",
+    "步骤一",
+    "步骤二",
+    "示例",
+    "起"
    ],
    "triggers": [
     "展示Lostdoc",
@@ -10150,7 +10709,7 @@
     "协作",
     "团队"
    ],
-   "fn": "lostdoc",
+   "fn": "stepper",
    "fields": [
     "lost",
     "n",
@@ -10160,7 +10719,7 @@
    "arrays": [
     "steps"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_mapnav": {
    "category": "chart_geo",
@@ -10182,6 +10741,7 @@
     "eta",
     "mapnav",
     "n",
+    "stepper",
     "steps",
     "t",
     "total",
@@ -10204,7 +10764,7 @@
     "地图",
     "地理"
    ],
-   "fn": "mapnav",
+   "fn": "stepper",
    "fields": [
     "d",
     "t",
@@ -10220,13 +10780,22 @@
    "category": "chart_geo",
    "title": "Mapping",
    "zh": [],
-   "description": "zx 组件「zx_mapping」（Mapping）：用于呈现Mapping相关数据。关键字段 ['k', 'n', 'to']、数组 ['from', 'to']。",
+   "description": "zx 组件「zx_mapping」（Mapping）：用于呈现Mapping相关数据。关键字段 ['k', 'n', 'to']、数组 ['from', 'to']。 示例 type=zx_mapping。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "from",
     "k",
     "mapping",
     "n",
-    "to"
+    "name",
+    "to",
+    "type",
+    "value",
+    "键",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Mapping",
@@ -10248,7 +10817,7 @@
     "from",
     "to"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_markov": {
    "category": "aiml",
@@ -10270,6 +10839,7 @@
     "6",
     "at",
     "markov",
+    "matrix",
     "n",
     "p",
     "r",
@@ -10292,7 +10862,7 @@
     "数据科学",
     "模型"
    ],
-   "fn": "markov",
+   "fn": "matrix",
    "fields": [],
    "arrays": [
     "p",
@@ -10305,12 +10875,20 @@
    "category": "card",
    "title": "Marquee",
    "zh": [],
-   "description": "zx 组件「zx_marquee」（Marquee）：用于呈现Marquee相关数据。关键字段 ['speed', 't']、数组 ['items']。",
+   "description": "zx 组件「zx_marquee」（Marquee）：用于呈现Marquee相关数据。关键字段 ['speed', 't']、数组 ['items']。 示例 type=zx_marquee。",
    "keywords": [
+    "10",
+    "20",
     "items",
     "marquee",
+    "name",
     "speed",
-    "t"
+    "t",
+    "type",
+    "value",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Marquee",
@@ -10330,7 +10908,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_master": {
    "category": "nav",
@@ -10344,6 +10922,7 @@
     "cat a",
     "children",
     "cmd",
+    "container",
     "lines",
     "master",
     "n",
@@ -10364,7 +10943,7 @@
     "布局",
     "结构"
    ],
-   "fn": "",
+   "fn": "container",
    "fields": [],
    "arrays": [],
    "has_sample": true
@@ -10575,6 +11154,7 @@
     "B",
     "C",
     "D",
+    "chart",
     "d",
     "iter",
     "mds",
@@ -10593,7 +11173,7 @@
     "数据科学",
     "模型"
    ],
-   "fn": "mds",
+   "fn": "chart",
    "fields": [
     "n"
    ],
@@ -10657,6 +11237,7 @@
     "n",
     "plan",
     "times",
+    "tree",
     "type",
     "药品",
     "钙片",
@@ -10673,7 +11254,7 @@
     "健康",
     "护理"
    ],
-   "fn": "medicine",
+   "fn": "tree",
    "fields": [
     "n"
    ],
@@ -10740,12 +11321,26 @@
    "category": "social",
    "title": "Mention",
    "zh": [],
-   "description": "zx 组件「zx_mention」（Mention）：用于呈现Mention相关数据。关键字段 ['k', 'n']、数组 ['people']。",
+   "description": "zx 组件「zx_mention」（Mention）：用于呈现Mention相关数据。关键字段 ['k', 'n']、数组 ['people']。 示例 type=zx_mention。",
    "keywords": [
+    "3",
+    "children",
+    "id",
     "k",
+    "label",
     "mention",
     "n",
-    "people"
+    "n1",
+    "n1a",
+    "n1b",
+    "n2",
+    "people",
+    "type",
+    "子节点",
+    "子节点二",
+    "节点一",
+    "节点二",
+    "键"
    ],
    "triggers": [
     "展示Mention",
@@ -10765,7 +11360,7 @@
    "arrays": [
     "people"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_meter": {
    "category": "chart_gauge",
@@ -10779,6 +11374,7 @@
     "62",
     "85",
     "at",
+    "gauge",
     "label",
     "levels",
     "max",
@@ -10802,7 +11398,7 @@
     "仪表",
     "占比"
    ],
-   "fn": "meter",
+   "fn": "gauge",
    "fields": [
     "at",
     "max",
@@ -10864,13 +11460,30 @@
    "category": "chart_graph",
    "title": "Mindmap",
    "zh": [],
-   "description": "zx 组件「zx_mindmap」（Mindmap）：用于呈现Mindmap相关数据。关键字段 ['n', 'root']、数组 ['arms', 'kids']。",
+   "description": "zx 组件「zx_mindmap」（Mindmap）：用于呈现Mindmap相关数据。关键字段 ['n', 'root']、数组 ['arms', 'kids']。 示例 type=zx_mindmap。",
    "keywords": [
+    "1",
+    "10",
+    "20",
+    "3",
     "arms",
+    "items",
     "kids",
     "mindmap",
     "n",
-    "root"
+    "name",
+    "root",
+    "title",
+    "tree",
+    "type",
+    "value",
+    "zx_list",
+    "zx_note",
+    "子卡片A",
+    "甲",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Mindmap",
@@ -10882,7 +11495,7 @@
     "关系",
     "网络"
    ],
-   "fn": "mindmap",
+   "fn": "tree",
    "fields": [
     "n",
     "root"
@@ -10891,19 +11504,28 @@
     "arms",
     "kids"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_minmap": {
    "category": "nav",
    "title": "Minmap",
    "zh": [],
-   "description": "zx 组件「zx_minmap」（Minmap）：用于呈现Minmap相关数据。关键字段 ['at', 'k', 't']、数组 ['blocks']。",
+   "description": "zx 组件「zx_minmap」（Minmap）：用于呈现Minmap相关数据。关键字段 ['at', 'k', 't']、数组 ['blocks']。 示例 type=zx_minmap。",
    "keywords": [
+    "4",
+    "8",
     "at",
     "blocks",
     "k",
     "minmap",
-    "t"
+    "name",
+    "t",
+    "type",
+    "value",
+    "分组一",
+    "分组二",
+    "示例",
+    "键"
    ],
    "triggers": [
     "展示Minmap",
@@ -10924,7 +11546,7 @@
    "arrays": [
     "blocks"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_mirror": {
    "category": "card",
@@ -10979,6 +11601,7 @@
     "0",
     "1",
     "cols",
+    "matrix",
     "missing",
     "n",
     "rows",
@@ -10999,7 +11622,7 @@
     "占位",
     "基础"
    ],
-   "fn": "missing",
+   "fn": "matrix",
    "fields": [],
    "arrays": [
     "cols",
@@ -11294,6 +11917,7 @@
     "n",
     "network",
     "nodes",
+    "tree",
     "type",
     "v",
     "w",
@@ -11314,7 +11938,7 @@
     "关系",
     "网络"
    ],
-   "fn": "network",
+   "fn": "tree",
    "fields": [
     "a",
     "b",
@@ -11384,14 +12008,22 @@
    "zh": [
     "通知"
    ],
-   "description": "zx 组件「zx_notice」（Notice）：用于呈现Notice相关数据。关键字段 ['d', 'lv', 'ttlMs']、数组 ['items']。",
+   "description": "zx 组件「zx_notice」（Notice）：用于呈现Notice相关数据。关键字段 ['d', 'lv', 'ttlMs']、数组 ['items']。 示例 type=zx_notice。",
    "keywords": [
+    "10",
+    "20",
     "d",
     "items",
     "lv",
+    "name",
     "notice",
     "ttlMs",
-    "通知"
+    "type",
+    "value",
+    "示例",
+    "通知",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Notice",
@@ -11412,7 +12044,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_nps": {
    "category": "metric",
@@ -11464,6 +12096,7 @@
     "15600",
     "dec",
     "dur",
+    "hero",
     "n",
     "odometer",
     "type",
@@ -11480,7 +12113,7 @@
     "仪表",
     "占比"
    ],
-   "fn": "odometer",
+   "fn": "hero",
    "fields": [
     "dec",
     "dur",
@@ -11555,6 +12188,7 @@
     "cand",
     "n",
     "optline",
+    "spark",
     "type",
     "面试该在第几个停"
    ],
@@ -11568,7 +12202,7 @@
     "对比",
     "决策"
    ],
-   "fn": "optline",
+   "fn": "spark",
    "fields": [],
    "arrays": [],
    "has_sample": true
@@ -11591,6 +12225,7 @@
     "dst",
     "edges",
     "f",
+    "graph",
     "n",
     "nodes",
     "optpath",
@@ -11618,7 +12253,7 @@
     "对比",
     "决策"
    ],
-   "fn": "optpath",
+   "fn": "graph",
    "fields": [
     "dst",
     "f",
@@ -11652,6 +12287,7 @@
     "order",
     "t",
     "total",
+    "tree",
     "ts",
     "type",
     "已下单",
@@ -11672,7 +12308,7 @@
     "购物",
     "订单"
    ],
-   "fn": "order",
+   "fn": "tree",
    "fields": [
     "cur",
     "t"
@@ -11703,6 +12339,7 @@
     "org",
     "r",
     "tech",
+    "tree",
     "type",
     "前端",
     "后端",
@@ -11724,7 +12361,7 @@
     "关系",
     "网络"
    ],
-   "fn": "org",
+   "fn": "tree",
    "fields": [
     "d",
     "k",
@@ -11741,13 +12378,29 @@
    "zh": [
     "组织架构图"
    ],
-   "description": "zx 组件「zx_orgchart」（Orgchart）：用于呈现Orgchart相关数据。关键字段 ['depth', 'n', 'root']、数组 []。",
+   "description": "zx 组件「zx_orgchart」（Orgchart）：用于呈现Orgchart相关数据。关键字段 ['depth', 'n', 'root']、数组 ['nodes']。 示例 type=zx_orgchart。",
    "keywords": [
+    "3",
+    "children",
     "depth",
+    "id",
+    "label",
     "n",
+    "n1",
+    "n1a",
+    "n1b",
+    "n2",
+    "nodes",
     "orgchart",
     "root",
-    "组织架构图"
+    "tree",
+    "type",
+    "子节点",
+    "子节点二",
+    "示例",
+    "组织架构图",
+    "节点一",
+    "节点二"
    ],
    "triggers": [
     "展示Orgchart",
@@ -11760,30 +12413,41 @@
     "关系",
     "网络"
    ],
-   "fn": "orgchart",
+   "fn": "tree",
    "fields": [
     "depth",
     "n",
     "root"
    ],
-   "arrays": [],
-   "has_sample": false
+   "arrays": [
+    "nodes"
+   ],
+   "has_sample": true
   },
   "zx_overrun": {
    "category": "finance",
    "title": "Overrun",
    "zh": [],
-   "description": "zx 组件「zx_overrun」（Overrun）：用于呈现Overrun相关数据。关键字段 ['act', 'actTotal', 'cut', 'n', 'plan', 'planTotal', 'why']、数组 ['items']。",
+   "description": "zx 组件「zx_overrun」（Overrun）：用于呈现Overrun相关数据。关键字段 ['act', 'actTotal', 'cut', 'n', 'plan', 'planTotal', 'why']、数组 ['items']。 示例 type=zx_overrun。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "act",
     "actTotal",
     "cut",
     "items",
     "n",
+    "name",
     "overrun",
     "plan",
     "planTotal",
-    "why"
+    "type",
+    "value",
+    "why",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Overrun",
@@ -11808,7 +12472,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_pager": {
    "category": "card",
@@ -11928,13 +12592,27 @@
    "category": "commerce",
    "title": "Parcel",
    "zh": [],
-   "description": "zx 组件「zx_parcel」（Parcel）：用于呈现Parcel相关数据。关键字段 ['eta', 't', 'ts']、数组 ['nodes']。",
+   "description": "zx 组件「zx_parcel」（Parcel）：用于呈现Parcel相关数据。关键字段 ['eta', 't', 'ts']、数组 ['nodes']。 示例 type=zx_parcel。",
    "keywords": [
+    "children",
     "eta",
+    "id",
+    "label",
+    "n1",
+    "n1a",
+    "n1b",
+    "n2",
     "nodes",
     "parcel",
     "t",
-    "ts"
+    "tree",
+    "ts",
+    "type",
+    "子节点",
+    "子节点二",
+    "示例",
+    "节点一",
+    "节点二"
    ],
    "triggers": [
     "展示Parcel",
@@ -11946,7 +12624,7 @@
     "购物",
     "订单"
    ],
-   "fn": "parcel",
+   "fn": "tree",
    "fields": [
     "eta",
     "t",
@@ -11955,7 +12633,7 @@
    "arrays": [
     "nodes"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_pareto": {
    "category": "chart_basic",
@@ -12050,6 +12728,7 @@
     "b",
     "cells",
     "cols",
+    "grid",
     "n",
     "payoff",
     "rows",
@@ -12070,7 +12749,7 @@
     "对比",
     "决策"
    ],
-   "fn": "payoff",
+   "fn": "grid",
    "fields": [
     "a",
     "b"
@@ -12109,6 +12788,7 @@
     "b",
     "n",
     "perm",
+    "spark",
     "type"
    ],
    "triggers": [
@@ -12121,7 +12801,7 @@
     "工程",
     "监控"
    ],
-   "fn": "perm",
+   "fn": "spark",
    "fields": [
     "n"
    ],
@@ -12194,8 +12874,8 @@
     "C",
     "D",
     "E",
+    "chart",
     "n",
-    "pareto",
     "pfront",
     "pts",
     "type",
@@ -12217,7 +12897,7 @@
     "财务",
     "会计"
    ],
-   "fn": "pareto",
+   "fn": "chart",
    "fields": [
     "n",
     "x",
@@ -12232,15 +12912,24 @@
    "category": "form",
    "title": "Photospec",
    "zh": [],
-   "description": "zx 组件「zx_photospec」（Photospec）：用于呈现Photospec相关数据。关键字段 ['bg', 'h', 'n', 'px', 'w']、数组 ['specs']。",
+   "description": "zx 组件「zx_photospec」（Photospec）：用于呈现Photospec相关数据。关键字段 ['bg', 'h', 'n', 'px', 'w']、数组 ['specs']。 示例 type=zx_photospec。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "bg",
     "h",
     "n",
+    "name",
     "photospec",
     "px",
     "specs",
-    "w"
+    "type",
+    "value",
+    "w",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Photospec",
@@ -12263,7 +12952,7 @@
    "arrays": [
     "specs"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_pictogram": {
    "category": "chart_basic",
@@ -12357,6 +13046,7 @@
     "queue",
     "rate",
     "stages",
+    "stepper",
     "type",
     "u",
     "拉取",
@@ -12376,7 +13066,7 @@
     "关系",
     "网络"
    ],
-   "fn": "pipe",
+   "fn": "stepper",
    "fields": [
     "n",
     "rate"
@@ -12390,13 +13080,22 @@
    "category": "devops",
    "title": "Plant",
    "zh": [],
-   "description": "zx 组件「zx_plant」（Plant）：用于呈现Plant相关数据。关键字段 ['iv', 'last', 'n']、数组 ['plants']。",
+   "description": "zx 组件「zx_plant」（Plant）：用于呈现Plant相关数据。关键字段 ['iv', 'last', 'n']、数组 ['plants']。 示例 type=zx_plant。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "iv",
     "last",
     "n",
+    "name",
     "plant",
-    "plants"
+    "plants",
+    "type",
+    "value",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Plant",
@@ -12417,21 +13116,28 @@
    "arrays": [
     "plants"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_playback": {
    "category": "media",
    "title": "Playback",
    "zh": [],
-   "description": "zx 组件「zx_playback」（Playback）：用于呈现Playback相关数据。关键字段 ['cur', 'f', 'frames', 'n', 'speed']、数组 ['marks']。",
+   "description": "zx 组件「zx_playback」（Playback）：用于呈现Playback相关数据。关键字段 ['cur', 'f', 'frames', 'n', 'speed']、数组 ['marks']。 示例 type=zx_playback。",
    "keywords": [
+    "100",
+    "3",
     "cur",
     "f",
     "frames",
     "marks",
     "n",
     "playback",
-    "speed"
+    "speed",
+    "type",
+    "标签一",
+    "标签三",
+    "标签二",
+    "示例"
    ],
    "triggers": [
     "展示Playback",
@@ -12454,7 +13160,7 @@
    "arrays": [
     "marks"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_playbook": {
    "category": "timeline",
@@ -12469,6 +13175,7 @@
     "n",
     "playbook",
     "sec",
+    "stepper",
     "steps",
     "type",
     "切备用网关",
@@ -12491,7 +13198,7 @@
     "进度",
     "计划"
    ],
-   "fn": "playbook",
+   "fn": "stepper",
    "fields": [
     "d",
     "n",
@@ -12557,6 +13264,7 @@
     "27",
     "9",
     "False",
+    "choice",
     "fri",
     "k",
     "multi",
@@ -12585,7 +13293,7 @@
     "协作",
     "团队"
    ],
-   "fn": "poll",
+   "fn": "choice",
    "fields": [
     "k",
     "t",
@@ -12653,14 +13361,24 @@
    "category": "timeline",
    "title": "Postmortem",
    "zh": [],
-   "description": "zx 组件「zx_postmortem」（Postmortem）：用于呈现Postmortem相关数据。关键字段 ['impact', 'n', 'summary', 'who']、数组 ['actions']。",
+   "description": "zx 组件「zx_postmortem」（Postmortem）：用于呈现Postmortem相关数据。关键字段 ['impact', 'n', 'summary', 'who']、数组 ['actions']。 示例 type=zx_postmortem。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "actions",
     "impact",
     "n",
+    "name",
     "postmortem",
     "summary",
-    "who"
+    "type",
+    "value",
+    "who",
+    "摘要",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Postmortem",
@@ -12682,7 +13400,7 @@
    "arrays": [
     "actions"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_power": {
    "category": "devops",
@@ -12739,6 +13457,7 @@
     "price",
     "pro",
     "rec",
+    "tree",
     "type",
     "unit",
     "专业",
@@ -12759,7 +13478,7 @@
     "财务",
     "会计"
    ],
-   "fn": "price",
+   "fn": "tree",
    "fields": [
     "k",
     "n",
@@ -12867,16 +13586,25 @@
    "category": "timeline",
    "title": "Projhandover",
    "zh": [],
-   "description": "zx 组件「zx_projhandover」（Projhandover）：用于呈现Projhandover相关数据。关键字段 ['n', 'new', 'old', 'oncallH', 'transH', 'who']、数组 ['open']。",
+   "description": "zx 组件「zx_projhandover」（Projhandover）：用于呈现Projhandover相关数据。关键字段 ['n', 'new', 'old', 'oncallH', 'transH', 'who']、数组 ['open']。 示例 type=zx_projhandover。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "n",
+    "name",
     "new",
     "old",
     "oncallH",
     "open",
     "projhandover",
     "transH",
-    "who"
+    "type",
+    "value",
+    "who",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Projhandover",
@@ -12900,7 +13628,7 @@
    "arrays": [
     "open"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_pscan": {
    "category": "devops",
@@ -12920,6 +13648,7 @@
     "0.82",
     "0.89",
     "0.95",
+    "chart",
     "grid",
     "metrics",
     "n",
@@ -12941,7 +13670,7 @@
     "工程",
     "监控"
    ],
-   "fn": "pscan",
+   "fn": "chart",
    "fields": [
     "x"
    ],
@@ -13062,6 +13791,7 @@
     "24",
     "7",
     "9",
+    "chart",
     "d",
     "days",
     "h",
@@ -13082,7 +13812,7 @@
     "协作",
     "团队"
    ],
-   "fn": "punch",
+   "fn": "chart",
    "fields": [
     "d",
     "days",
@@ -13103,6 +13833,7 @@
     "10000",
     "3200",
     "480",
+    "chart",
     "levels",
     "n",
     "pyramid",
@@ -13122,7 +13853,7 @@
     "图表",
     "统计"
    ],
-   "fn": "pyramid",
+   "fn": "chart",
    "fields": [
     "n",
     "v"
@@ -13157,6 +13888,7 @@
     "data",
     "n",
     "qq",
+    "spark",
     "type",
     "响应耗时正态性"
    ],
@@ -13170,7 +13902,7 @@
     "通讯",
     "消息"
    ],
-   "fn": "qq",
+   "fn": "spark",
    "fields": [],
    "arrays": [],
    "has_sample": true
@@ -13231,6 +13963,7 @@
     "mu",
     "n",
     "queue",
+    "stepper",
     "svc",
     "type",
     "消息队列"
@@ -13244,7 +13977,7 @@
     "数据",
     "列表"
    ],
-   "fn": "queue",
+   "fn": "stepper",
    "fields": [
     "at",
     "lambda",
@@ -13308,6 +14041,7 @@
     "0.8",
     "0.85",
     "0.9",
+    "chart",
     "dims",
     "n",
     "radar",
@@ -13334,7 +14068,7 @@
     "雷达",
     "多维"
    ],
-   "fn": "radar",
+   "fn": "chart",
    "fields": [
     "n"
    ],
@@ -13364,10 +14098,10 @@
     "A",
     "B",
     "axes",
+    "chart",
     "max",
     "n",
     "radar",
-    "radar2",
     "series",
     "type",
     "v",
@@ -13389,7 +14123,7 @@
     "雷达",
     "多维"
    ],
-   "fn": "radar2",
+   "fn": "chart",
    "fields": [
     "max",
     "n"
@@ -13405,13 +14139,24 @@
    "category": "chart_gauge",
    "title": "Radial",
    "zh": [],
-   "description": "zx 组件「zx_radial」（Radial）：用于呈现Radial相关数据。关键字段 ['inner', 'k', 'n']、数组 ['items']。",
+   "description": "zx 组件「zx_radial」（Radial）：用于呈现Radial相关数据。关键字段 ['inner', 'k', 'n']、数组 ['items']。 示例 type=zx_radial。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "inner",
     "items",
     "k",
     "n",
-    "radial"
+    "name",
+    "radial",
+    "tree",
+    "type",
+    "value",
+    "示例",
+    "键",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Radial",
@@ -13423,7 +14168,7 @@
     "仪表",
     "占比"
    ],
-   "fn": "radial",
+   "fn": "tree",
    "fields": [
     "inner",
     "k",
@@ -13432,20 +14177,30 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_radiogroup": {
    "category": "form",
    "title": "Radiogroup",
    "zh": [],
-   "description": "zx 组件「zx_radiogroup」（Radiogroup）：用于呈现Radiogroup相关数据。关键字段 ['d', 'k', 'sel', 't']、数组 ['options']。",
+   "description": "zx 组件「zx_radiogroup」（Radiogroup）：用于呈现Radiogroup相关数据。关键字段 ['d', 'k', 'sel', 't']、数组 ['options']。 示例 type=zx_radiogroup。",
    "keywords": [
+    "a",
+    "b",
+    "choice",
     "d",
     "k",
+    "label",
     "options",
     "radiogroup",
     "sel",
-    "t"
+    "t",
+    "type",
+    "value",
+    "示例",
+    "选项一",
+    "选项二",
+    "键"
    ],
    "triggers": [
     "展示Radiogroup",
@@ -13457,7 +14212,7 @@
     "输入",
     "表单"
    ],
-   "fn": "radiogroup",
+   "fn": "choice",
    "fields": [
     "d",
     "k",
@@ -13467,7 +14222,7 @@
    "arrays": [
     "options"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_range": {
    "category": "form",
@@ -13639,12 +14394,20 @@
    "category": "devops",
    "title": "Rca",
    "zh": [],
-   "description": "zx 组件「zx_rca」（Rca）：用于呈现Rca相关数据。关键字段 ['a', 'q']、数组 ['why']。",
+   "description": "zx 组件「zx_rca」（Rca）：用于呈现Rca相关数据。关键字段 ['a', 'q']、数组 ['why']。 示例 type=zx_rca。",
    "keywords": [
+    "10",
+    "20",
     "a",
+    "name",
     "q",
     "rca",
-    "why"
+    "type",
+    "value",
+    "why",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Rca",
@@ -13664,7 +14427,7 @@
    "arrays": [
     "why"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_rdd": {
    "category": "aiml",
@@ -13695,6 +14458,7 @@
     "99.1",
     "99.7",
     "bw",
+    "chart",
     "cut",
     "n",
     "pts",
@@ -13714,7 +14478,7 @@
     "数据科学",
     "模型"
    ],
-   "fn": "rdd",
+   "fn": "chart",
    "fields": [
     "bw",
     "cut",
@@ -13730,12 +14494,21 @@
    "category": "social",
    "title": "React",
    "zh": [],
-   "description": "zx 组件「zx_react」（React）：用于呈现React相关数据。关键字段 ['e', 'k']、数组 ['items']。",
+   "description": "zx 组件「zx_react」（React）：用于呈现React相关数据。关键字段 ['e', 'k']、数组 ['items']。 示例 type=zx_react。",
    "keywords": [
+    "10",
+    "20",
     "e",
     "items",
     "k",
-    "react"
+    "name",
+    "react",
+    "type",
+    "value",
+    "止",
+    "键",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示React",
@@ -13755,7 +14528,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_realoption": {
    "category": "compare",
@@ -13802,15 +14575,25 @@
    "zh": [
     "收据"
    ],
-   "description": "zx 组件「zx_receipt」（Receipt）：用于呈现Receipt相关数据。关键字段 ['at', 'id', 'k', 'st']、数组 ['rows']。",
+   "description": "zx 组件「zx_receipt」（Receipt）：用于呈现Receipt相关数据。关键字段 ['at', 'id', 'k', 'st']、数组 ['rows']。 示例 type=zx_receipt。",
    "keywords": [
     "at",
     "id",
     "k",
+    "metrics",
     "receipt",
     "rows",
     "st",
-    "收据"
+    "type",
+    "v",
+    "中",
+    "低",
+    "收据",
+    "示例",
+    "行一",
+    "行二",
+    "键",
+    "高"
    ],
    "triggers": [
     "展示Receipt",
@@ -13823,7 +14606,7 @@
     "财务",
     "会计"
    ],
-   "fn": "receipt",
+   "fn": "metrics",
    "fields": [
     "at",
     "id",
@@ -13833,20 +14616,36 @@
    "arrays": [
     "rows"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_recipe": {
    "category": "health",
    "title": "Recipe",
    "zh": [],
-   "description": "zx 组件「zx_recipe」（Recipe）：用于呈现Recipe相关数据。关键字段 ['base', 'n', 'q']、数组 ['ing', 'steps']。",
+   "description": "zx 组件「zx_recipe」（Recipe）：用于呈现Recipe相关数据。关键字段 ['base', 'n', 'q']、数组 ['ing', 'steps']。 示例 type=zx_recipe。",
    "keywords": [
+    "09:00",
+    "10",
+    "10:00",
+    "20",
+    "3",
+    "at",
     "base",
     "ing",
     "n",
+    "name",
     "q",
     "recipe",
-    "steps"
+    "stepper",
+    "steps",
+    "title",
+    "type",
+    "value",
+    "步骤一",
+    "步骤二",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Recipe",
@@ -13858,7 +14657,7 @@
     "健康",
     "护理"
    ],
-   "fn": "recipe",
+   "fn": "stepper",
    "fields": [
     "base",
     "n",
@@ -13868,19 +14667,28 @@
     "ing",
     "steps"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_recycle": {
    "category": "devops",
    "title": "Recycle",
    "zh": [],
-   "description": "zx 组件「zx_recycle」（Recycle）：用于呈现Recycle相关数据。关键字段 ['n', 't', 'tip']、数组 ['items']。",
+   "description": "zx 组件「zx_recycle」（Recycle）：用于呈现Recycle相关数据。关键字段 ['n', 't', 'tip']、数组 ['items']。 示例 type=zx_recycle。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "items",
     "n",
+    "name",
     "recycle",
     "t",
-    "tip"
+    "tip",
+    "type",
+    "value",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Recycle",
@@ -13901,7 +14709,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_refile": {
    "category": "pm",
@@ -13966,6 +14774,7 @@
     "60",
     "68",
     "91",
+    "chart",
     "n",
     "pts",
     "regress",
@@ -13984,7 +14793,7 @@
     "数据科学",
     "模型"
    ],
-   "fn": "regress",
+   "fn": "chart",
    "fields": [
     "x",
     "y"
@@ -14149,6 +14958,7 @@
     "OK",
     "SUCCESS",
     "f",
+    "gantt",
     "n",
     "remap",
     "rules",
@@ -14167,7 +14977,7 @@
     "地图",
     "地理"
    ],
-   "fn": "remap",
+   "fn": "gantt",
    "fields": [
     "f",
     "t"
@@ -14221,13 +15031,24 @@
    "category": "devops",
    "title": "Renovation",
    "zh": [],
-   "description": "zx 组件「zx_renovation」（Renovation）：用于呈现Renovation相关数据。关键字段 ['n', 's', 'who']、数组 ['stages']。",
+   "description": "zx 组件「zx_renovation」（Renovation）：用于呈现Renovation相关数据。关键字段 ['n', 's', 'who']、数组 ['stages']。 示例 type=zx_renovation。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "3",
+    "at",
     "n",
     "renovation",
     "s",
     "stages",
-    "who"
+    "stepper",
+    "title",
+    "type",
+    "who",
+    "步骤一",
+    "步骤二",
+    "示例",
+    "起"
    ],
    "triggers": [
     "展示Renovation",
@@ -14239,7 +15060,7 @@
     "工程",
     "监控"
    ],
-   "fn": "renovation",
+   "fn": "stepper",
    "fields": [
     "n",
     "s",
@@ -14248,7 +15069,7 @@
    "arrays": [
     "stages"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_rental": {
    "category": "finance",
@@ -14256,15 +15077,25 @@
    "zh": [
     "租赁"
    ],
-   "description": "zx 组件「zx_rental」（Rental）：用于呈现Rental相关数据。关键字段 ['area', 'dist', 'n', 'price']、数组 ['houses']。",
+   "description": "zx 组件「zx_rental」（Rental）：用于呈现Rental相关数据。关键字段 ['area', 'dist', 'n', 'price']、数组 ['houses']。 示例 type=zx_rental。",
    "keywords": [
+    "10",
+    "19.9",
+    "20",
+    "3",
     "area",
     "dist",
     "houses",
     "n",
+    "name",
     "price",
     "rental",
-    "租赁"
+    "type",
+    "value",
+    "示例",
+    "租赁",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Rental",
@@ -14287,7 +15118,7 @@
    "arrays": [
     "houses"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_rentreturn": {
    "category": "finance",
@@ -14347,15 +15178,24 @@
    "category": "devops",
    "title": "Repair",
    "zh": [],
-   "description": "zx 组件「zx_repair」（Repair）：用于呈现Repair相关数据。关键字段 ['m', 's', 't', 'w']、数组 ['logs', 'owners']。",
+   "description": "zx 组件「zx_repair」（Repair）：用于呈现Repair相关数据。关键字段 ['m', 's', 't', 'w']、数组 ['logs', 'owners']。 示例 type=zx_repair。",
    "keywords": [
+    "10",
+    "20",
     "logs",
     "m",
+    "name",
     "owners",
     "repair",
     "s",
     "t",
-    "w"
+    "type",
+    "value",
+    "w",
+    "示例",
+    "起",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Repair",
@@ -14378,7 +15218,7 @@
     "logs",
     "owners"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_repost": {
    "category": "social",
@@ -14392,6 +15232,7 @@
     "at",
     "by",
     "likes",
+    "objtree",
     "quote",
     "replies",
     "repost",
@@ -14412,7 +15253,7 @@
     "通讯",
     "消息"
    ],
-   "fn": "repost",
+   "fn": "objtree",
    "fields": [
     "by",
     "likes",
@@ -14692,13 +15533,22 @@
    "zh": [
     "富文本"
    ],
-   "description": "zx 组件「zx_rich」（Rich）：用于呈现Rich相关数据。关键字段 ['t', 'v']、数组 ['blocks']。",
+   "description": "zx 组件「zx_rich」（Rich）：用于呈现Rich相关数据。关键字段 ['t', 'v']、数组 ['blocks']。 示例 type=zx_rich。",
    "keywords": [
+    "4",
+    "42",
+    "8",
     "blocks",
+    "name",
     "rich",
     "t",
+    "type",
     "v",
-    "富文本"
+    "value",
+    "分组一",
+    "分组二",
+    "富文本",
+    "示例"
    ],
    "triggers": [
     "展示Rich",
@@ -14719,7 +15569,7 @@
    "arrays": [
     "blocks"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_ridgeline": {
    "category": "chart_basic",
@@ -14737,6 +15587,7 @@
     "6",
     "8",
     "9",
+    "chart",
     "n",
     "ridgeline",
     "rows",
@@ -14753,7 +15604,7 @@
     "图表",
     "统计"
    ],
-   "fn": "ridgeline",
+   "fn": "chart",
    "fields": [
     "n"
    ],
@@ -14817,9 +15668,9 @@
     "B",
     "n",
     "ring",
-    "ring2",
     "rings",
     "segs",
+    "tree",
     "type",
     "v",
     "三年构成",
@@ -14836,7 +15687,7 @@
     "仪表",
     "占比"
    ],
-   "fn": "ring2",
+   "fn": "tree",
    "fields": [
     "n",
     "v"
@@ -14861,6 +15712,7 @@
     "0.16",
     "0.18",
     "0.32",
+    "chart",
     "n",
     "pts",
     "r",
@@ -14883,7 +15735,7 @@
     "对比",
     "决策"
    ],
-   "fn": "riskreturn",
+   "fn": "chart",
    "fields": [
     "n",
     "r",
@@ -14910,6 +15762,7 @@
     "0.85",
     "0.92",
     "1",
+    "chart",
     "n",
     "pts",
     "roc",
@@ -14928,7 +15781,7 @@
     "图表",
     "统计"
    ],
-   "fn": "roc",
+   "fn": "chart",
    "fields": [
     "s",
     "y"
@@ -14957,6 +15810,7 @@
     "run",
     "s",
     "stages",
+    "stepper",
     "type",
     "v2.3 灰度"
    ],
@@ -14970,7 +15824,7 @@
     "进度",
     "计划"
    ],
-   "fn": "rollout",
+   "fn": "stepper",
    "fields": [
     "p",
     "s"
@@ -15034,13 +15888,23 @@
    "zh": [
     "路线"
    ],
-   "description": "zx 组件「zx_route」（Route）：用于呈现Route相关数据。关键字段 ['k', 'n']、数组 ['stops']。",
+   "description": "zx 组件「zx_route」（Route）：用于呈现Route相关数据。关键字段 ['k', 'n']、数组 ['stops']。 示例 type=zx_route。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "3",
+    "at",
     "k",
     "n",
     "route",
+    "stepper",
     "stops",
-    "路线"
+    "title",
+    "type",
+    "步骤一",
+    "步骤二",
+    "路线",
+    "键"
    ],
    "triggers": [
     "展示Route",
@@ -15053,7 +15917,7 @@
     "地图",
     "地理"
    ],
-   "fn": "route",
+   "fn": "stepper",
    "fields": [
     "k",
     "n"
@@ -15061,19 +15925,28 @@
    "arrays": [
     "stops"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_runbook": {
    "category": "timeline",
    "title": "Runbook",
    "zh": [],
-   "description": "zx 组件「zx_runbook」（Runbook）：用于呈现Runbook相关数据。关键字段 ['at', 'cmd', 'n']、数组 ['steps']。",
+   "description": "zx 组件「zx_runbook」（Runbook）：用于呈现Runbook相关数据。关键字段 ['at', 'cmd', 'n']、数组 ['steps']。 示例 type=zx_runbook。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "3",
     "at",
     "cmd",
     "n",
     "runbook",
-    "steps"
+    "stepper",
+    "steps",
+    "title",
+    "type",
+    "步骤一",
+    "步骤二",
+    "示例"
    ],
    "triggers": [
     "展示Runbook",
@@ -15085,7 +15958,7 @@
     "进度",
     "计划"
    ],
-   "fn": "runbook",
+   "fn": "stepper",
    "fields": [
     "at",
     "cmd",
@@ -15094,7 +15967,7 @@
    "arrays": [
     "steps"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_sankey": {
    "category": "chart_graph",
@@ -15157,12 +16030,12 @@
     "True",
     "f",
     "flows",
+    "graph",
     "l",
     "loss",
     "n",
     "nodes",
     "sankey",
-    "sankey2",
     "t",
     "type",
     "v",
@@ -15182,7 +16055,7 @@
     "关系",
     "网络"
    ],
-   "fn": "sankey2",
+   "fn": "graph",
    "fields": [
     "f",
     "l",
@@ -15214,6 +16087,7 @@
     "min",
     "ms",
     "n",
+    "rating",
     "scale",
     "stops",
     "type",
@@ -15233,7 +16107,7 @@
     "KPI",
     "数字"
    ],
-   "fn": "scale",
+   "fn": "rating",
    "fields": [
     "hex",
     "max",
@@ -15300,6 +16174,7 @@
     "62",
     "A",
     "B",
+    "chart",
     "n",
     "pts",
     "scatter",
@@ -15321,7 +16196,7 @@
     "图表",
     "统计"
    ],
-   "fn": "scatter",
+   "fn": "chart",
    "fields": [
     "x",
     "y"
@@ -15349,6 +16224,7 @@
     "182",
     "198",
     "242",
+    "chart",
     "n",
     "scenario",
     "scenarios",
@@ -15369,7 +16245,7 @@
     "对比",
     "决策"
    ],
-   "fn": "scenario",
+   "fn": "chart",
    "fields": [
     "n"
    ],
@@ -15385,15 +16261,37 @@
    "zh": [
     "排程"
    ],
-   "description": "zx 组件「zx_schedule」（Schedule）：用于呈现Schedule相关数据。关键字段 ['d', 's']、数组 ['cells', 'days', 'slots']。",
+   "description": "zx 组件「zx_schedule」（Schedule）：用于呈现Schedule相关数据。关键字段 ['d', 's']、数组 ['cells', 'days', 'slots']。 示例 type=zx_schedule。",
    "keywords": [
+    "0",
+    "1",
+    "2026-10-16",
+    "2026-10-17",
+    "4",
+    "8",
+    "A",
+    "B",
+    "C",
     "cells",
     "d",
     "days",
+    "grid",
+    "name",
     "s",
     "schedule",
     "slots",
-    "排程"
+    "type",
+    "v",
+    "value",
+    "x",
+    "y",
+    "事项A",
+    "事项B",
+    "分组一",
+    "分组二",
+    "排程",
+    "示例",
+    "起"
    ],
    "triggers": [
     "展示Schedule",
@@ -15406,7 +16304,7 @@
     "进度",
     "计划"
    ],
-   "fn": "schedule",
+   "fn": "grid",
    "fields": [
     "d",
     "s"
@@ -15416,7 +16314,7 @@
     "days",
     "slots"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_schoolnote": {
    "category": "text",
@@ -15531,6 +16429,7 @@
     "B",
     "C",
     "crit",
+    "decision",
     "n",
     "opts",
     "scoreboard",
@@ -15550,7 +16449,7 @@
     "数据",
     "表格"
    ],
-   "fn": "scoreboard",
+   "fn": "decision",
    "fields": [
     "n",
     "w"
@@ -15568,8 +16467,8 @@
    "zh": [],
    "description": "zx 组件「zx_scorecard」（Scorecard）：用于呈现Scorecard相关数据。关键字段 ['max', 'n', 'v', 'w']、数组 ['items']。 示例 type=zx_scorecard。",
    "keywords": [
-    "1.0",
-    "2.0",
+    "1",
+    "2",
     "3",
     "4",
     "5",
@@ -15577,6 +16476,7 @@
     "items",
     "k",
     "max",
+    "metrics",
     "n",
     "risk",
     "scorecard",
@@ -15597,7 +16497,7 @@
     "对比",
     "决策"
    ],
-   "fn": "scorecard",
+   "fn": "metrics",
    "fields": [
     "max",
     "n",
@@ -15693,6 +16593,7 @@
     "B2",
     "free",
     "k",
+    "matrix",
     "max",
     "rows",
     "seat",
@@ -15711,7 +16612,7 @@
     "物业",
     "租赁"
    ],
-   "fn": "seat",
+   "fn": "matrix",
    "fields": [
     "max",
     "st"
@@ -15725,13 +16626,18 @@
    "category": "media",
    "title": "Seek",
    "zh": [],
-   "description": "zx 组件「zx_seek」（Seek）：用于呈现Seek相关数据。关键字段 ['at', 'dur', 't']、数组 ['marks']。",
+   "description": "zx 组件「zx_seek」（Seek）：用于呈现Seek相关数据。关键字段 ['at', 'dur', 't']、数组 ['marks']。 示例 type=zx_seek。",
    "keywords": [
     "at",
     "dur",
     "marks",
     "seek",
-    "t"
+    "t",
+    "type",
+    "标签一",
+    "标签三",
+    "标签二",
+    "示例"
    ],
    "triggers": [
     "展示Seek",
@@ -15752,19 +16658,28 @@
    "arrays": [
     "marks"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_segmented": {
    "category": "form",
    "title": "Segmented",
    "zh": [],
-   "description": "zx 组件「zx_segmented」（Segmented）：用于呈现Segmented相关数据。关键字段 ['rec', 'sel', 't']、数组 ['segs']。",
+   "description": "zx 组件「zx_segmented」（Segmented）：用于呈现Segmented相关数据。关键字段 ['rec', 'sel', 't']、数组 ['segs']。 示例 type=zx_segmented。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "at",
     "rec",
     "segmented",
     "segs",
     "sel",
-    "t"
+    "stepper",
+    "t",
+    "title",
+    "type",
+    "步骤一",
+    "步骤二",
+    "示例"
    ],
    "triggers": [
     "展示Segmented",
@@ -15776,7 +16691,7 @@
     "输入",
     "表单"
    ],
-   "fn": "segmented",
+   "fn": "stepper",
    "fields": [
     "rec",
     "sel",
@@ -15785,7 +16700,7 @@
    "arrays": [
     "segs"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_sense": {
    "category": "card",
@@ -15795,7 +16710,7 @@
    "keywords": [
     "0.13",
     "0.42",
-    "1.0",
+    "1",
     "est",
     "g",
     "n",
@@ -15827,14 +16742,29 @@
    "category": "timeline",
    "title": "Seq",
    "zh": [],
-   "description": "zx 组件「zx_seq」（Seq）：用于呈现Seq相关数据。关键字段 ['f', 'n', 't']、数组 ['actors', 'msgs']。",
+   "description": "zx 组件「zx_seq」（Seq）：用于呈现Seq相关数据。关键字段 ['f', 'n', 't']、数组 ['actors', 'msgs']。 示例 type=zx_seq。",
    "keywords": [
+    "09:00",
+    "10",
+    "10:00",
+    "20",
+    "3",
     "actors",
+    "at",
     "f",
     "msgs",
     "n",
+    "name",
     "seq",
-    "t"
+    "t",
+    "title",
+    "type",
+    "value",
+    "步骤一",
+    "步骤二",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Seq",
@@ -15856,7 +16786,7 @@
     "actors",
     "msgs"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_seqdiff": {
    "category": "compare",
@@ -15902,14 +16832,24 @@
    "category": "aiml",
    "title": "Seqtest",
    "zh": [],
-   "description": "zx 组件「zx_seqtest」（Seqtest）：用于呈现Seqtest相关数据。关键字段 ['alpha', 'fn', 'n', 'z']、数组 ['looks']。",
+   "description": "zx 组件「zx_seqtest」（Seqtest）：用于呈现Seqtest相关数据。关键字段 ['alpha', 'fn', 'n', 'z']、数组 ['looks']。 示例 type=zx_seqtest。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "3",
     "alpha",
+    "at",
     "fn",
     "looks",
     "n",
     "seqtest",
-    "z"
+    "stepper",
+    "title",
+    "type",
+    "z",
+    "步骤一",
+    "步骤二",
+    "示例"
    ],
    "triggers": [
     "展示Seqtest",
@@ -15921,7 +16861,7 @@
     "数据科学",
     "模型"
    ],
-   "fn": "seqtest",
+   "fn": "stepper",
    "fields": [
     "alpha",
     "fn",
@@ -15931,7 +16871,7 @@
    "arrays": [
     "looks"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_sequential": {
    "category": "timeline",
@@ -15979,6 +16919,7 @@
    "description": "zx 组件「zx_settings」（Settings）：用于呈现Settings相关数据。关键字段 ['k', 'n', 'type']、数组 ['items', 'options']。 示例 type=zx_settings。",
    "keywords": [
     "True",
+    "choice",
     "d",
     "items",
     "k",
@@ -16008,7 +16949,7 @@
     "输入",
     "表单"
    ],
-   "fn": "settings",
+   "fn": "choice",
    "fields": [
     "k",
     "n",
@@ -16024,12 +16965,21 @@
    "category": "form",
    "title": "Setup",
    "zh": [],
-   "description": "zx 组件「zx_setup」（Setup）：用于呈现Setup相关数据。关键字段 ['req', 't']、数组 ['steps']。",
+   "description": "zx 组件「zx_setup」（Setup）：用于呈现Setup相关数据。关键字段 ['req', 't']、数组 ['steps']。 示例 type=zx_setup。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "at",
     "req",
     "setup",
+    "stepper",
     "steps",
-    "t"
+    "t",
+    "title",
+    "type",
+    "步骤一",
+    "步骤二",
+    "示例"
    ],
    "triggers": [
     "展示Setup",
@@ -16041,7 +16991,7 @@
     "输入",
     "表单"
    ],
-   "fn": "setup",
+   "fn": "stepper",
    "fields": [
     "req",
     "t"
@@ -16049,7 +16999,7 @@
    "arrays": [
     "steps"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_shell": {
    "category": "card",
@@ -16063,6 +17013,7 @@
     "prompt",
     "pwd",
     "shell",
+    "terminal",
     "type"
    ],
    "triggers": [
@@ -16075,7 +17026,7 @@
     "卡片",
     "容器"
    ],
-   "fn": "shell",
+   "fn": "terminal",
    "fields": [
     "prompt"
    ],
@@ -16100,10 +17051,10 @@
     "n",
     "no",
     "nodes",
-    "parcel",
     "s",
     "ship",
     "t",
+    "tree",
     "type",
     "到达转运中心",
     "寄件",
@@ -16122,7 +17073,7 @@
     "购物",
     "订单"
    ],
-   "fn": "parcel",
+   "fn": "tree",
    "fields": [
     "n",
     "s",
@@ -16191,6 +17142,7 @@
    "zh": [],
    "description": "zx 组件「zx_sign」（Sign）：用于呈现Sign相关数据。关键字段 ['onDone']、数组 []。 示例 type=zx_sign。",
    "keywords": [
+    "keyvalue",
     "onDone",
     "sign",
     "type"
@@ -16205,7 +17157,7 @@
     "输入",
     "表单"
    ],
-   "fn": "sign",
+   "fn": "keyvalue",
    "fields": [
     "onDone"
    ],
@@ -16414,6 +17366,7 @@
     "items",
     "k",
     "mem",
+    "metrics",
     "n",
     "slidergroup",
     "type",
@@ -16430,7 +17383,7 @@
     "输入",
     "表单"
    ],
-   "fn": "slidergroup",
+   "fn": "metrics",
    "fields": [
     "budget",
     "k",
@@ -16446,12 +17399,19 @@
    "category": "timeline",
    "title": "Slo",
    "zh": [],
-   "description": "zx 组件「zx_slo」（Slo）：用于呈现Slo相关数据。关键字段 ['target', 'used']、数组 ['days']。",
+   "description": "zx 组件「zx_slo」（Slo）：用于呈现Slo相关数据。关键字段 ['target', 'used']、数组 ['days']。 示例 type=zx_slo。",
    "keywords": [
+    "2026-10-16",
+    "2026-10-17",
+    "calendar",
     "days",
     "slo",
     "target",
-    "used"
+    "type",
+    "used",
+    "事项A",
+    "事项B",
+    "示例"
    ],
    "triggers": [
     "展示Slo",
@@ -16463,7 +17423,7 @@
     "进度",
     "计划"
    ],
-   "fn": "slo",
+   "fn": "calendar",
    "fields": [
     "target",
     "used"
@@ -16471,7 +17431,7 @@
    "arrays": [
     "days"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_slope": {
    "category": "chart_basic",
@@ -16568,16 +17528,32 @@
    "category": "form",
    "title": "Slotconflict",
    "zh": [],
-   "description": "zx 组件「zx_slotconflict」（Slotconflict）：用于呈现Slotconflict相关数据。关键字段 ['cost', 'n', 'slot', 'w', 'why']、数组 ['opts', 'sides']。",
+   "description": "zx 组件「zx_slotconflict」（Slotconflict）：用于呈现Slotconflict相关数据。关键字段 ['cost', 'n', 'slot', 'w', 'why']、数组 ['opts', 'sides']。 示例 type=zx_slotconflict。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "3",
+    "a",
+    "at",
+    "b",
+    "choice",
     "cost",
+    "label",
     "n",
     "opts",
     "sides",
     "slot",
     "slotconflict",
+    "title",
+    "type",
+    "value",
     "w",
-    "why"
+    "why",
+    "步骤一",
+    "步骤二",
+    "示例",
+    "选项一",
+    "选项二"
    ],
    "triggers": [
     "展示Slotconflict",
@@ -16589,7 +17565,7 @@
     "输入",
     "表单"
    ],
-   "fn": "slotconflict",
+   "fn": "choice",
    "fields": [
     "cost",
     "n",
@@ -16601,18 +17577,27 @@
     "opts",
     "sides"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_sortable": {
    "category": "table",
    "title": "Sortable",
    "zh": [],
-   "description": "zx 组件「zx_sortable」（Sortable）：用于呈现Sortable相关数据。关键字段 ['k', 'n']、数组 ['items']。",
+   "description": "zx 组件「zx_sortable」（Sortable）：用于呈现Sortable相关数据。关键字段 ['k', 'n']、数组 ['items']。 示例 type=zx_sortable。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "items",
     "k",
     "n",
-    "sortable"
+    "name",
+    "sortable",
+    "type",
+    "value",
+    "键",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Sortable",
@@ -16631,7 +17616,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_span": {
    "category": "nav",
@@ -16647,6 +17632,7 @@
     "900",
     "DNS",
     "e",
+    "gantt",
     "n",
     "s",
     "span",
@@ -16669,7 +17655,7 @@
     "布局",
     "结构"
    ],
-   "fn": "span",
+   "fn": "gantt",
    "fields": [
     "e",
     "n",
@@ -16699,6 +17685,7 @@
     "35",
     "38",
     "40",
+    "chart",
     "items",
     "n",
     "pts",
@@ -16717,7 +17704,7 @@
     "仪表",
     "占比"
    ],
-   "fn": "sparkgrid",
+   "fn": "chart",
    "fields": [
     "n"
    ],
@@ -16742,6 +17729,7 @@
     "99",
     "label",
     "points",
+    "spark",
     "sparkline",
     "type",
     "日活"
@@ -16756,7 +17744,7 @@
     "仪表",
     "占比"
    ],
-   "fn": "sparkline",
+   "fn": "spark",
    "fields": [],
    "arrays": [
     "points"
@@ -16779,6 +17767,7 @@
     "0.9",
     "bands",
     "n",
+    "spark",
     "spectrum",
     "type",
     "音频频谱"
@@ -16793,7 +17782,7 @@
     "图像",
     "音视频"
    ],
-   "fn": "spectrum",
+   "fn": "spark",
    "fields": [],
    "arrays": [
     "bands"
@@ -16878,13 +17867,27 @@
    "category": "chart_graph",
    "title": "Split",
    "zh": [],
-   "description": "zx 组件「zx_split」（Split）：用于呈现Split相关数据。关键字段 ['dir', 'max', 'min', 'ratio']、数组 []。",
+   "description": "zx 组件「zx_split」（Split）：用于呈现Split相关数据。关键字段 ['dir', 'max', 'min', 'ratio']、数组 []。 示例 type=zx_split。",
    "keywords": [
+    "0.5",
+    "1",
+    "children",
+    "container",
     "dir",
+    "items",
     "max",
     "min",
+    "name",
     "ratio",
-    "split"
+    "split",
+    "title",
+    "type",
+    "value",
+    "zx_list",
+    "zx_note",
+    "子卡片A",
+    "甲",
+    "示例"
    ],
    "triggers": [
     "展示Split",
@@ -16896,7 +17899,7 @@
     "关系",
     "网络"
    ],
-   "fn": "split",
+   "fn": "container",
    "fields": [
     "dir",
     "max",
@@ -16904,19 +17907,46 @@
     "ratio"
    ],
    "arrays": [],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_splitbill": {
    "category": "finance",
    "title": "Splitbill",
    "zh": [],
-   "description": "zx 组件「zx_splitbill」（Splitbill）：用于呈现Splitbill相关数据。关键字段 ['p', 'v']、数组 ['items', 'people']。",
+   "description": "zx 组件「zx_splitbill」（Splitbill）：用于呈现Splitbill相关数据。关键字段 ['p', 'v']、数组 ['items', 'people']。 示例 type=zx_splitbill。",
    "keywords": [
+    "1",
+    "10",
+    "20",
+    "42",
+    "children",
+    "id",
     "items",
+    "label",
+    "n1",
+    "n1a",
+    "n1b",
+    "n2",
+    "name",
     "p",
     "people",
     "splitbill",
-    "v"
+    "table",
+    "title",
+    "type",
+    "v",
+    "value",
+    "zx_list",
+    "zx_note",
+    "子卡片A",
+    "子节点",
+    "子节点二",
+    "甲",
+    "示例",
+    "节点一",
+    "节点二",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Splitbill",
@@ -16928,7 +17958,7 @@
     "财务",
     "会计"
    ],
-   "fn": "splitbill",
+   "fn": "table",
    "fields": [
     "p",
     "v"
@@ -16937,17 +17967,33 @@
     "items",
     "people"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_splitflap": {
    "category": "card",
    "title": "Splitflap",
    "zh": [],
-   "description": "zx 组件「zx_splitflap」（Splitflap）：用于呈现Splitflap相关数据。关键字段 ['v']、数组 ['digits']。",
+   "description": "zx 组件「zx_splitflap」（Splitflap）：用于呈现Splitflap相关数据。关键字段 ['v']、数组 ['digits']。 示例 type=zx_splitflap。",
    "keywords": [
+    "1",
+    "10",
+    "20",
+    "42",
+    "children",
     "digits",
+    "items",
+    "name",
     "splitflap",
-    "v"
+    "title",
+    "type",
+    "v",
+    "value",
+    "zx_list",
+    "zx_note",
+    "子卡片A",
+    "甲",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Splitflap",
@@ -16966,7 +18012,7 @@
    "arrays": [
     "digits"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_spreadsheet": {
    "category": "table",
@@ -17016,12 +18062,26 @@
    "category": "nav",
    "title": "Stack",
    "zh": [],
-   "description": "zx 组件「zx_stack」（Stack）：用于呈现Stack相关数据。关键字段 ['k', 't']、数组 ['cards']。",
+   "description": "zx 组件「zx_stack」（Stack）：用于呈现Stack相关数据。关键字段 ['k', 't']、数组 ['cards']。 示例 type=zx_stack。",
    "keywords": [
+    "1",
     "cards",
+    "children",
+    "container",
+    "items",
     "k",
+    "name",
     "stack",
-    "t"
+    "t",
+    "title",
+    "type",
+    "value",
+    "zx_list",
+    "zx_note",
+    "子卡片A",
+    "甲",
+    "示例",
+    "键"
    ],
    "triggers": [
     "展示Stack",
@@ -17033,7 +18093,7 @@
     "布局",
     "结构"
    ],
-   "fn": "stack",
+   "fn": "container",
    "fields": [
     "k",
     "t"
@@ -17041,7 +18101,7 @@
    "arrays": [
     "cards"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_stagger": {
    "category": "timeline",
@@ -17052,6 +18112,7 @@
     "/a.png",
     "children",
     "cmd",
+    "container",
     "image",
     "kind",
     "lines",
@@ -17072,7 +18133,7 @@
     "进度",
     "计划"
    ],
-   "fn": "",
+   "fn": "container",
    "fields": [],
    "arrays": [],
    "has_sample": true
@@ -17087,6 +18148,7 @@
     "5",
     "labels",
     "max",
+    "rating",
     "stars",
     "type",
     "v",
@@ -17106,7 +18168,7 @@
     "KPI",
     "数字"
    ],
-   "fn": "stars",
+   "fn": "rating",
    "fields": [
     "max",
     "v"
@@ -17132,6 +18194,7 @@
     "delta",
     "items",
     "lowerBetter",
+    "metrics",
     "n",
     "stat",
     "type",
@@ -17151,7 +18214,7 @@
     "KPI",
     "数字"
    ],
-   "fn": "stat",
+   "fn": "metrics",
    "fields": [
     "delta",
     "n",
@@ -17166,12 +18229,21 @@
    "category": "table",
    "title": "Statelist",
    "zh": [],
-   "description": "zx 组件「zx_statelist」（Statelist）：用于呈现Statelist相关数据。关键字段 ['at', 'n']、数组 ['states']。",
+   "description": "zx 组件「zx_statelist」（Statelist）：用于呈现Statelist相关数据。关键字段 ['at', 'n']、数组 ['states']。 示例 type=zx_statelist。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "3",
     "at",
     "n",
     "statelist",
-    "states"
+    "states",
+    "stepper",
+    "title",
+    "type",
+    "步骤一",
+    "步骤二",
+    "示例"
    ],
    "triggers": [
     "展示Statelist",
@@ -17182,7 +18254,7 @@
     "数据",
     "表格"
    ],
-   "fn": "statelist",
+   "fn": "stepper",
    "fields": [
     "at",
     "n"
@@ -17190,22 +18262,32 @@
    "arrays": [
     "states"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_statemachine": {
    "category": "devops",
    "title": "Statemachine",
    "zh": [],
-   "description": "zx 组件「zx_statemachine」（Statemachine）：用于呈现Statemachine相关数据。关键字段 ['at', 'f', 'k', 'n', 't']、数组 ['states', 'trans']。",
+   "description": "zx 组件「zx_statemachine」（Statemachine）：用于呈现Statemachine相关数据。关键字段 ['at', 'f', 'k', 'n', 't']、数组 ['states', 'trans']。 示例 type=zx_statemachine。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "3",
     "at",
     "f",
     "k",
     "n",
     "statemachine",
     "states",
+    "stepper",
     "t",
-    "trans"
+    "title",
+    "trans",
+    "type",
+    "步骤一",
+    "步骤二",
+    "示例",
+    "键"
    ],
    "triggers": [
     "展示Statemachine",
@@ -17217,7 +18299,7 @@
     "工程",
     "监控"
    ],
-   "fn": "statemachine",
+   "fn": "stepper",
    "fields": [
     "at",
     "f",
@@ -17229,7 +18311,7 @@
     "states",
     "trans"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_steparea": {
    "category": "chart_basic",
@@ -17242,6 +18324,7 @@
     "22",
     "25",
     "30",
+    "chart",
     "pts",
     "steparea",
     "type"
@@ -17256,7 +18339,7 @@
     "图表",
     "统计"
    ],
-   "fn": "steparea",
+   "fn": "chart",
    "fields": [],
    "arrays": [
     "pts"
@@ -17275,6 +18358,7 @@
     "n",
     "s",
     "stepflow",
+    "stepper",
     "steps",
     "type",
     "发布流程",
@@ -17293,7 +18377,7 @@
     "进度",
     "计划"
    ],
-   "fn": "stepflow",
+   "fn": "stepper",
    "fields": [
     "n",
     "s"
@@ -17350,17 +18434,26 @@
    "category": "commerce",
    "title": "Stocktake",
    "zh": [],
-   "description": "zx 组件「zx_stocktake」（Stocktake）：用于呈现Stocktake相关数据。关键字段 ['book', 'cycD', 'last', 'n', 'real', 'sinceD', 'why']、数组 ['items']。",
+   "description": "zx 组件「zx_stocktake」（Stocktake）：用于呈现Stocktake相关数据。关键字段 ['book', 'cycD', 'last', 'n', 'real', 'sinceD', 'why']、数组 ['items']。 示例 type=zx_stocktake。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "book",
     "cycD",
     "items",
     "last",
     "n",
+    "name",
     "real",
     "sinceD",
     "stocktake",
-    "why"
+    "type",
+    "value",
+    "why",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Stocktake",
@@ -17385,7 +18478,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_stoprule": {
    "category": "timeline",
@@ -17400,6 +18493,7 @@
     "at",
     "best",
     "explore",
+    "keyvalue",
     "n",
     "stoprule",
     "type"
@@ -17414,7 +18508,7 @@
     "进度",
     "计划"
    ],
-   "fn": "stoprule",
+   "fn": "keyvalue",
    "fields": [
     "at",
     "best",
@@ -17440,6 +18534,7 @@
     "38",
     "App",
     "Web",
+    "chart",
     "n",
     "series",
     "stream",
@@ -17457,7 +18552,7 @@
     "图像",
     "音视频"
    ],
-   "fn": "stream",
+   "fn": "chart",
    "fields": [
     "n"
    ],
@@ -17473,10 +18568,10 @@
    "zh": [],
    "description": "zx 组件「zx_stress」（Stress）：用于呈现Stress相关数据。关键字段 ['load', 'n', 's']、数组 ['items']。 示例 type=zx_stress。",
    "keywords": [
-    "0.0",
-    "1.0",
-    "2.0",
-    "3.0",
+    "0",
+    "1",
+    "2",
+    "3",
     "fail",
     "items",
     "load",
@@ -17685,6 +18780,7 @@
     "n",
     "rings",
     "sunburst",
+    "tree",
     "type",
     "v",
     "总计",
@@ -17701,7 +18797,7 @@
     "关系",
     "网络"
    ],
-   "fn": "sunburst",
+   "fn": "tree",
    "fields": [
     "n",
     "v"
@@ -17735,6 +18831,7 @@
     "n0",
     "survcmp",
     "t",
+    "tree",
     "type",
     "两组留存",
     "实验组",
@@ -17750,7 +18847,7 @@
     "图表",
     "统计"
    ],
-   "fn": "survcmp",
+   "fn": "tree",
    "fields": [
     "c",
     "d",
@@ -17774,6 +18871,7 @@
    "keywords": [
     "5",
     "True",
+    "form",
     "id",
     "k",
     "max",
@@ -17807,7 +18905,7 @@
     "协作",
     "团队"
    ],
-   "fn": "survey",
+   "fn": "form",
    "fields": [
     "id",
     "k",
@@ -17871,12 +18969,20 @@
    "category": "media",
    "title": "Swatch",
    "zh": [],
-   "description": "zx 组件「zx_swatch」（Swatch）：用于呈现Swatch相关数据。关键字段 ['hex', 'sel']、数组 ['colors']。",
+   "description": "zx 组件「zx_swatch」（Swatch）：用于呈现Swatch相关数据。关键字段 ['hex', 'sel']、数组 ['colors']。 示例 type=zx_swatch。",
    "keywords": [
+    "10",
+    "20",
     "colors",
     "hex",
+    "name",
     "sel",
-    "swatch"
+    "swatch",
+    "type",
+    "value",
+    "示例",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Swatch",
@@ -17896,7 +19002,7 @@
    "arrays": [
     "colors"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_swimlane": {
    "category": "timeline",
@@ -17908,6 +19014,7 @@
     "cells",
     "doing",
     "done",
+    "grid",
     "lanes",
     "lv",
     "n",
@@ -17931,7 +19038,7 @@
     "进度",
     "计划"
    ],
-   "fn": "swimlane",
+   "fn": "grid",
    "fields": [
     "lv",
     "n"
@@ -17946,13 +19053,29 @@
    "category": "nav",
    "title": "Swipe",
    "zh": [],
-   "description": "zx 组件「zx_swipe」（Swipe）：用于呈现Swipe相关数据。关键字段 ['k', 't']、数组 ['acts', 'items']。",
+   "description": "zx 组件「zx_swipe」（Swipe）：用于呈现Swipe相关数据。关键字段 ['k', 't']、数组 ['acts', 'items']。 示例 type=zx_swipe。",
    "keywords": [
+    "09:00",
+    "10",
+    "10:00",
+    "20",
     "acts",
+    "at",
     "items",
     "k",
+    "name",
+    "stepper",
     "swipe",
-    "t"
+    "t",
+    "title",
+    "type",
+    "value",
+    "步骤一",
+    "步骤二",
+    "示例",
+    "键",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Swipe",
@@ -17964,7 +19087,7 @@
     "布局",
     "结构"
    ],
-   "fn": "swipe",
+   "fn": "stepper",
    "fields": [
     "k",
     "t"
@@ -17973,7 +19096,7 @@
     "acts",
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_switch": {
    "category": "form",
@@ -18152,9 +19275,21 @@
    "category": "card",
    "title": "Tabs",
    "zh": [],
-   "description": "zx 组件「zx_tabs」（Tabs）：用于呈现Tabs相关数据。关键字段 []、数组 []。",
+   "description": "zx 组件「zx_tabs」（Tabs）：用于呈现Tabs相关数据。关键字段 []、数组 []。 示例 type=zx_tabs。",
    "keywords": [
-    "tabs"
+    "1",
+    "children",
+    "container",
+    "items",
+    "name",
+    "tabs",
+    "title",
+    "type",
+    "value",
+    "zx_list",
+    "zx_note",
+    "子卡片A",
+    "甲"
    ],
    "triggers": [
     "展示Tabs",
@@ -18166,10 +19301,10 @@
     "卡片",
     "容器"
    ],
-   "fn": "",
+   "fn": "container",
    "fields": [],
    "arrays": [],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_tags": {
    "category": "card",
@@ -18382,6 +19517,7 @@
     "b",
     "method",
     "n",
+    "spark",
     "t",
     "test",
     "type"
@@ -18396,7 +19532,7 @@
     "工程",
     "监控"
    ],
-   "fn": "test",
+   "fn": "spark",
    "fields": [
     "method"
    ],
@@ -18419,6 +19555,7 @@
     "by",
     "d",
     "posts",
+    "stepper",
     "t",
     "thread",
     "type",
@@ -18437,7 +19574,7 @@
     "数据",
     "列表"
    ],
-   "fn": "thread",
+   "fn": "stepper",
    "fields": [
     "by",
     "d",
@@ -18584,13 +19721,22 @@
    "zh": [
     "时间线"
    ],
-   "description": "zx 组件「zx_timeline」（Timeline）：用于呈现Timeline相关数据。关键字段 ['bind', 'n']、数组 ['steps']。",
+   "description": "zx 组件「zx_timeline」（Timeline）：用于呈现Timeline相关数据。关键字段 ['bind', 'n']、数组 ['steps']。 示例 type=zx_timeline。",
    "keywords": [
+    "09:00",
+    "10:00",
+    "3",
+    "at",
     "bind",
     "n",
+    "stepper",
     "steps",
     "timeline",
-    "时间线"
+    "title",
+    "type",
+    "时间线",
+    "步骤一",
+    "步骤二"
    ],
    "triggers": [
     "展示Timeline",
@@ -18603,7 +19749,7 @@
     "进度",
     "计划"
    ],
-   "fn": "timeline",
+   "fn": "stepper",
    "fields": [
     "bind",
     "n"
@@ -18611,7 +19757,7 @@
    "arrays": [
     "steps"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_timeline2": {
    "category": "timeline",
@@ -18629,13 +19775,13 @@
     "6",
     "e",
     "from",
+    "gantt",
     "n",
     "pe",
     "ps",
     "rows",
     "s",
     "timeline",
-    "timeline2",
     "to",
     "type",
     "开发",
@@ -18653,7 +19799,7 @@
     "进度",
     "计划"
    ],
-   "fn": "timeline2",
+   "fn": "gantt",
    "fields": [
     "e",
     "from",
@@ -18841,6 +19987,7 @@
     "fun",
     "k",
     "kw",
+    "metrics",
     "nl",
     "num",
     "op",
@@ -18858,7 +20005,7 @@
     "代码",
     "日志"
    ],
-   "fn": "tokens",
+   "fn": "metrics",
    "fields": [
     "k",
     "v"
@@ -18892,6 +20039,7 @@
     "data",
     "lsl",
     "n",
+    "spark",
     "target",
     "tolerance",
     "type",
@@ -18908,7 +20056,7 @@
     "KPI",
     "数字"
    ],
-   "fn": "tolerance",
+   "fn": "spark",
    "fields": [
     "lsl",
     "target",
@@ -18932,6 +20080,7 @@
     "false",
     "fields",
     "file_write",
+    "form",
     "hello",
     "n",
     "path",
@@ -18952,7 +20101,7 @@
     "输入",
     "表单"
    ],
-   "fn": "toolargs",
+   "fn": "form",
    "fields": [
     "def",
     "n",
@@ -18969,13 +20118,15 @@
    "category": "form",
    "title": "Toolcall",
    "zh": [],
-   "description": "zx 组件「zx_toolcall」（Toolcall）：用于呈现Toolcall相关数据。关键字段 ['ms', 'res', 'st', 'tool']、数组 []。",
+   "description": "zx 组件「zx_toolcall」（Toolcall）：用于呈现Toolcall相关数据。关键字段 ['ms', 'res', 'st', 'tool']、数组 []。 示例 type=zx_toolcall。",
    "keywords": [
     "ms",
     "res",
     "st",
     "tool",
-    "toolcall"
+    "toolcall",
+    "type",
+    "示例"
    ],
    "triggers": [
     "展示Toolcall",
@@ -18995,7 +20146,7 @@
     "tool"
    ],
    "arrays": [],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_toolchain": {
    "category": "form",
@@ -19019,6 +20170,7 @@
     "s2",
     "s3",
     "st",
+    "stepper",
     "steps",
     "tool",
     "toolchain",
@@ -19035,7 +20187,7 @@
     "输入",
     "表单"
    ],
-   "fn": "toolchain",
+   "fn": "stepper",
    "fields": [
     "after",
     "id",
@@ -19051,15 +20203,33 @@
    "category": "chart_graph",
    "title": "Topology",
    "zh": [],
-   "description": "zx 组件「zx_topology」（Topology）：用于呈现Topology相关数据。关键字段 ['f', 'n', 's', 't']、数组 ['edges', 'nodes']。",
+   "description": "zx 组件「zx_topology」（Topology）：用于呈现Topology相关数据。关键字段 ['f', 'n', 's', 't']、数组 ['edges', 'nodes']。 示例 type=zx_topology。",
    "keywords": [
+    "3",
+    "children",
     "edges",
     "f",
+    "from",
+    "graph",
+    "id",
+    "label",
     "n",
+    "n1",
+    "n1a",
+    "n1b",
+    "n2",
     "nodes",
     "s",
     "t",
-    "topology"
+    "to",
+    "topology",
+    "type",
+    "子节点",
+    "子节点二",
+    "示例",
+    "节点一",
+    "节点二",
+    "起"
    ],
    "triggers": [
     "展示Topology",
@@ -19071,7 +20241,7 @@
     "关系",
     "网络"
    ],
-   "fn": "topology",
+   "fn": "graph",
    "fields": [
     "f",
     "n",
@@ -19082,7 +20252,7 @@
     "edges",
     "nodes"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_tornado": {
    "category": "chart_basic",
@@ -19135,12 +20305,20 @@
    "category": "card",
    "title": "Tour",
    "zh": [],
-   "description": "zx 组件「zx_tour」（Tour）：用于呈现Tour相关数据。关键字段 ['at', 't']、数组 ['steps']。",
+   "description": "zx 组件「zx_tour」（Tour）：用于呈现Tour相关数据。关键字段 ['at', 't']、数组 ['steps']。 示例 type=zx_tour。",
    "keywords": [
+    "09:00",
+    "10:00",
     "at",
+    "stepper",
     "steps",
     "t",
-    "tour"
+    "title",
+    "tour",
+    "type",
+    "步骤一",
+    "步骤二",
+    "示例"
    ],
    "triggers": [
     "展示Tour",
@@ -19152,7 +20330,7 @@
     "卡片",
     "容器"
    ],
-   "fn": "tour",
+   "fn": "stepper",
    "fields": [
     "at",
     "t"
@@ -19160,18 +20338,33 @@
    "arrays": [
     "steps"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_traceback": {
    "category": "text",
    "title": "Traceback",
    "zh": [],
-   "description": "zx 组件「zx_traceback」（Traceback）：用于呈现Traceback相关数据。关键字段 ['n', 'p']、数组 ['nodes']。",
+   "description": "zx 组件「zx_traceback」（Traceback）：用于呈现Traceback相关数据。关键字段 ['n', 'p']、数组 ['nodes']。 示例 type=zx_traceback。",
    "keywords": [
+    "3",
+    "children",
+    "id",
+    "label",
     "n",
+    "n1",
+    "n1a",
+    "n1b",
+    "n2",
     "nodes",
     "p",
-    "traceback"
+    "traceback",
+    "tree",
+    "type",
+    "子节点",
+    "子节点二",
+    "示例",
+    "节点一",
+    "节点二"
    ],
    "triggers": [
     "展示Traceback",
@@ -19183,7 +20376,7 @@
     "代码",
     "日志"
    ],
-   "fn": "traceback",
+   "fn": "tree",
    "fields": [
     "n",
     "p"
@@ -19191,7 +20384,7 @@
    "arrays": [
     "nodes"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_tradeoff": {
    "category": "compare",
@@ -19238,12 +20431,23 @@
    "category": "timeline",
    "title": "Trail",
    "zh": [],
-   "description": "zx 组件「zx_trail」（Trail）：用于呈现Trail相关数据。关键字段 ['x', 'y']、数组 ['pts']。",
+   "description": "zx 组件「zx_trail」（Trail）：用于呈现Trail相关数据。关键字段 ['x', 'y']、数组 ['pts']。 示例 type=zx_trail。",
    "keywords": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "chart",
     "pts",
     "trail",
+    "type",
     "x",
-    "y"
+    "y",
+    "示例"
    ],
    "triggers": [
     "展示Trail",
@@ -19255,7 +20459,7 @@
     "进度",
     "计划"
    ],
-   "fn": "trail",
+   "fn": "chart",
    "fields": [
     "x",
     "y"
@@ -19263,19 +20467,29 @@
    "arrays": [
     "pts"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_transfer": {
    "category": "finance",
    "title": "Transfer",
    "zh": [],
-   "description": "zx 组件「zx_transfer」（Transfer）：用于呈现Transfer相关数据。关键字段 ['k', 'n', 'side']、数组 ['items']。",
+   "description": "zx 组件「zx_transfer」（Transfer）：用于呈现Transfer相关数据。关键字段 ['k', 'n', 'side']、数组 ['items']。 示例 type=zx_transfer。",
    "keywords": [
+    "10",
+    "20",
+    "3",
     "items",
     "k",
     "n",
+    "name",
     "side",
-    "transfer"
+    "transfer",
+    "type",
+    "value",
+    "示例",
+    "键",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Transfer",
@@ -19296,7 +20510,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_transit": {
    "category": "chart_geo",
@@ -19370,14 +20584,36 @@
    "zh": [
     "树"
    ],
-   "description": "zx 组件「zx_tree」（Tree）：用于呈现Tree相关数据。关键字段 ['n', 'path']、数组 ['children', 'nodes']。",
+   "description": "zx 组件「zx_tree」（Tree）：用于呈现Tree相关数据。关键字段 ['n', 'path']、数组 ['children', 'nodes']。 示例 type=zx_tree。",
    "keywords": [
+    "1",
+    "3",
     "children",
+    "id",
+    "items",
+    "label",
     "n",
+    "n1",
+    "n1a",
+    "n1b",
+    "n2",
+    "name",
     "nodes",
     "path",
+    "title",
     "tree",
-    "树"
+    "type",
+    "value",
+    "zx_list",
+    "zx_note",
+    "子卡片A",
+    "子节点",
+    "子节点二",
+    "树",
+    "甲",
+    "示例",
+    "节点一",
+    "节点二"
    ],
    "triggers": [
     "展示Tree",
@@ -19399,7 +20635,7 @@
     "children",
     "nodes"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_treemap": {
    "category": "chart_graph",
@@ -19419,6 +20655,7 @@
     "items",
     "js",
     "k",
+    "metrics",
     "n",
     "treemap",
     "type",
@@ -19436,7 +20673,7 @@
     "关系",
     "网络"
    ],
-   "fn": "treemap",
+   "fn": "metrics",
    "fields": [
     "k",
     "n",
@@ -19451,12 +20688,16 @@
    "category": "chart_graph",
    "title": "Treeview",
    "zh": [],
-   "description": "zx 组件「zx_treeview」（Treeview）：用于呈现Treeview相关数据。关键字段 ['k', 'n', 'root']、数组 []。",
+   "description": "zx 组件「zx_treeview」（Treeview）：用于呈现Treeview相关数据。关键字段 ['k', 'n', 'root']、数组 []。 示例 type=zx_treeview。",
    "keywords": [
+    "3",
     "k",
     "n",
     "root",
-    "treeview"
+    "treeview",
+    "type",
+    "示例",
+    "键"
    ],
    "triggers": [
     "展示Treeview",
@@ -19475,7 +20716,7 @@
     "root"
    ],
    "arrays": [],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_tripkit": {
    "category": "property",
@@ -19648,11 +20889,12 @@
     "0.42",
     "0.7",
     "0.92",
-    "1.0",
+    "1",
     "10",
     "20",
     "40",
     "80",
+    "chart",
     "n",
     "pts",
     "type",
@@ -19671,7 +20913,7 @@
     "卡片",
     "容器"
    ],
-   "fn": "utility",
+   "fn": "chart",
    "fields": [
     "u",
     "x"
@@ -19746,6 +20988,7 @@
     "32",
     "33",
     "34",
+    "chart",
     "groups",
     "n",
     "type",
@@ -19766,7 +21009,7 @@
     "数据科学",
     "模型"
    ],
-   "fn": "vardec",
+   "fn": "chart",
    "fields": [
     "n"
    ],
@@ -19937,6 +21180,7 @@
     "at",
     "dur",
     "marks",
+    "media",
     "n",
     "rate",
     "type",
@@ -19955,7 +21199,7 @@
     "图像",
     "音视频"
    ],
-   "fn": "video",
+   "fn": "media",
    "fields": [
     "at",
     "dur",
@@ -19987,6 +21231,7 @@
     "42",
     "A",
     "B",
+    "chart",
     "groups",
     "med",
     "n",
@@ -20005,7 +21250,7 @@
     "图表",
     "统计"
    ],
-   "fn": "violin",
+   "fn": "chart",
    "fields": [
     "med",
     "n"
@@ -20037,6 +21282,7 @@
     "880",
     "910",
     "980",
+    "chart",
     "groups",
     "n",
     "type",
@@ -20057,7 +21303,7 @@
     "图表",
     "统计"
    ],
-   "fn": "violincmp",
+   "fn": "chart",
    "fields": [
     "n"
    ],
@@ -20193,14 +21439,23 @@
    "zh": [
     "钱包"
    ],
-   "description": "zx 组件「zx_wallet」（Wallet）：用于呈现Wallet相关数据。关键字段 ['bal', 't', 'v']、数组 ['items']。",
+   "description": "zx 组件「zx_wallet」（Wallet）：用于呈现Wallet相关数据。关键字段 ['bal', 't', 'v']、数组 ['items']。 示例 type=zx_wallet。",
    "keywords": [
+    "10",
+    "20",
+    "42",
     "bal",
     "items",
+    "name",
     "t",
+    "type",
     "v",
+    "value",
     "wallet",
-    "钱包"
+    "示例",
+    "钱包",
+    "项一",
+    "项二"
    ],
    "triggers": [
     "展示Wallet",
@@ -20222,7 +21477,7 @@
    "arrays": [
     "items"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_wardhand": {
    "category": "health",
@@ -20390,6 +21645,7 @@
     "1430",
     "380",
     "n",
+    "stepper",
     "steps",
     "type",
     "v",
@@ -20409,7 +21665,7 @@
     "图表",
     "统计"
    ],
-   "fn": "waterfall",
+   "fn": "stepper",
    "fields": [
     "n",
     "v"
@@ -20433,6 +21689,7 @@
     "0.8",
     "0.9",
     "peaks",
+    "spark",
     "type",
     "waveedit"
    ],
@@ -20446,7 +21703,7 @@
     "图像",
     "音视频"
    ],
-   "fn": "waveedit",
+   "fn": "spark",
    "fields": [],
    "arrays": [
     "peaks"
@@ -20477,6 +21734,7 @@
     "3",
     "82",
     "c",
+    "calendar",
     "city",
     "code",
     "d",
@@ -20510,7 +21768,7 @@
     "KPI",
     "数字"
    ],
-   "fn": "weather",
+   "fn": "calendar",
    "fields": [
     "city",
     "code",
@@ -20528,16 +21786,38 @@
    "category": "timeline",
    "title": "Weekgrid",
    "zh": [],
-   "description": "zx 组件「zx_weekgrid」（Weekgrid）：用于呈现Weekgrid相关数据。关键字段 ['d', 'nowD', 'nowS', 's']、数组 ['cells', 'days', 'slots']。",
+   "description": "zx 组件「zx_weekgrid」（Weekgrid）：用于呈现Weekgrid相关数据。关键字段 ['d', 'nowD', 'nowS', 's']、数组 ['cells', 'days', 'slots']。 示例 type=zx_weekgrid。",
    "keywords": [
+    "0",
+    "1",
+    "2026-10-16",
+    "2026-10-17",
+    "4",
+    "8",
+    "A",
+    "B",
+    "C",
     "cells",
     "d",
     "days",
+    "grid",
+    "name",
     "nowD",
     "nowS",
     "s",
     "slots",
-    "weekgrid"
+    "type",
+    "v",
+    "value",
+    "weekgrid",
+    "x",
+    "y",
+    "事项A",
+    "事项B",
+    "分组一",
+    "分组二",
+    "示例",
+    "起"
    ],
    "triggers": [
     "展示Weekgrid",
@@ -20549,7 +21829,7 @@
     "进度",
     "计划"
    ],
-   "fn": "weekgrid",
+   "fn": "grid",
    "fields": [
     "d",
     "nowD",
@@ -20561,7 +21841,7 @@
     "days",
     "slots"
    ],
-   "has_sample": false
+   "has_sample": true
   },
   "zx_whatif": {
    "category": "compare",
@@ -20569,7 +21849,7 @@
    "zh": [],
    "description": "zx 组件「zx_whatif」（Whatif）：用于呈现Whatif相关数据。关键字段 ['k', 'n', 'v']、数组 ['nodes']。 示例 type=zx_whatif。",
    "keywords": [
-    "1.0",
+    "1",
     "1.05",
     "1.15",
     "1.3",
@@ -20580,6 +21860,7 @@
     "k",
     "n",
     "nodes",
+    "tree",
     "type",
     "v",
     "whatif",
@@ -20599,7 +21880,7 @@
     "对比",
     "决策"
    ],
-   "fn": "whatif",
+   "fn": "tree",
    "fields": [
     "k",
     "n",
@@ -20620,6 +21901,7 @@
     "MVVM",
     "a",
     "arch",
+    "choice",
     "k",
     "mvvm",
     "options",
@@ -20642,7 +21924,7 @@
     "输入",
     "表单"
    ],
-   "fn": "wizard",
+   "fn": "choice",
    "fields": [
     "k",
     "q",
@@ -20710,6 +21992,7 @@
     "3",
     "9",
     "cap",
+    "metrics",
     "n",
     "people",
     "todo",
@@ -20731,7 +22014,7 @@
     "工程",
     "监控"
    ],
-   "fn": "workload",
+   "fn": "metrics",
    "fields": [
     "cap",
     "n",
@@ -20767,6 +22050,7 @@
     "45",
     "8",
     "cells",
+    "grid",
     "radius",
     "site",
     "type",
@@ -20786,7 +22070,7 @@
     "雷达",
     "多维"
    ],
-   "fn": "wxradar",
+   "fn": "grid",
    "fields": [
     "radius",
     "v",

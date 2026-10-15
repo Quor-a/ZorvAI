@@ -1722,6 +1722,10 @@ function resolveLayout(comp, dsl){
   if(OVERRIDE[comp]) return OVERRIDE[comp];
   if(CONTAINERS.indexOf(comp)>=0) return "container";
   var ct = ZX_CONTRACTS[comp]||{};
+  /* 显式 fn 映射优先：契约声明了真实存在的布局名时直接采用，
+     避免形状推断在退化 DSL 上漂移到错误布局（list/chart/tree 等高频推断面）。
+     死 fn（无对应 LAYOUTS 实现）自动跳过，回落到下面的形状推断。 */
+  if(ct.fn && LAYOUTS[ct.fn]) return ct.fn;
   var arrs = ct.arrays||[];
   if(arrs.indexOf("columns")>=0 && arrs.indexOf("rows")>=0) return "table";
   if(arrs.indexOf("fields")>=0) return "form";
@@ -1865,11 +1869,32 @@ function compile(comp, dsl, ctx){
   var layout = resolveLayout(comp, dsl);
   var fn = LAYOUTS[layout];
   if(!fn){ layout="generic"; fn=LAYOUTS.generic; }
-  try{ return fn(dsl, comp, ctx); }
+  var node;
+  try{ node = fn(dsl, comp, ctx); }
   catch(e){
     var b=el("div","sec"); b.appendChild(el("div","err-box", esc(comp+" 渲染失败："+(e&&e.message||e))));
     return b;
   }
+  /* 编译后兜底：布局返回了一个「肉眼不可见」的空白产物（无文本 / 无 SVG / 无子节点），
+     但 DSL 里明明有数据 —— 这种不可见空白卡正是排查里最刺眼的一类。
+     统一换成可见的「暂无内容」占位，绝不交付隐形空白卡。 */
+  if(!renderHasContent(node)){
+    var _ph = el("div","note");
+    _ph.appendChild(el("div","note-i","!"));
+    _ph.appendChild(el("div",null,esc("（该组件暂无可显示内容）")));
+    return _ph;
+  }
+  return node;
+}
+/* 判断渲染产物是否真有可见内容（文本 / 几何图形 / 非空子节点） */
+function renderHasContent(n){
+  if(!n) return false;
+  var h = n._html||"", t = n._text||"";
+  if((h.replace(/<[^>]+>/g," ")).trim().length || t.trim().length) return true;
+  if((h.match(/<(rect|circle|line|path|polygon|polyline|ellipse|svg)\b/gi)||[]).length) return true;
+  var kids = n.children||[];
+  for(var i=0;i<kids.length;i++){ if(renderHasContent(kids[i])) return true; }
+  return false;
 }
 
 /* ═══════════════════════════════════════════════════════════════
