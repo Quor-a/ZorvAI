@@ -693,11 +693,20 @@ fun ChatScreen(
                     )
                 )
             } else if (hasPendingTool) {
+                // 收集仍在执行（结果尚未回填）的工具名，透出到工作指示气泡做细节展示，
+                // 让"AI 正在执行工具…"细化为"AI 正在执行工具：web_search · read_url …"。
+                val pendingTools = afterUser
+                    .filter { !it.mine && !it.tools.isNullOrEmpty() }
+                    .flatMap { it.tools!! }
+                    .filter { it.result.isNullOrBlank() }
+                    .map { it.name }
+                    .distinct()
                 out.add(
                     Message(
                         id = -2, mine = false, author = selectedPersona.name,
                         avatar = selectedPersona.ava, avatarUri = selectedPersona.avatarUri,
                         time = "", text = null, isWorking = true,
+                        workingTools = pendingTools,
                     )
                 )
             }
@@ -3585,7 +3594,7 @@ private fun MessageRow(
             }
             // 执行中指示：AI 正在执行工具（结果尚未回填）→ 显示「AI 正在执行工具…」工作小组件。
             if (msg.isWorking) {
-                WorkingIndicator()
+                WorkingIndicator(msg.workingTools)
                 Spacer(Modifier.height(4.dp))
             }
             // 展开的思考内容（在名字行下方，正文上方）
@@ -4712,8 +4721,14 @@ private fun WaitingDots() {
  * 让多轮工具循环期间对话框明确显示「进行中」，而非静止空白或重复文本。
  */
 @Composable
-private fun WorkingIndicator() {
+private fun WorkingIndicator(tools: List<String>) {
     val cs = MaterialTheme.colorScheme
+    // 有具体工具名时细化为"AI 正在执行工具：web_search · read_url …"，否则回退笼统文案。
+    val label = if (tools.isNotEmpty()) {
+        stringResource(R.string.qk_00163, tools.joinToString(" · "))
+    } else {
+        stringResource(R.string.qk_00153)
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(vertical = 4.dp),
@@ -4721,7 +4736,7 @@ private fun WorkingIndicator() {
         Spacer(Modifier.width(8.dp))
         WaitingDots()
         Spacer(Modifier.width(6.dp))
-        Text(stringResource(R.string.qk_00153),
+        Text(label,
             fontSize = 12.sp, color = cs.primary, fontWeight = FontWeight.Medium,
         )
     }
