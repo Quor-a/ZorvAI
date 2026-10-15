@@ -2470,6 +2470,30 @@
     var st=uiStyleOf(node);
     Object.keys(st).forEach(function(k){nodeEl.style[k]=st[k];});
   }
+  /* 把服务端发来的「顶层」布局字段落到元素上。uiStyleOf 只认 node.style，而
+     column/row/box/card 的 spacing/padding/cornerRadius/weight/horizontalAlign/
+     verticalAlign 是**顶层**字段，漏应用 = 列无间距、卡片不圆角、对齐失效——
+     「设计乱七八糟」的真因之一。 */
+  function applyLayout(nodeEl,node){
+    if(node.spacing)nodeEl.style.gap=node.spacing+"px";
+    if(node.padding!==undefined&&node.padding!==null&&!nodeEl.style.padding)nodeEl.style.padding=node.padding+"px";
+    if(node.cornerRadius!==undefined&&node.cornerRadius!==null&&!nodeEl.style.borderRadius)nodeEl.style.borderRadius=node.cornerRadius+"px";
+    if(node.weight!==undefined&&node.weight!==null)nodeEl.style.flex=String(node.weight);
+    var ha=node.horizontalAlign,va=node.verticalAlign;
+    if(node.type==="row"){
+      if(ha==="center")nodeEl.style.justifyContent="center";
+      else if(ha==="end")nodeEl.style.justifyContent="flex-end";
+      else if(ha==="start")nodeEl.style.justifyContent="flex-start";
+      if(va==="center")nodeEl.style.alignItems="center";
+      else if(va==="end")nodeEl.style.alignItems="flex-end";
+    }else{
+      if(ha==="center")nodeEl.style.alignItems="center";
+      else if(ha==="end")nodeEl.style.alignItems="flex-end";
+      else if(ha==="start")nodeEl.style.alignItems="flex-start";
+      if(va==="center")nodeEl.style.justifyContent="center";
+      else if(va==="end")nodeEl.style.justifyContent="flex-end";
+    }
+  }
   function uiActionClick(node){
     var a=node.action;
     if(!a)return;
@@ -2502,21 +2526,81 @@
         postCard({ui:{openScreen:a.target}});
         break;
       case "render_html":
-        postCard({ui:{renderHtml:a.html}});
+        showHtmlModal(a.html);
         break;
       case "render_vispro":
         postCard({ui:{renderVispro:a.source}});
         break;
       case "visual_popup":
-        postCard({ui:{visualPopup:{title:a.title,content:a.content}}});
+        showVisualPopup(a.title, a.content);
         break;
       case "visual_ask":
-        postCard({ui:{visualAsk:{prompt:a.prompt,options:a.options||[]}}});
+        showVisualAsk(a.prompt, a.options||[], function(opt){
+          var inp=document.getElementById("inp");
+          if(inp){ inp.value=opt; if(typeof doSend==="function")doSend(); }
+        });
         break;
       case "zx_web_card":
         postCard({ui:{zxWebCard:{component:a.component,title:a.title,dsl:a.dsl}}});
         break;
     }
+  }
+
+  /* 可视化弹窗 / 可视化询问 / HTML 预览：web 对等客户端直接渲染（不再仅转发手机） */
+  function closeViz(){
+    var ex=document.getElementById("vizOverlay");
+    if(ex&&ex.parentNode)ex.parentNode.removeChild(ex);
+  }
+  function showVisualPopup(title, content){
+    closeViz();
+    var ov=document.createElement("div");
+    ov.className="viz-overlay"; ov.id="vizOverlay";
+    var box=document.createElement("div"); box.className="viz-box";
+    var h=document.createElement("div"); h.className="viz-h";
+    var t=document.createElement("span"); t.textContent=title||"提示"; h.appendChild(t);
+    var x=document.createElement("button"); x.className="x"; x.type="button"; x.textContent="×"; x.setAttribute("aria-label","关闭");
+    x.addEventListener("click",closeViz); h.appendChild(x); box.appendChild(h);
+    var b=document.createElement("div"); b.className="viz-b";
+    var p=document.createElement("div"); p.textContent=content||""; b.appendChild(p);
+    box.appendChild(b); ov.appendChild(box);
+    ov.addEventListener("click",function(e){ if(e.target===ov)closeViz(); });
+    document.body.appendChild(ov);
+  }
+  function showVisualAsk(prompt, options, onPick){
+    closeViz();
+    var ov=document.createElement("div"); ov.className="viz-overlay"; ov.id="vizOverlay";
+    var box=document.createElement("div"); box.className="viz-box";
+    var h=document.createElement("div"); h.className="viz-h";
+    var t=document.createElement("span"); t.textContent="请选择"; h.appendChild(t);
+    var x=document.createElement("button"); x.className="x"; x.type="button"; x.textContent="×"; x.setAttribute("aria-label","关闭");
+    x.addEventListener("click",closeViz); h.appendChild(x); box.appendChild(h);
+    if(prompt){ var b=document.createElement("div"); b.className="viz-b"; var pp=document.createElement("div"); pp.textContent=prompt; b.appendChild(pp); box.appendChild(b); }
+    var f=document.createElement("div"); f.className="viz-f";
+    (options||[]).forEach(function(opt){
+      if(!opt)return;
+      var btn=document.createElement("button"); btn.type="button"; btn.textContent=opt;
+      btn.addEventListener("click",function(){ closeViz(); if(onPick)onPick(opt); });
+      f.appendChild(btn);
+    });
+    box.appendChild(f); ov.appendChild(box);
+    ov.addEventListener("click",function(e){ if(e.target===ov)closeViz(); });
+    document.body.appendChild(ov);
+  }
+  function showHtmlModal(html){
+    closeViz();
+    var ov=document.createElement("div"); ov.className="viz-overlay"; ov.id="vizOverlay";
+    var box=document.createElement("div"); box.className="viz-box"; box.style.maxWidth="min(94vw,720px)";
+    var h=document.createElement("div"); h.className="viz-h";
+    var t=document.createElement("span"); t.textContent="HTML 预览"; h.appendChild(t);
+    var x=document.createElement("button"); x.className="x"; x.type="button"; x.textContent="×"; x.setAttribute("aria-label","关闭");
+    x.addEventListener("click",closeViz); h.appendChild(x); box.appendChild(h);
+    var b=document.createElement("div"); b.className="viz-b"; b.style.padding="0";
+    var frame=document.createElement("iframe"); frame.className="viz-iframe";
+    frame.setAttribute("sandbox","allow-scripts allow-same-origin");
+    frame.srcdoc=html||"";
+    b.appendChild(frame); box.appendChild(b); ov.appendChild(box);
+    ov.addEventListener("click",function(e){ if(e.target===ov)closeViz(); });
+    document.body.appendChild(ov);
   }
   function uiTextInput(node,state){
     var box=div("dui-field");
@@ -2546,12 +2630,14 @@
       case "column": case "row": case "box":
         nodeEl=div("dui-"+node.type);
         uiApplyStyle(nodeEl,node);
+        applyLayout(nodeEl,node);
         if(node.scrollable)nodeEl.classList.add("scroll");
         (node.children||[]).forEach(function(ch){uiNode(ch,state,nodeEl);});
         break;
       case "card": case "pane":
         nodeEl=div("dui-card");
         uiApplyStyle(nodeEl,node);
+        applyLayout(nodeEl,node);
         if(node.title)nodeEl.appendChild(div("dui-card-title",node.title));
         if(node.onClick){
           nodeEl.style.cursor="pointer";
@@ -2587,7 +2673,11 @@
         img.alt=node.alt||"";
         if(node.aspectRatio)img.style.aspectRatio=node.aspectRatio;
         if(node.cornerRadius)img.style.borderRadius=node.cornerRadius+"px";
-        if(node.height&&node.height.kind==="fixed")img.style.height=node.height.dp+"px";
+        /* 服务端 QuroImageNode.height 是 Int?（纯数字），也可能带 uiSize 对象；两者都兼容 */
+        if(node.height){
+          if(node.height.kind==="fixed")img.style.height=node.height.dp+"px";
+          else if(typeof node.height==="number")img.style.height=node.height+"px";
+        }
         img.onerror=function(){img.replaceWith(div("dui-image-empty","图片加载失败"));};
         nodeEl.appendChild(img);
         break;
@@ -3034,11 +3124,14 @@
       case "color": {
         nodeEl=div("qcolors");
         uiApplyStyle(nodeEl,node);
-        (node.colors||[]).forEach(function(c){
+        /* 服务端序列化 QuroColorNode 用单值字段 color+name；兼容旧契约的 colors 数组 */
+        var c=node.color||(node.colors&&node.colors[0])||"";
+        if(c){
           var sw=div("qcolor");
           sw.style.background=c;
           nodeEl.appendChild(sw);
-        });
+        }
+        if(node.name)nodeEl.appendChild(div("qcolor-name",node.name));
         break;
       }
       case "media": {

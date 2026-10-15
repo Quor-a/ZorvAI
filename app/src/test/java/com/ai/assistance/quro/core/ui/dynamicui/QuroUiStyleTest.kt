@@ -94,22 +94,23 @@ class QuroUiStyleTest {
         assertEquals(false, (root as QuroBoxNode).style?.visible)
     }
 
-    // 7) 未知节点类型降级为「带通用样式的竖向容器」，并保留 style 与 children。
+    // 7) 未知节点类型由「捕获型兜底」收为 QuroUnknownNode（不再降级成空容器）：
+    //    保留原始 type、通用 style 与 children，渲染层用融合解释器画成结构化富卡。
+    //    （旧契约曾要求降级为 QuroColumnNode 并插入「未识别」提示；新设计改为自由书写 —
+    //     AI 可写任意节点类型，由融合解释器忠实呈现，而非一律降级。）
     @Test
     fun parse_unknownType_degradesToStyledContainer() {
         val root = parse(
             """{"type":"my_widget","style":{"backgroundColor":"#eee","borderRadius":8},"children":[{"type":"text","value":"y"}]}"""
         )
-        // 降级产物是 QuroColumnNode（带样式容器）
-        assertTrue("未知类型应降级为 QuroColumnNode", root is QuroColumnNode)
-        val col = root as QuroColumnNode
-        assertEquals(QuroUiBackground.Solid("#eee"), col.style?.background)
-        assertEquals(8, col.style?.borderRadius)
-        // 顶部插入降级提示，原 children 保留
-        assertTrue("应包含降级提示文本", col.children.any {
-            it is QuroTextNode && it.value.contains("未识别")
-        })
-        assertTrue("原 children 应保留", col.children.any {
+        // 兜底产物是 QuroUnknownNode（保留样式与子节点，由融合解释器渲染）
+        assertTrue("未知类型应捕获为 QuroUnknownNode", root is QuroUnknownNode)
+        val unk = root as QuroUnknownNode
+        assertEquals("my_widget", unk.type)
+        assertEquals(QuroUiBackground.Solid("#eee"), unk.style?.background)
+        assertEquals(8, unk.style?.borderRadius)
+        // 原 children 保留（融合解释器会递归渲染）
+        assertTrue("原 children 应保留", unk.children.any {
             it is QuroTextNode && it.value == "y"
         })
     }

@@ -142,9 +142,9 @@ html.flow #composer{position:sticky;bottom:0}
 
 /* ── 3. 顶栏（对等 ChatTopBar，单行紧凑）────────────────────────────── */
 #hd{
-  display:flex;align-items:center;gap:6px;flex:none;
-  padding:7px 8px;
-  padding-top:calc(7px + env(safe-area-inset-top));
+  display:flex;align-items:center;gap:4px;flex:none;
+  padding:4px 8px;
+  padding-top:calc(4px + env(safe-area-inset-top));
   background:var(--bg2);
   background:color-mix(in srgb,var(--bg2) 82%,transparent);
   -webkit-backdrop-filter:blur(14px) saturate(1.2);
@@ -154,19 +154,20 @@ html.flow #composer{position:sticky;bottom:0}
 }
 .hd-ico{
   flex:none;display:inline-flex;align-items:center;justify-content:center;
-  width:38px;height:38px;border-radius:11px;border:1px solid transparent;
+  width:32px;height:32px;border-radius:9px;border:1px solid transparent;
   background:none;color:var(--fg-soft);cursor:pointer;
   transition:background var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out),transform var(--t-fast) var(--ease-out);
 }
 .hd-ico:hover{background:var(--surface);color:var(--primary);border-color:var(--line)}
 .hd-ico:active{transform:scale(.92)}
+.hd-ico svg{width:18px;height:18px}
 .hd-chips{display:flex;align-items:center;gap:6px;min-width:0;flex:1 1 auto;overflow:hidden}
 .hd-sep{width:1px;height:18px;background:var(--line2);flex:none}
 .hd-right{display:flex;align-items:center;gap:2px;flex:none}
 .chip{
-  font-size:12px;line-height:1.4;color:var(--fg-soft);
+  font-size:11px;line-height:1.4;color:var(--fg-soft);
   background:var(--surface);border:1px solid var(--line);
-  border-radius:var(--r-pill);padding:5px 11px;
+  border-radius:var(--r-pill);padding:4px 10px;
   max-width:38vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   box-shadow:0 1px 2px rgba(33,30,26,.03);
   transition:border-color var(--t-fast) var(--ease-out),color var(--t-fast) var(--ease-out);
@@ -650,6 +651,48 @@ html.dark .msg.mine .md{color:#E8B9A0}
 }
 .sheet-f button:hover{background:color-mix(in srgb,var(--primary-soft) 80%,var(--primary))}
 .sheet-f button:active{transform:scale(.97)}
+
+/* ── 7c. 可视化弹窗 / 可视化询问 / HTML 预览（web 对等直接渲染）──── */
+.viz-overlay{
+  position:fixed;inset:0;z-index:60;
+  background:rgba(20,17,13,.46);
+  -webkit-backdrop-filter:blur(3px);
+  backdrop-filter:blur(3px);
+  display:flex;align-items:center;justify-content:center;padding:18px;
+  animation:fadeIn var(--t-fast) var(--ease-out) both;
+}
+.viz-overlay[hidden]{display:none}
+.viz-box{
+  width:min(92vw,460px);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-card);box-shadow:var(--shadow-sheet);
+  animation:vizIn var(--t-med) var(--ease-spring) both;
+}
+@keyframes vizIn{from{transform:translateY(18px) scale(.96);opacity:.5}to{transform:translateY(0) scale(1);opacity:1}}
+.viz-h{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:15px 18px;border-bottom:1px solid var(--line);
+  font-family:var(--font-serif);font-size:16px;font-weight:700;color:var(--fg);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--bg2) 45%,transparent),transparent);
+}
+.viz-h .x{
+  flex:0 0 auto;border:0;background:none;color:var(--muted);cursor:pointer;
+  width:32px;height:32px;border-radius:50%;font-size:18px;line-height:1;
+  display:flex;align-items:center;justify-content:center;transition:all var(--t-fast) var(--ease-out);
+}
+.viz-h .x:hover{background:var(--bg2);color:var(--fg)}
+.viz-b{flex:1;overflow-y:auto;padding:16px 18px;color:var(--fg);font-size:14px;line-height:1.62;word-break:break-word}
+.viz-b p{margin:0 0 10px}
+.viz-b p:last-child{margin-bottom:0}
+.viz-f{display:flex;flex-direction:column;gap:8px;padding:12px 16px 16px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--bg2) 38%,transparent)}
+.viz-f button{
+  font:inherit;font-size:14px;font-weight:600;color:var(--fg);text-align:left;
+  background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-ctl);
+  padding:12px 14px;cursor:pointer;transition:all var(--t-fast) var(--ease-out);
+}
+.viz-f button:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-soft)}
+.viz-f button:active{transform:scale(.98)}
+.viz-iframe{width:100%;height:60vh;border:0;background:#fff;display:block}
 
 /* 模型/人格行 */
 .group-h{
@@ -1513,3 +1556,55 @@ html.dark .msg.mine .md{color:#E8B9A0}
   #app{max-width:none;border:0;box-shadow:none}
   .msg{break-inside:avoid}
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   动态 UI 节点样式补全（修复「设计乱七八糟」：以下类型此前 0 条 CSS 定义，
+   渲染出来裸奔）。统一沿用上方 token，明暗自动适配。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* —— compare：对比要点列表 —— */
+.qcompare{display:flex;flex-direction:column;gap:6px;margin:6px 0}
+.qcompare-point{font-size:13px;line-height:1.5;padding:8px 12px;background:var(--bg2);
+  border-radius:var(--r-ctl);border-left:3px solid var(--secondary);color:var(--fg-soft)}
+
+/* —— heatmap：热力网格 —— */
+.qheat{margin:6px 0}
+.qheat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(22px,1fr));gap:3px}
+.qheat-cell{aspect-ratio:1/1;border-radius:4px;background:rgba(46,107,230,.4)}
+
+/* —— kanban：看板列 —— */
+.qkanban{display:flex;gap:10px;overflow-x:auto;margin:6px 0;padding-bottom:4px}
+.qkanban-col{flex:1;min-width:140px;background:var(--bg2);border-radius:var(--r-card);padding:8px}
+.qkanban-col-name{font-size:12.5px;font-weight:700;margin-bottom:6px;color:var(--fg-soft)}
+
+/* —— carousel：横向轮播 —— */
+.qcarousel{margin:6px 0;overflow:hidden}
+.qcarousel-viewport{overflow:hidden}
+.qcarousel-track{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px}
+.qcarousel-slide{flex:0 0 82%;scroll-snap-align:center;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r-card);padding:12px;box-shadow:var(--shadow-1);min-height:84px}
+.qcarousel-slide-title{font-weight:700;margin-bottom:4px;color:var(--fg)}
+.qcarousel-slide-body{font-size:13px;color:var(--fg-soft);line-height:1.55}
+
+/* —— gameboard：棋盘 —— */
+.dui-gameboard{margin:6px 0;display:inline-block}
+.dui-gameboard-grid{display:grid;gap:4px}
+.dui-gb-cell{width:40px;height:40px;font-size:18px;font-weight:700;
+  border:1px solid var(--line);border-radius:8px;background:var(--surface);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--fg);
+  transition:border-color var(--t-fast) var(--ease-out)}
+.dui-gb-cell:hover{border-color:var(--primary)}
+
+/* —— genui：iframe 容器 —— */
+.dui-genui{margin:6px 0;width:100%}
+.dui-genui-frame{width:100%;border:0;border-radius:var(--r-card);background:var(--surface);display:block}
+
+/* —— unknown：未识别类型 / 兜底（default 分支也用它） —— */
+.dui-unknown{margin:6px 0;padding:10px 12px;background:var(--err-soft);
+  border:1px dashed var(--err);border-radius:var(--r-ctl);color:var(--fg-soft);font-size:12.5px}
+.dui-unknown-text{white-space:pre-wrap;word-break:break-word}
+
+/* —— color：颜色块（服务端单值 color+name，兼容旧 colors 数组） —— */
+.qcolors{display:flex;align-items:center;gap:10px;margin:6px 0;flex-wrap:wrap}
+.qcolor{width:28px;height:28px;border-radius:var(--r-pill);border:1px solid var(--line);box-shadow:var(--shadow-1)}
+.qcolor-name{font-size:12.5px;color:var(--fg-soft)}
