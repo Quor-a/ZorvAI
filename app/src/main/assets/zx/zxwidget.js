@@ -1445,7 +1445,62 @@ function resolveLayout(comp, dsl){
   return "generic";
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   不规范 DSL 兜底（安全网）
+   模型写 zx_web_card 时常见三种不规范：
+   ① 数据多包一层 {data:{...}} / {content:{...}}；
+   ② 数组写成对象 {"0":{...},"1":{...}}；
+   ③ 图表用 lines/points 别名（契约真名 series/data）。
+   这些会让 mainArr 取不到数组 → 画了外壳没画数据。
+   这里统一规整**一次**，对所有布局生效，且不改变规范 DSL 的结果。 */
+function objToArr(v){
+  if(Array.isArray(v)) return v;
+  if(v!==null && typeof v==="object"){
+    var ks=Object.keys(v);
+    if(!ks.length) return [];
+    var allNum = ks.every(function(k){ return /^[0-9]+$/.test(k); });
+    if(allNum){ ks.sort(function(a,b){ return (+a)-(+b); }); return ks.map(function(k){ return v[k]; }); }
+    return ks.map(function(k){ return v[k]; });
+  }
+  return [];
+}
+function prepDsl(comp, dsl){
+  if(dsl===null || typeof dsl!=="object" || Array.isArray(dsl)) return dsl;
+  /* ① 解包 data/content 外壳：仅当外层本身没有可用数组时才解包，避免误伤真正用 data 字段的组件 */
+  var arrKeys = ["items","rows","nodes","pts","steps","v","edges","cols","columns","options","days","cells",
+    "slots","groups","blocks","marks","stages","fields","links","opts","cards","levels","series","people",
+    "labels","tags","tasks","children","kids","lines","data","values","points"];
+  var ct = (typeof ZX_CONTRACTS!=="undefined" && ZX_CONTRACTS[comp])||{};
+  var compArrs = ct.arrays||[];
+  var hasOuter = arrKeys.concat(compArrs).some(function(k){ return Array.isArray(dsl[k]); });
+  var out = dsl;
+  if(!hasOuter){
+    if(isObj(dsl.data)) out = dsl.data;
+    else if(isObj(dsl.content)) out = dsl.content;
+  }
+  if(out!==dsl && (typeof out!=="object" || Array.isArray(out))) return dsl;
+  /* ② 对象当数组：把常见容器键下的对象转成数组 */
+  var objArrKeys = ["items","rows","nodes","pts","steps","edges","cols","options","days","cells","slots",
+    "groups","blocks","marks","stages","cards","levels","people","tasks","children","kids","lines","series"];
+  for(var i=0;i<objArrKeys.length;i++){
+    var kk=objArrKeys[i];
+    if(out[kk]!==undefined && !Array.isArray(out[kk]) && isObj(out[kk])) out[kk]=objToArr(out[kk]);
+  }
+  /* ③ 图表别名：lines → series，每个 line.points → data */
+  if(Array.isArray(out.lines) && !Array.isArray(out.series)){
+    out.series = out.lines.map(function(ln){
+      if(isObj(ln) && Array.isArray(ln.points) && !Array.isArray(ln.data) && !Array.isArray(ln.values)){
+        var c={}; for(var p in ln) c[p]=ln[p]; c.data=ln.points; return c;
+      }
+      return ln;
+    });
+    delete out.lines;
+  }
+  return out;
+}
+
 function compile(comp, dsl, ctx){
+  dsl = prepDsl(comp, dsl);
   var layout = resolveLayout(comp, dsl);
   var fn = LAYOUTS[layout];
   if(!fn){ layout="generic"; fn=LAYOUTS.generic; }

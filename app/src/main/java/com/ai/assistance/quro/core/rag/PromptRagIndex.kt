@@ -186,13 +186,15 @@ object PromptRagIndex {
                 - **Web 应用 / 小程序** → `miniapp`
                 - **可视化弹窗 / 询问** → `visual_popup` / `visual_ask`
                 - **可交互卡片（zxwidget）** → `zx_web_card`（WebView 承载 zx 组件族 477 个）；
-                  组件名与字段先用 `zx_catalog` 查，别凭印象拼
+                  写之前**先 `rag_search(domain="zx_components", query="用户想看什么效果")`** 秒级命中最匹配的
+                  组件名 + 字段契约 + 可照抄的示例 DSL，照着改数据即可一次写对；
+                  若已知道组件名、要查确切字段，再用 `zx_catalog(component="zx_xxx")` 取契约。
                 - **出图（静态图片）** → `codecanvas_onscreen_*`（端侧渲染，无需服务器）
                 - ⚠️ 这六条路径**互不等价**，不要用一个凑另一个。需要「能点」就用可交互组件，
                   需要「能看」用富卡片，需要「整屏」用画布，需要「用户在卡片上当场操作并回传」用 zxwidget 动态交互界面。
             """.trimIndent(),
-            triggers = listOf("界面", "卡片", "组件", "画布", "页面", "弹窗", "小程序", "可视化", "交互"),
-            keywords = listOf("ui_card", "ui_widget", "ui_control", "genui", "miniapp", "codecanvas", "zx_web_card", "zx_catalog"),
+            triggers = listOf("界面", "卡片", "组件", "画布", "页面", "弹窗", "小程序", "可视化", "交互", "zx", "zxwidget", "对比", "占比", "趋势", "表单", "时间线"),
+            keywords = listOf("ui_card", "ui_widget", "ui_control", "genui", "miniapp", "codecanvas", "zx_web_card", "zx_catalog", "rag_search", "zx_components"),
         ),
         PromptBlock(
             id = "memory_policy",

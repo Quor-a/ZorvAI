@@ -4,6 +4,7 @@ import android.content.Context
 import com.ai.assistance.quro.core.rag.AgentRag
 import com.ai.assistance.quro.core.rag.PromptRagIndex
 import com.ai.assistance.quro.core.rag.RagHit
+import com.ai.assistance.quro.core.rag.ZxComponentRagIndex
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -39,10 +40,12 @@ class RagSearchTool : QuroTool {
             "\n- 你不知道该用哪个工具，且用户说的是效果不是工具名（「把这段视频弄短一点」）；" +
             "\n- 你在纠结该走哪条界面交付路径（「出海报」是 AI 生图还是确定性渲染？）；" +
             "\n- 用户想看趋势/占比/排行，你不确定名册里对应哪个组件类型；" +
+            "\n- 你打算写 zx_web_card 但拿不准用哪个 zx_ 组件、字段怎么填 —— 先 " +
+            "rag_search(domain=\"zx_components\", query=\"用户的原话\")，它会秒级返回**最匹配的组件名 + 字段契约 + 可照抄的示例 DSL**，照着改数据即可一次写对；" +
             "\n- 你打算直接回「我不支持 / 我不会」之前——先搜一遍，目录里可能就有；\n" +
             "- 拿不准「该用哪个组件 / 该守哪条规则」时——搜 domain=\"prompts\" 会带回**完整规则正文**。\n\n" +
             "参数：query（**用户的原话**，别自己概括，概括会丢掉关键限定词）" +
-            " / domain（all|tools|prompts，默认 all）" +
+            " / domain（all|tools|prompts|cluster_skills|zx_components，默认 all）" +
             " / limit（返回条数，默认 10）" +
             " / prefer_genui（true=优先整屏界面路径，做完整页面时用）" +
             " / cross_domain（**默认 false**：限定域零命中时**绝不**返回别的域的结果，" +
@@ -62,8 +65,8 @@ class RagSearchTool : QuroTool {
             })
             put("domain", JSONObject().apply {
                 put("type", "string")
-                put("description", "限定检索域：all（默认，跨域）/ tools（只搜工具）/ prompts（只搜规则段）/ cluster_skills（只搜集群技能规程）")
-                put("enum", JSONArray().apply { put("all"); put("tools"); put("prompts"); put("cluster_skills") })
+                put("description", "限定检索域：all（默认，跨域）/ tools（只搜工具）/ prompts（只搜规则段）/ cluster_skills（只搜集群技能规程）/ zx_components（只搜动态UI组件：477 个 zx_ 组件，按意图秒级命中正确组件 + 字段契约 + 可抄示例 DSL，写 zx_web_card 前先查这个）")
+                put("enum", JSONArray().apply { put("all"); put("tools"); put("prompts"); put("cluster_skills"); put("zx_components") })
             })
             put("limit", JSONObject().apply {
                 put("type", "integer")
@@ -88,14 +91,17 @@ class RagSearchTool : QuroTool {
 
     override val readOnly = true
 
-    override fun run(context: Context, arguments: String): String = query(arguments)
+    override fun run(context: Context, arguments: String): String = query(arguments, context)
 
     companion object {
         /**
          * 纯逻辑入口，不碰 Android 依赖，故可 JVM 单测
          * （同 [CardCatalogTool.query] 的理由：工程没引 Robolectric）。
+         *
+         * @param context 用于懒加载 zx_components 域（读 assets 灌索引）。单测可传 null，
+         *   此时 zx_components 域不参与检索（依赖调用方预装）。
          */
-        fun query(arguments: String): String {
+        fun query(arguments: String, context: Context? = null): String {
             val jo = runCatching { JSONObject(arguments) }.getOrElse { JSONObject() }
             val q = jo.optString("query", "").trim()
             if (q.isEmpty()) {
@@ -112,6 +118,12 @@ class RagSearchTool : QuroTool {
                 // tools 域会空 —— 那样 rag_search(domain="tools") 永远零命中，
                 // 模型会以为「根本没有这个工具」。
                 AgentRag.refresh(ToolCapabilityDirectory.specsSnapshot())
+            }
+
+            // 懒加载 zx_components 域：当用户查该域或查 all 时，透传的 context 用来读 assets 灌索引。
+            // 索引内部幂等（已装则跳过），与 AgentRag.refresh 的懒加载模式一致。
+            if (context != null && (domain == "zx_components" || domain == "all")) {
+                ZxComponentRagIndex.install(context)
             }
 
             //🔴 限定域**就是限定域**。旧实现在零命中时无条件回退 everything()，
@@ -134,6 +146,10 @@ class RagSearchTool : QuroTool {
                     com.ai.assistance.quro.core.rag.ClusterSkillRagIndex.searchSkills(
                         q, limit.coerceAtMost(8),
                     )
+                // 🔴 zx_components 域 —— 写 zx_web_card 前先查，秒级命中正确组件 + 字段契约 + 可抄示例 DSL。
+                // 索引由上面懒加载（install）按需灌入，未装则返回空，由 domainMiss 说明。
+                "zx_components" ->
+                    ZxComponentRagIndex.search(q, limit.coerceAtMost(12))
                 else -> AgentRag.everything(q, limit)
             }
 
@@ -202,7 +218,7 @@ class RagSearchTool : QuroTool {
                     "what_other_domains_return",
                     org.json.JSONArray().apply {
                         val per = (limit / 3).coerceIn(2, 4)
-                        for (dom in listOf("tools", "prompts", "cluster_skills")) {
+                        for (dom in listOf("tools", "prompts", "cluster_skills", "zx_components")) {
                             if (dom == domain) continue
                             val got = runCatching {
                                 when (dom) {
@@ -210,6 +226,7 @@ class RagSearchTool : QuroTool {
                                     "prompts" -> PromptRagIndex.searchPrompts(AgentRag.engine, q, per)
                                     "cluster_skills" ->
                                         com.ai.assistance.quro.core.rag.ClusterSkillRagIndex.searchSkills(q, per)
+                                    "zx_components" -> ZxComponentRagIndex.search(q, per)
                                     else -> emptyList()
                                 }
                             }.getOrDefault(emptyList())
@@ -226,7 +243,8 @@ class RagSearchTool : QuroTool {
                 put(
                     "next",
                     "若上面某个域有你要的，就用 rag_search(domain=\"那个域\", query=\"更具体的说法\") 重查；" +
-                        "命中工具名后用 tool_router(action=\"get_schema\", name=...) 拿完整参数。"
+                        "命中工具名后用 tool_router(action=\"get_schema\", name=...) 拿完整参数；" +
+                        "命中 zx_components 后直接用返回的组件名 + 字段契约 + 示例 DSL 写 zx_web_card。"
                 )
             }
             return byDomain.toString()
@@ -242,8 +260,10 @@ class RagSearchTool : QuroTool {
             // 拿到半条规则照样会用错。这是「改成 AI 被动使用」必须先补的洞。
             val promptHits = hits.filter { it.domain == PromptRagIndex.DOMAIN }
             val skillHits = hits.filter { it.domain == com.ai.assistance.quro.core.rag.ClusterSkillRagIndex.DOMAIN }
+            val compHits = hits.filter { it.domain == ZxComponentRagIndex.DOMAIN }
             val bodies = PromptRagIndex.renderFullBodies(promptHits)
             val skillBodies = com.ai.assistance.quro.core.rag.ClusterSkillRagIndex.renderFullBodies(skillHits)
+            val compBodies = ZxComponentRagIndex.render(compHits)
             hits.forEach { h ->
                 arr.put(
                     when (h.domain) {
@@ -267,6 +287,17 @@ class RagSearchTool : QuroTool {
                                 }
                             }
                         }
+                        // 🔴 zx_components 域 —— 命中必须带回**完整组件契约 + 可抄示例 DSL**，
+                        // 否则模型拿到摘要照样写出不规范 DSL（data.items 包裹 / 对象式数组 / 别名等）。
+                        ZxComponentRagIndex.DOMAIN -> {
+                            val cj = ZxComponentRagIndex.componentJsonOf(h)
+                            h.toJson().apply {
+                                if (cj != null) {
+                                    put("component", cj)
+                                    if (cj.has("sample")) put("example_dsl", cj.getJSONObject("sample"))
+                                }
+                            }
+                        }
                         else -> h.toJson()
                     }
                 )
@@ -281,13 +312,16 @@ class RagSearchTool : QuroTool {
                 if (bodies.isNotBlank()) put("rules_full_text", bodies)
                 // #217：集群技能全文，可直接照着执行。
                 if (skillBodies.isNotBlank()) put("skills_full_text", skillBodies)
+                // 🔴 zx 组件契约 + 可抄示例 DSL 全文，写 zx_web_card 时直接照填。
+                if (compBodies.isNotBlank()) put("components_full_text", compBodies)
                 put(
                     "next",
                     "命中工具名后用 tool_router(action=\"get_schema\", name=...) 拿完整参数；" +
                         "命中卡片类型后用 card_catalog(types=[...]) 拿样例；" +
                         "命中组件类型后用 ui_dsl_spec 拿完整 DSL 规范；" +
                         "命中规则段（domain=prompts）后**按 rules_full_text 里那份正文执行**，不要只看摘要；" +
-                        "命中集群技能段（domain=cluster_skills）后**按 skills_full_text 里那份规程执行**，不要只看摘要。"
+                        "命中集群技能段（domain=cluster_skills）后**按 skills_full_text 里那份规程执行**，不要只看摘要；" +
+                        "命中 zx_components 后**按 components_full_text 里的组件名 + 字段 + 示例 DSL 直接写 zx_web_card**，别凭印象拼字段。"
                 )
             }.toString()
         }
