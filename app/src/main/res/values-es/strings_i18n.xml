@@ -166,6 +166,8 @@
     <string name="qk_00161" formatted="false">Upload file</string>
     <string name="qk_00162" formatted="false">Voice input</string>
     <string name="qk_04101">La IA está ejecutando herramientas: %1$s …</string>
+    <string name="qk_04102" formatted="false">Obteniendo noticias destacadas de hoy…</string>
+    <string name="qk_04103">Obteniendo información oficial de %1$s…</string>
     <string name="qk_00163" formatted="false">Say something to Zorv…</string>
     <string name="qk_00164" formatted="false">Stop generating</string>
     <string name="qk_00165" formatted="false">Enviar</string>

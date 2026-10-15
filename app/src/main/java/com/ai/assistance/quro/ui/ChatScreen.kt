@@ -297,6 +297,8 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextDecoration
 import kotlinx.coroutines.flow.filterNotNull
 import org.json.JSONObject
+import com.ai.assistance.quro.core.websearch.IntentRouter
+import com.ai.assistance.quro.core.websearch.IntentType
 import com.ai.assistance.quro.core.tools.RunCodeTool
 import android.content.Context
 import android.content.pm.PackageManager
@@ -701,12 +703,30 @@ fun ChatScreen(
                     .filter { it.result.isNullOrBlank() }
                     .map { it.name }
                     .distinct()
+                // 若待执行工具含 web_search，进一步判定其意图，透出更细的标签
+                // （"hot" / "entity:ZorvAI"）；本地化在组合作用域的 WorkingIndicator 里做。
+                val workingIntent = if (pendingTools.contains("web_search")) {
+                    val q = afterUser
+                        .flatMap { it.tools ?: emptyList() }
+                        .firstOrNull { it.name == "web_search" && it.result.isNullOrBlank() }
+                        ?.args
+                        ?.let { runCatching { org.json.JSONObject(it) }.getOrNull()?.optString("query", "") }
+                        ?.trim().orEmpty()
+                    if (q.isNotBlank()) {
+                        when (IntentRouter.classify(q).type) {
+                            IntentType.HOT_NEWS -> "hot"
+                            IntentType.ENTITY_SELF -> "entity:" + (IntentRouter.classify(q).entity?.name ?: "")
+                            else -> null
+                        }
+                    } else null
+                } else null
                 out.add(
                     Message(
                         id = -2, mine = false, author = selectedPersona.name,
                         avatar = selectedPersona.ava, avatarUri = selectedPersona.avatarUri,
                         time = "", text = null, isWorking = true,
                         workingTools = pendingTools,
+                        workingIntent = workingIntent,
                     )
                 )
             }
@@ -3594,7 +3614,13 @@ private fun MessageRow(
             }
             // 执行中指示：AI 正在执行工具（结果尚未回填）→ 显示「AI 正在执行工具…」工作小组件。
             if (msg.isWorking) {
-                WorkingIndicator(msg.workingTools)
+                val intentLabel = when (msg.workingIntent) {
+                    "hot" -> stringResource(R.string.qk_04102)
+                    else -> if (msg.workingIntent?.startsWith("entity:") == true)
+                        stringResource(R.string.qk_04103, msg.workingIntent.removePrefix("entity:"))
+                    else null
+                }
+                WorkingIndicator(msg.workingTools, intentLabel)
                 Spacer(Modifier.height(4.dp))
             }
             // 展开的思考内容（在名字行下方，正文上方）
@@ -4721,11 +4747,12 @@ private fun WaitingDots() {
  * 让多轮工具循环期间对话框明确显示「进行中」，而非静止空白或重复文本。
  */
 @Composable
-private fun WorkingIndicator(tools: List<String>) {
+private fun WorkingIndicator(tools: List<String>, label: String? = null) {
     val cs = MaterialTheme.colorScheme
-    // 有具体工具名时细化为"AI 正在执行工具：web_search · read_url …"，否则回退笼统文案。
-    val label = if (tools.isNotEmpty()) {
-        stringResource(R.string.qk_00163, tools.joinToString(" · "))
+    // 优先用意图标签（"正在获取今日热点新闻…" / "正在获取 ZorvAI 的官方信息…"）；
+    // 否则细化为"AI 正在执行工具：web_search · read_url …"；再否则回退笼统文案。
+    val text = label ?: if (tools.isNotEmpty()) {
+        stringResource(R.string.qk_04101, tools.joinToString(" · "))
     } else {
         stringResource(R.string.qk_00153)
     }
@@ -4736,7 +4763,7 @@ private fun WorkingIndicator(tools: List<String>) {
         Spacer(Modifier.width(8.dp))
         WaitingDots()
         Spacer(Modifier.width(6.dp))
-        Text(label,
+        Text(text,
             fontSize = 12.sp, color = cs.primary, fontWeight = FontWeight.Medium,
         )
     }

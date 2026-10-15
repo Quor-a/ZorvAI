@@ -220,6 +220,76 @@ object ContextPacker {
     /** token 预算换算为字符预算（按中英混合的经验系数） */
     private fun charBudget(tokens: Int): Int = (tokens * 1.6).toInt()
 
+    /**
+     * 热点/新闻速览打包：直接用检索命中的标题 + 摘要，不抓取全文。
+     *
+     * 与 [pack]/[packEvidence] 的区别：热点是"看头条"而不是"读文章"，
+     * 抓全文既慢又易踩中列表页/空页；这里只保留标题、来源、摘要与时间，
+     * 按时间倒序排布，token 占用极小，适合"今天有什么热点"这类速览诉求。
+     * 每条摘要限制较短（约 600 token），避免单条热搜挤占列表。
+     */
+    fun packHeadlines(
+        hits: List<SearchHit>,
+        queries: List<String>,
+        tokenBudget: Int = 6000,
+        timings: Map<String, Long> = emptyMap()
+    ): SearchBundle {
+        val citations = ArrayList<Citation>()
+        val sb = StringBuilder()
+        var used = 0
+        val votesList = ArrayList<Int>()
+        var farmCount = 0
+        var freshCount = 0
+
+        for (h in hits) {
+            if (used >= tokenBudget) break
+            val body = h.snippet.ifBlank { h.title }
+            if (body.isBlank()) continue
+            val room = minOf(600, tokenBudget - used)
+            if (room < 20) break
+
+            val (excerpt, truncated) = Markdownizer.truncate(body, charBudget(room))
+            val domain = domainOf(h.url)
+            val idx = citations.size + 1
+            citations.add(
+                Citation(
+                    index = idx, title = h.title, url = h.url, domain = domain,
+                    publishedAt = h.publishedAt, excerpt = excerpt, truncated = truncated
+                )
+            )
+            votesList.add(h.votes)
+            if (DomainTrust.isContentFarm(domain)) farmCount++
+            if (h.publishedAt > 0) freshCount++
+
+            sb.append("[$idx] ").append(h.title.trim())
+            if (h.publishedAt > 0) sb.append(" (").append(fmtDate(h.publishedAt)).append(')')
+            sb.append('\n').append("来源: ").append(domain).append(" — ").append(h.url).append('\n')
+            if (excerpt.isNotBlank()) sb.append(excerpt).append('\n')
+            sb.append('\n')
+
+            used += estimateTokens(excerpt) + 30
+        }
+
+        if (citations.isEmpty()) {
+            return SearchBundle("", emptyList(), queries, emptyList(), timings, 0f, "无可用来源")
+        }
+
+        val (confidence, note) = computeConfidence(citations.size, votesList, farmCount, freshCount)
+        val header = buildString {
+            append("以下是实时热点/新闻速览（按时间倒序），请据此回答；")
+            append("引用处标注对应编号如 [1][2]：\n\n")
+        }
+        return SearchBundle(
+            context = header + sb.toString().trim(),
+            citations = citations,
+            queries = queries,
+            dropped = emptyList(),
+            timings = timings,
+            confidence = confidence,
+            confidenceNote = note
+        )
+    }
+
     private fun domainOf(url: String): String =
         url.removePrefix("https://").removePrefix("http://")
             .substringBefore('/').substringBefore(':').removePrefix("www.")
