@@ -35,6 +35,10 @@ import com.ai.assistance.quro.core.agent.orchestration.Deliverability
 import com.ai.assistance.quro.core.agent.orchestration.LongHorizonOrchestrator
 import com.ai.assistance.quro.core.agent.orchestration.TaskResult
 import com.ai.assistance.quro.core.agent.orchestration.TaskStep
+import com.ai.assistance.quro.core.agent.orchestration.FreePlanComposer
+import com.ai.assistance.quro.core.model.QuroModelConfigRepository
+import com.ai.assistance.quro.core.websearch.LlmCompleter
+import com.ai.assistance.quro.core.websearch.WebSearchProvider
 import com.ai.assistance.quro.core.agent.loop.ToolOutcome
 import com.ai.assistance.quro.core.agent.loop.FailureType
 import com.ai.assistance.quro.util.QuroDiag
@@ -97,6 +101,28 @@ class QuroAssistant(
 
     /** 一趟 ReAct 在编排器里的步骤 id（仅用于轨迹展示）。 */
     private val REACT_PASS_STEP_ID = "react_pass"
+
+    /** 用宿主云端模型做自由编排策划（仅当配置了 API Key 时可用；否则返回 null → 退化为本地启发式策划）。 */
+    private fun buildHostCompleter(context: Context): LlmCompleter? {
+        val cfg = runCatching { QuroModelConfigRepository(context).load() }.getOrNull() ?: return null
+        if (cfg.apiKey.isBlank()) return null
+        return object : LlmCompleter {
+            override suspend fun complete(system: String, user: String, maxTokens: Int): String? {
+                val messages = listOf(
+                    QuroChatMessage(role = "system", content = system),
+                    QuroChatMessage(role = "user", content = user),
+                )
+                return runCatching {
+                    val res = QuroLlmClient().chat(cfg.baseUrl, cfg.apiKey, cfg.model, messages, 0.2f, maxTokens)
+                    when (res) {
+                        is QuroLlmResult.Text -> res.content
+                        is QuroLlmResult.ToolCalls -> res.content ?: ""
+                        is QuroLlmResult.Error -> null
+                    }
+                }.getOrNull()
+            }
+        }
+    }
 
     /**
      * 提取最近若干条工具失败的一句话摘要，供策划阶段判断「哪一步卡住了」。
@@ -1054,6 +1080,12 @@ class QuroAssistant(
             //   闸门打回时编排器会带着「为什么不可交付 + 建议 + 最近工具失败」重新 plan()，
             //   再跑一趟完整的 ReAct —— 这就是此前缺失的「重规划带记忆」。
             //   maxIterations 复用 deliverAttempts 语义（默认 3趟），超限则按最后一趟产物强制交付。
+            // 🔗 自由编排：让 AI 现场编出它需要的步骤（逻辑思维计划 + 网络查询技术）。
+            //   仅当宿主配置了云端 API Key 时启用；否则 freeComposer 为 null，退化为本地启发式策划（DefaultTaskPlanner）。
+            val freeCompleter = context?.let { buildHostCompleter(it) }
+            val freeComposer = freeCompleter?.let { FreePlanComposer(it) }
+            val freeSearch = freeCompleter?.let { WebSearchProvider.build(it) }
+
             val taskResult = orchestration.runTask(
                 context = context,
                 taskBrief = userBrief(),
@@ -1063,7 +1095,8 @@ class QuroAssistant(
                 //   ↳ 每一趟策划都会注入一条；第2 趟起context 里带着「上一轮为什么不可交付」，
                 //   模型据此修正——这就是「重规划带记忆」真正落到模型眼前的那一步。
                 planner = { brief, planCtx ->
-                    val plan = taskPlanner.plan(brief, planCtx)
+                    val plannerImpl = freeComposer ?: taskPlanner
+                    val plan = plannerImpl.plan(brief, planCtx)
                     runCatching {
                         OrchestrationTrace.strategize("assistant", "已生成任务方案")
                         val planText = buildString {
@@ -1073,7 +1106,7 @@ class QuroAssistant(
                             plan.plan.takeIf { it.isNotBlank() }?.let { appendLine("· 规划方案：$it") }
                             plan.design.takeIf { it.isNotBlank() }?.let { appendLine("· 设计方案：$it") }
                             if (plan.steps.isNotEmpty()) {
-                                appendLine("· 执行步骤：")
+                                appendLine("· 执行步骤（自由编排·AI 现场生成）：")
                                 plan.steps.forEachIndexed { i, st -> appendLine("  ${i + 1}. ${st.description}") }
                             }
                             if (plan.decomposition.isNotEmpty()) {
@@ -1087,16 +1120,41 @@ class QuroAssistant(
                     }
                     plan
                 },
+                // 🔴 保底步骤：自由编排返回的 steps 为空（如本地模型退化为 DefaultTaskPlanner）时，
+                //   仍跑一轮完整 ReAct，保证主流程不空转。
                 steps = listOf(TaskStep(REACT_PASS_STEP_ID, "执行一轮 ReAct 工具循环并给出答复")),
                 // 🔴 确定性失败（terminalLlmFailure 非空）= 本趟撞上上下文超限等重试无用的错误：
                 //    包成 terminal Failure 让编排器立即升级，绝不再跑一趟（issue #11 问题6）。
-                stepExecutor = { _, _ ->
-                    val text = reactPass()
-                    val terminal = terminalLlmFailure
-                    if (terminal != null) {
-                        ToolOutcome.Failure(FailureType.BUSINESS, terminal, raw = text, terminal = true)
-                    } else {
-                        ToolOutcome.Success(text)
+                stepExecutor = { step, _ ->
+                    when (step.toolName) {
+                        // 网络查询技术：自由编排要求的联网查证步骤，现场调 searchSmart 取回证据。
+                        FreePlanComposer.Kind.WEB_SEARCH.toolName -> {
+                            val q = step.arguments ?: userBrief()
+                            val bundle = runCatching { freeSearch?.searchSmart(q) }.getOrNull()
+                            if (bundle != null && bundle.context.isNotBlank()) {
+                                store.add(QuroMessage(role = "assistant", content = "🔍 联网查询：$q\n${bundle.context.take(2000)}"))
+                                emit()
+                                OrchestrationTrace.execute("web_search", "自由编排·联网查证", q.take(80))
+                                ToolOutcome.Success(bundle.context)
+                            } else {
+                                OrchestrationTrace.execute("web_search", "自由编排·联网查证为空", q.take(80))
+                                ToolOutcome.Success("（联网查询未获得可用结果，请基于已有知识作答）")
+                            }
+                        }
+                        // 综合作答 / 保底 ReAct 步骤：跑一轮完整 ReAct 工具循环产出最终答复。
+                        FreePlanComposer.Kind.SYNTHESIZE.toolName, REACT_PASS_STEP_ID, null -> {
+                            val text = reactPass()
+                            val terminal = terminalLlmFailure
+                            if (terminal != null) {
+                                ToolOutcome.Failure(FailureType.BUSINESS, terminal, raw = text, terminal = true)
+                            } else {
+                                ToolOutcome.Success(text)
+                            }
+                        }
+                        else -> {
+                            val text = reactPass()
+                            ToolOutcome.Success(text)
+                        }
                     }
                 },
                 judge = deliverabilityJudge,
