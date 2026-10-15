@@ -13,6 +13,56 @@ import com.ai.assistance.quro.util.qstr
  * 实现上规则优先：正则与词表即可覆盖绝大多数情况，不依赖 LLM，
  * 因此没有额外延迟，且行为可预测。LLM 仅作为可选增强。
  */
+// ---------------------------------------------------------------- 意图理解层（2026 升级）
+// web_search 不再"一刀切"盲搜，而是先判定意图类型，再决定走哪条检索/抓取编排。
+// 规则优先、零延迟、可预测，与本项目"IntentRouter 规则优先"的哲学一致。
+
+/** 意图类型：决定后续 Agent 编排走哪条路径 */
+enum class IntentType { GENERAL, HOT_NEWS, ENTITY_SELF }
+
+/**
+ * 已知实体的权威信息。
+ * 例：问"zorvAI 怎么获取 zorvAI 的网络内容"时，不再用通用搜索瞎猜，
+ * 而是直接抓取该实体的官方/权威页面（GitHub 仓库、Releases、爱发电），准确且零歧义。
+ */
+data class EntityInfo(
+    val name: String,
+    val aliases: List<String>,
+    val urls: List<String>,
+    val domains: List<String>
+)
+
+/** 实体名册：按需追加。命中 aliases 即路由到 ENTITY_SELF。 */
+object EntityRegistry {
+    private val ZORVAI = EntityInfo(
+        name = "ZorvAI",
+        aliases = listOf("zorvai", "zorv", "zorv ai", "quor-a", "quroai", "quro ai"),
+        urls = listOf(
+            "https://github.com/Quor-a/ZorvAI",
+            "https://github.com/Quor-a/ZorvAI/releases",
+            "https://afdian.com/a/zorvAI"
+        ),
+        domains = listOf("github.com/Quor-a", "afdian.com/a/zorvAI")
+    )
+    val all: List<EntityInfo> = listOf(ZORVAI)
+
+    fun match(q: String): EntityInfo? {
+        val lower = q.lowercase()
+        return all.firstOrNull { e -> e.aliases.any { lower.contains(it) } }
+    }
+}
+
+/** 时效粒度：决定检索是否带时间约束、Agent 是否偏好近期源 */
+enum class Freshness { DAY, WEEK, MONTH, ANY }
+
+/** 意图判定结果，携带后续编排所需的全部信息 */
+data class IntentInfo(
+    val type: IntentType,
+    val entity: EntityInfo? = null,
+    val freshness: Freshness = Freshness.ANY,
+    val reason: String = ""
+)
+
 object IntentRouter {
 
     enum class Action { SEARCH, SKIP, CLARIFY }
@@ -27,8 +77,6 @@ object IntentRouter {
         /** 检索必要性：影响是否值得抓正文 */
         val freshness: Freshness = Freshness.ANY
     )
-
-    enum class Freshness { DAY, WEEK, MONTH, ANY }
 
     // ---------------------------------------------------------------- 词表
 
@@ -78,6 +126,42 @@ object IntentRouter {
     )
 
     // ---------------------------------------------------------------- 判定
+
+    private val HOT_NEWS_SIGNALS = listOf(
+        "热点新闻", "热搜", "热榜", "今日热点", "今日热搜", "今天的新闻", "今天有什么新闻",
+        "今天发生", "热门话题", "新闻头条", "实时热点", "最新消息", "突发", "什么新闻",
+        "trending", "hot news", "today's news", "what's happening", "what happened today",
+        "top news", "breaking news"
+    )
+
+    /**
+     * 意图分类（规则优先，零延迟）。
+     * 顺序：已知实体 → 热点新闻 → 通用检索。
+     * 实体命中优先于热点——"zorvAI 上热搜了吗"这类问题，获取其官方/权威内容比泛搜更准确。
+     */
+    fun classify(question: String): IntentInfo {
+        val q = question.trim()
+        val lower = q.lowercase()
+
+        val ent = EntityRegistry.match(q)
+        if (ent != null) {
+            return IntentInfo(IntentType.ENTITY_SELF, ent, Freshness.ANY, "命中已知实体，获取其官方/权威内容")
+        }
+
+        if (HOT_NEWS_SIGNALS.any { lower.contains(it) }) {
+            val f = if (listOf("今天", "今日", "现在", "实时", "刚刚", "today", "now")
+                    .any { lower.contains(it) }) Freshness.DAY else Freshness.WEEK
+            return IntentInfo(IntentType.HOT_NEWS, null, f, "含热点/时效新闻信号")
+        }
+
+        val f = when {
+            listOf("今天", "今日", "现在", "实时", "刚刚", "today", "now").any { lower.contains(it) } -> Freshness.DAY
+            listOf("本周", "这周", "近日", "最近", "recent").any { lower.contains(it) } -> Freshness.WEEK
+            listOf("本月", "今年", "month", "year").any { lower.contains(it) } -> Freshness.MONTH
+            else -> Freshness.ANY
+        }
+        return IntentInfo(IntentType.GENERAL, null, f, "通用检索")
+    }
 
     fun route(
         question: String,

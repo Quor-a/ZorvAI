@@ -10,6 +10,7 @@ import com.ai.assistance.quro.core.websearch.model.SearchBundle
 import com.ai.assistance.quro.core.websearch.model.SearchHit
 import com.ai.assistance.quro.core.websearch.net.EngineRouter
 import com.ai.assistance.quro.core.websearch.net.HttpStack
+import com.ai.assistance.quro.core.websearch.net.HotNewsFetcher
 import com.ai.assistance.quro.core.websearch.net.SearchEngine
 import com.ai.assistance.quro.core.websearch.pack.ContextPacker
 import com.ai.assistance.quro.core.websearch.rank.EvidenceReranker
@@ -273,6 +274,101 @@ class WebSearchOrchestrator(
         }
         timings["pack"] = System.currentTimeMillis() - t6
         return bundle
+    }
+
+    /**
+     * 智能检索入口：先判定意图，再路由到对应编排路径。
+     * 模型显式调用 web_search 时走这里（替代原 search()/searchExplicit() 的盲搜）。
+     * - HOT_NEWS：新闻骨干(gnews) + 实时热榜(B站) 多源汇聚成速览；
+     * - ENTITY_SELF：直接抓取该实体官方/权威页面（精准，不靠瞎搜）；
+     * - GENERAL：回退到已修好的 L2 证据级管线（searchExplicit）。
+     * 任一分支不可达/空结果都有安全兜底，绝不退化成"无结果"。
+     */
+    suspend fun searchSmart(question: String): SearchBundle {
+        val intent = IntentRouter.classify(question)
+        return when (intent.type) {
+            IntentType.HOT_NEWS -> gatherHotNews(question, intent)
+            IntentType.ENTITY_SELF -> gatherEntitySelf(question, intent.entity!!)
+            else -> searchExplicit(question)
+        }
+    }
+
+    /**
+     * 热点/新闻编排：多源汇聚 + 按时间倒序速览。
+     * 1) 新闻骨干：gnews 引擎（时效查询最佳源，境内不可达时自动熔断跳过）；
+     * 2) 实时热榜：B站热门（境内稳定可达）；
+     * 3) 通用召回：多引擎并发，仅保留近 48h 的时效结果；
+     * 4) 合并去重 → 按发布时间倒序 → 轻量速览打包（不抓全文）。
+     * 全部不可达时回退通用检索，保证"今天有什么热点"永远有答案。
+     */
+    private suspend fun gatherHotNews(question: String, intent: IntentInfo): SearchBundle {
+        val t0 = System.currentTimeMillis()
+        val timings = HashMap<String, Long>()
+
+        // 1) 新闻骨干：gnews 引擎（境内不可达时自动熔断跳过）
+        val gnews = engines.firstOrNull { it.id == "gnews" }
+        val newsHits = if (gnews != null) {
+            val q = if (intent.freshness == Freshness.DAY) "$question 今日" else question
+            runCatching { gnews.search(q, config.perQueryLimit) }.getOrDefault(emptyList())
+        } else emptyList()
+
+        // 2) 通用召回：多引擎并发，仅保留近 48h 的时效结果
+        val recent = EngineRouter.search(engines, question, config.perQueryLimit, config.searchTimeoutMs)
+            .filter { it.publishedAt <= 0 || System.currentTimeMillis() - it.publishedAt < 48 * 3_600_000L }
+
+        // 3) 实时热榜（境内稳定可达）
+        val hot = HotNewsFetcher.hotList(config.perQueryLimit)
+
+        timings["hotRetrieve"] = System.currentTimeMillis() - t0
+
+        // 4) 合并去重 → 按发布时间倒序
+        val merged = LinkedHashMap<String, SearchHit>()
+        (newsHits + hot + recent).forEach { merged.putIfAbsent(EngineRouter.normalizeUrl(it.url), it) }
+        val sorted = merged.values.sortedByDescending { if (it.publishedAt > 0) it.publishedAt else 0L }
+
+        // 全部不可达 → 退化为通用检索
+        if (sorted.isEmpty()) return searchExplicit(question)
+
+        timings["hotMerge"] = System.currentTimeMillis() - t0
+        return ContextPacker.packHeadlines(sorted, listOf(question), config.tokenBudget, timings)
+    }
+
+    /**
+     * 实体自身内容编排：直接抓取该实体的官方/权威页面（精准、零歧义）。
+     * 例：问"zorvAI 的网络内容" → 直接抓 GitHub 仓库/Releases + 爱发电，而不是用通用搜索瞎猜。
+     * 官方页抓取失败 → 退化为"域名约束检索"（site:github.com/Quor-a ...），仍比盲搜准。
+     */
+    private suspend fun gatherEntitySelf(question: String, entity: EntityInfo): SearchBundle {
+        val timings = HashMap<String, Long>()
+        val t0 = System.currentTimeMillis()
+
+        val fetched = LinkedHashMap<String, Article>()
+        coroutineScope {
+            val jobs = entity.urls.map { u ->
+                async { u to fetchArticle(SearchHit(entity.name, u, "", "direct", 0)) }
+            }
+            for (j in jobs) { val (u, a) = j.await(); fetched[u] = a }
+        }
+        timings["entityFetch"] = System.currentTimeMillis() - t0
+
+        val okArticles = fetched.filterValues { it.ok && it.markdown.isNotBlank() }
+        if (okArticles.isNotEmpty()) {
+            val hits = okArticles.map { (u, a) ->
+                SearchHit(a.title.ifBlank { entity.name }, u, "", "direct", 0, -1, 1)
+            }
+            return ContextPacker.pack(
+                hits = hits,
+                articles = okArticles,
+                queries = listOf(question),
+                tokenBudget = config.tokenBudget,
+                perArticleCap = config.perArticleCap,
+                timings = timings
+            ).copy(confidenceNote = "来源：${entity.name} 官方/权威页面（${okArticles.size}）")
+        }
+
+        // 官方页全部抓取失败 → 域名约束检索兜底
+        val constrained = entity.domains.joinToString(" OR ") { "site:$it" }
+        return searchExplicit("$question $constrained")
     }
 
     /** 单篇抓取：供 read_url 工具独立使用 */

@@ -106,6 +106,12 @@ data class Message(
      * 让用户清楚看到当前卡在哪些工具上（多轮工具循环期间的细节反馈）。
      */
     val workingTools: List<String> = emptyList(),
+    /**
+     * 执行指示时携带的意图标签（[isWorking]=true 时有效）："hot" 或 "entity:ZorvAI"。
+     * 用于在「AI 正在执行工具…」里进一步细化成「正在获取今日热点新闻…」/「正在获取 ZorvAI 的官方信息…」。
+     * 存原始键值、不存本地化文案——本地化在组合作用域的 [WorkingIndicator] 里做。
+     */
+    val workingIntent: String? = null,
     /** 用户消息的上下文标识（工作区/ACI/技能），从 [上下文|...] 注入标记中提取，用于气泡内可见化展示。 */
     val context: String? = null,
     /**

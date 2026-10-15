@@ -166,6 +166,8 @@
     <string name="qk_00161" formatted="false">上传文件</string>
     <string name="qk_00162" formatted="false">语音输入</string>
     <string name="qk_04101">AI 正在执行工具：%1$s …</string>
+    <string name="qk_04102" formatted="false">正在获取今日热点新闻…</string>
+    <string name="qk_04103">正在获取 %1$s 的官方信息…</string>
     <string name="qk_00163" formatted="false">和 Zorv 说点什么…</string>
     <string name="qk_00164" formatted="false">停止生成</string>
     <string name="qk_00165" formatted="false">发送</string>

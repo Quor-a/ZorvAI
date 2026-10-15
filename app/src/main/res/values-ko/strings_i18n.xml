@@ -166,6 +166,8 @@
     <string name="qk_00161" formatted="false">Upload file</string>
     <string name="qk_00162" formatted="false">Voice input</string>
     <string name="qk_04101">AI가 도구를 실행 중: %1$s …</string>
+    <string name="qk_04102" formatted="false">오늘의 실시간 인기 뉴스를 가져오는 중…</string>
+    <string name="qk_04103">%1$s 의 공식 정보를 가져오는 중…</string>
     <string name="qk_00163" formatted="false">Say something to Zorv…</string>
     <string name="qk_00164" formatted="false">Stop generating</string>
     <string name="qk_00165" formatted="false">보내기</string>
