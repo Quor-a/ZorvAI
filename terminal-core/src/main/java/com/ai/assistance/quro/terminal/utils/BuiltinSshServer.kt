@@ -36,29 +36,39 @@ object BuiltinSshServer {
     var backendLabel: String = "—"
         private set
 
+    /** 最近一次启动失败的原因（界面直接展示，不再猜「环境未就绪」）。 */
+    @Volatile
+    var lastError: String? = null
+        private set
+
     @Synchronized
     fun start(context: Context): Boolean {
         if (sshd != null) return true
+        lastError = null
+        // 必须在任何 MINA 类被加载之前补 user.home，否则 setUpDefaultServer() 直接
+        // 抛 ExceptionInInitializerError（Error，catch Exception 抓不住 → App 闪退）。
+        SshAndroidCompat.ensure(context)
         val env = TerminalEnvironment(context)
         if (!env.ensureHostBackendReady()) {
-            Log.e(TAG, "宿主运行环境初始化失败，无法启动 SSH")
+            lastError = "宿主运行环境未就绪：native 组件（busybox/proot）缺失，请重新初始化环境"
+            Log.e(TAG, lastError!!)
             return false
         }
-        val keyFile = Paths.get(context.filesDir.absolutePath, "ssh_host_key.ser")
-        val server = SshServer.setUpDefaultServer()
-        server.host = "127.0.0.1"
-        server.port = RemoteAccessManager.SSH_PORT
-        val keyProvider = SimpleGeneratorHostKeyProvider()
-        keyProvider.path = keyFile
-        keyProvider.algorithm = "RSA"
-        keyProvider.keySize = 2048
-        server.keyPairProvider = keyProvider
-        server.passwordAuthenticator = PasswordAuthenticator { _, password, _ ->
-            password == RemoteAccessManager.LOGIN_PASSWORD
-        }
-
-        server.shellFactory = ShellFactory { _: ChannelSession -> SshShellCommand(env) }
+        var server: SshServer? = null
         return try {
+            val keyFile = Paths.get(context.filesDir.absolutePath, "ssh_host_key.ser")
+            server = SshServer.setUpDefaultServer()
+            server.host = "127.0.0.1"
+            server.port = RemoteAccessManager.SSH_PORT
+            val keyProvider = SimpleGeneratorHostKeyProvider()
+            keyProvider.path = keyFile
+            keyProvider.algorithm = "RSA"
+            keyProvider.keySize = 2048
+            server.keyPairProvider = keyProvider
+            server.passwordAuthenticator = PasswordAuthenticator { _, password, _ ->
+                password == RemoteAccessManager.LOGIN_PASSWORD
+            }
+            server.shellFactory = ShellFactory { _: ChannelSession -> SshShellCommand(env) }
             server.start()
             sshd = server
             backendLabel = env.backendLabel()
@@ -67,9 +77,12 @@ object BuiltinSshServer {
                 "SSH 服务已启动：127.0.0.1:${RemoteAccessManager.SSH_PORT}（后端 ${backendLabel}）"
             )
             true
-        } catch (e: Exception) {
-            Log.e(TAG, "SSH 服务启动失败", e)
-            runCatching { server.stop() }
+        } catch (e: Throwable) {
+            // 抓 Throwable：SSHD 在 Android 上可能抛 Error（见 SshAndroidCompat 注释）
+            lastError = describe(e)
+            Log.e(TAG, "SSH 服务启动失败：${lastError}", e)
+            runCatching { server?.stop() }
+            sshd = null
             false
         }
     }
@@ -80,13 +93,25 @@ object BuiltinSshServer {
         sshd = null
         try {
             s.stop()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e(TAG, "停止 SSH 失败", e)
         }
         backendLabel = "—"
     }
 
     fun isRunning(): Boolean = sshd != null
+
+    /** 把 Throwable 变成一句人话（类名 + 首个有消息的 cause）。 */
+    private fun describe(e: Throwable): String {
+        var t: Throwable? = e
+        val seen = mutableSetOf<Throwable>()
+        while (t != null && seen.add(t)) {
+            val msg = t.message
+            if (!msg.isNullOrBlank()) return "${t.javaClass.simpleName}：$msg"
+            t = t.cause
+        }
+        return e.javaClass.simpleName
+    }
 }
 
 /**

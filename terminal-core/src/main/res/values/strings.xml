@@ -155,6 +155,21 @@
     <string name="remote_env_needs_install_hint">Ubuntu 待初始化：当前 SSH / VNC 接入 Host 终端（busybox）。初始化 Ubuntu 后可接入完整 Linux 环境。</string>
     <string name="remote_vnc_desktop_hint">Ubuntu 已就绪：VNC 将连接真正的 Ubuntu 桌面（tigervnc + 窗口管理器）。</string>
     <string name="remote_vnc_terminal_hint">Ubuntu 尚未就绪：VNC 暂以内置字符终端提供；初始化 Ubuntu 后可切换为桌面。</string>
+
+    <!-- Remote session in-app screens (SSH terminal / VNC screen) -->
+    <string name="remote_start">启动</string>
+    <string name="remote_open">打开</string>
+    <string name="remote_disconnect">断开</string>
+    <string name="remote_keyboard">键盘</string>
+    <string name="remote_ssh_terminal_title">SSH 终端</string>
+    <string name="remote_vnc_screen_title">VNC 画面</string>
+    <string name="remote_tap_to_type">点击屏幕唤起键盘输入</string>
+    <string name="remote_connecting">正在连接…</string>
+    <string name="remote_session_closed">连接已关闭</string>
+    <string name="remote_session_error">连接出错：</string>
+    <string name="remote_send">发送</string>
+    <string name="remote_special_keys">特殊键</string>
+    <string name="remote_ctrl">Ctrl</string>
     
     <!-- Additional new strings -->
     <string name="initializing">正在初始化...</string>
