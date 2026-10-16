@@ -135,6 +135,20 @@
     <string name="remote_vnc">VNC</string>
     <string name="remote_install_start">Install &amp; start</string>
     <string name="remote_not_installed">Not installed</string>
+
+    <!-- Remote access panel status / actions -->
+    <string name="remote_status_probing">Probing…</string>
+    <string name="remote_status_connected">Connected</string>
+    <string name="remote_status_disconnected">Disconnected</string>
+    <string name="remote_status_working">Installing…</string>
+    <string name="remote_status_failed">Failed</string>
+    <string name="remote_stop">Stop</string>
+    <string name="remote_retry">Retry</string>
+    <string name="remote_copy_hint">Tap to copy connection info</string>
+    <string name="remote_copied">Copied</string>
+    <string name="remote_banner_label">Service: </string>
+    <string name="remote_env_missing">Missing Ubuntu rootfs, cannot auto-fix — please reinitialize via Environment Setup</string>
+    <string name="remote_env_needs_install">First use will auto-initialize the Ubuntu environment (a few minutes; keep the app in foreground)</string>
     
     <!-- Additional new strings -->
     <string name="initializing">Initializing...</string>

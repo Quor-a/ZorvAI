@@ -9,6 +9,7 @@ import com.ai.assistance.quro.terminal.TerminalSession
 import com.ai.assistance.quro.terminal.data.PackageManagerType
 import com.ai.assistance.quro.terminal.utils.SourceManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -338,11 +339,50 @@ class TerminalEnvironment(context: Context) {
         }
         """.trimIndent().replace("@SB@", sharedStorageBindLines)
 
+        // 一次性执行入口：与 login_ubuntu 同样的 proot 挂载，但**不进交互 shell**，
+        // 而是直接 `bash -lc "$1"` 跑完就退出。用于「远程连接」这类需要可靠退出码的场景，
+        // 与终端会话的提示符检测/命令队列完全解耦。
+        // 额外点：TERM=dumb + DEBIAN_FRONTEND=noninteractive，避免 apt 弹交互式对话框卡死。
+        val guestExec = """
+        guest_exec(){
+          mkdir -p "${'$'}UBUNTU_PATH/storage/emulated" 2>/dev/null
+          mkdir -p "${'$'}UBUNTU_PATH/mnt/shared" 2>/dev/null
+          mkdir -p "${'$'}UBUNTU_PATH/root/shared" 2>/dev/null
+          mkdir -p "${'$'}TMPDIR/zxremote" 2>/dev/null
+          echo GUEST_EXEC_START
+          exec ${'$'}BIN/proot \
+            -0 \
+            -r "${'$'}UBUNTU_PATH" \
+            --link2symlink \
+            -b /dev \
+            -b /proc \
+            -b /sys \
+            -b /dev/pts \
+            -b "${'$'}TMPDIR":/dev/shm \
+            -b /proc/self/fd:/dev/fd \
+            -b /proc/self/fd/0:/dev/stdin \
+            -b /proc/self/fd/1:/dev/stdout \
+            -b /proc/self/fd/2:/dev/stderr \
+            -b "$sharedHostDir":/mnt/shared \
+            -b "$sharedHostDir":/root/shared \
+            @SB@
+            -w /root \
+            /usr/bin/env -i \
+              HOME=/root \
+              TERM=dumb \
+              LANG=en_US.UTF-8 \
+              DEBIAN_FRONTEND=noninteractive \
+              PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin \
+              /bin/bash -lc "${'$'}1"
+        }
+        """.trimIndent().replace("@SB@", sharedStorageBindLines)
+
         return """
         $common
         $installUbuntu
         $configureSources
         $loginUbuntu
+        $guestExec
         clear_lines
         start_shell(){
           install_ubuntu
@@ -373,23 +413,200 @@ class TerminalEnvironment(context: Context) {
         return f != null && f.canRead()
     }
 
+    /** Ubuntu rootfs 目录（proot-distro 布局）。 */
+    fun ubuntuRootDir(): File =
+        File(File(usrDir, "var/lib/proot-distro"), "installed-rootfs/ubuntu")
+
+    /** rootfs 是否已解压可用（以 /bin/bash + /etc 为准）。 */
+    fun isRootfsReady(): Boolean {
+        val root = ubuntuRootDir()
+        return File(root, "bin/bash").exists() && File(root, "etc").isDirectory
+    }
+
+    /** rootfs 安装包是否还在本地（还在 = 尚未解压，可自动初始化）。 */
+    fun hasRootfsArchive(): Boolean = File(filesDir, UBUNTU_FILENAME).exists()
+
+    /** 判定 guest 环境可用性等级。 */
+    fun guestEnvStatus(): GuestEnvStatus = when {
+        isRootfsReady() -> GuestEnvStatus.READY
+        hasRootfsArchive() -> GuestEnvStatus.NEEDS_INSTALL
+        else -> GuestEnvStatus.ASSET_MISSING
+    }
+
+    /**
+     * 执行信箱宿主目录。
+     *
+     * guest 内等价路径为 `/dev/shm/zxremote`（因为 `TMPDIR` 被 bind 到 guest 的 `/dev/shm`）。
+     * 该 bind 在 [generateStartScript] 中**无条件**存在，不依赖存储权限，因此是宿主⇄guest 之间
+     * 最稳的一条「文件信箱」通道：guest 写退出码/日志，宿主直接读。
+     */
+    fun mailboxHostDir(): File = File(File(filesDir, "tmp"), "zxremote").apply { mkdirs() }
+
+    /**
+     * 在 proot guest 内执行一次性脚本，返回真实退出码与输出。
+     *
+     * 与终端会话的命令队列/提示符检测**完全解耦**：
+     *  1. 宿主侧先 `source common.sh`（幂等，rootfs 没解压就顺手解压）再 `guest_exec`；
+     *  2. 真正的工作脚本写成文件，由 guest 内 `run.sh` 执行，输出 `tee` 到日志文件，
+     *     收尾把真实退出码写进 `code` 文件；
+     *  3. 宿主**以 code 文件出现作为完成信号**（不是以 proot 进程退出为准），
+     *     因此即使脚本派生了 sshd / Xvnc 这类常驻进程也不会误判为「一直安装中」。
+     *
+     * @param script guest 内要执行的 bash 脚本（可多行）
+     * @param timeoutMs 超时上限；到期会尽力终止并标记 [GuestExecResult.timedOut]
+     * @param onOutput 逐行回调（在读取线程上调用，实现方自行保证线程安全）
+     */
+    suspend fun execGuest(
+        script: String,
+        timeoutMs: Long,
+        onOutput: ((String) -> Unit)? = null,
+    ): GuestExecResult = withContext(Dispatchers.IO) {
+        if (!initializeEnvironment()) {
+            return@withContext GuestExecResult(false, -1, "", false, "本地终端运行环境初始化失败")
+        }
+        val bash = File(binDir, "bash")
+        if (!bash.exists()) {
+            return@withContext GuestExecResult(false, -1, "", false, "缺少宿主 bash（原生库未链接）")
+        }
+        val jobId = "job_" + java.lang.Long.toString(System.currentTimeMillis(), 36) +
+            "_" + (0..0xFFFF).random().toString(16)
+        val jobDir = File(mailboxHostDir(), jobId)
+        try {
+            if (!jobDir.mkdirs() && !jobDir.isDirectory) {
+                return@withContext GuestExecResult(false, -1, "", false, "无法创建执行信箱目录")
+            }
+            val codeFile = File(jobDir, "code")
+            val logFile = File(jobDir, "log")
+            File(jobDir, "task.sh").writeText(script)
+            File(jobDir, "run.sh").writeText(
+                "#!/bin/bash\n" +
+                    "D=\"/dev/shm/zxremote/$jobId\"\n" +
+                    "rm -f \"\$D/code\"\n" +
+                    "bash \"\$D/task.sh\" 2>&1 | tee \"\$D/log\"\n" +
+                    "echo \"\${PIPESTATUS[0]}\" > \"\$D/code\"\n"
+            )
+
+            val prelude = "source \"\$HOME/common.sh\" && install_ubuntu && configure_sources && guest_exec \"\$1\""
+            val guestCmd = "bash /dev/shm/zxremote/$jobId/run.sh"
+            val command = arrayOf(bash.absolutePath, "-c", prelude, "zxremote", guestCmd)
+
+            val pty = try {
+                Pty.start(command, baseEnv(), filesDir)
+            } catch (e: Exception) {
+                Log.e(TAG, "execGuest: 无法启动 proot 通道", e)
+                return@withContext GuestExecResult(
+                    false, -1, "", false, "无法启动 proot 通道：${e.message}"
+                )
+            }
+
+            val captured = StringBuilder()
+            val captureLock = Any()
+            fun emit(line: String) {
+                val safe = line.replace('\r', ' ').take(2000)
+                synchronized(captureLock) { captured.append(safe).append('\n') }
+                onOutput?.invoke(safe)
+            }
+
+            val reader = Thread {
+                try {
+                    pty.stdout.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                        lines.forEach { emit(it) }
+                    }
+                } catch (_: Throwable) {
+                    // 关流/进程退出时的正常异常，忽略
+                }
+            }.apply { isDaemon = true; name = "zxremote-reader"; start() }
+
+            var exitCode = Int.MIN_VALUE
+            val waiter = Thread {
+                try {
+                    exitCode = pty.waitFor()
+                } catch (_: Throwable) {
+                }
+            }.apply { isDaemon = true; name = "zxremote-wait"; start() }
+
+            val deadline = System.currentTimeMillis() + timeoutMs
+            var timedOut = false
+            while (!codeFile.exists()) {
+                if (System.currentTimeMillis() >= deadline) {
+                    timedOut = true
+                    break
+                }
+                if (!waiter.isAlive) {
+                    // 进程已退出：给文件系统一点落盘时间，再判定一次
+                    delay(250)
+                    break
+                }
+                delay(120)
+            }
+
+            // 收尾：优先让 proot 自然退出（守护进程已脱壳，不应被信号误伤），
+            // 仅在仍未退出时才强杀。
+            val graceEnd = System.currentTimeMillis() + 3000
+            while (waiter.isAlive && System.currentTimeMillis() < graceEnd) delay(100)
+            if (waiter.isAlive) {
+                try {
+                    pty.destroy()
+                } catch (_: Throwable) {
+                }
+            } else {
+                pty.closeQuietly()
+            }
+            try {
+                reader.join(1200)
+            } catch (_: InterruptedException) {
+            }
+
+            val completed = codeFile.exists()
+            val code = if (completed) {
+                codeFile.readText().trim().toIntOrNull() ?: -1
+            } else {
+                exitCode.takeIf { it != Int.MIN_VALUE } ?: -1
+            }
+            val log = if (logFile.exists()) {
+                runCatching { logFile.readText() }.getOrDefault("")
+            } else {
+                ""
+            }
+            val merged = if (log.isNotBlank()) log else synchronized(captureLock) { captured.toString() }
+            if (!completed) {
+                Log.w(TAG, "execGuest 未拿到回执: jobId=$jobId timedOut=$timedOut exit=$exitCode")
+            }
+            GuestExecResult(
+                completed = completed,
+                code = code,
+                output = merged,
+                timedOut = timedOut,
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "execGuest 失败", e)
+            GuestExecResult(false, -1, "", false, e.message ?: "执行通道异常")
+        } finally {
+            runCatching { jobDir.deleteRecursively() }
+        }
+    }
+
+    /** 宿主侧启动子进程所需的环境变量（终端会话与一次性执行共用，避免两处漂移）。 */
+    private fun baseEnv(): MutableMap<String, String> = mutableMapOf<String, String>().apply {
+        this["PATH"] = "${binDir.absolutePath}:${System.getenv("PATH")}"
+        this["HOME"] = filesDir.absolutePath
+        this["PREFIX"] = usrDir.absolutePath
+        this["TERMUX_PREFIX"] = usrDir.absolutePath
+        this["LD_LIBRARY_PATH"] = "${nativeLibDir}:${binDir.absolutePath}"
+        this["PROOT_LOADER"] = File(binDir, "loader").absolutePath
+        this["TMPDIR"] = File(filesDir, "tmp").absolutePath
+        this["PROOT_TMP_DIR"] = File(filesDir, "tmp").absolutePath
+        this["TERM"] = "xterm-256color"
+        this["LANG"] = "en_US.UTF-8"
+    }
+
     fun startTerminalSession(sessionId: String): Pair<TerminalSession, Pty> {
         val bash = File(binDir, "bash").absolutePath
         val startScript = "source \$HOME/common.sh && start_shell"
 
         val command = arrayOf(bash, "-c", startScript)
 
-        val env = mutableMapOf<String, String>()
-        env["PATH"] = "${binDir.absolutePath}:${System.getenv("PATH")}"
-        env["HOME"] = filesDir.absolutePath
-        env["PREFIX"] = usrDir.absolutePath
-        env["TERMUX_PREFIX"] = usrDir.absolutePath
-        env["LD_LIBRARY_PATH"] = "${nativeLibDir}:${binDir.absolutePath}"
-        env["PROOT_LOADER"] = File(binDir, "loader").absolutePath
-        env["TMPDIR"] = File(filesDir, "tmp").absolutePath
-        env["PROOT_TMP_DIR"] = File(filesDir, "tmp").absolutePath
-        env["TERM"] = "xterm-256color"
-        env["LANG"] = "en_US.UTF-8"
+        val env = baseEnv()
 
         Log.d(TAG, "Starting terminal session with command: ${command.joinToString(" ")}")
         Log.d(TAG, "Environment: $env")
