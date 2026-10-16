@@ -427,7 +427,10 @@ var HUMANIZE = {
   prevWho:"前序负责人", nextWho:"后序负责人", p1x:"点1X", p1y:"点1Y", p2x:"点2X", p2y:"点2Y",
   maxq:"最大量", maxLen:"最大长度", lambda:"参数", hiscost:"历史成本",
   fixed:"固定值", err:"错误", cost:"成本", claim:"申领", benefit:"收益",
-  from:"起始", hint:"提示"
+  from:"起始", hint:"提示",
+  id:"编号", label:"标签", children:"子项", child:"子项", parent:"父项",
+  root:"根节点", leaf:"叶子", node:"节点", edge:"连线", src:"源", dst:"目标", to:"目标",
+  series:"序列", points:"点", values:"数值", point:"点"
 };
 function humanKey(k){ if(!k) return ""; if(HUMANIZE[k]!==undefined) return HUMANIZE[k]; return String(k); }
 /* 仅返回已汉化的标签；未映射的英文键一律不显示（只显值），杜绝键名泄漏 */
@@ -485,11 +488,11 @@ LAYOUTS.table = function(dsl, comp, ctx){
   function colKey(c){ return isObj(c)?(pick(c,["key","k","field","id"])||txt(c)||String(c)):String(c); }
   var thead=el("thead"), tr=el("tr");
   cols.forEach(function(c){
-    var h = isObj(c)?(txt(c)||colKey(c)):String(c);
+    var h = isObj(c)?(txt(c)||colKey(c)):humanKey(String(c));
     var th=el("th",null,esc(h)); tr.appendChild(th);
   });
   if(!cols.length && rows.length && isObj(rows[0])){
-    Object.keys(rows[0]).forEach(function(k){ tr.appendChild(el("th",null,esc(k))); });
+    Object.keys(rows[0]).forEach(function(k){ tr.appendChild(el("th",null,esc(humanKey(k)))); });
   }
   thead.appendChild(tr); tb.appendChild(thead);
   var tbody=el("tbody");
@@ -964,10 +967,18 @@ LAYOUTS.note = function(dsl, comp, ctx){
 LAYOUTS.terminal = function(dsl, comp, ctx){
   var lines = isArr(dsl.lines)?dsl.lines:mainArr(dsl, comp);
   var box=el("div","sec"), t=el("div","term");
+  if(!lines.length){ box.appendChild(el("div","empty","暂无终端输出")); return box; }
   lines.forEach(function(l){
-    var s = isObj(l)?(txt(l)||val(l)):String(l);
+    /* 🔴 旧码 `txt(l)||val(l)`：c(content) 在 HARVEST_SKIP 里被跳过，
+       于是 harvest 回退到 lv(level 标签) —— 用户看到的是「cmd / ok」这种内部键，
+       而不是真正的命令与输出。现在显式优先读内容字段 c / cmd / text。 */
+    var raw = isObj(l) ? (l.c!=null ? l.c : (l.cmd!=null ? l.cmd : txt(l))) : String(l);
+    if(raw===""||raw==null) raw = isObj(l) ? val(l) : "";
+    var s = String(raw);
+    var lv = isObj(l) ? (l.lv||l.level||"") : "";
     var d=el("div");
-    if(/^\s*[$#>]/.test(s)) d.className="p";
+    if(lv && (lv==="cmd"||lv==="prompt"||lv==="$")) d.className="p";
+    else if(/^\s*[$#>]/.test(s)) d.className="p";
     else if(/error|fail|exception/i.test(s)) d.className="e";
     else if(/warn/i.test(s)) d.className="w";
     d.textContent=s;
@@ -1258,7 +1269,20 @@ LAYOUTS.spark = function(dsl, comp, ctx){
   Object.keys(dsl).forEach(function(k){
     if(k==="type") return;
     var v=dsl[k];
-    if(isArr(v) && v.length && typeof v[0]==="number") series.push([k,v]);
+    if(!isArr(v) || !v.length) return;
+    /* 顶层数字数组 → 直接成系列 */
+    if(typeof v[0]==="number"){ series.push([k,v]); return; }
+    /* 🔴 对象条目数组：模型常写成 [{v:1},{value:2}] 而非裸数字，
+       此前 spark 只认裸数字数组，于是「有数值的对象条目」被整段判成「没有数值序列」。
+       现在从每个对象抽取 v/value/n 作为数值。 */
+    if(isObj(v[0])){
+      var nums = v.map(function(o){
+        var raw = o.v!==undefined ? o.v : (o.value!==undefined ? o.value : (o.n!==undefined ? o.n : undefined));
+        var n = parseFloat(raw);
+        return isFinite(n) ? n : NaN;
+      });
+      if(nums.filter(function(n){ return !isNaN(n); }).length) series.push([k, nums]);
+    }
   });
   if(!series.length){ box.appendChild(el("div","empty","没有数值序列")); return box; }
   var W=660,H=180,P=28,all=[];
