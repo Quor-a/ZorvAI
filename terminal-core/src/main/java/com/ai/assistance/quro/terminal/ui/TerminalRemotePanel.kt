@@ -428,13 +428,14 @@ private fun buildConnectionLines(
     addresses: List<RemoteAccessManager.NetAddr>,
 ): List<String> {
     val pw = RemoteAccessManager.LOGIN_PASSWORD
+    val addr = addresses.firstOrNull()?.ip ?: "127.0.0.1"
     return if (addresses.isEmpty()) {
         when (kind) {
             RemoteAccessManager.Kind.SSH ->
-                listOf("ssh root@<本机IP> -p ${RemoteAccessManager.SSH_PORT}  （密码 $pw）")
+                listOf("ssh root@$addr -p ${RemoteAccessManager.SSH_PORT}  （密码 $pw）")
 
             RemoteAccessManager.Kind.VNC ->
-                listOf("<本机IP>:${RemoteAccessManager.VNC_PORT}  （密码 $pw）")
+                listOf("$addr:${RemoteAccessManager.VNC_PORT}  （密码 $pw）")
         }
     } else {
         addresses.map { addr ->

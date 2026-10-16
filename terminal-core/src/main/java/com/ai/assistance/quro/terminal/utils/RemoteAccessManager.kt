@@ -2,9 +2,7 @@ package com.ai.assistance.quro.terminal.utils
 
 import android.content.Context
 import android.util.Log
-import java.net.Inet4Address
 import java.net.InetSocketAddress
-import java.net.NetworkInterface
 import java.net.Socket
 
 /**
@@ -12,8 +10,8 @@ import java.net.Socket
  *
  * ## 定位
  * 在 proot + Ubuntu 环境内安装并启动 sshd / vncserver，把 Ubuntu 文件系统
- * 通过 SSH（端口 2222）与 VNC（显示 :1 → 端口 5901）暴露到局域网，
- * 供电脑端 `ssh` / VNC 客户端连接。
+ * 通过 SSH（端口 2222）与 VNC（显示 :1 → 端口 5901）在本机暴露出来，
+ * 供**本机**的客户端连接（本地连本地，回环地址 127.0.0.1，不需要任何 WiFi / 网卡）。
  *
  * ## 相对旧实现的三处关键修正
  * 1. **执行通道**：不再把命令塞进终端会话的「命令队列」（那条路要靠提示符正则
@@ -48,69 +46,29 @@ object RemoteAccessManager {
         SSH("SSH"), VNC("VNC")
     }
 
-    /** 一个可用的局域网地址。 */
+    /** 一个可用的连接地址（本地回环，本地连本地无需任何网络）。 */
     data class NetAddr(val ip: String, val iface: String)
 
-    // ---------------------------------------------------------------- 网络地址
+    // ---------------------------------------------------------------- 连接地址
 
     /**
-     * 枚举本机全部可用的局域网 IPv4。
+     * 连接地址：本地连本地。
      *
-     * 旧实现只看 `ConnectivityManager.activeNetwork` 且要求 WIFI/ETHERNET transport，
-     * 于是在热点、USB 共享、部分 ROM 上直接返回 null → 界面显示「—」，用户以为功能坏了。
-     * 这里改为直接枚举网卡：热点（ap/swlan）、WiFi（wlan）、以太网、USB 共享都能拿到。
+     * 服务端（proot 里的 sshd / Xvnc）和客户端都在**同一台设备**上，根本不需要 WiFi /
+     * 热点 / 任何网卡 —— 直接用回环地址 `127.0.0.1` 即可。回环地址永远存在，所以界面
+     * 不会再出现「本机 IP 显示 —」的问题（那是旧实现强行去要一个局域网地址、本机没连网
+     * 就空了，方向整个错了）。
      */
-    fun localIpv4All(): List<NetAddr> {
-        val result = ArrayList<NetAddr>()
-        try {
-            val nifs = NetworkInterface.getNetworkInterfaces() ?: return emptyList()
-            for (nif in nifs) {
-                if (!nif.isUp || nif.isLoopback) continue
-                val name = nif.name ?: continue
-                val lower = name.lowercase()
-                // 蜂窝 / 隧道 / 点对点：拿到的地址电脑端也访问不到，直接排除
-                if (lower.startsWith("rmnet") || lower.startsWith("ccmni") ||
-                    lower.startsWith("tun") || lower.startsWith("ppp") ||
-                    lower.startsWith("p2p") || lower.startsWith("dummy")
-                ) {
-                    continue
-                }
-                val addrs = runCatching { nif.interfaceAddresses }.getOrNull() ?: continue
-                for (ia in addrs) {
-                    val addr = ia.address ?: continue
-                    if (addr !is Inet4Address || addr.isLoopbackAddress) continue
-                    val raw = addr.hostAddress ?: continue
-                    val ip = raw.substringBefore('%')
-                    if (ip.startsWith("169.254.")) continue // link-local，不可路由
-                    result.add(NetAddr(ip, name))
-                }
-            }
-        } catch (e: Throwable) {
-            Log.w(TAG, "枚举网卡失败", e)
-        }
-        return result.sortedBy { preference(it.iface) }.distinctBy { it.ip }
-    }
+    fun connectAddresses(): List<NetAddr> = listOf(NetAddr("127.0.0.1", "localhost"))
 
-    /** 网卡优先级：越小越优先（局域网可能性越大）。 */
-    private fun preference(iface: String): Int {
-        val n = iface.lowercase()
-        return when {
-            n.startsWith("wlan") -> 0
-            n.startsWith("ap") || n.startsWith("swlan") -> 1
-            n.startsWith("eth") -> 2
-            n.startsWith("rndis") || n.startsWith("usb") -> 3
-            else -> 9
-        }
-    }
-
-    /** 首选局域网地址；没有可用地址时返回 null。 */
-    fun primaryIpv4(): NetAddr? = localIpv4All().firstOrNull()
+    /** 首选连接地址：恒为回环地址。 */
+    fun primaryIpv4(): NetAddr = connectAddresses().first()
 
     fun sshConnectionInfo(ip: String?): String =
-        "ssh root@${ip ?: "<本机IP>"} -p $SSH_PORT  （密码 $LOGIN_PASSWORD）"
+        "ssh root@${ip ?: "127.0.0.1"} -p $SSH_PORT  （密码 $LOGIN_PASSWORD）"
 
     fun vncConnectionInfo(ip: String?): String =
-        "${ip ?: "<本机IP>"}:$VNC_PORT  （密码 $LOGIN_PASSWORD）"
+        "${ip ?: "127.0.0.1"}:$VNC_PORT  （密码 $LOGIN_PASSWORD）"
 
     // ---------------------------------------------------------------- 服务探针
 
