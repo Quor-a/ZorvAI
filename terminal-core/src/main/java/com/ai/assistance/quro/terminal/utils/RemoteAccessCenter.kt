@@ -92,7 +92,7 @@ object RemoteAccessCenter {
         val app = context.applicationContext
         scope.launch {
             val manager = TerminalManager.getInstance(app)
-            _addresses.value = withContext(Dispatchers.IO) { RemoteAccessManager.localIpv4All() }
+            _addresses.value = withContext(Dispatchers.IO) { RemoteAccessManager.connectAddresses() }
             _envStatus.value = withContext(Dispatchers.IO) { manager.guestEnvStatus() }
             probe(app, RemoteAccessManager.Kind.SSH)
             probe(app, RemoteAccessManager.Kind.VNC)
