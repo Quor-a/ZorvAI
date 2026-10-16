@@ -32,6 +32,24 @@ class Pty(
         }
     }
 
+    /**
+     * 只关闭 PTY 主端读写流，**不向子进程发送任何信号**。
+     *
+     * 用于「命令已按回执确认完成」的场景：此时若仍走 [destroy]（对 pid 发 SIGHUP），
+     * 会误伤该命令在后台派生的守护进程（sshd / Xvnc）。这些守护进程已自行 setsid
+     * 或 nohup 脱离，关流不会波及它们。
+     */
+    fun closeQuietly() {
+        try {
+            stdout.close()
+        } catch (_: Throwable) {
+        }
+        try {
+            stdin.close()
+        } catch (_: Throwable) {
+        }
+    }
+
     companion object {
         private const val TAG = "Pty"
 

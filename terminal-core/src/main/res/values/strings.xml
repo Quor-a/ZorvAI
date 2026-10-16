@@ -136,6 +136,20 @@
     <string name="remote_vnc">VNC</string>
     <string name="remote_install_start">安装并启动</string>
     <string name="remote_not_installed">未安装</string>
+
+    <!-- Remote access panel status / actions -->
+    <string name="remote_status_probing">探测中…</string>
+    <string name="remote_status_connected">已连接</string>
+    <string name="remote_status_disconnected">未连接</string>
+    <string name="remote_status_working">安装中…</string>
+    <string name="remote_status_failed">失败</string>
+    <string name="remote_stop">停止</string>
+    <string name="remote_retry">重试</string>
+    <string name="remote_copy_hint">点击复制连接信息</string>
+    <string name="remote_copied">已复制</string>
+    <string name="remote_banner_label">服务标识：</string>
+    <string name="remote_env_missing">缺少 Ubuntu 根文件系统，无法自动修复 —— 请到「环境配置」重新初始化</string>
+    <string name="remote_env_needs_install">首次使用将自动初始化 Ubuntu 环境（约数分钟，请保持应用在前台）</string>
     
     <!-- Additional new strings -->
     <string name="initializing">正在初始化...</string>

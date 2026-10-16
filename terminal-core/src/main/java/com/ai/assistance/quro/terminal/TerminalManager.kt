@@ -232,6 +232,21 @@ class TerminalManager private constructor(
         return environment.initializeEnvironment()
     }
 
+    /**
+     * 在 proot guest 内执行一次性脚本（独立于终端会话的命令队列/提示符检测），
+     * 返回真实退出码与输出。详见 [TerminalEnvironment.execGuest]。
+     */
+    suspend fun runInGuest(
+        script: String,
+        timeoutMs: Long,
+        onOutput: ((String) -> Unit)? = null,
+    ): com.ai.assistance.quro.terminal.runtime.GuestExecResult =
+        environment.execGuest(script, timeoutMs, onOutput)
+
+    /** guest（Ubuntu）环境的可用性等级。 */
+    fun guestEnvStatus(): com.ai.assistance.quro.terminal.runtime.GuestEnvStatus =
+        environment.guestEnvStatus()
+
     fun startTerminalSession(sessionId: String): Pair<TerminalSession, Pty> {
         return environment.startTerminalSession(sessionId)
     }
