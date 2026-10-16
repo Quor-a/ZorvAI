@@ -153,6 +153,8 @@
     <string name="remote_backend">当前后端</string>
     <string name="remote_env_missing_hint">Ubuntu 未初始化：当前 SSH / VNC 接入 Host 终端（busybox）。初始化 Ubuntu 后可接入完整 Linux 环境。</string>
     <string name="remote_env_needs_install_hint">Ubuntu 待初始化：当前 SSH / VNC 接入 Host 终端（busybox）。初始化 Ubuntu 后可接入完整 Linux 环境。</string>
+    <string name="remote_vnc_desktop_hint">Ubuntu 已就绪：VNC 将连接真正的 Ubuntu 桌面（tigervnc + 窗口管理器）。</string>
+    <string name="remote_vnc_terminal_hint">Ubuntu 尚未就绪：VNC 暂以内置字符终端提供；初始化 Ubuntu 后可切换为桌面。</string>
     
     <!-- Additional new strings -->
     <string name="initializing">正在初始化...</string>
