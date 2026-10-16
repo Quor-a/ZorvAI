@@ -154,6 +154,21 @@
     <string name="remote_env_needs_install_hint">Ubuntu pending init: SSH / VNC currently connects to the Host terminal (busybox). Initialize Ubuntu for the full Linux environment.</string>
     <string name="remote_vnc_desktop_hint">Ubuntu is ready: VNC will connect to the real Ubuntu desktop (tigervnc + window manager).</string>
     <string name="remote_vnc_terminal_hint">Ubuntu not ready yet: VNC serves a built-in character terminal for now; initialize Ubuntu to switch to the desktop.</string>
+
+    <!-- Remote session in-app screens (SSH terminal / VNC screen) -->
+    <string name="remote_start">Start</string>
+    <string name="remote_open">Open</string>
+    <string name="remote_disconnect">Disconnect</string>
+    <string name="remote_keyboard">Keyboard</string>
+    <string name="remote_ssh_terminal_title">SSH Terminal</string>
+    <string name="remote_vnc_screen_title">VNC Screen</string>
+    <string name="remote_tap_to_type">Tap the screen to bring up the keyboard</string>
+    <string name="remote_connecting">Connecting…</string>
+    <string name="remote_session_closed">Connection closed</string>
+    <string name="remote_session_error">Connection error: </string>
+    <string name="remote_send">Send</string>
+    <string name="remote_special_keys">Keys</string>
+    <string name="remote_ctrl">Ctrl</string>
     
     <!-- Additional new strings -->
     <string name="initializing">Initializing...</string>

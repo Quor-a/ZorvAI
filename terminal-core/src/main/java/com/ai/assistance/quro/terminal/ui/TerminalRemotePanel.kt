@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,7 +24,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,12 +40,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.collectAsState
 import com.ai.assistance.quro.terminal.R
 import com.ai.assistance.quro.terminal.runtime.GuestEnvStatus
 import com.ai.assistance.quro.terminal.utils.RemoteAccessCenter
 import com.ai.assistance.quro.terminal.utils.RemoteAccessManager
 import com.ai.assistance.quro.terminal.utils.RemoteServiceState
+import com.ai.assistance.quro.terminal.ui.RemoteSshScreen
+import com.ai.assistance.quro.terminal.ui.RemoteVncScreen
 
 /**
  * 终端「远程连接」面板：SSH / VNC 访问 Ubuntu 环境。
@@ -63,6 +69,9 @@ fun TerminalRemotePanel(onDismiss: () -> Unit) {
     val sshState by center.sshState.collectAsState()
     val vncState by center.vncState.collectAsState()
     val backend by center.backend.collectAsState()
+
+    // 当前在 App 内打开的远程会话（SSH 终端 / VNC 画面）；非 null 时弹出全屏界面
+    var activeSession by remember { mutableStateOf<RemoteAccessManager.Kind?>(null) }
 
     LaunchedEffect(Unit) { center.refresh(context) }
 
@@ -144,6 +153,7 @@ fun TerminalRemotePanel(onDismiss: () -> Unit) {
                     addresses = addresses,
                     onProvision = { center.provision(context, it) },
                     onStop = { center.stop(context, it) },
+                    onOpen = { activeSession = it },
                 )
 
                 RemoteSection(
@@ -153,7 +163,27 @@ fun TerminalRemotePanel(onDismiss: () -> Unit) {
                     addresses = addresses,
                     onProvision = { center.provision(context, it) },
                     onStop = { center.stop(context, it) },
+                    onOpen = { activeSession = it },
                 )
+            }
+        }
+    }
+
+    // 已连接的会话：在 App 内打开真正的终端 / 画面（不再只是一行 banner）
+    if (activeSession != null) {
+        Dialog(
+            onDismissRequest = { activeSession = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = TerminalTheme.backgroundColor,
+            ) {
+                when (activeSession) {
+                    RemoteAccessManager.Kind.SSH -> RemoteSshScreen { activeSession = null }
+                    RemoteAccessManager.Kind.VNC -> RemoteVncScreen { activeSession = null }
+                    null -> {}
+                }
             }
         }
     }
@@ -252,6 +282,7 @@ private fun RemoteSection(
     addresses: List<RemoteAccessManager.NetAddr>,
     onProvision: (RemoteAccessManager.Kind) -> Unit,
     onStop: (RemoteAccessManager.Kind) -> Unit,
+    onOpen: (RemoteAccessManager.Kind) -> Unit,
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -332,7 +363,8 @@ private fun RemoteSection(
                 )
             }
 
-            // 操作按钮：运行中→停止；其它→安装并启动（失败态按钮文案变「重试」）
+            // 操作按钮：运行中→打开界面 + 停止；其它→启动（失败态文案变「重试」）。
+            // 服务内置、环境无关：已运行就直接打开界面，不再「每次都要安装再启动」。
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 when {
                     busy -> {
@@ -349,6 +381,11 @@ private fun RemoteSection(
 
                     state is RemoteServiceState.Running -> {
                         ActionButton(
+                            text = stringResource(R.string.remote_open),
+                            color = TerminalTheme.primaryColor
+                        ) { onOpen(kind) }
+
+                        ActionButton(
                             text = stringResource(R.string.remote_stop),
                             color = TerminalTheme.errorVariant
                         ) { onStop(kind) }
@@ -357,7 +394,7 @@ private fun RemoteSection(
                     else -> {
                         val label =
                             if (state is RemoteServiceState.Failed) stringResource(R.string.remote_retry)
-                            else stringResource(R.string.remote_install_start)
+                            else stringResource(R.string.remote_start)
                         ActionButton(
                             text = label,
                             color = TerminalTheme.primaryColor,
