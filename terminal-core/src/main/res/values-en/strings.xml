@@ -154,6 +154,15 @@
     <string name="remote_env_needs_install_hint">Ubuntu pending init: SSH / VNC currently connects to the Host terminal (busybox). Initialize Ubuntu for the full Linux environment.</string>
     <string name="remote_vnc_desktop_hint">Ubuntu is ready: VNC will connect to the real Ubuntu desktop (tigervnc + window manager).</string>
     <string name="remote_vnc_terminal_hint">Ubuntu not ready yet: VNC serves a built-in character terminal for now; initialize Ubuntu to switch to the desktop.</string>
+    <string name="remote_client_hint">ZorvAI connects to your remote terminal as a client: enter host, account, password — SSH for the command line, VNC to view that machine\'s desktop.</string>
+    <string name="remote_host">Host / IP</string>
+    <string name="remote_port">Port</string>
+    <string name="remote_username">Username</string>
+    <string name="remote_password">Password</string>
+    <string name="remote_connect_btn">Connect</string>
+    <string name="remote_save_btn">Save</string>
+    <string name="remote_saved">Saved</string>
+    <string name="remote_invalid_host">Host address is required</string>
 
     <!-- Remote session in-app screens (SSH terminal / VNC screen) -->
     <string name="remote_start">Start</string>

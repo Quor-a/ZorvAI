@@ -588,7 +588,8 @@ class TerminalEnvironment(context: Context) {
 
     /** 宿主侧启动子进程所需的环境变量（终端会话与一次性执行共用，避免两处漂移）。 */
     private fun baseEnv(): MutableMap<String, String> = mutableMapOf<String, String>().apply {
-        this["PATH"] = "${binDir.absolutePath}:${System.getenv("PATH")}"
+        this["PATH"] =
+            "/system/bin:/system/xbin:${binDir.absolutePath}:${System.getenv("PATH") ?: ""}"
         this["HOME"] = filesDir.absolutePath
         this["PREFIX"] = usrDir.absolutePath
         this["TERMUX_PREFIX"] = usrDir.absolutePath
@@ -607,26 +608,26 @@ class TerminalEnvironment(context: Context) {
     fun baseEnvironment(): MutableMap<String, String> = baseEnv()
 
     /**
-     * 确保 host 级服务可用：仅做原生库链接 + busybox 软链（不碰 Ubuntu rootfs），
-     * 并在 proot 后端需要但 common.sh 缺失时重建它。返回是否就绪。
+     * 确保 host 级服务可用：尽力做原生库链接 + busybox 软链（不碰 Ubuntu rootfs），
+     * 并在 proot 后端需要但 common.sh 缺失时重建它。
      *
-     * 这是「没有连接环境也能用」的关键：它不要求 rootfs 已解压，host 的 busybox 始终可用。
+     * **注意：纯 Java 的 SSH 服务端（MINA）本就不依赖 busybox / proot**；原生库缺失
+     * （未初始化 Ubuntu 环境）时只影响「Ubuntu 登录 shell」后端，不影响 SSH 服务本身。
+     * 因此这里**绝不因 busybox 缺失而返回 false 阻断服务**——降级即可，让 SSH 永远能起。
      */
-    fun ensureHostBackendReady(): Boolean = try {
-        linkNativeLibs()
-        createBusyboxSymlinks()
-        if (isRootfsReady() && !File(filesDir, "common.sh").exists()) {
-            File(filesDir, "common.sh").writeText(generateStartScript())
+    fun ensureHostBackendReady(): Boolean {
+        runCatching { linkNativeLibs() }.onFailure { Log.w(TAG, "linkNativeLibs 跳过", it) }
+        runCatching { createBusyboxSymlinks() }.onFailure { Log.w(TAG, "createBusyboxSymlinks 跳过", it) }
+        runCatching {
+            if (isRootfsReady() && !File(filesDir, "common.sh").exists()) {
+                File(filesDir, "common.sh").writeText(generateStartScript())
+            }
         }
-        true
-    } catch (e: Exception) {
-        Log.e(TAG, "ensureHostBackendReady 失败", e)
-        false
+        return true
     }
 
-    /** host 级 shell：Android 宿主的 busybox sh（无需 Ubuntu）。 */
-    fun hostShellCommand(): Array<String> =
-        arrayOf(File(binDir, "busybox").absolutePath, "sh")
+    /** host 级 shell：Android 系统自带的 `/system/bin/sh`（真 shell，环境无关，无需 Ubuntu）。 */
+    fun hostShellCommand(): Array<String> = arrayOf("/system/bin/sh")
 
     /**
      * 后端 shell：rootfs 就绪时进 proot Ubuntu 登录 shell，否则退化为 host 的 busybox sh。
