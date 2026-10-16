@@ -22,6 +22,7 @@ class QuroReasoningControlTest {
     private val vllmUrl = "https://vllm.internal:8000/v1"
     private val dashScopeUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     private val openAiUrl = "https://api.openai.com/v1"
+    private val agnesUrl = "https://apihub.agnes-ai.com/v1"
 
     private fun plan(
         model: String,
@@ -78,6 +79,29 @@ class QuroReasoningControlTest {
         )
     }
 
+    /**
+     * 修复 issue #21：Agnes 的 baseUrl 不含任何已知关键词（anthropic/openai/dashscope），
+     * 旧逻辑判为 NONE —— 深度思考开关对 Agnes 完全不生效。
+     * Agnes 经本应用的 OpenAI 兼容 chat/completions 端点，thinking 走 `chat_template_kwargs`。
+     */
+    @Test
+    fun `agnes detected from model name or endpoint`() {
+        assertEquals(
+            QuroReasoningControl.Family.AGNES,
+            QuroReasoningControl.detectFamily("OTHER", agnesUrl, "agnes-3.0-flash"),
+        )
+        // 仅模型名命中（用户可能填裸 host 或中转）。
+        assertEquals(
+            QuroReasoningControl.Family.AGNES,
+            QuroReasoningControl.detectFamily("OTHER", "https://some-relay.example/v1", "agnes-3.0-flash"),
+        )
+        // 仅 baseUrl 命中（模型名被写成通用名）。
+        assertEquals(
+            QuroReasoningControl.Family.AGNES,
+            QuroReasoningControl.detectFamily("OTHER", "https://apihub.agnes-ai.com/v1", "my-custom-model"),
+        )
+    }
+
     @Test
     fun `always-on reasoners are detected`() {
         for (m in listOf("deepseek-r1", "deepseek-reasoner", "QwQ-32B", "glm-z1-air")) {
@@ -115,8 +139,9 @@ class QuroReasoningControlTest {
         val models = listOf(
             "o3-mini", "gpt-5.1", "claude-sonnet-4-6", "anthropic/claude-opus-4",
             "qwen3-8b", "qwen3-235b-a22b", "deepseek-r1", "gpt-4o-mini",
+            "agnes-3.0-flash",
         )
-        val urls = listOf(openAiUrl, vllmUrl, dashScopeUrl, "https://api.anthropic.com/v1")
+        val urls = listOf(openAiUrl, vllmUrl, dashScopeUrl, "https://api.anthropic.com/v1", agnesUrl)
         for (m in models) {
             for (u in urls) {
                 for (lv in QuroReasoningControl.ThinkingLevel.values()) {
@@ -226,6 +251,35 @@ class QuroReasoningControlTest {
             "OTHER", dashScopeUrl, "qwen3-235b-a22b", QuroReasoningControl.ThinkingLevel.MEDIUM, 32768,
         )
         assertEquals(true, on.topLevelEnableThinking)
+    }
+
+    /**
+     * 修复 issue #21：Agnes 走 OpenAI 兼容 chat/completions，thinking 用
+     * `chat_template_kwargs.enable_thinking`（与 Qwen3 部署同形态），而非 Anthropic 的
+     * `thinking` 对象 —— 后者在 chat/completions 端点会被 Agnes 拒绝（400）。
+     */
+    @Test
+    fun `agnes emits chat_template_kwargs enable_thinking on openai endpoint`() {
+        val off = QuroReasoningControl.plan(
+            "OTHER", agnesUrl, "agnes-3.0-flash", QuroReasoningControl.ThinkingLevel.OFF, 32768,
+        )
+        assertEquals(false, off.chatTemplateEnableThinking)
+        assertNull(off.thinkingType)
+        assertNull(off.topLevelEnableThinking)
+
+        val on = QuroReasoningControl.plan(
+            "OTHER", agnesUrl, "agnes-3.0-flash", QuroReasoningControl.ThinkingLevel.HIGH, 32768,
+        )
+        assertEquals(true, on.chatTemplateEnableThinking)
+        assertTrue(on.controlsReasoning)
+        assertTrue(on.notes.any { it.contains("Agnes") })
+
+        // AUTO（开关关闭）→ 不下发，保持 Agnes 自身默认。
+        val auto = QuroReasoningControl.plan(
+            "OTHER", agnesUrl, "agnes-3.0-flash", QuroReasoningControl.ThinkingLevel.AUTO, 32768,
+        )
+        assertNull(auto.chatTemplateEnableThinking)
+        assertFalse(auto.controlsReasoning)
     }
 
     // ───────────────────────── 恒思考 / 未识别 ─────────────────────────

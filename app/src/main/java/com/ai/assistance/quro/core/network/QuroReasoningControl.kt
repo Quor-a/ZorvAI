@@ -22,6 +22,7 @@ package com.ai.assistance.quro.core.network
  * | Anthropic | `thinking: {type: "enabled", budget_tokens: N}` |
  * | Qwen3（vLLM/SGLang） | `chat_template_kwargs: {enable_thinking: bool}` |
  * | DashScope 兼容端点 | 顶层 `enable_thinking: bool` |
+ * | Agnes（OpenAI 兼容端点） | `chat_template_kwargs: {enable_thinking: bool}`（与 Qwen3 部署同形态；不走 Anthropic 的 `thinking` 对象） |
  *
  * ## 设计原则（与端侧 N8/N9 同源）
  *
@@ -75,6 +76,12 @@ object QuroReasoningControl {
 
         /** DashScope（百炼）OpenAI 兼容端点：顶层 `enable_thinking`。 */
         DASHSCOPE_TOGGLE,
+
+        /**
+         * Agnes 3.0 Flash 等：Anthropic 兼容但本应用对其走 OpenAI 兼容 chat/completions 请求体，
+         * thinking 用 `chat_template_kwargs.enable_thinking`（与 Qwen3 部署同形态）。
+         */
+        AGNES,
 
         /** 恒思考模型（DeepSeek-R1 / QwQ / GLM-Z1 等）：没有开关，开关对其无效。 */
         ALWAYS_ON,
@@ -158,6 +165,7 @@ object QuroReasoningControl {
     private val OPENAI_EFFORT_PATTERN = Regex("(?i)(^|/)(o[1-9])(-|$)|gpt-5|gpt5")
     private val QWEN3_PATTERN = Regex("(?i)qwen3|qwen-3")
     private val ALWAYS_ON_PATTERN = Regex("(?i)deepseek-r|deepseek-reasoner|qwq|glm-z|magistral|reasoner")
+    private val AGNES_PATTERN = Regex("(?i)agnes")
 
     /**
      * 判定模型家族。
@@ -174,6 +182,15 @@ object QuroReasoningControl {
 
         // 1. 恒思考模型优先：它们没有开关，无论怎么配都只能「什么都不发」。
         if (ALWAYS_ON_PATTERN.containsMatchIn(m)) return Family.ALWAYS_ON
+
+        // 2b. Agnes：域名（apihub.agnes-ai.com）或模型名（agnes-*）任一命中即归入 AGNES。
+        //     Agnes 同时给两套 thinking 写法：Anthropic 兼容的 `thinking: {type, budget_tokens}`
+        //     与 OpenAI 兼容的 `chat_template_kwargs.enable_thinking`。本应用对 Agnes 一律走
+        //     OpenAI 兼容 chat/completions 请求体（`messages` + `tools` + `max_tokens`），
+        //     故采用后者 —— 前者在 chat/completions 端点不被 Agnes 接受（会 400）。
+        if (AGNES_PATTERN.containsMatchIn(m) || url.contains("agnes-ai")) {
+            return Family.AGNES
+        }
 
         // 2. Anthropic：端点与模型名任一命中即可（中转常把模型名写成 anthropic/claude-*）。
         if (ANTHROPIC_PATTERN.containsMatchIn(m) || url.contains("anthropic")) {
@@ -254,6 +271,8 @@ object QuroReasoningControl {
                     if (level == ThinkingLevel.AUTO) add("不干预（AUTO）：不下发")
                 },
             )
+
+            Family.AGNES -> compileAgnes(level, notes)
         }
         return result.copy(
             family = family,
@@ -346,6 +365,32 @@ object QuroReasoningControl {
             thinkingType = "enabled",
             thinkingBudgetTokens = budget,
             suppressTemperature = true,
+        )
+    }
+
+    /**
+     * Agnes 3.0 Flash（经本应用的 OpenAI 兼容 chat/completions 端点）。
+     *
+     * Agnes 文档给出两套 thinking 写法：OpenAI 兼容的 `chat_template_kwargs.enable_thinking`
+     * 与 Anthropic 兼容的 `thinking: {type, budget_tokens}`。本应用对 Agnes 一律走 OpenAI 兼容
+     * 请求体，故采用前者（与 Qwen3 部署同形态）；后者在 chat/completions 端点不被 Agnes 接受（会 400）。
+     */
+    private fun compileAgnes(
+        level: ThinkingLevel,
+        notes: MutableList<String>,
+    ): ReasoningPlan {
+        notes += "Agnes（OpenAI 兼容端点）：chat_template_kwargs.enable_thinking"
+        return ReasoningPlan(
+            chatTemplateEnableThinking =
+                if (level == ThinkingLevel.AUTO) null else level != ThinkingLevel.OFF,
+            notes = notes.apply {
+                when (level) {
+                    // AUTO 刻意不发：不干预 = 保持 Agnes 自身默认思考行为。
+                    ThinkingLevel.AUTO -> add("不干预（AUTO）：不下发，保持 Agnes 默认")
+                    ThinkingLevel.OFF -> add("显式关闭 enable_thinking=false")
+                    else -> add("显式开启 enable_thinking=true")
+                }
+            },
         )
     }
 
