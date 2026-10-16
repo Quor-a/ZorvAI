@@ -600,6 +600,53 @@ class TerminalEnvironment(context: Context) {
         this["LANG"] = "en_US.UTF-8"
     }
 
+    /** 公开：宿主侧启动子进程所需的目录（供 host 级服务拉 PTY）。 */
+    val filesDirectory: File get() = filesDir
+
+    /** 公开：宿主侧启动子进程所需的环境变量（终端会话与一次性执行共用）。 */
+    fun baseEnvironment(): MutableMap<String, String> = baseEnv()
+
+    /**
+     * 确保 host 级服务可用：仅做原生库链接 + busybox 软链（不碰 Ubuntu rootfs），
+     * 并在 proot 后端需要但 common.sh 缺失时重建它。返回是否就绪。
+     *
+     * 这是「没有连接环境也能用」的关键：它不要求 rootfs 已解压，host 的 busybox 始终可用。
+     */
+    fun ensureHostBackendReady(): Boolean = try {
+        linkNativeLibs()
+        createBusyboxSymlinks()
+        if (isRootfsReady() && !File(filesDir, "common.sh").exists()) {
+            File(filesDir, "common.sh").writeText(generateStartScript())
+        }
+        true
+    } catch (e: Exception) {
+        Log.e(TAG, "ensureHostBackendReady 失败", e)
+        false
+    }
+
+    /** host 级 shell：Android 宿主的 busybox sh（无需 Ubuntu）。 */
+    fun hostShellCommand(): Array<String> =
+        arrayOf(File(binDir, "busybox").absolutePath, "sh")
+
+    /**
+     * 后端 shell：rootfs 就绪时进 proot Ubuntu 登录 shell，否则退化为 host 的 busybox sh。
+     * 满足「没有连接环境也能连、连接环境就绪则接 Ubuntu」两边都要接的诉求。
+     */
+    fun backendShellCommand(): Array<String> {
+        ensureHostBackendReady()
+        return if (isRootfsReady()) {
+            arrayOf(
+                File(binDir, "bash").absolutePath, "-c",
+                "source \$HOME/common.sh && install_ubuntu && configure_sources && login_ubuntu"
+            )
+        } else {
+            hostShellCommand()
+        }
+    }
+
+    /** 当前后端类型（用于界面展示）。 */
+    fun backendLabel(): String = if (isRootfsReady()) "Ubuntu (proot)" else "Host (busybox)"
+
     fun startTerminalSession(sessionId: String): Pair<TerminalSession, Pty> {
         val bash = File(binDir, "bash").absolutePath
         val startScript = "source \$HOME/common.sh && start_shell"

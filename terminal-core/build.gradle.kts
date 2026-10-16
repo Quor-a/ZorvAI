@@ -101,4 +101,10 @@ dependencies {
         exclude(group = "org.bouncycastle", module = "bcprov-jdk15to18")
     }
     implementation("org.apache.ftpserver:ftplet-api:1.2.0")
+
+    // 真正内置的 SSH 服务端（Apache MINA SSHD，纯 Java，跑在 App host 进程内）
+    implementation(libs.apache.sshd.core)
+    // SSHD 依赖 slf4j；显式带上 nop 绑定，避免运行时无 provider 的告警
+    implementation(libs.slf4j.api)
+    implementation(libs.slf4j.nop)
 }
