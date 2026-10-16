@@ -155,6 +155,15 @@
     <string name="remote_env_needs_install_hint">Ubuntu 待初始化：当前 SSH / VNC 接入 Host 终端（busybox）。初始化 Ubuntu 后可接入完整 Linux 环境。</string>
     <string name="remote_vnc_desktop_hint">Ubuntu 已就绪：VNC 将连接真正的 Ubuntu 桌面（tigervnc + 窗口管理器）。</string>
     <string name="remote_vnc_terminal_hint">Ubuntu 尚未就绪：VNC 暂以内置字符终端提供；初始化 Ubuntu 后可切换为桌面。</string>
+    <string name="remote_client_hint">ZorvAI 作为客户端连接你的远程终端：填地址、账号、密码，SSH 进命令行、VNC 看那台机器的桌面。</string>
+    <string name="remote_host">主机 / IP</string>
+    <string name="remote_port">端口</string>
+    <string name="remote_username">用户名</string>
+    <string name="remote_password">密码</string>
+    <string name="remote_connect_btn">连接</string>
+    <string name="remote_save_btn">保存</string>
+    <string name="remote_saved">已保存</string>
+    <string name="remote_invalid_host">请先填写主机地址</string>
 
     <!-- Remote session in-app screens (SSH terminal / VNC screen) -->
     <string name="remote_start">启动</string>

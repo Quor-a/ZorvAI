@@ -57,24 +57,37 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.ai.assistance.quro.terminal.R
 import com.ai.assistance.quro.terminal.domain.ansi.AnsiTerminalEmulator
-import com.ai.assistance.quro.terminal.utils.RemoteAccessManager
 import com.ai.assistance.quro.terminal.utils.SshTerminalClient
 import com.ai.assistance.quro.terminal.utils.VncClient
 import com.ai.assistance.quro.terminal.view.canvas.ConfigurableCanvasTerminal
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * 远程连接的「真界面」：让「已连接」不再只是一行 banner，而是本机内直接可交互的
- * SSH 终端 / VNC 画面。两条通路都连 127.0.0.1（内置服务端），本地连本地。
+ * 远程连接（ZorvAI 作为 **客户端**）：填好远程终端的地址 / 账号 / 密码后，SSH 进命令行、
+ * VNC 看那台机器的图形桌面（被连的终端有桌面，所以 VNC 才有意义）。
  *
- * - [RemoteSshScreen]：连本机 2222，把服务端 shell 输出喂给与本地终端同一套
- *   [AnsiTerminalEmulator] 渲染，能直接看到登录 shell 并键入命令。
- * - [RemoteVncScreen]：连本机 5901，把 RFB 帧缓冲画到画布上，支持触摸点击/拖动，
- *   并带一个软键盘条发送字符与特殊键。
+ * - [RemoteSshScreen]：用 [SshTerminalClient] 连远程 SSH 服务端，把对端输出喂给与本地
+ *   终端同一套 [AnsiTerminalEmulator] 渲染，能直接看到对端 shell 并键入命令。
+ * - [RemoteVncScreen]：用 [VncClient] 连远程 VNC 服务端，把 RFB 帧缓冲画到画布上，
+ *   支持触摸点击 / 拖动，并带一个软键盘条发送字符与特殊键。
  */
 
+/**
+ * 一条远程连接配置（ZorvAI 作为客户端连过去）。
+ * [kind] 区分 SSH（命令行）与 VNC（看那台机器有桌面的图形画面）。
+ */
+data class RemoteConnection(
+    val kind: Kind,
+    val host: String,
+    val port: Int,
+    val user: String,
+    val password: String,
+) {
+    enum class Kind { SSH, VNC }
+}
+
 @Composable
-fun RemoteSshScreen(onClose: () -> Unit) {
+fun RemoteSshScreen(conn: RemoteConnection, onClose: () -> Unit) {
     val context = LocalContext.current.applicationContext
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
@@ -107,10 +120,10 @@ fun RemoteSshScreen(onClose: () -> Unit) {
     val client = remember {
         SshTerminalClient(
             context,
-            "127.0.0.1",
-            RemoteAccessManager.SSH_PORT,
-            "root",
-            RemoteAccessManager.LOGIN_PASSWORD,
+            conn.host,
+            conn.port,
+            conn.user,
+            conn.password,
             object : SshTerminalClient.Listener {
                 override fun onStatus(text: String) {
                     mainHandler.post { status = text }
@@ -199,7 +212,7 @@ fun RemoteSshScreen(onClose: () -> Unit) {
 }
 
 @Composable
-fun RemoteVncScreen(onClose: () -> Unit) {
+fun RemoteVncScreen(conn: RemoteConnection, onClose: () -> Unit) {
     val context = LocalContext.current.applicationContext
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
@@ -215,9 +228,9 @@ fun RemoteVncScreen(onClose: () -> Unit) {
 
     val client = remember {
         VncClient(
-            "127.0.0.1",
-            RemoteAccessManager.VNC_PORT,
-            RemoteAccessManager.LOGIN_PASSWORD,
+            conn.host,
+            conn.port,
+            conn.password,
             object : VncClient.Listener {
                 override fun onStatus(text: String) {
                     mainHandler.post { status = text }

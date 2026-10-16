@@ -4,16 +4,11 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -22,7 +17,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,49 +25,55 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.runtime.collectAsState
 import com.ai.assistance.quro.terminal.R
-import com.ai.assistance.quro.terminal.runtime.GuestEnvStatus
-import com.ai.assistance.quro.terminal.utils.RemoteAccessCenter
-import com.ai.assistance.quro.terminal.utils.RemoteAccessManager
-import com.ai.assistance.quro.terminal.utils.RemoteServiceState
-import com.ai.assistance.quro.terminal.ui.RemoteSshScreen
-import com.ai.assistance.quro.terminal.ui.RemoteVncScreen
 
 /**
- * 终端「远程连接」面板：SSH / VNC 访问 Ubuntu 环境。
+ * 终端「远程连接」面板（ZorvAI 作为 **客户端**）。
  *
- * 与后端 [RemoteAccessCenter] 对齐的纯展示层：
- * - 打开时 [RemoteAccessCenter.refresh] 刷新环境、IP、并重新探测两个服务；
- * - 状态全部来自 [RemoteAccessCenter] 的 [androidx.compose.runtime.State]，不依赖任何
- *   终端会话生命周期 —— 弹窗关掉任务仍跑，重开即见进度（旧实现卡「安装中」的根因已根除）；
- * - 「是否在监听」以真实 TCP 探针为准，而不是看进程名或提示符。
+ * 与前面的服务端版本彻底不同：这里不再是「在手机上开 SSH/VNC 服务端、暴露局域网」。
+ * 方向是 **ZorvAI 去连远程终端**——填好那台机器（有桌面的那台）的地址 / 账号 / 密码，
+ * SSH 进命令行、VNC 看那台机器的图形桌面。
+ *
+ * - 配置持久化在 SharedPreferences（remote_conn），下次打开自动回填；
+ * - 「连接」直接拿配置实例化 [RemoteSshScreen] / [RemoteVncScreen]（底层是真正的
+ *   [com.ai.assistance.quro.terminal.utils.SshTerminalClient] /
+ *   [com.ai.assistance.quro.terminal.utils.VncClient] 客户端）；
+ * - 不再有任何「安装 / 启动 / 探测本机服务」的误导，界面就是「填地址 → 连接」。
  */
 @Composable
 fun TerminalRemotePanel(onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val center = RemoteAccessCenter
+    val prefs = remember { context.getSharedPreferences("remote_conn", Context.MODE_PRIVATE) }
 
-    val envStatus by center.envStatus.collectAsState()
-    val addresses by center.addresses.collectAsState()
-    val sshState by center.sshState.collectAsState()
-    val vncState by center.vncState.collectAsState()
-    val backend by center.backend.collectAsState()
+    var sshHost by remember { mutableStateOf(prefs.getString("ssh_host", "") ?: "") }
+    var sshPort by remember { mutableStateOf(prefs.getString("ssh_port", "22") ?: "22") }
+    var sshUser by remember { mutableStateOf(prefs.getString("ssh_user", "root") ?: "root") }
+    var sshPass by remember { mutableStateOf(prefs.getString("ssh_pass", "") ?: "") }
 
-    // 当前在 App 内打开的远程会话（SSH 终端 / VNC 画面）；非 null 时弹出全屏界面
-    var activeSession by remember { mutableStateOf<RemoteAccessManager.Kind?>(null) }
+    var vncHost by remember { mutableStateOf(prefs.getString("vnc_host", "") ?: "") }
+    var vncPort by remember { mutableStateOf(prefs.getString("vnc_port", "5900") ?: "5900") }
+    var vncPass by remember { mutableStateOf(prefs.getString("vnc_pass", "") ?: "") }
 
-    LaunchedEffect(Unit) { center.refresh(context) }
+    var activeConn by remember { mutableStateOf<RemoteConnection?>(null) }
+
+    fun persist(block: android.content.SharedPreferences.Editor.() -> Unit) {
+        val e = prefs.edit()
+        e.block()
+        e.apply()
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -106,83 +106,93 @@ fun TerminalRemotePanel(onDismiss: () -> Unit) {
                 }
 
                 Text(
-                    stringResource(R.string.terminal_remote_hint),
+                    stringResource(R.string.remote_client_hint),
                     color = TerminalTheme.onSurfaceVariant,
-                    fontSize = 13.sp
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
                 )
 
-                // 后端说明：SSH / VNC 接入的是哪个环境（不依赖 Ubuntu 是否就绪）
-                BackendCard(backend)
-
-                // 环境可用性提示（仅提示，不阻断：host 服务即使 Ubuntu 未初始化也能连）
-                when (envStatus) {
-                    GuestEnvStatus.ASSET_MISSING ->
-                        EnvBanner(
-                            stringResource(R.string.remote_env_missing_hint),
-                            TerminalTheme.warningColor
-                        )
-
-                    GuestEnvStatus.NEEDS_INSTALL ->
-                        EnvBanner(
-                            stringResource(R.string.remote_env_needs_install_hint),
-                            TerminalTheme.warningColor
-                        )
-
-                    else -> { /* READY 或尚未探明：无需横幅 */ }
-                }
-
-                IpCard(addresses)
-
-                // VNC 形态说明：Ubuntu 就绪走桌面，未就绪退化为 host 终端（两条路都能连）
-                if (envStatus == GuestEnvStatus.READY) {
-                    EnvBanner(
-                        stringResource(R.string.remote_vnc_desktop_hint),
-                        TerminalTheme.accentColor
-                    )
-                } else {
-                    EnvBanner(
-                        stringResource(R.string.remote_vnc_terminal_hint),
-                        TerminalTheme.onSurfaceVariant
-                    )
-                }
-
-                RemoteSection(
-                    kind = RemoteAccessManager.Kind.SSH,
+                // SSH 连接配置（命令行）
+                ConnectionCard(
                     title = stringResource(R.string.remote_ssh),
-                    state = sshState,
-                    addresses = addresses,
-                    onProvision = { center.provision(context, it) },
-                    onStop = { center.stop(context, it) },
-                    onOpen = { activeSession = it },
+                    host = sshHost, onHost = { sshHost = it },
+                    port = sshPort, onPort = { sshPort = it },
+                    user = sshUser, onUser = { sshUser = it },
+                    pass = sshPass, onPass = { sshPass = it },
+                    showUser = true,
+                    onSave = {
+                        persist {
+                            putString("ssh_host", sshHost.trim())
+                            putString("ssh_port", sshPort.trim())
+                            putString("ssh_user", sshUser.trim())
+                            putString("ssh_pass", sshPass)
+                        }
+                        Toast.makeText(context, R.string.remote_saved, Toast.LENGTH_SHORT).show()
+                    },
+                    onConnect = {
+                        val port = sshPort.toIntOrNull() ?: 22
+                        if (sshHost.isBlank()) {
+                            Toast.makeText(context, R.string.remote_invalid_host, Toast.LENGTH_SHORT).show()
+                            return@ConnectionCard
+                        }
+                        activeConn = RemoteConnection(
+                            RemoteConnection.Kind.SSH,
+                            sshHost.trim(),
+                            port,
+                            sshUser.trim(),
+                            sshPass
+                        )
+                    },
                 )
 
-                RemoteSection(
-                    kind = RemoteAccessManager.Kind.VNC,
+                // VNC 连接配置（看那台机器的桌面）
+                ConnectionCard(
                     title = stringResource(R.string.remote_vnc),
-                    state = vncState,
-                    addresses = addresses,
-                    onProvision = { center.provision(context, it) },
-                    onStop = { center.stop(context, it) },
-                    onOpen = { activeSession = it },
+                    host = vncHost, onHost = { vncHost = it },
+                    port = vncPort, onPort = { vncPort = it },
+                    user = "", onUser = {},
+                    pass = vncPass, onPass = { vncPass = it },
+                    showUser = false,
+                    onSave = {
+                        persist {
+                            putString("vnc_host", vncHost.trim())
+                            putString("vnc_port", vncPort.trim())
+                            putString("vnc_pass", vncPass)
+                        }
+                        Toast.makeText(context, R.string.remote_saved, Toast.LENGTH_SHORT).show()
+                    },
+                    onConnect = {
+                        val port = vncPort.toIntOrNull() ?: 5900
+                        if (vncHost.isBlank()) {
+                            Toast.makeText(context, R.string.remote_invalid_host, Toast.LENGTH_SHORT).show()
+                            return@ConnectionCard
+                        }
+                        activeConn = RemoteConnection(
+                            RemoteConnection.Kind.VNC,
+                            vncHost.trim(),
+                            port,
+                            "",
+                            vncPass
+                        )
+                    },
                 )
             }
         }
     }
 
-    // 已连接的会话：在 App 内打开真正的终端 / 画面（不再只是一行 banner）
-    if (activeSession != null) {
+    // 已连接的会话：全屏显示真实终端 / 桌面画面（不再是 banner）
+    activeConn?.let { conn ->
         Dialog(
-            onDismissRequest = { activeSession = null },
+            onDismissRequest = { activeConn = null },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = TerminalTheme.backgroundColor,
             ) {
-                when (activeSession) {
-                    RemoteAccessManager.Kind.SSH -> RemoteSshScreen { activeSession = null }
-                    RemoteAccessManager.Kind.VNC -> RemoteVncScreen { activeSession = null }
-                    null -> {}
+                when (conn.kind) {
+                    RemoteConnection.Kind.SSH -> RemoteSshScreen(conn) { activeConn = null }
+                    RemoteConnection.Kind.VNC -> RemoteVncScreen(conn) { activeConn = null }
                 }
             }
         }
@@ -190,107 +200,16 @@ fun TerminalRemotePanel(onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun EnvBanner(text: String, color: Color) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = color.copy(alpha = 0.12f),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Text(
-            text,
-            color = color,
-            fontSize = 13.sp,
-            lineHeight = 18.sp,
-            modifier = Modifier.padding(12.dp)
-        )
-    }
-}
-
-/** 后端说明卡：SSH / VNC 接入的是 host busybox 还是 Ubuntu proot（环境无关，始终可连）。 */
-@Composable
-private fun BackendCard(backend: String) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = TerminalTheme.elevated,
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                stringResource(R.string.remote_backend),
-                color = TerminalTheme.onSurfaceVariant,
-                fontSize = 13.sp
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                backend,
-                color = TerminalTheme.accentColor,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
-}
-
-@Composable
-private fun IpCard(addresses: List<RemoteAccessManager.NetAddr>) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = TerminalTheme.elevated,
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                stringResource(R.string.remote_local_ip),
-                color = TerminalTheme.onSurfaceVariant,
-                fontSize = 13.sp
-            )
-            Spacer(Modifier.weight(1f))
-            Column(horizontalAlignment = Alignment.End) {
-                if (addresses.isEmpty()) {
-                    Text(
-                        "—",
-                        color = TerminalTheme.onSurfaceVariant,
-                        fontSize = 15.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                } else {
-                    addresses.forEach { addr ->
-                        Text(
-                            "${addr.ip}  (${addr.iface})",
-                            color = TerminalTheme.accentColor,
-                            fontSize = 14.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RemoteSection(
-    kind: RemoteAccessManager.Kind,
+private fun ConnectionCard(
     title: String,
-    state: RemoteServiceState,
-    addresses: List<RemoteAccessManager.NetAddr>,
-    onProvision: (RemoteAccessManager.Kind) -> Unit,
-    onStop: (RemoteAccessManager.Kind) -> Unit,
-    onOpen: (RemoteAccessManager.Kind) -> Unit,
+    host: String, onHost: (String) -> Unit,
+    port: String, onPort: (String) -> Unit,
+    user: String, onUser: (String) -> Unit,
+    pass: String, onPass: (String) -> Unit,
+    showUser: Boolean,
+    onSave: () -> Unit,
+    onConnect: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
-    val copiedText = stringResource(R.string.remote_copied)
-
-    val connectionLines = remember(addresses, kind) { buildConnectionLines(kind, addresses) }
-    val busy = state is RemoteServiceState.Working
-
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = TerminalTheme.surfaceVariant,
@@ -300,235 +219,95 @@ private fun RemoteSection(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // 标题 + 实时状态胶囊
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    title,
-                    color = TerminalTheme.onSurfaceColor,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(Modifier.weight(1f))
-                StatusPill(state)
-            }
+            Text(
+                title,
+                color = TerminalTheme.onSurfaceColor,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold
+            )
 
-            // 连接信息：点击整块复制到剪贴板
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        clipboard.setText(AnnotatedString(connectionLines.joinToString("\n")))
-                        Toast
-                            .makeText(context, copiedText, Toast.LENGTH_SHORT)
-                            .show()
-                    },
-                color = TerminalTheme.terminalBackground,
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-                    connectionLines.forEach { line ->
-                        Text(
-                            line,
-                            color = TerminalTheme.accentColor,
-                            fontSize = 13.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        stringResource(R.string.remote_copy_hint),
-                        color = TerminalTheme.onSurfaceVariant,
-                        fontSize = 11.sp
-                    )
-                }
-            }
+            ConfigField(stringResource(R.string.remote_host), host, onHost, KeyboardType.Text)
 
-            // 运行中：展示服务端真实 banner（sshd / Xvnc 自报的标识）
-            if (state is RemoteServiceState.Running) {
-                Text(
-                    stringResource(R.string.remote_banner_label) + state.banner,
-                    color = TerminalTheme.onSurfaceVariant,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-
-            // 失败：一句话原因（日志在下方日志框）
-            if (state is RemoteServiceState.Failed) {
-                Text(
-                    state.reason,
-                    color = TerminalTheme.errorColor,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            // 操作按钮：运行中→打开界面 + 停止；其它→启动（失败态文案变「重试」）。
-            // 服务内置、环境无关：已运行就直接打开界面，不再「每次都要安装再启动」。
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                when {
-                    busy -> {
-                        Text(
-                            stringResource(R.string.remote_status_working),
-                            color = TerminalTheme.onSurfaceVariant,
-                            fontSize = 13.sp,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(TerminalTheme.elevated)
-                                .padding(horizontal = 14.dp, vertical = 9.dp)
-                        )
-                    }
-
-                    state is RemoteServiceState.Running -> {
-                        ActionButton(
-                            text = stringResource(R.string.remote_open),
-                            color = TerminalTheme.primaryColor
-                        ) { onOpen(kind) }
-
-                        ActionButton(
-                            text = stringResource(R.string.remote_stop),
-                            color = TerminalTheme.errorVariant
-                        ) { onStop(kind) }
-                    }
-
-                    else -> {
-                        val label =
-                            if (state is RemoteServiceState.Failed) stringResource(R.string.remote_retry)
-                            else stringResource(R.string.remote_start)
-                        ActionButton(
-                            text = label,
-                            color = TerminalTheme.primaryColor,
-                            enabled = true
-                        ) { onProvision(kind) }
+                Box(modifier = Modifier.weight(0.4f)) {
+                    ConfigField(stringResource(R.string.remote_port), port, onPort, KeyboardType.Number)
+                }
+                if (showUser) {
+                    Box(modifier = Modifier.weight(0.6f)) {
+                        ConfigField(stringResource(R.string.remote_username), user, onUser, KeyboardType.Text)
                     }
                 }
             }
 
-            // 进行中：当前步骤提示
-            if (state is RemoteServiceState.Working) {
-                Text(state.step, color = TerminalTheme.onSurfaceVariant, fontSize = 12.sp)
-            }
+            ConfigField(
+                stringResource(R.string.remote_password),
+                pass,
+                onPass,
+                KeyboardType.Password,
+                isPassword = true
+            )
 
-            // 进行中 / 失败：脚本输出尾巴，便于排查（如密码未生效、端口未起）
-            if (state is RemoteServiceState.Working || state is RemoteServiceState.Failed) {
-                val log = when (state) {
-                    is RemoteServiceState.Working -> state.log
-                    is RemoteServiceState.Failed -> state.log
-                }
-                if (log.isNotEmpty()) LogBox(log)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ActionButton(stringResource(R.string.remote_save_btn), TerminalTheme.elevated) { onSave() }
+                ActionButton(stringResource(R.string.remote_connect_btn), TerminalTheme.primaryColor) { onConnect() }
             }
         }
     }
 }
 
 @Composable
-private fun StatusPill(state: RemoteServiceState) {
-    val text = when (state) {
-        RemoteServiceState.Probing -> stringResource(R.string.remote_status_probing)
-        is RemoteServiceState.Running -> "● " + stringResource(R.string.remote_status_connected)
-        RemoteServiceState.Stopped -> "○ " + stringResource(R.string.remote_status_disconnected)
-        is RemoteServiceState.Working -> "● " + stringResource(R.string.remote_status_working)
-        is RemoteServiceState.Failed -> "● " + stringResource(R.string.remote_status_failed)
-    }
-    val color = when (state) {
-        RemoteServiceState.Probing -> TerminalTheme.onSurfaceVariant
-        is RemoteServiceState.Running -> TerminalTheme.successColor
-        RemoteServiceState.Stopped -> TerminalTheme.onSurfaceVariant
-        is RemoteServiceState.Working -> TerminalTheme.accentColor
-        is RemoteServiceState.Failed -> TerminalTheme.errorColor
-    }
-    Surface(
-        color = color.copy(alpha = 0.14f),
-        shape = RoundedCornerShape(999.dp)
-    ) {
-        Text(
-            text,
-            color = color,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-        )
+private fun ConfigField(
+    label: String,
+    value: String,
+    onValue: (String) -> Unit,
+    keyboardType: KeyboardType,
+    isPassword: Boolean = false,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, color = TerminalTheme.onSurfaceVariant, fontSize = 12.sp)
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp)),
+            color = TerminalTheme.terminalBackground,
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValue,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+                textStyle = TextStyle(
+                    color = TerminalTheme.onSurfaceColor,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 14.sp,
+                ),
+                cursorBrush = SolidColor(TerminalTheme.accentColor),
+                decorationBox = { inner -> inner() },
+            )
+        }
     }
 }
 
 @Composable
-private fun ActionButton(
-    text: String,
-    color: Color,
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-) {
+private fun ActionButton(text: String, color: Color, onClick: () -> Unit) {
     Surface(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .clickable(enabled = enabled) { onClick() },
-        color = if (enabled) color else TerminalTheme.divider,
+            .clickable { onClick() },
+        color = color,
         shape = RoundedCornerShape(10.dp)
     ) {
         Text(
             text,
-            color = if (enabled) Color.White else TerminalTheme.onSurfaceVariant,
+            color = if (color == TerminalTheme.primaryColor) Color.White else TerminalTheme.onSurfaceColor,
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
         )
-    }
-}
-
-@Composable
-private fun LogBox(log: List<String>) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(120.dp),
-        color = TerminalTheme.terminalBackground,
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 10.dp, vertical = 8.dp)
-        ) {
-            log.forEach { line ->
-                Text(
-                    line,
-                    color = TerminalTheme.onSurfaceVariant,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    lineHeight = 15.sp
-                )
-            }
-        }
-    }
-}
-
-/**
- * 按网卡列表拼连接串：每个可用地址一行，方便电脑端直接复制。
- * 没有任何地址时退回占位符（仍给出正确端口/密码格式）。
- */
-private fun buildConnectionLines(
-    kind: RemoteAccessManager.Kind,
-    addresses: List<RemoteAccessManager.NetAddr>,
-): List<String> {
-    val pw = RemoteAccessManager.LOGIN_PASSWORD
-    val addr = addresses.firstOrNull()?.ip ?: "127.0.0.1"
-    return if (addresses.isEmpty()) {
-        when (kind) {
-            RemoteAccessManager.Kind.SSH ->
-                listOf("ssh root@$addr -p ${RemoteAccessManager.SSH_PORT}  （密码 $pw）")
-
-            RemoteAccessManager.Kind.VNC ->
-                listOf("$addr:${RemoteAccessManager.VNC_PORT}  （密码 $pw）")
-        }
-    } else {
-        addresses.map { addr ->
-            when (kind) {
-                RemoteAccessManager.Kind.SSH ->
-                    "ssh root@${addr.ip} -p ${RemoteAccessManager.SSH_PORT}  （密码 $pw）"
-
-                RemoteAccessManager.Kind.VNC ->
-                    "${addr.ip}:${RemoteAccessManager.VNC_PORT}  （密码 $pw）"
-            }
-        }
     }
 }
