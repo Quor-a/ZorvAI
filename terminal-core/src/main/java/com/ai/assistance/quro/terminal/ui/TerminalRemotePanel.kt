@@ -62,10 +62,9 @@ fun TerminalRemotePanel(onDismiss: () -> Unit) {
     val addresses by center.addresses.collectAsState()
     val sshState by center.sshState.collectAsState()
     val vncState by center.vncState.collectAsState()
+    val backend by center.backend.collectAsState()
 
     LaunchedEffect(Unit) { center.refresh(context) }
-
-    val envMissing = envStatus == GuestEnvStatus.ASSET_MISSING
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -103,13 +102,22 @@ fun TerminalRemotePanel(onDismiss: () -> Unit) {
                     fontSize = 13.sp
                 )
 
-                // 环境可用性提示（缺 rootfs 时禁用安装按钮 + 引导去环境配置）
+                // 后端说明：SSH / VNC 接入的是哪个环境（不依赖 Ubuntu 是否就绪）
+                BackendCard(backend)
+
+                // 环境可用性提示（仅提示，不阻断：host 服务即使 Ubuntu 未初始化也能连）
                 when (envStatus) {
                     GuestEnvStatus.ASSET_MISSING ->
-                        EnvBanner(stringResource(R.string.remote_env_missing), TerminalTheme.errorColor)
+                        EnvBanner(
+                            stringResource(R.string.remote_env_missing_hint),
+                            TerminalTheme.warningColor
+                        )
 
                     GuestEnvStatus.NEEDS_INSTALL ->
-                        EnvBanner(stringResource(R.string.remote_env_needs_install), TerminalTheme.warningColor)
+                        EnvBanner(
+                            stringResource(R.string.remote_env_needs_install_hint),
+                            TerminalTheme.warningColor
+                        )
 
                     else -> { /* READY 或尚未探明：无需横幅 */ }
                 }
@@ -120,7 +128,6 @@ fun TerminalRemotePanel(onDismiss: () -> Unit) {
                     kind = RemoteAccessManager.Kind.SSH,
                     title = stringResource(R.string.remote_ssh),
                     state = sshState,
-                    envMissing = envMissing,
                     addresses = addresses,
                     onProvision = { center.provision(context, it) },
                     onStop = { center.stop(context, it) },
@@ -130,7 +137,6 @@ fun TerminalRemotePanel(onDismiss: () -> Unit) {
                     kind = RemoteAccessManager.Kind.VNC,
                     title = stringResource(R.string.remote_vnc),
                     state = vncState,
-                    envMissing = envMissing,
                     addresses = addresses,
                     onProvision = { center.provision(context, it) },
                     onStop = { center.stop(context, it) },
@@ -154,6 +160,34 @@ private fun EnvBanner(text: String, color: Color) {
             lineHeight = 18.sp,
             modifier = Modifier.padding(12.dp)
         )
+    }
+}
+
+/** 后端说明卡：SSH / VNC 接入的是 host busybox 还是 Ubuntu proot（环境无关，始终可连）。 */
+@Composable
+private fun BackendCard(backend: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = TerminalTheme.elevated,
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                stringResource(R.string.remote_backend),
+                color = TerminalTheme.onSurfaceVariant,
+                fontSize = 13.sp
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                backend,
+                color = TerminalTheme.accentColor,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
     }
 }
 
@@ -202,7 +236,6 @@ private fun RemoteSection(
     kind: RemoteAccessManager.Kind,
     title: String,
     state: RemoteServiceState,
-    envMissing: Boolean,
     addresses: List<RemoteAccessManager.NetAddr>,
     onProvision: (RemoteAccessManager.Kind) -> Unit,
     onStop: (RemoteAccessManager.Kind) -> Unit,
@@ -314,8 +347,8 @@ private fun RemoteSection(
                             else stringResource(R.string.remote_install_start)
                         ActionButton(
                             text = label,
-                            color = if (envMissing) TerminalTheme.divider else TerminalTheme.primaryColor,
-                            enabled = !envMissing
+                            color = TerminalTheme.primaryColor,
+                            enabled = true
                         ) { onProvision(kind) }
                     }
                 }

@@ -8,7 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
  * 单个远程服务（SSH / VNC）的界面状态。
  *
  * 「运行中」不是猜的：只有 TCP 探针真的读到服务 banner（`SSH-2.0-` / `RFB 003.`）才算
- * [Running]；脚本报告成功但端口没起来，同样判 [Failed]。
+ * [Running]；启动调用成功但端口没起来，同样判 [Failed]。
  */
 sealed interface RemoteServiceState {
     /** 正在探测。 */
@@ -46,14 +46,20 @@ sealed interface RemoteServiceState {
 /**
  * 远程连接（SSH / VNC）的运行时中心。
  *
- * ## 为什么要有这一层
- * 1. **状态与界面解耦**：apt 装一次可能几分钟，用户一定会把弹窗关掉。任务跑在
- *    模块级协程里，状态放在 [MutableStateFlow]；弹窗重开就能看到进度，不会丢。
- * 2. **单一执行通道**：所有动作都走 [TerminalManager.runInGuest]（proot 一次性执行 +
- *    文件回执），彻底绕开终端会话那条「靠提示符正则推进」的命令队列 —— 旧实现
- *    正是因为队列不推进，界面永远停在「安装中」。
- * 3. **完成以探针为准**：脚本退出码只是第一道闸门，最终一定会再做一次 TCP 探针，
- *    避免「脚本说成功、实际没监听」的假成功。
+ * ## 关键修正（相对旧实现）
+ * 旧实现把 sshd / vncserver `apt` 装在 proot + Ubuntu 里，于是「没有连接环境」
+ * （Ubuntu 未初始化）就完全连不上，且 [RemoteAccessCenter] 在 [GuestEnvStatus.ASSET_MISSING]
+ * 时直接 return 阻断 —— 正是用户报「一直安装、连不上」的根因。
+ *
+ * 新版改为**真正内置**：SSH 用 Apache MINA SSHD、VNC 用自研 RFB 3.8 服务端，
+ * 都跑在 **App host 进程**里（[BuiltinSshServer] / [HostVncServer]），监听 127.0.0.1:
+ * 端口，不依赖 proot / Ubuntu。后端 shell 由 [TerminalEnvironment.backendShellCommand] 决定：
+ * Ubuntu rootfs 就绪时桥接 proot 登录 shell，否则退化为 Android host 的 busybox sh ——
+ * 满足「没有连接环境也能连、连接环境就绪则接 Ubuntu」两边都要接的诉求。
+ *
+ * ## 状态与界面解耦
+ * 动作跑在模块级协程里，状态放在 [MutableStateFlow]；弹窗关掉任务仍跑，重开即见进度。
+ * 完成以 TCP 探针为准：启动后一定再做一次探针，避免「调用说成功、端口没起」的假成功。
  */
 object RemoteAccessCenter {
 
@@ -62,9 +68,6 @@ object RemoteAccessCenter {
     /** 界面日志区最多保留的行数。 */
     private const val LOG_TAIL = 80
 
-    /** 内部缓冲上限，防止超长输出吃内存。 */
-    private const val LOG_BUFFER = 400
-
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val _envStatus = MutableStateFlow<GuestEnvStatus?>(null)
@@ -72,6 +75,10 @@ object RemoteAccessCenter {
 
     private val _addresses = MutableStateFlow<List<RemoteAccessManager.NetAddr>>(emptyList())
     val addresses: StateFlow<List<RemoteAccessManager.NetAddr>> = _addresses.asStateFlow()
+
+    /** 当前后端（Ubuntu proot / Host busybox），供界面展示。 */
+    private val _backend = MutableStateFlow("—")
+    val backend: StateFlow<String> = _backend.asStateFlow()
 
     private val _sshState = MutableStateFlow<RemoteServiceState>(RemoteServiceState.Probing)
     val sshState: StateFlow<RemoteServiceState> = _sshState.asStateFlow()
@@ -94,6 +101,12 @@ object RemoteAccessCenter {
             val manager = TerminalManager.getInstance(app)
             _addresses.value = withContext(Dispatchers.IO) { RemoteAccessManager.connectAddresses() }
             _envStatus.value = withContext(Dispatchers.IO) { manager.guestEnvStatus() }
+            // 后端随已运行的服务刷新
+            _backend.value = when {
+                BuiltinSshServer.isRunning() -> BuiltinSshServer.backendLabel
+                HostVncServer.isRunning() -> HostVncServer.backend()
+                else -> "—"
+            }
             probe(app, RemoteAccessManager.Kind.SSH)
             probe(app, RemoteAccessManager.Kind.VNC)
         }
@@ -112,25 +125,14 @@ object RemoteAccessCenter {
         }
     }
 
-    /** 安装并启动（幂等：已装则直接重启）。 */
+    /** 安装并启动内置服务（幂等：已起则直接复核）。 */
     fun provision(context: Context, kind: RemoteAccessManager.Kind) {
         if (isBusy(kind)) return
         val app = context.applicationContext
         val flow = stateOf(kind)
         val job = scope.launch {
             try {
-                runJob(
-                    context = app,
-                    kind = kind,
-                    flow = flow,
-                    script = RemoteAccessManager.provisionScript(app, kind),
-                    timeoutMs = RemoteAccessManager.PROVISION_TIMEOUT_MS,
-                    busyStep = { envNeedsInstall ->
-                        if (envNeedsInstall) "正在初始化 Ubuntu 环境（首次较慢，请保持应用在前台）…"
-                        else "正在安装并启动 ${kind.title}…"
-                    },
-                    expectRunning = true,
-                )
+                runHostServer(app, kind, flow, start = true)
             } finally {
                 jobs.remove(kind)
             }
@@ -138,22 +140,14 @@ object RemoteAccessCenter {
         jobs[kind] = job
     }
 
-    /** 停止服务。 */
+    /** 停止内置服务。 */
     fun stop(context: Context, kind: RemoteAccessManager.Kind) {
         if (isBusy(kind)) return
         val app = context.applicationContext
         val flow = stateOf(kind)
         val job = scope.launch {
             try {
-                runJob(
-                    context = app,
-                    kind = kind,
-                    flow = flow,
-                    script = RemoteAccessManager.stopScript(app, kind),
-                    timeoutMs = RemoteAccessManager.STOP_TIMEOUT_MS,
-                    busyStep = { "正在停止 ${kind.title}…" },
-                    expectRunning = false,
-                )
+                runHostServer(app, kind, flow, start = false)
             } finally {
                 jobs.remove(kind)
             }
@@ -161,92 +155,70 @@ object RemoteAccessCenter {
         jobs[kind] = job
     }
 
-    private suspend fun runJob(
+    private suspend fun runHostServer(
         context: Context,
         kind: RemoteAccessManager.Kind,
         flow: MutableStateFlow<RemoteServiceState>,
-        script: String,
-        timeoutMs: Long,
-        busyStep: (Boolean) -> String,
-        expectRunning: Boolean,
+        start: Boolean,
     ) {
-        val manager = TerminalManager.getInstance(context)
-        val startedAt = System.currentTimeMillis()
-        flow.value = RemoteServiceState.Working("准备执行通道…", startedAt, emptyList())
-
-        val env = withContext(Dispatchers.IO) { manager.guestEnvStatus() }
-        _envStatus.value = env
-        if (env == GuestEnvStatus.ASSET_MISSING) {
-            flow.value = RemoteServiceState.Failed(
-                "缺少 Ubuntu 根文件系统，无法自动修复 —— 请到「环境配置」重新初始化",
-                emptyList(),
-            )
-            return
-        }
         flow.value = RemoteServiceState.Working(
-            busyStep(env == GuestEnvStatus.NEEDS_INSTALL), startedAt, emptyList()
+            if (start) "正在启动内置 ${kind.title} 服务（host 进程，环境无关）…"
+            else "正在停止 ${kind.title} 服务…",
+            System.currentTimeMillis(),
+            emptyList(),
         )
-
-        // 逐行日志：读取线程 trySend，主线程收集，避免跨线程写 Compose 状态
-        val lines = Channel<String>(Channel.UNLIMITED)
-        val buffer = ArrayList<String>(LOG_BUFFER)
-        val collector = scope.launch {
-            for (line in lines) {
-                buffer.add(line)
-                if (buffer.size > LOG_BUFFER) buffer.removeAt(0)
-                val cur = flow.value
-                if (cur is RemoteServiceState.Working) {
-                    flow.value = cur.copy(log = buffer.takeLast(LOG_TAIL))
+        try {
+            val ok = withContext(Dispatchers.IO) {
+                if (start) {
+                    when (kind) {
+                        RemoteAccessManager.Kind.SSH -> BuiltinSshServer.start(context)
+                        RemoteAccessManager.Kind.VNC -> HostVncServer.start(context)
+                    }
+                } else {
+                    when (kind) {
+                        RemoteAccessManager.Kind.SSH -> {
+                            BuiltinSshServer.stop()
+                            true
+                        }
+                        RemoteAccessManager.Kind.VNC -> {
+                            HostVncServer.stop()
+                            true
+                        }
+                    }
                 }
             }
-        }
-
-        val result = try {
-            withContext(Dispatchers.IO) {
-                manager.runInGuest(script, timeoutMs) { line -> lines.trySend(line) }
+            if (!ok) {
+                flow.value = RemoteServiceState.Failed(
+                    if (start) "${kind.title} 服务启动失败：宿主运行环境未就绪（native 库缺失）"
+                    else "${kind.title} 服务停止失败",
+                    emptyList(),
+                )
+                return
+            }
+            // 刷新后端标签（Ubuntu proot / Host busybox）
+            _backend.value = when {
+                BuiltinSshServer.isRunning() -> BuiltinSshServer.backendLabel
+                HostVncServer.isRunning() -> HostVncServer.backend()
+                else -> "—"
+            }
+            // 复核端口真实状态：调用成功不够，必须真能连上
+            delay(400)
+            val banner = withContext(Dispatchers.IO) { RemoteAccessManager.probe(kind) }
+            flow.value = when {
+                start && banner != null -> RemoteServiceState.Running(banner)
+                start -> RemoteServiceState.Failed(
+                    "${kind.title} 服务已启动，但端口未响应（可能端口被占用）", emptyList(),
+                )
+                banner == null -> RemoteServiceState.Stopped
+                else -> RemoteServiceState.Failed(
+                    "${kind.title} 服务已停止，但端口仍在监听", emptyList(),
+                )
             }
         } catch (e: Exception) {
-            Log.e(TAG, "runJob 异常 kind=$kind", e)
-            null
-        } finally {
-            lines.close()
-        }
-        collector.join()
-        val tail = buffer.takeLast(LOG_TAIL)
-
-        if (result == null) {
-            flow.value = RemoteServiceState.Failed("执行通道异常中断", tail)
-            return
-        }
-        when {
-            result.timedOut -> flow.value = RemoteServiceState.Failed(
-                "执行超时（${timeoutMs / 60000} 分钟）—— 网络过慢时可重试，已安装部分会复用",
-                tail,
+            Log.e(TAG, "runHostServer 异常 kind=$kind", e)
+            flow.value = RemoteServiceState.Failed(
+                "执行异常：${e.message ?: e.javaClass.simpleName}", emptyList(),
             )
-
-            !result.completed -> flow.value = RemoteServiceState.Failed(
-                result.error ?: "未拿到执行回执（proot 通道未能启动，可先到「环境配置」确认环境正常）",
-                tail,
-            )
-
-            result.code != 0 -> flow.value = RemoteServiceState.Failed(
-                "脚本以退出码 ${result.code} 结束（详见日志）", tail,
-            )
-
-            else -> {
-                // 脚本说成功还不够，必须再验一次端口真实状态
-                val banner = withContext(Dispatchers.IO) { RemoteAccessManager.probe(kind) }
-                flow.value = when {
-                    expectRunning && banner != null -> RemoteServiceState.Running(banner)
-                    expectRunning -> RemoteServiceState.Failed(
-                        "脚本报告成功，但 ${kind.title} 端口未在监听（详见日志）", tail,
-                    )
-                    banner == null -> RemoteServiceState.Stopped
-                    else -> RemoteServiceState.Failed(
-                        "脚本报告已停止，但 ${kind.title} 端口仍在监听（详见日志）", tail,
-                    )
-                }
-            }
         }
     }
 }

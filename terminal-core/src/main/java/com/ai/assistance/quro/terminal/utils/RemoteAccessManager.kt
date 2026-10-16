@@ -1,6 +1,5 @@
 package com.ai.assistance.quro.terminal.utils
 
-import android.content.Context
 import android.util.Log
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -9,21 +8,22 @@ import java.net.Socket
  * 终端远程访问（SSH / VNC）管理器。
  *
  * ## 定位
- * 在 proot + Ubuntu 环境内安装并启动 sshd / vncserver，把 Ubuntu 文件系统
- * 通过 SSH（端口 2222）与 VNC（显示 :1 → 端口 5901）在本机暴露出来，
- * 供**本机**的客户端连接（本地连本地，回环地址 127.0.0.1，不需要任何 WiFi / 网卡）。
+ * SSH / VNC 服务端**真正内置在 App host 进程**里（见 [BuiltinSshServer] / [HostVncServer]），
+ * 监听 127.0.0.1:2222（SSH）与 127.0.0.1:5901（VNC），供**本机**客户端连接
+ * （本地连本地，回环地址 127.0.0.1，不需要任何 WiFi / 网卡，外部连接走内网穿透/公网）。
  *
- * ## 相对旧实现的三处关键修正
- * 1. **执行通道**：不再把命令塞进终端会话的「命令队列」（那条路要靠提示符正则
- *    匹配才会推进，匹配不上就永远卡在「安装中」），改为经 proot 一次性执行
- *    通道 + 文件回执，拿真实退出码。见 [com.ai.assistance.quro.terminal.TerminalManager.runInGuest]。
- * 2. **真的能登录**：sshd 显式 `UsePAM no`（proot 下 PAM 必失败）+ 设置 root 密码；
- *    VNC 补 `xstartup` 与最小桌面（旧实现只装 tigervnc，连上是全黑屏）。
- * 3. **状态不靠猜**：直接用 TCP 探针读服务 banner（`SSH-2.0-` / `RFB 003.`）判定
- *    「是否真的在监听」，而不是看进程名或提示符。
+ * 这是「没有连接环境也能连」的关键：服务端不依赖 proot / Ubuntu 是否就绪，
+ * 后端 shell 由 [com.ai.assistance.quro.terminal.runtime.TerminalEnvironment.backendShellCommand]
+ * 在 Ubuntu rootfs 就绪时桥接 proot 登录 shell、否则退化为 host 的 busybox sh。
+ *
+ * ## 本类的职责（仅限轻量工具）
+ * - [connectAddresses] / [primaryIpv4]：回环地址（本地连本地，永远存在）。
+ * - [probe] / [sshProbe] / [vncProbe]：TCP 探针读服务 banner（`SSH-2.0-` / `RFB 003.`），
+ *   判定「是否真的在监听」—— 界面状态以此为准，而非看进程名或提示符。
+ * - 端口 / 密码常量：[SSH_PORT] / [VNC_PORT] / [LOGIN_PASSWORD]。
  *
  * ## 端口选择
- * 端口 >1024，避免 proot 伪 root（proot -0）下绑定特权端口需要 CAP_NET_BIND_SERVICE 的问题。
+ * 端口 >1024，避免绑定特权端口需要的 CAP_NET_BIND_SERVICE（host 普通进程无此能力）。
  */
 object RemoteAccessManager {
 
@@ -106,38 +106,5 @@ object RemoteAccessManager {
     fun probe(kind: Kind): String? = when (kind) {
         Kind.SSH -> sshProbe()
         Kind.VNC -> vncProbe()
-    }
-
-    // ---------------------------------------------------------------- guest 脚本
-
-    fun provisionScript(context: Context, kind: Kind): String = when (kind) {
-        Kind.SSH -> loadScript(context, "ssh_provision.sh")
-        Kind.VNC -> loadScript(context, "vnc_provision.sh")
-    }
-
-    fun stopScript(context: Context, kind: Kind): String = when (kind) {
-        Kind.SSH -> loadScript(context, "ssh_stop.sh")
-        Kind.VNC -> loadScript(context, "vnc_stop.sh")
-    }
-
-    /**
-     * 读取并填参 guest 侧脚本。
-     *
-     * 脚本以 assets 形式存放（如 assets/zxremote/ssh_provision.sh），避免在 Kotlin 字符串里
-     * 与 shell 的 `$`、反引号、反斜杠互相打架；端口/密码等常量统一在此注入，
-     * 保证 Kotlin 常量是唯一真源。
-     */
-    private fun loadScript(context: Context, name: String): String {
-        val raw = try {
-            context.assets.open("zxremote/$name").use { it.readBytes().toString(Charsets.UTF_8) }
-        } catch (e: Throwable) {
-            Log.e(TAG, "读取脚本失败: $name", e)
-            "echo \"[remote] 缺少内置脚本 $name\"; exit 127\n"
-        }
-        return raw
-            .replace("@SSH_PORT@", SSH_PORT.toString())
-            .replace("@VNC_DISPLAY@", VNC_DISPLAY.toString())
-            .replace("@VNC_PORT@", VNC_PORT.toString())
-            .replace("@PASSWORD@", LOGIN_PASSWORD)
     }
 }

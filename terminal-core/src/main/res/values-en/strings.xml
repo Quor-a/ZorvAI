@@ -129,7 +129,7 @@
     <string name="permission_probing">Probing…</string>
     <string name="terminal_remote">Remote</string>
     <string name="terminal_remote_title">Remote Access</string>
-    <string name="terminal_remote_hint">Access the Ubuntu environment from a PC via SSH / VNC (requires an initialized environment).</string>
+    <string name="terminal_remote_hint">The SSH / VNC server is built into the app (listens on 127.0.0.1) and works without initializing Ubuntu; once Ubuntu is ready it connects to its login shell automatically.</string>
     <string name="remote_local_ip">Local IP</string>
     <string name="remote_ssh">SSH</string>
     <string name="remote_vnc">VNC</string>
@@ -149,6 +149,9 @@
     <string name="remote_banner_label">Service: </string>
     <string name="remote_env_missing">Missing Ubuntu rootfs, cannot auto-fix — please reinitialize via Environment Setup</string>
     <string name="remote_env_needs_install">First use will auto-initialize the Ubuntu environment (a few minutes; keep the app in foreground)</string>
+    <string name="remote_backend">Backend</string>
+    <string name="remote_env_missing_hint">Ubuntu not initialized: SSH / VNC currently connects to the Host terminal (busybox). Initialize Ubuntu for the full Linux environment.</string>
+    <string name="remote_env_needs_install_hint">Ubuntu pending init: SSH / VNC currently connects to the Host terminal (busybox). Initialize Ubuntu for the full Linux environment.</string>
     
     <!-- Additional new strings -->
     <string name="initializing">Initializing...</string>

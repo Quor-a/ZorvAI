@@ -130,7 +130,7 @@
     <string name="permission_probing">探测中…</string>
     <string name="terminal_remote">远程</string>
     <string name="terminal_remote_title">远程连接</string>
-    <string name="terminal_remote_hint">通过 SSH / VNC 从电脑访问 Ubuntu 环境（需已初始化环境）。</string>
+    <string name="terminal_remote_hint">SSH / VNC 服务端内置在 App 内（监听 127.0.0.1），无需初始化 Ubuntu 也能连；Ubuntu 就绪后自动接入其登录 shell。</string>
     <string name="remote_local_ip">本机 IP</string>
     <string name="remote_ssh">SSH</string>
     <string name="remote_vnc">VNC</string>
@@ -150,6 +150,9 @@
     <string name="remote_banner_label">服务标识：</string>
     <string name="remote_env_missing">缺少 Ubuntu 根文件系统，无法自动修复 —— 请到「环境配置」重新初始化</string>
     <string name="remote_env_needs_install">首次使用将自动初始化 Ubuntu 环境（约数分钟，请保持应用在前台）</string>
+    <string name="remote_backend">当前后端</string>
+    <string name="remote_env_missing_hint">Ubuntu 未初始化：当前 SSH / VNC 接入 Host 终端（busybox）。初始化 Ubuntu 后可接入完整 Linux 环境。</string>
+    <string name="remote_env_needs_install_hint">Ubuntu 待初始化：当前 SSH / VNC 接入 Host 终端（busybox）。初始化 Ubuntu 后可接入完整 Linux 环境。</string>
     
     <!-- Additional new strings -->
     <string name="initializing">正在初始化...</string>

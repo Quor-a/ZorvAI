@@ -20,6 +20,11 @@ navigation = "2.8.5"
 kotlinxSerialization = "1.8.0"
 room = "2.8.4"
 ksp = "2.3.9"
+# 真正内置的 SSH 服务端（跑在 App host 进程，纯 Java，不依赖 proot / Ubuntu 环境）。
+# 选 2.13.x：纯 Java 8，minSdk 26 可直接跑；比捆绑 dropbear 原生二进制在 Android 非 root
+# 上的 getpwnam / 登录 shell 认证脆弱性更稳，且天然满足「没有连接环境也能连」。
+sshd = "2.13.0"
+slf4j = "1.7.36"
 # 多角色集群编排（cluster-*）：SQLCipher 独立加密库 + SQLite KTX
 sqlcipher = "4.5.5"
 sqliteKtx = "2.4.0"
@@ -112,6 +117,11 @@ kaml = { group = "com.charleskorn.kaml", name = "kaml", version.ref = "kaml" }
 # bcpkix 提供 X.509 证书构建 / CMS；bcprov 是它的 ASN.1 与 JCE 底座。
 bouncycastle-bcpkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
 bouncycastle-bcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
+
+# 内置 SSH 服务端（Apache MINA SSHD，纯 Java，App host 进程内运行）
+apache-sshd-core = { group = "org.apache.sshd", name = "sshd-core", version.ref = "sshd" }
+slf4j-api = { group = "org.slf4j", name = "slf4j-api", version.ref = "slf4j" }
+slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version.ref = "slf4j" }
 
 # 端侧 ASR 引擎 Sherpa-NCNN：未使用版本目录条目。
 # 原因：Sherpa-NCNN 无 Maven Central / JitPack AAR（仓库根仅含 CMake，JitPack 构建全部失败）。
