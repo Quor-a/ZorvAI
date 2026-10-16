@@ -41,23 +41,26 @@ cat > /root/.vnc/xstartup <<'ZORVAI_VNC_EOF'
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
 [ -r "$HOME/.Xresources" ] && xrdb "$HOME/.Xresources" >/dev/null 2>&1
+xsetroot -solid "#2b2b3a" 2>/dev/null || true
 if command -v twm >/dev/null 2>&1; then twm & fi
-if command -v xterm >/dev/null 2>&1; then
-  exec xterm -geometry 110x32 -fn fixed
-fi
+if command -v xterm >/dev/null 2>&1; then xterm -geometry 100x30+10+10 -fn fixed & fi
 exec sleep infinity
 ZORVAI_VNC_EOF
 chmod +x /root/.vnc/xstartup
 
-log "步骤 4/5 · 重启 Xvnc（显示 :$VNC_DISPLAY → 端口 $VNC_PORT）"
+log "步骤 4/5 · 重启 Xvnc（显示 :$VNC_DISPLAY → 端口 $VNC_PORT，仅回环监听）"
 vncserver -kill ":$VNC_DISPLAY" >/dev/null 2>&1 || true
 sleep 1
 rm -f "/tmp/.X${VNC_DISPLAY}-lock" 2>/dev/null
 mkdir -p /tmp/.X11-unix
 rm -f "/tmp/.X11-unix/X${VNC_DISPLAY}" 2>/dev/null
-nohup vncserver ":$VNC_DISPLAY" -geometry 1280x800 -depth 24 -localhost no \
+nohup vncserver ":$VNC_DISPLAY" -geometry 1280x800 -depth 24 -localhost yes \
   >/var/log/vnc-zorvai.log 2>&1 &
-sleep 4
+# Xvnc 首跑需生成字体缓存，最多等 15s 再判定
+for i in $(seq 1 15); do
+  pgrep -f Xvnc >/dev/null 2>&1 && break
+  sleep 1
+done
 
 log "步骤 5/5 · 校验"
 if pgrep -f Xvnc >/dev/null 2>&1; then

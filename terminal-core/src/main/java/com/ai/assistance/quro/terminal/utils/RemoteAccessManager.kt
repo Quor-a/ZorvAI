@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.terminal.utils
 
+import android.content.Context
 import android.util.Log
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -42,6 +43,9 @@ object RemoteAccessManager {
     /** 停止阶段超时。 */
     const val STOP_TIMEOUT_MS = 90 * 1000L
 
+    /** VNC 桌面（Ubuntu 内 tigervnc）首次需 apt 安装，给更宽裕的超时。 */
+    const val VNC_DESKTOP_TIMEOUT_MS = 25 * 60 * 1000L
+
     enum class Kind(val title: String) {
         SSH("SSH"), VNC("VNC")
     }
@@ -69,6 +73,36 @@ object RemoteAccessManager {
 
     fun vncConnectionInfo(ip: String?): String =
         "${ip ?: "127.0.0.1"}:$VNC_PORT  （密码 $LOGIN_PASSWORD）"
+
+    // ---------------------------------------------------------------- guest 脚本
+
+    /**
+     * VNC「Ubuntu 桌面」模式的安装/启动脚本（在 proot guest 内执行）。
+     *
+     * 与 host 级 [HostVncServer]（字符终端退化）不同，这条路径在 Ubuntu 就绪时启动**真正的**
+     * tigervnc + 窗口管理器桌面，监听同一个 127.0.0.1:5901 —— 满足「需要 Ubuntu 桌面 +
+     * 显示服务」。端口/密码等常量统一在此注入，保证 Kotlin 常量是唯一真源。
+     */
+    fun vncProvisionScript(context: Context): String =
+        loadGuestScript(context, "vnc_provision.sh")
+            .replace("@VNC_DISPLAY@", VNC_DISPLAY.toString())
+            .replace("@VNC_PORT@", VNC_PORT.toString())
+            .replace("@PASSWORD@", LOGIN_PASSWORD)
+
+    /** VNC「Ubuntu 桌面」模式的停止脚本（在 proot guest 内执行）。 */
+    fun vncStopScript(context: Context): String =
+        loadGuestScript(context, "vnc_stop.sh")
+            .replace("@VNC_DISPLAY@", VNC_DISPLAY.toString())
+
+    /** 读取 assets/zxremote 下的 guest 侧脚本（纯文本，不做 shell 转义）。 */
+    private fun loadGuestScript(context: Context, name: String): String {
+        return try {
+            context.assets.open("zxremote/$name").use { it.readBytes().toString(Charsets.UTF_8) }
+        } catch (e: Throwable) {
+            Log.e(TAG, "读取 guest 脚本失败: $name", e)
+            "#!/bin/bash\necho \"[remote] 缺少内置脚本 $name\"; exit 127\n"
+        }
+    }
 
     // ---------------------------------------------------------------- 服务探针
 

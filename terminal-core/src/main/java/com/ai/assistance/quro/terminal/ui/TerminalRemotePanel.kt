@@ -124,6 +124,19 @@ fun TerminalRemotePanel(onDismiss: () -> Unit) {
 
                 IpCard(addresses)
 
+                // VNC 形态说明：Ubuntu 就绪走桌面，未就绪退化为 host 终端（两条路都能连）
+                if (envStatus == GuestEnvStatus.READY) {
+                    EnvBanner(
+                        stringResource(R.string.remote_vnc_desktop_hint),
+                        TerminalTheme.accentColor
+                    )
+                } else {
+                    EnvBanner(
+                        stringResource(R.string.remote_vnc_terminal_hint),
+                        TerminalTheme.onSurfaceVariant
+                    )
+                }
+
                 RemoteSection(
                     kind = RemoteAccessManager.Kind.SSH,
                     title = stringResource(R.string.remote_ssh),

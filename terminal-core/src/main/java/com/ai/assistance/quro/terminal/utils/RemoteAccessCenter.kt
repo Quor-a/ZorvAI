@@ -51,11 +51,11 @@ sealed interface RemoteServiceState {
  * （Ubuntu 未初始化）就完全连不上，且 [RemoteAccessCenter] 在 [GuestEnvStatus.ASSET_MISSING]
  * 时直接 return 阻断 —— 正是用户报「一直安装、连不上」的根因。
  *
- * 新版改为**真正内置**：SSH 用 Apache MINA SSHD、VNC 用自研 RFB 3.8 服务端，
- * 都跑在 **App host 进程**里（[BuiltinSshServer] / [HostVncServer]），监听 127.0.0.1:
- * 端口，不依赖 proot / Ubuntu。后端 shell 由 [TerminalEnvironment.backendShellCommand] 决定：
- * Ubuntu rootfs 就绪时桥接 proot 登录 shell，否则退化为 Android host 的 busybox sh ——
- * 满足「没有连接环境也能连、连接环境就绪则接 Ubuntu」两边都要接的诉求。
+ * 新版改为**真正内置**：SSH 始终用 Apache MINA SSHD（[BuiltinSshServer]，host 进程，
+ * 环境无关）；VNC 则按 Ubuntu 就绪情况二选一 —— **rootfs 就绪时在 proot 内启动真正的
+ * tigervnc 桌面**（满足「需要 Ubuntu 桌面 + 显示服务」），**未就绪时退化为 host 进程的自研
+ * RFB 3.8 字符终端**([HostVncServer]，环境无关，仍能连)。两条 VNC 路都监听 127.0.0.1:5901，
+ * 客户端连接信息不变。核心目的不变：本地连本地，且没有连接环境时也连得上。
  *
  * ## 状态与界面解耦
  * 动作跑在模块级协程里，状态放在 [MutableStateFlow]；弹窗关掉任务仍跑，重开即见进度。
@@ -88,6 +88,10 @@ object RemoteAccessCenter {
 
     private val jobs = ConcurrentHashMap<RemoteAccessManager.Kind, Job>()
 
+    /** VNC 后端：HOST = 内置字符终端（环境无关）；UBUNTU = Ubuntu 内真实桌面。 */
+    private enum class VncBackend { HOST, UBUNTU, NONE }
+    @Volatile private var vncBackend: VncBackend = VncBackend.NONE
+
     private fun stateOf(kind: RemoteAccessManager.Kind): MutableStateFlow<RemoteServiceState> =
         if (kind == RemoteAccessManager.Kind.SSH) _sshState else _vncState
 
@@ -102,11 +106,7 @@ object RemoteAccessCenter {
             _addresses.value = withContext(Dispatchers.IO) { RemoteAccessManager.connectAddresses() }
             _envStatus.value = withContext(Dispatchers.IO) { manager.guestEnvStatus() }
             // 后端随已运行的服务刷新
-            _backend.value = when {
-                BuiltinSshServer.isRunning() -> BuiltinSshServer.backendLabel
-                HostVncServer.isRunning() -> HostVncServer.backend()
-                else -> "—"
-            }
+            updateBackend()
             probe(app, RemoteAccessManager.Kind.SSH)
             probe(app, RemoteAccessManager.Kind.VNC)
         }
@@ -125,14 +125,15 @@ object RemoteAccessCenter {
         }
     }
 
-    /** 安装并启动内置服务（幂等：已起则直接复核）。 */
+    /** 安装并启动服务（幂等：已起则直接复核）。 */
     fun provision(context: Context, kind: RemoteAccessManager.Kind) {
         if (isBusy(kind)) return
         val app = context.applicationContext
         val flow = stateOf(kind)
         val job = scope.launch {
             try {
-                runHostServer(app, kind, flow, start = true)
+                if (kind == RemoteAccessManager.Kind.SSH) runSsh(app, flow, start = true)
+                else runVnc(app, flow, start = true)
             } finally {
                 jobs.remove(kind)
             }
@@ -140,14 +141,15 @@ object RemoteAccessCenter {
         jobs[kind] = job
     }
 
-    /** 停止内置服务。 */
+    /** 停止服务。 */
     fun stop(context: Context, kind: RemoteAccessManager.Kind) {
         if (isBusy(kind)) return
         val app = context.applicationContext
         val flow = stateOf(kind)
         val job = scope.launch {
             try {
-                runHostServer(app, kind, flow, start = false)
+                if (kind == RemoteAccessManager.Kind.SSH) runSsh(app, flow, start = false)
+                else runVnc(app, flow, start = false)
             } finally {
                 jobs.remove(kind)
             }
@@ -155,70 +157,145 @@ object RemoteAccessCenter {
         jobs[kind] = job
     }
 
-    private suspend fun runHostServer(
+    /** 汇总当前后端展示文案（SSH host/Ubuntu + VNC 桌面/终端）。 */
+    private fun updateBackend() {
+        val parts = mutableListOf<String>()
+        if (BuiltinSshServer.isRunning()) parts += BuiltinSshServer.backendLabel
+        if (vncBackend == VncBackend.UBUNTU) parts += "Ubuntu 桌面"
+        if (HostVncServer.isRunning()) parts += "Host 终端"
+        _backend.value = if (parts.isEmpty()) "—" else parts.joinToString(" / ")
+    }
+
+    /** SSH：始终用 host 级 Apache MINA SSHD（环境无关，桥接到 proot/Ubuntu 或 host busybox）。 */
+    private suspend fun runSsh(
         context: Context,
-        kind: RemoteAccessManager.Kind,
         flow: MutableStateFlow<RemoteServiceState>,
         start: Boolean,
     ) {
         flow.value = RemoteServiceState.Working(
-            if (start) "正在启动内置 ${kind.title} 服务（host 进程，环境无关）…"
-            else "正在停止 ${kind.title} 服务…",
+            if (start) "正在启动内置 SSH 服务（host 进程，环境无关）…"
+            else "正在停止 SSH 服务…",
             System.currentTimeMillis(),
             emptyList(),
         )
         try {
             val ok = withContext(Dispatchers.IO) {
-                if (start) {
-                    when (kind) {
-                        RemoteAccessManager.Kind.SSH -> BuiltinSshServer.start(context)
-                        RemoteAccessManager.Kind.VNC -> HostVncServer.start(context)
-                    }
-                } else {
-                    when (kind) {
-                        RemoteAccessManager.Kind.SSH -> {
-                            BuiltinSshServer.stop()
-                            true
-                        }
-                        RemoteAccessManager.Kind.VNC -> {
-                            HostVncServer.stop()
-                            true
-                        }
-                    }
-                }
+                if (start) BuiltinSshServer.start(context)
+                else { BuiltinSshServer.stop(); true }
             }
             if (!ok) {
                 flow.value = RemoteServiceState.Failed(
-                    if (start) "${kind.title} 服务启动失败：宿主运行环境未就绪（native 库缺失）"
-                    else "${kind.title} 服务停止失败",
+                    if (start) "SSH 服务启动失败：宿主运行环境未就绪（native 库缺失）"
+                    else "SSH 服务停止失败",
                     emptyList(),
                 )
                 return
             }
-            // 刷新后端标签（Ubuntu proot / Host busybox）
-            _backend.value = when {
-                BuiltinSshServer.isRunning() -> BuiltinSshServer.backendLabel
-                HostVncServer.isRunning() -> HostVncServer.backend()
-                else -> "—"
-            }
-            // 复核端口真实状态：调用成功不够，必须真能连上
+            updateBackend()
             delay(400)
-            val banner = withContext(Dispatchers.IO) { RemoteAccessManager.probe(kind) }
+            val banner = withContext(Dispatchers.IO) { RemoteAccessManager.probe(RemoteAccessManager.Kind.SSH) }
             flow.value = when {
                 start && banner != null -> RemoteServiceState.Running(banner)
-                start -> RemoteServiceState.Failed(
-                    "${kind.title} 服务已启动，但端口未响应（可能端口被占用）", emptyList(),
-                )
+                start -> RemoteServiceState.Failed("SSH 服务已启动，但端口未响应（可能端口被占用）", emptyList())
                 banner == null -> RemoteServiceState.Stopped
-                else -> RemoteServiceState.Failed(
-                    "${kind.title} 服务已停止，但端口仍在监听", emptyList(),
-                )
+                else -> RemoteServiceState.Failed("SSH 服务已停止，但端口仍在监听", emptyList())
             }
         } catch (e: Exception) {
-            Log.e(TAG, "runHostServer 异常 kind=$kind", e)
-            flow.value = RemoteServiceState.Failed(
-                "执行异常：${e.message ?: e.javaClass.simpleName}", emptyList(),
-            )
+            Log.e(TAG, "runSsh 异常", e)
+            flow.value = RemoteServiceState.Failed("执行异常：${e.message ?: e.javaClass.simpleName}", emptyList())
         }
+    }
+
+    /**
+     * VNC：后端随 Ubuntu 就绪情况切换。
+     * - rootfs 就绪 → 在 proot 内启动**真正的** tigervnc 桌面（满足「Ubuntu 桌面 + 显示服务」）；
+     * - 未就绪 → 退化为 host 级 [HostVncServer] 字符终端（环境无关，仍能连）。
+     * 两条路都监听同一个 127.0.0.1:5901，客户端连接信息不变。
+     */
+    private suspend fun runVnc(
+        context: Context,
+        flow: MutableStateFlow<RemoteServiceState>,
+        start: Boolean,
+    ) {
+        val manager = TerminalManager.getInstance(context.applicationContext)
+        val ubuntuReady = withContext(Dispatchers.IO) { manager.guestEnvStatus() == GuestEnvStatus.READY }
+        val target = if (ubuntuReady) VncBackend.UBUNTU else VncBackend.HOST
+        flow.value = RemoteServiceState.Working(
+            if (start) {
+                if (target == VncBackend.UBUNTU) {
+                    "正在 Ubuntu 内启动桌面 VNC（tigervnc + 窗口管理器，首次需 apt 安装，请保持前台）…"
+                } else {
+                    "正在启动内置 VNC 服务（host 终端，环境无关）…"
+                }
+            } else "正在停止 VNC 服务…",
+            System.currentTimeMillis(),
+            emptyList(),
+        )
+        try {
+            val ok = withContext(Dispatchers.IO) {
+                // 切换后端前先停掉另一个后端，避免 5901 端口冲突
+                if (start && target != vncBackend) {
+                    if (vncBackend == VncBackend.UBUNTU) stopGuestVnc(context)
+                    if (vncBackend == VncBackend.HOST) HostVncServer.stop()
+                }
+                if (!start) {
+                    if (vncBackend == VncBackend.UBUNTU) stopGuestVnc(context)
+                    else HostVncServer.stop()
+                    true
+                } else {
+                    when (target) {
+                        VncBackend.UBUNTU -> {
+                            val script = RemoteAccessManager.vncProvisionScript(context)
+                            val res = manager.runInGuest(
+                                script,
+                                RemoteAccessManager.VNC_DESKTOP_TIMEOUT_MS,
+                            ) { line ->
+                                val cur = flow.value
+                                if (cur is RemoteServiceState.Working) {
+                                    flow.value = cur.copy(log = (cur.log + line).takeLast(LOG_TAIL))
+                                }
+                            }
+                            if (!res.ok) {
+                                flow.value = RemoteServiceState.Failed(
+                                    if (res.timedOut) "Ubuntu 桌面 VNC 安装超时（apt 太慢或网络不通）"
+                                    else res.error ?: "Ubuntu 桌面 VNC 启动失败",
+                                    res.tailLines(LOG_TAIL),
+                                )
+                                return@withContext false
+                            }
+                            true
+                        }
+                        VncBackend.HOST -> HostVncServer.start(context)
+                        VncBackend.NONE -> true
+                    }
+                }
+            }
+            if (!ok) {
+                if (flow.value !is RemoteServiceState.Failed) {
+                    flow.value = RemoteServiceState.Failed("VNC 服务启动失败", emptyList())
+                }
+                return
+            }
+            vncBackend = if (start) target else VncBackend.NONE
+            updateBackend()
+            delay(400)
+            val banner = withContext(Dispatchers.IO) { RemoteAccessManager.probe(RemoteAccessManager.Kind.VNC) }
+            flow.value = when {
+                start && banner != null -> RemoteServiceState.Running(banner)
+                start -> RemoteServiceState.Failed("VNC 服务已启动，但端口未响应（可能端口被占用）", emptyList())
+                banner == null -> RemoteServiceState.Stopped
+                else -> RemoteServiceState.Failed("VNC 服务已停止，但端口仍在监听", emptyList())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "runVnc 异常", e)
+            flow.value = RemoteServiceState.Failed("执行异常：${e.message ?: e.javaClass.simpleName}", emptyList())
+        }
+    }
+
+    /** 在 proot guest 内停止 Ubuntu 桌面 VNC（幂等）。 */
+    private suspend fun stopGuestVnc(context: Context) {
+        val manager = TerminalManager.getInstance(context.applicationContext)
+        val script = RemoteAccessManager.vncStopScript(context)
+        runCatching { manager.runInGuest(script, RemoteAccessManager.STOP_TIMEOUT_MS, null) }
     }
 }

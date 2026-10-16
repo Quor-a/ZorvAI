@@ -152,6 +152,8 @@
     <string name="remote_backend">Backend</string>
     <string name="remote_env_missing_hint">Ubuntu not initialized: SSH / VNC currently connects to the Host terminal (busybox). Initialize Ubuntu for the full Linux environment.</string>
     <string name="remote_env_needs_install_hint">Ubuntu pending init: SSH / VNC currently connects to the Host terminal (busybox). Initialize Ubuntu for the full Linux environment.</string>
+    <string name="remote_vnc_desktop_hint">Ubuntu is ready: VNC will connect to the real Ubuntu desktop (tigervnc + window manager).</string>
+    <string name="remote_vnc_terminal_hint">Ubuntu not ready yet: VNC serves a built-in character terminal for now; initialize Ubuntu to switch to the desktop.</string>
     
     <!-- Additional new strings -->
     <string name="initializing">Initializing...</string>
