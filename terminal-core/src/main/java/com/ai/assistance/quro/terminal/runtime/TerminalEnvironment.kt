@@ -197,20 +197,46 @@ class TerminalEnvironment(context: Context) {
     private fun extractAssets() {
         try {
             // Ubuntu 内置；LANXIU 亦内置（与 Ubuntu 同机制，不再首次按需下载）。
-            val assets = listOf(UBUNTU_FILENAME, Distro.LANXIU.rootfsFilename)
-            assets.forEach { assetName ->
-                val assetFile = File(filesDir, assetName)
-                if (!assetFile.exists()) {
+            val assetNames = listOf(UBUNTU_FILENAME, Distro.LANXIU.rootfsFilename)
+            val stampFile = File(filesDir, ".assets.stamp")
+            val prevStamp = runCatching { stampFile.readText() }.getOrDefault("")
+            // 用 lastUpdateTime 而不是 versionCode：每次安装都会变，保证「同版本号重装」也能刷新资产。
+            // 旧实现「exists() 即跳过」会让换了内容的新资产、以及被中断写坏的半截包永远留在设备上。
+            val installStamp = runCatching {
+                appContext.packageManager.getPackageInfo(appContext.packageName, 0).lastUpdateTime
+            }.getOrDefault(0L)
+            val prevStampV = Regex("^v=(\\d+)$", RegexOption.MULTILINE)
+                .find(prevStamp)?.groupValues?.get(1)?.toLongOrNull() ?: -1L
+            val versionChanged = prevStampV != installStamp
+
+            val newStamp = StringBuilder("v=$installStamp\n")
+            assetNames.forEach { assetName ->
+                val dest = File(filesDir, assetName)
+                val recordedSize = Regex("^${Regex.escape(assetName)}=(\\d+)$", RegexOption.MULTILINE)
+                    .find(prevStamp)?.groupValues?.get(1)?.toLongOrNull()
+                // 尺寸与戳不符（上次拷贝被中断留下半截包）或版本变了 -> 必须重拷。
+                val needCopy = versionChanged || !dest.exists() ||
+                    recordedSize == null || dest.length() != recordedSize
+                if (needCopy) {
+                    // 先写 .tmp 再原子替换：半截拷贝只会留下 .tmp，绝不会污染正式文件名。
+                    // 从根上消除「半截 tarball 被判为已下载 -> busybox tar 永远解压失败 -> 终端永久黑屏」的死锁。
+                    val tmp = File(filesDir, "$assetName.tmp")
+                    Files.deleteIfExists(tmp.toPath())
                     appContext.assets.open(assetName).use { input ->
-                        assetFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
+                        tmp.outputStream().use { output -> input.copyTo(output) }
                     }
-                    Log.d(TAG, "Extracted $assetName")
+                    if (dest.exists() && !dest.delete()) Log.w(TAG, "Cannot delete old $assetName")
+                    if (!tmp.renameTo(dest)) {
+                        tmp.copyTo(dest, overwrite = true)
+                        Files.deleteIfExists(tmp.toPath())
+                    }
+                    Log.d(TAG, "Copied asset $assetName -> ${dest.length()} bytes")
                 } else {
-                    Log.d(TAG, "Asset $assetName already exists.")
+                    Log.d(TAG, "Asset $assetName up to date (${dest.length()} bytes).")
                 }
+                newStamp.append(assetName).append('=').append(dest.length()).append('\n')
             }
+            runCatching { stampFile.writeText(newStamp.toString()) }
         } catch (e: IOException) {
             Log.e(TAG, "Failed to extract assets", e)
             throw e
@@ -273,12 +299,15 @@ class TerminalEnvironment(context: Context) {
         val installRootfs = """
         install_rootfs(){
           mkdir -p "${'$'}ROOTFS_PATH" 2>/dev/null
-          # 就绪判定（与 isRootfsReady 对齐的强校验）：issue.net 存在 且 bash 在 /bin 或 /usr/bin。
-          # 旧实现仅用「目录非空」判定，会把「上次解压被中断的半截 rootfs」误判为已装好，
-          # 导致 proot 进破碎 rootfs、LANXIU 永久残废（只能清 App 数据救）。
-          ready_check(){ [ -e "${'$'}ROOTFS_PATH/etc/issue.net" ] && { [ -e "${'$'}ROOTFS_PATH/bin/bash" ] || [ -e "${'$'}ROOTFS_PATH/usr/bin/bash" ]; }; }
+          # 就绪判定（与 Kotlin isRootfsReady 对齐）：bash 在 /bin 或 /usr/bin + 发行版身份文件。
+          # 🔴 不能只看 etc/issue.net：Ubuntu 有 issue.net，但 LANXIU（独立 aarch64 rootfs）只有
+          # etc/os-release / etc/lanxiu-release，压根没有 issue.net。用 issue.net 会把「已解压好的澜岫」
+          # 永远判成未就绪 -> 每次会话都 rm -rf 重装，终端反复黑屏（2026-10-17 真机事故根因）。
+          # 同时保留旧实现的强校验意图：bash + 身份文件双条件，避免「半截解压」被误判为可用。
+          ready_check(){ { [ -e "${'$'}ROOTFS_PATH/bin/bash" ] || [ -e "${'$'}ROOTFS_PATH/usr/bin/bash" ]; } && { [ -e "${'$'}ROOTFS_PATH/etc/os-release" ] || [ -e "${'$'}ROOTFS_PATH/etc/issue.net" ]; }; }
           if ready_check; then
-            VERSION=`cat "${'$'}ROOTFS_PATH/etc/issue.net" 2>/dev/null`
+            VERSION=`grep '^PRETTY_NAME=' "${'$'}ROOTFS_PATH/etc/os-release" 2>/dev/null | head -n 1 | cut -d= -f2- | tr -d '"'`
+            [ -z "${'$'}VERSION" ] && VERSION=`cat "${'$'}ROOTFS_PATH/etc/issue.net" 2>/dev/null`
             progress_echo "rootfs ${'$'}L_INSTALLED -> ${'$'}VERSION"
           else
             if [ -n "${'$'}(ls -A "${'$'}ROOTFS_PATH" 2>/dev/null)" ]; then
@@ -290,7 +319,17 @@ class TerminalEnvironment(context: Context) {
               return 1
             fi
             progress_echo "rootfs ${'$'}L_NOT_INSTALLED, ${'$'}L_INSTALLING..."
-            busybox tar xf ~/"${'$'}ROOTFS_TARBALL" -C "${'$'}ROOTFS_PATH/" >/dev/null 2>&1
+            # 空间预检：澜岫解压后约 460MB（Ubuntu 约 280MB）。空间不够先给明确提示，
+            # 好过 tar 解到一半失败只剩黑屏。
+            FREE_KB=`df -k "${'$'}HOME" 2>/dev/null | tail -n 1 | awk '{print ${'$'}4}'`
+            if [ -n "${'$'}FREE_KB" ] && [ "${'$'}FREE_KB" -lt 614400 ] 2>/dev/null; then
+              progress_echo "rootfs 解压需约 600MB 可用空间，当前仅 ${'$'}((FREE_KB / 1024))MB，请先清理设备存储"
+              return 1
+            fi
+            # 解压错误不再静默吞掉（原来 >/dev/null 2>&1，坏了只看到黑屏）：错误落盘 + 回显末行。
+            if ! busybox tar xf ~/"${'$'}ROOTFS_TARBALL" -C "${'$'}ROOTFS_PATH/" 2>"${'$'}TMPDIR/rootfs_extract.err"; then
+              progress_echo "rootfs 解压报错：${'$'}(tail -n 1 "${'$'}TMPDIR/rootfs_extract.err" 2>/dev/null)"
+            fi
             ${if (distro == Distro.UBUNTU) "mv \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"/* \"${'$'}ROOTFS_PATH/\" 2>/dev/null\n            rm -rf \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"" else ":  # LANXIU rootfs 已是扁平布局，无需拍平"}
             echo "Extraction complete"
             echo 'export ANDROID_DATA=/home/' >> "${'$'}ROOTFS_PATH/root/.bashrc"
@@ -466,13 +505,16 @@ EOF
     fun rootfsDir(distro: Distro = selectedDistro): File =
         File(File(usrDir, "var/lib/proot-distro"), "installed-rootfs/${distro.rootfsDirName}")
 
-    /** rootfs 是否已解压可用（以 bash 实际位置 + /etc 为准）。
+    /** rootfs 是否已解压可用（bash 实际位置 + 发行版身份文件）。
      *  注意：独立 aarch64 rootfs（如 LANXIU）bash 在 /usr/bin/bash 而非 /bin/bash（无 /bin→/usr/bin 合并），
-     *  因此两种路径都要查，否则解压成功也永远判「未就绪」。 */
+     *  因此两种路径都要查，否则解压成功也永远判「未就绪」。
+     *  身份文件同样不能只认 issue.net：Ubuntu 有，澜岫只有 os-release / lanxiu-release。
+     *  与 common.sh 里 ready_check 保持完全一致的判定口径（bash + os-release|issue.net）。 */
     fun isRootfsReady(distro: Distro = selectedDistro): Boolean {
         val root = rootfsDir(distro)
         val hasBash = File(root, "bin/bash").exists() || File(root, "usr/bin/bash").exists()
-        return hasBash && File(root, "etc").isDirectory
+        val hasIdentity = File(root, "etc/os-release").exists() || File(root, "etc/issue.net").exists()
+        return hasBash && hasIdentity
     }
 
     /** rootfs 安装包是否还在本地（还在 = 尚未解压，可自动初始化）。 */
