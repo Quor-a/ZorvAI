@@ -186,4 +186,14 @@
     <string name="cannot_open_browser">Cannot open browser</string>
     <string name="ftp_server_running_info">FTP Server Running\nAddress: %1$s:%2$s\nUsername: %3$s\nPassword: %4$s\nRoot Directory: Ubuntu File System</string>
     <string name="unknown_session">Unknown Session</string>
+
+    <!-- Dual system: Ubuntu / LANXIU distro switch + on-demand first download -->
+    <string name="distro_switch">Distro</string>
+    <string name="distro_ubuntu">Ubuntu</string>
+    <string name="distro_lanxiu">LANXIU</string>
+    <string name="lanxiu_needs_download">LANXIU needs a one-time download (~88MB) on first use</string>
+    <string name="lanxiu_download">Download LANXIU</string>
+    <string name="lanxiu_downloading">Downloading LANXIU rootfs…</string>
+    <string name="lanxiu_download_failed">LANXIU download failed, tap to retry</string>
+    <string name="lanxiu_pending_install">Downloaded — open or restart a terminal session to auto-extract &amp; install</string>
 </resources> 

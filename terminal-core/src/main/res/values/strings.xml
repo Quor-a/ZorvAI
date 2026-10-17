@@ -187,4 +187,14 @@
     <string name="cannot_open_browser">无法打开浏览器</string>
     <string name="ftp_server_running_info">FTP服务器正在运行\n地址: %1$s:%2$s\n用户名: %3$s\n密码: %4$s\n根目录: Ubuntu文件系统</string>
     <string name="unknown_session">未知会话</string>
+
+    <!-- 双系统：Ubuntu / LANXIU 发行版切换 + 首次按需下载 -->
+    <string name="distro_switch">发行版</string>
+    <string name="distro_ubuntu">Ubuntu</string>
+    <string name="distro_lanxiu">LANXIU</string>
+    <string name="lanxiu_needs_download">LANXIU 首次使用需下载（约 88MB）</string>
+    <string name="lanxiu_download">下载 LANXIU</string>
+    <string name="lanxiu_downloading">正在下载 LANXIU rootfs…</string>
+    <string name="lanxiu_download_failed">LANXIU 下载失败，点击重试</string>
+    <string name="lanxiu_pending_install">已下载，打开或重启终端会话将自动解压安装</string>
 </resources> 

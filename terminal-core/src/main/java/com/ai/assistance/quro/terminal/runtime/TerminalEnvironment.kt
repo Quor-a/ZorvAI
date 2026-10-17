@@ -7,6 +7,8 @@ import androidx.annotation.RequiresApi
 import com.ai.assistance.quro.terminal.Pty
 import com.ai.assistance.quro.terminal.TerminalSession
 import com.ai.assistance.quro.terminal.data.PackageManagerType
+import com.ai.assistance.quro.terminal.runtime.Distro
+import com.ai.assistance.quro.terminal.utils.RootfsDownloader
 import com.ai.assistance.quro.terminal.utils.SourceManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -40,6 +42,10 @@ class TerminalEnvironment(context: Context) {
 
     private val sourceManager = SourceManager(context)
 
+    /** 当前选中的发行版（双系统切换），持久化在 SharedPreferences，默认 Ubuntu 以兼容老用户。 */
+    private val distroPrefs = context.getSharedPreferences("terminal_distro", Context.MODE_PRIVATE)
+    var selectedDistro: Distro = Distro.fromId(distroPrefs.getString("selected_distro", null))
+
     private val envInitMutex = Mutex()
     private var isEnvInitialized = false
 
@@ -48,6 +54,9 @@ class TerminalEnvironment(context: Context) {
     companion object {
         private const val TAG = "TerminalEnvironment"
         private const val UBUNTU_FILENAME = "ubuntu-noble-aarch64-pd-v4.18.0.tar.xz"
+        /** LANXIU（启元 Linux）安卓版 rootfs：本仓库 Release 标签（README 权威源）。 */
+        const val LANXIU_DOWNLOAD_URL =
+            "https://github.com/Quor-a/qiyuan-linux-android/releases/download/lanxiu-1.7.41-aarch64/lanxiu-aarch64-rootfs-20261017.tar.xz"
     }
 
     /**
@@ -66,7 +75,7 @@ class TerminalEnvironment(context: Context) {
                     linkNativeLibs()
                     createBusyboxSymlinks()
                     extractAssets()
-                    val startScript = generateStartScript()
+                    val startScript = generateStartScript(selectedDistro)
                     File(filesDir, "common.sh").writeText(startScript)
                     Log.d(TAG, "Environment initialization completed successfully.")
                     true
@@ -207,27 +216,27 @@ class TerminalEnvironment(context: Context) {
         }
     }
 
-    private fun generateStartScript(): String {
-        val ubuntuName = UBUNTU_FILENAME.replace(Regex("-pd.*"), "")
+    private fun generateStartScript(distro: Distro): String {
+        val rootfsName = distro.rootfsFilename.replace(Regex("-pd.*"), "")
         val tmpDir = File(filesDir, "tmp").absolutePath
         val binDir = binDir.absolutePath
         val homeDir = filesDir.absolutePath
         val usrDir = usrDir.absolutePath
         val prootDistroPath = "$usrDir/var/lib/proot-distro"
-        val ubuntuPath = "$prootDistroPath/installed-rootfs/ubuntu"
+        val rootfsPath = "$prootDistroPath/installed-rootfs/${distro.rootfsDirName}"
 
         val aptSource = sourceManager.getSelectedSource(PackageManagerType.APT)
         val pipSource = sourceManager.getSelectedSource(PackageManagerType.PIP)
         val npmSource = sourceManager.getSelectedSource(PackageManagerType.NPM)
-        val rustSource = sourceManager.getSelectedSource(PackageManagerType.RUST)
 
         val common = """
         export TMPDIR=$tmpDir
         export BIN=$binDir
         export HOME=$homeDir
-        export UBUNTU_PATH=$ubuntuPath
-        export UBUNTU=$UBUNTU_FILENAME
-        export UBUNTU_NAME=$ubuntuName
+        export ROOTFS_PATH=$rootfsPath
+        export ROOTFS_TARBALL=${distro.rootfsFilename}
+        export ROOTFS_NAME=$rootfsName
+        export DISTRO_ID=${distro.id}
         export L_NOT_INSTALLED="not installed"
         export L_INSTALLING="installing"
         export L_INSTALLED="installed"
@@ -251,48 +260,52 @@ class TerminalEnvironment(context: Context) {
         }
         """.trimIndent()
 
-        val installUbuntu = """
-        install_ubuntu(){
-          mkdir -p ${'$'}UBUNTU_PATH 2>/dev/null
-          if [ -z "${'$'}(ls -A ${'$'}UBUNTU_PATH)" ]; then
-            progress_echo "Ubuntu ${'$'}L_NOT_INSTALLED, ${'$'}L_INSTALLING..."
-            ls ~/${'$'}UBUNTU
-            progress_echo "Extracting Ubuntu rootfs..."
-            busybox tar xf ~/${'$'}UBUNTU -C ${'$'}UBUNTU_PATH/ >/dev/null 2>&1
-            rm -f ~/${'$'}UBUNTU
+        // 解压：Ubuntu 的 tar 包顶层有 ubuntu-noble-aarch64/ 需拍平；LANXIU 是扁平 rootfs（无顶层目录）。
+        // 两者都用 busybox tar xf（与既有 Ubuntu 路径一致，busybox tar 自动识别 xz）。
+        val installRootfs = """
+        install_rootfs(){
+          mkdir -p "${'$'}ROOTFS_PATH" 2>/dev/null
+          if [ -z "${'$'}(ls -A "${'$'}ROOTFS_PATH")" ]; then
+            progress_echo "rootfs ${'$'}L_NOT_INSTALLED, ${'$'}L_INSTALLING..."
+            ls ~/"${'$'}ROOTFS_TARBALL"
+            progress_echo "Extracting rootfs..."
+            busybox tar xf ~/"${'$'}ROOTFS_TARBALL" -C "${'$'}ROOTFS_PATH/" >/dev/null 2>&1
+            rm -f ~/"${'$'}ROOTFS_TARBALL"
+            ${if (distro == Distro.UBUNTU) "mv \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"/* \"${'$'}ROOTFS_PATH/\" 2>/dev/null\n            rm -rf \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"" else ":  # LANXIU rootfs 已是扁平布局，无需拍平"}
             echo "Extraction complete"
-            mv ${'$'}UBUNTU_PATH/${'$'}UBUNTU_NAME/* ${'$'}UBUNTU_PATH/ 2>/dev/null
-            rm -rf ${'$'}UBUNTU_PATH/${'$'}UBUNTU_NAME
-            echo 'export ANDROID_DATA=/home/' >> ${'$'}UBUNTU_PATH/root/.bashrc
+            echo 'export ANDROID_DATA=/home/' >> "${'$'}ROOTFS_PATH/root/.bashrc"
           else
-            VERSION=`cat ${'$'}UBUNTU_PATH/etc/issue.net 2>/dev/null`
-            progress_echo "Ubuntu ${'$'}L_INSTALLED -> ${'$'}VERSION"
+            VERSION=`cat "${'$'}ROOTFS_PATH/etc/issue.net" 2>/dev/null`
+            progress_echo "rootfs ${'$'}L_INSTALLED -> ${'$'}VERSION"
           fi
-          echo 'nameserver 8.8.8.8' > ${'$'}UBUNTU_PATH/etc/resolv.conf
+          echo 'nameserver 8.8.8.8' > "${'$'}ROOTFS_PATH/etc/resolv.conf"
+          # 解压后自检：若目录仍为空（tar 包缺失或解压失败，如 LANXIU 尚未下载），报错退出，
+          # 避免 proot 挂空目录导致终端空白/崩溃。
+          if [ -z "${'$'}(ls -A "${'$'}ROOTFS_PATH" 2>/dev/null)" ]; then
+            progress_echo "rootfs 解压失败：请先下载或确认安装包完整"
+            return 1
+          fi
         }
         """.trimIndent()
 
+        // 源配置：仅 Debian/Ubuntu 系写 apt/pip/npm；启元 Linux 用自家 qypkg，留空函数。
         val configureSources = """
         configure_sources(){
-          # 配置APT源
-          cat <<'EOF' > ${'$'}UBUNTU_PATH/etc/apt/sources.list
+          ${if (distro.isDebian) """
+          cat <<'EOF' > "${'$'}ROOTFS_PATH/etc/apt/sources.list"
         # From ZorvAI Settings - ${aptSource.name}
         deb ${aptSource.url} noble main restricted universe multiverse
         deb ${aptSource.url} noble-updates main restricted universe multiverse
         deb ${aptSource.url} noble-backports main restricted universe multiverse
         EOF
-
-          # 配置Pip/Uv源
-          mkdir -p ${'$'}UBUNTU_PATH/root/.config/pip 2>/dev/null
-          echo '[global]' > ${'$'}UBUNTU_PATH/root/.config/pip/pip.conf
-          echo 'index-url = ${pipSource.url}' >> ${'$'}UBUNTU_PATH/root/.config/pip/pip.conf
-
-          mkdir -p ${'$'}UBUNTU_PATH/root/.config/uv 2>/dev/null
-          echo 'index-url = "${pipSource.url}"' > ${'$'}UBUNTU_PATH/root/.config/uv/uv.toml
-
-          # 配置NPM源
-          mkdir -p ${'$'}UBUNTU_PATH/root 2>/dev/null
-          echo 'registry=${npmSource.url}' > ${'$'}UBUNTU_PATH/root/.npmrc
+          mkdir -p "${'$'}ROOTFS_PATH/root/.config/pip" 2>/dev/null
+          echo '[global]' > "${'$'}ROOTFS_PATH/root/.config/pip/pip.conf"
+          echo 'index-url = ${pipSource.url}' >> "${'$'}ROOTFS_PATH/root/.config/pip/pip.conf"
+          mkdir -p "${'$'}ROOTFS_PATH/root/.config/uv" 2>/dev/null
+          echo 'index-url = "${pipSource.url}"' > "${'$'}ROOTFS_PATH/root/.config/uv/uv.toml
+          mkdir -p "${'$'}ROOTFS_PATH/root" 2>/dev/null
+          echo 'registry=${npmSource.url}' > "${'$'}ROOTFS_PATH/root/.npmrc
+          """ else ":  # 启元 Linux 不需要 Debian 源配置"}
         }
         """.trimIndent()
 
@@ -307,15 +320,15 @@ class TerminalEnvironment(context: Context) {
             ""
         }
 
-        val loginUbuntu = """
-        login_ubuntu(){
-          mkdir -p "${'$'}UBUNTU_PATH/storage/emulated" 2>/dev/null
+        val loginRootfs = """
+        login_rootfs(){
+          mkdir -p "${'$'}ROOTFS_PATH/storage/emulated" 2>/dev/null
           # 终端「公用挂载主目录」：应用自有外部目录，不依赖存储权限，始终可用
-          mkdir -p "${'$'}UBUNTU_PATH/mnt/shared" 2>/dev/null
-          mkdir -p "${'$'}UBUNTU_PATH/root/shared" 2>/dev/null
+          mkdir -p "${'$'}ROOTFS_PATH/mnt/shared" 2>/dev/null
+          mkdir -p "${'$'}ROOTFS_PATH/root/shared" 2>/dev/null
           exec ${'$'}BIN/proot \
             -0 \
-            -r "${'$'}UBUNTU_PATH" \
+            -r "${'$'}ROOTFS_PATH" \
             --link2symlink \
             -b /dev \
             -b /proc \
@@ -339,20 +352,20 @@ class TerminalEnvironment(context: Context) {
         }
         """.trimIndent().replace("@SB@", sharedStorageBindLines)
 
-        // 一次性执行入口：与 login_ubuntu 同样的 proot 挂载，但**不进交互 shell**，
+        // 一次性执行入口：与 login_rootfs 同样的 proot 挂载，但**不进交互 shell**，
         // 而是直接 `bash -lc "$1"` 跑完就退出。用于「远程连接」这类需要可靠退出码的场景，
         // 与终端会话的提示符检测/命令队列完全解耦。
         // 额外点：TERM=dumb + DEBIAN_FRONTEND=noninteractive，避免 apt 弹交互式对话框卡死。
         val guestExec = """
         guest_exec(){
-          mkdir -p "${'$'}UBUNTU_PATH/storage/emulated" 2>/dev/null
-          mkdir -p "${'$'}UBUNTU_PATH/mnt/shared" 2>/dev/null
-          mkdir -p "${'$'}UBUNTU_PATH/root/shared" 2>/dev/null
+          mkdir -p "${'$'}ROOTFS_PATH/storage/emulated" 2>/dev/null
+          mkdir -p "${'$'}ROOTFS_PATH/mnt/shared" 2>/dev/null
+          mkdir -p "${'$'}ROOTFS_PATH/root/shared" 2>/dev/null
           mkdir -p "${'$'}TMPDIR/zxremote" 2>/dev/null
           echo GUEST_EXEC_START
           exec ${'$'}BIN/proot \
             -0 \
-            -r "${'$'}UBUNTU_PATH" \
+            -r "${'$'}ROOTFS_PATH" \
             --link2symlink \
             -b /dev \
             -b /proc \
@@ -379,17 +392,17 @@ class TerminalEnvironment(context: Context) {
 
         return """
         $common
-        $installUbuntu
+        $installRootfs
         $configureSources
-        $loginUbuntu
+        $loginRootfs
         $guestExec
         clear_lines
         start_shell(){
-          install_ubuntu
+          install_rootfs
           configure_sources
           sleep 1
           bump_progress
-          login_ubuntu
+          login_rootfs
         }
         """.trimIndent()
     }
@@ -413,23 +426,24 @@ class TerminalEnvironment(context: Context) {
         return f != null && f.canRead()
     }
 
-    /** Ubuntu rootfs 目录（proot-distro 布局）。 */
-    fun ubuntuRootDir(): File =
-        File(File(usrDir, "var/lib/proot-distro"), "installed-rootfs/ubuntu")
+    /** 某发行版的 rootfs 目录（proot-distro 布局，按 rootfsDirName 区分）。 */
+    fun rootfsDir(distro: Distro = selectedDistro): File =
+        File(File(usrDir, "var/lib/proot-distro"), "installed-rootfs/${distro.rootfsDirName}")
 
     /** rootfs 是否已解压可用（以 /bin/bash + /etc 为准）。 */
-    fun isRootfsReady(): Boolean {
-        val root = ubuntuRootDir()
+    fun isRootfsReady(distro: Distro = selectedDistro): Boolean {
+        val root = rootfsDir(distro)
         return File(root, "bin/bash").exists() && File(root, "etc").isDirectory
     }
 
     /** rootfs 安装包是否还在本地（还在 = 尚未解压，可自动初始化）。 */
-    fun hasRootfsArchive(): Boolean = File(filesDir, UBUNTU_FILENAME).exists()
+    fun hasRootfsArchive(distro: Distro = selectedDistro): Boolean =
+        File(filesDir, distro.rootfsFilename).exists()
 
-    /** 判定 guest 环境可用性等级。 */
-    fun guestEnvStatus(): GuestEnvStatus = when {
-        isRootfsReady() -> GuestEnvStatus.READY
-        hasRootfsArchive() -> GuestEnvStatus.NEEDS_INSTALL
+    /** 判定 guest 环境可用性等级（按发行版）。 */
+    fun guestEnvStatus(distro: Distro = selectedDistro): GuestEnvStatus = when {
+        isRootfsReady(distro) -> GuestEnvStatus.READY
+        hasRootfsArchive(distro) -> GuestEnvStatus.NEEDS_INSTALL
         else -> GuestEnvStatus.ASSET_MISSING
     }
 
@@ -486,7 +500,7 @@ class TerminalEnvironment(context: Context) {
                     "echo \"\${PIPESTATUS[0]}\" > \"\$D/code\"\n"
             )
 
-            val prelude = "source \"\$HOME/common.sh\" && install_ubuntu && configure_sources && guest_exec \"\$1\""
+            val prelude = "source \"\$HOME/common.sh\" && install_rootfs && configure_sources && guest_exec \"\$1\""
             val guestCmd = "bash /dev/shm/zxremote/$jobId/run.sh"
             val command = arrayOf(bash.absolutePath, "-c", prelude, "zxremote", guestCmd)
 
@@ -619,8 +633,8 @@ class TerminalEnvironment(context: Context) {
         runCatching { linkNativeLibs() }.onFailure { Log.w(TAG, "linkNativeLibs 跳过", it) }
         runCatching { createBusyboxSymlinks() }.onFailure { Log.w(TAG, "createBusyboxSymlinks 跳过", it) }
         runCatching {
-            if (isRootfsReady() && !File(filesDir, "common.sh").exists()) {
-                File(filesDir, "common.sh").writeText(generateStartScript())
+            if (isEnvInitialized && !File(filesDir, "common.sh").exists()) {
+                File(filesDir, "common.sh").writeText(generateStartScript(selectedDistro))
             }
         }
         return true
@@ -629,16 +643,32 @@ class TerminalEnvironment(context: Context) {
     /** host 级 shell：Android 系统自带的 `/system/bin/sh`（真 shell，环境无关，无需 Ubuntu）。 */
     fun hostShellCommand(): Array<String> = arrayOf("/system/bin/sh")
 
+    /** 切换发行版：持久化偏好 + 重建 common.sh（让后续启动/后端用新目标）。 */
+    suspend fun setDistro(distro: Distro): Boolean {
+        selectedDistro = distro
+        distroPrefs.edit().putString("selected_distro", distro.id).apply()
+        runCatching { File(filesDir, "common.sh").writeText(generateStartScript(distro)) }
+        return true
+    }
+
+    /** 首次使用按需下载 LANXIU rootfs（约 88MB），落盘到 filesDir/<filename>。 */
+    suspend fun downloadLanxiuRootfs(
+        onProgress: ((downloaded: Long, total: Long, fraction: Float) -> Unit)? = null
+    ): Boolean {
+        val dest = File(filesDir, Distro.LANXIU.rootfsFilename)
+        if (dest.exists()) return true
+        return RootfsDownloader.download(LANXIU_DOWNLOAD_URL, dest, onProgress)
+    }
+
     /**
-     * 后端 shell：rootfs 就绪时进 proot Ubuntu 登录 shell，否则退化为 host 的 busybox sh。
-     * 满足「没有连接环境也能连、连接环境就绪则接 Ubuntu」两边都要接的诉求。
+     * 后端 shell：rootfs 就绪时进 proot 登录 shell（按选中发行版），否则退化为 host 的 busybox sh。
      */
     fun backendShellCommand(): Array<String> {
         ensureHostBackendReady()
-        return if (isRootfsReady()) {
+        return if (isRootfsReady(selectedDistro)) {
             arrayOf(
                 File(binDir, "bash").absolutePath, "-c",
-                "source \$HOME/common.sh && install_ubuntu && configure_sources && login_ubuntu"
+                "source \$HOME/common.sh && install_rootfs && configure_sources && login_rootfs"
             )
         } else {
             hostShellCommand()
@@ -646,7 +676,8 @@ class TerminalEnvironment(context: Context) {
     }
 
     /** 当前后端类型（用于界面展示）。 */
-    fun backendLabel(): String = if (isRootfsReady()) "Ubuntu (proot)" else "Host (busybox)"
+    fun backendLabel(): String =
+        if (isRootfsReady(selectedDistro)) "${selectedDistro.displayName} (proot)" else "Host (busybox)"
 
     fun startTerminalSession(sessionId: String): Pair<TerminalSession, Pty> {
         val bash = File(binDir, "bash").absolutePath

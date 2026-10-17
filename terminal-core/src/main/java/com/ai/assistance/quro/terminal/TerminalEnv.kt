@@ -9,8 +9,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.ai.assistance.quro.terminal.data.TerminalSessionData
+import com.ai.assistance.quro.terminal.runtime.Distro
+import com.ai.assistance.quro.terminal.runtime.GuestEnvStatus
 import kotlinx.coroutines.launch
 import android.util.Log
+
+/** LANXIU rootfs 下载状态（按需下载）。 */
+enum class LanxiuDownloadStatus { Idle, Downloading, Success, Failed }
 
 @Stable
 class TerminalEnv(
@@ -30,9 +35,41 @@ class TerminalEnv(
 
     var command by mutableStateOf("")
 
+    /** 当前选中的发行版（双系统切换），初始值读自持久化偏好。 */
+    var selectedDistro by mutableStateOf(terminalManager.getDistro())
+
+    /** LANXIU rootfs 按需下载状态与进度（0f..1f）。 */
+    var lanxiuDownloadStatus by mutableStateOf(LanxiuDownloadStatus.Idle)
+    var lanxiuDownloadProgress by mutableStateOf(0f)
+
     fun onCommandChange(newCommand: String) {
         command = newCommand
     }
+
+    /** 切换发行版：更新本地状态 + 持久化（不杀已有会话，影响下次启动/后端）。 */
+    fun onSelectDistro(distro: Distro) {
+        if (distro == selectedDistro) return
+        selectedDistro = distro
+        terminalManager.coroutineScope.launch {
+            terminalManager.setDistro(distro)
+        }
+    }
+
+    /** 首次使用按需下载 LANXIU rootfs（约 88MB）。 */
+    fun onDownloadLanxiu() {
+        if (lanxiuDownloadStatus == LanxiuDownloadStatus.Downloading) return
+        lanxiuDownloadStatus = LanxiuDownloadStatus.Downloading
+        lanxiuDownloadProgress = 0f
+        terminalManager.coroutineScope.launch {
+            val ok = terminalManager.downloadLanxiuRootfs { _, _, frac ->
+                if (frac >= 0f) lanxiuDownloadProgress = frac
+            }
+            lanxiuDownloadStatus = if (ok) LanxiuDownloadStatus.Success else LanxiuDownloadStatus.Failed
+        }
+    }
+
+    /** LANXIU rootfs 当前可用性（用于 UI 显示下载 / 初始化 / 就绪）。 */
+    fun lanxiuEnvStatus(): GuestEnvStatus = terminalManager.guestEnvStatus(Distro.LANXIU)
 
     fun onSendInput(inputText: String, isCommand: Boolean) {
         // 允许空输入（用于交互式场景发送回车）
