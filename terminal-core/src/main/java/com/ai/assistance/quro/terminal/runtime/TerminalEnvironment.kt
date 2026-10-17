@@ -273,24 +273,39 @@ class TerminalEnvironment(context: Context) {
         val installRootfs = """
         install_rootfs(){
           mkdir -p "${'$'}ROOTFS_PATH" 2>/dev/null
-          if [ -z "${'$'}(ls -A "${'$'}ROOTFS_PATH")" ]; then
+          # 就绪判定（与 isRootfsReady 对齐的强校验）：issue.net 存在 且 bash 在 /bin 或 /usr/bin。
+          # 旧实现仅用「目录非空」判定，会把「上次解压被中断的半截 rootfs」误判为已装好，
+          # 导致 proot 进破碎 rootfs、LANXIU 永久残废（只能清 App 数据救）。
+          ready_check(){ [ -e "${'$'}ROOTFS_PATH/etc/issue.net" ] && { [ -e "${'$'}ROOTFS_PATH/bin/bash" ] || [ -e "${'$'}ROOTFS_PATH/usr/bin/bash" ]; }; }
+          if ready_check; then
+            VERSION=`cat "${'$'}ROOTFS_PATH/etc/issue.net" 2>/dev/null`
+            progress_echo "rootfs ${'$'}L_INSTALLED -> ${'$'}VERSION"
+          else
+            if [ -n "${'$'}(ls -A "${'$'}ROOTFS_PATH" 2>/dev/null)" ]; then
+              progress_echo "rootfs 检测到半截解压，清理后重装..."
+              rm -rf "${'$'}ROOTFS_PATH"/* 2>/dev/null
+            fi
+            if [ ! -e ~/"${'$'}ROOTFS_TARBALL" ]; then
+              progress_echo "rootfs 安装包缺失，无法安装"
+              return 1
+            fi
             progress_echo "rootfs ${'$'}L_NOT_INSTALLED, ${'$'}L_INSTALLING..."
-            ls ~/"${'$'}ROOTFS_TARBALL"
-            progress_echo "Extracting rootfs..."
             busybox tar xf ~/"${'$'}ROOTFS_TARBALL" -C "${'$'}ROOTFS_PATH/" >/dev/null 2>&1
-            rm -f ~/"${'$'}ROOTFS_TARBALL"
             ${if (distro == Distro.UBUNTU) "mv \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"/* \"${'$'}ROOTFS_PATH/\" 2>/dev/null\n            rm -rf \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"" else ":  # LANXIU rootfs 已是扁平布局，无需拍平"}
             echo "Extraction complete"
             echo 'export ANDROID_DATA=/home/' >> "${'$'}ROOTFS_PATH/root/.bashrc"
-          else
-            VERSION=`cat "${'$'}ROOTFS_PATH/etc/issue.net" 2>/dev/null`
-            progress_echo "rootfs ${'$'}L_INSTALLED -> ${'$'}VERSION"
+            # 仅在校验通过后才删除安装包：避免「删除后被再次中断 -> 无包可重装」导致永久残废
+            if ready_check; then
+              rm -f ~/"${'$'}ROOTFS_TARBALL"
+            else
+              progress_echo "rootfs 解压校验失败，保留安装包以便重试"
+              return 1
+            fi
           fi
           echo 'nameserver 8.8.8.8' > "${'$'}ROOTFS_PATH/etc/resolv.conf"
-          # 解压后自检：若目录仍为空（tar 包缺失或解压失败，如 LANXIU 尚未下载），报错退出，
-          # 避免 proot 挂空目录导致终端空白/崩溃。
+          # 解压后自检：若目录仍为空（tar 包缺失或解压失败），报错退出，避免 proot 挂空目录。
           if [ -z "${'$'}(ls -A "${'$'}ROOTFS_PATH" 2>/dev/null)" ]; then
-            progress_echo "rootfs 解压失败：请先下载或确认安装包完整"
+            progress_echo "rootfs 解压失败：请先确认安装包完整"
             return 1
           fi
         }
