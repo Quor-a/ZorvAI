@@ -5,6 +5,9 @@ import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.terminal.QuroTerminalController
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager
+import com.ai.assistance.quro.terminal.TerminalManager
+import com.ai.assistance.quro.terminal.runtime.Distro
+import com.ai.assistance.quro.terminal.runtime.GuestEnvStatus
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -35,31 +38,58 @@ class TerminalExecTool : QuroTool {
         if (cmd.isBlank()) return "missing command"
         QuroAgentTrace.action("terminal", "执行命令", cmd)
 
-        // v122：优先走 proot/Linux 环境（python3 / 任意写可用），不可用时回退设备 Toybox shell。
-        // 这样 AI 经 terminal_exec 驱动的命令与交互式终端界面拥有完全一致的能力，不再受 untrusted_app 沙盒限制。
-        // 使用宽松探测：严格 probe 会因 canExecute()/符号链接解析误判。
-        val st = QuroLinuxEnv.probeLenient(context)
-
-        // E-8：退出码必须**结构化**返回给模型。
-        // 旧实现把设备回退路径的结果糊成一个字符串（"(no output, exit 1)" / "⏱ 命令超时…"），
-        // 模型只能靠猜提示语判断成败：命令失败了却当成功继续往下走，是很常见的连锁错误来源。
+        // 双系统：AI 经 TerminalManager 感知并控制 Ubuntu / LANXIU 两套 proot 发行版。
+        // LANXIU 只能走 TerminalManager 的 proot rootfs（installed-rootfs/lanxiu），
+        // 因为 QuroLinuxEnv 的 linux-sandbox/rootfs 仅含 Ubuntu。
         val json = JSONObject()
-        if (st.available) {
-            val (code, text) = QuroLinuxEnv.run(context, cmd)
-            json.put("source", "proot/Linux")
-            json.put("exit_code", code)
-            json.put("success", code == 0)
-            json.put("timed_out", false)
-            json.put("output", text)
+        val tm = TerminalManager.getInstance(context)
+        val distro = tm.getDistro()
+        if (distro == Distro.LANXIU) {
+            // LANXIU：走 TerminalManager 的一次性执行通道（与交互式终端同一 rootfs）。
+            if (tm.guestEnvStatus(Distro.LANXIU) == GuestEnvStatus.READY) {
+                val res = runBlocking { tm.runInGuest(cmd, 60_000L) }
+                json.put("distro", "lanxiu")
+                json.put("source", "proot/LANXIU (启元 Linux)")
+                json.put("exit_code", res.code)
+                json.put("success", res.ok)
+                json.put("timed_out", res.timedOut)
+                json.put("output", res.output)
+                if (res.error != null) json.put("error", res.error)
+            } else {
+                // LANXIU 未就绪：回退设备 sh，并明确提示。
+                val r = QuroTerminalController.runCommand(cmd)
+                json.put("distro", "lanxiu(unready)")
+                json.put("source", "device/Toybox(fallback)")
+                json.put("exit_code", r.exitCode)
+                json.put("success", r.success)
+                json.put("timed_out", r.timedOut)
+                json.put("output", r.output)
+                if (r.error.isNotEmpty()) json.put("error", r.error)
+                json.put("hint", "LANXIU 环境未就绪，已回退设备 sh；可用 terminal_status 查看，或先 set_distro 切回 ubuntu")
+            }
         } else {
-            val r = QuroTerminalController.runCommand(cmd)
-            json.put("source", "device/Toybox")
-            json.put("exit_code", r.exitCode)
-            json.put("success", r.success)
-            json.put("timed_out", r.timedOut)
-            json.put("output", r.output)
-            if (r.error.isNotEmpty()) json.put("error", r.error)
-            if (r.timedOut) json.put("hint", "命令在超时前未结束，已被强制终止；若是交互式或持续输出的命令请改用 terminal_write")
+            // Ubuntu：优先沿用已建立的 QuroLinuxEnv(linux-sandbox/rootfs) 工具链（含 python3 等），
+            // 不可用时再回退 TerminalManager 的 installed-rootfs/ubuntu，最后设备 sh。
+            val st = QuroLinuxEnv.probeLenient(context)
+            if (st.available) {
+                val (code, text) = QuroLinuxEnv.run(context, cmd)
+                json.put("distro", "ubuntu")
+                json.put("source", "proot/Linux (Ubuntu)")
+                json.put("exit_code", code)
+                json.put("success", code == 0)
+                json.put("timed_out", false)
+                json.put("output", text)
+            } else {
+                val r = QuroTerminalController.runCommand(cmd)
+                json.put("distro", "ubuntu")
+                json.put("source", "device/Toybox")
+                json.put("exit_code", r.exitCode)
+                json.put("success", r.success)
+                json.put("timed_out", r.timedOut)
+                json.put("output", r.output)
+                if (r.error.isNotEmpty()) json.put("error", r.error)
+                if (r.timedOut) json.put("hint", "命令在超时前未结束，已被强制终止；若是交互式或持续输出的命令请改用 terminal_write")
+            }
         }
 
         val out = json.toString()
@@ -133,8 +163,17 @@ class TerminalStatusTool : QuroTool {
 
     override fun run(context: Context, arguments: String): String {
         val session = QuroTerminalController.session
-        val linux = QuroLinuxEnv.shellLaunch(context) != null
-        val shell = if (linux) "proot/Linux (Ubuntu 24.04 ARM64)" else "/system/bin/sh (Toybox)"
+        // 双系统：当前选中的发行版 + 两套 rootfs 各自就绪度。
+        val tm = TerminalManager.getInstance(context)
+        val distro = tm.getDistro()
+        val ubuntuReady = tm.guestEnvStatus(Distro.UBUNTU) == GuestEnvStatus.READY
+        val lanxiuStatus = tm.guestEnvStatus(Distro.LANXIU)
+        val lanxiuReady = lanxiuStatus == GuestEnvStatus.READY
+        val shell = when {
+            distro == Distro.LANXIU -> "proot/LANXIU (启元 Linux)"
+            ubuntuReady -> "proot/Linux (Ubuntu)"
+            else -> "/system/bin/sh (Toybox)"
+        }
         // 终端架构统一：把会话总览一并返回，AI/使用者可据此管理所有会话与后端。
         val sessions = JSONArray()
         QuroTerminalSessionManager.listSessions().forEach { s ->
@@ -161,14 +200,65 @@ class TerminalStatusTool : QuroTool {
             put("last_exit", session?.lastExit ?: -1)
             put("last_interrupted", session?.lastInterrupted ?: false)
             put("shell", shell)
-            put("linux_env", linux)
+            // 双系统核心字段
+            put("selected_distro", distro.id)
+            put("distro_display", distro.displayName)
+            put("ubuntu_ready", ubuntuReady)
+            put("lanxiu_ready", lanxiuReady)
+            put("lanxiu_status", lanxiuStatus.name.lowercase())
+            put("linux_env", ubuntuReady || lanxiuReady)
             put("default_session_id", QuroTerminalSessionManager.defaultSession?.let { session ->
                 // 返回实际的会话 ID，而不是固定字符串 "default"
                 QuroTerminalSessionManager.listSessions().find { it.isDefault }?.id ?: "default"
             } ?: "none")
             put("sessions", sessions)
-            put("note", if (session != null) "交互式会话可用，可用 terminal_write 输入" else "会话未启动，terminal_exec 仍可独立执行命令")
+            put("note", if (session != null) "交互式会话可用，可用 terminal_write 输入" else "会话未启动，terminal_exec 仍可独立执行命令；可用 terminal_set_distro 切换 Ubuntu/LANXIU")
         }.toString()
+    }
+}
+
+/**
+ * 切换 AI 与交互式终端共用的 Linux 发行版（双系统控制）。
+ *
+ * 这是让 AI「感知并操控」双系统的关键控制开关：set_distro 后，[TerminalManager] 的
+ * 全局 selectedDistro 改变，[terminal_exec] 与可见终端都运行在该发行版上（AI 与用户
+ * 共用同一套 rootfs）。Ubuntu=Debian 系(apt)；LANXIU=启元 Linux(qypkg，非 apt)。
+ */
+class TerminalSetDistroTool : QuroTool {
+    override val name: String = "terminal_set_distro"
+    override val description: String =
+        "切换 AI 与交互式终端共用的 Linux 发行版（双系统）。参数 distro=ubuntu 或 lanxiu。" +
+            "切换后 terminal_exec 与可见终端都运行在该发行版（AI 与用户共用同一套 rootfs）。" +
+            "LANXIU=启元 Linux（用 qypkg 包管理，不是 apt）；Ubuntu=Debian 系（apt/pip/npm）。" +
+            "返回切换结果与两套发行版就绪状态（ubuntu_ready / lanxiu_ready / lanxiu_status）。"
+    override val parametersJson: String =
+        """{"type":"object","properties":{"distro":{"type":"string","description":"目标发行版：ubuntu 或 lanxiu"}},"required":["distro"]}"""
+
+    override fun run(context: Context, arguments: String): String {
+        val req = JSONObject(arguments).optString("distro", "").trim().lowercase()
+        if (req != "ubuntu" && req != "lanxiu") {
+            return JSONObject().put("ok", false)
+                .put("error", "distro 必须是 ubuntu 或 lanxiu，收到: '$req'")
+                .toString()
+        }
+        val target = Distro.fromId(req)
+        return try {
+            val tm = TerminalManager.getInstance(context)
+            runBlocking { tm.setDistro(target) }
+            val ubuntuReady = tm.guestEnvStatus(Distro.UBUNTU) == GuestEnvStatus.READY
+            val lanxiuReady = tm.guestEnvStatus(Distro.LANXIU) == GuestEnvStatus.READY
+            JSONObject().apply {
+                put("ok", true)
+                put("selected_distro", target.id)
+                put("distro_display", target.displayName)
+                put("ubuntu_ready", ubuntuReady)
+                put("lanxiu_ready", lanxiuReady)
+                put("lanxiu_status", tm.guestEnvStatus(Distro.LANXIU).name.lowercase())
+                put("note", "切换成功；terminal_exec 现在运行在 ${target.displayName}。LANXIU 用 qypkg，Ubuntu 用 apt。")
+            }.toString()
+        } catch (e: Exception) {
+            JSONObject().put("ok", false).put("error", e.message ?: e.toString()).toString()
+        }
     }
 }
 
