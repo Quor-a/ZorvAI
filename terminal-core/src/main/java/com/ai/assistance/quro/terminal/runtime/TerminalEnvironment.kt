@@ -465,6 +465,8 @@ EOF
           # proot -w /root 进不去 -> shell-init getcwd 失败(exit 130)。
           mkdir -p "${'$'}SHARED_HOME"
           mkdir -p "${'$'}SHARED_HOME/shared"
+          # 🔴 getcwd 铁律（同 guest_exec）：强制保证 guest /root 真实存在，宿主先 cd guest 根。
+          mkdir -p "${'$'}ROOTFS_PATH/root"
           cd "${'$'}ROOTFS_PATH"
           G_CWD=/root; G_HOME=/root
           resolve_guest_bash
@@ -509,6 +511,12 @@ EOF
           mkdir -p "${'$'}SHARED_HOME"
           mkdir -p "${'$'}SHARED_HOME/shared"
           mkdir -p "${'$'}TMPDIR/zxremote"
+          # 🔴 getcwd 铁律（2026-10-18 真机事故）：LANXIU exec 通道 100% 因「proot -w 指向的 guest 目录
+          # 翻译失败 -> tracee 继承宿主 cwd(filesDir) 且 guest 内无此路径 -> shell-init getcwd ENOENT -> exit 130」。
+          # 三层兜底：① 宿主侧先 cd 进 guest 根(ROOTFS_PATH, -r 映射为 /, 永远可翻译)；
+          # ② **强制保证 guest /root 真实存在**(主机 mkdir, 不依赖 bind/rootfs 是否自带) -> -w /root 必能 chdir；
+          # ③ -w /root(必存在) + SHARED_HOME bind。任一失效仍有 guest / 可翻译, getcwd 不再 ENOENT。
+          mkdir -p "${'$'}ROOTFS_PATH/root"
           cd "${'$'}ROOTFS_PATH"
           G_CWD=/root; G_HOME=/root
           resolve_guest_bash
