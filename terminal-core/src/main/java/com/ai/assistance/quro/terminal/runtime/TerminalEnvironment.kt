@@ -57,6 +57,9 @@ class TerminalEnvironment(context: Context) {
         /** LANXIU（澜岫）安卓版 rootfs：本仓库 Release 标签（README 权威源）。 */
         const val LANXIU_DOWNLOAD_URL =
             "https://github.com/Quor-a/qiyuan-linux-android/releases/download/lanxiu-1.7.41-aarch64/lanxiu-aarch64-rootfs-20261017.tar.xz"
+        /** 资产内容版本：改了内置 tar 包内容（如 rebrand 改 os-release）时 +1，强制设备重抽。
+         *  仅靠 lastUpdateTime 无法捕捉「同版本号改内容」，会导致设备继续用旧解压 rootfs。 */
+        private const val ASSET_VERSION = 2
     }
 
     /**
@@ -205,11 +208,16 @@ class TerminalEnvironment(context: Context) {
             val installStamp = runCatching {
                 appContext.packageManager.getPackageInfo(appContext.packageName, 0).lastUpdateTime
             }.getOrDefault(0L)
-            val prevStampV = Regex("^v=(\\d+)$", RegexOption.MULTILINE)
-                .find(prevStamp)?.groupValues?.get(1)?.toLongOrNull() ?: -1L
-            val versionChanged = prevStampV != installStamp
+            val stampMatch = Regex("^v=(\\d+);av=(\\d+)$", RegexOption.MULTILINE)
+                .find(prevStamp)
+            val prevStampV = stampMatch?.groupValues?.get(1)?.toLongOrNull() ?: -1L
+            val prevAssetV = stampMatch?.groupValues?.get(2)?.toIntOrNull() ?: -1
+            // versionChanged：App 重装(lastUpdateTime 变) 或 资产内容变更(ASSET_VERSION 升) 任一触发重抽。
+            // 关键：rebrand 等改了 tar 包内容但不升 versionCode 时，仅靠 lastUpdateTime 不会重抽，
+            // 导致设备继续用旧解压 rootfs（曾出现 status 仍显示 Qiyuan 而非 澜岫）。ASSET_VERSION +1 强制重抽。
+            val versionChanged = prevStampV != installStamp || prevAssetV != ASSET_VERSION
 
-            val newStamp = StringBuilder("v=$installStamp\n")
+            val newStamp = StringBuilder("v=$installStamp;av=$ASSET_VERSION\n")
             assetNames.forEach { assetName ->
                 val dest = File(filesDir, assetName)
                 val recordedSize = Regex("^${Regex.escape(assetName)}=(\\d+)$", RegexOption.MULTILINE)
@@ -436,10 +444,16 @@ EOF
 
         val loginRootfs = """
         login_rootfs(){
-          mkdir -p "${'$'}ROOTFS_PATH/storage/emulated" 2>/dev/null
+          mkdir -p "${'$'}ROOTFS_PATH/storage/emulated"
           # 终端「公用挂载主目录」：应用自有外部目录，不依赖存储权限，始终可用
-          mkdir -p "${'$'}ROOTFS_PATH/mnt/shared" 2>/dev/null
-          mkdir -p "${'$'}ROOTFS_PATH/root/shared" 2>/dev/null
+          mkdir -p "${'$'}ROOTFS_PATH/mnt/shared"
+          # 🔴 cwd 铁律（2026-10-17 真机事故）：LANXIU 扁平 rootfs 顶层根本没有 /root，
+          # 仅靠 install 时 mkdir 补；这里显式保证 guest 内 /root 存在，并 cd 进 guest 根作为兜底——
+          # 否则 proot -w /root 在宿主 cwd（App 的 filesDir，不在 guest 根内）无法切进 guest，
+          # 回退到宿主 cwd -> bash shell-init 阶段 getcwd 失败 -> 整条 exec 在命令执行前就崩（exit 130）。
+          mkdir -p "${'$'}ROOTFS_PATH/root"
+          mkdir -p "${'$'}ROOTFS_PATH/root/shared"
+          cd "${'$'}ROOTFS_PATH"
           resolve_guest_bash
           fix_usrmerge_links
           exec ${'$'}BIN/proot \
@@ -476,10 +490,16 @@ EOF
         // 额外点：TERM=dumb + DEBIAN_FRONTEND=noninteractive，避免 apt 弹交互式对话框卡死。
         val guestExec = """
         guest_exec(){
-          mkdir -p "${'$'}ROOTFS_PATH/storage/emulated" 2>/dev/null
-          mkdir -p "${'$'}ROOTFS_PATH/mnt/shared" 2>/dev/null
-          mkdir -p "${'$'}ROOTFS_PATH/root/shared" 2>/dev/null
-          mkdir -p "${'$'}TMPDIR/zxremote" 2>/dev/null
+          mkdir -p "${'$'}ROOTFS_PATH/storage/emulated"
+          mkdir -p "${'$'}ROOTFS_PATH/mnt/shared"
+          # 🔴 cwd 铁律（2026-10-17 真机事故）：LANXIU 扁平 rootfs 顶层根本没有 /root，
+          # 仅靠 install 时 mkdir 补；这里显式保证 guest 内 /root 存在，并 cd 进 guest 根作为兜底——
+          # 否则 proot -w /root 在宿主 cwd（App 的 filesDir，不在 guest 根内）无法切进 guest，
+          # 回退到宿主 cwd -> bash shell-init 阶段 getcwd 失败 -> 整条 exec 在命令执行前就崩（exit 130）。
+          mkdir -p "${'$'}ROOTFS_PATH/root"
+          mkdir -p "${'$'}ROOTFS_PATH/root/shared"
+          mkdir -p "${'$'}TMPDIR/zxremote"
+          cd "${'$'}ROOTFS_PATH"
           resolve_guest_bash
           fix_usrmerge_links
           echo GUEST_EXEC_START

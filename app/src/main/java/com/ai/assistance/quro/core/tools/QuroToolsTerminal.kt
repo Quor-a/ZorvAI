@@ -178,6 +178,14 @@ class TerminalStatusTool : QuroTool {
             ubuntuReady -> "proot/Linux (Ubuntu)"
             else -> "/system/bin/sh (Toybox)"
         }
+        // 真实探活：rootfs 存在 ≠ exec 可用。2026-10-17 真机曾出现 lanxiu_ready=true 但
+        // exec 100% 失败（proot -w /root 回退宿主 cwd -> bash shell-init getcwd 崩，exit 130）。
+        // 这里对选中的 LANXIU 跑一次最小 echo 探活，让 status 反映「exec 真能跑」，而不是只按
+        // rootfs 是否存在来报。非 LANXIU 不探活（Ubuntu 走 QuroLinuxEnv，自有探针，避免无谓 proot 开销）。
+        val execReachable: Boolean? = if (distro == Distro.LANXIU && lanxiuReady) {
+            runCatching { runBlocking { tm.runInGuest("echo __LANXIU_PROBE__", 12_000L) } }
+                .fold({ r -> r.ok && r.output.contains("__LANXIU_PROBE__") }, { false })
+        } else null
         // 终端架构统一：把会话总览一并返回，AI/使用者可据此管理所有会话与后端。
         val sessions = JSONArray()
         QuroTerminalSessionManager.listSessions().forEach { s ->
@@ -211,6 +219,7 @@ class TerminalStatusTool : QuroTool {
             put("ubuntu_ready", ubuntuReady)
             put("lanxiu_ready", lanxiuReady)
             put("lanxiu_status", lanxiuStatus.name.lowercase())
+            put("exec_reachable", execReachable)
             put("linux_env", ubuntuReady || lanxiuReady)
             put("default_session_id", QuroTerminalSessionManager.defaultSession?.let { session ->
                 // 返回实际的会话 ID，而不是固定字符串 "default"
