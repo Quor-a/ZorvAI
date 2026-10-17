@@ -28,15 +28,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,8 +63,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ai.assistance.quro.terminal.LanxiuDownloadStatus
 import com.ai.assistance.quro.terminal.TerminalEnv
 import com.ai.assistance.quro.terminal.data.TerminalSessionData
+import com.ai.assistance.quro.terminal.runtime.Distro
+import com.ai.assistance.quro.terminal.runtime.GuestEnvStatus
 import com.ai.assistance.quro.terminal.utils.CommandSanitizer
 import com.ai.assistance.quro.terminal.view.canvas.CanvasTerminalOutput
 import com.ai.assistance.quro.terminal.view.canvas.CanvasTerminalScreen
@@ -118,7 +124,18 @@ fun TerminalHome(
                 },
                 onNavigateToSetup = onNavigateToSetup,
                 onOpenPrivilege = { showPrivilegePanel = true },
-                onOpenRemote = { showRemotePanel = true }
+                onOpenRemote = { showRemotePanel = true },
+                env = env
+            )
+        }
+
+        // 双系统：选中 LANXIU 但尚未就绪时，提示首次按需下载（约 88MB）
+        if (env.selectedDistro == Distro.LANXIU && env.lanxiuEnvStatus() != GuestEnvStatus.READY) {
+            LanxiuDownloadBanner(
+                envStatus = env.lanxiuEnvStatus(),
+                dlStatus = env.lanxiuDownloadStatus,
+                progress = env.lanxiuDownloadProgress,
+                onDownload = env::onDownloadLanxiu
             )
         }
 
@@ -259,7 +276,8 @@ private fun TopBar(
     onRequestDelete: (String) -> Unit,
     onNavigateToSetup: () -> Unit,
     onOpenPrivilege: () -> Unit,
-    onOpenRemote: () -> Unit
+    onOpenRemote: () -> Unit,
+    env: TerminalEnv
 ) {
     val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
@@ -393,6 +411,75 @@ private fun TopBar(
                 }
             }
 
+            // 发行版切换（双系统：Ubuntu / LANXIU）
+            var distroMenuExpanded by remember { mutableStateOf(false) }
+            Box {
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { distroMenuExpanded = true },
+                    color = TerminalTheme.elevated,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = env.selectedDistro.displayName,
+                            color = TerminalTheme.onSurfaceColor,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = TerminalTheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                DropdownMenu(
+                    expanded = distroMenuExpanded,
+                    onDismissRequest = { distroMenuExpanded = false },
+                    containerColor = TerminalTheme.surfaceColor
+                ) {
+                    Distro.entries.forEach { d ->
+                        val isActive = d == env.selectedDistro
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    env.onSelectDistro(d)
+                                    distroMenuExpanded = false
+                                }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = d.displayName,
+                                modifier = Modifier.weight(1f),
+                                color = if (isActive) TerminalTheme.primaryColor else TerminalTheme.onSurfaceColor,
+                                fontSize = 14.sp,
+                                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1
+                            )
+                            if (isActive) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = TerminalTheme.primaryColor,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.weight(1f))
 
             // 权限
@@ -419,6 +506,88 @@ private fun TopBar(
                     imageVector = Icons.Default.Add,
                     contentDescription = context.getString(com.ai.assistance.quro.terminal.R.string.new_session),
                     tint = TerminalTheme.onSurfaceColor
+                )
+            }
+        }
+    }
+}
+
+/**
+ * LANXIU 首次按需下载提示条：选中 LANXIU 但未就绪时显示。
+ * - 未下载（ASSET_MISSING）：显示下载按钮（Idle / Failed 可重试）。
+ * - 下载中（Downloading）：显示进度条。
+ * - 已下载待解压（NEEDS_INSTALL）：提示打开/重启会话自动安装。
+ */
+@Composable
+private fun LanxiuDownloadBanner(
+    envStatus: GuestEnvStatus,
+    dlStatus: LanxiuDownloadStatus,
+    progress: Float,
+    onDownload: () -> Unit
+) {
+    val context = LocalContext.current
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = TerminalTheme.surfaceVariant,
+        shadowElevation = 2.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = null,
+                    tint = TerminalTheme.accentColor,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = when {
+                        envStatus == GuestEnvStatus.NEEDS_INSTALL ->
+                            context.getString(com.ai.assistance.quro.terminal.R.string.lanxiu_pending_install)
+                        dlStatus == LanxiuDownloadStatus.Failed ->
+                            context.getString(com.ai.assistance.quro.terminal.R.string.lanxiu_download_failed)
+                        dlStatus == LanxiuDownloadStatus.Downloading ->
+                            context.getString(com.ai.assistance.quro.terminal.R.string.lanxiu_downloading)
+                        else ->
+                            context.getString(com.ai.assistance.quro.terminal.R.string.lanxiu_needs_download)
+                    },
+                    color = TerminalTheme.onSurfaceColor,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                if (envStatus == GuestEnvStatus.ASSET_MISSING &&
+                    dlStatus != LanxiuDownloadStatus.Downloading
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onDownload() },
+                        color = TerminalTheme.primaryColor,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            text = context.getString(com.ai.assistance.quro.terminal.R.string.lanxiu_download),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                        )
+                    }
+                }
+            }
+            if (dlStatus == LanxiuDownloadStatus.Downloading) {
+                LinearProgressIndicator(
+                    progress = { progress.coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = TerminalTheme.primaryColor
                 )
             }
         }

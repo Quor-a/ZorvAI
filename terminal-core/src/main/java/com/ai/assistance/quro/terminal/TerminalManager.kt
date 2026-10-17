@@ -10,6 +10,7 @@ import com.ai.assistance.quro.terminal.data.TerminalState
 import com.ai.assistance.quro.terminal.domain.OutputProcessor
 import com.ai.assistance.quro.terminal.domain.SessionManager
 import com.ai.assistance.quro.terminal.domain.ansi.AnsiTerminalEmulator
+import com.ai.assistance.quro.terminal.runtime.Distro
 import com.ai.assistance.quro.terminal.runtime.TerminalEnvironment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -243,9 +244,20 @@ class TerminalManager private constructor(
     ): com.ai.assistance.quro.terminal.runtime.GuestExecResult =
         environment.execGuest(script, timeoutMs, onOutput)
 
-    /** guest（Ubuntu）环境的可用性等级。 */
-    fun guestEnvStatus(): com.ai.assistance.quro.terminal.runtime.GuestEnvStatus =
-        environment.guestEnvStatus()
+    /** guest 环境（按发行版）的可用性等级。 */
+    fun guestEnvStatus(distro: Distro = environment.selectedDistro): com.ai.assistance.quro.terminal.runtime.GuestEnvStatus =
+        environment.guestEnvStatus(distro)
+
+    /** 当前选中的发行版（双系统切换）。 */
+    fun getDistro(): Distro = environment.selectedDistro
+
+    /** 切换发行版（持久化 + 重建 common.sh）。 */
+    suspend fun setDistro(distro: Distro): Boolean = environment.setDistro(distro)
+
+    /** 首次使用按需下载 LANXIU rootfs（约 88MB）。 */
+    suspend fun downloadLanxiuRootfs(
+        onProgress: ((downloaded: Long, total: Long, fraction: Float) -> Unit)? = null
+    ): Boolean = environment.downloadLanxiuRootfs(onProgress)
 
     fun startTerminalSession(sessionId: String): Pair<TerminalSession, Pty> {
         return environment.startTerminalSession(sessionId)
