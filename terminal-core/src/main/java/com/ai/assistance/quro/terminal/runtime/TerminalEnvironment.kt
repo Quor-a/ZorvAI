@@ -258,6 +258,13 @@ class TerminalEnvironment(context: Context) {
           next=${'$'}((current + 1))
           printf "${'$'}next" > "${'$'}TMPDIR/progress"
         }
+        # 解析 guest 内 bash 真实路径：独立 aarch64 rootfs（如 LANXIU）bash 在 /usr/bin/bash，
+        # 而 Ubuntu(usrmerge) 在 /bin/bash。两者都要兼容，否则 LANXIU 登录会找不到 /bin/bash 而失败。
+        resolve_guest_bash(){
+          if [ -e "${'$'}ROOTFS_PATH/bin/bash" ]; then GUEST_BASH=/bin/bash
+          elif [ -e "${'$'}ROOTFS_PATH/usr/bin/bash" ]; then GUEST_BASH=/usr/bin/bash
+          else GUEST_BASH=/bin/bash; fi
+        }
         """.trimIndent()
 
         // 解压：Ubuntu 的 tar 包顶层有 ubuntu-noble-aarch64/ 需拍平；LANXIU 是扁平 rootfs（无顶层目录）。
@@ -326,6 +333,7 @@ class TerminalEnvironment(context: Context) {
           # 终端「公用挂载主目录」：应用自有外部目录，不依赖存储权限，始终可用
           mkdir -p "${'$'}ROOTFS_PATH/mnt/shared" 2>/dev/null
           mkdir -p "${'$'}ROOTFS_PATH/root/shared" 2>/dev/null
+          resolve_guest_bash
           exec ${'$'}BIN/proot \
             -0 \
             -r "${'$'}ROOTFS_PATH" \
@@ -348,7 +356,7 @@ class TerminalEnvironment(context: Context) {
               TERM=xterm-256color \
               LANG=en_US.UTF-8 \
               PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin \
-              /bin/bash -lc "echo LOGIN_SUCCESSFUL; echo TERMINAL_READY; exec /bin/bash -il"
+              ${'$'}GUEST_BASH -lc "echo LOGIN_SUCCESSFUL; echo TERMINAL_READY; exec ${'$'}GUEST_BASH -il"
         }
         """.trimIndent().replace("@SB@", sharedStorageBindLines)
 
@@ -362,6 +370,7 @@ class TerminalEnvironment(context: Context) {
           mkdir -p "${'$'}ROOTFS_PATH/mnt/shared" 2>/dev/null
           mkdir -p "${'$'}ROOTFS_PATH/root/shared" 2>/dev/null
           mkdir -p "${'$'}TMPDIR/zxremote" 2>/dev/null
+          resolve_guest_bash
           echo GUEST_EXEC_START
           exec ${'$'}BIN/proot \
             -0 \
@@ -386,7 +395,7 @@ class TerminalEnvironment(context: Context) {
               LANG=en_US.UTF-8 \
               DEBIAN_FRONTEND=noninteractive \
               PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin \
-              /bin/bash -lc "${'$'}1"
+              ${'$'}GUEST_BASH -lc "${'$'}1"
         }
         """.trimIndent().replace("@SB@", sharedStorageBindLines)
 
@@ -430,10 +439,13 @@ class TerminalEnvironment(context: Context) {
     fun rootfsDir(distro: Distro = selectedDistro): File =
         File(File(usrDir, "var/lib/proot-distro"), "installed-rootfs/${distro.rootfsDirName}")
 
-    /** rootfs 是否已解压可用（以 /bin/bash + /etc 为准）。 */
+    /** rootfs 是否已解压可用（以 bash 实际位置 + /etc 为准）。
+     *  注意：独立 aarch64 rootfs（如 LANXIU）bash 在 /usr/bin/bash 而非 /bin/bash（无 /bin→/usr/bin 合并），
+     *  因此两种路径都要查，否则解压成功也永远判「未就绪」。 */
     fun isRootfsReady(distro: Distro = selectedDistro): Boolean {
         val root = rootfsDir(distro)
-        return File(root, "bin/bash").exists() && File(root, "etc").isDirectory
+        val hasBash = File(root, "bin/bash").exists() || File(root, "usr/bin/bash").exists()
+        return hasBash && File(root, "etc").isDirectory
     }
 
     /** rootfs 安装包是否还在本地（还在 = 尚未解压，可自动初始化）。 */
