@@ -39,7 +39,9 @@ MODS = {
 
 with tarfile.open(SRC, "r:xz") as src, tarfile.open(DST, "w:xz", preset=6) as dst:
     count = 0
+    existing = set()
     for m in src:
+        existing.add(m.name)
         if m.isdir() or m.issym() or m.islnk():
             dst.addfile(m)
             count += 1
@@ -52,6 +54,23 @@ with tarfile.open(SRC, "r:xz") as src, tarfile.open(DST, "w:xz", preset=6) as ds
         else:
             dst.addfile(m, f)
         count += 1
+    # 补标准 usrmerge 链接：LANXIU 扁平 rootfs 顶层缺 /bin /lib /sbin，
+    # 而动态二进制 PT_INTERP 写死 /lib/ld-linux-aarch64.so.1（loader 实际在 /usr/lib）。
+    # 不补则 proot exec 任何动态二进制都找不到 loader -> ENOSYS（2026-10-17 真机事故）。
+    for link, target in (("lib", "usr/lib"), ("bin", "usr/bin"), ("sbin", "usr/sbin")):
+        linkname = "./" + link
+        if linkname in existing:
+            continue  # 已存在（Ubuntu 风格或上游已带），不动
+        if ("./" + target) not in existing:
+            continue  # 目标目录不存在，跳过（避免悬空链接）
+        ti = tarfile.TarInfo(linkname)
+        ti.type = tarfile.SYMTYPE
+        ti.linkname = target
+        ti.mode = 0o777
+        dst.addfile(ti)
+        existing.add(linkname)
+        count += 1
+        print("added usrmerge symlink", linkname, "->", target)
     print("total members written:", count)
 
 # verify modified content

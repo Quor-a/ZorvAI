@@ -292,6 +292,16 @@ class TerminalEnvironment(context: Context) {
           elif [ -e "${'$'}ROOTFS_PATH/usr/bin/bash" ]; then GUEST_BASH=/usr/bin/bash
           else GUEST_BASH=/bin/bash; fi
         }
+        # LANXIU 扁平 rootfs 是 usrmerge 风格：库/二进制全在 /usr，顶层缺 /bin /lib /sbin。
+        # 动态二进制 PT_INTERP 写死 /lib/ld-linux-aarch64.so.1，但 loader 实际在 /usr/lib；
+        # 不补这根链接，proot exec 任何动态二进制都找不到 loader -> execve/chdir 报 ENOSYS 崩
+        #（2026-10-17 真机事故：LANXIU 一执行命令就 proot error Function not implemented）。
+        # 补标准 usrmerge 链接（Ubuntu 本就这结构，幂等无害）。必须在每次 proot 启动前保证存在。
+        fix_usrmerge_links(){
+          [ -d "${'$'}ROOTFS_PATH/usr/lib" ] && [ ! -e "${'$'}ROOTFS_PATH/lib" ] && busybox ln -s usr/lib "${'$'}ROOTFS_PATH/lib" 2>/dev/null
+          [ -d "${'$'}ROOTFS_PATH/usr/bin" ] && [ ! -e "${'$'}ROOTFS_PATH/bin" ] && busybox ln -s usr/bin "${'$'}ROOTFS_PATH/bin" 2>/dev/null
+          [ -d "${'$'}ROOTFS_PATH/usr/sbin" ] && [ ! -e "${'$'}ROOTFS_PATH/sbin" ] && busybox ln -s usr/sbin "${'$'}ROOTFS_PATH/sbin" 2>/dev/null
+        }
         """.trimIndent()
 
         // 解压：Ubuntu 的 tar 包顶层有 ubuntu-noble-aarch64/ 需拍平；LANXIU 是扁平 rootfs（无顶层目录）。
@@ -331,6 +341,7 @@ class TerminalEnvironment(context: Context) {
               progress_echo "rootfs 解压报错：${'$'}(tail -n 1 "${'$'}TMPDIR/rootfs_extract.err" 2>/dev/null)"
             fi
             ${if (distro == Distro.UBUNTU) "mv \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"/* \"${'$'}ROOTFS_PATH/\" 2>/dev/null\n            rm -rf \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"" else ":  # LANXIU rootfs 已是扁平布局，无需拍平"}
+            fix_usrmerge_links
             echo "Extraction complete"
             echo 'export ANDROID_DATA=/home/' >> "${'$'}ROOTFS_PATH/root/.bashrc"
             # 仅在校验通过后才删除安装包：避免「删除后被再次中断 -> 无包可重装」导致永久残废
@@ -396,6 +407,7 @@ EOF
           mkdir -p "${'$'}ROOTFS_PATH/mnt/shared" 2>/dev/null
           mkdir -p "${'$'}ROOTFS_PATH/root/shared" 2>/dev/null
           resolve_guest_bash
+          fix_usrmerge_links
           exec ${'$'}BIN/proot \
             -0 \
             -r "${'$'}ROOTFS_PATH" \
@@ -435,6 +447,7 @@ EOF
           mkdir -p "${'$'}ROOTFS_PATH/root/shared" 2>/dev/null
           mkdir -p "${'$'}TMPDIR/zxremote" 2>/dev/null
           resolve_guest_bash
+          fix_usrmerge_links
           echo GUEST_EXEC_START
           exec ${'$'}BIN/proot \
             -0 \
