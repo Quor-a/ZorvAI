@@ -52,7 +52,7 @@ class TerminalExecTool : QuroTool {
             // 而不是静默降级到设备 sh 把失败藏起来。
             val res = runBlocking { tm.runInGuest(cmd, 180_000L) }
             json.put("distro", "lanxiu")
-            json.put("source", "proot/LANXIU (启元 Linux)")
+            json.put("source", "proot/LANXIU (澜岫)")
             json.put("exit_code", res.code)
             json.put("success", res.ok)
             json.put("timed_out", res.timedOut)
@@ -161,7 +161,7 @@ class TerminalStatusTool : QuroTool {
         val lanxiuStatus = tm.guestEnvStatus(Distro.LANXIU)
         val lanxiuReady = lanxiuStatus == GuestEnvStatus.READY
         val shell = when {
-            distro == Distro.LANXIU -> "proot/LANXIU (启元 Linux)"
+            distro == Distro.LANXIU -> "proot/LANXIU (澜岫)"
             ubuntuReady -> "proot/Linux (Ubuntu)"
             else -> "/system/bin/sh (Toybox)"
         }
@@ -213,14 +213,14 @@ class TerminalStatusTool : QuroTool {
  *
  * 这是让 AI「感知并操控」双系统的关键控制开关：set_distro 后，[TerminalManager] 的
  * 全局 selectedDistro 改变，[terminal_exec] 与可见终端都运行在该发行版上（AI 与用户
- * 共用同一套 rootfs）。Ubuntu=Debian 系(apt)；LANXIU=启元 Linux(qypkg，非 apt)。
+ * 共用同一套 rootfs）。Ubuntu=Debian 系(apt)；LANXIU=澜岫(qypkg，非 apt)。
  */
 class TerminalSetDistroTool : QuroTool {
     override val name: String = "terminal_set_distro"
     override val description: String =
         "切换 AI 与交互式终端共用的 Linux 发行版（双系统）。参数 distro=ubuntu 或 lanxiu。" +
             "切换后 terminal_exec 与可见终端都运行在该发行版（AI 与用户共用同一套 rootfs）。" +
-            "LANXIU=启元 Linux（用 qypkg 包管理，不是 apt）；Ubuntu=Debian 系（apt/pip/npm）。" +
+            "LANXIU=澜岫（用 qypkg 包管理，不是 apt）；Ubuntu=Debian 系（apt/pip/npm）。" +
             "返回切换结果与两套发行版就绪状态（ubuntu_ready / lanxiu_ready / lanxiu_status）。"
     override val parametersJson: String =
         """{"type":"object","properties":{"distro":{"type":"string","description":"目标发行版：ubuntu 或 lanxiu"}},"required":["distro"]}"""

@@ -54,7 +54,7 @@ class TerminalEnvironment(context: Context) {
     companion object {
         private const val TAG = "TerminalEnvironment"
         private const val UBUNTU_FILENAME = "ubuntu-noble-aarch64-pd-v4.18.0.tar.xz"
-        /** LANXIU（启元 Linux）安卓版 rootfs：本仓库 Release 标签（README 权威源）。 */
+        /** LANXIU（澜岫）安卓版 rootfs：本仓库 Release 标签（README 权威源）。 */
         const val LANXIU_DOWNLOAD_URL =
             "https://github.com/Quor-a/qiyuan-linux-android/releases/download/lanxiu-1.7.41-aarch64/lanxiu-aarch64-rootfs-20261017.tar.xz"
     }
@@ -318,7 +318,7 @@ EOF
         }
         """.trimIndent()
 
-        // 源配置：仅 Debian/Ubuntu 系写 apt/pip/npm；启元 Linux 用自家 qypkg，留空函数。
+        // 源配置：仅 Debian/Ubuntu 系写 apt/pip/npm；澜岫 用自家 qypkg，留空函数。
         val configureSources = """
         configure_sources(){
           ${if (distro.isDebian) """
@@ -335,7 +335,7 @@ EOF
           echo 'index-url = "${pipSource.url}"' > "${'$'}ROOTFS_PATH/root/.config/uv/uv.toml
           mkdir -p "${'$'}ROOTFS_PATH/root" 2>/dev/null
           echo 'registry=${npmSource.url}' > "${'$'}ROOTFS_PATH/root/.npmrc
-          """ else ":  # 启元 Linux 不需要 Debian 源配置"}
+          """ else ":  # 澜岫 不需要 Debian 源配置"}
         }
         """.trimIndent()
 

@@ -336,14 +336,14 @@ cd ZorvAI
 
 ---
 
-## 终端双系统 · Ubuntu + LANXIU（启元 Linux）
+## 终端双系统 · Ubuntu + LANXIU（澜岫）
 
 ZorvAI 终端内置 **两套 Linux 发行版**，可在终端顶部栏一键切换，AI 也能感知并操控：
 
 | 系统 | 身份 | 包管理 | 说明 |
 |------|------|--------|------|
 | **Ubuntu 24.04**（系统一） | Ubuntu noble aarch64 | `apt` | 完整 Debian 系工具链（python3 / gcc / node / java / git / make…），适合通用开发。 |
-| **LANXIU**（系统二） | 启元 Linux（Qiyuan Linux）安卓版 aarch64 `1.7.41-aarch64` | `qypkg`（非 apt） | 自研扁平 rootfs（bash 在 `/usr/bin/bash`），自带 git 2.49 / iproute2 / alsa-utils / sudo / shadow / tzdata 等 44 应用。 |
+| **LANXIU（澜岫）**（系统二） | 澜岫（LANXIU）安卓版 aarch64 `1.7.41-aarch64` | `qypkg`（非 apt） | 自研扁平 rootfs（bash 在 `/usr/bin/bash`），自带 git 2.49 / iproute2 / alsa-utils / sudo / shadow / tzdata 等 44 应用。 |
 
 **内置资产（无需下载）**：两个 rootfs 都打包进 APK `assets/`（`ubuntu-noble-aarch64-pd-v4.18.0.tar.xz` 约 64MB + `lanxiu-aarch64-rootfs-20261017.tar.xz` 约 93MB），首次进入终端由 `TerminalEnvironment.extractAssets()` 自动解压到 App 私有目录 `installed-rootfs/{ubuntu,lanxiu}`，不与网络下载耦合。
 
@@ -376,9 +376,9 @@ ZorvAI 终端内置 **两套 Linux 发行版**，可在终端顶部栏一键切�
 
 - 🟢 **[v1.1.8 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
 
-  **终端双系统：Ubuntu + LANXIU（启元 Linux）全面打通**
+  **终端双系统：Ubuntu + LANXIU（澜岫）全面打通**
 
-  - **LANXIU 内置**：启元 Linux aarch64 rootfs 打包进 APK assets（无需下载），首次进终端自动解压；与 Ubuntu 共用顶部栏切换。
+  - **LANXIU（澜岫）内置**：澜岫 aarch64 rootfs 打包进 APK assets（无需下载），首次进终端自动解压；与 Ubuntu 共用顶部栏切换。
   - **AI 感知并操控双系统**：`terminal_status` 报告当前发行版与两套就绪度；`terminal_set_distro` 切换；`terminal_exec` 在选中系统执行（LANXIU 走 `runInGuest`，与界面同一 rootfs）。
   - **LANXIU 开箱即联网**：源 rootfs 烤入 `resolv.conf` / `nsswitch.conf` / CA bundle，`common.sh` 双保险注入 `SSL_CERT_FILE` / `CURL_CA_BUNDLE`，curl / wget 国内外全通。
   - 修复 LANXIU 首次解压中断导致的半截 rootfs 死锁（`install_rootfs` 强校验 + 180s 兜底超时）。
