@@ -302,7 +302,14 @@ class TerminalEnvironment(context: Context) {
               return 1
             fi
           fi
-          echo 'nameserver 8.8.8.8' > "${'$'}ROOTFS_PATH/etc/resolv.conf"
+          # DNS：写入多 nameserver 兜底（国内/海外通用）。LANXIU 原生缺失 resolv.conf，
+          # 仅靠此行保证开箱 DNS 可用；rootfs 内也烤入了一份默认 resolv.conf 作双保险。
+          cat > "${'$'}ROOTFS_PATH/etc/resolv.conf" <<'EOF'
+nameserver 8.8.8.8
+nameserver 1.1.1.1
+nameserver 223.5.5.5
+nameserver 119.29.29.29
+EOF
           # 解压后自检：若目录仍为空（tar 包缺失或解压失败），报错退出，避免 proot 挂空目录。
           if [ -z "${'$'}(ls -A "${'$'}ROOTFS_PATH" 2>/dev/null)" ]; then
             progress_echo "rootfs 解压失败：请先确认安装包完整"
@@ -372,6 +379,8 @@ class TerminalEnvironment(context: Context) {
               TERM=xterm-256color \
               LANG=en_US.UTF-8 \
               PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin \
+              SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+              CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
               ${'$'}GUEST_BASH -lc "echo LOGIN_SUCCESSFUL; echo TERMINAL_READY; exec ${'$'}GUEST_BASH -il"
         }
         """.trimIndent().replace("@SB@", sharedStorageBindLines)
@@ -411,6 +420,8 @@ class TerminalEnvironment(context: Context) {
               LANG=en_US.UTF-8 \
               DEBIAN_FRONTEND=noninteractive \
               PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin \
+              SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+              CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
               ${'$'}GUEST_BASH -lc "${'$'}1"
         }
         """.trimIndent().replace("@SB@", sharedStorageBindLines)
