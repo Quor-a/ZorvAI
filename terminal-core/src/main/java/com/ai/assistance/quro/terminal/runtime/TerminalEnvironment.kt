@@ -292,15 +292,49 @@ class TerminalEnvironment(context: Context) {
           elif [ -e "${'$'}ROOTFS_PATH/usr/bin/bash" ]; then GUEST_BASH=/usr/bin/bash
           else GUEST_BASH=/bin/bash; fi
         }
-        # LANXIU 扁平 rootfs 是 usrmerge 风格：库/二进制全在 /usr，顶层缺 /bin /lib /sbin。
-        # 动态二进制 PT_INTERP 写死 /lib/ld-linux-aarch64.so.1，但 loader 实际在 /usr/lib；
-        # 不补这根链接，proot exec 任何动态二进制都找不到 loader -> execve/chdir 报 ENOSYS 崩
+        # LANXIU 扁平 rootfs：实测 tar 包里【根本没有】顶层 /lib /bin /sbin 成员，也没有任何
+        # usrmerge 符号链接（只有 usr/lib / usr/bin / usr/sbin 等真实目录）。动态二进制 PT_INTERP
+        # 写死 /lib/ld-linux-aarch64.so.1，但 loader 实际在 /usr/lib——不补这根链接，proot exec
+        # 任何动态二进制都找不到 loader -> 报 ENOSYS（Function not implemented）崩。
         #（2026-10-17 真机事故：LANXIU 一执行命令就 proot error Function not implemented）。
-        # 补标准 usrmerge 链接（Ubuntu 本就这结构，幂等无害）。必须在每次 proot 启动前保证存在。
+        # 因此这根链接【必须每次 proot 启动前强制保证】，且要能对抗各种异常态：
+        #   - 缺失（正常解压后）：补；
+        #   - 被解压工具误建成空目录（busybox tar 在某些固件上会把 symlink 抽成空目录）：删空目录再补；
+        #   - 已是正确符号链接：跳过（幂等）；
+        #   - 非空目录（不该出现）：保留并告警，绝不强行破坏真内容。
+        # Ubuntu 本就这结构，幂等无害。末尾自检 loader 是否可达，不可达时给出明确告警便于排查。
         fix_usrmerge_links(){
-          [ -d "${'$'}ROOTFS_PATH/usr/lib" ] && [ ! -e "${'$'}ROOTFS_PATH/lib" ] && busybox ln -s usr/lib "${'$'}ROOTFS_PATH/lib" 2>/dev/null
-          [ -d "${'$'}ROOTFS_PATH/usr/bin" ] && [ ! -e "${'$'}ROOTFS_PATH/bin" ] && busybox ln -s usr/bin "${'$'}ROOTFS_PATH/bin" 2>/dev/null
-          [ -d "${'$'}ROOTFS_PATH/usr/sbin" ] && [ ! -e "${'$'}ROOTFS_PATH/sbin" ] && busybox ln -s usr/sbin "${'$'}ROOTFS_PATH/sbin" 2>/dev/null
+          fix_one(){
+            d="${'$'}1"; t="${'$'}2"
+            if [ -d "${'$'}ROOTFS_PATH/${'$'}t" ]; then
+              cur="${'$'}ROOTFS_PATH/${'$'}d"
+              need=1
+              if [ -L "${'$'}cur" ]; then
+                [ "${'$'}(busybox readlink "${'$'}cur" 2>/dev/null)" = "${'$'}t" ] && need=0
+              fi
+              if [ "${'$'}need" = "1" ]; then
+                # 不是正确的符号链接：可能缺失，也可能被解压工具误建成目录/文件
+                if [ -e "${'$'}cur" ] && [ ! -L "${'$'}cur" ]; then
+                  if [ -d "${'$'}cur" ] && [ -z "${'$'}(busybox ls -A "${'$'}cur" 2>/dev/null)" ]; then
+                    # 空目录：解压工具误建成空目录的典型情形，安全删掉再补
+                    busybox rm -rf "${'$'}cur"
+                  elif [ -d "${'$'}cur" ]; then
+                    progress_echo "警告: /${'$'}d 是非空目录而非 usrmerge 链接，动态库可能无法加载"
+                  fi
+                fi
+                if [ ! -e "${'$'}cur" ]; then
+                  busybox ln -s "${'$'}t" "${'$'}cur" 2>/dev/null || ln -s "${'$'}t" "${'$'}cur" 2>/dev/null
+                fi
+              fi
+            fi
+          }
+          fix_one lib usr/lib
+          fix_one bin usr/bin
+          fix_one sbin usr/sbin
+          # 自检：loader 必须可达，否则 proot 启动会 ENOSYS（Function not implemented）
+          if [ ! -e "${'$'}ROOTFS_PATH/lib/ld-linux-aarch64.so.1" ] && [ ! -e "${'$'}ROOTFS_PATH/lib/ld-linux.so.2" ]; then
+            progress_echo "警告: 动态链接器 /lib/ld-linux 仍不可达，proot 可能无法启动"
+          fi
         }
         """.trimIndent()
 

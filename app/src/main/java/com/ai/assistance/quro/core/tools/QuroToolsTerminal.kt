@@ -5,6 +5,7 @@ import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.terminal.QuroTerminalController
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager
+import com.ai.assistance.quro.core.terminal.ShellMode
 import com.ai.assistance.quro.terminal.TerminalManager
 import com.ai.assistance.quro.terminal.runtime.Distro
 import com.ai.assistance.quro.terminal.runtime.GuestEnvStatus
@@ -161,8 +162,19 @@ class TerminalStatusTool : QuroTool {
         val ubuntuReady = tm.guestEnvStatus(Distro.UBUNTU) == GuestEnvStatus.READY
         val lanxiuStatus = tm.guestEnvStatus(Distro.LANXIU)
         val lanxiuReady = lanxiuStatus == GuestEnvStatus.READY
-        val shell = when {
-            distro == Distro.LANXIU -> "proot/LANXIU (澜岫)"
+        // 交互式终端（terminal_write / 界面终端共用的默认会话）的真实后端：
+        // 它只经 QuroLinuxEnv 跑 Ubuntu（或设备 sh / VM），【从不】跑 LANXIU。
+        // 之前 shell 字段直接按 selected_distro 标志推断，会谎报成 proot/LANXIU（假 ready 最坑）。
+        val interactiveBackend = when (QuroTerminalController.session?.mode) {
+            ShellMode.VM -> "proot/VM Linux"
+            ShellMode.LINUX -> "proot/Linux (Ubuntu)"
+            ShellMode.DEVICE -> "/system/bin/sh (Toybox)"
+            null -> "none"
+        }
+        // 一次性执行（terminal_exec）实际使用的发行版 = selected_distro 标志：
+        // LANXIU 走 TerminalManager.execGuest 的独立 rootfs，Ubuntu 走 QuroLinuxEnv。
+        val execSource = when {
+            distro == Distro.LANXIU -> "proot/LANXIU (澜岫, 独立 rootfs)"
             ubuntuReady -> "proot/Linux (Ubuntu)"
             else -> "/system/bin/sh (Toybox)"
         }
@@ -191,10 +203,11 @@ class TerminalStatusTool : QuroTool {
             // 会话时完全不知道命令成没成功。
             put("last_exit", session?.lastExit ?: -1)
             put("last_interrupted", session?.lastInterrupted ?: false)
-            put("shell", shell)
+            put("shell", interactiveBackend)
             // 双系统核心字段
             put("selected_distro", distro.id)
             put("distro_display", distro.displayName)
+            put("exec_source", execSource)
             put("ubuntu_ready", ubuntuReady)
             put("lanxiu_ready", lanxiuReady)
             put("lanxiu_status", lanxiuStatus.name.lowercase())
@@ -204,7 +217,7 @@ class TerminalStatusTool : QuroTool {
                 QuroTerminalSessionManager.listSessions().find { it.isDefault }?.id ?: "default"
             } ?: "none")
             put("sessions", sessions)
-            put("note", if (session != null) "交互式会话可用，可用 terminal_write 输入" else "会话未启动，terminal_exec 仍可独立执行命令；可用 terminal_set_distro 切换 Ubuntu/LANXIU")
+            put("note", "交互式终端(shell=$interactiveBackend) 与 terminal_exec(exec_source=$execSource) 是两条独立通道：交互式终端固定跑 Ubuntu（或设备 sh），切换发行版只影响 terminal_exec 的一次性执行通道，不会让可见终端也变成 LANXIU——LANXIU 仅在 terminal_exec 的独立 rootfs 中可用。set_distro 之前的『假 ready』正是 shell 字段按 selected_distro 标志误报所致，现已改为上报真实交互式后端。")
         }.toString()
     }
 }
