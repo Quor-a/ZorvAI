@@ -103,6 +103,10 @@ class TerminalEnvironment(context: Context) {
             Log.d(TAG, "Created bin directory at: ${binDir.absolutePath}")
         }
         File(filesDir, "tmp").mkdirs()
+        // 双系统共享用户空间：app 拥有的公共 home，proot 启动时 bind 进两套 rootfs 的 /root。
+        // LANXIU 与 Ubuntu 共用同一个 home/数据，仅 OS 层不同；且 app 拥有它 -> /root 永远可遍历，
+        // 从根上消除 tar 包 agentuser/0700 的 /root 让 proot -w /root 进不去 -> getcwd 失败(exit 130)。
+        File(filesDir, "proot_home").mkdirs()
     }
 
     private fun linkNativeLibs() {
@@ -268,6 +272,7 @@ class TerminalEnvironment(context: Context) {
         export TMPDIR=$tmpDir
         export BIN=$binDir
         export HOME=$homeDir
+        export SHARED_HOME=$homeDir/proot_home
         export ROOTFS_PATH=$rootfsPath
         export ROOTFS_TARBALL=${distro.rootfsFilename}
         export ROOTFS_NAME=$rootfsName
@@ -351,6 +356,8 @@ class TerminalEnvironment(context: Context) {
         val installRootfs = """
         install_rootfs(){
           mkdir -p "${'$'}ROOTFS_PATH" 2>/dev/null
+          # 共享用户空间目录（app 拥有），供两套 rootfs 的 /root 共用；configure_sources 也会写这里。
+          mkdir -p "${'$'}SHARED_HOME" 2>/dev/null
           # 就绪判定（与 Kotlin isRootfsReady 对齐）：bash 在 /bin 或 /usr/bin + 发行版身份文件。
           # 🔴 不能只看 etc/issue.net：Ubuntu 有 issue.net，但 LANXIU（独立 aarch64 rootfs）只有
           # etc/os-release / etc/lanxiu-release，压根没有 issue.net。用 issue.net 会把「已解压好的澜岫」
@@ -387,11 +394,10 @@ class TerminalEnvironment(context: Context) {
             ${if (distro == Distro.UBUNTU) "mv \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"/* \"${'$'}ROOTFS_PATH/\" 2>/dev/null\n            rm -rf \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"" else ":  # LANXIU rootfs 已是扁平布局，无需拍平"}
             fix_usrmerge_links
             echo "Extraction complete"
-            # 防御：确保 rootfs 顶层与 /root 至少对当前进程可遍历（某些固件 busybox tar 仍可能保留异常属主/0700）。
-            # 当前进程拥有这些目录时 chmod 生效，否则静默失败，靠下方 cwd 兜底。
+            # 防御：确保 rootfs 顶层对当前进程可遍历（动态库路径等）。
             chmod 0755 "${'$'}ROOTFS_PATH" 2>/dev/null
-            chmod 0755 "${'$'}ROOTFS_PATH/root" 2>/dev/null
-            echo 'export ANDROID_DATA=/home/' >> "${'$'}ROOTFS_PATH/root/.bashrc"
+            # 共享用户空间：基础环境写进 SHARED_HOME/.bashrc（两套 rootfs 共用，幂等）。
+            grep -q 'ANDROID_DATA' "${'$'}SHARED_HOME/.bashrc" 2>/dev/null || echo 'export ANDROID_DATA=/home/' >> "${'$'}SHARED_HOME/.bashrc"
             # 仅在校验通过后才删除安装包：避免「删除后被再次中断 -> 无包可重装」导致永久残废
             if ready_check; then
               rm -f ~/"${'$'}ROOTFS_TARBALL"
@@ -426,13 +432,13 @@ EOF
         deb ${aptSource.url} noble-updates main restricted universe multiverse
         deb ${aptSource.url} noble-backports main restricted universe multiverse
         EOF
-          mkdir -p "${'$'}ROOTFS_PATH/root/.config/pip" 2>/dev/null
-          echo '[global]' > "${'$'}ROOTFS_PATH/root/.config/pip/pip.conf"
-          echo 'index-url = ${pipSource.url}' >> "${'$'}ROOTFS_PATH/root/.config/pip/pip.conf"
-          mkdir -p "${'$'}ROOTFS_PATH/root/.config/uv" 2>/dev/null
-          echo 'index-url = "${pipSource.url}"' > "${'$'}ROOTFS_PATH/root/.config/uv/uv.toml
-          mkdir -p "${'$'}ROOTFS_PATH/root" 2>/dev/null
-          echo 'registry=${npmSource.url}' > "${'$'}ROOTFS_PATH/root/.npmrc
+          mkdir -p "${'$'}SHARED_HOME/.config/pip" 2>/dev/null
+          echo '[global]' > "${'$'}SHARED_HOME/.config/pip/pip.conf"
+          echo 'index-url = ${pipSource.url}' >> "${'$'}SHARED_HOME/.config/pip/pip.conf"
+          mkdir -p "${'$'}SHARED_HOME/.config/uv" 2>/dev/null
+          echo 'index-url = "${pipSource.url}"' > "${'$'}SHARED_HOME/.config/uv/uv.toml
+          mkdir -p "${'$'}SHARED_HOME" 2>/dev/null
+          echo 'registry=${npmSource.url}' > "${'$'}SHARED_HOME/.npmrc
           """ else ":  # 澜岫 不需要 Debian 源配置"}
         }
         """.trimIndent()
@@ -453,21 +459,14 @@ EOF
           mkdir -p "${'$'}ROOTFS_PATH/storage/emulated"
           # 终端「公用挂载主目录」：应用自有外部目录，不依赖存储权限，始终可用
           mkdir -p "${'$'}ROOTFS_PATH/mnt/shared"
-          # 🔴 cwd 铁律（2026-10-17 真机事故）：LANXIU 扁平 rootfs 顶层根本没有 /root，
-          # 仅靠 install 时 mkdir 补；这里显式保证 guest 内 /root 存在，并 cd 进 guest 根作为兜底——
-          # 否则 proot -w /root 在宿主 cwd（App 的 filesDir，不在 guest 根内）无法切进 guest，
-          # 回退到宿主 cwd -> bash shell-init 阶段 getcwd 失败 -> 整条 exec 在命令执行前就崩（exit 130）。
-          mkdir -p "${'$'}ROOTFS_PATH/root"
-          mkdir -p "${'$'}ROOTFS_PATH/root/shared"
+          # 🔴 共享用户空间（双系统铁律 2026-10-18）：LANXIU 与 Ubuntu 共用同一个 app 拥有的 home，
+          # 仅 OS 层不同。把 SHARED_HOME bind 进 guest 的 /root -> 两套 rootfs 看到同一 home/数据，
+          # 用户文件在双系统间互通，且 /root 永远 app 可遍历，从根消除 tar 包 agentuser/0700 致
+          # proot -w /root 进不去 -> shell-init getcwd 失败(exit 130)。
+          mkdir -p "${'$'}SHARED_HOME"
+          mkdir -p "${'$'}SHARED_HOME/shared"
           cd "${'$'}ROOTFS_PATH"
-          # guest 内 cwd/home：优先 /root；若 /root 因 tar 包异常属主/0700 导致当前进程进不去，
-          # 退回 rootfs 根 /（应用自建、必可遍历），避免 bash shell-init 的 getcwd 失败(exit 130)。
-          if cd "${'$'}ROOTFS_PATH/root" 2>/dev/null; then
-            G_CWD=/root; G_HOME=/root
-            cd "${'$'}ROOTFS_PATH"
-          else
-            G_CWD=/; G_HOME=/
-          fi
+          G_CWD=/root; G_HOME=/root
           resolve_guest_bash
           fix_usrmerge_links
           exec ${'$'}BIN/proot \
@@ -483,8 +482,8 @@ EOF
             -b /proc/self/fd/0:/dev/stdin \
             -b /proc/self/fd/1:/dev/stdout \
             -b /proc/self/fd/2:/dev/stderr \
+            -b "${'$'}SHARED_HOME":/root \
             -b "$sharedHostDir":/mnt/shared \
-            -b "$sharedHostDir":/root/shared \
             @SB@
             -w "${'$'}G_CWD" \
             /usr/bin/env -i \
@@ -506,22 +505,12 @@ EOF
         guest_exec(){
           mkdir -p "${'$'}ROOTFS_PATH/storage/emulated"
           mkdir -p "${'$'}ROOTFS_PATH/mnt/shared"
-          # 🔴 cwd 铁律（2026-10-17 真机事故）：LANXIU 扁平 rootfs 顶层根本没有 /root，
-          # 仅靠 install 时 mkdir 补；这里显式保证 guest 内 /root 存在，并 cd 进 guest 根作为兜底——
-          # 否则 proot -w /root 在宿主 cwd（App 的 filesDir，不在 guest 根内）无法切进 guest，
-          # 回退到宿主 cwd -> bash shell-init 阶段 getcwd 失败 -> 整条 exec 在命令执行前就崩（exit 130）。
-          mkdir -p "${'$'}ROOTFS_PATH/root"
-          mkdir -p "${'$'}ROOTFS_PATH/root/shared"
+          # 🔴 共享用户空间（双系统铁律 2026-10-18）：同 login_rootfs，SHARED_HOME bind 进 /root。
+          mkdir -p "${'$'}SHARED_HOME"
+          mkdir -p "${'$'}SHARED_HOME/shared"
           mkdir -p "${'$'}TMPDIR/zxremote"
           cd "${'$'}ROOTFS_PATH"
-          # guest 内 cwd/home：优先 /root；若 /root 因 tar 包异常属主/0700 导致当前进程进不去，
-          # 退回 rootfs 根 /（应用自建、必可遍历），避免 bash shell-init 的 getcwd 失败(exit 130)。
-          if cd "${'$'}ROOTFS_PATH/root" 2>/dev/null; then
-            G_CWD=/root; G_HOME=/root
-            cd "${'$'}ROOTFS_PATH"
-          else
-            G_CWD=/; G_HOME=/
-          fi
+          G_CWD=/root; G_HOME=/root
           resolve_guest_bash
           fix_usrmerge_links
           echo GUEST_EXEC_START
@@ -538,8 +527,8 @@ EOF
             -b /proc/self/fd/0:/dev/stdin \
             -b /proc/self/fd/1:/dev/stdout \
             -b /proc/self/fd/2:/dev/stderr \
+            -b "${'$'}SHARED_HOME":/root \
             -b "$sharedHostDir":/mnt/shared \
-            -b "$sharedHostDir":/root/shared \
             @SB@
             -w "${'$'}G_CWD" \
             /usr/bin/env -i \
