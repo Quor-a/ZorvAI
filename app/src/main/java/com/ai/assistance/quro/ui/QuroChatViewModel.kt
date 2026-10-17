@@ -2991,7 +2991,9 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "**关键约束**：\n" +
             "- LANXIU 用 `qypkg`（如 `qypkg install xxx`），**绝不要**在 LANXIU 里用 apt / dpkg；Ubuntu 才用 apt。\n" +
             "- 首次切到某发行版若其 rootfs 未就绪，terminal_status 会给出 lanxiu_status（ready / needs_install / asset_missing），必要时先 `set_distro` 到已就绪的那套。\n" +
-            "- 不要假设只有 Ubuntu：用户明确装了 LANXIU，遇到「某个 Linux 命令在 Ubuntu 找不到 / 想用澜岫生态」时应主动考虑切到 LANXIU。\n"
+            "- 不要假设只有 Ubuntu：用户明确装了 LANXIU，遇到「某个 Linux 命令在 Ubuntu 找不到 / 想用澜岫生态」时应主动考虑切到 LANXIU。\n" +
+            "- **LANXIU 与 Ubuntu 完全同级（对等系统，不是二等公民）**：两套都是终端里的对等发行版，你用同一套 `status` / `set_distro` / `exec` 控制，能力对等；LANXIU 用 `qypkg`（如同 `apt` 是 Ubuntu 的生态），别把它当残缺系统。\n" +
+            "- **proot 共性约束（两套都一样，不是 LANXIU 缺陷）**：别在 Ubuntu 里嵌套 proot 启 LANXIU（任何第二套 rootfs 都会被 ptrace 拒绝，LANXIU 本就作为独立 sibling proot 在 Ubuntu 外拉起）；sudo 在 proot 内受限但两套都已映射成 root，**直接用命令别加 sudo**；两套 proot 都无 `/lib/modules`（安卓不需要），别试 `modprobe` / `insmod`。\n"
         )
 
         // ══════════════ ACI（Agent Capability Interface）：AI 作为控制方调用第三方 App ══════════════

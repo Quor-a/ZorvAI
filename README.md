@@ -364,7 +364,17 @@ ZorvAI 终端内置 **两套 Linux 发行版**，可在终端顶部栏一键切�
 
 同时 `common.sh` 双保险：`install_rootfs` 写 resolv.conf 升为 4 nameserver；`login_rootfs` / `guest_exec` 的 `env -i` 块直接注入 `SSL_CERT_FILE` / `CURL_CA_BUNDLE`——即便 `profile.d` 未被 source 也生效。实测 curl / wget 国内外站点全通。
 
-> ⚠️ **Android 权限限制（预期，非 bug）**：proot 容器内 `sudo` / setuid、`ping`（ICMP）、`ss` 读 `/proc/net` 等受 Android 沙箱限制，属正常现象；DNS 解析与 TCP/TLS 联网不受影响。
+### LANXIU 与 Ubuntu 完全同级（对等系统，非二等公民）
+
+LANXIU（澜岫）是终端里与 Ubuntu **完全对等**的第二套发行版——AI 与用户用的是**同一套**控制面：`terminal_status` 查两套就绪度、`terminal_set_distro` 切换、`terminal_exec` 在选中系统执行，三者对 Ubuntu 和 LANXIU **一视同仁**。LANXIU 的 `terminal_exec` 与 Ubuntu 走**同一种**一次性 proot 执行模型（都每次 spawn 一个独立 proot 跑命令，互不保留跨命令状态），AI 命令执行能力对等；LANXIU 还拥有自己的包生态 `qypkg`（如同 `apt` 是 Ubuntu 的生态），是并列关系而非从属。
+
+下面三条常被误读为「LANXIU 的缺陷」，其实它们是 **proot-on-Android 的共性约束，Ubuntu 同样存在**，因此**不构成 LANXIU 相对 Ubuntu 的任何劣势**：
+
+1. **不能「在 Ubuntu 内嵌套 proot 启 LANXIU」** → 这条对**任何**第二套 rootfs 都成立：你也没法在 Ubuntu 里再嵌套启动第二个 Ubuntu。App 的设计本来就是 LANXIU 作为**独立 sibling proot**，由 distro 切换器在 Ubuntu **之外**拉起（`installed-rootfs/lanxiu`），与 Ubuntu 平起平坐、互不嵌套。所以 LANXIU 是**完整可运行的环境**，绝非「只能以文件形式存在、等切换器来用」。
+
+2. **sudo / setuid 受限** → 两套 proot 都受 Android 沙箱限制，sudo 都不可用；但两套都**已把你映射成 root**，直接用命令即可，本来就不用 sudo。Ubuntu 同理。
+
+3. **无 `/lib/modules`** → 任何安卓 proot 都没有内核模块机制（安卓不需要），Ubuntu 的 proot 也没有。这不是 LANXIU 独有。
 
 > 💡 LANXIU rootfs 为扁平布局（解压后直接是 `bin/ etc/ usr/ …`），启动 bash 用 `/usr/bin/bash`（不是 `/bin/bash`）；若用 `common.sh` 的 `resolve_guest_bash()` 则无需关心此差异。
 

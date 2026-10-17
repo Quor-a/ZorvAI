@@ -58,6 +58,7 @@ class TerminalExecTool : QuroTool {
             json.put("timed_out", res.timedOut)
             json.put("output", res.output)
             if (res.error != null) json.put("error", res.error)
+            if (res.timedOut) json.put("hint", "命令在超时前未结束，已被强制终止；若是交互式或持续输出的命令请改用 terminal_write")
         } else {
             // Ubuntu：优先沿用已建立的 QuroLinuxEnv(linux-sandbox/rootfs) 工具链（含 python3 等），
             // 不可用时再回退 TerminalManager 的 installed-rootfs/ubuntu，最后设备 sh。
