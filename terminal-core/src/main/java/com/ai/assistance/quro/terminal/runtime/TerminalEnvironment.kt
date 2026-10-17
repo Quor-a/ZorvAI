@@ -379,12 +379,18 @@ class TerminalEnvironment(context: Context) {
               return 1
             fi
             # 解压错误不再静默吞掉（原来 >/dev/null 2>&1，坏了只看到黑屏）：错误落盘 + 回显末行。
-            if ! busybox tar xf ~/"${'$'}ROOTFS_TARBALL" -C "${'$'}ROOTFS_PATH/" 2>"${'$'}TMPDIR/rootfs_extract.err"; then
+            # -o: 不保留 tar 包属主/属组，全部归当前（应用）进程所有 -> 应用可遍历整棵树，
+            # 避免 tar 包里 agentuser/0700 的 /root 让 proot -w /root 进不去 -> getcwd 失败(exit 130)。
+            if ! busybox tar xof ~/"${'$'}ROOTFS_TARBALL" -C "${'$'}ROOTFS_PATH/" 2>"${'$'}TMPDIR/rootfs_extract.err"; then
               progress_echo "rootfs 解压报错：${'$'}(tail -n 1 "${'$'}TMPDIR/rootfs_extract.err" 2>/dev/null)"
             fi
             ${if (distro == Distro.UBUNTU) "mv \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"/* \"${'$'}ROOTFS_PATH/\" 2>/dev/null\n            rm -rf \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"" else ":  # LANXIU rootfs 已是扁平布局，无需拍平"}
             fix_usrmerge_links
             echo "Extraction complete"
+            # 防御：确保 rootfs 顶层与 /root 至少对当前进程可遍历（某些固件 busybox tar 仍可能保留异常属主/0700）。
+            # 当前进程拥有这些目录时 chmod 生效，否则静默失败，靠下方 cwd 兜底。
+            chmod 0755 "${'$'}ROOTFS_PATH" 2>/dev/null
+            chmod 0755 "${'$'}ROOTFS_PATH/root" 2>/dev/null
             echo 'export ANDROID_DATA=/home/' >> "${'$'}ROOTFS_PATH/root/.bashrc"
             # 仅在校验通过后才删除安装包：避免「删除后被再次中断 -> 无包可重装」导致永久残废
             if ready_check; then
@@ -454,6 +460,14 @@ EOF
           mkdir -p "${'$'}ROOTFS_PATH/root"
           mkdir -p "${'$'}ROOTFS_PATH/root/shared"
           cd "${'$'}ROOTFS_PATH"
+          # guest 内 cwd/home：优先 /root；若 /root 因 tar 包异常属主/0700 导致当前进程进不去，
+          # 退回 rootfs 根 /（应用自建、必可遍历），避免 bash shell-init 的 getcwd 失败(exit 130)。
+          if cd "${'$'}ROOTFS_PATH/root" 2>/dev/null; then
+            G_CWD=/root; G_HOME=/root
+            cd "${'$'}ROOTFS_PATH"
+          else
+            G_CWD=/; G_HOME=/
+          fi
           resolve_guest_bash
           fix_usrmerge_links
           exec ${'$'}BIN/proot \
@@ -472,9 +486,9 @@ EOF
             -b "$sharedHostDir":/mnt/shared \
             -b "$sharedHostDir":/root/shared \
             @SB@
-            -w /root \
+            -w "${'$'}G_CWD" \
             /usr/bin/env -i \
-              HOME=/root \
+              HOME="${'$'}G_HOME" \
               TERM=xterm-256color \
               LANG=en_US.UTF-8 \
               PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin \
@@ -500,6 +514,14 @@ EOF
           mkdir -p "${'$'}ROOTFS_PATH/root/shared"
           mkdir -p "${'$'}TMPDIR/zxremote"
           cd "${'$'}ROOTFS_PATH"
+          # guest 内 cwd/home：优先 /root；若 /root 因 tar 包异常属主/0700 导致当前进程进不去，
+          # 退回 rootfs 根 /（应用自建、必可遍历），避免 bash shell-init 的 getcwd 失败(exit 130)。
+          if cd "${'$'}ROOTFS_PATH/root" 2>/dev/null; then
+            G_CWD=/root; G_HOME=/root
+            cd "${'$'}ROOTFS_PATH"
+          else
+            G_CWD=/; G_HOME=/
+          fi
           resolve_guest_bash
           fix_usrmerge_links
           echo GUEST_EXEC_START
@@ -519,9 +541,9 @@ EOF
             -b "$sharedHostDir":/mnt/shared \
             -b "$sharedHostDir":/root/shared \
             @SB@
-            -w /root \
+            -w "${'$'}G_CWD" \
             /usr/bin/env -i \
-              HOME=/root \
+              HOME="${'$'}G_HOME" \
               TERM=dumb \
               LANG=en_US.UTF-8 \
               DEBIAN_FRONTEND=noninteractive \
