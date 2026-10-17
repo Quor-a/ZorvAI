@@ -196,7 +196,8 @@ class TerminalEnvironment(context: Context) {
 
     private fun extractAssets() {
         try {
-            val assets = listOf(UBUNTU_FILENAME)
+            // Ubuntu 内置；LANXIU 亦内置（与 Ubuntu 同机制，不再首次按需下载）。
+            val assets = listOf(UBUNTU_FILENAME, Distro.LANXIU.rootfsFilename)
             assets.forEach { assetName ->
                 val assetFile = File(filesDir, assetName)
                 if (!assetFile.exists()) {
