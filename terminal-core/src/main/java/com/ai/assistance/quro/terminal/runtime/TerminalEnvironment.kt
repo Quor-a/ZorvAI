@@ -671,8 +671,16 @@ EOF
             val guestCmd = "bash /dev/shm/zxremote/$jobId/run.sh"
             val command = arrayOf(bash.absolutePath, "-c", prelude, "zxremote", guestCmd)
 
+            // 🔴 getcwd 铁律（用户 2026-10-18 实测根因）：execGuest 启动常驻 agent 时绝不能把宿主 cwd
+            // 透传成 filesDir（落在 rootfs 之外，proot 翻译不到 -> guest bash shell-init getcwd ENOENT -> exit 130）。
+            // 这里把进程启动 cwd 钉成 rootfs 目录本身（-r 映射为 guest /，永远可翻译）；rootfs 尚未解压时
+            // 退回 filesDir（install_rootfs 会建好它，随后脚本内 cd 继续兜底）。
+            val rootfsWorkPath = File(
+                usrDir, "var/lib/proot-distro/installed-rootfs/${selectedDistro.rootfsDirName}"
+            ).takeIf { it.isDirectory }?.absolutePath ?: filesDir.absolutePath
+
             val pty = try {
-                Pty.start(command, baseEnv(), filesDir)
+                Pty.start(command, baseEnv(), File(rootfsWorkPath))
             } catch (e: Exception) {
                 Log.e(TAG, "execGuest: 无法启动 proot 通道", e)
                 return@withContext GuestExecResult(
