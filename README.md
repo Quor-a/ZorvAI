@@ -326,7 +326,7 @@ cd ZorvAI
 | **`./gradlew` 无法启动** | wrapper jar 缺失 `Main-Class` 时需修复；或改用本机已安装的 Gradle 直接构建。 |
 | **Shizuku 相关能力不可用** | 必须先打开 Shizuku App 并启动其服务 / 完成配对，再在 Zorv AI 中授权；Shizuku 未运行时 L2 通道不会启用。 |
 | **ROOT 模式命令不执行** | ROOT 模式走 `sh -c` 执行，需确认设备已 root 且已授予 su 权限。 |
-| **应用内 Linux（L5）无法运行** | 首次进入终端会提示「安装 Linux 环境」；`proot` 随包内置，仅 Ubuntu base rootfs 需联网下载（arm64 走 `ubuntu-ports`）。 |
+| **应用内 Linux（L5）无法运行** | 首次进入终端会自动解压内置 rootfs（`proot` 随包内置，Ubuntu + LANXIU 两套 rootfs 均已打包进 APK **无需联网下载**）；若解压被中断（App 被杀 / 设备过慢）导致环境异常，重启 App 会自动清掉半截 rootfs 重装。 |
 | **终端息屏 / 切 App 后被杀** | 检查通知栏是否显示「Zorv AI 终端运行中」；Android 14+ 需要 `FOREGROUND_SERVICE_SPECIAL_USE` 权限。 |
 | **离线对话不可用** | 离线 LLM 随发布包内置；若所用构建不含离线引擎原生库则会提示未接入。 |
 | **网页 / HTML 预览不显示** | 内置浏览器基于 `android.webkit.WebView`：请确认系统 WebView 已安装且为较新版本（开发者选项 → WebView 实现）。 |
@@ -336,11 +336,54 @@ cd ZorvAI
 
 ---
 
+## 终端双系统 · Ubuntu + LANXIU（启元 Linux）
+
+ZorvAI 终端内置 **两套 Linux 发行版**，可在终端顶部栏一键切换，AI 也能感知并操控：
+
+| 系统 | 身份 | 包管理 | 说明 |
+|------|------|--------|------|
+| **Ubuntu 24.04**（系统一） | Ubuntu noble aarch64 | `apt` | 完整 Debian 系工具链（python3 / gcc / node / java / git / make…），适合通用开发。 |
+| **LANXIU**（系统二） | 启元 Linux（Qiyuan Linux）安卓版 aarch64 `1.7.41-aarch64` | `qypkg`（非 apt） | 自研扁平 rootfs（bash 在 `/usr/bin/bash`），自带 git 2.49 / iproute2 / alsa-utils / sudo / shadow / tzdata 等 44 应用。 |
+
+**内置资产（无需下载）**：两个 rootfs 都打包进 APK `assets/`（`ubuntu-noble-aarch64-pd-v4.18.0.tar.xz` 约 64MB + `lanxiu-aarch64-rootfs-20261017.tar.xz` 约 93MB），首次进入终端由 `TerminalEnvironment.extractAssets()` 自动解压到 App 私有目录 `installed-rootfs/{ubuntu,lanxiu}`，不与网络下载耦合。
+
+**两种切换方式**：
+
+- **手动**：终端界面顶部栏发行版下拉（Ubuntu / LANXIU 勾选）即时切换。
+- **AI 操控**：
+  - `terminal_status` → 返回 `selected_distro` / `ubuntu_ready` / `lanxiu_ready` / `lanxiu_status`，AI 一眼看清两套就绪度；
+  - `terminal_set_distro(distro="lanxiu")` → 切换当前发行版（AI 与可见终端共用同一 rootfs）；
+  - `terminal_exec(command=...)` → 在**选中**发行版内执行；LANXIU 走 `TerminalManager.runInGuest`（与终端界面同一 rootfs），Ubuntu 走原有 `QuroLinuxEnv` 工具链（保 python3 等已验证环境）。
+
+**LANXIU 开箱即联网（已修复）**：上游 rootfs 原生缺 3 处配置导致开箱联网瘫痪——`/etc/resolv.conf` 缺失、`/etc/nsswitch.conf` 缺失、`/etc/ssl/certs` 空目录且 curl 不读 CA 目录（所有 HTTPS 报 `(60)`）。已**烤进源 rootfs** 修复（15525 → 15529 条目，root 属主）：
+
+- `etc/nsswitch.conf`（`hosts: files dns`）
+- `etc/resolv.conf`（8.8.8.8 / 1.1.1.1 / 223.5.5.5 / 119.29.29.29 四 nameserver 兜底）
+- `etc/ssl/certs/ca-certificates.crt`（certifi / Mozilla 全量 CA bundle）
+- `etc/profile.d/ssl-ca.sh`（`export SSL_CERT_FILE` / `CURL_CA_BUNDLE`）
+
+同时 `common.sh` 双保险：`install_rootfs` 写 resolv.conf 升为 4 nameserver；`login_rootfs` / `guest_exec` 的 `env -i` 块直接注入 `SSL_CERT_FILE` / `CURL_CA_BUNDLE`——即便 `profile.d` 未被 source 也生效。实测 curl / wget 国内外站点全通。
+
+> ⚠️ **Android 权限限制（预期，非 bug）**：proot 容器内 `sudo` / setuid、`ping`（ICMP）、`ss` 读 `/proc/net` 等受 Android 沙箱限制，属正常现象；DNS 解析与 TCP/TLS 联网不受影响。
+
+> 💡 LANXIU rootfs 为扁平布局（解压后直接是 `bin/ etc/ usr/ …`），启动 bash 用 `/usr/bin/bash`（不是 `/bin/bash`）；若用 `common.sh` 的 `resolve_guest_bash()` 则无需关心此差异。
+
+---
+
 ## 下载 / APK · Download
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[v1.1.6 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
+- 🟢 **[v1.1.8 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
+
+  **终端双系统：Ubuntu + LANXIU（启元 Linux）全面打通**
+
+  - **LANXIU 内置**：启元 Linux aarch64 rootfs 打包进 APK assets（无需下载），首次进终端自动解压；与 Ubuntu 共用顶部栏切换。
+  - **AI 感知并操控双系统**：`terminal_status` 报告当前发行版与两套就绪度；`terminal_set_distro` 切换；`terminal_exec` 在选中系统执行（LANXIU 走 `runInGuest`，与界面同一 rootfs）。
+  - **LANXIU 开箱即联网**：源 rootfs 烤入 `resolv.conf` / `nsswitch.conf` / CA bundle，`common.sh` 双保险注入 `SSL_CERT_FILE` / `CURL_CA_BUNDLE`，curl / wget 国内外全通。
+  - 修复 LANXIU 首次解压中断导致的半截 rootfs 死锁（`install_rootfs` 强校验 + 180s 兜底超时）。
+
+- 🟢 **[v1.1.6 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名）
 
   **动态交互界面（zxwidget）渲染/交互缺陷全面修复**
 
