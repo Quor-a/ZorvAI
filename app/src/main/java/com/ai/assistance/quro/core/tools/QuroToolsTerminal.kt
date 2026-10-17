@@ -47,7 +47,10 @@ class TerminalExecTool : QuroTool {
         if (distro == Distro.LANXIU) {
             // LANXIU：走 TerminalManager 的一次性执行通道（与交互式终端同一 rootfs）。
             if (tm.guestEnvStatus(Distro.LANXIU) == GuestEnvStatus.READY) {
-                val res = runBlocking { tm.runInGuest(cmd, 60_000L) }
+                // LANXIU 首次 runInGuest 会顺带 install_rootfs 解压 88MB xz rootfs，真机可能 >60s；
+                // 超时强杀会留下半截 rootfs（install_rootfs 下次误判"已装好"跳过重解 → 永久残废）。
+                // 放宽到 180s，仅首次解压受影响，之后都秒过。
+                val res = runBlocking { tm.runInGuest(cmd, 180_000L) }
                 json.put("distro", "lanxiu")
                 json.put("source", "proot/LANXIU (启元 Linux)")
                 json.put("exit_code", res.code)
