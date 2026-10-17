@@ -45,31 +45,19 @@ class TerminalExecTool : QuroTool {
         val tm = TerminalManager.getInstance(context)
         val distro = tm.getDistro()
         if (distro == Distro.LANXIU) {
-            // LANXIU：走 TerminalManager 的一次性执行通道（与交互式终端同一 rootfs）。
-            if (tm.guestEnvStatus(Distro.LANXIU) == GuestEnvStatus.READY) {
-                // LANXIU 首次 runInGuest 会顺带 install_rootfs 解压 88MB xz rootfs，真机可能 >60s；
-                // 超时强杀会留下半截 rootfs（install_rootfs 下次误判"已装好"跳过重解 → 永久残废）。
-                // 放宽到 180s，仅首次解压受影响，之后都秒过。
-                val res = runBlocking { tm.runInGuest(cmd, 180_000L) }
-                json.put("distro", "lanxiu")
-                json.put("source", "proot/LANXIU (启元 Linux)")
-                json.put("exit_code", res.code)
-                json.put("success", res.ok)
-                json.put("timed_out", res.timedOut)
-                json.put("output", res.output)
-                if (res.error != null) json.put("error", res.error)
-            } else {
-                // LANXIU 未就绪：回退设备 sh，并明确提示。
-                val r = QuroTerminalController.runCommand(cmd)
-                json.put("distro", "lanxiu(unready)")
-                json.put("source", "device/Toybox(fallback)")
-                json.put("exit_code", r.exitCode)
-                json.put("success", r.success)
-                json.put("timed_out", r.timedOut)
-                json.put("output", r.output)
-                if (r.error.isNotEmpty()) json.put("error", r.error)
-                json.put("hint", "LANXIU 环境未就绪，已回退设备 sh；可用 terminal_status 查看，或先 set_distro 切回 ubuntu")
-            }
+            // LANXIU 必须走 TerminalManager 的 proot rootfs（installed-rootfs/lanxiu），
+            // 绝不能回退设备 sh——否则 AI 切到 LANXIU 后 exec 仍跑在设备 sh，等于「切换无效」。
+            // runInGuest→execGuest 内部会 initializeEnvironment() 首次自动解压 88MB xz rootfs，
+            // 180s 兜底仅覆盖首次解压；解压/启动失败会返回 error，这里如实上报，
+            // 而不是静默降级到设备 sh 把失败藏起来。
+            val res = runBlocking { tm.runInGuest(cmd, 180_000L) }
+            json.put("distro", "lanxiu")
+            json.put("source", "proot/LANXIU (启元 Linux)")
+            json.put("exit_code", res.code)
+            json.put("success", res.ok)
+            json.put("timed_out", res.timedOut)
+            json.put("output", res.output)
+            if (res.error != null) json.put("error", res.error)
         } else {
             // Ubuntu：优先沿用已建立的 QuroLinuxEnv(linux-sandbox/rootfs) 工具链（含 python3 等），
             // 不可用时再回退 TerminalManager 的 installed-rootfs/ubuntu，最后设备 sh。
