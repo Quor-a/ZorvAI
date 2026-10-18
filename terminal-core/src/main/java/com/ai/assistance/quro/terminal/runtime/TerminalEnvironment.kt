@@ -59,7 +59,7 @@ class TerminalEnvironment(context: Context) {
             "https://github.com/Quor-a/lanxiu-linux-android/releases/download/lanxiu-1.7.41-aarch64/lanxiu-aarch64-rootfs-20261017.tar.xz"
         /** 资产内容版本：改了内置 tar 包内容（如 rebrand 改 os-release、r10 proot 修复加 ld.so.cache）时 +1，
          *  强制设备重抽。仅靠 lastUpdateTime 无法捕捉「同版本号改内容」，会导致设备继续用旧解压 rootfs。 */
-        private const val ASSET_VERSION = 4
+        private const val ASSET_VERSION = 5
     }
 
     /**
@@ -542,7 +542,7 @@ EOF
               HOME="${'$'}G_HOME" \
               TERM=xterm-256color \
               LANG=en_US.UTF-8 \
-              PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin \
+              PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/rust/bin:/usr/local/go/bin \
               SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
               CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
               ${'$'}GUEST_BASH -lc "echo LOGIN_SUCCESSFUL; ldconfig >/dev/null 2>&1 || true; echo TERMINAL_READY; exec ${'$'}GUEST_BASH -il"
@@ -598,7 +598,7 @@ EOF
               TERM=dumb \
               LANG=en_US.UTF-8 \
               DEBIAN_FRONTEND=noninteractive \
-              PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin \
+              PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/rust/bin:/usr/local/go/bin \
               SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
               CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
               ${'$'}GUEST_BASH -lc "ldconfig >/dev/null 2>&1 || true; ${'$'}1"
@@ -814,7 +814,7 @@ EOF
         val env = mutableMapOf(
             "HOME" to "/root",
             "PWD" to "/root",
-            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin",
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/rust/bin:/usr/local/go/bin",
             "TERM" to "xterm-256color",
             "LANG" to "C.UTF-8",
             "DEBIAN_FRONTEND" to "noninteractive",
