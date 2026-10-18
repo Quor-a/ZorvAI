@@ -83,7 +83,7 @@ class QuroToolRouter(
             // 屏幕捕获授权（AI 主动发起 MediaProjection 系统授权，无需手动长按开关）
             "enable_screen_capture",
             "run_code", "creative_studio",
-            "terminal_run", "terminal_exec", "terminal_write", "terminal_kill", "terminal_status", "quroterm_exec",
+            "terminal", "quroterm_exec",   // 合并后的统一终端工具（含 LANXIU 澜岫 / Ubuntu 双系统）
             "speak", "stop_speak",
             "set_alarm", "schedule_task", "list_scheduled_tasks", "delete_scheduled_task",
             "memory_save", "memory_list", "memory_search", "memory_delete",
@@ -487,7 +487,7 @@ class QuroToolRouter(
             name.startsWith("cms_") -> ToolCapabilityDirectory.ToolCategory.AI_CAPABILITIES
             name.startsWith("memory_") || name.startsWith("experience_") || name.startsWith("knowledge_") ->
                 ToolCapabilityDirectory.ToolCategory.KNOWLEDGE_MEMORY
-            name.startsWith("terminal_") || name.startsWith("linux_") || name.startsWith("quroterm_") ->
+            name == "terminal" || name.startsWith("terminal_") || name.startsWith("linux_") || name.startsWith("quroterm_") ->
                 ToolCapabilityDirectory.ToolCategory.TERMINAL_LINUX
             name.startsWith("ui_") -> ToolCapabilityDirectory.ToolCategory.UI_CARDS
             name.startsWith("skill__") -> ToolCapabilityDirectory.ToolCategory.AI_CAPABILITIES

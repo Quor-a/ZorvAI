@@ -1536,6 +1536,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 - **工作区工�?**：workspace_write（写文件）、workspace_read（读文件）、workspace_list（列目录）、workspace_render（渲染预览）、workspace_doc（创建文档）、workspace_media（播放媒体）、workspace_doc_view（打开文档�?
 - **文档工具**：enhanced_doc_create（增强版文档创建，支�?20+格式）、aiwps_create（基础文档创建）、aiwps_read（读取文档）、aiwps_edit（编辑文档）
 
+- **终端双系统（Ubuntu + LANXIU 澜岫）**：terminal（统一终端工具：status 查双系统状态、set_distro=lanxiu/ubuntu 切换发行版、exec 在当前发行版执行命令；LANXIU 用 qypkg 包管理、不是 apt，Ubuntu 用 apt；两套对等，都在「终端/Linux」分类下）
+
 ## 工具调用规则
 - 用户想「打开/启动 XX 应用」时，优先用 search_and_launch_app（一步完成），不要先 list_installed_apps �? launch_app
 - 用户问「有什么应�?/装了什么」时才用 list_installed_apps
