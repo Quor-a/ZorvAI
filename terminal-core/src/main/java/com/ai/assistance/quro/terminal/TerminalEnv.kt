@@ -65,6 +65,8 @@ class TerminalEnv(
                 if (frac >= 0f) lanxiuDownloadProgress = frac
             }
             lanxiuDownloadStatus = if (ok) LanxiuDownloadStatus.Success else LanxiuDownloadStatus.Failed
+            // 下载完成（内置 asset 或网络）即触发老栈可见终端重建，使其切到 LANXIU rootfs。
+            if (ok) terminalManager.rebuildInteractiveTerminal()
         }
     }
 

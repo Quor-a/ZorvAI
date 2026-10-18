@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import com.ai.assistance.quro.core.linux.CommandTranslator
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.privilege.QuroShellQuote
+import com.ai.assistance.quro.terminal.TerminalManager
 import com.ai.assistance.quro.terminal.vt.TerminalScreen
 import com.ai.assistance.quro.terminal.vt.TerminalSnapshot
 import kotlinx.coroutines.CoroutineScope
@@ -957,6 +958,14 @@ class QuroShellSession private constructor(
          */
         private fun createPty(context: Context): QuroShellSession {
             diag(context, "createPty: 进入真实 PTY 路径")
+            // 双系统：选中 LANXIU 且 rootfs 就绪 → 委托 TerminalManager 的 common.sh start_shell
+            // （复用 install_rootfs / login_rootfs / patch_lanxiu_rootfs 全部 LANXIU 修复），
+            // 与终端-core 新栈会话完全一致；其余回退 Ubuntu/设备路径（保留 Ubuntu 原样）。
+            val lanxiu = runCatching { TerminalManager.getInstance(context).visibleTerminalLaunch() }.getOrNull()
+            if (lanxiu != null) {
+                val (cmd, env) = lanxiu
+                return QuroShellSession(context, ShellMode.LINUX, cmd.toList(), env, context.filesDir.absolutePath, usePty = true)
+            }
             val launch = runCatching { QuroLinuxEnv.shellLaunch(context) }.getOrNull()
             if (launch != null) {
                 val (proot, args) = launch
@@ -984,6 +993,13 @@ class QuroShellSession private constructor(
          */
         private fun createLegacy(context: Context): QuroShellSession {
             diag(context, "createLegacy: 进入直连 proot 路径")
+            // 双系统：选中 LANXIU 且 rootfs 就绪 → 委托 TerminalManager 的 common.sh start_shell
+            // （复用全部 LANXIU 修复，与终端-core 新栈会话一致）；其余回退 Ubuntu/设备路径。
+            val lanxiu = runCatching { TerminalManager.getInstance(context).visibleTerminalLaunch() }.getOrNull()
+            if (lanxiu != null) {
+                val (cmd, env) = lanxiu
+                return QuroShellSession(context, ShellMode.LINUX, cmd.toList(), env, context.filesDir.absolutePath)
+            }
             // shellLaunch 也可能抛（prepareRuntimeExtras / 文件操作），包一层避免 create 抛异常。
             val launch = runCatching { QuroLinuxEnv.shellLaunch(context) }.getOrNull()
             if (launch != null) {

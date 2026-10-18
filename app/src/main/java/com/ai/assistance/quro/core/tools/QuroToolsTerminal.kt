@@ -163,13 +163,14 @@ class TerminalStatusTool : QuroTool {
         val lanxiuStatus = tm.guestEnvStatus(Distro.LANXIU)
         val lanxiuReady = lanxiuStatus == GuestEnvStatus.READY
         // 交互式终端（terminal_write / 界面终端共用的默认会话）的真实后端：
-        // 它只经 QuroLinuxEnv 跑 Ubuntu（或设备 sh / VM），【从不】跑 LANXIU。
-        // 之前 shell 字段直接按 selected_distro 标志推断，会谎报成 proot/LANXIU（假 ready 最坑）。
-        val interactiveBackend = when (QuroTerminalController.session?.mode) {
-            ShellMode.VM -> "proot/VM Linux"
-            ShellMode.LINUX -> "proot/Linux (Ubuntu)"
-            ShellMode.DEVICE -> "/system/bin/sh (Toybox)"
-            null -> "none"
+        // 现在它跟随 selected_distro——选中 LANXIU 且 rootfs 就绪即跑 LANXIU（共用 TerminalManager
+        // 的 common.sh start_shell），否则退回 Ubuntu（或设备 sh / VM）。切换发行版后可见终端会重建。
+        val interactiveBackend = when {
+            QuroTerminalController.session?.mode == ShellMode.VM -> "proot/VM Linux"
+            QuroTerminalController.session?.mode == ShellMode.LINUX && distro == Distro.LANXIU && lanxiuReady -> "proot/LANXIU (澜岫, 独立 rootfs)"
+            QuroTerminalController.session?.mode == ShellMode.LINUX -> "proot/Linux (Ubuntu)"
+            QuroTerminalController.session?.mode == ShellMode.DEVICE -> "/system/bin/sh (Toybox)"
+            else -> "none"
         }
         // 一次性执行（terminal_exec）实际使用的发行版 = selected_distro 标志：
         // LANXIU 走 TerminalManager.execGuest 的独立 rootfs，Ubuntu 走 QuroLinuxEnv。
@@ -226,7 +227,7 @@ class TerminalStatusTool : QuroTool {
                 QuroTerminalSessionManager.listSessions().find { it.isDefault }?.id ?: "default"
             } ?: "none")
             put("sessions", sessions)
-            put("note", "交互式终端(shell=$interactiveBackend) 与 terminal_exec(exec_source=$execSource) 是两条独立通道：交互式终端固定跑 Ubuntu（或设备 sh），切换发行版只影响 terminal_exec 的一次性执行通道，不会让可见终端也变成 LANXIU——LANXIU 仅在 terminal_exec 的独立 rootfs 中可用。set_distro 之前的『假 ready』正是 shell 字段按 selected_distro 标志误报所致，现已改为上报真实交互式后端。")
+            put("note", "双系统已打通：交互式终端(shell=$interactiveBackend) 与 terminal_exec(exec_source=$execSource) 都跟随 selected_distro（Ubuntu=apt / LANXIU=澜岫 qypkg）。切换发行版后可见终端会重建并运行在所选发行版上，两套 rootfs 相互独立、共享同一 home。")
         }.toString()
     }
 }

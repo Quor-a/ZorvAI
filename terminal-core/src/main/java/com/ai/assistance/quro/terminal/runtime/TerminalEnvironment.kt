@@ -943,6 +943,43 @@ EOF
     fun backendLabel(): String =
         if (isRootfsReady(selectedDistro)) "${selectedDistro.displayName} (proot)" else "Host (busybox)"
 
+    /**
+     * 可见交互终端（老栈 QuroShellSession 委托）启动命令。
+     *
+     * 仅当选中 [Distro.LANXIU] 且 rootfs 就绪（或 tar 包在、可 host 侧解压）时返回
+     * `(command, env)`，复用 common.sh 的 start_shell（含 install_rootfs / login_rootfs /
+     * patch_lanxiu_rootfs / 全部 usrmerge 修复 / CA / binds），与终端-core 新栈会话完全一致。
+     * 其余情况（Ubuntu 或 LANXIU 未就绪）返回 null，调用方回退 QuroLinuxEnv 的 Ubuntu/设备路径。
+     *
+     * 复用而非重写：LANXIU 的全部运行修复都在 TerminalEnvironment 内闭环，老栈只负责把这条
+     * `bash -c "source \$HOME/common.sh && start_shell"` 命令交给自己的 PTY/管道进程跑——两条
+     * 栈共用同一份 rootfs 与同一套修复，永不分叉。
+     */
+    fun visibleTerminalLaunch(): Pair<Array<String>, Array<String>>? {
+        if (selectedDistro != Distro.LANXIU) return null
+        val bash = File(binDir, "bash")
+        if (!bash.exists()) return null
+        // 确保原生库软链 + CA bundle：proot/loader/bash 必须存在，否则即便 rootfs 就绪也起不来。
+        runCatching { linkNativeLibs() }
+        runCatching { createBusyboxSymlinks() }
+        ensureCaBundle()
+        // 确保内置 LANXIU tar 包已落到 filesDir（APK asset → 文件），消除「TerminalManager 首次实例化
+        // 异步 extractAssets 尚未完成」的竞态；已抽过则 stamp 命中，本调用近乎零成本。
+        runCatching { extractAssets() }
+        // 确保 common.sh 为当前（LANXIU）版本（setDistro 已写；此处兜底切换后未初始化）。
+        runCatching { File(filesDir, "common.sh").writeText(generateStartScript(selectedDistro)) }
+        // LANXIU 仅在 rootfs 真正就绪（解压 + usrmerge 链接 + sh 链接）时才进 proot；
+        // 仅存在 tar 包但未解压 → prepareGuestRootfs（host 侧）先解压，成功才放行，
+        // 失败则回落 Ubuntu，避免「解压失败 → bash 退出 → 保活重建 → 再失败」死循环。
+        if (!isRootfsReady(Distro.LANXIU)) {
+            if (!hasRootfsArchive(Distro.LANXIU)) return null
+            if (!prepareGuestRootfs()) return null
+        }
+        val command = arrayOf(bash.absolutePath, "-c", "source \$HOME/common.sh && start_shell")
+        val env = baseEnv().map { "${it.key}=${it.value}" }.toTypedArray()
+        return command to env
+    }
+
     fun startTerminalSession(sessionId: String): Pair<TerminalSession, Pty> {
         val bash = File(binDir, "bash").absolutePath
         val startScript = "source \$HOME/common.sh && start_shell"
