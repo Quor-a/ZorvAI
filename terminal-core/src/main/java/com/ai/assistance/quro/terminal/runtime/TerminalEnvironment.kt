@@ -480,6 +480,7 @@ EOF
           mkdir -p "${'$'}SHARED_HOME/shared"
           # 🔴 getcwd 铁律（同 guest_exec）：强制保证 guest /root 真实存在，宿主先 cd guest 根。
           mkdir -p "${'$'}ROOTFS_PATH/root"
+          chmod 0755 "${'$'}ROOTFS_PATH/root" 2>/dev/null || true
           cd "${'$'}ROOTFS_PATH"
           G_CWD=/root; G_HOME=/root
           resolve_guest_bash
@@ -530,6 +531,7 @@ EOF
           # ② **强制保证 guest /root 真实存在**(主机 mkdir, 不依赖 bind/rootfs 是否自带) -> -w /root 必能 chdir；
           # ③ -w /root(必存在) + SHARED_HOME bind。任一失效仍有 guest / 可翻译, getcwd 不再 ENOENT。
           mkdir -p "${'$'}ROOTFS_PATH/root"
+          chmod 0755 "${'$'}ROOTFS_PATH/root" 2>/dev/null || true
           cd "${'$'}ROOTFS_PATH"
           G_CWD=/root; G_HOME=/root
           resolve_guest_bash
