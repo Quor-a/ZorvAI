@@ -6,6 +6,7 @@ import android.util.Log
 import com.ai.assistance.quro.terminal.TerminalManager
 import com.ai.assistance.quro.terminal.runtime.Distro
 import com.ai.assistance.quro.terminal.runtime.GuestEnvStatus
+import com.ai.assistance.quro.terminal.launch.LanxiuLaunchResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -111,10 +112,34 @@ object LanxiuDesktop {
     }
 
     /**
-     * 构造 Weston 启动脚本（按输出模式选后端）。全程不使用 shell 变量展开以外的复杂插值，
-     * 所有路径写死，避免 Kotlin 字符串插值冲突。
+     * 用配置化解析器（LanxiuLaunchResolver）决定 Weston 后端参数，对齐 tiny_container 的
+     * options 树思路：启用 X11 option → 注入 --backend=x11-backend.so；启用 VNC option →
+     * 注入 --config=/tmp/weston-vnc.ini（backend 写在 ini 内）。默认行为与旧硬编码等价。
      */
-    private fun buildStartScript(mode: OutputMode): String = if (mode == OutputMode.X11) {
+    private fun backendArgsFor(mode: OutputMode): String {
+        val config = mapOf(
+            "boot_command" to "weston \$EXTRA_ARGS",
+            "options" to listOf(mapOf("type" to "options", "options" to listOf(
+                mapOf(
+                    "type" to "option", "name" to "x11", "enabled" to (mode == OutputMode.X11),
+                    "args" to listOf("--backend=x11-backend.so")
+                ),
+                mapOf(
+                    "type" to "option", "name" to "vnc", "enabled" to (mode == OutputMode.VNC),
+                    "args" to listOf("--config=/tmp/weston-vnc.ini")
+                )
+            )))
+        )
+        return LanxiuLaunchResolver.resolveArgs(config).joinToString(" ")
+    }
+
+    /**
+     * 构造 Weston 启动脚本（按输出模式选后端）。后端参数由 LanxiuLaunchResolver 从 options
+     * 树解析注入；脚本的 XDG/seatd/pgrep 健壮性逻辑保持硬编码（铁律：不破坏已跑通链路）。
+     */
+    private fun buildStartScript(mode: OutputMode): String {
+        val backend = backendArgsFor(mode)
+        return if (mode == OutputMode.X11) {
         // X11 后端：连 Termux:X11 的 X 服务器（DISPLAY=:0），不需要 seatd。
         """
         export XDG_RUNTIME_DIR=/tmp/lanxiu-xdg
@@ -125,7 +150,7 @@ object LanxiuDesktop {
         sleep 1
         # 指向 Termux:X11 提供的 X 服务器
         export DISPLAY=:0
-        nohup weston --backend=x11-backend.so >/tmp/weston-x11.log 2>&1 &
+        nohup weston $backend >/tmp/weston-x11.log 2>&1 &
         sleep 3
         if pgrep -x weston >/dev/null 2>&1; then
           echo "LANXIU 桌面已启动 · X11 后端 → 请在 Termux:X11 App 查看"
@@ -165,7 +190,7 @@ object LanxiuDesktop {
         [output]
         resolution=1280x800
         INI
-        nohup weston --config=/tmp/weston-vnc.ini --backend=vnc-backend.so >/tmp/weston-vnc.log 2>&1 &
+        nohup weston $backend >/tmp/weston-vnc.log 2>&1 &
         sleep 3
         if pgrep -x weston >/dev/null 2>&1; then
           echo "LANXIU 桌面已启动 · VNC 端口 5902"
@@ -176,4 +201,5 @@ object LanxiuDesktop {
         fi
         """.trimIndent()
     }
+}
 }
