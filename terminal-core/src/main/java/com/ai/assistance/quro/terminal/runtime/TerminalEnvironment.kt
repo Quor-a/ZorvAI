@@ -349,6 +349,24 @@ class TerminalEnvironment(context: Context) {
             progress_echo "警告: 动态链接器 /lib/ld-linux 仍不可达，proot 可能无法启动"
           fi
         }
+        # LANXIU 专用兜底补丁（2026-10-18 真机实测根因）：LANXIU 扁平 rootfs 与 Ubuntu 两处差异，
+        # 必须每次 proot 启动前强制保证（ready_check 命中时 install_rootfs 的解压分支被跳过，旧逻辑
+        # 就不补这些，导致重解压前一直缺）。exec 与交互两条通道共用 install_rootfs，故在此统一兜底：
+        #  1) LANXIU 只有 /usr/bin/bash，没有 /usr/bin/sh（也无 dash）。execGuest/login_rootfs 调 /bin/sh
+        #     （经 usrmerge /bin->usr/bin 即 /usr/bin/sh）缺失即 proot 起不来（/bin/sh not found）。补 sh->bash。
+        #  2) tar 包保留 agentuser/0700 模式位 -> 各级目录 0700，挡 proot getcwd 向上遍历父链（实测
+        #     chmod 0755 各级目录后 pwd/getcwd 才正常）。仅 chmod 目录（绝不动文件，保 sudo 等 setuid 位），
+        #     并用隐藏标记文件避免每次 exec 全树扫描（重解压会清掉标记，自动重跑）。
+        patch_lanxiu_rootfs(){
+          cd "${'$'}ROOTFS_PATH" 2>/dev/null || return 0
+          if [ ! -e usr/bin/sh ]; then
+            busybox ln -sf bash usr/bin/sh 2>/dev/null || ln -sf bash usr/bin/sh 2>/dev/null
+          fi
+          if [ ! -e .lanxiu_patched_v1 ]; then
+            busybox find . -type d -exec chmod 0755 {} + 2>/dev/null || find . -type d -exec chmod 0755 {} + 2>/dev/null
+            : > .lanxiu_patched_v1 2>/dev/null
+          fi
+        }
         """.trimIndent()
 
         // 解压：Ubuntu 的 tar 包顶层有 ubuntu-noble-aarch64/ 需拍平；LANXIU 是扁平 rootfs（无顶层目录）。
@@ -432,6 +450,11 @@ EOF
             progress_echo "rootfs 解压失败：请先确认安装包完整"
             return 1
           fi
+          # 🔴 LANXIU 兜底补丁：无论新鲜解压还是 ready 跳过解压分支，都强制补 usrmerge 链接 +
+          # sh 链接 + 目录权限（ready 命中时旧逻辑不跑 fix_usrmerge_links，这里统一兜底，覆盖 exec
+          # 与交互两条通道，且扛住 App 更新/rootfs 重解压自动重跑）。
+          fix_usrmerge_links
+          patch_lanxiu_rootfs
         }
         """.trimIndent()
 
@@ -485,6 +508,7 @@ EOF
           G_CWD=/root; G_HOME=/root
           resolve_guest_bash
           fix_usrmerge_links
+          patch_lanxiu_rootfs
           exec ${'$'}BIN/proot \
             -0 \
             -r "${'$'}ROOTFS_PATH" \
@@ -739,6 +763,7 @@ EOF
 
         val env = mutableMapOf(
             "HOME" to "/root",
+            "PWD" to "/root",
             "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin",
             "TERM" to "xterm-256color",
             "LANG" to "C.UTF-8",
