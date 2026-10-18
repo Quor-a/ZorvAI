@@ -17,6 +17,8 @@ import com.ai.assistance.quro.terminal.TerminalManager
 import com.ai.assistance.quro.terminal.navigation.TerminalRoutes
 import com.ai.assistance.quro.terminal.ui.SetupScreen
 import com.ai.assistance.quro.terminal.ui.TerminalHome
+import com.ai.assistance.quro.terminal.ui.LanxiuScreen
+import com.ai.assistance.quro.terminal.ui.LanxiuDesktopScreen
 import com.ai.assistance.quro.terminal.utils.UpdateChecker
 import kotlinx.coroutines.launch
 
@@ -60,6 +62,9 @@ fun TerminalScreen(
                 env = env,
                 onNavigateToSetup = {
                     navController.navigate(TerminalRoutes.SETUP_ROUTE)
+                },
+                onNavigateToLanxiu = {
+                    navController.navigate(TerminalRoutes.LANXIU_ROUTE)
                 }
             )
         }
@@ -82,6 +87,18 @@ fun TerminalScreen(
                     }
                 }
             )
+        }
+
+        composable(TerminalRoutes.LANXIU_ROUTE) {
+            LanxiuScreen(
+                env = env,
+                onBack = { navController.popBackStack() },
+                onOpenDesktop = { navController.navigate(TerminalRoutes.LANXIU_DESKTOP_ROUTE) }
+            )
+        }
+
+        composable(TerminalRoutes.LANXIU_DESKTOP_ROUTE) {
+            LanxiuDesktopScreen(onBack = { navController.popBackStack() })
         }
     }
 }
