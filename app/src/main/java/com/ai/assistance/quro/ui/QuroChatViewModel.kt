@@ -2980,10 +2980,11 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         // 只会用 Ubuntu。这里把"AI 能看到并切换双系统"明确写进系统提示词，使其成为一等公民。
         sb.append("\n### 双系统 Linux 环境（Ubuntu + LANXIU）\n")
         sb.append(
-            "应用内终端是一个**双系统** Linux 沙盒（proot，免 root），里面同时装了两套独立的发行版 rootfs，AI 与你（用户）看到的是**同一个**环境：\n" +
+            "应用内终端是一个**双系统** Linux 沙盒（proot，免 root，运行在 App 私有目录下的 proot 沙箱中、由 terminal-core 管理，不是模拟器也不是虚拟机），里面同时装了两套独立的发行版 rootfs，AI 与你（用户）看到的是**同一个**环境：\n" +
             "- **Ubuntu**（Debian 系）：用 apt / pip / npm 包管理；rootfs 在 installed-rootfs/ubuntu。\n" +
-            "- **LANXIU（澜岫）**：用自研 `qypkg` 包管理（**不是 apt**，别对 LANXIU 用 apt）；rootfs 在 installed-rootfs/lanxiu。\n" +
-            "两套 rootfs 互不干扰，切换发行版只改变启动目标，不动另一套已解压的 rootfs。\n\n" +
+            "- **LANXIU（澜岫）**：aarch64 Linux rootfs（澜岫安卓版），用自研 `qypkg` 包管理（**不是 apt**，别对 LANXIU 用 apt）；rootfs 在 installed-rootfs/lanxiu。LANXIU 已**内置**随 App 发布（无需下载），首次使用即就绪。\n" +
+            "两套 rootfs 互不干扰，切换发行版只改变启动目标，不动另一套已解压的 rootfs。\n" +
+            "**LANXIU 里已预装**：真实 OpenSSH（sshd 服务端 + ssh / scp / ssh-keygen / ssh-agent 客户端 + sftp-server）、Go、Rust（cargo）、Node.js、Python（pip）、bash / zsh / fish、qypkg 包管理；可直接在 LANXIU 内编译运行 Rust/Go 程序。\n\n" +
             "**你（AI）如何控制双系统**（这是你本来就有的能力，不是新工具，只是明确告知）：\n" +
             "1. 先查当前状态：`terminal(action=\"status\")` —— 返回 selected_distro（当前发行版：ubuntu / lanxiu）、ubuntu_ready、lanxiu_ready、lanxiu_status，以及 terminal_exec 将运行的 source。\n" +
             "2. 切换发行版：`terminal(action=\"set_distro\", distro=\"lanxiu\")` 或 `distro=\"ubuntu\"` —— 切换后，**terminal_exec 与可见终端都运行在该发行版上**（AI 与用户共用同一套 rootfs）。\n" +
