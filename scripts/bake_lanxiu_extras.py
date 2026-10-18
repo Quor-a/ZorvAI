@@ -452,7 +452,10 @@ if os.path.exists(RUST_TAR):
         rmembers = tr.getmembers()
         top = rmembers[0].name
         if not top.endswith("/"):
-            top = top.split("/")[0] + "/"
+            top = top + "/"
+        # rust 官方 tar 结构: top/ 下是多个平级组件目录 (cargo/ rustc/ rust-std-xxx/ ...)
+        #   真实 bin 在 top/rustc/bin/rustc, top/cargo/bin/cargo
+        # 须剥掉 top/ + 第一级组件目录名, 落到 ./usr/local/rust/bin/rustc
         rmap = {m.name: m for m in rmembers}
         r_cnt = 0
         for m in rmembers:
@@ -461,7 +464,10 @@ if os.path.exists(RUST_TAR):
             rel = m.name[len(top):]
             if rel == "" or rel.endswith("/"):
                 continue
-            newname = "./usr/local/rust/" + rel
+            parts = rel.split("/")
+            # 剥掉第一级组件目录名 (top 下直接子目录); 顶层根文件(长度1)保留原名
+            new_rel = "/".join(parts[1:]) if len(parts) > 1 else rel
+            newname = "./usr/local/rust/" + new_rel
             if m.issym():
                 add_symlink(newname, m.linkname, m.mode)
                 r_cnt += 1
