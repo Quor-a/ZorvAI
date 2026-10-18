@@ -107,6 +107,9 @@ class TerminalEnvironment(context: Context) {
         // LANXIU 与 Ubuntu 共用同一个 home/数据，仅 OS 层不同；且 app 拥有它 -> /root 永远可遍历，
         // 从根上消除 tar 包 agentuser/0700 的 /root 让 proot -w /root 进不去 -> getcwd 失败(exit 130)。
         File(filesDir, "proot_home").mkdirs()
+        // 🔴 CA 证书 bundle：初始化阶段就生成（幂等），覆盖 exec 与交互两条通道——两条路径都会走
+        // patch_lanxiu_rootfs 把 bundle 复制进内置 rootfs，确保 HTTPS 开箱即用，不依赖先跑哪条。
+        ensureCaBundle()
     }
 
     private fun linkNativeLibs() {
@@ -365,6 +368,15 @@ class TerminalEnvironment(context: Context) {
           if [ ! -e .lanxiu_patched_v1 ]; then
             busybox find . -type d -exec chmod 0755 {} + 2>/dev/null || find . -type d -exec chmod 0755 {} + 2>/dev/null
             : > .lanxiu_patched_v1 2>/dev/null
+          fi
+          # 🔴 CA 证书 bundle（宿主预先生成，落 ${'$'}HOME/ca-bundle.crt）：内置 LANXIU rootfs 原生缺 CA，
+          # curl HTTPS 会证书校验失败。复制进 guest /etc/ssl/certs 并让 curl/openssl 默认走它。
+          # 幂等：已存在则跳过。双上下文安全：guest(proot) 下 ${'$'}HOME=/root 无此文件 -> -f 不命中 ->
+          # 跳过（此时证书已由宿主侧首次运行时复制进 rootfs，持久生效，扛住重解压）。
+          if [ -f "${'$'}HOME/ca-bundle.crt" ] && [ ! -e etc/ssl/certs/ca-certificates.crt ]; then
+            busybox mkdir -p etc/ssl/certs 2>/dev/null || mkdir -p etc/ssl/certs 2>/dev/null
+            busybox cp -f "${'$'}HOME/ca-bundle.crt" etc/ssl/certs/ca-certificates.crt 2>/dev/null || cp -f "${'$'}HOME/ca-bundle.crt" etc/ssl/certs/ca-certificates.crt 2>/dev/null
+            [ -e etc/ssl/certs/ca-certificates.crt ] && ln -sf ca-certificates.crt etc/ssl/cert.pem 2>/dev/null
           fi
         }
         """.trimIndent()
@@ -671,6 +683,33 @@ EOF
      * 必须在 execGuest 直接拉起 proot 之前跑，否则 LANXIU 扁平 rootfs 缺少 /bin→usr/bin 链接会导致
      * guest 动态二进制 loader 找不到 -> proot ENOSYS。幂等：rootfs 已就绪时 install_rootfs 跳过解压。
      */
+    /**
+     * 生成 Android 系统 CA 证书 bundle 到 filesDir/ca-bundle.crt（幂等），供 guest 内 curl/openssl
+     * 走 HTTPS。内置 LANXIU rootfs 原生缺 CA 证书，curl 访问 HTTPS 会证书校验失败；宿主侧把
+     * /system/etc/security/cacerts 下所有 .0（Android 标准 CA 存储，哈希命名的 PEM 软链）拼成一个
+     * PEM bundle，[patch_lanxiu_rootfs] 会把它复制进 guest /etc/ssl/certs，[execGuest] 再导出
+     * SSL_CERT_FILE/CURL_CA_BUNDLE。宿主读不到 cacerts（权限/不存在）时返回 null，不报错、不回归。
+     */
+    private fun ensureCaBundle(): File? {
+        val out = File(filesDir, "ca-bundle.crt")
+        if (out.exists() && out.length() > 0) return out
+        return try {
+            val cacerts = File("/system/etc/security/cacerts")
+            if (!cacerts.isDirectory) return null
+            val sb = StringBuilder()
+            cacerts.listFiles { f -> f.isFile && f.name.endsWith(".0") }?.forEach { pem ->
+                try { sb.append(pem.readText()).append('\n') } catch (_: Throwable) {}
+            }
+            if (sb.isEmpty()) return null
+            out.writeText(sb.toString())
+            Log.i(TAG, "ensureCaBundle: 生成 ${sb.length} 字节 CA bundle")
+            out
+        } catch (e: Exception) {
+            Log.w(TAG, "ensureCaBundle 失败（非致命）", e)
+            null
+        }
+    }
+
     private fun prepareGuestRootfs(): Boolean {
         val bash = File(binDir, "bash")
         if (!bash.exists()) {
@@ -720,6 +759,8 @@ EOF
         // 🔴 照搬 QuroLinuxEnv（Ubuntu 通道）：proot 直接由 ProcessBuilder 拉起，走 App 主进程上下文，
         // ptrace/PEEKDATA 可用。旧链路经 Pty.start(bash → source common.sh → guest_exec → exec proot)
         // 起 proot，native createSubprocess 的上下文不同，导致 proot 注入 loader 时 PEEKDATA 失败。
+        // 宿主侧预生成 CA 证书 bundle（幂等），供 patch_lanxiu_rootfs 复制进内置 rootfs，HTTPS 开箱即用。
+        ensureCaBundle()
         // 先确保 rootfs 解压 + usrmerge 链接就绪（纯宿主侧文件操作，不开 proot）。
         if (!prepareGuestRootfs()) {
             return@withContext GuestExecResult(false, -1, "", false, "LANXIU rootfs 解压/就绪失败（见 Log）")
@@ -728,7 +769,15 @@ EOF
         val rootfsPath = rootfsDir(selectedDistro).absolutePath
         val prootBin = File(nativeLibDir, "libproot.so").absolutePath
         val tmpDir = File(filesDir, "tmp").absolutePath
-        val sharedHome = File(filesDir, "proot_home").absolutePath
+        // 🔴 getcwd 铁律：/root 必须 bind mount（与 Ubuntu 通道一致）getcwd 才正常；bind 的宿主目标
+        // proot_home 若缺失，bind 静默失败 -> /root 退回 rootfs 内建目录 -> 内置目录 getcwd 翻译在
+        // proot 5.0.0 下犯别扭（shell-init 警告、cd 报失真错误）。这里在 Kotlin 侧显式保证其存在且可遍历，
+        // 不依赖 init/createDirectories 的隐式副作用。
+        val sharedHome = File(filesDir, "proot_home").apply {
+            mkdirs()
+            setReadable(true, false)
+            setExecutable(true, false)
+        }.absolutePath
         val loader = File(nativeLibDir, "libproot-loader.so").absolutePath
 
         // proot 参数：与 QuroLinuxEnv.buildProotLaunch 严格对齐（含 /dev/urandom→/dev/random、
@@ -768,6 +817,10 @@ EOF
             "TERM" to "xterm-256color",
             "LANG" to "C.UTF-8",
             "DEBIAN_FRONTEND" to "noninteractive",
+            // 🔴 CA 证书：patch_lanxiu_rootfs 已将宿主生成的 bundle 复制进 guest /etc/ssl/certs，
+            // 这里显式导出，保证 curl/openssl/wget 默认走它（HTTPS 开箱即用，无需手动 export）。
+            "SSL_CERT_FILE" to "/etc/ssl/certs/ca-certificates.crt",
+            "CURL_CA_BUNDLE" to "/etc/ssl/certs/ca-certificates.crt",
             "LD_LIBRARY_PATH" to "$nativeLibDir:${binDir.absolutePath}",
             "PROOT_TMP_DIR" to tmpDir,
             "PROOT_LOADER" to loader,
