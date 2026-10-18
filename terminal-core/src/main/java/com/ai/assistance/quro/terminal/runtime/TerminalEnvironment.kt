@@ -545,7 +545,7 @@ EOF
               PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin \
               SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
               CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
-              ${'$'}GUEST_BASH -lc "echo LOGIN_SUCCESSFUL; echo TERMINAL_READY; exec ${'$'}GUEST_BASH -il"
+              ${'$'}GUEST_BASH -lc "echo LOGIN_SUCCESSFUL; ldconfig >/dev/null 2>&1 || true; echo TERMINAL_READY; exec ${'$'}GUEST_BASH -il"
         }
         """.trimIndent().replace("@SB@", sharedStorageBindLines)
 
@@ -601,7 +601,7 @@ EOF
               PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin \
               SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
               CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
-              ${'$'}GUEST_BASH -lc "${'$'}1"
+              ${'$'}GUEST_BASH -lc "ldconfig >/dev/null 2>&1 || true; ${'$'}1"
         }
         """.trimIndent().replace("@SB@", sharedStorageBindLines)
 
