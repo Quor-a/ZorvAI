@@ -787,6 +787,7 @@ EOF
             "--rootfs=$rootfsPath",
             "--link2symlink",
             "--bind=/dev",
+            "--bind=/dev/pts",      // 🔴 解锁 pty 分配：telnetd/sshd 需要 /dev/pts；common.sh 的 guest_exec/login_rootfs 已有，execGuest 直连 proot 此前漏绑 → 远程登录服务启动即死。与 -b /dev 并列显式绑定 devpts 文件系统。
             "--bind=/dev/urandom:/dev/random",
             "--bind=/proc",
             "--bind=/proc/net:/proc/net",
