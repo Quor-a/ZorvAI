@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.terminal
 
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
@@ -88,6 +89,13 @@ class TerminalManager private constructor(
                 INSTANCE ?: TerminalManager(context.applicationContext).also { INSTANCE = it }
             }
         }
+
+        /**
+         * 通知 App 侧保活服务重建可见（老栈）终端会话：切换发行版 / LANXIU 下载完成后发送。
+         * 老栈 QuroShellSession 在创建时读取 selectedDistro，只有「杀掉旧会话 → 重建」才能让
+         * 已运行的可见终端真正切到新发行版（否则只改了 selected_distro 标志，跑的仍是旧 rootfs）。
+         */
+        const val ACTION_TERMINAL_DISTRO_CHANGED = "com.ai.assistance.quro.action.TERMINAL_DISTRO_CHANGED"
 
         private const val TAG = "TerminalManager"
 
@@ -251,8 +259,24 @@ class TerminalManager private constructor(
     /** 当前选中的发行版（双系统切换）。 */
     fun getDistro(): Distro = environment.selectedDistro
 
-    /** 切换发行版（持久化 + 重建 common.sh）。 */
-    suspend fun setDistro(distro: Distro): Boolean = environment.setDistro(distro)
+    /** 切换发行版（持久化 + 重建 common.sh + 通知老栈可见终端重建）。 */
+    suspend fun setDistro(distro: Distro): Boolean {
+        val ok = environment.setDistro(distro)
+        rebuildInteractiveTerminal()
+        return ok
+    }
+
+    /** LAUNXIU rootfs 按需下载完成后，让老栈可见终端重建以切到新 rootfs。 */
+    fun rebuildInteractiveTerminal() {
+        try {
+            context.sendBroadcast(Intent(ACTION_TERMINAL_DISTRO_CHANGED))
+        } catch (_: Throwable) {
+            Log.w(TAG, "rebuildInteractiveTerminal: 广播发送失败（忽略）")
+        }
+    }
+
+    /** 可见交互终端（老栈 QuroShellSession）启动命令：选中 LANXIU 且就绪时返回，否则 null。 */
+    fun visibleTerminalLaunch(): Pair<Array<String>, Array<String>>? = environment.visibleTerminalLaunch()
 
     /** 首次使用按需下载 LANXIU rootfs（约 88MB）。 */
     suspend fun downloadLanxiuRootfs(

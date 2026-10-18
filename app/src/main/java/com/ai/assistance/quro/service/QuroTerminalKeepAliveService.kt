@@ -7,8 +7,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -17,6 +19,7 @@ import androidx.core.app.NotificationCompat
 import com.ai.assistance.quro.activity.QuroMainActivity
 import com.ai.assistance.quro.core.terminal.QuroShellSession
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager
+import com.ai.assistance.quro.terminal.TerminalManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -66,6 +69,22 @@ class QuroTerminalKeepAliveService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var loopJob: Job? = null
 
+    /** 发行版切换 / LANXIU 下载完成广播接收器：杀掉当前可见会话并重建，使其跟随 selected_distro。 */
+    private val rebuildReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context?, intent: Intent?) {
+            if (intent?.action != TerminalManager.ACTION_TERMINAL_DISTRO_CHANGED) return
+            Log.i(TAG, "收到发行版切换广播，重建可见（老栈）终端会话…")
+            scope.launch {
+                try { heldSession?.destroy() } catch (_: Throwable) {}
+                heldSession = null
+                // 同时清掉默认会话登记，确保下次 ensureDefault 重新创建（读最新 selectedDistro）。
+                runCatching { QuroTerminalSessionManager.destroySession("default") }
+                ensureSessionSafe(installIfMissing = false)
+                updateNotification()
+            }
+        }
+    }
+
     /** 服务内持有的终端会话——shell 子进程是本服务进程的 fork，服务活则子进程活。 */
     var heldSession: QuroShellSession? = null
         private set
@@ -87,6 +106,17 @@ class QuroTerminalKeepAliveService : Service() {
             }
         }
         Log.i(TAG, "终端保活前台服务已启动（pid=${android.os.Process.myPid()}）")
+        // 监听发行版切换广播：切换双系统 / LANXIU 下载完成后重建可见终端。
+        try {
+            val filter = IntentFilter(TerminalManager.ACTION_TERMINAL_DISTRO_CHANGED)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(rebuildReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(rebuildReceiver, filter)
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "注册发行版切换广播失败", e)
+        }
         startLoop()
     }
 
@@ -161,6 +191,7 @@ class QuroTerminalKeepAliveService : Service() {
         Log.i(TAG, "终端保活前台服务被销毁")
         loopJob?.cancel()
         loopJob = null
+        try { unregisterReceiver(rebuildReceiver) } catch (_: Throwable) {}
         heldSession?.destroy()
         heldSession = null
         super.onDestroy()
