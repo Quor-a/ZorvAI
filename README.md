@@ -345,7 +345,7 @@ ZorvAI 终端内置 **两套 Linux 发行版**，可在终端顶部栏一键切�
 | **Ubuntu 24.04**（系统一） | Ubuntu noble aarch64 | `apt` | 完整 Debian 系工具链（python3 / gcc / node / java / git / make…），适合通用开发。 |
 | **LANXIU（澜岫）**（系统二） | 澜岫（LANXIU）安卓版 aarch64 `1.7.41-aarch64` | `qypkg`（非 apt） | 自研扁平 rootfs（bash 在 `/usr/bin/bash`），自带 git 2.49 / iproute2 / alsa-utils / sudo / shadow / tzdata 等 44 应用。 |
 
-**内置资产（无需下载）**：两个 rootfs 都打包进 APK `assets/`（`ubuntu-noble-aarch64-pd-v4.18.0.tar.xz` 约 64MB + `lanxiu-aarch64-rootfs-20261017.tar.xz` 约 93MB），首次进入终端由 `TerminalEnvironment.extractAssets()` 自动解压到 App 私有目录 `installed-rootfs/{ubuntu,lanxiu}`，不与网络下载耦合。
+**内置资产（无需下载）**：两个 rootfs 都打包进 APK `assets/`（`ubuntu-noble-aarch64-pd-v4.18.0.tar.xz` 约 64MB + `lanxiu-aarch64-rootfs-20261017.tar.xz` 约 127MB，已烘焙 dash/zsh/fish + node v22.11.0 + pip 25.0.1 + svc，ASSET_VERSION=4 强制重抽），首次进入终端由 `TerminalEnvironment.extractAssets()` 自动解压到 App 私有目录 `installed-rootfs/{ubuntu,lanxiu}`，不与网络下载耦合。
 
 **两种切换方式**：
 
