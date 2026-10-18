@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Wifi
@@ -77,7 +78,8 @@ import com.ai.assistance.quro.terminal.view.canvas.RenderConfig
 @Composable
 fun TerminalHome(
     env: TerminalEnv,
-    onNavigateToSetup: () -> Unit
+    onNavigateToSetup: () -> Unit,
+    onNavigateToLanxiu: () -> Unit
 ) {
     val fontSize = 14.sp
     val padding = 8.dp
@@ -125,6 +127,7 @@ fun TerminalHome(
                 onNavigateToSetup = onNavigateToSetup,
                 onOpenPrivilege = { showPrivilegePanel = true },
                 onOpenRemote = { showRemotePanel = true },
+                onNavigateToLanxiu = onNavigateToLanxiu,
                 env = env
             )
         }
@@ -277,6 +280,7 @@ private fun TopBar(
     onNavigateToSetup: () -> Unit,
     onOpenPrivilege: () -> Unit,
     onOpenRemote: () -> Unit,
+    onNavigateToLanxiu: () -> Unit,
     env: TerminalEnv
 ) {
     val context = LocalContext.current
@@ -497,6 +501,16 @@ private fun TopBar(
                     imageVector = Icons.Default.Wifi,
                     contentDescription = context.getString(com.ai.assistance.quro.terminal.R.string.terminal_remote),
                     tint = TerminalTheme.onSurfaceColor
+                )
+            }
+
+            // LANXIU 独立设置 / 图形桌面入口
+            IconButton(onClick = onNavigateToLanxiu) {
+                Icon(
+                    imageVector = Icons.Default.Computer,
+                    contentDescription = "LANXIU 设置",
+                    tint = if (env.selectedDistro == Distro.LANXIU) TerminalTheme.accentColor
+                    else TerminalTheme.onSurfaceColor
                 )
             }
 
