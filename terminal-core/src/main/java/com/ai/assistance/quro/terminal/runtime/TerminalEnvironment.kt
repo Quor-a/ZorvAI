@@ -642,14 +642,44 @@ EOF
     fun mailboxHostDir(): File = File(File(filesDir, "tmp"), "zxremote").apply { mkdirs() }
 
     /**
+     * 照搬 QuroLinuxEnv 之前的 rootfs 就绪动作：纯宿主侧解压 + usrmerge 链接修复，不开 proot。
+     * 复用 common.sh 的 install_rootfs / fix_usrmerge_links（二者只做文件操作/符号链接）。
+     * 必须在 execGuest 直接拉起 proot 之前跑，否则 LANXIU 扁平 rootfs 缺少 /bin→usr/bin 链接会导致
+     * guest 动态二进制 loader 找不到 -> proot ENOSYS。幂等：rootfs 已就绪时 install_rootfs 跳过解压。
+     */
+    private fun prepareGuestRootfs(): Boolean {
+        val bash = File(binDir, "bash")
+        if (!bash.exists()) {
+            Log.e(TAG, "prepareGuestRootfs: 缺少宿主 bash（原生库未链接）")
+            return false
+        }
+        return try {
+            val cmd = "source \"\$HOME/common.sh\" && install_rootfs && fix_usrmerge_links && echo PREPARE_DONE"
+            val pb = ProcessBuilder(bash.absolutePath, "-c", cmd)
+            pb.directory(filesDir)
+            pb.environment().putAll(baseEnv())
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            val out = p.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val ok = p.waitFor(180_000, java.util.concurrent.TimeUnit.MILLISECONDS) && p.exitValue() == 0
+            if (!ok) Log.w(TAG, "prepareGuestRootfs 失败:\n$out")
+            ok
+        } catch (e: Exception) {
+            Log.e(TAG, "prepareGuestRootfs 异常", e)
+            false
+        }
+    }
+
+    /**
      * 在 proot guest 内执行一次性脚本，返回真实退出码与输出。
      *
      * 与终端会话的命令队列/提示符检测**完全解耦**：
-     *  1. 宿主侧先 `source common.sh`（幂等，rootfs 没解压就顺手解压）再 `guest_exec`；
-     *  2. 真正的工作脚本写成文件，由 guest 内 `run.sh` 执行，输出 `tee` 到日志文件，
-     *     收尾把真实退出码写进 `code` 文件；
-     *  3. 宿主**以 code 文件出现作为完成信号**（不是以 proot 进程退出为准），
-     *     因此即使脚本派生了 sshd / Xvnc 这类常驻进程也不会误判为「一直安装中」。
+     *  1. 宿主侧先确保 rootfs 解压 + usrmerge 链接就绪（`prepareGuestRootfs`）；
+     *  2. 直接以 [ProcessBuilder] 拉起 proot（照搬 QuroLinuxEnv，走 App 主进程上下文，ptrace 可用），
+     *     不再经 Pty.start(bash → guest_exec → exec proot) 的旧链路（该链路上下文不同导致 proot 注入
+     *     loader 时 PEEKDATA 失败）；
+     *  3. proot 参数与 QuroLinuxEnv.buildProotLaunch 严格对齐（-0 -w /root 硬编码、同样 binds），
+     *     仅 rootfs/家目录换成 LANXIU 的共享 home。
      *
      * @param script guest 内要执行的 bash 脚本（可多行）
      * @param timeoutMs 超时上限；到期会尽力终止并标记 [GuestExecResult.timedOut]
@@ -663,49 +693,68 @@ EOF
         if (!initializeEnvironment()) {
             return@withContext GuestExecResult(false, -1, "", false, "本地终端运行环境初始化失败")
         }
-        val bash = File(binDir, "bash")
-        if (!bash.exists()) {
-            return@withContext GuestExecResult(false, -1, "", false, "缺少宿主 bash（原生库未链接）")
+        // 🔴 照搬 QuroLinuxEnv（Ubuntu 通道）：proot 直接由 ProcessBuilder 拉起，走 App 主进程上下文，
+        // ptrace/PEEKDATA 可用。旧链路经 Pty.start(bash → source common.sh → guest_exec → exec proot)
+        // 起 proot，native createSubprocess 的上下文不同，导致 proot 注入 loader 时 PEEKDATA 失败。
+        // 先确保 rootfs 解压 + usrmerge 链接就绪（纯宿主侧文件操作，不开 proot）。
+        if (!prepareGuestRootfs()) {
+            return@withContext GuestExecResult(false, -1, "", false, "LANXIU rootfs 解压/就绪失败（见 Log）")
         }
-        val jobId = "job_" + java.lang.Long.toString(System.currentTimeMillis(), 36) +
-            "_" + (0..0xFFFF).random().toString(16)
-        val jobDir = File(mailboxHostDir(), jobId)
-        try {
-            if (!jobDir.mkdirs() && !jobDir.isDirectory) {
-                return@withContext GuestExecResult(false, -1, "", false, "无法创建执行信箱目录")
+
+        val rootfsPath = rootfsDir(selectedDistro).absolutePath
+        val prootBin = File(nativeLibDir, "libproot.so").absolutePath
+        val tmpDir = File(filesDir, "tmp").absolutePath
+        val sharedHome = File(filesDir, "proot_home").absolutePath
+        val loader = File(nativeLibDir, "libproot-loader.so").absolutePath
+
+        // proot 参数：与 QuroLinuxEnv.buildProotLaunch 严格对齐（含 /dev/urandom→/dev/random、
+        // /proc/net、filesDir:/quro），仅 rootfs/家目录换成 LANXIU 的共享 home。
+        val args = mutableListOf(
+            prootBin,
+            "--rootfs=$rootfsPath",
+            "--link2symlink",
+            "--bind=/dev",
+            "--bind=/dev/urandom:/dev/random",
+            "--bind=/proc",
+            "--bind=/proc/net:/proc/net",
+            "--bind=/sys",
+            "--bind=$sharedHome:/root",   // 双系统共享 home（app 拥有，/root 永远可遍历）
+            "--bind=$tmpDir:/tmp",
+            "--bind=${filesDir.absolutePath}:/quro",
+        )
+        if (sharedStorageAccessible()) {
+            val ext = android.os.Environment.getExternalStorageDirectory()
+            if (ext != null) {
+                args.add("--bind=${ext.absolutePath}:/sdcard")
+                args.add("--bind=${ext.absolutePath}:${ext.absolutePath}")
             }
-            val codeFile = File(jobDir, "code")
-            val logFile = File(jobDir, "log")
-            File(jobDir, "task.sh").writeText(script)
-            File(jobDir, "run.sh").writeText(
-                "#!/bin/bash\n" +
-                    "D=\"/dev/shm/zxremote/$jobId\"\n" +
-                    "rm -f \"\$D/code\"\n" +
-                    "bash \"\$D/task.sh\" 2>&1 | tee \"\$D/log\"\n" +
-                    "echo \"\${PIPESTATUS[0]}\" > \"\$D/code\"\n"
-            )
+        }
+        // 🔴 cwd 硬编码 /root（Ubuntu 同款），绝不依赖变量——修旧链路 -w "$G_CWD" 变量可能落空的隐患。
+        args.add("-0")
+        args.add("-w"); args.add("/root")
+        // Ubuntu 用 /bin/sh -c（非登录、不清环境）；LANXIU rootfs 经 usrmerge 链接 /bin→usr/bin 后
+        // /bin/sh 即 /usr/bin/sh，存在且可用，无需 -i/-lc 登录壳（那正是旧链路 getcwd ENOENT 的温床）。
+        args.add("/bin/sh"); args.add("-c")
+        args.add(script)
 
-            val prelude = "source \"\$HOME/common.sh\" && install_rootfs && configure_sources && guest_exec \"\$1\""
-            val guestCmd = "bash /dev/shm/zxremote/$jobId/run.sh"
-            val command = arrayOf(bash.absolutePath, "-c", prelude, "zxremote", guestCmd)
+        val env = mutableMapOf(
+            "HOME" to "/root",
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin",
+            "TERM" to "xterm-256color",
+            "LANG" to "C.UTF-8",
+            "DEBIAN_FRONTEND" to "noninteractive",
+            "LD_LIBRARY_PATH" to "$nativeLibDir:${binDir.absolutePath}",
+            "PROOT_TMP_DIR" to tmpDir,
+            "PROOT_LOADER" to loader,
+        )
 
-            // 🔴 getcwd 铁律（用户 2026-10-18 实测根因）：execGuest 启动常驻 agent 时绝不能把宿主 cwd
-            // 透传成 filesDir（落在 rootfs 之外，proot 翻译不到 -> guest bash shell-init getcwd ENOENT -> exit 130）。
-            // 这里把进程启动 cwd 钉成 rootfs 目录本身（-r 映射为 guest /，永远可翻译）；rootfs 尚未解压时
-            // 退回 filesDir（install_rootfs 会建好它，随后脚本内 cd 继续兜底）。
-            val rootfsWorkPath = File(
-                usrDir, "var/lib/proot-distro/installed-rootfs/${selectedDistro.rootfsDirName}"
-            ).takeIf { it.isDirectory }?.absolutePath ?: filesDir.absolutePath
-
-            val pty = try {
-                Pty.start(command, baseEnv(), File(rootfsWorkPath))
-            } catch (e: Exception) {
-                Log.e(TAG, "execGuest: 无法启动 proot 通道", e)
-                return@withContext GuestExecResult(
-                    false, -1, "", false, "无法启动 proot 通道：${e.message}"
-                )
-            }
-
+        return@withContext try {
+            val pb = ProcessBuilder(args)
+            pb.directory(filesDir)              // 宿主 cwd 无关紧要：proot -w /root 决定 guest cwd
+            pb.environment().putAll(env)
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            Log.i(TAG, "execGuest: proot 直接拉起（照搬 QuroLinuxEnv），rootfs=$rootfsPath")
             val captured = StringBuilder()
             val captureLock = Any()
             fun emit(line: String) {
@@ -713,83 +762,27 @@ EOF
                 synchronized(captureLock) { captured.append(safe).append('\n') }
                 onOutput?.invoke(safe)
             }
-
             val reader = Thread {
                 try {
-                    pty.stdout.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                    p.inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
                         lines.forEach { emit(it) }
                     }
                 } catch (_: Throwable) {
                     // 关流/进程退出时的正常异常，忽略
                 }
-            }.apply { isDaemon = true; name = "zxremote-reader"; start() }
-
-            var exitCode = Int.MIN_VALUE
-            val waiter = Thread {
-                try {
-                    exitCode = pty.waitFor()
-                } catch (_: Throwable) {
-                }
-            }.apply { isDaemon = true; name = "zxremote-wait"; start() }
-
-            val deadline = System.currentTimeMillis() + timeoutMs
-            var timedOut = false
-            while (!codeFile.exists()) {
-                if (System.currentTimeMillis() >= deadline) {
-                    timedOut = true
-                    break
-                }
-                if (!waiter.isAlive) {
-                    // 进程已退出：给文件系统一点落盘时间，再判定一次
-                    delay(250)
-                    break
-                }
-                delay(120)
+            }.apply { isDaemon = true; name = "execGuest-reader"; start() }
+            val finished = p.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            val code = if (finished) p.exitValue() else {
+                try { p.destroyForcibly() } catch (_: Throwable) {}
+                -1
             }
-
-            // 收尾：优先让 proot 自然退出（守护进程已脱壳，不应被信号误伤），
-            // 仅在仍未退出时才强杀。
-            val graceEnd = System.currentTimeMillis() + 3000
-            while (waiter.isAlive && System.currentTimeMillis() < graceEnd) delay(100)
-            if (waiter.isAlive) {
-                try {
-                    pty.destroy()
-                } catch (_: Throwable) {
-                }
-            } else {
-                pty.closeQuietly()
-            }
-            try {
-                reader.join(1200)
-            } catch (_: InterruptedException) {
-            }
-
-            val completed = codeFile.exists()
-            val code = if (completed) {
-                codeFile.readText().trim().toIntOrNull() ?: -1
-            } else {
-                exitCode.takeIf { it != Int.MIN_VALUE } ?: -1
-            }
-            val log = if (logFile.exists()) {
-                runCatching { logFile.readText() }.getOrDefault("")
-            } else {
-                ""
-            }
-            val merged = if (log.isNotBlank()) log else synchronized(captureLock) { captured.toString() }
-            if (!completed) {
-                Log.w(TAG, "execGuest 未拿到回执: jobId=$jobId timedOut=$timedOut exit=$exitCode")
-            }
-            GuestExecResult(
-                completed = completed,
-                code = code,
-                output = merged,
-                timedOut = timedOut,
-            )
+            try { reader.join(2000) } catch (_: Throwable) {}
+            val merged = synchronized(captureLock) { captured.toString() }
+            Log.i(TAG, "execGuest: proot 执行完成 finished=$finished 退出码=$code")
+            GuestExecResult(completed = true, code = code, output = merged, timedOut = !finished)
         } catch (e: Exception) {
             Log.e(TAG, "execGuest 失败", e)
             GuestExecResult(false, -1, "", false, e.message ?: "执行通道异常")
-        } finally {
-            runCatching { jobDir.deleteRecursively() }
         }
     }
 
