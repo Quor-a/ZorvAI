@@ -390,9 +390,22 @@ class TerminalEnvironment(context: Context) {
             # 避免 tar 包里 agentuser/0700 的 /root 让 proot -w /root 进不去 -> getcwd 失败(exit 130)。
             if ! busybox tar xof ~/"${'$'}ROOTFS_TARBALL" -C "${'$'}ROOTFS_PATH/" 2>"${'$'}TMPDIR/rootfs_extract.err"; then
               progress_echo "rootfs 解压报错：${'$'}(tail -n 1 "${'$'}TMPDIR/rootfs_extract.err" 2>/dev/null)"
+              return 1
             fi
             ${if (distro == Distro.UBUNTU) "mv \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"/* \"${'$'}ROOTFS_PATH/\" 2>/dev/null\n            rm -rf \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"" else ":  # LANXIU rootfs 已是扁平布局，无需拍平"}
             fix_usrmerge_links
+            # 🔴 解压完整性校验（2026-10-18 实测根因之一）：解压残缺 -> guest 动态二进制 proot
+            # 启动即 ENOSYS(Function not implemented)，进程极短命（进程采样器抓不到），表现为
+            # 「LANXIU exec 不起新进程」。解压后强制核验 loader 与 bash 可达，任一缺失立即报错返回，
+            # 把沉默的黑屏变成可见、可诊断的失败，而不是带着半截 rootfs 继续。
+            if [ ! -e "${'$'}ROOTFS_PATH/lib/ld-linux-aarch64.so.1" ] && [ ! -e "${'$'}ROOTFS_PATH/lib/ld-linux.so.2" ]; then
+              progress_echo "rootfs 解压不完整：动态链接器 /lib/ld-linux 仍不可达（usrmerge 链接缺失或解压残缺）"
+              return 1
+            fi
+            if [ ! -e "${'$'}ROOTFS_PATH/usr/bin/bash" ] && [ ! -e "${'$'}ROOTFS_PATH/bin/bash" ]; then
+              progress_echo "rootfs 解压不完整：guest bash 缺失"
+              return 1
+            fi
             echo "Extraction complete"
             # 防御：确保 rootfs 顶层对当前进程可遍历（动态库路径等）。
             chmod 0755 "${'$'}ROOTFS_PATH" 2>/dev/null
@@ -522,6 +535,9 @@ EOF
           resolve_guest_bash
           fix_usrmerge_links
           echo GUEST_EXEC_START
+          # 🔴 与 Ubuntu 三通道（交互/sandbox/CMS）严格对齐：-0 -w /root 必须齐备。
+          # 用户 2026-10-18 8000 次高频采样证实 Ubuntu 三通道全带 -0 -w /root；LANXIU 缺此即
+          # 继承宿主 cwd / 无 root 仿真 -> getcwd ENOENT 或 proot 启动异常。G_CWD 恒为 /root。
           exec ${'$'}BIN/proot \
             -0 \
             -r "${'$'}ROOTFS_PATH" \
