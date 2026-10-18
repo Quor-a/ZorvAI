@@ -415,26 +415,36 @@ echo "proot 源码版本: $PROOT_COMMIT"
 if [[ "$DO_INSTALL" == "1" ]]; then
   echo ""
   echo ">>> 安装到工程（覆盖现有预编译二进制）"
-  mkdir -p "$ROOT/app/src/full/jniLibs/$ABI"
-  cp -f "$BIN_FILE" "$ROOT/app/src/full/jniLibs/$ABI/libproot.so"
-  echo "  → app/src/full/jniLibs/$ABI/libproot.so"
-  # 外部 loader 同步安装（与 proot 同源重建，PROOT_LOADER 指向它）
   LOADER_BIN="$OUT_DIR/libproot-loader.so"
-  if [[ -f "$LOADER_BIN" ]]; then
-    cp -f "$LOADER_BIN" "$ROOT/app/src/full/jniLibs/$ABI/libproot-loader.so"
-    echo "  → app/src/full/jniLibs/$ABI/libproot-loader.so"
-  else
-    echo "❌ 缺少 $LOADER_BIN，loader 未生成"; exit 1
-  fi
+  [[ -f "$LOADER_BIN" ]] || { echo "❌ 缺少 $LOADER_BIN，loader 未生成"; exit 1; }
+
+  # ── proot 主体：装到两套 jniLibs（app/src/full 与 terminal-core 都提供 libproot.so，
+  #    必须同时覆盖成同一份，否则 Gradle 合并时可能挑到旧的，APK 内 lib/arm64-v8a/libproot.so 不一致）──
+  for dst in \
+    "$ROOT/app/src/full/jniLibs/$ABI/libproot.so" \
+    "$ROOT/terminal-core/src/main/jniLibs/$ABI/libproot.so" ; do
+    mkdir -p "$(dirname "$dst")"
+    cp -f "$BIN_FILE" "$dst"
+    echo "  → $dst"
+  done
+
+  # ── 运行时 loader：🔴 真正的 PROOT_LOADER 是 terminal-core/.../libloader.so
+  #    （linkNativeLibs 把 libloader.so 软链成 loader，APK 内 lib/arm64-v8a/libloader.so），
+  #    不是 app/src/full 的 libproot-loader.so（那个并非运行时 loader）。
+  #    必须覆盖它，否则重编的 proot 配旧 loader 可能不兼容。──
+  cp -f "$LOADER_BIN" "$ROOT/terminal-core/src/main/jniLibs/$ABI/libloader.so"
+  echo "  → $ROOT/terminal-core/src/main/jniLibs/$ABI/libloader.so  (运行时 PROOT_LOADER)"
+  # 顺带把 app/src/full 的 libproot-loader.so 与 linux_env 资产也换成同源 loader（一致性，非运行时关键）
+  cp -f "$LOADER_BIN" "$ROOT/app/src/full/jniLibs/$ABI/libproot-loader.so"
+  echo "  → $ROOT/app/src/full/jniLibs/$ABI/libproot-loader.so"
   if [[ "$ABI" == "arm64-v8a" ]]; then
     cp -f "$BIN_FILE" "$ROOT/app/src/main/assets/linux_env/proot"
-    echo "  → app/src/main/assets/linux_env/proot"
-    if [[ -f "$LOADER_BIN" ]]; then
-      cp -f "$LOADER_BIN" "$ROOT/app/src/main/assets/linux_env/libproot-loader.so"
-      echo "  → app/src/main/assets/linux_env/libproot-loader.so"
-    fi
+    echo "  → $ROOT/app/src/main/assets/linux_env/proot"
+    cp -f "$LOADER_BIN" "$ROOT/app/src/main/assets/linux_env/libproot-loader.so"
+    echo "  → $ROOT/app/src/main/assets/linux_env/libproot-loader.so"
   fi
-  echo "⚠ 已覆盖运行时二进制，务必真机验证终端；回退：git checkout -- app/src/full/jniLibs app/src/main/assets/linux_env"
+  echo "⚠ 已覆盖运行时二进制，务必真机验证终端（Ubuntu + LANXIU 两套都要测）；"
+  echo "  回退：git checkout -- app/src/full/jniLibs terminal-core/src/main/jniLibs app/src/main/assets/linux_env"
 else
   echo ""
   echo "产物未安装（安全模式）。要替换工程内运行时二进制请加 --install："
