@@ -217,7 +217,7 @@ fun LanxiuScreen(
                         )
                     } else {
                         Text(
-                            "VNC 模式：App 内原生渲染。需要 rootfs 内置 Weston vnc-backend.so（当前缺失，需后续单独编译烤入），否则启动会失败。",
+                            "VNC 模式：App 内原生渲染（Xtigervnc 虚拟 X+VNC，Weston x11-backend 纯软渲），不依赖外部 App、不依赖 GPU，进桌面即可看见。",
                             color = TerminalTheme.onSurfaceVariant,
                             fontSize = 11.sp,
                             lineHeight = 15.sp
