@@ -170,11 +170,25 @@ object LanxiuDesktop {
         killall weston 2>/dev/null || true
         killall Xtigervnc 2>/dev/null || true
         sleep 1
+        # 预检：rootfs 必须已真的解压出含 Xtigervnc 的资产版本。否则 execve 只回 ENOENT，界面只能看到
+        # "nohup: failed to run command 'Xtigervnc': No such file or directory"，根本看不出是
+        # 「rootfs 没升级」还是「loader 找不到」（2026-10-19 真机踩坑）。故先自证文件在不在。
+        if [ ! -x /usr/bin/Xtigervnc ]; then
+          echo "启动失败：/usr/bin/Xtigervnc 不存在（rootfs 未升级到含 Xtigervnc 的资产版本）"
+          echo -n "rootfs 资产标记: "; cat /.quro_asset_v 2>/dev/null || echo "(无标记 = 旧 rootfs)"
+          ls -l /usr/bin/Xtigervnc 2>&1
+          exit 8
+        fi
+        if ! command -v weston >/dev/null 2>&1; then
+          echo "启动失败：weston 不在 PATH"
+          exit 9
+        fi
         # Xtigervnc：虚拟 X 服务器 + VNC 一体。:2 => TCP 5902（= VNC_PORT）。
         # -fp 用已烤入的 misc 字体索引；-SecurityTypes None -localhost 仅回环、免密，
         # 与 App 内 VncClient（RFB 3.8，优先 VncAuth、仅 None 时走 None 免密）兼容。
+        # 用绝对路径调用，不依赖 PATH（真机上 nohup 报 ENOENT 时曾有歧义）。
         export DISPLAY=:2
-        nohup Xtigervnc :2 -geometry 1280x800 -depth 24 \
+        nohup /usr/bin/Xtigervnc :2 -geometry 1280x800 -depth 24 \
           -fp /usr/share/fonts/X11/misc \
           -SecurityTypes None -localhost \
           >/tmp/xtigervnc.log 2>&1 &

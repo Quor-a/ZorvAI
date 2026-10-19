@@ -395,15 +395,57 @@ class TerminalEnvironment(context: Context) {
           # 永远判成未就绪 -> 每次会话都 rm -rf 重装，终端反复黑屏（2026-10-17 真机事故根因）。
           # 同时保留旧实现的强校验意图：bash + 身份文件双条件，避免「半截解压」被误判为可用。
           ready_check(){ { [ -e "${'$'}ROOTFS_PATH/bin/bash" ] || [ -e "${'$'}ROOTFS_PATH/usr/bin/bash" ]; } && { [ -e "${'$'}ROOTFS_PATH/etc/os-release" ] || [ -e "${'$'}ROOTFS_PATH/etc/issue.net" ]; }; }
+          # 🔴 资产版本标记（2026-10-19 真机根因）：ready_check 只证明「曾经解压过」，不证明「解压的就是当前这份资产」。
+          # 设备上旧的 av7 rootfs 永远满足 ready_check -> bump ASSET_VERSION 后新 tarball 只被拷进 filesDir、
+          # 永不重解压 -> rootfs 里压根没有 Xtigervnc，真机报
+          #   nohup: failed to run command 'Xtigervnc': No such file or directory
+          # 故：解压成功后在 rootfs 内写 .quro_asset_v=av=N，此后「就绪」还须比对标记与当前内置版本。
+          ASSET_VER=${ASSET_VERSION}
+          ASSET_MARK="${'$'}ROOTFS_PATH/.quro_asset_v"
+          asset_current(){ [ "`cat "${'$'}ASSET_MARK" 2>/dev/null`" = "av=${'$'}ASSET_VER" ]; }
           if ready_check; then
-            VERSION=`grep '^PRETTY_NAME=' "${'$'}ROOTFS_PATH/etc/os-release" 2>/dev/null | head -n 1 | cut -d= -f2- | tr -d '"'`
-            [ -z "${'$'}VERSION" ] && VERSION=`cat "${'$'}ROOTFS_PATH/etc/issue.net" 2>/dev/null`
-            progress_echo "rootfs ${'$'}L_INSTALLED -> ${'$'}VERSION"
+            if asset_current; then
+              VERSION=`grep '^PRETTY_NAME=' "${'$'}ROOTFS_PATH/etc/os-release" 2>/dev/null | head -n 1 | cut -d= -f2- | tr -d '"'`
+              [ -z "${'$'}VERSION" ] && VERSION=`cat "${'$'}ROOTFS_PATH/etc/issue.net" 2>/dev/null`
+              progress_echo "rootfs ${'$'}L_INSTALLED -> ${'$'}VERSION"
+            elif [ -e ~/"${'$'}ROOTFS_TARBALL" ]; then
+              # 资产换过 + 安装包在 -> 升级解压。就地覆盖（不清空）：LANXIU 扁平 rootfs 保留用户已装内容；
+              # Ubuntu 包带顶层目录，下面用 cp -a 覆盖式拍平。解压失败不动现有 rootfs，保住可用状态。
+              progress_echo "rootfs 资产版本变更(av=${'$'}ASSET_VER})，升级解压..."
+              if ! busybox tar xof ~/"${'$'}ROOTFS_TARBALL" -C "${'$'}ROOTFS_PATH/" 2>"${'$'}TMPDIR/rootfs_upgrade.err"; then
+                progress_echo "rootfs 升级解压报错：${'$'}(tail -n 1 "${'$'}TMPDIR/rootfs_upgrade.err" 2>/dev/null)"
+                progress_echo "已保留现有 rootfs（未清空），可重试"
+                return 1
+              fi
+              if [ -d "${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME" ]; then
+                busybox cp -a "${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME"/. "${'$'}ROOTFS_PATH"/ 2>/dev/null || cp -a "${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME"/. "${'$'}ROOTFS_PATH"/
+                busybox rm -rf "${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME" 2>/dev/null
+              fi
+              fix_usrmerge_links
+              # 🔴 覆盖解压会把 tar 包里的 agentuser/0700 目录模式重新盖到已存在目录上，
+              # 而 patch_lanxiu_rootfs 只在 .lanxiu_patched_v1 缺失时才全树 chmod。旧 rootfs 上该标记已存在
+              # -> 会跳过修复 -> proot getcwd 向上遍历再被 0700 挡住。故升级后强制让补丁重跑一次。
+              rm -f "${'$'}ROOTFS_PATH/.lanxiu_patched_v1" 2>/dev/null
+              if [ ! -e "${'$'}ROOTFS_PATH/usr/bin/bash" ] && [ ! -e "${'$'}ROOTFS_PATH/bin/bash" ]; then
+                progress_echo "rootfs 升级后 bash 缺失，保留安装包以便重试"
+                return 1
+              fi
+              echo "av=${'$'}ASSET_VER" > "${'$'}ASSET_MARK" 2>/dev/null
+              rm -f ~/"${'$'}ROOTFS_TARBALL"
+              progress_echo "rootfs 资产已升级 -> av=${'$'}ASSET_VER"
+            else
+              # 版本不匹配但安装包已不在（上次解压成功后被删）：保住现有 rootfs，避免清空后无包可装。
+              progress_echo "rootfs 资产标记与内置版本(av=${'$'}ASSET_VER})不一致，但安装包缺失，沿用现有 rootfs"
+            fi
           else
             if [ -n "${'$'}(ls -A "${'$'}ROOTFS_PATH" 2>/dev/null)" ]; then
               progress_echo "rootfs 检测到半截解压，清理后重装..."
               rm -rf "${'$'}ROOTFS_PATH"/* 2>/dev/null
             fi
+            # 清掉旧资产标记（glob 不清点文件）：解压成功后才重写，避免「半截解压 + 旧标记」被判为已就绪而跳过重装。
+            rm -f "${'$'}ASSET_MARK" 2>/dev/null
+            # 同理清掉补丁标记：重解压后必须让 patch_lanxiu_rootfs 重新全树 chmod 0755。
+            rm -f "${'$'}ROOTFS_PATH/.lanxiu_patched_v1" 2>/dev/null
             if [ ! -e ~/"${'$'}ROOTFS_TARBALL" ]; then
               progress_echo "rootfs 安装包缺失，无法安装"
               return 1
@@ -438,6 +480,8 @@ class TerminalEnvironment(context: Context) {
               return 1
             fi
             echo "Extraction complete"
+            # 解压完整性校验已过：写入资产版本标记，后续 ready_check 只认这个版本的 rootfs。
+            echo "av=${'$'}ASSET_VER" > "${'$'}ASSET_MARK" 2>/dev/null
             # 防御：确保 rootfs 顶层对当前进程可遍历（动态库路径等）。
             chmod 0755 "${'$'}ROOTFS_PATH" 2>/dev/null
             # 共享用户空间：基础环境写进 SHARED_HOME/.bashrc（两套 rootfs 共用，幂等）。
