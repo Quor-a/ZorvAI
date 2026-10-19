@@ -61,11 +61,12 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * LANXIU 图形桌面查看器：连 127.0.0.1:[LanxiuDesktop.VNC_PORT]（Weston VNC 后端），
- * 用内置 [VncClient] 原生渲染 Wayland 桌面帧缓冲，触摸当鼠标、软键盘发字符。
+ * LANXIU 图形桌面查看器：连 127.0.0.1:[LanxiuDesktop.VNC_PORT]（LANXIU 内 Xtigervnc 起的
+ * 虚拟 X+VNC 服务，Weston 经 x11-backend 把桌面渲染进该 X），用内置 [VncClient] 原生渲染
+ * Wayland 桌面帧缓冲，触摸当鼠标、软键盘发字符。
  *
- * 进入时自动确保桌面已启动；若 Weston 尚未监听则给出「重试连接」。返回仅断连（不杀桌面，
- * 可在「LANXIU 设置」里手动停止）。
+ * 进入时自动确保桌面已启动（VNC 模式：Xtigervnc + weston）；若服务尚未监听则给出「重试连接」。
+ * 返回仅断连（不杀桌面，可在「LANXIU 设置」里手动停止）。
  */
 @Composable
 fun LanxiuDesktopScreen(onBack: () -> Unit) {
@@ -116,14 +117,14 @@ fun LanxiuDesktopScreen(onBack: () -> Unit) {
         ).also { clientRef.value = it }
     }
 
-    /** 确保桌面以 VNC 后端启动并尝试连 VNC（VNC viewer 只走 VNC 模式）。 */
+    /** 确保桌面以 VNC 模式（Xtigervnc + weston）启动并尝试连 VNC（本 viewer 只走 VNC 模式）。 */
     fun ensureAndConnect() {
         errorMsg = null
-        status = "正在启动/连接 LANXIU 桌面（VNC 后端）…"
+        status = "正在启动/连接 LANXIU 桌面（VNC 模式）…"
         CoroutineScope(Dispatchers.IO).launch {
-            // 强制 VNC 模式：先杀残留 weston（可能跑着 X11 后端），再起 vnc-backend。
+            // 强制 VNC 模式：先杀残留 weston（可能跑着 X11 后端），再起 Xtigervnc + weston。
             LanxiuDesktop.start(context, LanxiuDesktop.OutputMode.VNC)
-            // 给 Weston 一点时间监听端口
+            // 给 Xtigervnc + weston 一点时间监听端口
             Thread.sleep(2500)
             mainHandler.post { status = "正在连接 127.0.0.1:${LanxiuDesktop.VNC_PORT} …" }
             client.start()

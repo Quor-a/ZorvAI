@@ -6,7 +6,6 @@ import android.util.Log
 import com.ai.assistance.quro.terminal.TerminalManager
 import com.ai.assistance.quro.terminal.runtime.Distro
 import com.ai.assistance.quro.terminal.runtime.GuestEnvStatus
-import com.ai.assistance.quro.terminal.launch.LanxiuLaunchResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -14,23 +13,30 @@ import kotlinx.coroutines.withContext
  * LANXIU 图形桌面启动器。
  *
  * LANXIU 是 Wayland/Weston 14 桌面发行版，rootfs 里已有 `weston` + `seatd` + `qystore`，
- * 但**没有 VNC/RDP 后端 .so**。要在 ZorvAI 里把桌面呈现出来，提供两种输出模式：
+ * 但**没有 VNC/RDP 后端 .so**（Debian/Ubuntu 的 weston 包根本不编译 vnc-backend），而且
+ * 上游 qiyuan/澜岫同源也只有 drm/headless/wayland/x11 四个后端。所以**不可能**靠"烤入
+ * vnc-backend.so"实现 in-app 桌面。
  *
- * 1. [OutputMode.VNC]（默认，in-app 原生渲染）：用 Weston 自带的 **VNC 后端**
- *    （`vnc-backend.so`，随 rootfs 一起烤入）把桌面喂给 Android 侧现成的
- *    [com.ai.assistance.quro.terminal.utils.VncClient]（RFB 3.8，回环直连，零网卡开销）。
- *    App 内 [LanxiuDesktopScreen] 直接原生渲染，触摸当鼠标。
+ * 真正的、可自包含运行的方案（本文件实现的就是这个）：
+ *
+ * 1. [OutputMode.VNC]（默认，in-app 原生渲染）：用 Ubuntu noble 的 **Xtigervnc**（虚拟 X
+ *    服务器 + VNC 一体，随 rootfs 烤入 `usr/bin/Xtigervnc` 及其依赖库）在 proot 内起一个
+ *    `:2` 显示（VNC 端口 5902 = [VNC_PORT]），监听回环；再用 rootfs 自带的 `weston`
+ *    `--backend=x11-backend.so --renderer=pixman` 把桌面渲染进那个 X 窗口（纯软件渲染，
+ *    不依赖 GPU/GL 驱动）。App 内 [com.ai.assistance.quro.terminal.utils.VncClient]（RFB
+ *    3.8，回环直连）连 127.0.0.1:5902 原生取帧，**真能看见桌面**，触摸当鼠标。
+ *    不依赖任何外部 App、不依赖 GPU。
  *
  * 2. [OutputMode.X11]（Termux:X11 备选，最稳）：用 rootfs 自带的 `x11-backend.so`，
  *    设 `DISPLAY=:0` 把 Weston 接到 Termux:X11 这个 X 服务器，**零 rootfs 改动**，
  *    但桌面渲染在 **Termux:X11 App 的另一个窗口**（脱离 ZorvAI 界面）。
  *
- * 生命周期：在 LANXIU 的 proot 内 `nohup weston --backend=... &` 常驻。VNC 模式由 `seatd`
- * 提供 seat；X11 模式由 Termux:X11 提供输入，不需要 seatd。
+ * 生命周期：在 LANXIU 的 proot 内先起 Xtigervnc（VNC 模式）或直连 Termux:X11（X11 模式），
+ * 再 `nohup weston ... &` 常驻。VNC 模式由 `seatd` 提供 seat。
  *
  * ⚠️ 设备侧真机验证项（本机无法验证）：
- *    - VNC 模式：vnc-backend.so 随 rootfs 烤入后，seatd + weston 能否在 proot 内常驻、
- *      VncClient 能否取到帧缓冲。
+ *    - VNC 模式：Xtigervnc + weston x11-backend(pixman) 能否在 proot 内常驻、VncClient
+ *      能否取到帧缓冲（桌面画面）。
  *    - X11 模式：Termux:X11 App 安装后，proot 内 weston 能否经 DISPLAY 连上其 X 服务器。
  */
 object LanxiuDesktop {
@@ -112,30 +118,16 @@ object LanxiuDesktop {
     }
 
     /**
-     * 用配置化解析器（LanxiuLaunchResolver）决定 Weston 后端参数，对齐 tiny_container 的
-     * options 树思路：启用 X11 option → 注入 --backend=x11-backend.so；启用 VNC option →
-     * 注入 --config=/tmp/weston-vnc.ini（backend 写在 ini 内）。默认行为与旧硬编码等价。
+     * Weston 后端参数。VNC 模式用 rootfs 自带的 `x11-backend.so` + `--renderer=pixman`
+     * （纯软件渲染，不依赖 GPU/GL 驱动），把桌面渲染进 Xtigervnc 提供的虚拟 X 显示；
+     * X11 模式同理但连 Termux:X11（DISPLAY=:0）。
      */
-    private fun backendArgsFor(mode: OutputMode): String {
-        val config = mapOf(
-            "boot_command" to "weston \$EXTRA_ARGS",
-            "options" to listOf(mapOf("type" to "options", "options" to listOf(
-                mapOf(
-                    "type" to "option", "name" to "x11", "enabled" to (mode == OutputMode.X11),
-                    "args" to listOf("--backend=x11-backend.so")
-                ),
-                mapOf(
-                    "type" to "option", "name" to "vnc", "enabled" to (mode == OutputMode.VNC),
-                    "args" to listOf("--config=/tmp/weston-vnc.ini")
-                )
-            )))
-        )
-        return LanxiuLaunchResolver.resolveArgs(config).joinToString(" ")
-    }
+    private fun backendArgsFor(mode: OutputMode): String =
+        "--backend=x11-backend.so --renderer=pixman"
 
     /**
-     * 构造 Weston 启动脚本（按输出模式选后端）。后端参数由 LanxiuLaunchResolver 从 options
-     * 树解析注入；脚本的 XDG/seatd/pgrep 健壮性逻辑保持硬编码（铁律：不破坏已跑通链路）。
+     * 构造 Weston 启动脚本（按输出模式选后端）。脚本的 XDG/seatd/pgrep 健壮性逻辑保持
+     * 硬编码（铁律：不破坏已跑通链路）。VNC 模式额外先起 Xtigervnc（虚拟 X+VNC 一体）。
      */
     private fun buildStartScript(mode: OutputMode): String {
         val backend = backendArgsFor(mode)
@@ -161,42 +153,43 @@ object LanxiuDesktop {
         fi
         """.trimIndent()
     } else {
-        // VNC 后端：seatd 提供 seat + vnc-backend.so 喂 App 内 VncClient。
+        // VNC 模式（in-app 原生渲染）：Xtigervnc 起虚拟 X(:2 → VNC 5902，回环只听 localhost)
+        // + weston x11-backend(pixman) 把桌面渲染进该 X；App 内 VncClient 直连 5902。
         """
         export XDG_RUNTIME_DIR=/tmp/lanxiu-xdg
         mkdir -p /tmp/lanxiu-xdg
         chmod 700 /tmp/lanxiu-xdg
-        # seatd：Weston 在 proot 内仍需一个 seat（VNC 后端不接真实输入设备）
+        # seatd：Weston 在 proot 内仍需一个 seat（x11 后端不接真实输入设备）
         pgrep -x seatd >/dev/null 2>&1 || (seatd -g 0 -t /tmp/lanxiu-seatd.sock >/tmp/seatd.log 2>&1 &)
         sleep 1
         export SEATD_SOCK=/tmp/lanxiu-seatd.sock
-        # 关掉残留 weston
+        # 重建 ld.so 缓存：rootfs 带 /etc/ld.so.cache，但本次烤入的 15 个新库不在缓存里，
+        # 不重建则 Xtigervnc 运行时找不到 libgcrypt/libgnutls 等（glibc 优先用缓存）。
+        ldconfig 2>/dev/null || true
+        # 关掉残留 weston / Xtigervnc（VNC 或 X11 都叫 weston；VNC 重起要清旧 Xtigervnc）
         killall weston 2>/dev/null || true
+        killall Xtigervnc 2>/dev/null || true
         sleep 1
-        cat > /tmp/weston-vnc.ini <<'INI'
-        [core]
-        backend=vnc-backend.so
-
-        [vnc]
-        port=5902
-        refresh=30
-
-        [shell]
-        background-color=0x002b36
-
-        [keyboard]
-        keymap_rules=evdev
-
-        [output]
-        resolution=1280x800
-        INI
-        nohup weston $backend >/tmp/weston-vnc.log 2>&1 &
+        # Xtigervnc：虚拟 X 服务器 + VNC 一体。:2 => TCP 5902（= VNC_PORT）。
+        # -fp 用已烤入的 misc 字体索引；-SecurityTypes None -localhost 仅回环、免密，
+        # 与 App 内 VncClient（RFB 3.8，优先 VncAuth、仅 None 时走 None 免密）兼容。
+        export DISPLAY=:2
+        nohup Xtigervnc :2 -geometry 1280x800 -depth 24 \
+          -fp /usr/share/fonts/X11/misc \
+          -SecurityTypes None -localhost \
+          >/tmp/xtigervnc.log 2>&1 &
+        sleep 2
+        # weston 接进 Xtigervnc 的 X 显示，纯软件渲染（pixman），不依赖 GPU/GL。
+        export DISPLAY=:2
+        nohup weston --backend=x11-backend.so --renderer=pixman \
+          >/tmp/weston-vnc.log 2>&1 &
         sleep 3
-        if pgrep -x weston >/dev/null 2>&1; then
-          echo "LANXIU 桌面已启动 · VNC 端口 5902"
+        if pgrep -x weston >/dev/null 2>&1 && pgrep -x Xtigervnc >/dev/null 2>&1; then
+          echo "LANXIU 桌面已启动 · VNC 端口 5902（App 内可见）"
         else
           echo "启动失败，日志："
-          tail -n 30 /tmp/weston-vnc.log
+          echo "---- weston ----"; tail -n 30 /tmp/weston-vnc.log
+          echo "---- Xtigervnc ----"; tail -n 30 /tmp/xtigervnc.log
           exit 7
         fi
         """.trimIndent()

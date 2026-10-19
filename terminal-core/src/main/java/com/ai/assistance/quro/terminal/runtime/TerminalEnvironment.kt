@@ -58,8 +58,9 @@ class TerminalEnvironment(context: Context) {
         const val LANXIU_DOWNLOAD_URL =
             "https://github.com/Quor-a/lanxiu-linux-android/releases/download/lanxiu-1.7.41-aarch64/lanxiu-aarch64-rootfs-20261017.tar.xz"
         /** 资产内容版本：改了内置 tar 包内容（如 rebrand 改 os-release、r10 proot 修复加 ld.so.cache）时 +1，
-         *  强制设备重抽。仅靠 lastUpdateTime 无法捕捉「同版本号改内容」，会导致设备继续用旧解压 rootfs。 */
-        private const val ASSET_VERSION = 7
+         *  强制设备重抽。仅靠 lastUpdateTime 无法捕捉「同版本号改内容」，会导致设备继续用旧解压 rootfs。
+         *  本次 +1：烤入 Xtigervnc + 桌面依赖库 + misc 字体索引，支撑 in-app VNC 桌面。 */
+        private const val ASSET_VERSION = 8
     }
 
     /**
