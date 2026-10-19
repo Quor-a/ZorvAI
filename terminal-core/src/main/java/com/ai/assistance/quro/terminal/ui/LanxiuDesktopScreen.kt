@@ -123,7 +123,18 @@ fun LanxiuDesktopScreen(onBack: () -> Unit) {
         status = "正在启动/连接 LANXIU 桌面（VNC 模式）…"
         CoroutineScope(Dispatchers.IO).launch {
             // 强制 VNC 模式：先杀残留 weston（可能跑着 X11 后端），再起 Xtigervnc + weston。
-            LanxiuDesktop.start(context, LanxiuDesktop.OutputMode.VNC)
+            val (code, out) = LanxiuDesktop.start(context, LanxiuDesktop.OutputMode.VNC)
+            // 🔴 必须先看启动结果再连：原来忽略返回值，启动失败也照样 sleep 后硬连 5902，
+            // 于是界面只显示 "ECONNREFUSED"，真正的原因（Xtigervnc 缺失/起不来/缺库）被盖掉，
+            // 白白多排查好几轮（2026-10-19 真机事故）。
+            if (code != 0) {
+                val detail = out.trim().ifEmpty { "(无输出)" }
+                mainHandler.post {
+                    errorMsg = "桌面启动失败（退出码 $code）"
+                    status = detail
+                }
+                return@launch
+            }
             // 给 Xtigervnc + weston 一点时间监听端口
             Thread.sleep(2500)
             mainHandler.post { status = "正在连接 127.0.0.1:${LanxiuDesktop.VNC_PORT} …" }

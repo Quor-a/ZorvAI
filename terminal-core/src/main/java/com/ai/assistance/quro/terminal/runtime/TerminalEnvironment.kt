@@ -61,6 +61,21 @@ class TerminalEnvironment(context: Context) {
          *  强制设备重抽。仅靠 lastUpdateTime 无法捕捉「同版本号改内容」，会导致设备继续用旧解压 rootfs。
          *  本次 +1：烤入 Xtigervnc + 桌面依赖库 + misc 字体索引，支撑 in-app VNC 桌面。 */
         private const val ASSET_VERSION = 8
+
+        /**
+         * LANXIU 图形桌面（VNC）增量包：仅含 Xtigervnc + 15 个依赖库 + misc 字体索引，约 9.5MB。
+         *
+         * 🔴 为什么要单独做增量包（2026-10-19 真机事故根因）：
+         * 把 Xtigervnc 烤进 455MB 主 rootfs 后，设备上已有的旧 rootfs 永远满足 `install_rootfs`
+         * 的 `ready_check`（bash + os-release 都在），于是「换资产」只能靠把 455MB 整包
+         * **覆盖解压到 8 万多个已存在文件上**——这在手机上要数分钟，而 `prepareGuestRootfs`
+         * 只有 180s 上限：解压被杀 → 资产标记写不上 → 下次又从头解压 → **死循环，永远拿不到
+         * Xtigervnc**。真机表现就是 `nohup: failed to run command 'Xtigervnc': No such file or directory`。
+         *
+         * 改为叠加式小包后：每次 exec 前只需检查 `/usr/bin/Xtigervnc` 是否存在，缺则解这 9.5MB
+         * （秒级完成，远低于任何超时），老 av7 rootfs 也能就地补上，且完全不触碰主包。
+         */
+        private const val LANXIU_ADDON_FILENAME = "lanxiu-vnc-addon.tar.xz"
     }
 
     /**
@@ -208,7 +223,9 @@ class TerminalEnvironment(context: Context) {
     private fun extractAssets() {
         try {
             // Ubuntu 内置；LANXIU 亦内置（与 Ubuntu 同机制，不再首次按需下载）。
-            val assetNames = listOf(UBUNTU_FILENAME, Distro.LANXIU.rootfsFilename)
+            // 第三个是 LANXIU 图形桌面增量包（Xtigervnc + 依赖库 + 字体索引，~9.5MB）：
+            // 单独成包是为了「老 rootfs 就地补文件」，避开 455MB 整包重解压的超时死循环（详见常量注释）。
+            val assetNames = listOf(UBUNTU_FILENAME, Distro.LANXIU.rootfsFilename, LANXIU_ADDON_FILENAME)
             val stampFile = File(filesDir, ".assets.stamp")
             val prevStamp = runCatching { stampFile.readText() }.getOrDefault("")
             // 用 lastUpdateTime 而不是 versionCode：每次安装都会变，保证「同版本号重装」也能刷新资产。
@@ -403,40 +420,44 @@ class TerminalEnvironment(context: Context) {
           ASSET_VER=${ASSET_VERSION}
           ASSET_MARK="${'$'}ROOTFS_PATH/.quro_asset_v"
           asset_current(){ [ "`cat "${'$'}ASSET_MARK" 2>/dev/null`" = "av=${'$'}ASSET_VER" ]; }
+          # 🔴 LANXIU 图形桌面增量件（Xtigervnc + 依赖库 + 字体索引，~9.5MB）：幂等，只在缺失时解。
+          # 为什么不把 Xtigervnc 只放在主包：设备上已有的旧 rootfs 永远满足 ready_check，换资产就得把
+          # 455MB 主包「覆盖解压到 8 万多个已存在文件」——手机要数分钟，而宿主侧 prepareGuestRootfs
+          # 只有 180s 上限 -> 解压被 SIGKILL -> 标记写不上 -> 下次重头来，形成「永远升不上去」的死循环
+          # （2026-10-19 真机二次根因）。小包秒级解完，老 av7 rootfs 也能就地补文件，且完全不碰主包。
+          ADDON_TARBALL="${LANXIU_ADDON_FILENAME}"
+          install_lanxiu_addon(){
+            [ -e "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" ] && return 0
+            if [ ! -e ~/"${'$'}ADDON_TARBALL" ]; then
+              progress_echo "LANXIU 桌面增量包缺失(${LANXIU_ADDON_FILENAME})，跳过"
+              return 0
+            fi
+            progress_echo "补齐 LANXIU 桌面组件(Xtigervnc + 依赖库)..."
+            if ! busybox tar xof ~/"${'$'}ADDON_TARBALL" -C "${'$'}ROOTFS_PATH/" 2>"${'$'}TMPDIR/addon_extract.err"; then
+              progress_echo "增量包解压报错：${'$'}(tail -n 1 "${'$'}TMPDIR/addon_extract.err" 2>/dev/null)"
+              return 1
+            fi
+            chmod 0755 "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" "${'$'}ROOTFS_PATH/usr/bin/tigervncconfig" 2>/dev/null
+            if [ -e "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" ]; then
+              progress_echo "LANXIU 桌面组件已就位(Xtigervnc)"
+              return 0
+            fi
+            progress_echo "增量包解压后仍未找到 Xtigervnc"
+            return 1
+          }
           if ready_check; then
             if asset_current; then
               VERSION=`grep '^PRETTY_NAME=' "${'$'}ROOTFS_PATH/etc/os-release" 2>/dev/null | head -n 1 | cut -d= -f2- | tr -d '"'`
               [ -z "${'$'}VERSION" ] && VERSION=`cat "${'$'}ROOTFS_PATH/etc/issue.net" 2>/dev/null`
               progress_echo "rootfs ${'$'}L_INSTALLED -> ${'$'}VERSION"
-            elif [ -e ~/"${'$'}ROOTFS_TARBALL" ]; then
-              # 资产换过 + 安装包在 -> 升级解压。就地覆盖（不清空）：LANXIU 扁平 rootfs 保留用户已装内容；
-              # Ubuntu 包带顶层目录，下面用 cp -a 覆盖式拍平。解压失败不动现有 rootfs，保住可用状态。
-              progress_echo "rootfs 资产版本变更(av=${'$'}ASSET_VER})，升级解压..."
-              if ! busybox tar xof ~/"${'$'}ROOTFS_TARBALL" -C "${'$'}ROOTFS_PATH/" 2>"${'$'}TMPDIR/rootfs_upgrade.err"; then
-                progress_echo "rootfs 升级解压报错：${'$'}(tail -n 1 "${'$'}TMPDIR/rootfs_upgrade.err" 2>/dev/null)"
-                progress_echo "已保留现有 rootfs（未清空），可重试"
-                return 1
-              fi
-              if [ -d "${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME" ]; then
-                busybox cp -a "${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME"/. "${'$'}ROOTFS_PATH"/ 2>/dev/null || cp -a "${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME"/. "${'$'}ROOTFS_PATH"/
-                busybox rm -rf "${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME" 2>/dev/null
-              fi
-              fix_usrmerge_links
-              # 🔴 覆盖解压会把 tar 包里的 agentuser/0700 目录模式重新盖到已存在目录上，
-              # 而 patch_lanxiu_rootfs 只在 .lanxiu_patched_v1 缺失时才全树 chmod。旧 rootfs 上该标记已存在
-              # -> 会跳过修复 -> proot getcwd 向上遍历再被 0700 挡住。故升级后强制让补丁重跑一次。
-              rm -f "${'$'}ROOTFS_PATH/.lanxiu_patched_v1" 2>/dev/null
-              if [ ! -e "${'$'}ROOTFS_PATH/usr/bin/bash" ] && [ ! -e "${'$'}ROOTFS_PATH/bin/bash" ]; then
-                progress_echo "rootfs 升级后 bash 缺失，保留安装包以便重试"
-                return 1
-              fi
-              echo "av=${'$'}ASSET_VER" > "${'$'}ASSET_MARK" 2>/dev/null
-              rm -f ~/"${'$'}ROOTFS_TARBALL"
-              progress_echo "rootfs 资产已升级 -> av=${'$'}ASSET_VER"
             else
-              # 版本不匹配但安装包已不在（上次解压成功后被删）：保住现有 rootfs，避免清空后无包可装。
-              progress_echo "rootfs 资产标记与内置版本(av=${'$'}ASSET_VER})不一致，但安装包缺失，沿用现有 rootfs"
+              # 🔴 不做整包重解压（见 install_lanxiu_addon 注释里的超时死循环）。标记直接更新，
+              # 避免每次 exec 都重复走这条分支；主包内容变更由后续版本（或叠加包）承接。
+              echo "av=${'$'}ASSET_VER" > "${'$'}ASSET_MARK" 2>/dev/null
+              progress_echo "rootfs 资产标记更新 -> av=${'$'}ASSET_VER}(沿用现有 rootfs，增量件单独叠加)"
             fi
+            # 无论主 rootfs 新旧，都幂等补齐桌面组件（缺才解，已有直接返回）。
+            ${if (distro == Distro.LANXIU) "install_lanxiu_addon || true" else ":  # Ubuntu 不用 LANXIU 增量件"}
           else
             if [ -n "${'$'}(ls -A "${'$'}ROOTFS_PATH" 2>/dev/null)" ]; then
               progress_echo "rootfs 检测到半截解压，清理后重装..."
@@ -493,6 +514,8 @@ class TerminalEnvironment(context: Context) {
               progress_echo "rootfs 解压校验失败，保留安装包以便重试"
               return 1
             fi
+            # 主包（av8+）已含桌面组件；此处仍幂等检查一次，兼容「旧主包 + 新增量包」组合。
+            ${if (distro == Distro.LANXIU) "install_lanxiu_addon || true" else ":  # Ubuntu 不用 LANXIU 增量件"}
           fi
           # DNS：写入多 nameserver 兜底（国内/海外通用）。LANXIU 原生缺失 resolv.conf，
           # 仅靠此行保证开箱 DNS 可用；rootfs 内也烤入了一份默认 resolv.conf 作双保险。

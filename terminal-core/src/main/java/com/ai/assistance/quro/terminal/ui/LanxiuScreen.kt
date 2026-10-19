@@ -243,8 +243,11 @@ fun LanxiuScreen(
                                         val r = if (deskRunning) LanxiuDesktop.stop(context)
                                         else LanxiuDesktop.start(context)
                                         deskRunning = r.first == 0
-                                        deskMsg = r.second.trim().lines().lastOrNull()
-                                            ?: r.second.trim()
+                                        // 失败时脚本会打「启动失败：原因」+ 日志尾；只取最后一行会把原因裁掉
+                                        // （真机曾只看到一句裸 ENOENT），故保留最后 3 行便于定位。
+                                        deskMsg = r.second.trim().lines().filter { it.isNotBlank() }
+                                            .takeLast(3).joinToString("\n")
+                                            .ifEmpty { "退出码 ${r.first}" }
                                         deskBusy = false
                                     }
                                 },
