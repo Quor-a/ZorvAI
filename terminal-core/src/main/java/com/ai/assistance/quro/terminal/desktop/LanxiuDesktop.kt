@@ -174,25 +174,43 @@ object LanxiuDesktop {
         # "nohup: failed to run command 'Xtigervnc': No such file or directory"，根本看不出是
         # 「rootfs 没升级」还是「loader 找不到」（2026-10-19 真机踩坑）。故先自证文件在不在。
         if [ ! -x /usr/bin/Xtigervnc ]; then
-          echo "启动失败：/usr/bin/Xtigervnc 不存在（rootfs 未升级到含 Xtigervnc 的资产版本）"
+          echo "启动失败：/usr/bin/Xtigervnc 不存在（桌面组件未就位）"
           echo -n "rootfs 资产标记: "; cat /.quro_asset_v 2>/dev/null || echo "(无标记 = 旧 rootfs)"
+          echo -n "增量包残留检查: "; ls -d /usr/lib/aarch64-linux-gnu/libgnutls.so.30 2>&1
           ls -l /usr/bin/Xtigervnc 2>&1
           exit 8
+        fi
+        # 动态链接自检：loader 直接报缺哪些库，比 execve 的裸 ENOENT 可诊断得多。
+        # （ENOENT 既可能是「文件不存在」，也可能是「PT_INTERP 解析不到 loader」，两者报错一模一样。）
+        /usr/lib/ld-linux-aarch64.so.1 --list /usr/bin/Xtigervnc 2>&1 | grep -i "not found" >/tmp/xt_missing.txt || true
+        if [ -s /tmp/xt_missing.txt ]; then
+          echo "启动失败：Xtigervnc 缺动态库"
+          head -n 8 /tmp/xt_missing.txt
+          exit 10
         fi
         if ! command -v weston >/dev/null 2>&1; then
           echo "启动失败：weston 不在 PATH"
           exit 9
         fi
+        # X 的 unix socket 目录：Xtigervnc 起 X 时要用，缺失会直接失败。
+        mkdir -p /tmp/.X11-unix 2>/dev/null
+        chmod 1777 /tmp/.X11-unix 2>/dev/null
         # Xtigervnc：虚拟 X 服务器 + VNC 一体。:2 => TCP 5902（= VNC_PORT）。
-        # -fp 用已烤入的 misc 字体索引；-SecurityTypes None -localhost 仅回环、免密，
-        # 与 App 内 VncClient（RFB 3.8，优先 VncAuth、仅 None 时走 None 免密）兼容。
-        # 用绝对路径调用，不依赖 PATH（真机上 nohup 报 ENOENT 时曾有歧义）。
+        # -ac 关掉 X 访问控制（避免无 XAUTHORITY 时被拒）；-rfbport 显式绑 5902 不靠推算；
+        # -SecurityTypes None -localhost 仅回环免密，与 App 内 VncClient（RFB 3.8，
+        # 优先 VncAuth、仅服务端给 None 时走免密）兼容。
         export DISPLAY=:2
         nohup /usr/bin/Xtigervnc :2 -geometry 1280x800 -depth 24 \
+          -rfbport 5902 -ac \
           -fp /usr/share/fonts/X11/misc \
           -SecurityTypes None -localhost \
           >/tmp/xtigervnc.log 2>&1 &
-        sleep 2
+        sleep 3
+        if ! pgrep -f Xtigervnc >/dev/null 2>&1; then
+          echo "启动失败：Xtigervnc 进程未存活，日志："
+          tail -n 20 /tmp/xtigervnc.log
+          exit 11
+        fi
         # weston 接进 Xtigervnc 的 X 显示，纯软件渲染（pixman），不依赖 GPU/GL。
         export DISPLAY=:2
         nohup weston --backend=x11-backend.so --renderer=pixman \
