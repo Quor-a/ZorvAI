@@ -76,6 +76,17 @@ fun LanxiuScreen(
     var deskBusy by remember { mutableStateOf(false) }
     var deskMode by remember { mutableStateOf(LanxiuDesktop.getOutputMode(context)) }
 
+    // 安装时间：versionCode 被锁定（1.1.10/1001010 铁律不改），光看版本号无法区分新旧包；
+    // 但 lastUpdateTime 每次覆盖安装都会变 —— 这是判断「设备上到底装没装这个新包」唯一可靠的
+    // 宿主侧证据（2026-10-20 因桌面上三个同尺寸包装错，白跑两轮）。
+    val installedAt = remember {
+        runCatching {
+            val pi = context.packageManager.getPackageInfo(context.packageName, 0)
+            java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.US)
+                .format(java.util.Date(pi.lastUpdateTime))
+        }.getOrDefault("未知")
+    }
+
     val lanxiuReady = env.lanxiuEnvStatus() == GuestEnvStatus.READY
     val isSelected = env.selectedDistro == Distro.LANXIU
 
@@ -217,7 +228,7 @@ fun LanxiuScreen(
                         )
                     } else {
                         Text(
-                            "VNC 模式：App 内原生渲染（Xtigervnc 虚拟 X+VNC，Weston x11-backend 纯软渲），不依赖外部 App、不依赖 GPU，进桌面即可看见。\n· 启动脚本 v5 · getcwd 修复（-w /）+ 僵尸锁清理",
+                            "VNC 模式：App 内原生渲染（Xtigervnc 虚拟 X+VNC，Weston x11-backend 纯软渲），不依赖外部 App、不依赖 GPU，进桌面即可看见。\n· 构建 ${LanxiuDesktop.BUILD_STAMP} · 安装于 $installedAt（-w / getcwd 修复 + 僵尸锁清理）",
                             color = TerminalTheme.onSurfaceVariant,
                             fontSize = 11.sp,
                             lineHeight = 15.sp
@@ -243,18 +254,19 @@ fun LanxiuScreen(
                                         val r = if (deskRunning) LanxiuDesktop.stop(context)
                                         else LanxiuDesktop.start(context)
                                         deskRunning = r.first == 0
-                                        // 失败时脚本会打「启动失败：原因」+ 日志尾；只取最后一行会把原因裁掉
-                                        // （真机曾只看到一句裸 ENOENT），故保留最后 3 行便于定位。
-                                        // v5 起额外带上退出码：8/10/11/7 分别对应「没 Xtigervnc / 缺库 /
-                                        // 进程秒退 / weston 没起来」，一眼能定位是哪一环。
-                                        val body = r.second.trim().lines().filter { it.isNotBlank() }
-                                            .takeLast(3).joinToString("\n")
+                                        // 失败原因常在末尾（tail 的日志），但「脚本到底有没有进 guest」的证据
+                                        // （首行 [lanxiu-boot NAME]）在开头。只取末尾会把前者裁掉，只取开头
+                                        // 又会丢掉真正的报错 —— 两头都要：首行标记 + 末尾 6 行。
+                                        val lines = r.second.trim().lines().filter { it.isNotBlank() }
+                                        val stamp = lines.firstOrNull { it.startsWith("[lanxiu-boot") }
+                                        val tailLines = lines.takeLast(6).filter { it != stamp }
+                                        val body = (listOfNotNull(stamp) + tailLines).joinToString("\n")
                                         deskMsg = if (r.first == 0) {
-                                            body.ifEmpty { "已启动" }
+                                            body.ifEmpty { "已启动（${LanxiuDesktop.BUILD_STAMP}）" }
                                         } else if (body.isEmpty()) {
-                                            "退出码 ${r.first}（无输出）"
+                                            "退出码 ${r.first}（无输出）· 构建 ${LanxiuDesktop.BUILD_STAMP}"
                                         } else {
-                                            "退出码 ${r.first}\n$body"
+                                            "退出码 ${r.first} · 构建 ${LanxiuDesktop.BUILD_STAMP}\n$body"
                                         }
                                         deskBusy = false
                                     }

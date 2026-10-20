@@ -50,6 +50,22 @@ object LanxiuDesktop {
     /** VNC 连接密码（App 内直连，短密码足够）。 */
     const val VNC_PASSWORD = "lanxiu"
 
+    /**
+     * 🔴 构建标记（每次出包必须改成新的日期时刻）。
+     *
+     * 为什么需要它：versionName/versionCode 是用户锁定的（1.1.10/1001010，铁律不改），
+     * 导致**每一版 APK 的版本号完全一样**；桌面上又常同时躺着几个同尺寸（~823MB）、
+     * 文件名只差日期的包。真机上一旦装错包，界面/日志与旧包毫无区别，只能靠猜版本
+     * （2026-10-20 已经为此白跑两轮）。
+     *
+     * 这个标记同时出现在两处：① LANXIU 设置卡片上的「构建」字样（宿主侧常量）；
+     * ② 启动脚本第一行的 echo（guest 侧），因此能一句话区分：
+     *    - 界面看到新标记、红字里没有       -> 脚本没进 guest（proot/exec 通道问题）
+     *    - 界面看到新标记、红字里有新标记   -> 脚本进来了，失败在后面环节
+     *    - 界面看不到新标记                 -> 装的不是这个包（安装没生效/装错了旧包）
+     */
+    const val BUILD_STAMP = "B20261020-1415"
+
     /** 桌面输出模式。 */
     enum class OutputMode {
         /** App 内 VNC 原生渲染（默认）。 */
@@ -134,6 +150,7 @@ object LanxiuDesktop {
         return if (mode == OutputMode.X11) {
         // X11 后端：连 Termux:X11 的 X 服务器（DISPLAY=:0），不需要 seatd。
         """
+        echo "[lanxiu-boot ${BUILD_STAMP}] mode=x11 cwd=$(pwd 2>/dev/null) uid=$(id -u 2>/dev/null)"
         export XDG_RUNTIME_DIR=/tmp/lanxiu-xdg
         mkdir -p /tmp/lanxiu-xdg
         chmod 700 /tmp/lanxiu-xdg
@@ -156,12 +173,12 @@ object LanxiuDesktop {
         // VNC 模式（in-app 原生渲染）：Xtigervnc 起虚拟 X(:2 → VNC 5902，回环只听 localhost)
         // + weston x11-backend(pixman) 把桌面渲染进该 X；App 内 VncClient 直连 5902。
         """
+        # 自证脚本真的进来了：放第一行，且带构建标记。上一版因 proot -w /root 翻译失败，bash 只打
+        # 一句 getcwd 告警、脚本体一行没跑，界面看不出区别。这行能立刻区分「没进来」和「进来了但起不来」。
+        echo "[lanxiu-boot ${BUILD_STAMP}] mode=vnc cwd=$(pwd 2>/dev/null) uid=$(id -u 2>/dev/null)"
         export XDG_RUNTIME_DIR=/tmp/lanxiu-xdg
         mkdir -p /tmp/lanxiu-xdg
         chmod 700 /tmp/lanxiu-xdg
-        # 自证脚本真的进来了（v5）：上一版因 proot -w /root 翻译失败，bash 只打一句 getcwd 告警，
-        # 脚本体一行没跑，界面却看不出区别。这行能立刻区分「没进来」和「进来了但起不来」。
-        echo "[vnc v5] cwd=$(pwd 2>/dev/null) uid=$(id -u 2>/dev/null)"
         # seatd：Weston 在 proot 内仍需一个 seat（x11 后端不接真实输入设备）
         pgrep -x seatd >/dev/null 2>&1 || (seatd -g 0 -t /tmp/lanxiu-seatd.sock >/tmp/seatd.log 2>&1 &)
         sleep 1

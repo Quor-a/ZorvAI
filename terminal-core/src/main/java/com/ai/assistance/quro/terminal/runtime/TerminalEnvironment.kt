@@ -924,7 +924,15 @@ EOF
         args.add("-w"); args.add("/")
         // Ubuntu 用 /bin/sh -c（非登录、不清环境）；LANXIU rootfs 经 usrmerge 链接 /bin→usr/bin 后
         // /bin/sh 即 /usr/bin/sh，存在且可用，无需 -i/-lc 登录壳（那正是旧链路 getcwd ENOENT 的温床）。
-        args.add("/bin/sh"); args.add("-c")
+        // 🔴 解释器按 rootfs 实况选（2026-10-20）：LANXIU 是扁平 rootfs，可能只有 usr/bin/sh 而
+        // /bin → usr/bin 的 usrmerge 链接尚未建立。此时写死 /bin/sh 只会得到一个裸 ENOENT
+        // （proot 报 execve("/bin/sh"): No such file or directory），界面无法区分是「解释器没了」
+        // 还是「脚本内容错」。宿主侧直接看文件存在性，选不到才退回 /bin/sh（旧行为，不回归）。
+        val guestSh = listOf("bin/sh", "usr/bin/sh", "bin/bash", "usr/bin/bash")
+            .firstOrNull { File(rootfsPath, it).exists() }
+            ?.let { "/$it" } ?: "/bin/sh"
+        Log.i(TAG, "execGuest: guest shell=$guestSh（rootfs=$rootfsPath）")
+        args.add(guestSh); args.add("-c")
         // cwd 前置：与上面的 `-w /` 配合，把「家在 /root」语义补回来。两段都不可失败，
         // 保证无论 guest /root 处于什么状态，脚本一定能在这个 shell 里跑起来。
         args.add("cd /root 2>/dev/null || cd /; " + script)
