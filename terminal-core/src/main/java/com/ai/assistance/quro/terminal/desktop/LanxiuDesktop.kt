@@ -159,6 +159,9 @@ object LanxiuDesktop {
         export XDG_RUNTIME_DIR=/tmp/lanxiu-xdg
         mkdir -p /tmp/lanxiu-xdg
         chmod 700 /tmp/lanxiu-xdg
+        # 自证脚本真的进来了（v5）：上一版因 proot -w /root 翻译失败，bash 只打一句 getcwd 告警，
+        # 脚本体一行没跑，界面却看不出区别。这行能立刻区分「没进来」和「进来了但起不来」。
+        echo "[vnc v5] cwd=$(pwd 2>/dev/null) uid=$(id -u 2>/dev/null)"
         # seatd：Weston 在 proot 内仍需一个 seat（x11 后端不接真实输入设备）
         pgrep -x seatd >/dev/null 2>&1 || (seatd -g 0 -t /tmp/lanxiu-seatd.sock >/tmp/seatd.log 2>&1 &)
         sleep 1
@@ -195,14 +198,20 @@ object LanxiuDesktop {
         # X 的 unix socket 目录：Xtigervnc 起 X 时要用，缺失会直接失败。
         mkdir -p /tmp/.X11-unix 2>/dev/null
         chmod 1777 /tmp/.X11-unix 2>/dev/null
+        # 🔴 清僵尸锁（2026-10-20）：Xtigervnc 被 killall 后 /tmp/.X2-lock 常残留（/tmp 是宿主
+        # filesDir/tmp 的 bind，进程死了文件还在），下次启动会直接报
+        # "Server is already active for display 2" 并退出 —— 表现为「怎么点都起不来」。
+        rm -f /tmp/.X2-lock /tmp/.X11-unix/X2 2>/dev/null
+        # 字体路径：misc 字体目录存在才传 -fp，否则 Xtigervnc 会因找不到默认字体退出。
+        FP=""
+        [ -d /usr/share/fonts/X11/misc ] && FP="-fp /usr/share/fonts/X11/misc"
         # Xtigervnc：虚拟 X 服务器 + VNC 一体。:2 => TCP 5902（= VNC_PORT）。
         # -ac 关掉 X 访问控制（避免无 XAUTHORITY 时被拒）；-rfbport 显式绑 5902 不靠推算；
         # -SecurityTypes None -localhost 仅回环免密，与 App 内 VncClient（RFB 3.8，
         # 优先 VncAuth、仅服务端给 None 时走免密）兼容。
         export DISPLAY=:2
         nohup /usr/bin/Xtigervnc :2 -geometry 1280x800 -depth 24 \
-          -rfbport 5902 -ac \
-          -fp /usr/share/fonts/X11/misc \
+          -rfbport 5902 -ac ${'$'}FP \
           -SecurityTypes None -localhost \
           >/tmp/xtigervnc.log 2>&1 &
         sleep 3
