@@ -217,7 +217,7 @@ fun LanxiuScreen(
                         )
                     } else {
                         Text(
-                            "VNC 模式：App 内原生渲染（Xtigervnc 虚拟 X+VNC，Weston x11-backend 纯软渲），不依赖外部 App、不依赖 GPU，进桌面即可看见。\n· 启动脚本 v4 · 增量包叠加（缺件秒级补齐，不再重解压 455MB）",
+                            "VNC 模式：App 内原生渲染（Xtigervnc 虚拟 X+VNC，Weston x11-backend 纯软渲），不依赖外部 App、不依赖 GPU，进桌面即可看见。\n· 启动脚本 v5 · getcwd 修复（-w /）+ 僵尸锁清理",
                             color = TerminalTheme.onSurfaceVariant,
                             fontSize = 11.sp,
                             lineHeight = 15.sp
@@ -245,9 +245,17 @@ fun LanxiuScreen(
                                         deskRunning = r.first == 0
                                         // 失败时脚本会打「启动失败：原因」+ 日志尾；只取最后一行会把原因裁掉
                                         // （真机曾只看到一句裸 ENOENT），故保留最后 3 行便于定位。
-                                        deskMsg = r.second.trim().lines().filter { it.isNotBlank() }
+                                        // v5 起额外带上退出码：8/10/11/7 分别对应「没 Xtigervnc / 缺库 /
+                                        // 进程秒退 / weston 没起来」，一眼能定位是哪一环。
+                                        val body = r.second.trim().lines().filter { it.isNotBlank() }
                                             .takeLast(3).joinToString("\n")
-                                            .ifEmpty { "退出码 ${r.first}" }
+                                        deskMsg = if (r.first == 0) {
+                                            body.ifEmpty { "已启动" }
+                                        } else if (body.isEmpty()) {
+                                            "退出码 ${r.first}（无输出）"
+                                        } else {
+                                            "退出码 ${r.first}\n$body"
+                                        }
                                         deskBusy = false
                                     }
                                 },

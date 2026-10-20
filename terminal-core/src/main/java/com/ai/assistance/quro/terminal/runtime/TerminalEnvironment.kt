@@ -877,6 +877,16 @@ EOF
             setReadable(true, false)
             setExecutable(true, false)
         }.absolutePath
+        // 🔴 getcwd 兜底 v5 配套：bind 的目标挂载点必须在 rootfs 内真实存在，否则 proot 会**静默跳过**
+        // 该 bind -> -w /root 落空 -> 又回到「bash 继承宿主 cwd」的老坑。这里宿主侧硬保证它存在且可遍历，
+        // 不依赖 install_rootfs 的 chmod 是否执行过（execGuest 通道不走 patch_lanxiu_rootfs）。
+        runCatching {
+            File(rootfsPath, "root").let { r ->
+                r.mkdirs()
+                r.setReadable(true, false)
+                r.setExecutable(true, false)
+            }
+        }
         val loader = File(nativeLibDir, "libproot-loader.so").absolutePath
 
         // proot 参数：与 QuroLinuxEnv.buildProotLaunch 严格对齐（含 /dev/urandom→/dev/random、
@@ -902,17 +912,26 @@ EOF
                 args.add("--bind=${ext.absolutePath}:${ext.absolutePath}")
             }
         }
-        // 🔴 cwd 硬编码 /root（Ubuntu 同款），绝不依赖变量——修旧链路 -w "$G_CWD" 变量可能落空的隐患。
+        // 🔴 getcwd 兜底 v5（2026-10-20 真机事故）：guest /root 是 bind 挂载点，proot `-w /root` 一旦
+        // 翻译失败（rootfs 内 /root 缺失 / 被 tar 里的 0700 挡住 / bind 被静默跳过），tracee 会继承宿主
+        // cwd -> bash 启动即打
+        //   shell-init: error retrieving current directory: getcwd: cannot access parent directories: Success
+        // 然后**整个 -c 脚本一句都不执行**（真机界面只看到这一行红字，桌面永远起不来）。
+        // 改用 `-w /`：guest 根 = 宿主 ROOTFS_PATH，映射恒成立、目录恒可遍历，getcwd 必成功；
+        // 再在脚本首行 `cd /root`（失败退回 /），语义与 -w /root 完全等价但没有失败可能。
+        // -0 仍保留（root 仿真，与 Ubuntu 三通道对齐）。
         args.add("-0")
-        args.add("-w"); args.add("/root")
+        args.add("-w"); args.add("/")
         // Ubuntu 用 /bin/sh -c（非登录、不清环境）；LANXIU rootfs 经 usrmerge 链接 /bin→usr/bin 后
         // /bin/sh 即 /usr/bin/sh，存在且可用，无需 -i/-lc 登录壳（那正是旧链路 getcwd ENOENT 的温床）。
         args.add("/bin/sh"); args.add("-c")
-        args.add(script)
+        // cwd 前置：与上面的 `-w /` 配合，把「家在 /root」语义补回来。两段都不可失败，
+        // 保证无论 guest /root 处于什么状态，脚本一定能在这个 shell 里跑起来。
+        args.add("cd /root 2>/dev/null || cd /; " + script)
 
         val env = mutableMapOf(
             "HOME" to "/root",
-            "PWD" to "/root",
+            "PWD" to "/",
             "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/rust/bin:/usr/local/go/bin",
             "TERM" to "xterm-256color",
             "LANG" to "C.UTF-8",
@@ -928,7 +947,9 @@ EOF
 
         return@withContext try {
             val pb = ProcessBuilder(args)
-            pb.directory(filesDir)              // 宿主 cwd 无关紧要：proot -w /root 决定 guest cwd
+            // 宿主 cwd 与 Ubuntu 通道（QuroLinuxEnv.buildProotLaunch 用 rootfs 父目录）保持一致：
+            // -w / 已决定 guest cwd，这里只是让「万一翻译失败」时的继承路径也落在 rootfs 附近。
+            pb.directory(File(rootfsPath).parentFile ?: filesDir)
             pb.environment().putAll(env)
             pb.redirectErrorStream(true)
             val p = pb.start()
