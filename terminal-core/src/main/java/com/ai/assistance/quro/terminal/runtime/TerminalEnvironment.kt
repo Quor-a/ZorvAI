@@ -255,19 +255,37 @@ class TerminalEnvironment(context: Context) {
                     // 从根上消除「半截 tarball 被判为已下载 -> busybox tar 永远解压失败 -> 终端永久黑屏」的死锁。
                     val tmp = File(filesDir, "$assetName.tmp")
                     Files.deleteIfExists(tmp.toPath())
-                    appContext.assets.open(assetName).use { input ->
-                        tmp.outputStream().use { output -> input.copyTo(output) }
-                    }
-                    if (dest.exists() && !dest.delete()) Log.w(TAG, "Cannot delete old $assetName")
-                    if (!tmp.renameTo(dest)) {
-                        tmp.copyTo(dest, overwrite = true)
+                    // 🔴 容错（2026-10-20）：瘦身/验证包可能**故意不含**大 rootfs 资产——全量包 862MB
+                    // （rootfs 495MB + libxul 137MB），在部分设备上安装会失败，导致「装了新包但跑的还是
+                    // 旧代码」的假象。资产缺失时必须跳过而不是抛异常，否则 initializeEnvironment 直接
+                    // 失败 -> 整个终端不可用。设备上已有解压好的 rootfs，不依赖这份 tarball 也能跑。
+                    val copied = runCatching {
+                        appContext.assets.open(assetName).use { input ->
+                            tmp.outputStream().use { output -> input.copyTo(output) }
+                        }
+                        true
+                    }.getOrElse { e ->
+                        Log.w(TAG, "Asset $assetName 不存在或拷贝失败，跳过（瘦身包场景）：${e.message}")
                         Files.deleteIfExists(tmp.toPath())
+                        false
                     }
-                    Log.d(TAG, "Copied asset $assetName -> ${dest.length()} bytes")
+                    if (copied) {
+                        if (dest.exists() && !dest.delete()) Log.w(TAG, "Cannot delete old $assetName")
+                        if (!tmp.renameTo(dest)) {
+                            tmp.copyTo(dest, overwrite = true)
+                            Files.deleteIfExists(tmp.toPath())
+                        }
+                        Log.d(TAG, "Copied asset $assetName -> ${dest.length()} bytes")
+                    } else if (!dest.exists()) {
+                        Log.w(TAG, "Asset $assetName 缺失，且设备上也没有副本（依赖后续按需下载）")
+                    }
                 } else {
                     Log.d(TAG, "Asset $assetName up to date (${dest.length()} bytes).")
                 }
-                newStamp.append(assetName).append('=').append(dest.length()).append('\n')
+                // 只有设备上确实存在该文件时才记尺寸；否则下次仍会尝试拷贝。
+                if (dest.exists()) {
+                    newStamp.append(assetName).append('=').append(dest.length()).append('\n')
+                }
             }
             runCatching { stampFile.writeText(newStamp.toString()) }
         } catch (e: IOException) {
@@ -427,10 +445,24 @@ class TerminalEnvironment(context: Context) {
           # （2026-10-19 真机二次根因）。小包秒级解完，老 av7 rootfs 也能就地补文件，且完全不碰主包。
           ADDON_TARBALL="${LANXIU_ADDON_FILENAME}"
           install_lanxiu_addon(){
-            [ -e "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" ] && return 0
+            # 🔴 已在位（存在+可执行+非空）才直接返回；否则强制重解增量包补齐。
+            # 之前用 [ -e ] 判断，若上一版被 180s 超时打断留下半截/零字节的 Xtigervnc，会被误判为
+            # 已存在而跳过 -> 永远起不来（2026-10-20 真机现场：装了最新包仍失败的根因之一）。
+            if [ -x "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" ] && [ -s "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" ]; then
+              # 🔴 大小兜底：完整 Xtigervnc ≈ 2.9MB。若上一版被中断留下半截文件，虽非空且带可执行位，
+              # 但体积远小于此 -> 仍判为损坏，强制重解增量包（而不是带着半截二进制继续跑，VNC 必崩）。
+              XV_SZ=`wc -c < "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" 2>/dev/null || echo 0`
+              if [ "${'$'}XV_SZ" -ge 2000000 ]; then
+                return 0
+              fi
+            fi
             if [ ! -e ~/"${'$'}ADDON_TARBALL" ]; then
-              progress_echo "LANXIU 桌面增量包缺失(${LANXIU_ADDON_FILENAME})，跳过"
-              return 0
+              # 设备没有增量包：若 Xtigervnc 已就位则放行，否则报错（提示需含增量包的包）。
+              if [ -x "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" ]; then
+                return 0
+              fi
+              progress_echo "LANXIU 桌面增量包缺失(${LANXIU_ADDON_FILENAME})，Xtigervnc 无法补齐"
+              return 1
             fi
             progress_echo "补齐 LANXIU 桌面组件(Xtigervnc + 依赖库)..."
             if ! busybox tar xof ~/"${'$'}ADDON_TARBALL" -C "${'$'}ROOTFS_PATH/" 2>"${'$'}TMPDIR/addon_extract.err"; then
@@ -438,12 +470,11 @@ class TerminalEnvironment(context: Context) {
               return 1
             fi
             chmod 0755 "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" "${'$'}ROOTFS_PATH/usr/bin/tigervncconfig" 2>/dev/null
-            if [ -e "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" ]; then
-              progress_echo "LANXIU 桌面组件已就位(Xtigervnc)"
-              return 0
+            if [ ! -x "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" ]; then
+              progress_echo "增量包解压后仍未得到可用的 Xtigervnc"
+              return 1
             fi
-            progress_echo "增量包解压后仍未找到 Xtigervnc"
-            return 1
+            progress_echo "LANXIU 桌面组件已就位(Xtigervnc)"
           }
           if ready_check; then
             if asset_current; then

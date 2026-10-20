@@ -217,7 +217,7 @@ fun LanxiuScreen(
                         )
                     } else {
                         Text(
-                            "VNC 模式：App 内原生渲染（Xtigervnc 虚拟 X+VNC，Weston x11-backend 纯软渲），不依赖外部 App、不依赖 GPU，进桌面即可看见。",
+                            "VNC 模式：App 内原生渲染（Xtigervnc 虚拟 X+VNC，Weston x11-backend 纯软渲），不依赖外部 App、不依赖 GPU，进桌面即可看见。\n· 启动脚本 v4 · 增量包叠加（缺件秒级补齐，不再重解压 455MB）",
                             color = TerminalTheme.onSurfaceVariant,
                             fontSize = 11.sp,
                             lineHeight = 15.sp
