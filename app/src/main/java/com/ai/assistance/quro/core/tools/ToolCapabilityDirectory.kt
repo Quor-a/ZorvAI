@@ -337,6 +337,48 @@ object ToolCapabilityDirectory {
             relatedTools = listOf("terminal_run", "linux_install"),
             priority = 4
         ),
+
+        "moyu" to ToolInfo(
+            name = "moyu",
+            category = ToolCategory.TERMINAL_LINUX,
+            description = "墨语言（Mo）独立运行时 v1.165.0：编译/运行/调试 .mo 程序，读写源码修 bug，" +
+                "包管理（mo.toml + deps + mo.lock，免 git 走 tarball + 四级镜像回退），依赖图分析。" +
+                "工具链（moc/molink/mols/modb/dwmo/mo2c/mo2x/seed）与 aarch64 静态 qemu 随 APK 内置，" +
+                "全部零依赖，**不需要 Ubuntu / proot / 终端**，直接用 App 进程调用。",
+            useCases = listOf(
+                "写个墨语言程序并跑起来",
+                "编译我的 .mo 文件",
+                "墨语言编译器报错了帮我修",
+                "给我装个墨语言依赖包",
+                "用墨语言起个 HTTP 服务",
+                "看看墨语言标准库和示例"
+            ),
+            examples = listOf(
+                "moyu(action=\"setup\")",
+                "moyu(action=\"build_run\", code=\"func main() { print(\\\"hi\\\") }\", name=\"hi.mo\")",
+                "moyu(action=\"compile\", path=\"/data/.../moyu/workspace/demo.mo\")",
+                "moyu(action=\"run\", path=\"/data/.../moyu/workspace/demo.elf\")",
+                "moyu(action=\"read\", path=\"/data/.../moyu/mo/bin/../src/compiler.mo\")"
+            ),
+            parameters = mapOf(
+                "action" to "setup/compile/run/build_run/exec/list/read/write/diagnose/graph/pkg_init/dep_install/dep_fetch/dep_list/dep_tree/dep_verify/net_diag",
+                "path" to "源文件或可执行文件路径",
+                "code" to "write 时的源码内容",
+                "name" to "write 时的文件名",
+                "tool" to "exec 时的工具名",
+                "args" to "exec 时的参数"
+            ),
+            tips = listOf(
+                "首次使用先 action=setup 解压运行时",
+                "纯静态工具链，无需 apt/Ubuntu/终端",
+                "修 bug 流程：read 源码 → write 改后版本 → build_run 验证",
+                "装依赖用 dep_install，编译前 App 会自动同步 deps 到源目录",
+                "moc 不支持 -I，依赖能 import 靠的是目录同步",
+                "网络走 Android 网络栈，无需配置；不支持 HTTPS"
+            ),
+            relatedTools = listOf("moyu", "terminal"),
+            priority = 5
+        ),
         
         "linux_install" to ToolInfo(
             name = "linux_install",
@@ -1299,6 +1341,9 @@ object ToolCapabilityDirectory {
                 ToolCategory.KNOWLEDGE_MEMORY
             name == "terminal" || name.startsWith("terminal_") || name.startsWith("linux_") || name.startsWith("quroterm_") ->
                 ToolCategory.TERMINAL_LINUX
+            // 墨语言独立运行时（编译/运行 .mo、读写源码修 bug）。必须与 QuroToolRouter.categorize 同源，
+            // 否则 tool_discovery / tool_router 列不出它，AI 根本不知道有这门语言可用。
+            name == "moyu" || name.startsWith("moyu_") -> ToolCategory.TERMINAL_LINUX
             name.startsWith("ui_") -> ToolCategory.UI_CARDS
             name.startsWith("skill__") -> ToolCategory.AI_CAPABILITIES
             // CodeCanvas 确定性渲染出图（codecanvas_* 5 个工具）。

@@ -30,7 +30,7 @@ enum class Distro(
         displayName = "LANXIU",
         rootfsDirName = "lanxiu",
         isDebian = false,
-        rootfsFilename = "lanxiu-aarch64-rootfs-20261017.tar.xz",
+        rootfsFilename = "lanxiu-aarch64-rootfs-20261020-r17.tar.xz",
     );
 
     companion object {

@@ -44,6 +44,7 @@ import com.ai.assistance.quro.core.linux.LinuxDistro
 import com.ai.assistance.quro.core.linux.PackageManagerSpec
 import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
 import com.ai.assistance.quro.terminal.data.MirrorSource
+import com.ai.assistance.quro.terminal.ui.MoyuScreen
 import com.ai.assistance.quro.terminal.data.PackageManagerType
 import com.ai.assistance.quro.terminal.utils.SourceManager
 import com.ai.assistance.quro.core.tools.QuroPrivateDbTool
@@ -120,6 +121,9 @@ fun QuroToolCenterScreen(
                     "miniapp" -> stringResource(R.string.qk_02775)
                     "kaleidobox" -> stringResource(R.string.qk_02777)
                     "pkgmgr" -> stringResource(R.string.qk_02778)
+                    // 墨语言（Mo）——独立运行时，不依赖 Ubuntu。新增入口不走 strings.xml，
+                    // 直接用中文常量，避免为单个标题追加 i18n 键（项目铁律：qk_%05d 只追加）。
+                    "moyu" -> "墨语言 Mo"
                     "plugins" -> stringResource(R.string.qk_02779)
                     else -> stringResource(R.string.qk_02772)
                 },
@@ -141,6 +145,8 @@ fun QuroToolCenterScreen(
             "miniapp_sdk" -> MiniAppSdkPanel(context, onRenderInChat)
             "kaleidobox" -> KaleidoBoxPanel(context, onRenderInChat, onAskAi)
             "pkgmgr" -> PackageManagerPanel(context)
+            // 复用 terminal-core 的 MoyuScreen（全屏 Column，自带返回），返回即回到工具列表
+            "moyu" -> MoyuScreen(onBack = { selected = null })
             "plugins" -> PluginManagerPanel(context)
         }
     }
@@ -154,6 +160,7 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         Triple("miniapp_sdk", stringResource(R.string.qk_02781), stringResource(R.string.qk_02782)),
         Triple("toolbox", stringResource(R.string.qk_00214), stringResource(R.string.qk_02783)),
         Triple("pkgmgr", stringResource(R.string.qk_02778), stringResource(R.string.qk_02784)),
+        Triple("moyu", "墨语言 Mo", "独立运行时：编译/运行 .mo、AI 可直接读写源码修 bug，不依赖 Ubuntu"),
         Triple("sandbox", stringResource(R.string.qk_02773), stringResource(R.string.qk_02785)),
         Triple("db", stringResource(R.string.qk_02774), stringResource(R.string.qk_02786)),
         Triple("vispro", stringResource(R.string.qk_00021), stringResource(R.string.qk_02787)),

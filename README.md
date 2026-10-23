@@ -123,6 +123,7 @@
 | **离线 LLM 引擎** | 内置 **MNN / llama.cpp** 本地推理（`QuroLocalEngineNative`），支持流式、`<think>` 思考段流式上屏、本地工具调用、会话常驻复用 |
 | **特权层 L1–L5** | 无障碍 → Shizuku（uid 0/2000）→ 设备管理员 → ROOT（su）→ 应用内 Linux（proot + Ubuntu 24.04）。其中 **L1–L4 由 `PrivilegeLevel` 枚举承载**（系统权限），**L5 不在枚举内**，由 Linux 环境是否就绪决定 |
 | **终端 / Linux 沙箱** | 完整终端模拟器：proot + Ubuntu 24.04 ARM64 真实用户空间；PTY 伪终端（`/dev/ptmx` + `fork/exec`）；前台服务保活（specialUse，息屏/切 App 不被杀）；ACI 跨进程 26 个能力（终端服务单一入口 + `action` 分发）；4 种 IPC 接入（ContentProvider / Deep Link / Intent / BroadcastReceiver）；多会话管理 |
+| **墨语言 Mo（独立运行时）** | 内置 **墨语言 v1.165.0** 完整工具链（moc / molink / mols / modb / dwmo / mo2c / mo2x / seed） + aarch64 静态 qemu，**全部零依赖、不经 Ubuntu/proot/终端**；支持编译运行、包管理（mo.toml + deps + mo.lock，免 git 走 tarball + 4 级镜像回退）、依赖图分析、源码读写（AI 可直接修 bug）；socket 直通 Android 网络栈，可跑 HTTP 服务端 |
 | **MCP** | MCP 客户端（WebSocket / HTTP 传输）、应用内本地 MCP 服务，可由 AI 部署/调用、**MCP-ACI 桥接** |
 | **引擎 / 运行时** | CMS 引擎共享运行时（NODE / PYTHON / SSH / JAVA / RUST / GO）、CMS v2 模块、内置浏览器（Android WebView 运行时）、本地语音 STT / TTS |
 | **IM 通道** | 飞书（WebSocket）/ QQBot（官方 WS）/ 微信 iLink（HTTP 长轮询 35s） |
@@ -326,7 +327,7 @@ cd ZorvAI
 | **`./gradlew` 无法启动** | wrapper jar 缺失 `Main-Class` 时需修复；或改用本机已安装的 Gradle 直接构建。 |
 | **Shizuku 相关能力不可用** | 必须先打开 Shizuku App 并启动其服务 / 完成配对，再在 Zorv AI 中授权；Shizuku 未运行时 L2 通道不会启用。 |
 | **ROOT 模式命令不执行** | ROOT 模式走 `sh -c` 执行，需确认设备已 root 且已授予 su 权限。 |
-| **应用内 Linux（L5）无法运行** | 首次进入终端会自动解压内置 rootfs（`proot` 随包内置，Ubuntu + LANXIU 两套 rootfs 均已打包进 APK **无需联网下载**）；若解压被中断（App 被杀 / 设备过慢）导致环境异常，重启 App 会自动清掉半截 rootfs 重装。 |
+| **应用内 Linux（L5）无法运行** | 首次进入终端会自动解压内置 rootfs（`proot` 随包内置，Ubuntu rootfs 已打包进 APK **无需联网下载**）；若解压被中断（App 被杀 / 设备过慢）导致环境异常，重启 App 会自动清掉半截 rootfs 重装。 |
 | **终端息屏 / 切 App 后被杀** | 检查通知栏是否显示「Zorv AI 终端运行中」；Android 14+ 需要 `FOREGROUND_SERVICE_SPECIAL_USE` 权限。 |
 | **离线对话不可用** | 离线 LLM 随发布包内置；若所用构建不含离线引擎原生库则会提示未接入。 |
 | **网页 / HTML 预览不显示** | 内置浏览器基于 `android.webkit.WebView`：请确认系统 WebView 已安装且为较新版本（开发者选项 → WebView 实现）。 |
@@ -336,47 +337,58 @@ cd ZorvAI
 
 ---
 
-## 终端双系统 · Ubuntu + LANXIU（澜岫）
+## 终端 · Ubuntu 24.04
 
-ZorvAI 终端内置 **两套 Linux 发行版**，可在终端顶部栏一键切换，AI 也能感知并操控：
+终端内置**一套完整 Ubuntu**（proot，免 root，运行在 App 私有目录，不是模拟器也不是虚拟机）：
 
-| 系统 | 身份 | 包管理 | 说明 |
-|------|------|--------|------|
-| **Ubuntu 24.04**（系统一） | Ubuntu noble aarch64 | `apt` | 完整 Debian 系工具链（python3 / gcc / node / java / git / make…），适合通用开发。 |
-| **LANXIU（澜岫）**（系统二） | 澜岫（LANXIU）安卓版 aarch64 `1.7.41-aarch64` | `qypkg`（非 apt） | 自研扁平 rootfs（bash 在 `/usr/bin/bash`），自带 git 2.49 / iproute2 / alsa-utils / sudo / shadow / tzdata 等 44 应用。 |
+| 项 | 说明 |
+|---|---|
+| 发行版 | Ubuntu 24.04 noble · aarch64 |
+| 包管理 | `apt` / `pip` / `npm` |
+| 内置资产 | `assets/ubuntu-noble-aarch64-pd-v4.18.0.tar.xz`（约 64MB），随 APK 发布，首次进终端自动解压，不依赖网络 |
+| 目录 | `installed-rootfs/ubuntu` |
+| 工具链 | python3 / gcc / node / java / git / make 等完整 Debian 系工具链 |
 
-**内置资产（无需下载）**：两个 rootfs 都打包进 APK `assets/`（`ubuntu-noble-aarch64-pd-v4.18.0.tar.xz` 约 64MB + `lanxiu-aarch64-rootfs-20261017.tar.xz` 约 127MB，已烘焙 dash/zsh/fish + node v22.11.0 + pip 25.0.1 + svc，ASSET_VERSION=4 强制重抽），首次进入终端由 `TerminalEnvironment.extractAssets()` 自动解压到 App 私有目录 `installed-rootfs/{ubuntu,lanxiu}`，不与网络下载耦合。
+**AI 如何操控**：
 
-**两种切换方式**：
+- `terminal(action="status")` → 返回环境状态与就绪度
+- `terminal(action="exec", command="...")` → 在 Ubuntu 内执行命令
 
-- **手动**：终端界面顶部栏发行版下拉（Ubuntu / LANXIU 勾选）即时切换。
-- **AI 操控**：
-  - `terminal_status` → 返回 `selected_distro` / `ubuntu_ready` / `lanxiu_ready` / `lanxiu_status`，AI 一眼看清两套就绪度；
-  - `terminal_set_distro(distro="lanxiu")` → 切换当前发行版（AI 与可见终端共用同一 rootfs）；
-  - `terminal_exec(command=...)` → 在**选中**发行版内执行；LANXIU 走 `TerminalManager.runInGuest`（与终端界面同一 rootfs），Ubuntu 走原有 `QuroLinuxEnv` 工具链（保 python3 等已验证环境）。
+> ℹ️ **LANXIU（澜岫）已移除**：v1.2.0 起内置资产从 451MB 降至 64MB（删除 LANXIU 主 rootfs 389MB 与 VNC 增量包 9.9MB），终端只保留 Ubuntu。设备上历史保存的 `lanxiu` 偏好会自动回落 Ubuntu，不会指向已删除的 rootfs。
+>
+> **proot 共性约束**：命令直接用、别加 sudo（已映射为 root）；无 `/lib/modules`，别试 `modprobe`；不要在 rootfs 内嵌套启动第二套 proot。
 
-**LANXIU 开箱即联网（已修复）**：上游 rootfs 原生缺 3 处配置导致开箱联网瘫痪——`/etc/resolv.conf` 缺失、`/etc/nsswitch.conf` 缺失、`/etc/ssl/certs` 空目录且 curl 不读 CA 目录（所有 HTTPS 报 `(60)`）。已**烤进源 rootfs** 修复（15525 → 15529 条目，root 属主）：
+---
 
-- `etc/nsswitch.conf`（`hosts: files dns`）
-- `etc/resolv.conf`（8.8.8.8 / 1.1.1.1 / 223.5.5.5 / 119.29.29.29 四 nameserver 兜底）
-- `etc/ssl/certs/ca-certificates.crt`（certifi / Mozilla 全量 CA bundle）
-- `etc/profile.d/ssl-ca.sh`（`export SSL_CERT_FILE` / `CURL_CA_BUNDLE`）
+## 墨语言 Mo · 内置独立运行时
 
-同时 `common.sh` 双保险：`install_rootfs` 写 resolv.conf 升为 4 nameserver；`login_rootfs` / `guest_exec` 的 `env -i` 块直接注入 `SSL_CERT_FILE` / `CURL_CA_BUNDLE`——即便 `profile.d` 未被 source 也生效。实测 curl / wget 国内外站点全通。
+ZorvAI 内置 **墨语言（Mo）v1.165.0** —— 一门编译到原生机器码的静态类型系统级语言，编译器用墨语言自身写成，完成 Stage 0→1→2→3 自举闭环。
 
-### LANXIU 与 Ubuntu 完全同级（对等系统，非二等公民）
+### 关键设计：完全独立，不依赖 Ubuntu / proot / 终端
 
-LANXIU（澜岫）是终端里与 Ubuntu **完全对等**的第二套发行版——AI 与用户用的是**同一套**控制面：`terminal_status` 查两套就绪度、`terminal_set_distro` 切换、`terminal_exec` 在选中系统执行，三者对 Ubuntu 和 LANXIU **一视同仁**。LANXIU 的 `terminal_exec` 与 Ubuntu 走**同一种**一次性 proot 执行模型（都每次 spawn 一个独立 proot 跑命令，互不保留跨命令状态），AI 命令执行能力对等；LANXIU 还拥有自己的包生态 `qypkg`（如同 `apt` 是 Ubuntu 的生态），是并列关系而非从属。
+墨语言工具链（`moc` / `molink` / `mols` / `modb` / `dwmo` / `mo2c` / `mo2x` / `seed`）全部是 **x86_64 静态可执行（ELF `DT_NEEDED = 0`）**，随包内置的 `qemu-x86_64-static` 是 **aarch64 静态可执行**，两者零依赖 —— App 直接用 `ProcessBuilder` 进程调用，**不走 proot、不走终端、不需要联网装任何东西**。
 
-下面三条常被误读为「LANXIU 的缺陷」，其实它们是 **proot-on-Android 的共性约束，Ubuntu 同样存在**，因此**不构成 LANXIU 相对 Ubuntu 的任何劣势**：
+| 项 | 说明 |
+|---|---|
+| 内置资产 | `assets/mo-pkg.pack`（3.3MB，解压后 27.5MB / 756 文件） |
+| 运行时目录 | `filesDir/moyu/`（`bin/qemu-x86_64-static` + `mo/` 语言本体） |
+| 入口 | 工具中心 → 墨语言 Mo |
+| 语言本体 | 含 `src/compiler.mo` 编译器源码、`lib/` 标准库、`examples/` 示例、`docs/` 文档、`tests/` 测试 —— AI 可直接读写源码修 bug |
 
-1. **不能「在 Ubuntu 内嵌套 proot 启 LANXIU」** → 这条对**任何**第二套 rootfs 都成立：你也没法在 Ubuntu 里再嵌套启动第二个 Ubuntu。App 的设计本来就是 LANXIU 作为**独立 sibling proot**，由 distro 切换器在 Ubuntu **之外**拉起（`installed-rootfs/lanxiu`），与 Ubuntu 平起平坐、互不嵌套。所以 LANXIU 是**完整可运行的环境**，绝非「只能以文件形式存在、等切换器来用」。
+### 能力
 
-2. **sudo / setuid 受限** → 两套 proot 都受 Android 沙箱限制，sudo 都不可用；但两套都**已把你映射成 root**，直接用命令即可，本来就不用 sudo。Ubuntu 同理。
+- **编译运行**：`moc <src.mo> [out]`，编写 → 编译 → 运行 → 改错闭环
+- **包管理**（对齐官方 `tools/mopkg.sh` 协议，但**不需要 git**）：`mo.toml` 声明依赖 → 把 git 地址换算成托管站 tarball 下载（GitHub `codeload` / Gitee `archive`，含 **4 级镜像回退**：直连 → ghfast → gh-proxy → ghproxy）→ 解压到 `deps/<name>/` → 写 `mo.lock`；支持 `install` / `fetch` / `list` / `remove` / `verify` / `tree`
+- **依赖解析**：编译前自动把 `deps/*/*.mo` 与 `mo/lib/*.mo` 同步到源目录（moc 的真实 import 机制是「找当前目录」，**不支持 `-I` 参数**）
+- **构建依赖图**：递归扫 `import` → 拓扑排序 → 缺失与循环检测
+- **网络**：socket 经 qemu 直通 Android 内核，直接使用 ZorvAI 的网络（仅需 `INTERNET` 权限）。标准库 `lib/net.mo` 提供 `tcp_listen` / `tcp_accept` / `tcp_connect`；示例含 `httpd.mo`（HTTP 服务端）与 `httpto.mo`（带慢连接超时）。**无 TLS/HTTPS**
+- **AI 工具 `moyu`**：`setup` / `compile` / `run` / `build_run` / `exec` / `read` / `write` / `list` / `diagnose` / `graph` / `pkg_init` / `dep_install` / `dep_fetch` / `dep_list` / `dep_tree` / `dep_verify` / `net_diag`
 
-3. **无 `/lib/modules`** → 任何安卓 proot 都没有内核模块机制（安卓不需要），Ubuntu 的 proot 也没有。这不是 LANXIU 独有。
+### Android 适配要点
 
-> 💡 LANXIU rootfs 为扁平布局（解压后直接是 `bin/ etc/ usr/ …`），启动 bash 用 `/usr/bin/bash`（不是 `/bin/bash`）；若用 `common.sh` 的 `resolve_guest_bash()` 则无需关心此差异。
+- 运行时解压用**纯 Java 实现**（`GZIPInputStream` + 内置 tar 解析），不依赖 busybox，也不依赖终端环境是否初始化
+- 16KB 页兼容：qemu 的 `PT_LOAD p_align = 64KB` ≥ Android 15 的 16KB 要求
+- 退出码诊断：`137` 内存不足被回收 / `159` seccomp 拦截系统调用 / `139` 段错误 / `134` 断言失败
 
 ---
 
@@ -384,7 +396,17 @@ LANXIU（澜岫）是终端里与 Ubuntu **完全对等**的第二套发行版�
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[v1.1.8 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
+- 🟢 **[v1.2.0 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
+
+  **内置墨语言 Mo v1.165.0 · 移除 LANXIU · 包体积 805MB → 382MB**
+
+  - **墨语言内置独立运行时**：工具链与 aarch64 静态 qemu 随 APK 发布，零依赖、不经 Ubuntu/proot/终端，直接在 App 私有目录进程调用；纯 Java 解压（不依赖 busybox）。
+  - **包管理**：对齐官方 `mopkg.sh` 协议但免 git —— git 地址换算 tarball，含直连/ghfast/gh-proxy/ghproxy 四级镜像回退；`mo.toml` + `deps/` + `mo.lock`，编译前自动同步依赖到源目录。
+  - **网络**：socket 直通 Android 内核，标准库 `lib/net.mo` 提供 TCP，示例含 `httpd.mo` 可现场起 HTTP 服务。
+  - **移除 LANXIU**：删掉 389MB 主 rootfs 与 9.9MB 增量包，APK 805MB → 382MB；历史 `lanxiu` 偏好自动回落 Ubuntu。
+  - **AI 工具 `moyu`**：compile / build_run / graph / dep_install / dep_fetch / net_diag 等 17 个动作。
+
+- 🟡 **[v1.1.8 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名）
 
   **终端双系统：Ubuntu + LANXIU（澜岫）全面打通**
 

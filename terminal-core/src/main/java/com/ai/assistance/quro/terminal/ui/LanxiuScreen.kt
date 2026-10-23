@@ -87,7 +87,22 @@ fun LanxiuScreen(
         }.getOrDefault("未知")
     }
 
-    val lanxiuReady = env.lanxiuEnvStatus() == GuestEnvStatus.READY
+    // 🔴 2026-10-21（用户反馈「UI 层没有解压 UI，不知道什么时候好了」）：
+    // lanxiuEnvStatus() 是普通函数，不会自己触发重组——解压完成后界面也不会变。
+    // 这里在「解压中 / 待安装」期间每 1.5s 自刷新一次，就绪或缺失时停止轮询，不空转。
+    var statusTick by remember { mutableStateOf(0) }
+    val lanxiuStatus = remember(statusTick) { env.lanxiuEnvStatus() }
+    androidx.compose.runtime.LaunchedEffect(lanxiuStatus) {
+        if (lanxiuStatus == GuestEnvStatus.INSTALLING ||
+            lanxiuStatus == GuestEnvStatus.NEEDS_INSTALL
+        ) {
+            while (true) {
+                kotlinx.coroutines.delay(1500)
+                statusTick++
+            }
+        }
+    }
+    val lanxiuReady = lanxiuStatus == GuestEnvStatus.READY
     val isSelected = env.selectedDistro == Distro.LANXIU
 
     Column(
@@ -135,8 +150,11 @@ fun LanxiuScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // 状态卡
+            val isInstalling = lanxiuStatus == GuestEnvStatus.INSTALLING
             val statusText = when {
                 !isSelected -> "未选中（当前：${env.selectedDistro.displayName}）"
+                // 🔴 解压中必须单独可见（2026-10-21 用户反馈：不知道什么时候好）
+                isInstalling -> "正在解压…（首次约 3-8 分钟，完成自动就绪）"
                 env.lanxiuDownloadStatus == LanxiuDownloadStatus.Downloading ->
                     "下载中 ${(env.lanxiuDownloadProgress * 100).toInt()}%"
                 lanxiuReady -> "就绪"
@@ -157,6 +175,12 @@ fun LanxiuScreen(
                 ActionRow(
                     label = "切换到 LANXIU",
                     onClick = { env.onSelectDistro(Distro.LANXIU) }
+                )
+            } else if (isInstalling) {
+                // 解压进行中：不确定进度，用不确定态进度条表示"在动"，并说明无需操作
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = TerminalTheme.accentColor
                 )
             } else if (env.lanxiuDownloadStatus == LanxiuDownloadStatus.Downloading) {
                 LinearProgressIndicator(

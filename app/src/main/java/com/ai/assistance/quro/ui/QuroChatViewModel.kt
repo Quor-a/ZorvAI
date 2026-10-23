@@ -1536,7 +1536,9 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 - **工作区工�?**：workspace_write（写文件）、workspace_read（读文件）、workspace_list（列目录）、workspace_render（渲染预览）、workspace_doc（创建文档）、workspace_media（播放媒体）、workspace_doc_view（打开文档�?
 - **文档工具**：enhanced_doc_create（增强版文档创建，支�?20+格式）、aiwps_create（基础文档创建）、aiwps_read（读取文档）、aiwps_edit（编辑文档）
 
-- **终端双系统（Ubuntu + LANXIU 澜岫）**：terminal（统一终端工具：status 查双系统状态、set_distro=lanxiu/ubuntu 切换发行版、exec 在当前发行版执行命令；LANXIU 用 qypkg 包管理、不是 apt，Ubuntu 用 apt；两套对等，都在「终端/Linux」分类下）
+- **终端（Ubuntu）**：terminal（统一终端工具：status 查环境状态、exec 执行命令；Ubuntu 用 apt 包管理）
+
+- **墨语言 Mo（独立运行时，不依赖 Ubuntu）**：moyu（action=setup 解压运行时 / compile 编译 .mo / build_run 编译并运行 / run 运行 .elf / exec 调工具链 / read+write 读写源码修 bug / list 列出工具链 / diagnose 体检）。工具链（moc 编译器、molink 链接器、mols、modb、dwmo、mo2c、mo2x、seed）随 APK 内置，均为 x86_64 静态可执行，经同样内置的 aarch64 静态 qemu 在设备本地**直接跑**——不需要 Ubuntu、不需要联网装包。用户说「写个墨语言程序 / 跑一下 / 修个墨语言 bug」就用它，不要绕去 terminal。
 
 ## 工具调用规则
 - 用户想「打开/启动 XX 应用」时，优先用 search_and_launch_app（一步完成），不要先 list_installed_apps �? launch_app
@@ -2978,25 +2980,27 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         sb.append("- 当你要判断「某个需要 Python/Node 的模块能不能跑」「引擎是否就绪」「引擎拉起了哪些共享服务」时，调用 **cms_engine_status** 回查，而不是凭空回答。\n")
 
         // ══════════════ 双系统 Linux 环境（Ubuntu + LANXIU）：AI 必须感知并可控制 ══════════════
-        // 背景：终端已做成双系统（Ubuntu + 澜岫 LANXIU），但 AI 此前完全不知道 LANXIU 存在、
-        // 只会用 Ubuntu。这里把"AI 能看到并切换双系统"明确写进系统提示词，使其成为一等公民。
-        sb.append("\n### 双系统 Linux 环境（Ubuntu + LANXIU）\n")
+        // 2026-10-23：LANXIU 已按用户要求整体移除（内置的两套 LANXIU 资产约 400MB，体积过大），
+        // 终端只保留完整 Ubuntu；同时新增墨语言（Mo）独立运行时——不依赖 Ubuntu 也能编译运行。
+        sb.append("\n### 内置 Linux 环境（Ubuntu）与墨语言独立运行时\n")
         sb.append(
-            "应用内终端是一个**双系统** Linux 沙盒（proot，免 root，运行在 App 私有目录下的 proot 沙箱中、由 terminal-core 管理，不是模拟器也不是虚拟机），里面同时装了两套独立的发行版 rootfs，AI 与你（用户）看到的是**同一个**环境：\n" +
-            "- **Ubuntu**（Debian 系）：用 apt / pip / npm 包管理；rootfs 在 installed-rootfs/ubuntu。\n" +
-            "- **LANXIU（澜岫）**：aarch64 Linux rootfs（澜岫安卓版），用自研 `qypkg` 包管理（**不是 apt**，别对 LANXIU 用 apt）；rootfs 在 installed-rootfs/lanxiu。LANXIU 已**内置**随 App 发布（无需下载），首次使用即就绪。\n" +
-            "两套 rootfs 互不干扰，切换发行版只改变启动目标，不动另一套已解压的 rootfs。\n" +
-            "**LANXIU 里已预装**：真实 OpenSSH（sshd 服务端 + ssh / scp / ssh-keygen / ssh-agent 客户端 + sftp-server）、Go、Rust（cargo）、Node.js、Python（pip）、bash / zsh / fish、qypkg 包管理；可直接在 LANXIU 内编译运行 Rust/Go 程序。\n\n" +
-            "**你（AI）如何控制双系统**（这是你本来就有的能力，不是新工具，只是明确告知）：\n" +
-            "1. 先查当前状态：`terminal(action=\"status\")` —— 返回 selected_distro（当前发行版：ubuntu / lanxiu）、ubuntu_ready、lanxiu_ready、lanxiu_status，以及 terminal_exec 将运行的 source。\n" +
-            "2. 切换发行版：`terminal(action=\"set_distro\", distro=\"lanxiu\")` 或 `distro=\"ubuntu\"` —— 切换后，**terminal_exec 与可见终端都运行在该发行版上**（AI 与用户共用同一套 rootfs）。\n" +
-            "3. 执行命令：`terminal(action=\"exec\", command=\"...\")` —— 在你当前选中的发行版里执行；返回里带 `distro` 字段标明实际跑在哪套系统，务必看它确认。\n\n" +
-            "**关键约束**：\n" +
-            "- LANXIU 用 `qypkg`（如 `qypkg install xxx`），**绝不要**在 LANXIU 里用 apt / dpkg；Ubuntu 才用 apt。\n" +
-            "- 首次切到某发行版若其 rootfs 未就绪，terminal_status 会给出 lanxiu_status（ready / needs_install / asset_missing），必要时先 `set_distro` 到已就绪的那套。\n" +
-            "- 不要假设只有 Ubuntu：用户明确装了 LANXIU，遇到「某个 Linux 命令在 Ubuntu 找不到 / 想用澜岫生态」时应主动考虑切到 LANXIU。\n" +
-            "- **LANXIU 与 Ubuntu 完全同级（对等系统，不是二等公民）**：两套都是终端里的对等发行版，你用同一套 `status` / `set_distro` / `exec` 控制，能力对等；LANXIU 用 `qypkg`（如同 `apt` 是 Ubuntu 的生态），别把它当残缺系统。\n" +
-            "- **proot 共性约束（两套都一样，不是 LANXIU 缺陷）**：别在 Ubuntu 里嵌套 proot 启 LANXIU（任何第二套 rootfs 都会被 ptrace 拒绝，LANXIU 本就作为独立 sibling proot 在 Ubuntu 外拉起）；sudo 在 proot 内受限但两套都已映射成 root，**直接用命令别加 sudo**；两套 proot 都无 `/lib/modules`（安卓不需要），别试 `modprobe` / `insmod`。\n"
+            "**终端 = 单系统 Ubuntu**：应用内终端是一个 proot 沙盒（免 root，运行在 App 私有目录、由 terminal-core 管理，不是模拟器也不是虚拟机），只装一套完整 Ubuntu（Debian 系），AI 与用户看到的是同一个环境。\n" +
+            "- 包管理用 apt / pip / npm；rootfs 在 installed-rootfs/ubuntu。\n" +
+            "- 查状态 `terminal(action=\"status\")`；执行命令 `terminal(action=\"exec\", command=\"...\")`。\n" +
+            "- **LANXIU（澜岫）已整体移除**：不要再用 lanxiu / qypkg / set_distro=\"lanxiu\" 之类的说法与操作，那套 rootfs 与 qypkg 都已不存在。\n\n" +
+            "**墨语言 Mo = 独立运行时，完全不依赖 Ubuntu**：`moyu` 工具自带整套工具链（moc 编译器 / molink 链接器 / mols / modb / dwmo / mo2c / mo2x / seed）与 qemu，全部随 APK 内置。\n" +
+            "- 原理：工具链是 x86_64 **静态链接**可执行（零动态依赖），内置的 qemu-x86_64-static 是 aarch64 **静态**可执行，两者组合可直接在 App 私有目录进程调用——**不经 proot、不经 Ubuntu、不需联网装任何东西**。\n" +
+            "- 首次使用先 `moyu(action=\"setup\")` 解压运行时（约 10-20 秒）；之后 `build_run` 编译并运行、`compile` 只编译、`run` 运行已编译的 .elf、`exec` 调任意工具链程序、`list`/`diagnose` 查状态。\n" +
+            "- 墨语言是静态类型、编译到原生机器码的系统级语言，写法接近 C：`func main() { print(\"hi\") }`。\n" +
+            "- **AI 修复墨语言 bug 的标准流程**：`read` 读源码（语言本体在 moyu 根目录的 mo/ 下，含 src/compiler.mo 编译器源码、lib/ 标准库、examples/、tests/、docs/）→ 定位问题 → `write` 写回修正版 → `build_run` 验证编译与运行结果。\n" +
+            "- **包管理**（对齐官方 tools/mopkg.sh 协议，但**不需要 git**）：`pkg_init` 建项目（生成 mo.toml）→ `dep_install` 传 git 地址装依赖（内部把 GitHub/Gitee 地址换算成 tarball 下载，含直连→ghfast→gh-proxy→ghproxy 四级镜像回退，解压到 deps/<名字>、写 mo.lock）→ `dep_fetch` 按 mo.toml 拉全部 → `dep_list` / `dep_tree` / `dep_verify`。依赖装在 workspace/deps/ 下。\n" +
+            "- **依赖如何被 import**：moc **不支持 -I 参数**（它只在「源文件所在目录」找 import）。所以编译前 App 会自动把 deps/*/*.mo 与 mo/lib/*.mo 同步到源目录；你只管写 `import \"xxx.mo\";`，不用也不能传 -I。\n" +
+            "- **依赖图**：`graph` 传入口 .mo，递归扫 import、拓扑排序、报缺失文件与循环依赖。编译失败又看不出原因时先跑它。\n" +
+            "- **网络**：墨语言的 socket 经 qemu 直通 Android 内核，**用的就是 ZorvAI 的网络**（只需 INTERNET 权限，无需额外配置）。标准库 lib/net.mo 提供 tcp_listen / tcp_accept / tcp_connect；examples/httpd.mo 是 HTTP 服务端（argv(1) 取端口）、httpto.mo 带慢连接超时。**没有 TLS/HTTPS**。\n" +
+            "- **下载不通时**：先 `net_diag` 看各源可达性（直连 / ghfast / gh-proxy / ghproxy / Gitee），据此判断是网络问题还是仓库地址问题。\n" +
+            "- **退出码含义**（Android 特有）：137 = 内存不足被系统回收；159 = seccomp 拦截 qemu 需要的系统调用（ROM 限制，非墨语言问题）；139 = 段错误（程序越界）；134 = 断言失败。碰到这些不要瞎猜，直接看退出码。\n" +
+            "- 用户说「写个墨语言程序 / 跑一下 / 修个墨语言 bug / 用墨语言写个工具 / 装个墨语言依赖」→ 一律用 `moyu`，**不要**绕去 terminal 或用 apt 装编译器。\n" +
+            "- proot 共性约束：不要嵌套启第二套 rootfs；命令直接用别加 sudo；proot 内无 /lib/modules，别试 modprobe / insmod。\n"
         )
 
         // ══════════════ ACI（Agent Capability Interface）：AI 作为控制方调用第三方 App ══════════════
