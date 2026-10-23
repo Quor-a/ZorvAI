@@ -42,9 +42,18 @@ class TerminalEnvironment(context: Context) {
 
     private val sourceManager = SourceManager(context)
 
-    /** 当前选中的发行版（双系统切换），持久化在 SharedPreferences，默认 Ubuntu 以兼容老用户。 */
+    /** 当前选中的发行版，持久化在 SharedPreferences。LANXIU 已整体移除，只保留 Ubuntu。 */
     private val distroPrefs = context.getSharedPreferences("terminal_distro", Context.MODE_PRIVATE)
+
+    /**
+     * 🔴 2026-10-23：LANXIU 已移除，但设备上 SharedPreferences 里可能还存着 "lanxiu"。
+     * 若不强制纠正，启动会指向一套不存在的 rootfs（表现为"环境永远未就绪/反复解压"）。
+     * 这里读到 LANXIU 一律回落 UBUNTU，并顺手把偏好覆盖掉。
+     */
     var selectedDistro: Distro = Distro.fromId(distroPrefs.getString("selected_distro", null))
+        .takeIf { it != Distro.LANXIU } ?: Distro.UBUNTU.also {
+            distroPrefs.edit().putString("selected_distro", it.id).apply()
+        }
 
     private val envInitMutex = Mutex()
     private var isEnvInitialized = false
@@ -56,11 +65,20 @@ class TerminalEnvironment(context: Context) {
         private const val UBUNTU_FILENAME = "ubuntu-noble-aarch64-pd-v4.18.0.tar.xz"
         /** LANXIU（澜岫）安卓版 rootfs：本仓库 Release 标签（README 权威源）。 */
         const val LANXIU_DOWNLOAD_URL =
-            "https://github.com/Quor-a/lanxiu-linux-android/releases/download/lanxiu-1.7.41-aarch64/lanxiu-aarch64-rootfs-20261017.tar.xz"
+            "https://github.com/Quor-a/lanxiu-linux-android/releases/download/lanxiu-1.7.46-aarch64/lanxiu-aarch64-rootfs-20261020-r17.tar.xz"
         /** 资产内容版本：改了内置 tar 包内容（如 rebrand 改 os-release、r10 proot 修复加 ld.so.cache）时 +1，
          *  强制设备重抽。仅靠 lastUpdateTime 无法捕捉「同版本号改内容」，会导致设备继续用旧解压 rootfs。
-         *  本次 +1：烤入 Xtigervnc + 桌面依赖库 + misc 字体索引，支撑 in-app VNC 桌面。 */
-        private const val ASSET_VERSION = 8
+         *  8→14：内置最新 LANXIU r17（2026-10-20，扁平化后入库，官方 release 原包逐字节内容）。 */
+        private const val ASSET_VERSION = 17
+
+        /**
+         * 「解压进行中」标记文件名（写在 rootfs 根下）。
+         *
+         * install_rootfs 在解压**开始前**写入、在**关键文件全部校验通过后**删除。
+         * 它的存续期精确等于「解压这段时间」，因此是 UI 显示「正在解压…」和
+         * 会话初始化「按状态轮询而非固定超时」的依据（2026-10-21 用户要求）。
+         */
+        const val EXTRACT_MARK = ".extracting"
 
         /**
          * LANXIU 图形桌面（VNC）增量包：仅含 Xtigervnc + 15 个依赖库 + misc 字体索引，约 9.5MB。
@@ -225,7 +243,11 @@ class TerminalEnvironment(context: Context) {
             // Ubuntu 内置；LANXIU 亦内置（与 Ubuntu 同机制，不再首次按需下载）。
             // 第三个是 LANXIU 图形桌面增量包（Xtigervnc + 依赖库 + 字体索引，~9.5MB）：
             // 单独成包是为了「老 rootfs 就地补文件」，避开 455MB 整包重解压的超时死循环（详见常量注释）。
-            val assetNames = listOf(UBUNTU_FILENAME, Distro.LANXIU.rootfsFilename, LANXIU_ADDON_FILENAME)
+            // 🔴 2026-10-23 用户决定：放弃 LANXIU，只保留完整 Ubuntu。assets 里已删除
+            // lanxiu 主包(389MB) 与 vnc 增量包(9.9MB)，因此这里不再尝试拷贝它们
+            // （否则每次启动都白跑一遍拷贝并刷缺失日志）。墨语言运行时是独立资产，
+            // 由 MoyuRuntime 自行从 assets 解压到 filesDir/moyu，不参与 rootfs 安装。
+            val assetNames = listOf(UBUNTU_FILENAME)
             val stampFile = File(filesDir, ".assets.stamp")
             val prevStamp = runCatching { stampFile.readText() }.getOrDefault("")
             // 用 lastUpdateTime 而不是 versionCode：每次安装都会变，保证「同版本号重装」也能刷新资产。
@@ -452,7 +474,10 @@ class TerminalEnvironment(context: Context) {
               # 🔴 大小兜底：完整 Xtigervnc ≈ 2.9MB。若上一版被中断留下半截文件，虽非空且带可执行位，
               # 但体积远小于此 -> 仍判为损坏，强制重解增量包（而不是带着半截二进制继续跑，VNC 必崩）。
               XV_SZ=`wc -c < "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" 2>/dev/null || echo 0`
-              if [ "${'$'}XV_SZ" -ge 2000000 ]; then
+              # 🔴 字体兜底（2026-10-21 真机）：Xvnc 起 X 必须有默认字体，addon 里的 X11 misc 字体
+              # 以前因为没有这条检查而永远补不上（Xtigervnc 在就整包跳过）→ 报 could not open
+              # default font 退出。这里连带校验 fixed 别名的目标字体，缺则重解 addon。
+              if [ "${'$'}XV_SZ" -ge 2000000 ] && [ -e "${'$'}ROOTFS_PATH/usr/share/fonts/X11/misc/fonts.alias" ] && [ -e "${'$'}ROOTFS_PATH/usr/share/fonts/X11/misc/10x20-ISO8859-1.pcf.gz" ]; then
                 return 0
               fi
             fi
@@ -476,20 +501,41 @@ class TerminalEnvironment(context: Context) {
             fi
             progress_echo "LANXIU 桌面组件已就位(Xtigervnc)"
           }
-          if ready_check; then
-            if asset_current; then
+          # 🔴 2026-10-21 两处结构性修复（首次在 01:45/12:27 做过，被 12:37 的 git checkout 还原，此处重做）：
+          # (a) 资产标记不过 → 必须真正重解压。原「棉花分支」只把标记改成新版本号、内容一字不解，
+          #     于是换包/升资产在设备上永不生效（半截 rootfs 永远修不好，表现为「怎么改都还是废」）。
+          # (b) 清空 rootfs 之前必须先确认安装包在。原顺序是「先 rm -rf 再查包」，而包在解压成功后
+          #     就被删了 → 版本一变就「清空就绪系统 + 发现无包可装」= 自毁（Ubuntu 曾因此一起废）。
+          if ready_check && asset_current; then
               VERSION=`grep '^PRETTY_NAME=' "${'$'}ROOTFS_PATH/etc/os-release" 2>/dev/null | head -n 1 | cut -d= -f2- | tr -d '"'`
               [ -z "${'$'}VERSION" ] && VERSION=`cat "${'$'}ROOTFS_PATH/etc/issue.net" 2>/dev/null`
               progress_echo "rootfs ${'$'}L_INSTALLED -> ${'$'}VERSION"
-            else
-              # 🔴 不做整包重解压（见 install_lanxiu_addon 注释里的超时死循环）。标记直接更新，
-              # 避免每次 exec 都重复走这条分支；主包内容变更由后续版本（或叠加包）承接。
-              echo "av=${'$'}ASSET_VER" > "${'$'}ASSET_MARK" 2>/dev/null
-              progress_echo "rootfs 资产标记更新 -> av=${'$'}ASSET_VER}(沿用现有 rootfs，增量件单独叠加)"
-            fi
-            # 无论主 rootfs 新旧，都幂等补齐桌面组件（缺才解，已有直接返回）。
-            ${if (distro == Distro.LANXIU) "install_lanxiu_addon || true" else ":  # Ubuntu 不用 LANXIU 增量件"}
+              # 无论主 rootfs 新旧，都幂等补齐桌面组件（缺才解，已有直接返回）。
+              ${if (distro == Distro.LANXIU) "install_lanxiu_addon || true" else ":  # Ubuntu 不用 LANXIU 增量件"}
           else
+            if [ ! -e ~/"${'$'}ROOTFS_TARBALL" ] && ready_check; then
+              # 无包但 rootfs 就绪：沿用现有系统、只对齐标记，绝不清空（否则就是自毁）
+              echo "av=${'$'}ASSET_VER" > "${'$'}ASSET_MARK" 2>/dev/null
+              progress_echo "rootfs 安装包缺失但现有 rootfs 就绪，沿用现有系统（标记对齐 av=${'$'}ASSET_VER）"
+              ${if (distro == Distro.LANXIU) "install_lanxiu_addon || true" else ":  # Ubuntu 不用 LANXIU 增量件"}
+            else
+            # 🔴 2026-10-22 解压互斥锁（用户追问「你知道哪个是最后的解压吗」——正是多入口并发解压）：
+            # prepareGuestRootfs / login_rootfs / execGuest 三条链路都会调 install_rootfs。若两个
+            # tar 同时往同一棵树解压，文件会互相覆盖/截断，于是校验**永远**判"不完整"→ 清空重来
+            # → 无限循环解压。用 mkdir 的原子性做互斥：抢不到锁说明别人正在解压，本次直接返回，
+            # 绝不并发第二个 tar。锁龄超 20 分钟视为死锁（进程被杀留下的），强制接管。
+            LOCK="${'$'}ROOTFS_PATH/.extract_lock"
+            if ! mkdir "${'$'}LOCK" 2>/dev/null; then
+              OLD=`find "${'$'}LOCK" -maxdepth 0 -mmin +20 2>/dev/null | wc -l`
+              if [ "${'$'}OLD" -gt 0 ] 2>/dev/null; then
+                progress_echo "检测到超时遗留的解压锁，接管继续"
+                rm -rf "${'$'}LOCK" 2>/dev/null
+                mkdir "${'$'}LOCK" 2>/dev/null || { progress_echo "其他解压进程仍在运行，稍后自动继续"; return 0; }
+              else
+                progress_echo "已有解压进程在进行中，本次跳过（避免并发解压互相破坏）"
+                return 0
+              fi
+            fi
             if [ -n "${'$'}(ls -A "${'$'}ROOTFS_PATH" 2>/dev/null)" ]; then
               progress_echo "rootfs 检测到半截解压，清理后重装..."
               rm -rf "${'$'}ROOTFS_PATH"/* 2>/dev/null
@@ -513,8 +559,15 @@ class TerminalEnvironment(context: Context) {
             # 解压错误不再静默吞掉（原来 >/dev/null 2>&1，坏了只看到黑屏）：错误落盘 + 回显末行。
             # -o: 不保留 tar 包属主/属组，全部归当前（应用）进程所有 -> 应用可遍历整棵树，
             # 避免 tar 包里 agentuser/0700 的 /root 让 proot -w /root 进不去 -> getcwd 失败(exit 130)。
+            # 🔴 解压中标记（2026-10-21 用户要求）：从真正开始解压这一刻起 UI 就能显示「正在解压…」，
+            # 会话初始化也按 guestEnvStatus 轮询（INSTALLING→继续等），而不是到点就判失败。
+            # 注意：必须放在空间预检**之后**——否则空间不足提前 return 会留下标记，界面永久卡「正在解压」。
+            mkdir -p "${'$'}ROOTFS_PATH" 2>/dev/null
+            echo "start=`date '+%s' 2>/dev/null`" > "${'$'}ROOTFS_PATH/${EXTRACT_MARK}" 2>/dev/null
             if ! busybox tar xof ~/"${'$'}ROOTFS_TARBALL" -C "${'$'}ROOTFS_PATH/" 2>"${'$'}TMPDIR/rootfs_extract.err"; then
               progress_echo "rootfs 解压报错：${'$'}(tail -n 1 "${'$'}TMPDIR/rootfs_extract.err" 2>/dev/null)"
+              rm -f "${'$'}ROOTFS_PATH/${EXTRACT_MARK}" 2>/dev/null
+              rm -rf "${'$'}LOCK" 2>/dev/null
               return 1
             fi
             ${if (distro == Distro.UBUNTU) "mv \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"/* \"${'$'}ROOTFS_PATH/\" 2>/dev/null\n            rm -rf \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"" else ":  # LANXIU rootfs 已是扁平布局，无需拍平"}
@@ -523,17 +576,57 @@ class TerminalEnvironment(context: Context) {
             # 启动即 ENOSYS(Function not implemented)，进程极短命（进程采样器抓不到），表现为
             # 「LANXIU exec 不起新进程」。解压后强制核验 loader 与 bash 可达，任一缺失立即报错返回，
             # 把沉默的黑屏变成可见、可诊断的失败，而不是带着半截 rootfs 继续。
-            if [ ! -e "${'$'}ROOTFS_PATH/lib/ld-linux-aarch64.so.1" ] && [ ! -e "${'$'}ROOTFS_PATH/lib/ld-linux.so.2" ]; then
-              progress_echo "rootfs 解压不完整：动态链接器 /lib/ld-linux 仍不可达（usrmerge 链接缺失或解压残缺）"
+            # 🔴 2026-10-22 无限循环解压的元凶就在这句：原来只认 /lib/ld-linux-aarch64.so.1，
+            # 而该 rootfs 的实体只有 usr/lib/ld-linux-aarch64.so.1（lib 只是 ->usr/lib 的符号链接，
+            # 解压顺序不巧时 lib 会先被建成空目录，链接补不上）→ 每轮解压完都判"不完整"→ return 1
+            # → av 标记不写 → 下次又清空重解压 → **无限循环**。现在四条路径任一命中即通过。
+            if [ ! -e "${'$'}ROOTFS_PATH/lib/ld-linux-aarch64.so.1" ] && [ ! -e "${'$'}ROOTFS_PATH/usr/lib/ld-linux-aarch64.so.1" ] && [ ! -e "${'$'}ROOTFS_PATH/lib/ld-linux.so.2" ] && [ ! -e "${'$'}ROOTFS_PATH/usr/lib/ld-linux.so.2" ]; then
+              progress_echo "rootfs 解压不完整：动态链接器 ld-linux 在 lib/ 与 usr/lib/ 均不可达"
+              rm -f "${'$'}ROOTFS_PATH/${EXTRACT_MARK}" 2>/dev/null
+              rm -rf "${'$'}LOCK" 2>/dev/null
               return 1
             fi
             if [ ! -e "${'$'}ROOTFS_PATH/usr/bin/bash" ] && [ ! -e "${'$'}ROOTFS_PATH/bin/bash" ]; then
               progress_echo "rootfs 解压不完整：guest bash 缺失"
+              rm -f "${'$'}ROOTFS_PATH/${EXTRACT_MARK}" 2>/dev/null
+              rm -rf "${'$'}LOCK" 2>/dev/null
               return 1
             fi
             echo "Extraction complete"
-            # 解压完整性校验已过：写入资产版本标记，后续 ready_check 只认这个版本的 rootfs。
+            # 🔴 关键文件体检（2026-10-21 用户要求「不应该限制时间，而是解压检测完了没有」）：
+            # 只查 bash + loader 远远不够——解压被打断时这两个往往已经落地，真正缺的是
+            # libpixman / libxcb / libXau / xkb / X11 字体，表现为「库里都有却用不了」。
+            # 这里逐项核验跑桌面真正需要的文件，缺哪项直接报出来（而不是当成功）。
+            # 🔴 glibc 路径不能写死：Ubuntu(noble aarch64) 的 libc.so.6 在
+            # `usr/lib/aarch64-linux-gnu/` 下，**不在** usr/lib。之前 MUST 里写死
+            # `usr/lib/libc.so.6` → Ubuntu 每轮解压完都判"不完整" → 清空重解压 →
+            # **无限循环解压**（2026-10-23 用户现场）。这里改成两条路径任一命中即通过。
+            if [ ! -e "${'$'}ROOTFS_PATH/usr/lib/libc.so.6" ] && [ ! -e "${'$'}ROOTFS_PATH/usr/lib/aarch64-linux-gnu/libc.so.6" ]; then
+              progress_echo "rootfs 解压不完整，缺失: libc.so.6（usr/lib 与 usr/lib/aarch64-linux-gnu 均无）"
+              rm -f "${'$'}ROOTFS_PATH/${EXTRACT_MARK}" 2>/dev/null
+              rm -rf "${'$'}LOCK" 2>/dev/null
+              return 1
+            fi
+            MUST=""
+            ${if (distro == Distro.LANXIU) "MUST=\"${'$'}MUST usr/lib/libpixman-1.so.0 usr/lib/libxcb.so.1 usr/lib/libXau.so.6 usr/lib/libX11.so.6 usr/bin/weston usr/lib/libweston-14/x11-backend.so usr/share/X11/xkb/rules/evdev.xml usr/share/fonts/X11/misc/fonts.dir usr/share/fonts/X11/misc/10x20-ISO8859-1.pcf.gz\"" else ":  # Ubuntu 只需 glibc 基础件"}
+            MISSING=""
+            for f in ${'$'}MUST ; do
+              [ -e "${'$'}ROOTFS_PATH/${'$'}f" ] || MISSING="${'$'}MISSING ${'$'}f"
+            done
+            if [ -n "${'$'}MISSING" ]; then
+              progress_echo "rootfs 解压不完整，缺失:${'$'}MISSING"
+              rm -f "${'$'}ROOTFS_PATH/${EXTRACT_MARK}" 2>/dev/null
+              rm -rf "${'$'}LOCK" 2>/dev/null
+              return 1
+            fi
+            # 解压完整性校验已过：写「完成指纹」+ 资产版本标记，然后释放互斥锁。
+            # 🔴 `.extract_done` 就是「哪一次解压是最后一次」的权威答案：由**解压成功者自己写**，
+            # 内含完成时间戳、顶层条目数、资产版本。它存在 + 关键文件齐，才允许判 READY。
+            ITEMS=`ls -A "${'$'}ROOTFS_PATH" 2>/dev/null | wc -l`
+            echo "done=`date '+%s' 2>/dev/null` items=${'$'}ITEMS av=${'$'}ASSET_VER" > "${'$'}ROOTFS_PATH/.extract_done" 2>/dev/null
+            rm -f "${'$'}ROOTFS_PATH/${EXTRACT_MARK}" 2>/dev/null
             echo "av=${'$'}ASSET_VER" > "${'$'}ASSET_MARK" 2>/dev/null
+            rm -rf "${'$'}LOCK" 2>/dev/null
             # 防御：确保 rootfs 顶层对当前进程可遍历（动态库路径等）。
             chmod 0755 "${'$'}ROOTFS_PATH" 2>/dev/null
             # 共享用户空间：基础环境写进 SHARED_HOME/.bashrc（两套 rootfs 共用，幂等）。
@@ -543,10 +636,12 @@ class TerminalEnvironment(context: Context) {
               rm -f ~/"${'$'}ROOTFS_TARBALL"
             else
               progress_echo "rootfs 解压校验失败，保留安装包以便重试"
+              rm -rf "${'$'}LOCK" 2>/dev/null
               return 1
             fi
             # 主包（av8+）已含桌面组件；此处仍幂等检查一次，兼容「旧主包 + 新增量包」组合。
             ${if (distro == Distro.LANXIU) "install_lanxiu_addon || true" else ":  # Ubuntu 不用 LANXIU 增量件"}
+            fi
           fi
           # DNS：写入多 nameserver 兜底（国内/海外通用）。LANXIU 原生缺失 resolv.conf，
           # 仅靠此行保证开箱 DNS 可用；rootfs 内也烤入了一份默认 resolv.conf 作双保险。
@@ -760,9 +855,78 @@ EOF
     fun hasRootfsArchive(distro: Distro = selectedDistro): Boolean =
         File(filesDir, distro.rootfsFilename).exists()
 
+    /**
+     * 是否正在解压（rootfs 内存在 `.extracting` 标记）。
+     *
+     * 标记由 common.sh 的 install_rootfs 在**解压开始前**写入、**全部关键文件校验通过后**删除，
+     * 因此它的存在与否就是「解压到底完成没有」的权威信号——比任何固定超时都可靠。
+     */
+    fun isExtracting(distro: Distro = selectedDistro): Boolean {
+        val mark = File(rootfsDir(distro), EXTRACT_MARK)
+        if (!mark.exists()) return false
+        // 🔴 陈旧标记兜底（2026-10-22）：解压进程被杀（OOM/用户划掉 App）后标记会残留，
+        // 若不判龄，UI 会**永久**停在「正在解压…」，用户以为卡死。正常解压 3-8 分钟，
+        // 30 分钟仍未更新即视为陈旧，按「未在解压」处理（后续会走重装分支重新解压）。
+        val ageMinutes = (System.currentTimeMillis() - mark.lastModified()) / 60_000L
+        return ageMinutes < 30
+    }
+
+    /**
+     * rootfs 关键文件体检：返回**缺失项**清单（空 = 完整）。
+     *
+     * 🔴 为什么需要它（2026-10-21 真机）：原来「就绪」只查 bash + os-release。
+     * xz 解压被中途打断（超时/被杀）时，这两个文件往往已经落地 → 判 READY → 但
+     * libpixman / libxcb / libXau / xkb / 字体全没解出来 → 桌面必崩且看不出原因。
+     * 这里把「跑起来真正需要的」逐项列出，缺哪项一目了然。
+     */
+    fun rootfsMissingParts(distro: Distro = selectedDistro): List<String> {
+        val root = rootfsDir(distro)
+        if (!root.exists()) return listOf("rootfs 目录不存在")
+        // 通用底线（两套发行版都必须有）：能起 shell、能加载动态程序。
+        // 🔴 libc 不能写进 must 列表：Ubuntu 的 libc.so.6 在 usr/lib/aarch64-linux-gnu 下，
+        // LANXIU 在 usr/lib 下，写死任一条都会让另一套永远判"不完整"→ 无限循环解压。
+        // 故下面单独用「两条路径任一」判定。
+        val common = emptyList<String>()
+        // 澜岫专属：Xtigervnc / weston x11 后端 / X 键盘映射 / X 默认字体的直连依赖。
+        // 🔴 这些**不能**拿去校验 Ubuntu（Ubuntu 本来就没有 weston/fonts/X11），否则 Ubuntu 会被误判成不完整。
+        val lanxiuOnly = listOf(
+            "usr/lib/libpixman-1.so.0",
+            "usr/lib/libxcb.so.1",
+            "usr/lib/libXau.so.6",
+            "usr/lib/libX11.so.6",
+            "usr/bin/weston",
+            "usr/lib/libweston-14/x11-backend.so",
+            "usr/share/X11/xkb/rules/evdev.xml",
+            "usr/share/fonts/X11/misc/fonts.dir",
+            "usr/share/fonts/X11/misc/10x20-ISO8859-1.pcf.gz",
+        )
+        val must = if (distro == Distro.LANXIU) common + lanxiuOnly else common
+        val missing = must.filter { !File(root, it).exists() }.toMutableList()
+        // bash 两条路径任一存在即可（扁平 rootfs 可能只有 usr/bin/bash）
+        val hasBash = File(root, "bin/bash").exists() || File(root, "usr/bin/bash").exists()
+        if (!hasBash) missing.add("bin/bash 或 usr/bin/bash")
+        // 动态链接器同样两条路径任一（扁平 rootfs 的实体在 usr/lib，lib 只是符号链接）
+        val hasLd = File(root, "lib/ld-linux-aarch64.so.1").exists() ||
+            File(root, "usr/lib/ld-linux-aarch64.so.1").exists() ||
+            File(root, "lib/ld-linux.so.2").exists() ||
+            File(root, "usr/lib/ld-linux.so.2").exists()
+        if (!hasLd) missing.add("ld-linux-aarch64.so.1（lib/ 或 usr/lib/）")
+        // glibc 同样两条路径任一：Ubuntu 在 usr/lib/aarch64-linux-gnu，LANXIU 在 usr/lib
+        val hasLibc = File(root, "usr/lib/libc.so.6").exists() ||
+            File(root, "usr/lib/aarch64-linux-gnu/libc.so.6").exists()
+        if (!hasLibc) missing.add("libc.so.6（usr/lib 或 usr/lib/aarch64-linux-gnu）")
+        return missing
+    }
+
     /** 判定 guest 环境可用性等级（按发行版）。 */
     fun guestEnvStatus(distro: Distro = selectedDistro): GuestEnvStatus = when {
-        isRootfsReady(distro) -> GuestEnvStatus.READY
+        // 🔴 顺序铁律：「解压中」必须最先判。半截解压时 bash 常常已落地，若先判 READY 就会把
+        // 正在解压的 rootfs 当成就绪（用户看到"就绪"但终端黑屏、桌面一启动就崩）。
+        isExtracting(distro) -> GuestEnvStatus.INSTALLING
+        // 🔴 就绪必须通过「关键文件体检」：只查 bash + os-release 是不够的——半截解压的 rootfs
+        // 这两个恰好在，但 libpixman / libxcb / libXau / xkb / 字体全缺，结果就是「显示就绪、
+        // 终端却黑屏、点启动桌面就报缺库」。缺件一律降级为 NEEDS_INSTALL（有包就能重解压修好）。
+        isRootfsReady(distro) && rootfsMissingParts(distro).isEmpty() -> GuestEnvStatus.READY
         hasRootfsArchive(distro) -> GuestEnvStatus.NEEDS_INSTALL
         else -> GuestEnvStatus.ASSET_MISSING
     }
@@ -823,7 +987,7 @@ EOF
             pb.redirectErrorStream(true)
             val p = pb.start()
             val out = p.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val ok = p.waitFor(180_000, java.util.concurrent.TimeUnit.MILLISECONDS) && p.exitValue() == 0
+            val ok = p.waitFor(600_000, java.util.concurrent.TimeUnit.MILLISECONDS) && p.exitValue() == 0
             if (!ok) Log.w(TAG, "prepareGuestRootfs 失败:\n$out")
             ok
         } catch (e: Exception) {
@@ -948,7 +1112,13 @@ EOF
             // 这里显式导出，保证 curl/openssl/wget 默认走它（HTTPS 开箱即用，无需手动 export）。
             "SSL_CERT_FILE" to "/etc/ssl/certs/ca-certificates.crt",
             "CURL_CA_BUNDLE" to "/etc/ssl/certs/ca-certificates.crt",
-            "LD_LIBRARY_PATH" to "$nativeLibDir:${binDir.absolutePath}",
+            // 🔴 2026-10-21 决定性修复：LD_LIBRARY_PATH 原来只含宿主 nativeLibDir + binDir，
+            // **完全不含 guest 的库目录**。动态链接器优先查 LD_LIBRARY_PATH，查不到才落 ld.so.cache；
+            // 而这个 rootfs 构建时 ldconfig 没跑（cache 不可靠），于是 Xtigervnc/weston/GTK 一律报
+            // "cannot open shared object file"（真机现象：libpixman / libcairo / libgdk-3 / libm 全说缺，
+            // 但包内实体都在）。这里把 guest 标准库目录全部追加，宿主路径对 guest 无意义但无害。
+            "LD_LIBRARY_PATH" to "$nativeLibDir:${binDir.absolutePath}:" +
+                "/usr/lib:/usr/lib/aarch64-linux-gnu:/usr/lib/fcitx5-libs:/lib:/lib/aarch64-linux-gnu:/usr/local/lib",
             "PROOT_TMP_DIR" to tmpDir,
             "PROOT_LOADER" to loader,
         )
@@ -1000,7 +1170,10 @@ EOF
         this["HOME"] = filesDir.absolutePath
         this["PREFIX"] = usrDir.absolutePath
         this["TERMUX_PREFIX"] = usrDir.absolutePath
-        this["LD_LIBRARY_PATH"] = "${nativeLibDir}:${binDir.absolutePath}"
+        // 🔴 同 buildProotLaunch：必须包含 guest 标准库目录，否则 guest 内 ld.so 只看到宿主路径，
+        // 加上该 rootfs 的 ldconfig 未跑过 → 一律 "cannot open shared object file"。
+        this["LD_LIBRARY_PATH"] = "${nativeLibDir}:${binDir.absolutePath}:" +
+            "/usr/lib:/usr/lib/aarch64-linux-gnu:/usr/lib/fcitx5-libs:/lib:/lib/aarch64-linux-gnu:/usr/local/lib"
         this["PROOT_LOADER"] = File(binDir, "loader").absolutePath
         this["TMPDIR"] = File(filesDir, "tmp").absolutePath
         this["PROOT_TMP_DIR"] = File(filesDir, "tmp").absolutePath

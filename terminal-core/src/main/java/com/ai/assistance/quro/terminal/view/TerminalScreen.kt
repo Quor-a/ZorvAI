@@ -17,6 +17,7 @@ import com.ai.assistance.quro.terminal.TerminalManager
 import com.ai.assistance.quro.terminal.navigation.TerminalRoutes
 import com.ai.assistance.quro.terminal.ui.SetupScreen
 import com.ai.assistance.quro.terminal.ui.TerminalHome
+import com.ai.assistance.quro.terminal.ui.MoyuScreen
 import com.ai.assistance.quro.terminal.ui.LanxiuScreen
 import com.ai.assistance.quro.terminal.ui.LanxiuDesktopScreen
 import com.ai.assistance.quro.terminal.utils.UpdateChecker
@@ -63,10 +64,15 @@ fun TerminalScreen(
                 onNavigateToSetup = {
                     navController.navigate(TerminalRoutes.SETUP_ROUTE)
                 },
-                onNavigateToLanxiu = {
-                    navController.navigate(TerminalRoutes.LANXIU_ROUTE)
+                onNavigateToMoyu = {
+                    navController.navigate(TerminalRoutes.MOYU_ROUTE)
                 }
             )
+        }
+
+        // 墨语言（Mo）管理页：独立运行时（qemu + x86_64 静态工具链），不经 Ubuntu。
+        composable(TerminalRoutes.MOYU_ROUTE) {
+            MoyuScreen(onBack = { navController.popBackStack() })
         }
         
         composable(TerminalRoutes.SETUP_ROUTE) {

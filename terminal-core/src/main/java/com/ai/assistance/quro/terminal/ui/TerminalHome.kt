@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Security
@@ -79,7 +80,7 @@ import com.ai.assistance.quro.terminal.view.canvas.RenderConfig
 fun TerminalHome(
     env: TerminalEnv,
     onNavigateToSetup: () -> Unit,
-    onNavigateToLanxiu: () -> Unit
+    onNavigateToMoyu: () -> Unit
 ) {
     val fontSize = 14.sp
     val padding = 8.dp
@@ -127,20 +128,15 @@ fun TerminalHome(
                 onNavigateToSetup = onNavigateToSetup,
                 onOpenPrivilege = { showPrivilegePanel = true },
                 onOpenRemote = { showRemotePanel = true },
-                onNavigateToLanxiu = onNavigateToLanxiu,
+                onNavigateToMoyu = onNavigateToMoyu,
                 env = env
             )
         }
 
-        // 双系统：选中 LANXIU 但尚未就绪时，提示首次按需下载（约 88MB）
-        if (env.selectedDistro == Distro.LANXIU && env.lanxiuEnvStatus() != GuestEnvStatus.READY) {
-            LanxiuDownloadBanner(
-                envStatus = env.lanxiuEnvStatus(),
-                dlStatus = env.lanxiuDownloadStatus,
-                progress = env.lanxiuDownloadProgress,
-                onDownload = env::onDownloadLanxiu
-            )
-        }
+        // 🔴 2026-10-23：LANXIU 已整体移除（内置资产删除，只剩 Ubuntu）。原先这里会在
+        // 「选中 LANXIU 且未就绪」时显示下载提示条；现在该分支永远不会成立，且残留提示会
+        // 误导用户去下载一个已经不存在的包，故删除。若历史偏好仍停在 LANXIU，用户可在
+        // 顶栏发行版下拉里切回 Ubuntu（下拉已不再列出 LANXIU）。
 
         if (env.isFullscreen) {
             Column(
@@ -280,7 +276,7 @@ private fun TopBar(
     onNavigateToSetup: () -> Unit,
     onOpenPrivilege: () -> Unit,
     onOpenRemote: () -> Unit,
-    onNavigateToLanxiu: () -> Unit,
+    onNavigateToMoyu: () -> Unit,
     env: TerminalEnv
 ) {
     val context = LocalContext.current
@@ -451,7 +447,8 @@ private fun TopBar(
                     onDismissRequest = { distroMenuExpanded = false },
                     containerColor = TerminalTheme.surfaceColor
                 ) {
-                    Distro.entries.forEach { d ->
+                    // 🔴 2026-10-23 LANXIU 已整体移除（内置包 400MB 太大），发行版下拉不再列出它。
+                    Distro.entries.filter { it != Distro.LANXIU }.forEach { d ->
                         val isActive = d == env.selectedDistro
                         Row(
                             modifier = Modifier
@@ -501,16 +498,6 @@ private fun TopBar(
                     imageVector = Icons.Default.Wifi,
                     contentDescription = context.getString(com.ai.assistance.quro.terminal.R.string.terminal_remote),
                     tint = TerminalTheme.onSurfaceColor
-                )
-            }
-
-            // LANXIU 独立设置 / 图形桌面入口
-            IconButton(onClick = onNavigateToLanxiu) {
-                Icon(
-                    imageVector = Icons.Default.Computer,
-                    contentDescription = "LANXIU 设置",
-                    tint = if (env.selectedDistro == Distro.LANXIU) TerminalTheme.accentColor
-                    else TerminalTheme.onSurfaceColor
                 )
             }
 
@@ -564,6 +551,10 @@ private fun LanxiuDownloadBanner(
                 )
                 Text(
                     text = when {
+                        // 🔴 2026-10-21：用户反馈「UI 层没有解压 UI，不知道什么时候好了」。
+                        // 现在解压期间有明确状态（rootfs 内 .extracting 标记），直接显示进行中。
+                        envStatus == GuestEnvStatus.INSTALLING ->
+                            "正在解压 rootfs，请稍候…（首次约 3-8 分钟，完成后自动就绪，无需重装）"
                         envStatus == GuestEnvStatus.NEEDS_INSTALL ->
                             context.getString(com.ai.assistance.quro.terminal.R.string.lanxiu_pending_install)
                         dlStatus == LanxiuDownloadStatus.Failed ->

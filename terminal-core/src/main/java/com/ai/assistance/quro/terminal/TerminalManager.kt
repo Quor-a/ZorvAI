@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -196,21 +197,35 @@ class TerminalManager private constructor(
             initializeSession(newSession.id)
         }
 
-        val success = withTimeoutOrNull(30000) {
-            terminalState.first { state ->
-                val session = state.sessions.find { it.id == newSession.id }
-                session?.initState == SessionInitState.READY
+        // 🔴 2026-10-21 用户明确要求：「不应该限制时间，而是解压检测完了没有」。
+        // 原实现是 withTimeoutOrNull(660_000) 到点就 closeSession —— 而 closeSession 会取消
+        // 初始化协程，把正在解压的 rootfs 直接掐断，留下半截残废（下次又从头解压，这就是
+        // 「反复死循环」的根源之一）。改为**按状态轮询**：
+        //   · 会话变 READY → 成功返回；
+        //   · 还在解压（rootfs 内 .extracting 标记在）→ 一直等，绝不放弃；
+        //   · 30 分钟仅作极端保险，且失败信息明确告诉用户「还在解压/去清理存储」，不误导成"环境坏了"。
+        val deadline = System.currentTimeMillis() + 30 * 60 * 1000L
+        while (System.currentTimeMillis() < deadline) {
+            val session = terminalState.value.sessions.find { it.id == newSession.id }
+            if (session == null) break                                  // 会话已被外部关闭
+            if (session.initState == SessionInitState.READY) {
+                Log.d(TAG, "Session ${newSession.id} initialized successfully")
+                return sessionManager.getSession(newSession.id) ?: newSession
             }
+            delay(1_000)
         }
 
-        if (success == null) {
-            Log.e(TAG, "Session initialization timeout for session: ${newSession.id}")
-            sessionManager.closeSession(newSession.id)
-            throw Exception("Session initialization timeout")
-        }
-
-        Log.d(TAG, "Session ${newSession.id} initialized successfully")
-        return sessionManager.getSession(newSession.id) ?: newSession
+        val stillExtracting = runCatching { environment.isExtracting() }.getOrDefault(false)
+        Log.e(TAG, "会话初始化未完成 session=${newSession.id} 解压中=$stillExtracting")
+        sessionManager.closeSession(newSession.id)
+        throw Exception(
+            if (stillExtracting) {
+                "rootfs 仍在解压中（已超过 30 分钟）。请确认设备剩余空间充足；" +
+                    "解压完成后再打开终端即可继续，不需要重装。"
+            } else {
+                "Session initialization timeout"
+            }
+        )
     }
 
     fun switchToSession(sessionId: String) {

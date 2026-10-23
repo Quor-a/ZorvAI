@@ -26,6 +26,8 @@ enum class LinuxDistro(
     UBUNTU(setOf("ubuntu"), "Ubuntu"),
     FEDORA(setOf("fedora", "rhel", "centos", "rocky", "almalinux"), "Fedora / RHEL 系"),
     ARCH(setOf("arch", "archarm", "manjaro"), "Arch Linux"),
+    /** 澜岫 LANXIU（/etc/os-release: ID=lanxiu，ID_LIKE 可能为 qiyuan）：自家 qypkg 包管理器。 */
+    LANXIU(setOf("lanxiu", "qiyuan"), "澜岫 LANXIU"),
     UNKNOWN(emptySet(), "未知发行版"),
     ;
 
@@ -132,6 +134,43 @@ object PacmanPackageManager : PackageManagerSpec {
 }
 
 /**
+ * 澜岫 LANXIU：qypkg（二进制 /usr/bin/qypkg-inst，自带于 rootfs）。
+ *
+ * 与 apt/apk 的本质差异（2026-10-21 设备端实测 + 包内核对）：qypkg 是**本地包安装器**，
+ * 没有网络软件源，也没有 --help（它会把 --help 当成包文件路径）。真实能力只有三个：
+ *   `qypkg-inst -l`            列出已安装
+ *   `qypkg-inst -r <name>`     移除
+ *   `qypkg-inst <pkg.qyp ...>` 安装本地 .qyp 包
+ * 因此 search / update / upgrade / info / clean 一律返回**明确引导文案**，
+ * 绝不拼成 `qypkg-inst search xxx`（会被当成包路径，报 "打不开 xxx"，用户看不懂）。
+ * 注：LANXIU 的 /etc/os-release 是 `ID=lanxiu`，未登记时会被 detect 判成 UNKNOWN 并回落 apt
+ * （表现为在 LANXIU 里跑 apt-get: not found）——这是本实现要修的核心问题。
+ */
+object QypkgPackageManager : PackageManagerSpec {
+    override val binary = "qypkg-inst"
+    override val displayName = "qypkg (LANXIU 澜岫)"
+
+    override fun install(pkgs: List<String>) = "qypkg-inst ${pkgs.joinToString(" ")}"
+    override fun remove(pkgs: List<String>) = "qypkg-inst -r ${pkgs.joinToString(" ")}"
+
+    override fun update() =
+        "echo 'qypkg 是本地包安装器，没有远程软件源索引，无需 update；把 .qyp 包放到设备后用 install 安装'"
+
+    override fun upgrade() =
+        "echo 'qypkg 无远程软件源，无法整体升级；请下载新版 .qyp 包后用 install 安装'"
+
+    override fun search(query: String) =
+        "echo 'qypkg 无软件源搜索能力；查已安装请用 list（qypkg-inst -l），安装请提供 .qyp 文件路径'"
+
+    override fun listInstalled(filter: String?) =
+        if (filter.isNullOrBlank()) "qypkg-inst -l" else "qypkg-inst -l | grep -i ${q(filter)}"
+
+    override fun info(pkg: String) = "qypkg-inst -l | grep -i ${q(pkg)}"
+
+    override fun clean() = "echo 'qypkg 无包缓存可清理'"
+}
+
+/**
  * 命令参数转义：包管理器命令最终交给 shell 执行，
  * 这里挡住最常见的注入/误解析字符，避免 AI 拼出的包名把整条命令带偏。
  */
@@ -147,6 +186,7 @@ object QuroLinuxDistroDetector {
         LinuxDistro.UBUNTU to AptPackageManager,
         LinuxDistro.FEDORA to DnfPackageManager,
         LinuxDistro.ARCH to PacmanPackageManager,
+        LinuxDistro.LANXIU to QypkgPackageManager,
         LinuxDistro.UNKNOWN to AptPackageManager,
     )
 

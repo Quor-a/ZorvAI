@@ -456,6 +456,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(LinuxStatusTool())
     r.register(LinuxPackageTool())   // 统一包管理：自动适配 apt/apk/dnf/pacman
     r.register(LinuxProcessTool())   // 查看/终止 Linux 环境残留后台进程（issue #11 问题 9 入口）
+    // ═════════════ 墨语言（Mo）独立运行时 ═════════════
+    // 工具链是 x86_64 静态可执行、qemu 是 aarch64 静态，两者零依赖 → 直接在 App 私有目录进程调用，
+    // **不依赖 Ubuntu/proot**。用于编译/运行 .mo、读写源码修 bug、调 mols/modb 等工具链。
+    r.register(MoyuTool())
     // 隔离沙箱（应用私有目录隔离，路径穿越防护）
     r.register(QuroSandboxTool())
     // 应用私有数据库只读查询（应用私有目录隔离，只读安全）

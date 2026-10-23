@@ -64,7 +64,7 @@ object LanxiuDesktop {
      *    - 界面看到新标记、红字里有新标记   -> 脚本进来了，失败在后面环节
      *    - 界面看不到新标记                 -> 装的不是这个包（安装没生效/装错了旧包）
      */
-    const val BUILD_STAMP = "B20261020-1415"
+    const val BUILD_STAMP = "B20261023-1520"
 
     /** 桌面输出模式。 */
     enum class OutputMode {
@@ -154,20 +154,49 @@ object LanxiuDesktop {
         export XDG_RUNTIME_DIR=/tmp/lanxiu-xdg
         mkdir -p /tmp/lanxiu-xdg
         chmod 700 /tmp/lanxiu-xdg
+        # 🔴 2026-10-22：X11 分支此前**完全没有设库路径与 GTK 环境**（只有 VNC 分支有），
+        # 而该 rootfs 的 x11-backend.so / Xtigervnc 都没有 RUNPATH，只能靠 LD_LIBRARY_PATH。
+        # 结果就是 weston 加载 x11-backend 时报 libxcb.so.1 找不到。这里与 VNC 分支保持一致。
+        ldconfig 2>/dev/null || true
+        export LD_LIBRARY_PATH="/usr/lib:/usr/lib/aarch64-linux-gnu:/usr/lib/fcitx5-libs:/lib:/lib/aarch64-linux-gnu:/usr/local/lib:${'$'}{LD_LIBRARY_PATH}"
+        export LANG=C.UTF-8
+        export GIO_MODULE_DIR=/usr/lib/gio/modules
+        export GDK_PIXBUF_MODULE_FILE=/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache
+        export GLIBC_TUNABLES=glibc.malloc.check=0:glibc.malloc.tcache_count=0
+        export XCURSOR_PATH=/usr/share/icons:/usr/share/icons/Adwaita
+        export XCURSOR_THEME=Adwaita
+        if [ -z "${'$'}HOME" ] || [ "${'$'}HOME" = "/" ]; then export HOME=/root; fi
+        echo "库路径: ${'$'}LD_LIBRARY_PATH"
         # 关掉残留 weston（VNC 或 X11 都叫 weston）
         killall weston 2>/dev/null || true
         sleep 1
         # 指向 Termux:X11 提供的 X 服务器
         export DISPLAY=:0
+        # 🔴 2026-10-22 真机：原来只 `pgrep weston` 就报「已启动」，于是出现
+        # App 说「已在 Termux:X11 运行」而 Termux:X11 显示 "Not connected"（根本没有客户端连上）。
+        # 现在先做可达性预检，并把结果如实告诉用户该做什么。
+        XSOCK=0
+        if [ -e /tmp/.X11-unix/X0 ]; then XSOCK=1; fi
+        if [ "${'$'}XSOCK" = 0 ] && [ -e /tmp/lanxiu-xdg/../.X11-unix/X0 ]; then XSOCK=1; fi
+        if [ "${'$'}XSOCK" = 0 ]; then
+          echo "提示：未检测到 X 服务器 socket（/tmp/.X11-unix/X0）。"
+          echo "     请先在 Termux:X11 App 里启动 X server（点右下 + → 选 X11），再回到这里点「启动桌面」。"
+        fi
         nohup weston $backend >/tmp/weston-x11.log 2>&1 &
-        sleep 3
-        if pgrep -x weston >/dev/null 2>&1; then
-          echo "LANXIU 桌面已启动 · X11 后端 → 请在 Termux:X11 App 查看"
-        else
-          echo "启动失败，日志："
+        sleep 4
+        if ! pgrep -x weston >/dev/null 2>&1; then
+          echo "启动失败：weston 进程未存活，日志："
           tail -n 30 /tmp/weston-x11.log
           exit 7
         fi
+        # 进程活着不代表成功：backend 加载失败 / 连不上 X server 时，weston 会先报错再退出，
+        # 或留下 "failed to create compositor backend"。必须看日志才敢说「已启动」。
+        if grep -qiE "failed to create compositor backend|cannot open shared object|Failed to load module" /tmp/weston-x11.log 2>/dev/null; then
+          echo "启动失败：weston 无法创建 X11 后端，日志："
+          tail -n 25 /tmp/weston-x11.log
+          exit 7
+        fi
+        echo "LANXIU 桌面已启动 · X11 后端 → 请在 Termux:X11 App 查看"
         """.trimIndent()
     } else {
         // VNC 模式（in-app 原生渲染）：Xtigervnc 起虚拟 X(:2 → VNC 5902，回环只听 localhost)
@@ -186,6 +215,26 @@ object LanxiuDesktop {
         # 重建 ld.so 缓存：rootfs 带 /etc/ld.so.cache，但本次烤入的 15 个新库不在缓存里，
         # 不重建则 Xtigervnc 运行时找不到 libgcrypt/libgnutls 等（glibc 优先用缓存）。
         ldconfig 2>/dev/null || true
+        # 🔴 2026-10-21 决定性兜底：该 rootfs 的 ldconfig 是坏包装脚本（要 exec /sbin/ldconfig.real，
+        # 文件不存在）+ 构建时根本没跑过 ldconfig，缓存不可靠；同时宿主注入的 LD_LIBRARY_PATH 原本
+        # 只有 APK 库目录。这里把所有 guest 库目录显式导出，ld.so 就不会再"找不到实体明明存在的库"。
+        export LD_LIBRARY_PATH="/usr/lib:/usr/lib/aarch64-linux-gnu:/usr/lib/fcitx5-libs:/lib:/lib/aarch64-linux-gnu:/usr/local/lib:${'$'}{LD_LIBRARY_PATH}"
+        echo "库路径: ${'$'}LD_LIBRARY_PATH"
+        # 🔴 2026-10-21 补齐官方 start-weston.sh / start-qydesktop.sh 的必需环境变量。
+        # 这几个不设，即使动态库全找得到，GTK / weston 起来也会崩或渲染异常：
+        #  · GIO_MODULE_DIR / GDK_PIXBUF_MODULE_FILE：GTK 的 IO 模块与图片 loader 缓存，缺失 → gdk-pixbuf 报错
+        #  · GLIBC_TUNABLES：官方明确关掉 malloc.check / tcache_count（TCG 模拟下性能与稳定性都受影响）
+        #  · XCURSOR_PATH / THEME：鼠标指针，缺了光标不显示
+        #  · LANG：UTF-8，否则中文全变方块
+        #  · HOME 归一化：官方注释指出 HOME 为 "/" 时 GLib 得到的 home 与 getent 不一致 → ~/.local 全部错位
+        export LANG=C.UTF-8
+        export GIO_MODULE_DIR=/usr/lib/gio/modules
+        export GDK_PIXBUF_MODULE_FILE=/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache
+        export GLIBC_TUNABLES=glibc.malloc.check=0:glibc.malloc.tcache_count=0
+        export XCURSOR_PATH=/usr/share/icons:/usr/share/icons/Adwaita
+        export XCURSOR_THEME=Adwaita
+        if [ -z "${'$'}HOME" ] || [ "${'$'}HOME" = "/" ]; then export HOME=/root; fi
+        echo "环境: HOME=${'$'}HOME LANG=${'$'}LANG GDK_PIXBUF=$([ -e ${'$'}GDK_PIXBUF_MODULE_FILE ] && echo OK || echo MISS) GIO_MODULES=$([ -d ${'$'}GIO_MODULE_DIR ] && echo OK || echo MISS)"
         # 关掉残留 weston / Xtigervnc（VNC 或 X11 都叫 weston；VNC 重起要清旧 Xtigervnc）
         killall weston 2>/dev/null || true
         killall Xtigervnc 2>/dev/null || true
@@ -219,9 +268,15 @@ object LanxiuDesktop {
         # filesDir/tmp 的 bind，进程死了文件还在），下次启动会直接报
         # "Server is already active for display 2" 并退出 —— 表现为「怎么点都起不来」。
         rm -f /tmp/.X2-lock /tmp/.X11-unix/X2 2>/dev/null
-        # 字体路径：misc 字体目录存在才传 -fp，否则 Xtigervnc 会因找不到默认字体退出。
-        FP=""
-        [ -d /usr/share/fonts/X11/misc ] && FP="-fp /usr/share/fonts/X11/misc"
+        # 字体：无条件用 built-ins（X server 编译内置 fixed/6x13）。
+        # 🔴 2026-10-21 真机：addon 的 X11 字体未落到 rootfs（Xtigervnc 在 → addon 曾被整包跳过），
+        # 而 `-fp <空目录>,built-ins` 这种组合仍会让 Xvnc fatal 在 could not open default font。
+        # 因此这里只传 built-ins，不与任何目录混用；misc 真存在时 X 也会自动加载其 fonts.dir。
+        FP="-fp built-ins"
+        # 字体状态诊断（界面会显示，便于定位是「没解压」还是「参数没生效」）
+        MISCN=/usr/share/fonts/X11/misc
+        echo "字体诊断: misc目录=$([ -d ${'$'}MISCN ] && echo YES || echo NO) 文件数=${'$'}(ls -A ${'$'}MISCN 2>/dev/null | wc -l) fonts.dir=$([ -e ${'$'}MISCN/fonts.dir ] && echo YES || echo NO) fixed目标=$([ -e ${'$'}MISCN/10x20-ISO8859-1.pcf.gz ] && echo YES || echo NO)"
+        echo "字体参数: ${'$'}FP"
         # Xtigervnc：虚拟 X 服务器 + VNC 一体。:2 => TCP 5902（= VNC_PORT）。
         # -ac 关掉 X 访问控制（避免无 XAUTHORITY 时被拒）；-rfbport 显式绑 5902 不靠推算；
         # -SecurityTypes None -localhost 仅回环免密，与 App 内 VncClient（RFB 3.8，
