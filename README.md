@@ -382,7 +382,55 @@ ZorvAI 内置 **墨语言（Mo）v1.165.0** —— 一门编译到原生机器�
 - **依赖解析**：编译前自动把 `deps/*/*.mo` 与 `mo/lib/*.mo` 同步到源目录（moc 的真实 import 机制是「找当前目录」，**不支持 `-I` 参数**）
 - **构建依赖图**：递归扫 `import` → 拓扑排序 → 缺失与循环检测
 - **网络**：socket 经 qemu 直通 Android 内核，直接使用 ZorvAI 的网络（仅需 `INTERNET` 权限）。标准库 `lib/net.mo` 提供 `tcp_listen` / `tcp_accept` / `tcp_connect`；示例含 `httpd.mo`（HTTP 服务端）与 `httpto.mo`（带慢连接超时）。**无 TLS/HTTPS**
-- **AI 工具 `moyu`**：`setup` / `compile` / `run` / `build_run` / `exec` / `read` / `write` / `list` / `diagnose` / `graph` / `pkg_init` / `dep_install` / `dep_fetch` / `dep_list` / `dep_tree` / `dep_verify` / `net_diag`
+- **AI 工具 `moyu`**：`setup` / `compile` / `run` / `build_run` / `exec` / `read` / `write` / `list` / `diagnose` / `graph` / `pkg_init` / `dep_install` / `dep_fetch` / `dep_list` / `dep_tree` / `dep_verify` / `net_diag` / `test` / `aifix` / `resolve` / **`native_build`** / **`native_run`** / `native_targets` / `cc_diag` / `native_setup`
+
+### AArch64 原生目标（不经 qemu）
+
+墨语言的官方编译器 `moc` 只有 x86_64 一个代码生成后端，在 Android 上要靠 qemu 逐条指令翻译执行。
+ZorvAI 额外接上了官方 `mo2x` 转译器的 `cfs-aarch64` 目标，让 `.mo` 直接产出 **Android 能原生执行的
+ARM64 静态 ELF**：
+
+```
+.mo ──mo2x(cfs-aarch64)──▶ freestanding C ──zig cc──▶ ARM64 静态 ELF ──▶ 原生 execve
+                              内联 svc #0、不链 libc
+```
+
+ZorvAI 只装 `arm64-v8a`，Android 的 ABI 就是 arm64、内核系统调用号与 Linux aarch64 一致，所以产物
+**零翻译、零 libc、零 Ubuntu**。`mo2x` 那一步仍然要 qemu（它本身是 x86_64 程序），之后的编译与执行
+全部原生 —— 这一步没有替代方案，因为转译器是预编译的 x86_64 二进制。
+
+**它不是 Linux 内核。** 产物是普通用户态系统程序：自建 `_start`、不链 musl/glibc、不需要
+`/system/bin/linker64`，只发内核系统调用。
+
+| 目标 | 产物形态 | 在哪执行 |
+|---|---|---|
+| `cfs-aarch64`（默认） | ARM64 静态 ELF（`ET_EXEC`、无 `PT_INTERP`） | **Android 原生执行** |
+| `cfs` | x86_64 静态 ELF | 经 qemu 翻译执行 |
+| `kern-aarch64` | ARM64 裸机镜像（PL011 UART，无系统调用） | 只能模拟器跑；Android 不能裸机启动 |
+
+非 PIE（`ET_EXEC`）是必需的：`-nostdlib` 下没有任何启动代码能做自加载重定位，静态 + PIE 会直接崩。
+
+可直接构建的系统级程序：`examples/uspace2.mo`（层次化 VFS + 24 条命令的 shell + 带 SipHash 签名的
+包管理 + 状态持久化，约 2000 行）、`examples/andromo.mo`（官方 Android 原生示例）。两者都带
+`mo-target: cfs-aarch64` 标记。UI 入口：**工具中心 → 墨语言 Mo → AArch64 原生**。
+
+### Android 执行限制与 memfd 启动器
+
+`targetSdk = 34` 下，App 私有数据目录在 **SELinux** 层面禁止 `execve` —— 把 ELF 写到 `filesDir`
+再 `ProcessBuilder` 必然拿到 `EACCES`，与文件权限、`chmod` 无关。这直接影响 qemu 与所有动态产物。
+
+ZorvAI 的做法是一个随包内置的 aarch64 启动器：以 `libmoexec.so` 打进 `jniLibs`，安装后落在
+`nativeLibraryDir`（App 内唯一挂载为可执行的目录），它把目标 ELF 读进 memfd（匿名内存文件、没有路径），
+再 `execveat(AT_EMPTY_PATH)` 执行，绕开"按路径检查"的那道限制。
+
+三级退化，每一步失败都把真实原因带回界面，不做静默降级：
+
+1. `execveat(memfd, "", …, AT_EMPTY_PATH)` —— 内核 3.19+，最干净
+2. `execve("/proc/self/fd/N", …)` —— 老内核走 fd 软链
+3. `execve(原路径, …)` —— 目标目录本身可执行时
+
+这条通路同时修正了既有路径：`filesDir` 里的 `qemu` 也改走启动器（此前直接 `ProcessBuilder`
+在 targetSdk ≥ 29 的设备上必然失败）。
 
 ### Android 适配要点
 

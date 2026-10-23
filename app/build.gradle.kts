@@ -124,6 +124,9 @@ android {
         androidResources {
             // 端侧 ASR 模型在运行期下载到应用私有目录（不再内置 assets）。此处 noCompress 以备 ncnn 文件误入 assets
             noCompress += listOf("onnx", "txt", "ncnn", "param", "bin", "gz", "crt", "so")
+            // 墨语言的两个资产本身就是 tar.gz（.pack 扩展名），此前会被 AAPT 再压一遍：
+            // 已压缩数据再压缩没有收益，只多花构建时间，运行时 assets.open 还要多解一层。
+            noCompress += "pack"
             // 覆盖默认 assets 忽略规则（默认会丢 `_` 开头的文件/目录，如 Python 标准库的
             // __phello__ / _aix_support.py——CPython 官方 testbed 同款做法）。
             // 设一个匹配不到任何文件的模式 = 不忽略任何 assets。

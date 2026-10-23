@@ -1538,7 +1538,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 
 - **终端（Ubuntu）**：terminal（统一终端工具：status 查环境状态、exec 执行命令；Ubuntu 用 apt 包管理）
 
-- **墨语言 Mo（独立运行时，不依赖 Ubuntu）**：moyu（action=setup 解压运行时 / compile 编译 .mo / build_run 编译并运行 / run 运行 .elf / exec 调工具链 / read+write 读写源码修 bug / list 列出工具链 / diagnose 体检）。工具链（moc 编译器、molink 链接器、mols、modb、dwmo、mo2c、mo2x、seed）随 APK 内置，均为 x86_64 静态可执行，经同样内置的 aarch64 静态 qemu 在设备本地**直接跑**——不需要 Ubuntu、不需要联网装包。用户说「写个墨语言程序 / 跑一下 / 修个墨语言 bug」就用它，不要绕去 terminal。
+- **墨语言 Mo（独立运行时，不依赖 Ubuntu）**：moyu（action=setup 解压运行时 / compile 编译 .mo / build_run 编译并运行 / run 运行 .elf / exec 调工具链 / read+write 读写源码修 bug / list 列出工具链 / diagnose 体检 / **native_build 编成 AArch64 原生静态 ELF** / **native_run 原生执行** / native_targets 列目标 / cc_diag 编译器诊断 / native_setup 装编译器库）。工具链（moc 编译器、molink 链接器、mols、modb、dwmo、mo2c、mo2x、seed）随 APK 内置，均为 x86_64 静态可执行，经同样内置的 aarch64 静态 qemu 在设备本地**直接跑**——不需要 Ubuntu、不需要联网装包。用户说「写个墨语言程序 / 跑一下 / 修个墨语言 bug」就用它，不要绕去 terminal。
 
 ## 工具调用规则
 - 用户想「打开/启动 XX 应用」时，优先用 search_and_launch_app（一步完成），不要先 list_installed_apps �? launch_app
@@ -2997,9 +2997,28 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "- **依赖如何被 import**：moc **不支持 -I 参数**（它只在「源文件所在目录」找 import）。所以编译前 App 会自动把 deps/*/*.mo 与 mo/lib/*.mo 同步到源目录；你只管写 `import \"xxx.mo\";`，不用也不能传 -I。\n" +
             "- **依赖图**：`graph` 传入口 .mo，递归扫 import、拓扑排序、报缺失文件与循环依赖。编译失败又看不出原因时先跑它。\n" +
             "- **网络**：墨语言的 socket 经 qemu 直通 Android 内核，**用的就是 ZorvAI 的网络**（只需 INTERNET 权限，无需额外配置）。标准库 lib/net.mo 提供 tcp_listen / tcp_accept / tcp_connect；examples/httpd.mo 是 HTTP 服务端（argv(1) 取端口）、httpto.mo 带慢连接超时。**没有 TLS/HTTPS**。\n" +
+            "- **DNS 必须由 App 侧做**：`lib/net.mo` 是裸 syscall，**完全没有域名解析**；`tcp_connect(ip, port)` 收的是 4 字节整数 IP（127.0.0.1 写作 0x0100007f）。所以写联网程序时：先用 `resolve(host=\"example.com\")` 拿到 IP 与整数形式，再把整数传进程序（argv 或写进源码常量）。不要指望程序里 `connect(\"example.com\")` 能通。\n" +
+            "- **端口**：普通 App 可绑 1024–65535，**1024 以下需 root（EACCES）**；推荐 8080/3000/9000。`tcp_listen` 已开 SO_REUSEADDR，仍报占用就换端口。\n" +
+            "- **协议栈只有 IPv4**：`net.mo` 只定义 AF_INET，没有 AF_INET6，也没有 TLS —— IPv6-only 站点与 HTTPS 直连都不可用（https 需自己实现 TLS 或经 App 代理）。\n" +
             "- **下载不通时**：先 `net_diag` 看各源可达性（直连 / ghfast / gh-proxy / ghproxy / Gitee），据此判断是网络问题还是仓库地址问题。\n" +
             "- **退出码含义**（Android 特有）：137 = 内存不足被系统回收；159 = seccomp 拦截 qemu 需要的系统调用（ROM 限制，非墨语言问题）；139 = 段错误（程序越界）；134 = 断言失败。碰到这些不要瞎猜，直接看退出码。\n" +
-            "- 用户说「写个墨语言程序 / 跑一下 / 修个墨语言 bug / 用墨语言写个工具 / 装个墨语言依赖」→ 一律用 `moyu`，**不要**绕去 terminal 或用 apt 装编译器。\n" +
+            "\n**AArch64 原生目标（native_build / native_run）—— 这是墨语言在手机上最快的路径，且它不是 Linux 内核**\n" +
+            "- **为什么快**：默认路径是 .mo → x86_64 ELF → qemu 逐条指令翻译执行，慢一个量级；AArch64 路径是 .mo → mo2x 转译成 freestanding C（内联 `svc #0`、不带 libc）→ 内置 zig 编成 **ARM64 静态 ELF** → Android **直接 execve**。ZorvAI 只装 arm64-v8a，Android 的 ABI 就是 arm64、内核系统调用号与 Linux aarch64 一致，所以产物零翻译、零 libc、零 Ubuntu。\n" +
+            "- **它不是 Linux 内核**：产物是普通用户态系统程序（自建 _start，不链 musl/glibc、不需要 linker64），只发内核系统调用；`kern-aarch64` 才是裸机内核（无系统调用、输出走 PL011 UART），那个 Android 上不能裸机启动、只能生成镜像后在模拟器里跑。\n" +
+            "- **推荐用法**：要交付能跑的系统级程序（文件系统、shell、包管理、服务端）→ `native_build`（缺省 target=aarch64）然后 `native_run`；只想快速验算逻辑 → 用 compile/build_run 的默认路径即可，省掉一次 C 编译。\n" +
+            "- **产物校验看什么**：`native_build` 的返回里会写「架构 AArch64 (0xB7) · 静态（无 PT_INTERP）」—— 这两项齐了才叫真正的原生静态产物，不要只看「构建成功」。\n" +
+            "- **编译慢是正常的**：zig 首次编译要建缓存，一个大程序（如 examples/uspace2.mo，近 2000 行）在手机上可能几十秒到几分钟；快速迭代时用 `opt=\"-O0\"`，交付前再换回缺省的 -O2。\n" +
+            "- **跑不起来时先 `cc_diag`**：它会逐环给出结论（mo2x 在不在、zig 能不能被拉起、zig 版本、memfd 启动器在不在）。若提示缺少 libzig.so，说明这个版本没内置编译器，可退回默认 x86_64 路径，或让用户在 Ubuntu 里装 gcc 作为外部编译器。\n" +
+            "- **内置可直接构建的系统**：`examples/uspace2.mo` 是墨语言写的完整用户空间（层次化 VFS + 24 条命令的 shell + 带 SipHash 签名的包管理 + 状态持久化），`examples/andromo.mo` 是官方 Android 原生示例。两者都有 `mo-target: cfs-aarch64` 标记，最适合用 native_build 出 aarch64；界面上「墨语言 → AArch64 原生」有对应的一键按钮。\n" +
+            "- `native_run` 会自动按产物真实架构选执行方式（AArch64 → 原生；x86_64 → qemu），不要手工指定错目标。\n" +
+            "- **改语言源码之前必须先读两份材料**：`read` 打开 `mo/CLAUDE.md`（官方写的「最容易写错的 13 件事」，如 `>>` 是算术右移不是逻辑右移、`let` 不能写在循环体内否则累积栈帧、没有 printf 只有 print/print_i64/sfmt、全局数组必须带初值、只有 i64/f64/ptr/i32/bool/enum 六种类型）与 `mo/docs/aifix.md`（修复规程）。不读就改，容易写出「看起来对但语义错」的补丁。\n" +
+            "- **跑测试**：`test` 跑内置用例（口径与官方 tests/run.sh 一致：`# expect: N` 比退出码；`tests/errors/` 必须编译失败且报错含 `# expect-error:` 片段）。参数 `filter` 缩小范围（如 \"01_\" 或 \"errors/\"）、`max_cases` 做快速冒烟。全部 181 个用例在 qemu 下很慢，改语言时**按 filter 只跑相关子集**。\n" +
+            "- **修复闭环 aifix（改语言源码必须走它）**：`aifix(file, old, new, filter)` 会做四步硬校验 —— ① old 必须在文件里**唯一**出现（否则拒绝）② 应用补丁后测试必须通过 ③ **把补丁撤回再跑，测试必须失败** ④ 自动还原到修复态。第 ③ 步失败（撤回后仍全绿）意味着这条修复没被测试钉住：要么测试没覆盖该缺陷、要么判据只是「能编译 / 退出码 0」——此时应先补测试判据，不能宣称修好了。禁止绕过它直接 write 改 `lib/` 或 `src/`。\n" +
+            "- **aifix 的守卫**：`src/compiler.mo` 是 `src/mo/` 下 compiler_part 分片拼接的生成物，直接改会被下次 sync 冲掉且不报错，因此被拒绝；改编译器要改分片（App 内改完需手工自举重建 bin/moc，成本高，非必要不要动）。\n" +
+            "- **标准库能力地图**（写系统级程序时先看有没有现成的）：`net`(TCP) · `proc`(fork/进程池/waitpid/守护化) · `pty`(伪终端，可给「像在终端里」的程序喂输入) · `thread`/`pthread` · `actor`(Erlang 风格监督树 + let it crash) · `csp`/`stm`(并发) · `crypto`(SHA-256/ChaCha20) · `regex` · `json` · `gc`(mark-sweep) · `vec`/`map`/`heap`/`fenw`(Fenwick)/线段树/四种概率草图 · `nn`/`cnn`/`autodiff`(定点神经网络 + 自动微分)。目录 `mo/lib/` 下共 72 个模块，用 `list` 或 `read` 查。\n" +
+            "- **语言边界（别白费劲）**：完整寄存器分配未做（缺 IR）、交叉编译/多架构/GPU 都是 ❌；浮点受限 —— **全局变量不支持 f64**、无 f64→i64 转换，所以神经网络库走定点。写数值代码前先确认这些限制。\n" +
+            "- **性能**：qemu 是**翻译执行**，不是原生速度；单次 exec 默认 180s 超时。大程序编译/大批测试要分片，别一次梭哈。\n" +
+            "- 用户说「写个墨语言程序 / 跑一下 / 修个墨语言 bug / 用墨语言写个工具 / 装个墨语言依赖 / 跑一下墨语言测试」→ 一律用 `moyu`，**不要**绕去 terminal 或用 apt 装编译器。\n" +
             "- proot 共性约束：不要嵌套启第二套 rootfs；命令直接用别加 sudo；proot 内无 /lib/modules，别试 modprobe / insmod。\n"
         )
 
