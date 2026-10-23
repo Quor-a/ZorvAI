@@ -129,38 +129,31 @@ class MoyuRuntime(private val context: Context) {
         if (!qemu.exists()) {
             return@withContext ExecResult(-1, "墨语言运行时未安装（缺少 ${qemu.absolutePath}），请先在设置里初始化")
         }
-        val cmd = mutableListOf(qemu.absolutePath, binary.absolutePath)
-        cmd += args
-        try {
-            val pb = ProcessBuilder(cmd)
-            pb.directory(workDir ?: workspace.apply { mkdirs() })
-            pb.redirectErrorStream(true)
-            pb.environment().apply {
-                put("QEMU_LD_PREFIX", "/")          // 静态程序不需要，但避免 qemu 探测告警
-                put("MO_HOME", moHome.absolutePath)  // 工具查标准库/资源用
-                put("HOME", workspace.absolutePath)
-                put("TMPDIR", File(root, "tmp").apply { mkdirs() }.absolutePath)
-                put("LANG", "C.UTF-8")
+        // 🔴 一律经 MoyuExec：targetSdk 34 下 App 私有目录禁止 execve（SELinux），
+        // 把 filesDir 里的 qemu 直接交给 ProcessBuilder 会拿到 EACCES —— 与 chmod 无关。
+        // MoyuExec 经 nativeLibraryDir 的 libmoexec.so（memfd + execveat）拉起它，
+        // 失败时还会自动退化到直接 exec 并带回每一步的真实错误。
+        val r = MoyuExec.run(
+            context = context,
+            binary = qemu,
+            args = listOf(binary.absolutePath) + args,
+            workDir = workDir ?: workspace.apply { mkdirs() },
+            env = mapOf(
+                "QEMU_LD_PREFIX" to "/",                              // 静态程序不需要，但避免 qemu 探测告警
+                "MO_HOME" to moHome.absolutePath,                     // 工具查标准库/资源用
                 // 系统层适配：Android 上进程栈/虚拟地址空间与桌面 Linux 不同，
                 // 显式给出 qemu 的栈大小与保留地址空间，避免大程序编译时栈溢出/地址耗尽。
-                put("QEMU_STACK_SIZE", (8 * 1024 * 1024).toString())   // 8MB guest 栈
-                put("QEMU_RESERVED_VA", "0")                           // 0 = 让 qemu 自动选择
-            }
-            val p = pb.start()
-            val output = p.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val finished = p.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
-            if (!finished) {
-                p.destroyForcibly()
-                ExecResult(-1, (output + "\n[超时 ${timeoutMs / 1000}s，已终止]").trim(), timedOut = true)
-            } else {
-                val code = p.exitValue()
-                val hint = signalHint(code)
-                ExecResult(code, if (hint == null) output else output + "\n" + hint)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "执行失败：$cmd", e)
-            ExecResult(-1, "执行失败：${e.message ?: e.javaClass.simpleName}")
-        }
+                "QEMU_STACK_SIZE" to (8 * 1024 * 1024).toString(),    // 8MB guest 栈
+                "QEMU_RESERVED_VA" to "0",                            // 0 = 让 qemu 自动选择
+            ),
+            timeoutMs = timeoutMs,
+        )
+        val hint = signalHint(r.code)
+        ExecResult(
+            r.code,
+            if (hint == null) r.output else r.output + "\n" + hint,
+            r.timedOut,
+        )
     }
 
     /**
@@ -252,6 +245,56 @@ class MoyuRuntime(private val context: Context) {
         139 -> "[诊断] 进程被 SIGSEGV（exit 139）：段错误，多为被测程序自身越界（可用 modb 排查）。"
         134 -> "[诊断] 进程被 SIGABRT（exit 134）：断言失败或主动 abort。"
         else -> null
+    }
+
+    /**
+     * 解析域名 → IPv4 地址（同时给出墨语言 tcp_connect 需要的整数形式）。
+     *
+     * 为什么必须由 App 侧来做：墨语言标准库 `lib/net.mo` **完全没有 DNS** ——
+     * `tcp_connect(ip: i64, port)` 收的是 4 字节整数地址（如 127.0.0.1 写作 0x0100007f）。
+     * 而它用的是裸 syscall，不经过 libc resolver，所以也不存在「静态链接程序读不到
+     * /etc/resolv.conf」的问题（Android 本来就没有那个文件，DNS 走 netd）。
+     * 结论：**域名必须在 App 侧解析好，再把 IP 整数当参数传给墨语言程序**。
+     *
+     * @return "host -> 1.2.3.4 (int=0x01020304)" 或错误说明
+     */
+    suspend fun resolveHost(host: String): String = withContext(Dispatchers.IO) {
+        val h = host.trim()
+        if (h.isEmpty()) return@withContext "需要 host（域名或 IP）"
+        // 已经是点分 IPv4 就直接换算
+        val dotted = Regex("""^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$""")
+        dotted.find(h)?.let { m ->
+            val o = m.groupValues.drop(1).map { it.toIntOrNull() ?: -1 }
+            if (o.all { it in 0..255 }) {
+                val intVal = (o[3] shl 24) or (o[2] shl 16) or (o[1] shl 8) or o[0]
+                return@withContext h + " 已是 IPv4 → int=0x" + Integer.toHexString(intVal) +
+                    "（小端写法：0x%08x）".format(intVal)
+            }
+        }
+        runCatching {
+            val addrs = java.net.InetAddress.getAllByName(h)
+            if (addrs.isEmpty()) error("解析结果为空")
+            val v4 = addrs.filterIsInstance<java.net.Inet4Address>().firstOrNull()
+            if (v4 == null) {
+                "❌ " + h + " 只解析到 IPv6（" + addrs.joinToString { it.hostAddress ?: "?" } +
+                    "）。墨语言 lib/net.mo 只支持 AF_INET（IPv4），IPv6 不可用。"
+            } else {
+                val b = v4.address
+                val intVal = ((b[3].toInt() and 0xFF) shl 24) or ((b[2].toInt() and 0xFF) shl 16) or
+                    ((b[1].toInt() and 0xFF) shl 8) or (b[0].toInt() and 0xFF)
+                buildString {
+                    appendLine(h + " → " + v4.hostAddress +
+                        (if (v4.canonicalHostName != v4.hostAddress) "（canonical " + v4.canonicalHostName + "）" else ""))
+                    appendLine("tcp_connect 用整数：" + intVal + "  即 0x" + Integer.toHexString(intVal) +
+                        "（小端：0x%08x）".format(intVal))
+                    val others = addrs.size - 1
+                    if (others > 0) append("另有 " + others + " 个地址：" + addrs.mapNotNull { it.hostAddress }.joinToString(", "))
+                }.trim()
+            }
+        }.getOrElse { e ->
+            "❌ 解析 " + h + " 失败：" + (e.message ?: e.javaClass.simpleName) +
+                "\n提示：设备无网络/DNS 被拦截时会这样；可先用 IP 直连，或用 net_diag 看外网可达性。"
+        }
     }
 
     /** 墨语言版本（读 mo/VERSION）。 */

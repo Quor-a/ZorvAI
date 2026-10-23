@@ -343,6 +343,8 @@ object ToolCapabilityDirectory {
             category = ToolCategory.TERMINAL_LINUX,
             description = "墨语言（Mo）独立运行时 v1.165.0：编译/运行/调试 .mo 程序，读写源码修 bug，" +
                 "包管理（mo.toml + deps + mo.lock，免 git 走 tarball + 四级镜像回退），依赖图分析。" +
+                "**AArch64 原生目标**：native_build 把 .mo 编成 ARM64 静态 ELF（mo2x 转译 freestanding C + 内置 zig 编译），" +
+                "产物不链 libc、不经 qemu、由 Android 直接 execve —— 比 x86_64 经 qemu 翻译快一个量级；注意它是用户态系统程序，不是 Linux 内核。" +
                 "工具链（moc/molink/mols/modb/dwmo/mo2c/mo2x/seed）与 aarch64 静态 qemu 随 APK 内置，" +
                 "全部零依赖，**不需要 Ubuntu / proot / 终端**，直接用 App 进程调用。",
             useCases = listOf(
@@ -351,6 +353,8 @@ object ToolCapabilityDirectory {
                 "墨语言编译器报错了帮我修",
                 "给我装个墨语言依赖包",
                 "用墨语言起个 HTTP 服务",
+                "编个安卓能直接跑的 ARM64 原生程序",
+                "用墨语言写个自己的系统跑起来",
                 "看看墨语言标准库和示例"
             ),
             examples = listOf(
@@ -358,10 +362,15 @@ object ToolCapabilityDirectory {
                 "moyu(action=\"build_run\", code=\"func main() { print(\\\"hi\\\") }\", name=\"hi.mo\")",
                 "moyu(action=\"compile\", path=\"/data/.../moyu/workspace/demo.mo\")",
                 "moyu(action=\"run\", path=\"/data/.../moyu/workspace/demo.elf\")",
-                "moyu(action=\"read\", path=\"/data/.../moyu/mo/bin/../src/compiler.mo\")"
+                "moyu(action=\"read\", path=\"/data/.../moyu/mo/bin/../src/compiler.mo\")",
+                "moyu(action=\"native_build\", path=\"uspace2.mo\", target=\"aarch64\")",
+                "moyu(action=\"native_run\", path=\"workspace/uspace2.arm64\")",
+                "moyu(action=\"cc_diag\")"
             ),
             parameters = mapOf(
-                "action" to "setup/compile/run/build_run/exec/list/read/write/diagnose/graph/pkg_init/dep_install/dep_fetch/dep_list/dep_tree/dep_verify/net_diag",
+                "action" to "setup/compile/run/build_run/exec/list/read/write/diagnose/graph/pkg_init/dep_install/dep_fetch/dep_list/dep_tree/dep_verify/net_diag/native_build/native_run/native_targets/cc_diag/native_setup",
+                "target" to "native_build 目标：aarch64（默认，Android 原生执行）/ x86_64（qemu）/ kern-aarch64（裸机，仅模拟器）",
+                "opt" to "native_build 优化级别：-O2（默认）/ -O0（快、省内存）",
                 "path" to "源文件或可执行文件路径",
                 "code" to "write 时的源码内容",
                 "name" to "write 时的文件名",
@@ -374,7 +383,11 @@ object ToolCapabilityDirectory {
                 "修 bug 流程：read 源码 → write 改后版本 → build_run 验证",
                 "装依赖用 dep_install，编译前 App 会自动同步 deps 到源目录",
                 "moc 不支持 -I，依赖能 import 靠的是目录同步",
-                "网络走 Android 网络栈，无需配置；不支持 HTTPS"
+                "网络走 Android 网络栈，无需配置；不支持 HTTPS",
+                "要交付原生系统程序用 native_build（aarch64）：产物无 libc、不经 qemu，Android 直接执行",
+                "aarch64 产物校验看「AArch64 (0xB7) + 无 PT_INTERP」两项，只看到构建成功不算数",
+                "编译慢属正常（zig 首次建缓存），快速迭代用 opt=\"-O0\"，交付前换回 -O2",
+                "native_run 会按产物真实架构自动选执行方式，不用手填目标"
             ),
             relatedTools = listOf("moyu", "terminal"),
             priority = 5
