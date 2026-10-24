@@ -95,8 +95,17 @@ class MoyuLocal(private val context: Context) {
         /** 远端根目录。`/data/local/tmp` 是 adb push 可执行文件的标准位置。 */
         const val REMOTE_ROOT = "/data/local/tmp/quro-mo"
 
-        /** 远端安装标记（改部署内容时必须 +1，否则老设备不刷新）。 */
+        /**
+         * 远端安装标记（改部署内容时必须 +1，否则老设备不刷新）。
+         *
+         * 🔴 标记**文件名带版本号**（见 [MARKER]）：老设备的旧标记文件名不同，
+         * 自然判定为「未部署」从而重传。若只把版本号写进文件内容，
+         * [status] 就得为了读几个字节多付一次 exec 往返，而且早晚有人忘了比对。
+         */
         const val NATIVE_VERSION = "v=1"
+
+        /** 远端安装标记的完整路径。改 [NATIVE_VERSION] 即换文件名，老设备自动重部署。 */
+        val MARKER: String get() = "$REMOTE_ROOT/.quro-native-$NATIVE_VERSION"
 
         /** Binder 单次事务约 1MB，留足头部余量。 */
         const val CHUNK = 512 * 1024
@@ -274,7 +283,7 @@ class MoyuLocal(private val context: Context) {
         if (sh == null || !sh.isReady) {
             return Status(false, false, false, false, 0L)
         }
-        val mark = sh.fileSize("$REMOTE_ROOT/.quro-native-v") > 0
+        val mark = sh.fileSize(MARKER) > 0
         val qemu = sh.fileSize("$REMOTE_ROOT/qemu-x86_64-static")
         val mo2x = sh.fileSize("$REMOTE_ROOT/bin/mo2x")
         val lib = sh.fileSize("$REMOTE_ROOT/lib/io.mo")
@@ -369,7 +378,7 @@ class MoyuLocal(private val context: Context) {
 
             onProgress("写 runner 脚本与安装标记 …")
             writeRemoteText(sh, REMOTE_RUNNER, runnerScript())
-            writeRemoteText(sh, "$REMOTE_ROOT/.quro-native-v", NATIVE_VERSION + "\n")
+            writeRemoteText(sh, MARKER, NATIVE_VERSION + "\n")
             writeRemoteText(
                 sh,
                 "$REMOTE_ROOT/README.txt",
