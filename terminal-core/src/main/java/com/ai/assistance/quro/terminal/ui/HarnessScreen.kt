@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.view.ViewGroup
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -422,6 +423,56 @@ private const val DSH_NET_JS = """
 """
 
 /**
+ * 上游 boot 看门狗的 console 契约前缀（#380）。
+ *
+ * 来自 profile 注入的 `@dsh-android/dsh-host-web-compat` 0.14.x（冻结接口，跨仓按**位置**
+ * 解析字段，改前缀必须同批改上游）。它把 40s 卡死自诊断打成 `console.error`：
+ *   [dsh-boot-stall]  dsh-boot-diag source=page-stall …      （40s 未启动，带 pendingBundles/badBundles/engineHttp）
+ *   [dsh-boot-ready]  dsh-boot-diag source=page-ready …      （页面真渲染出来了）
+ *   [dsh-boot-failed] dsh-boot-diag source=page-plugin-fail …（客户端插件装配失败，带 failedIds）
+ * 另有静态回退支线的 `source=page-static-fallback` / `source=page-error`，同走 stall 前缀。
+ *
+ * 壳侧此前**一条都不接**：页内看门狗现场采齐了（manifest 条目、/plugins/ bundle 挂起与 4xx、
+ * 引擎 HTTP 可达、rendered/pendingBoot）却只在 console 里喊一声就没了。本页 onConsoleMessage
+ * 按前缀收进来：ready 到 ⇒ 停 15s 看门狗；stall/failed 到 ⇒ 直接顶诊断面板。
+ */
+private const val BOOT_STALL_PREFIX = "[dsh-boot-stall]"
+private const val BOOT_READY_PREFIX = "[dsh-boot-ready]"
+private const val BOOT_FAILED_PREFIX = "[dsh-boot-failed]"
+
+/**
+ * WebView 内核能力预检（#380）：在页面加载**之前**问一遍 JS 引擎会什么。
+ *
+ * 为什么要它：白屏最难向用户解释的一种是「设备 WebView 内核太老」。入口 chunk
+ * （`assets/index-*.js`）含 `class static{}` 静态初始化块（Chrome/WebView 94+），
+ * vendor chunk 含私有字段（84+），还有 RegExp `v` 标志（110+）—— **语法级**需求，
+ * compat 的 polyfill 只补运行时 API（Promise.withResolvers 等），补不了语法：
+ * 缺任何一样，入口 chunk 在解析期整体不执行，React 永不挂载，白屏且几乎没有报错。
+ * 上游注释与 2026-09-10 在 WebView 110 上的实测都指向这条路径。
+ *
+ * 返回 `OK` 或 `BAD|S:项…|A:项…`（S=语法级缺失，A=运行时 API 缺失）。
+ * 语法级缺失时页面顶部直接挂警示条 —— 把「白屏」翻译成「升级 WebView」。
+ */
+private const val DSH_KERNEL_JS = """
+(function(){
+  var miss = [];
+  // ── 语法级（polyfill 救不了；缺一项入口 chunk 就整体不执行）──
+  try { new Function('class X{static{}}'); } catch (e) { miss.push('S:class static{} 块（需 WebView 94+）'); }
+  try { new Function('class X{#f=1;g(){return this.#f}}'); } catch (e) { miss.push('S:私有字段 #f（需 84+）'); }
+  try { new Function('var a;a??=1'); } catch (e) { miss.push('S:??= 逻辑赋值（需 85+）'); }
+  try { new RegExp('[[]', 'v'); } catch (e) { miss.push('S:RegExp v 标志（需 110+）'); }
+  if (typeof [].at !== 'function') miss.push('S:Array.prototype.at（需 92+）');
+  // ── 运行时 API（compat 有 polyfill，缺失不致命，但同样说明内核代次）──
+  if (typeof Promise.withResolvers !== 'function') miss.push('A:Promise.withResolvers');
+  if (typeof structuredClone !== 'function') miss.push('A:structuredClone');
+  if (typeof Array.fromAsync !== 'function') miss.push('A:Array.fromAsync');
+  if (typeof AbortSignal === 'undefined' || typeof AbortSignal.any !== 'function') miss.push('A:AbortSignal.any');
+  if (typeof Iterator === 'undefined') miss.push('A:Iterator');
+  return miss.length ? ('BAD|' + miss.join('|')) : 'OK';
+})()
+"""
+
+/**
  * 诊断现场：把 WebView 里真实的状态读出来，不靠猜。
  *
  * 重点是 `Promise.withResolvers` / `structuredClone` / `AbortSignal.any` / `Iterator` 四项 ——
@@ -433,6 +484,11 @@ private const val DSH_NET_JS = """
  *  - `androidBridge` 在不在场、pick token 取不取到（上游 dir-pick 端点 fail-closed，缺 token 就每 500ms 一次 403）；
  *  - 网络探针快照：哪个请求 `responseEnd === 0`（挂在半空）、哪些 >3s；
  *  - `<script src>` 声明数与资源计时条数对不上 ⇒ 有脚本根本没被请求。
+ *
+ * #380 再补**装配链判据**（按依赖顺序，断点即根因）：document-start 注入 →
+ * `__ModuleLoader__`（head 首个内联）→ `__DSH_BOOT__` manifest → 看门狗脚本 `__dshBootDiag` →
+ * 静态回退条 `__dshStaticFallback` → body 末尾 `__DSH_BOOT_READY__` 承诺；
+ * 外加三个契约行全局镜像（console 投递万一丢，页面侧原文仍在）。
  */
 private const val DSH_DIAG_JS = """
 (function(){
@@ -472,6 +528,27 @@ private const val DSH_DIAG_JS = """
   } else {
     p('网络探针', '未注入或无数据');
   }
+  // ── #380：页面侧装配链判据（按依赖顺序，断在哪一环一眼可见）──────────────────
+  // 顺序：document-start 注入 → head 首个内联(__ModuleLoader__) → 阻塞 client.js →
+  //       manifest(__DSH_BOOT__) → compat 注入脚本(看门狗/polyfill/静态回退) → body 末尾 boot-ready 承诺。
+  // 任何一环缺失，其后的环节全都不可能出现 —— 断点位置即根因位置。
+  p('document-start 注入', typeof window.__dshHostCanvas !== 'undefined' ? '已生效' : '未生效（addDocumentStartJavaScript 没跑：画布钉色/错误收集/网络探针全丢）');
+  var ml = window.__ModuleLoader__;
+  if (ml) {
+    var q = ml.pendingQueue;
+    p('__ModuleLoader__', 'mode=' + (ml.mode || '?') + '，待决队列=' + (q && q.length !== undefined ? q.length : '?'));
+  } else {
+    p('__ModuleLoader__', '缺失（head 第一个内联脚本没跑）');
+  }
+  var b = window.__DSH_BOOT__;
+  p('manifest(__DSH_BOOT__)', b ? 'rev=' + (b.rev || '?') + '，条目=' + ((b.entries || []).length) : '缺失（head 内联 manifest 没跑）');
+  p('看门狗脚本(__dshBootDiag)', typeof window.__dshBootDiag !== 'undefined' ? '已执行（40s 卡死诊断在线）' : '未执行（compat 注入脚本没跑，console 契约不会来）');
+  p('静态回退条(__dshStaticFallback)', typeof window.__dshStaticFallback !== 'undefined' ? '在场' : '缺失');
+  p('boot-ready 承诺(__DSH_BOOT_READY__)', typeof window.__DSH_BOOT_READY__ !== 'undefined' ? '在场' : '缺失（body 末尾解析语句没跑）');
+  // 契约行的页面侧镜像：console 投递万一丢，这三个全局仍留着看门狗的原文
+  if (window.__dshBootReady) p('契约就绪行', String(window.__dshBootReady).slice(0, 240));
+  if (window.__dshBootFail) p('契约失败行', String(window.__dshBootFail).slice(0, 300));
+  if (window.__dshBootStallReport && window.__dshBootStallReport.line) p('契约卡死行', String(window.__dshBootStallReport.line).slice(0, 300));
   p('Promise.withResolvers', typeof Promise.withResolvers);
   p('structuredClone', typeof structuredClone);
   p('AbortSignal.any', (typeof AbortSignal !== 'undefined') ? typeof AbortSignal.any : 'AbortSignal 缺失');
@@ -653,13 +730,18 @@ private fun sameOrigin(a: String, b: String): Boolean {
  * ## 白屏是怎么被抓住的
  *
  * 主框架 200、正文正常，但整屏纯白 —— 这是 SPA 最典型的坏法，而 `onReceivedError`
- * **不会**报主框架。能观察到它的有五处，这里全都接上了：
+ * **不会**报主框架。能观察到它的有七处，这里全都接上了：
  *  1. `onReceivedError` 里 `isForMainFrame == false` 的那些（子资源 404 / 失败）——
  *     原来的实现把它们整段丢掉，所以白屏时界面一个字都不显示；
  *  2. `onReceivedHttpError` 的子资源分支（>=400，与 ① 互补：网络层错误 vs HTTP 层错误）；
  *  3. document-start 注入的 `window.__dshDiag.errors`（JS 期异常 / unhandledrejection）；
  *  4. document-start 注入的 `window.__dshNet` 网络探针（哪个请求 `responseEnd === 0` 挂半空）；
- *  5. `onPageFinished` 之后探一次 `#root` 的子节点数与正文长度 —— 两个都是 0 就是白屏。
+ *  5. `onPageFinished` 之后探一次 `#root` 的子节点数与正文长度 —— 两个都是 0 就是白屏；
+ *  6. （#380）`onConsoleMessage` 接上游 boot 看门狗的 console 契约：`[dsh-boot-stall]`
+ *     / `[dsh-boot-ready]` / `[dsh-boot-failed]` 三条前缀，40s 卡死现场（挂起 bundle、
+ *     4xx bundle、引擎 HTTP、rendered/pendingBoot）从此不再丢失；ready 到达即停 15s 误报；
+ *  7. （#380）加载前的内核能力预检（`DSH_KERNEL_JS`）：缺 `class static{}` 这类**语法**
+ *     能力 ⇒ 入口 chunk 解析期整体不执行，页顶直接挂警示条，把白屏翻译成「升级 WebView」。
  * 任一中招，或主帧 15s 还没走完（进度条停住、页面不出字），就把诊断面板顶上来
  * （半透明盖在 WebView 上，不销毁页面），右下角常驻一个「诊断」悬浮钮，随时读现场。
  */
@@ -692,6 +774,14 @@ private fun HarnessWebView(
      *  否则 AndroidView 的 update 只在 url 空白时补载，401 重试换了新 token 也不会重载，
      *  于是拿着旧 token 的页面反复 401，卡死成白屏。 */
     var loadedUrl by remember { mutableStateOf("") }
+    /** 上游 boot 看门狗的 console 契约行（#380，见 BOOT_STALL_PREFIX 等处注释）。 */
+    var bootLines by remember { mutableStateOf<List<String>>(emptyList()) }
+    /** [dsh-boot-ready] 到达 ⇒ 页面自己报「渲染出来了」，15s 主帧看门狗必须停（不再误报卡死）。 */
+    var bootReady by remember { mutableStateOf(false) }
+    /** 契约驱动的告因：stall/failed 行到达时自动顶面板，标题直接用它。 */
+    var bootAlert by remember { mutableStateOf<String?>(null) }
+    /** 内核能力预检（DSH_KERNEL_JS）：null=未测，`OK`=全过，`BAD|S:…|A:…`=缺能力。 */
+    var kernelReport by remember { mutableStateOf<String?>(null) }
 
     // 主帧走完 2.5s 后探一次实机 DOM。SPA 的 hydration 失败不触发任何 WebView 回调，
     // 只有真的去看 #root 才知道是不是白屏。
@@ -728,10 +818,13 @@ private fun HarnessWebView(
         loadError = null
         blankScreen = false
         stalledMain = false
+        bootAlert = null
         panelOpen = false
         subErrors = emptyList()
         diag = null
         pageDone = false
+        bootLines = emptyList()
+        bootReady = false
         navStartedAt = System.currentTimeMillis()
         loadedUrl = url
         webView?.loadUrl(url)
@@ -744,12 +837,38 @@ private fun HarnessWebView(
             return
         }
         diag = "读取中…"
-        wv.evaluateJavascript(DSH_DIAG_JS) { raw -> diag = unescapeJsString(raw.orEmpty()) }
+        wv.evaluateJavascript(DSH_DIAG_JS) { raw ->
+            val body = unescapeJsString(raw.orEmpty())
+            diag = buildString {
+                append(body)
+                // #380：上游看门狗契约行紧跟现场之后 —— 它带着 pendingBundles/badBundles/
+                // rendered/pendingBoot，是「资源没到」与「入口没执行」的分水岭。
+                if (bootLines.isNotEmpty()) {
+                    append("\n\n── 上游 boot 契约（看门狗 console，")
+                    append(bootLines.size)
+                    append(" 条） ──\n")
+                    append(bootLines.joinToString("\n"))
+                }
+                val kr = kernelReport
+                if (kr != null) {
+                    append("\n\n── 内核能力预检 ──\n")
+                    append(
+                        if (kr == "OK") "全部通过（含 class static{} / 私有字段 / RegExp v）"
+                        else kr.removePrefix("BAD|").replace('|', '\n')
+                    )
+                }
+            }
+        }
     }
 
-    /** 自动把诊断面板顶出来，并顺手读一份现场 —— 用户点一下就能看到，不用先猜要点哪。 */
-    fun autoOpenPanel(reason: String) {
-        stalledMain = true
+    /** 自动把诊断面板顶出来，并顺手读一份现场 —— 用户点一下就能看到，不用先猜要点哪。
+     *
+     *  @param stall true = 主帧 15s 未走完（标题走「主帧加载停滞」并隐藏关闭钮）；
+     *               false = 其它原因（关键子资源失败 / 上游契约行），标题用 reason 本身。
+     *               老实现恒为 true，子资源失败也被说成「主帧停滞」，标题与实因对不上。 */
+    fun autoOpenPanel(reason: String, stall: Boolean = false) {
+        stalledMain = stall
+        if (!stall) bootAlert = reason
         panelOpen = true
         loadError = null
         blankScreen = false
@@ -757,14 +876,27 @@ private fun HarnessWebView(
         android.util.Log.w("HarnessScreen", "白屏自证：$reason")
     }
 
+    /** [dsh-boot-ready] 到达：页面自己报「渲染出来了」，此前所有白屏告警全部作废
+     *  （15s 看门狗、契约 stall/failed、空白探针都可能是误报 ——  healthy boot 慢而已）。 */
+    fun onBootReady() {
+        bootReady = true
+        loadError = null
+        blankScreen = false
+        stalledMain = false
+        bootAlert = null
+        panelOpen = false
+        diag = null
+    }
+
     // 主帧看门狗：15s 还没 onPageFinished，说明卡在某个子资源上（最典型的是 <head> 里的
     // 阻塞 <script src> 不返回）。进度条早在 100% 前就停了，页面一个字不出 —— 这时不自动弹，
     // 用户看到的就只有一块白，没有任何线索。
+    // #380：`bootReady` 是第二道门 —— 上游看门狗已报「页面真渲染出来了」就不再误报。
     LaunchedEffect(navStartedAt) {
         if (navStartedAt == 0L) return@LaunchedEffect
         delay(MAIN_FRAME_STALL_MS)
-        if (!pageDone) {
-            autoOpenPanel("主帧 ${MAIN_FRAME_STALL_MS / 1000}s 未加载完成（进度 $progress%）")
+        if (!pageDone && !bootReady) {
+            autoOpenPanel("主帧 ${MAIN_FRAME_STALL_MS / 1000}s 未加载完成（进度 $progress%）", stall = true)
         }
     }
 
@@ -818,6 +950,39 @@ private fun HarnessWebView(
                         override fun onProgressChanged(view: WebView?, newProgress: Int) {
                             progress = newProgress
                         }
+
+                        // #380：上游 boot 看门狗的 console 契约入口（三条前缀见文件内常量）。
+                        // 页内 40s 看门狗现场采得再齐（pendingBundles / badBundles / engineHttp /
+                        // rendered / pendingBoot），壳侧不接就全部丢失 —— 白屏只剩「等 40s」。
+                        // ready ⇒ 停 15s 看门狗并清误报；stall/failed ⇒ 直接顶诊断面板。
+                        override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                            val cm = consoleMessage ?: return false
+                            val msg = cm.message() ?: return false
+                            if (!msg.startsWith(BOOT_STALL_PREFIX) &&
+                                !msg.startsWith(BOOT_READY_PREFIX) &&
+                                !msg.startsWith(BOOT_FAILED_PREFIX)
+                            ) {
+                                return false
+                            }
+                            val lvl = when (cm.messageLevel()) {
+                                ConsoleMessage.MessageLevel.ERROR -> "E"
+                                ConsoleMessage.MessageLevel.WARNING -> "W"
+                                ConsoleMessage.MessageLevel.TIP -> "I"
+                                ConsoleMessage.MessageLevel.DEBUG -> "D"
+                                else -> "L"
+                            }
+                            val line = "[$lvl] $msg"
+                            android.util.Log.e("HarnessScreen", "boot 契约: $msg")
+                            bootLines = (bootLines + line).takeLast(30)
+                            when {
+                                msg.startsWith(BOOT_READY_PREFIX) -> onBootReady()
+                                msg.startsWith(BOOT_FAILED_PREFIX) ->
+                                    autoOpenPanel("上游看门狗：客户端插件装配失败（boot 契约 failed 行，见下）")
+                                else ->
+                                    autoOpenPanel("上游看门狗：启动 40s 未完成（boot 契约 stall 行，见下）")
+                            }
+                            return true
+                        }
                     }
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(
@@ -850,6 +1015,11 @@ private fun HarnessWebView(
                             panelOpen = false
                             blankScreen = false
                             subErrors = emptyList()
+                            // #380：契约行与就绪标记按文档轮换 —— 上一份文档报的 ready
+                            // 不担保新文档（303 回跳会走第二个文档）。
+                            bootLines = emptyList()
+                            bootReady = false
+                            bootAlert = null
                             navStartedAt = System.currentTimeMillis()
                         }
 
@@ -906,6 +1076,20 @@ private fun HarnessWebView(
                     loadUrl(url)
                     webView = this
                     onWebViewReady(this)
+                    // #380：内核能力预检。**必须在第一次 loadUrl 之后**调（早于首文档的
+                    // evaluateJavascript 在部分 ROM 上被丢弃）。缺 class static{}
+                    // （WebView 94+）这类**语法**能力时入口 chunk 解析期整体不执行：
+                    // React 永不挂载 —— 白屏、无报错、重试无效。提前问出来，页顶挂警示条，
+                    // 把「白屏」翻译成「升级 WebView / 系统」。
+                    runCatching {
+                        evaluateJavascript(DSH_KERNEL_JS) { raw ->
+                            val r = unescapeJsString(raw.orEmpty()).trim()
+                            kernelReport = r.ifEmpty { null }
+                            if (r.startsWith("BAD|")) {
+                                android.util.Log.e("HarnessScreen", "内核能力预检不通过：$r")
+                            }
+                        }
+                    }
                     // document-start 注入：修 viewport + 抓页面错误。
                     // dsh 的前端是桌面布局，viewport 若写成固定宽度（如 width=1280），
                     // 在手机上会按桌面视口渲染再缩放 —— 表现为只看到页面最左边一条。
@@ -1009,6 +1193,29 @@ private fun HarnessWebView(
             }
         )
 
+        // #380：内核能力预警条。语法级缺失（S:）= 引擎页面在这台设备上**不可能**跑起来
+        // （入口 chunk 解析期整体不执行），把「白屏」翻译成「升级 WebView / 系统」。
+        // 仅运行时 API 缺失（A:）不挂条 —— compat 的 polyfill 正是为它准备的，不打扰页面。
+        val kernel = kernelReport
+        if (kernel != null && kernel.startsWith("BAD|") && kernel.contains("S:")) {
+            Surface(
+                color = Color(0xFF7A2424),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(start = 10.dp, end = 10.dp, top = 46.dp),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Text(
+                    "⚠ WebView 内核过旧，引擎界面无法运行：缺 class static{} 等语法能力（需 WebView 94+），" +
+                        "入口模块会被整体跳过 —— 这就是白屏的原因。请升级「Android System WebView」或系统后重试。",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(10.dp),
+                )
+            }
+        }
+
         // 右下角悬浮入口：退出 + 诊断。harness 的 Web UI 自带一整条顶栏（返回/刷新），
         // 所以 Compose 不再画顶栏，只放这两个不与它打架的圆形钮。
         Box(
@@ -1076,6 +1283,7 @@ private fun HarnessWebView(
                     Text(
                         when {
                             err != null -> "页面加载失败"
+                            bootAlert != null -> bootAlert!!
                             stalled -> "主帧加载停滞（${MAIN_FRAME_STALL_MS / 1000}s 未完成，进度 $progress%）"
                             blank -> "页面加载完成，但没有渲染出内容（白屏）"
                             panelOpen -> "关键资源加载失败（主框架是好的，坏在这些）"
@@ -1132,7 +1340,7 @@ private fun HarnessWebView(
                             diag = null
                             onAuthRetry()
                         }
-                        if (err == null && !blank && !stalled) {
+                        if (err == null && !blank && !stalled && bootAlert == null) {
                             HarnessAction("关闭诊断") { panelOpen = false; diag = null }
                         }
                         HarnessAction("退出") { onClose() }
