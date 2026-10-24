@@ -20,9 +20,23 @@ import java.util.concurrent.TimeUnit
  * - `http_get`  ：GET handler_config.url（支持 `${param}` 模板替换），返回响应体
  * - `time`      ：返回当前毫秒时间戳 + ISO 时间
  * - `file_read` ：读取 handler_config.path 或参数 path 指向的文本文件
+ * - `quro_tool` ：**转发到 ZorvAI 自己的工具**（handler_config.tool 指定工具名）。
+ *                 这是"外部 agent 用上本应用完整工具"的通道：DeepSeek Harness 这类
+ *                 外部 harness 通过 MCP 连进来后，调用的是真正的 QuroTool，而不是
+ *                 重新实现的简化版。
  */
 object QuroLocalMcpDispatcher {
     private const val TAG = "QuroLocalMcp"
+
+    /**
+     * 应用上下文。`quro_tool` 需要它才能拿到工具注册表。
+     *
+     * 由 QuroLocalMcpManager 在部署 / 恢复 server 时注入 —— dispatcher 是 object，
+     * 又不能改 MCP server 的构造函数签名（历史调用点较多），放在这里代价最小。
+     */
+    @Volatile
+    var appContext: android.content.Context? = null
+
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
@@ -40,11 +54,34 @@ object QuroLocalMcpDispatcher {
                     "{\"time_ms\":$now,\"iso\":\"${java.time.Instant.ofEpochMilli(now)}\"}"
                 }
                 "file_read" -> fileRead(cfg, arguments)
+                "quro_tool" -> quroTool(cfg, arguments)
                 else -> arguments.toString()
             }
         } catch (e: Exception) {
             Log.w(TAG, "本地 MCP 工具执行失败($handlerType): ${e.message}")
             "本地 MCP 工具执行失败: ${e.message}"
+        }
+    }
+
+    /**
+     * 转发到 ZorvAI 真实工具。
+     *
+     * 参数原样作为 JSON 字符串交给 `QuroTool.run` —— 工具的 parametersJson 已经声明了
+     * 自己的 schema，MCP 客户端（harness）会按 schema 组参数，这里不再二次校验，
+     * 免得两套 schema 逐渐漂移。
+     */
+    private fun quroTool(cfg: JSONObject, args: JSONObject): String {
+        val ctx = appContext ?: return "本地 MCP 未绑定应用上下文，无法转发 ZorvAI 工具"
+        val toolName = cfg.optString("tool", "").trim()
+        if (toolName.isEmpty()) return "handler_config.tool 为空"
+        val reg = com.ai.assistance.quro.core.tools.buildQuroRegistry(ctx)
+        val tool = reg.get(toolName)
+            ?: return "ZorvAI 没有名为「$toolName」的工具"
+        return try {
+            tool.run(ctx, args.toString())
+        } catch (e: Exception) {
+            Log.w(TAG, "转发 ZorvAI 工具 $toolName 失败: ${e.message}")
+            "ZorvAI 工具「$toolName」执行失败: ${e.message}"
         }
     }
 

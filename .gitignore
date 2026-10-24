@@ -182,3 +182,8 @@ browser_act_test_prompt.md
 # Python 字节码缓存（4fd0c78 误提交过一批）
 __pycache__/
 *.pyc
+rootfs-backups/
+
+# ⚠️ DeepSeek Harness 运行时整包（241MB）：超过 GitHub 单文件 100MB 上限，不入库。
+# 与 app/src/main/assets/keystore/ 同属「构建需要但不进 git」类；APK 交付走 Releases。
+terminal-core/src/main/assets/dsh-runtime.pack

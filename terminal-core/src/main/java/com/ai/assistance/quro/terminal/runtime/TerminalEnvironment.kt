@@ -973,11 +973,25 @@ EOF
         }
     }
 
-    private fun prepareGuestRootfs(): Boolean {
+    /**
+     * 宿主侧确保 rootfs 解压 + usrmerge 链接就绪（不开 proot）。
+     *
+     * 公开原因：墨语言 ⇢ Ubuntu 融合通道（MoyuUbuntu）要在工具链落地前先保证 Ubuntu 就绪，
+     * 它与终端会话走同一条 install_rootfs 链路，只是目标发行版固定为 [Distro.UBUNTU]。
+     */
+    fun prepareGuestRootfs(distro: Distro = selectedDistro): Boolean {
         val bash = File(binDir, "bash")
         if (!bash.exists()) {
             Log.e(TAG, "prepareGuestRootfs: 缺少宿主 bash（原生库未链接）")
             return false
+        }
+        // prepare 走 common.sh 的 install_rootfs，目标由 selectedDistro 决定。
+        // 调用方指定别的发行版时临时切过去（selectedDistro 是纯内存 var，
+        // 赋值不写 prefs，持久化只发生在 setDistro），跑完恢复，互不影响。
+        val prev = selectedDistro
+        if (distro != prev) {
+            selectedDistro = distro
+            runCatching { File(filesDir, "common.sh").writeText(generateStartScript(distro)) }
         }
         return try {
             val cmd = "source \"\$HOME/common.sh\" && install_rootfs && fix_usrmerge_links && echo PREPARE_DONE"
@@ -993,6 +1007,11 @@ EOF
         } catch (e: Exception) {
             Log.e(TAG, "prepareGuestRootfs 异常", e)
             false
+        } finally {
+            if (distro != prev) {
+                selectedDistro = prev
+                runCatching { File(filesDir, "common.sh").writeText(generateStartScript(prev)) }
+            }
         }
     }
 
@@ -1015,6 +1034,20 @@ EOF
         script: String,
         timeoutMs: Long,
         onOutput: ((String) -> Unit)? = null,
+        logFile: File? = null,
+        detach: Boolean = false,
+        /**
+         * 目标发行版。默认跟随用户选择的全局发行版；墨语言通道显式传 [Distro.UBUNTU]，
+         * 保证「墨语言融合在 Ubuntu 里」这件事不被全局切换影响。
+         */
+        distro: Distro = selectedDistro,
+        /**
+         * 额外的 proot bind（如 `--bind=<宿主目录>:/opt/xxx`）。
+         *
+         * 墨语言用它把宿主侧的墨语言工具链、zig 编译器、原生库目录**挂进** Ubuntu，
+         * 零拷贝、秒级，且不改动主 rootfs（符合「一律走增量，不覆盖整包」的规矩）。
+         */
+        extraBinds: List<String> = emptyList(),
     ): GuestExecResult = withContext(Dispatchers.IO) {
         if (!initializeEnvironment()) {
             return@withContext GuestExecResult(false, -1, "", false, "本地终端运行环境初始化失败")
@@ -1025,11 +1058,11 @@ EOF
         // 宿主侧预生成 CA 证书 bundle（幂等），供 patch_lanxiu_rootfs 复制进内置 rootfs，HTTPS 开箱即用。
         ensureCaBundle()
         // 先确保 rootfs 解压 + usrmerge 链接就绪（纯宿主侧文件操作，不开 proot）。
-        if (!prepareGuestRootfs()) {
+        if (!prepareGuestRootfs(distro)) {
             return@withContext GuestExecResult(false, -1, "", false, "LANXIU rootfs 解压/就绪失败（见 Log）")
         }
 
-        val rootfsPath = rootfsDir(selectedDistro).absolutePath
+        val rootfsPath = rootfsDir(distro).absolutePath
         val prootBin = File(nativeLibDir, "libproot.so").absolutePath
         val tmpDir = File(filesDir, "tmp").absolutePath
         // 🔴 getcwd 铁律：/root 必须 bind mount（与 Ubuntu 通道一致）getcwd 才正常；bind 的宿主目标
@@ -1069,6 +1102,8 @@ EOF
             "--bind=$tmpDir:/tmp",
             "--bind=${filesDir.absolutePath}:/quro",
         )
+        // 附加 bind（墨语言融合 Ubuntu：宿主侧工具链/编译器/原生库目录直接挂进 guest，零拷贝）。
+        args.addAll(extraBinds)
         if (sharedStorageAccessible()) {
             val ext = android.os.Environment.getExternalStorageDirectory()
             if (ext != null) {
@@ -1129,8 +1164,20 @@ EOF
             // -w / 已决定 guest cwd，这里只是让「万一翻译失败」时的继承路径也落在 rootfs 附近。
             pb.directory(File(rootfsPath).parentFile ?: filesDir)
             pb.environment().putAll(env)
-            pb.redirectErrorStream(true)
+            // 常驻服务（detach）：输出落到日志文件，不在管道里等 —— proot 进程继续活着，
+            // 它的子进程（如 dsh 引擎）也随之常驻。
+            if (logFile != null) {
+                runCatching { logFile.parentFile?.mkdirs() }
+                pb.redirectErrorStream(true)
+                pb.redirectOutput(ProcessBuilder.Redirect.to(logFile))
+            } else {
+                pb.redirectErrorStream(true)
+            }
             val p = pb.start()
+            if (detach) {
+                Log.i(TAG, "execGuest: 后台常驻已拉起，脚本=$script")
+                return@withContext GuestExecResult(completed = true, code = 0, output = "", timedOut = false)
+            }
             Log.i(TAG, "execGuest: proot 直接拉起（照搬 QuroLinuxEnv），rootfs=$rootfsPath")
             val captured = StringBuilder()
             val captureLock = Any()
