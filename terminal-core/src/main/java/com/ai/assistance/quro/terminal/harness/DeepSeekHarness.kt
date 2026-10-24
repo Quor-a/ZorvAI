@@ -67,6 +67,9 @@ class DeepSeekHarness(private val context: Context) {
          * 19 = 同一暂存树改回 gz 重打（App 侧纯 Java GZIPInputStream，不认 xz）。
          *      **必须 +1**：v=18 安装全部失败，但个别设备可能留下半解压树，不升版本
          *      mark 对不上也会重解——升了更稳，杜绝任何复用残树的可能。
+         * 20 = profile patch YAML 修 3 处漏 # 的注释续行（js-yaml 65:2 解析崩，
+         *      引擎启动即退出）+ 加写盘前结构 lint。**pack 字节未变，版本不升**：
+         *      设备已按 v=19 解压完毕，YAML 每次启动由 Kotlin 重写，换包即修复。
          */
         private const val RUNTIME_VERSION = 19
         private const val MARK = ".dsh_v"
@@ -145,7 +148,7 @@ class DeepSeekHarness(private val context: Context) {
          * dsh 壳」只能靠它。它同时进 `diagnose()` 输出与 HarnessScreen 顶栏 —— 界面上看不到戳，
          * 就等于装错包，这一条是出包自证链的一部分（同 LANXIU / Moyu 的做法）。
          */
-        const val BUILD_STAMP = "B20261024-2247"
+        const val BUILD_STAMP = "B20261024-2316"
 
         @Volatile
         private var instance: DeepSeekHarness? = null
@@ -973,8 +976,7 @@ class DeepSeekHarness(private val context: Context) {
         f.parentFile?.mkdirs()
         val bash = File(root, "bin/bash")
         val ptcWrapper = File(root, "libexec/dsh-node")
-        f.writeText(
-            buildString {
+        val yaml = buildString {
                 appendLine("# 由 ZorvAI 生成：web profile 的完整 Android 装配层。")
                 appendLine("# 移植自 dsh-mobile-apk 0.14.8 profile-web.cordis.patch.yml（路径换运行期绝对路径）。")
                 appendLine("# 每次启动都会重写，删掉会退回引擎默认装配。")
@@ -1039,7 +1041,7 @@ class DeepSeekHarness(private val context: Context) {
                 appendLine("    provider: deepseek-official")
                 appendLine("    model: deepseek-v4-flash")
                 appendLine("# directory-picker：auto 在 Android 上解析成 browse，与 host-web-compat 的原生单例")
-                appendLine(" 冲突（后注册者抛 duplicate service，整个 auto mount 失败）→ 禁 auto，显式挂原生面")
+                appendLine("# 冲突（后注册者抛 duplicate service，整个 auto mount 失败）→ 禁 auto，显式挂原生面")
                 appendLine("- id: directory-picker")
                 appendLine("  disabled: true")
                 appendLine("- insert:")
@@ -1055,14 +1057,14 @@ class DeepSeekHarness(private val context: Context) {
                 appendLine("      name: '@dsh-android/dsh-android-vdisplay'")
                 appendLine("# PTC 代码执行：executable 必须钉死到 wrapper，不得依赖 process.execPath")
                 appendLine("# （linker64 回退时 execPath 被污染成 linker64 自身，PTC 子进程必死；")
-                appendLine("  且 PTC 子进程 env 被 tombstone，LD_LIBRARY_PATH 继承不到，由 wrapper 自己 export）")
+                appendLine("#  且 PTC 子进程 env 被 tombstone，LD_LIBRARY_PATH 继承不到，由 wrapper 自己 export）")
                 appendLine("- id: ptc-runtime")
                 appendLine("  config:")
                 appendLine("    launch:")
                 appendLine("      kind: node-script")
                 appendLine("      executable: ${ptcWrapper.absolutePath}")
                 appendLine("# office-to-pdf：libreoffice-kit 的 platformTarget 不认 android ⇒ 无条件抛，")
-                appendLine("  不禁该行会在 boot 阶段崩；禁行 = 用上游自己的 unavailable 降级面")
+                appendLine("#  不禁该行会在 boot 阶段崩；禁行 = 用上游自己的 unavailable 降级面")
                 appendLine("- id: office-to-pdf")
                 appendLine("  disabled: true")
                 appendLine("# 桌面态产品遥测/分析不是 Android 服务（保留共享 otel 与官方 session-log 上传控制）")
@@ -1074,8 +1076,22 @@ class DeepSeekHarness(private val context: Context) {
                 appendLine("- insert:")
                 appendLine("    - id: session-delete")
                 appendLine("      name: '@dsh-android/dsh-session-delete'")
-            }
-        )
+        }
+        // 结构自检（2026-10-24 真机教训）：每一非空行必须是「# 注释 / - 序列项 /
+        // key: 键」之一。多行注释的续行一旦漏了 # 前缀，js-yaml 就报
+        // "bad indentation of a sequence entry" → 整个 profile 解析失败 →
+        // 引擎启动即退出（2247 包实测，报错 65:2）。**写盘前拦下**：
+        // 宁可退回上一份好 YAML（引擎用旧装配也能起），也绝不让坏 YAML 落盘。
+        val badLine = yaml.lines().withIndex().firstOrNull { (_, line) ->
+            val t = line.trim()
+            t.isNotEmpty() && !t.startsWith("#") && !t.startsWith("-") &&
+                !Regex("^[A-Za-z_][\\w.-]*:").containsMatchIn(t)
+        }
+        require(badLine == null) {
+            "profile patch 第 ${badLine?.index?.plus(1)} 行既非注释也非键（拒绝写盘）: " +
+                badLine?.value?.take(60)
+        }
+        f.writeText(yaml)
         return f
     }
 
