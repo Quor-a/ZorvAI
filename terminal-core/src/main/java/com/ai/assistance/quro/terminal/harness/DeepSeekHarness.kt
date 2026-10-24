@@ -62,7 +62,7 @@ class DeepSeekHarness(private val context: Context) {
          *      （Chromium 94+）—— 老 WebView 解析期 SyntaxError ⇒ 白屏无报错。
          *      **必须 +1**：老设备已按 v=16 解压过未降级字节，不升版本不会重解。
          */
-        private const val RUNTIME_VERSION = 17
+        private const val RUNTIME_VERSION = 18
         private const val MARK = ".dsh_v"
 
         /** dsh 默认端口。 */
@@ -139,7 +139,7 @@ class DeepSeekHarness(private val context: Context) {
          * dsh 壳」只能靠它。它同时进 `diagnose()` 输出与 HarnessScreen 顶栏 —— 界面上看不到戳，
          * 就等于装错包，这一条是出包自证链的一部分（同 LANXIU / Moyu 的做法）。
          */
-        const val BUILD_STAMP = "B20261024-2115"
+        const val BUILD_STAMP = "B20261024-2226"
 
         @Volatile
         private var instance: DeepSeekHarness? = null
@@ -461,6 +461,10 @@ class DeepSeekHarness(private val context: Context) {
         runCatching { writeProfilePatch() }
             .onSuccess { appendLog("[profile] 已写入插件装配层: ${it.name}") }
             .onFailure { Log.w(TAG, "写 profile patch 失败", it) }
+
+        // PTC node wrapper + pnpm shim（幂等烧写，路径按运行期实际值）——同样必须在启动前
+        runCatching { ensureRuntimeShims() }
+            .onFailure { Log.w(TAG, "烧写运行时 shim 失败", it) }
 
         // 挂上宿主的手机能力：把 ZorvAI 的全部工具经 MCP 桥注册给引擎，
         // harness 的 agent 于是能直接用 read_screen / tap_screen / swipe_screen /
@@ -919,41 +923,64 @@ class DeepSeekHarness(private val context: Context) {
     }
 
     /**
-     * 运行时生成 profile 的 `cordis.patch.yml`，把三个 Android 适配插件挂进 web profile。
+     * 运行时生成 profile 的 `cordis.patch.yml` —— web profile 的完整 Android 装配层。
      *
-     * 为什么要运行时生成而不是随资产写死：`shell-termux` 的配置里是**绝对路径**
-     * （bash 在哪、prefix 在哪、home 在哪、workspace 根在哪），这些只有运行期才知道。
+     * **移植面**：dsh-mobile-apk 0.14.8 的 `scripts/profile-web.cordis.patch.yml`（权威装配），
+     * 路径全部换成运行期绝对路径（Termux 前缀在我的树里就是 root 本身：bin/bash、lib/、etc/）。
      *
-     * 三个插件各管一段：
-     *  · `shell-termux` —— 提供 dsh 的 shell 服务：让引擎能在 Android 上真正执行命令
-     *    （bash / prefix / home / cwd / 写面栅栏 / 超时都在这里配）；
-     *  · `ui-responsive` —— 移动端 UI 适配层：只注入 CSS/DOM 与移动外壳（不改布局服务中枢），
-     *    让引擎自带的桌面 Web UI 在手机视口下可用；
-     *  · `host-web-compat` —— 浏览器兼容层：给旧内核 WebView 注入缺失的 polyfill
-     *    （AbortSignal.any / Promise.withResolvers / structuredClone / 全局 Iterator），
-     *    没有它，客户端包在 import 期就抛 "Iterator is not defined"，整棵前端树加载失败 → 白屏；
-     *  · `android-bridge` —— 手机管理授权桥：授权状态机、失败关闭、审计，
-     *    提供 android_* 工具（读屏/点击/截图/启动应用/通知…），执行经由上面那个 shell 服务。
+     * 为什么要运行时生成而不是随资产写死：配置里是**绝对路径**（bash 在哪、prefix 在哪、
+     * home 在哪、workspace 根在哪），这些只有运行期才知道。
+     *
+     * 装配内容（与参考一一对应）：
+     *  · insert 11 块 / 12 行：
+     *    - `shell-termux`（带 config）—— dsh 的 shell 服务：bash/prefix/home/cwd/写面栅栏/超时；
+     *    - `host-web-compat` —— 浏览器兼容层：给旧内核 WebView 注入缺失的 polyfill
+     *      （AbortSignal.any / Promise.withResolvers / structuredClone / 全局 Iterator），
+     *      没有它，客户端包在 import 期就抛 "Iterator is not defined"，整棵前端树加载失败 → 白屏；
+     *    - `ui-responsive` —— 移动端 UI 适配层：只注入 CSS/DOM 与移动外壳（不改布局服务中枢）；
+     *    - `dshmarketplace` —— 插件市场（会话 /store 命令、设置页市场、agent 工具与技能文件）；
+     *    - `android-bridge` —— 手机管理授权桥：授权状态机、失败关闭、审计；
+     *    - `android-manage` —— 手机管理工具面：观察/动作/等待闭环，全部失败关闭；
+     *    - `android-linux-env` —— 工具链与环境设置面板（同时是 shell-termux 写面栅栏的设置维护面）；
+     *    - `android-file-open` —— 外部文件直达会话；
+     *    - `picker-native-surface` —— 原生目录选择面（禁掉 auto 后由它独占能力）；
+     *    - `android-browser` —— 侧栏 AI 浏览器宿主半；
+     *    - `android-vdisplay` —— 虚拟屏能力状态面 + vd* op 声明；
+     *    - `session-delete` —— 会话行菜单「删除对话」+ 受鉴权 host 路由。
+     *  · disabled 8 行：bash-sandbox（Android 上无对应沙盒实现，写面栅栏改由 shell-termux 承担）、
+     *    open-in-app / ui-open-in-app（桌面编排，Android 无等价候选）、
+     *    client-hmr（`/plugins/events` SSE 无鉴权，移动侧无 live reload 收益）、
+     *    directory-picker（auto 在 Android 上解析成 browse，与 host-web-compat 的原生单例冲突）、
+     *    office-to-pdf（libreoffice-kit 的 platformTarget 不认 android，无条件抛，禁行是上游既定降级面）、
+     *    desktop-product-telemetry / product-analytics（桌面态产品遥测，非 Android 服务）。
+     *  · config 就地覆盖 2 行（**整体替换不是深合并**，键要给全）：
+     *    - `agent-default-model` → deepseek-official / deepseek-v4-flash（零额外配置、国内可达）；
+     *    - `ptc-runtime` → launch: node-script，executable 钉死到 `libexec/dsh-node` 包装器
+     *      （process.execPath 在 linker64 回退时被污染成 linker64 自身，PTC 子进程必死）。
      *
      * 插件放在 profile 的 node_modules 下；它们的 peer 依赖（cordis / dsh-tools / schemastery /
-     * dsh-client-ui-settings …）由 Node 的向上查找从引擎的 node_modules 解析得到。
+     * dsh-client-ui-settings …）由引擎 profile launcher 的 two-anchor 解析路由器从安装锚点
+     * （dsh/node_modules）供给（dsh-app-boot 的 installProfileResolution，ESM+CJS 双包装）。
      */
     private fun writeProfilePatch(): File {
         val f = File(home, "profiles/web/cordis.patch.yml")
         f.parentFile?.mkdirs()
         val bash = File(root, "bin/bash")
+        val ptcWrapper = File(root, "libexec/dsh-node")
         f.writeText(
             buildString {
-                appendLine("# 由 ZorvAI 生成：把 Android 适配插件挂进 harness 的 web profile。")
-                appendLine("# 每次启动都会重写（路径是运行期绝对路径），删掉会退回引擎默认装配。")
+                appendLine("# 由 ZorvAI 生成：web profile 的完整 Android 装配层。")
+                appendLine("# 移植自 dsh-mobile-apk 0.14.8 profile-web.cordis.patch.yml（路径换运行期绝对路径）。")
+                appendLine("# 每次启动都会重写，删掉会退回引擎默认装配。")
+                appendLine("# bash-sandbox：Android 无对应沙盒实现，写面栅栏由 shell-termux 的 writeMode 承担")
+                appendLine("- id: bash-sandbox")
+                appendLine("  disabled: true")
                 appendLine("- insert:")
                 appendLine("    - id: shell-termux")
                 appendLine("      name: '@dsh-android/dsh-shell-termux'")
                 appendLine("      config:")
                 appendLine("        # bash / 工具链都指向本运行时内置的那一份 Termux 用户态")
                 appendLine("        # （与引擎同域、self-contained，不依赖 Termux App）")
-                // bash / 工具链指向本运行时内置的那一份 Termux 用户态
-                // （与引擎同域、self-contained，不依赖 Termux App）
                 appendLine("        bashPath: ${bash.absolutePath}")
                 appendLine("        prefix: ${root.absolutePath}")
                 appendLine("        home: ${home.absolutePath}")
@@ -961,18 +988,150 @@ class DeepSeekHarness(private val context: Context) {
                 appendLine("        timeoutMs: 120000")
                 appendLine("        maxTimeoutMs: 600000")
                 appendLine("        # 写面栅栏：默认只允许工作区与选定共享目录")
+                appendLine("        # （workspaceRoot/sharedDirs 由 dsh-android-linux-env 在设置页动态维护）")
                 appendLine("        writeMode: workspace-write")
                 appendLine("        workspaceRoot: ${workspace.absolutePath}")
                 appendLine("        sharedDirs: []")
                 appendLine("    - id: host-web-compat")
                 appendLine("      name: '@dsh-android/dsh-host-web-compat'")
+                appendLine("# ui-responsive：只注入 CSS/DOM 与移动外壳；ui-layout 是布局服务中枢，不禁用")
+                appendLine("- insert:")
                 appendLine("    - id: ui-responsive")
                 appendLine("      name: '@dsh-android/dsh-client-ui-responsive'")
+                appendLine("# 插件市场：/store 命令、设置页市场、agent 工具与技能文件")
+                appendLine("- insert:")
+                appendLine("    - id: dshmarketplace")
+                appendLine("      name: dshmarketplace-plugin")
+                appendLine("# open-in-app / ui-open-in-app：桌面编排（Finder/Terminal/编辑器），Android 无等价候选")
+                appendLine("- id: open-in-app")
+                appendLine("  disabled: true")
+                appendLine("- id: ui-open-in-app")
+                appendLine("  disabled: true")
+                appendLine("# client-hmr：/plugins/events SSE 无鉴权，移动侧无 live reload 收益，禁行收口端口面")
+                appendLine("- id: client-hmr")
+                appendLine("  disabled: true")
+                appendLine("# 手机管理授权桥：门控限死为完全访问档位（自动审批模式不构成开放条件）")
+                appendLine("- insert:")
                 appendLine("    - id: android-bridge")
                 appendLine("      name: '@dsh-android/dsh-android-bridge'")
+                appendLine("# 手机管理工具面：观察/动作/等待闭环，全部失败关闭")
+                appendLine("- insert:")
+                appendLine("    - id: android-manage")
+                appendLine("      name: '@dsh-android/dsh-android-manage'")
+                appendLine("# 工具链与环境设置面板：shell-termux 写面栅栏的设置维护面，不装载则共享目录设置无处维护")
+                appendLine("- insert:")
+                appendLine("    - id: android-linux-env")
+                appendLine("      name: '@dsh-android/dsh-android-linux-env'")
+                appendLine("# 外部文件强制新会话请求/状态/清理")
+                appendLine("- insert:")
+                appendLine("    - id: android-file-open")
+                appendLine("      name: '@dsh-android/dsh-android-file-open'")
+                appendLine("# 默认模型：deepseek-official 零额外配置、国内可达、开箱即用")
+                appendLine("# （就地按上游 id 覆盖 config，不再 disable + 换 id insert——后者会引入服务供给单点）")
+                appendLine("- id: agent-default-model")
+                appendLine("  config:")
+                appendLine("    provider: deepseek-official")
+                appendLine("    model: deepseek-v4-flash")
+                appendLine("# directory-picker：auto 在 Android 上解析成 browse，与 host-web-compat 的原生单例")
+                appendLine(" 冲突（后注册者抛 duplicate service，整个 auto mount 失败）→ 禁 auto，显式挂原生面")
+                appendLine("- id: directory-picker")
+                appendLine("  disabled: true")
+                appendLine("- insert:")
+                appendLine("    - id: picker-native-surface")
+                appendLine("      name: '@deepseek-ai/dsh-client-ui-directory-picker-native'")
+                appendLine("# 侧栏 AI 浏览器（宿主半：tier 判定、面板数据契约、壳桥 op 名）")
+                appendLine("- insert:")
+                appendLine("    - id: android-browser")
+                appendLine("      name: '@dsh-android/dsh-android-browser'")
+                appendLine("# 虚拟屏：Shizuku 特权通道的能力状态面 + 只读状态端点 + vd* op 声明")
+                appendLine("- insert:")
+                appendLine("    - id: android-vdisplay")
+                appendLine("      name: '@dsh-android/dsh-android-vdisplay'")
+                appendLine("# PTC 代码执行：executable 必须钉死到 wrapper，不得依赖 process.execPath")
+                appendLine("# （linker64 回退时 execPath 被污染成 linker64 自身，PTC 子进程必死；")
+                appendLine("  且 PTC 子进程 env 被 tombstone，LD_LIBRARY_PATH 继承不到，由 wrapper 自己 export）")
+                appendLine("- id: ptc-runtime")
+                appendLine("  config:")
+                appendLine("    launch:")
+                appendLine("      kind: node-script")
+                appendLine("      executable: ${ptcWrapper.absolutePath}")
+                appendLine("# office-to-pdf：libreoffice-kit 的 platformTarget 不认 android ⇒ 无条件抛，")
+                appendLine("  不禁该行会在 boot 阶段崩；禁行 = 用上游自己的 unavailable 降级面")
+                appendLine("- id: office-to-pdf")
+                appendLine("  disabled: true")
+                appendLine("# 桌面态产品遥测/分析不是 Android 服务（保留共享 otel 与官方 session-log 上传控制）")
+                appendLine("- id: desktop-product-telemetry")
+                appendLine("  disabled: true")
+                appendLine("- id: product-analytics")
+                appendLine("  disabled: true")
+                appendLine("# 删除对话：会话行菜单「删除对话」+ 受鉴权 host 路由 /api/session-delete")
+                appendLine("- insert:")
+                appendLine("    - id: session-delete")
+                appendLine("      name: '@dsh-android/dsh-session-delete'")
             }
         )
         return f
+    }
+
+    /**
+     * 确保两个快照内 shim 就位（幂等：缺失或内容不一致才重写）。
+     *
+     *  · `libexec/dsh-node` —— PTC 代码执行的 node 启动器（移植自 dsh-mobile-apk 7c1）。
+     *    三层机制缺一不可：① 脚本非 ELF，内核走 shebang 用 /system/bin/sh 读它，
+     *    不触发 app-data ELF exec（untrusted_app 域 execute_no_trans）；② wrapper 自己
+     *    export LD_LIBRARY_PATH——PTC 给子进程的 env 是显式过滤后的（只放 6 个名字），
+     *    壳侧注入的到不了那条路径；③ `/system/bin/linker64 <node>` 只**读取** node 而非
+     *    exec，与壳侧引擎自己在 linker64 回退时的形态一致。附带 V8 堆自适应下限
+     *    clamp(MemTotal/2, 512, 4096)MB，仅在调用方未设 NODE_OPTIONS 时填（调用方显式值优先）。
+     *  · `bin/pnpm` —— pnpm standalone shim（7e）：市场一键安装（`dsh plugin add`）走 pnpm，
+     *    快照无 pnpm 时实测 "pnpm not found on PATH"；pnpm 包本体在 lib/node_modules/pnpm。
+     *
+     * 树内 pack 已烧写同一份（自包含）；这里按**运行期实际路径**重写兜底——
+     * work profile / 数据迁移等 filesDir 变化的场景下烧写路径会错。
+     */
+    private fun ensureRuntimeShims() {
+        // ── PTC node wrapper ──
+        val libexec = File(root, "libexec").apply { mkdirs() }
+        val wrapper = File(libexec, "dsh-node")
+        val node = File(root, "bin/node")
+        val wrapperText = """
+            #!/system/bin/sh
+            # dsh-mobile: PTC node launcher (C1) - app-data ELF cannot be exec'd under untrusted_app,
+            # so hand it to the system linker with the snapshot library path exported here.
+            export LD_LIBRARY_PATH="${'$'}{libDir.absolutePath}"
+            # 引擎/子进程 V8 堆下限：clamp(MemTotal/2, 512, 4096)MB，仅 NODE_OPTIONS 未设时填
+            if [ -z "${'$'}NODE_OPTIONS" ]; then
+              __dsh_mem_kb=0
+              while read -r __dsh_key __dsh_val __dsh_rest; do
+                if [ "${'$'}__dsh_key" = "MemTotal:" ]; then __dsh_mem_kb=${'$'}__dsh_val; break; fi
+              done < /proc/meminfo
+              __dsh_heap=${'$'}(( __dsh_mem_kb / 2048 ))
+              [ "${'$'}__dsh_heap" -lt 512 ] && __dsh_heap=512
+              [ "${'$'}__dsh_heap" -gt 4096 ] && __dsh_heap=4096
+              export NODE_OPTIONS="--max-old-space-size=${'$'}__dsh_heap"
+            fi
+            exec /system/bin/linker64 "${'$'}{node.absolutePath}" "${'$'}@"
+        """.trimIndent() + "\n"
+        if (!wrapper.isFile || wrapper.readText() != wrapperText) {
+            wrapper.writeText(wrapperText)
+            wrapper.setExecutable(true, true)
+            appendLog("[shim] PTC node wrapper 就位: ${wrapper.name}")
+        }
+        // ── pnpm standalone shim ──
+        val pnpmCjs = File(root, "lib/node_modules/pnpm/bin/pnpm.cjs")
+        if (pnpmCjs.isFile) {
+            val shim = File(File(root, "bin"), "pnpm")
+            val shimText = """
+                #!/system/bin/sh
+                # dsh-mobile: pnpm standalone shim（npm registry 打包，自包含；node 由快照提供）
+                exec "${'$'}{node.absolutePath}" "${'$'}{pnpmCjs.absolutePath}" "${'$'}@"
+            """.trimIndent() + "\n"
+            if (!shim.isFile || shim.readText() != shimText) {
+                shim.writeText(shimText)
+                shim.setExecutable(true, true)
+                appendLog("[shim] pnpm shim 就位: ${shim.name}")
+            }
+        }
     }
 
     /**
