@@ -67,11 +67,15 @@ class DeepSeekHarness(private val context: Context) {
          * 19 = 同一暂存树改回 gz 重打（App 侧纯 Java GZIPInputStream，不认 xz）。
          *      **必须 +1**：v=18 安装全部失败，但个别设备可能留下半解压树，不升版本
          *      mark 对不上也会重解——升了更稳，杜绝任何复用残树的可能。
-         * 20 = profile patch YAML 修 3 处漏 # 的注释续行（js-yaml 65:2 解析崩，
-         *      引擎启动即退出）+ 加写盘前结构 lint。**pack 字节未变，版本不升**：
-         *      设备已按 v=19 解压完毕，YAML 每次启动由 Kotlin 重写，换包即修复。
+         * 20 = profile package.json 补 `dsh.profile.bundles`（dsh-base + dsh-web-app）——
+         *      缺它整棵引擎条目树不装配：webserver/tools/subprocess/commands 等服务方
+         *      一个都不在树里，10 个 @dsh-android 插件 + dsh-mcp-client 全部
+         *      `pending (waiting for service: …)`（2316 包真机实测 11 entries did not
+         *      activate）。pack 字节已变，**必须 +1** 触发全量重解压覆盖旧 package.json；
+         *      Kotlin 侧另加 ensureProfileBundles() 每次启动自愈（仿参考实现的
+         *      ensureHardBundlesSelected），双保险。
          */
-        private const val RUNTIME_VERSION = 19
+        private const val RUNTIME_VERSION = 20
         private const val MARK = ".dsh_v"
 
         /** dsh 默认端口。 */
@@ -148,7 +152,7 @@ class DeepSeekHarness(private val context: Context) {
          * dsh 壳」只能靠它。它同时进 `diagnose()` 输出与 HarnessScreen 顶栏 —— 界面上看不到戳，
          * 就等于装错包，这一条是出包自证链的一部分（同 LANXIU / Moyu 的做法）。
          */
-        const val BUILD_STAMP = "B20261024-2316"
+        const val BUILD_STAMP = "B20261024-2352"
 
         @Volatile
         private var instance: DeepSeekHarness? = null
@@ -470,6 +474,10 @@ class DeepSeekHarness(private val context: Context) {
         runCatching { writeProfilePatch() }
             .onSuccess { appendLog("[profile] 已写入插件装配层: ${it.name}") }
             .onFailure { Log.w(TAG, "写 profile patch 失败", it) }
+
+        // 工厂 bundle 清单自愈（缺了它整棵引擎条目树不装配，见 ensureProfileBundles）
+        runCatching { ensureProfileBundles() }
+            .onFailure { Log.w(TAG, "profile bundle 自愈失败", it) }
 
         // PTC node wrapper + pnpm shim（幂等烧写，路径按运行期实际值）——同样必须在启动前
         runCatching { ensureRuntimeShims() }
@@ -1096,6 +1104,64 @@ class DeepSeekHarness(private val context: Context) {
     }
 
     /**
+     * 确保 profile 的工厂 bundle 清单就位（幂等，仿参考实现的 ensureHardBundlesSelected）。
+     *
+     * **为什么必须有**：profile 的条目树 = `package.json` 里 `dsh.profile.bundles` 的
+     * bundle 层（dsh-base + dsh-web-app 的 cordis.patch.yml）+ 本 profile 的
+     * cordis.patch.yml + --patch 覆盖层。缺了 bundles 字段，引擎自带的 ~190 个条目
+     * （webserver / tools / subprocess / commands / sessions… 全部服务提供方）一个都不进树，
+     * 我们 insert 的 10 个 @dsh-android 插件就全部 `pending (waiting for service: …)`
+     * ——2316 包真机实测「11 entries did not activate」，引擎等于空转。
+     *
+     * pack 里已修好（v=20 重解压覆盖），这里是运行时自愈的第二道保险：
+     * 解压被跳过 / 老设备残树 / 用户手改坏了的场景，每次启动补回缺失的工厂项。
+     * 只追加缺失项，用户自装插件（soft 选择）与其它字段原样保留；base 必须排在
+     * web-app 前（web-app 的 patch 层叠在 base 之上）。
+     *
+     * @param profile profile 名（web / headless）
+     * @param factory 该 profile 的工厂 bundle 清单（顺序即 patch 层叠顺序）
+     * @param canvasDeps 文件缺失重建时是否登记 @napi-rs canvas 依赖（仅 web 需要）
+     */
+    private fun ensureProfileBundles(
+        profile: String = "web",
+        factory: List<String> = listOf("@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"),
+        canvasDeps: Boolean = true,
+    ) {
+        val f = File(home, "profiles/$profile/package.json")
+        val json = if (f.isFile) {
+            runCatching { JSONObject(f.readText()) }.getOrNull()
+                ?: run {
+                    appendLog("[profile] $profile/package.json 不是合法 JSON，跳过 bundle 自愈（交给引擎报错）")
+                    return
+                }
+        } else {
+            // 文件缺失时引擎虽会按模板自建，但会丢依赖登记（canvas 会被 pnpm 当孤儿清掉）
+            // ——这里补一份完整的。
+            JSONObject().put("name", profile).put("private", true).put("version", "0.0.0")
+                .put("dependencies", if (canvasDeps) JSONObject()
+                    .put("@napi-rs/canvas", "^1.0.8")
+                    .put("@napi-rs/canvas-android-arm64", "1.0.8") else JSONObject())
+        }
+        val profileSection = json.optJSONObject("dsh")?.optJSONObject("profile")
+            ?: JSONObject().also { json.put("dsh", JSONObject().put("profile", it)) }
+        val current = profileSection.optJSONArray("bundles")
+        val names = (0 until (current?.length() ?: 0)).mapNotNull { current?.optString(it) }
+            .filter { it.isNotBlank() }
+        val merged = names.toMutableList()
+        for (name in factory) if (name !in merged) merged.add(name)
+        if (merged == names && f.isFile) return
+        profileSection.put("bundles", org.json.JSONArray(merged))
+        val tmp = File(f.parentFile, f.name + ".tmp")
+        tmp.writeText(json.toString(2) + "\n")
+        if (!tmp.renameTo(f)) {
+            tmp.delete()
+            appendLog("[profile] bundle 清单写入失败（rename 被拒）")
+            return
+        }
+        appendLog("[profile] 工厂 bundle 清单就位: ${merged.joinToString(", ")}")
+    }
+
+    /**
      * 确保两个快照内 shim 就位（幂等：缺失或内容不一致才重写）。
      *
      *  · `libexec/dsh-node` —— PTC 代码执行的 node 启动器（移植自 dsh-mobile-apk 7c1）。
@@ -1279,6 +1345,14 @@ class DeepSeekHarness(private val context: Context) {
         if (!isInstalled()) {
             return@withContext MoyuExec.Result(-1, "运行时未安装，先安装后再执行任务")
         }
+        // headless profile 的工厂 bundle 自愈（同 web：缺 bundles 则引擎条目树不装配）
+        runCatching {
+            ensureProfileBundles(
+                profile = "headless",
+                factory = listOf("@deepseek-ai/dsh-base", "@deepseek-ai/dsh-headless"),
+                canvasDeps = false,
+            )
+        }.onFailure { Log.w(TAG, "headless bundle 自愈失败", it) }
         val args = mutableListOf(
             "--expose-internals",   // 同 start()：绕开缺失的 android-arm64 原生模块
             dshEntry.absolutePath,
