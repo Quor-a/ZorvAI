@@ -64,7 +64,7 @@ object LanxiuDesktop {
      *    - 界面看到新标记、红字里有新标记   -> 脚本进来了，失败在后面环节
      *    - 界面看不到新标记                 -> 装的不是这个包（安装没生效/装错了旧包）
      */
-    const val BUILD_STAMP = "B20261024-1420"
+    const val BUILD_STAMP = "B20261024-1530"
 
     /** 桌面输出模式。 */
     enum class OutputMode {

@@ -295,6 +295,117 @@ object QuroShizuku {
         return execAsRootViaReflection(command)
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // 墨语言原生通道专用：带超时执行 / 分块写文件 / 查体积 / 删除
+    //
+    // 这些都是「把工具链复制进 /data/local/tmp」必需的。App 写不进 /data/local/tmp，
+    // shell 也读不了 App 私有目录，两边 UID 不一致 —— 唯一不依赖额外权限的办法就是
+    // 让特权进程代写。Binder 单次事务约 1MB，所以调用方分块、这里只负责追加。
+    // ══════════════════════════════════════════════════════════════
+
+    /** 带超时执行。跑编译/基准时必须能收回进程，否则 waitFor() 永久挂住线程。 */
+    fun execTimed(command: String, timeoutMs: Long): String {
+        if (!isReady) return "❌ Shizuku 未就绪"
+        if (isAidlAvailable) {
+            runCatching { return shellService!!.execTimed(command, timeoutMs) }
+                .onFailure { Log.w(TAG, "[AIDL] execTimed 失败，降级", it) }
+        }
+        return execTimedViaReflection(command, timeoutMs)
+    }
+
+    /**
+     * 以特权身份写文件（追加）。
+     *
+     * AIDL 优先；反射路径没有对应 private API，退化方案是
+     * `printf '%s' <base64> | base64 -d >> path` —— 多 33% 体积，但同样不依赖任何权限。
+     */
+    fun writeChunk(path: String, data: ByteArray, append: Boolean): Int {
+        if (!isReady) return -1
+        if (isAidlAvailable) {
+            runCatching { return shellService!!.writeChunk(path, data, append) }
+                .onFailure { Log.w(TAG, "[AIDL] writeChunk 失败，走 base64 兜底", it) }
+        }
+        return writeChunkViaBase64(path, data, append)
+    }
+
+    /** 远端文件字节数；不存在 -1。 */
+    fun fileSize(path: String): Long {
+        if (!isReady) return -1L
+        if (isAidlAvailable) {
+            runCatching { return shellService!!.fileSize(path) }
+                .onFailure { Log.w(TAG, "[AIDL] fileSize 失败，降级", it) }
+        }
+        val out = exec("if [ -f '$path' ]; then wc -c < '$path' | tr -d ' '; else echo -1; fi")
+        return out.trim().lines().lastOrNull()?.trim()?.toLongOrNull() ?: -1L
+    }
+
+    /** 删除远端文件/目录。 */
+    fun remove(path: String): Boolean {
+        if (!isReady) return false
+        if (isAidlAvailable) {
+            runCatching { return shellService!!.remove(path) }
+                .onFailure { Log.w(TAG, "[AIDL] remove 失败，降级", it) }
+        }
+        val r = exec("rm -rf '$path' 2>/dev/null; echo rc=$?")
+        return r.contains("rc=0")
+    }
+
+    private fun execTimedViaReflection(command: String, timeoutMs: Long): String {
+        val budget = if (timeoutMs <= 0) 120_000L else timeoutMs
+        return try {
+            val process: Process = shizukuNewProcess(arrayOf("sh", "-c", command), null, null)
+            if (!process.waitFor(budget, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                runCatching {
+                    shizukuNewProcess(
+                        arrayOf("sh", "-c", "pkill -f 'quro-mo' 2>/dev/null; true"), null, null
+                    )
+                }
+                process.destroyForcibly()
+                val out = runCatching {
+                    BufferedReader(InputStreamReader(process.inputStream)).use { it.readText() }
+                }.getOrDefault("")
+                val err = runCatching {
+                    BufferedReader(InputStreamReader(process.errorStream)).use { it.readText() }
+                }.getOrDefault("")
+                val body = (out + err).trim()
+                (if (body.isBlank()) "" else body + "\n") + "exit=timeout(${budget}ms)"
+            } else {
+                val out = BufferedReader(InputStreamReader(process.inputStream)).use { it.readText() }
+                val err = BufferedReader(InputStreamReader(process.errorStream)).use { it.readText() }
+                val body = (out + err).trim()
+                if (body.isBlank()) "(无输出)" else body
+            }
+        } catch (e: Throwable) {
+            "❌ Shizuku 执行失败: ${e.message}"
+        }
+    }
+
+    /**
+     * base64 兜底写文件。反射路径拿不到 byte[] 通道，只能把数据编码进命令串。
+     * 块大小由调用方定（MoyuLocal 走 AIDL 时用 512KB；走这里会自动再切）。
+     */
+    private fun writeChunkViaBase64(path: String, data: ByteArray, append: Boolean): Int {
+        if (data.isEmpty()) {
+            if (!append) exec(": > '$path'")
+            return fileSize(path).toInt()
+        }
+        // 171KB base64 ≈ 128KB 原始数据，远离 Binder ~1MB 上限
+        val step = 128 * 1024
+        var off = 0
+        var first = !append
+        while (off < data.size) {
+            val len = minOf(step, data.size - off)
+            val b64 = android.util.Base64.encodeToString(
+                data.copyOfRange(off, off + len), android.util.Base64.NO_WRAP
+            )
+            val op = if (first) ">" else ">>"
+            exec("printf '%s' '$b64' | base64 -d $op '$path'")
+            first = false
+            off += len
+        }
+        return fileSize(path).toInt()
+    }
+
     // ── 反射路径实现（内部用）──
 
     private fun execViaReflection(command: String): String {

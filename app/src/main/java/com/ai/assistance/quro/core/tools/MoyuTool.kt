@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.tools
 
 import android.content.Context
+import com.ai.assistance.quro.terminal.moyu.MoyuLocal
 import com.ai.assistance.quro.terminal.moyu.MoyuNative
 import com.ai.assistance.quro.terminal.moyu.MoyuPkg
 import com.ai.assistance.quro.terminal.moyu.MoyuRuntime
@@ -51,12 +52,16 @@ class MoyuTool : QuroTool {
             "AArch64 原生目标（native_build / native_run / native_targets / cc_diag / native_setup）：" +
             "把 .mo 编成 **ARM64 静态 ELF**（cfs-aarch64 后端 + freestanding C + Ubuntu 内的 zig 编译器），" +
             "产物不链 libc、**不经 qemu 翻译**，由 Android 原生执行 —— 这是墨语言在手机上的最快路径。" +
-            "它是用户态系统程序，不是 Linux 内核；要裸机内核请用 kernel_build。"
+            "它是用户态系统程序，不是 Linux 内核；要裸机内核请用 kernel_build。" +
+            "墨语言原生通道（native_status/native_deploy/native_bench/native_exec/native_compile/native_system/native_cleanup）：一条独立复制的通道，`/data/local/tmp/quro-mo`，经 Shizuku 特权 shell 域执行，避开 App 沙箱 SELinux 对 execve 的限制。" +
+            "它从 APK 资产重新解一份工具链，与 Ubuntu rootfs 内的 `/opt/molang` 毫无关系，删一边不影响另一边。" +
+            "cfs-aarch64 后端产出的 freestanding 静态 ELF（不链 libc、`svc #0` 直接陷入内核）在这条路上 **原生跑**，连 proot 都不经过。" +
+            "native_bench 跑的 andromo（筛法数 π）就是直接证据：产物由内核直接调度，毫秒级出结果。"
 
     override val parametersJson: String = """{
         "type":"object",
         "properties":{
-            "action":{"type":"string","description":"操作","enum":["setup","compile","run","build_run","exec","list","read","write","diagnose","pkg_init","dep_install","dep_fetch","dep_list","dep_tree","dep_verify","graph","net_diag","test","aifix","resolve","native_build","native_run","native_targets","cc_diag","native_setup","selfhosted","system_image","system_build","kernel_build","kernel_info"]},
+            "action":{"type":"string","description":"操作","enum":["setup","compile","run","build_run","exec","list","read","write","diagnose","pkg_init","dep_install","dep_fetch","dep_list","dep_tree","dep_verify","graph","net_diag","test","aifix","resolve","native_build","native_run","native_targets","cc_diag","native_setup","selfhosted","system_image","system_build","kernel_build","kernel_info","native_status","native_deploy","native_bench","native_exec","native_compile","native_system","native_cleanup"]},
             "path":{"type":"string","description":"compile/run/read 的文件路径（.mo 源码或已编译的 .elf）"},
             "code":{"type":"string","description":"write 时写入的源码内容；配合 name 使用"},
             "name":{"type":"string","description":"write 时的文件名（如 hello.mo）"},
@@ -71,6 +76,8 @@ class MoyuTool : QuroTool {
             "max_cases":{"type":"number","description":"test 最多跑前 N 个用例（快速冒烟），0=不限"},
             "host":{"type":"string","description":"resolve 时的域名或 IPv4（墨语言 lib/net.mo 无 DNS，域名要靠它先解析成 IP 整数）"},
             "target":{"type":"string","description":"native_build 的编译目标：aarch64（默认，在 proot 的 Ubuntu 用户空间里原生执行）/ x86_64（经 qemu 逐条翻译，慢）/ kern-aarch64（裸机，仅模拟器）"},
+            "layer":{"type":"string","description":"native_deploy 部署哪一层：core（核心层，约6.4MB，默认）/ zig（编译层，约176MB）"},
+            "n":{"type":"number","description":"native_bench 的筛法上限，默认 200000"},
             "opt":{"type":"string","description":"native_build 的优化级别：-O2（默认）/-O1/-O0（-O0 更快更省内存）"}
         },
         "required":["action"]
@@ -167,6 +174,75 @@ class MoyuTool : QuroTool {
                 ubuntu.kernelInfo()
             }
 
+            // ── 原生通道：/data/local/tmp + Shizuku，ARM64 产物原生跑 ──
+            // 🔴 这套动作必须留在 ubuntuActions 门禁**之前**：它跟 Ubuntu 一点关系都没有，
+            //    是从 APK 资产重新解一份工具链落到 /data/local/tmp 的独立通道。
+            "native_status" -> return runBlocking {
+                val local = MoyuLocal(context)
+                local.describe() + "\n\n" + local.probe().fold({ it }, { "自检失败：${it.message}" })
+            }
+
+            "native_deploy" -> {
+                val layer = args.optString("layer", "core").trim().lowercase()
+                val local = MoyuLocal(context)
+                val steps = StringBuilder()
+                val r = if (layer == "zig" || layer == "cc") {
+                    runBlocking { local.deployZig { steps.appendLine(it) } }
+                } else {
+                    runBlocking { local.deployCore { steps.appendLine(it) } }
+                }
+                return r.fold(
+                    onSuccess = { "✅ " + local.describe() + "\n\n" + steps.toString().trim() },
+                    onFailure = { "❌ 部署失败：${it.message}" }
+                )
+            }
+
+            "native_bench" -> {
+                // π(n) 计数。这个数字就是「ARM64 产物原生跑」的直接证据：
+                // 一个 AArch64 静态 ELF，不经 proot、不经 qemu，内核直接调度。
+                val local = MoyuLocal(context)
+                val n = args.optDouble("n", 200000.0).toInt().coerceIn(1, 20_000_000)
+                return runBlocking { local.benchmark(n, timeoutMs) }
+                    .fold({ it }, { "失败：${it.message}" })
+            }
+
+            "native_run" -> {
+                val local = MoyuLocal(context)
+                val rel = args.optString("path", "").trim().ifBlank { "bin/andromo" }
+                val a = args.optString("args", "").trim()
+                return runBlocking { local.runArtifact(rel, a, timeoutMs) }
+                    .fold({ it }, { "失败：${it.message}" })
+            }
+
+            "native_compile" -> {
+                // 在设备上把 .mo 走官方配方（mo2x cfs-aarch64 → zig cc -nostdlib -fno-builtin）
+                // 现编成 ARM64 静态 ELF 并原生运行。需要编译层（zig），由 native_deploy layer=zig 部署。
+                val local = MoyuLocal(context)
+                val key = args.optString("path", "").trim().ifBlank { args.optString("name", "").trim() }
+                val src = if (key.isNotBlank()) {
+                    resolveMoyuFile(rt, key) ?: File(key)
+                } else {
+                    local.sourceFromAsset("examples/andromo.mo")
+                }
+                if (src == null || !src.isFile) return "找不到源码：${key.ifBlank { "（未提供 path）" }}"
+                val a = args.optString("args", "").trim()
+                return runBlocking { local.compileAndRun(src, a, timeoutMs) }
+                    .fold({ it }, { "失败：${it.message}" })
+            }
+
+            "native_system" -> {
+                val local = MoyuLocal(context)
+                val input = args.optString("stdin", "").ifBlank { "help\nexit\n" }
+                return runBlocking { local.enterSystem(input, timeoutMs) }
+                    .fold({ it }, { "失败：${it.message}" })
+            }
+
+            "native_cleanup" -> {
+                val local = MoyuLocal(context)
+                return runBlocking { local.cleanup() }
+                    .fold({ "已清空 " + MoyuLocal.REMOTE_ROOT }, { "失败：${it.message}" })
+            }
+
             "native_setup" -> {
                 val r = runBlocking { ubuntu.ensure { } }
                 return r.fold(
@@ -224,7 +300,7 @@ class MoyuTool : QuroTool {
                 )
             }
 
-            "native_run" -> {
+            "native_exec" -> {
                 val key = args.optString("path", "").trim()
                     .ifBlank { args.optString("name", "").trim().removeSuffix(".mo") + ".arm64" }
                 val f = resolveMoyuFile(rt, key) ?: return "找不到产物：$key"
