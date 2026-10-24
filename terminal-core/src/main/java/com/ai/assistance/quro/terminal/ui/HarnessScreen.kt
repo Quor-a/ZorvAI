@@ -54,6 +54,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -72,8 +74,12 @@ import com.ai.assistance.quro.terminal.harness.DeepSeekHarness
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 
 /**
  * DeepSeek Harness 页。
@@ -441,6 +447,15 @@ private const val BOOT_READY_PREFIX = "[dsh-boot-ready]"
 private const val BOOT_FAILED_PREFIX = "[dsh-boot-failed]"
 
 /**
+ * 内核探针结论的 title 回传通道前缀（#381）。
+ *
+ * 为什么需要它：部分 ROM 会把**首文档**的 `evaluateJavascript` 回包丢掉（loadUrl 之后立刻发
+ * 的那一次最容易被丢），于是「内核过旧」这个最致命的根因在壳侧反而看不到。document-start
+ * 注入的探针把同一份结论同时写进 `document.title` —— title 回调丢不掉。两条通道互为备份。
+ */
+private const val KERNEL_TITLE_PREFIX = "DSH_KERNEL:"
+
+/**
  * WebView 内核能力预检（#380）：在页面加载**之前**问一遍 JS 引擎会什么。
  *
  * 为什么要它：白屏最难向用户解释的一种是「设备 WebView 内核太老」。这些是**语法级**
@@ -462,9 +477,12 @@ private const val BOOT_FAILED_PREFIX = "[dsh-boot-failed]"
  * ⚠ 历史坑 2（B20261024-2115 已修）：static{} 原列为 `S:` 致命项 —— 那是**未降级**
  *    dist 的口径（入口 chunk 实测 2 处，9:1811 / 13:9117）。内置 dist 降级后它已不致命，
  *    改列 `A:`；只有换回未降级包时才回到致命。
+ *
+ * #381：探针体抽成 [DSH_KERNEL_PROBE] 一个常量，两个消费面共用，杜绝两份漂移：
+ *  - [DSH_KERNEL_JS]：loadUrl 之后 evaluateJavascript 现问（部分 ROM 丢首文档回包）；
+ *  - [DSH_KERNEL_TITLE_JS]：document-start 注入，结论写 `document.title`（回调丢不掉）。
  */
-private const val DSH_KERNEL_JS = """
-(function(){
+private const val DSH_KERNEL_PROBE = """
   var miss = [];
   // ── 语法级硬门槛（出厂 chrome87 口径未降级的三项；缺一项入口 chunk 解析期整体不执行）──
   try { new Function('class X{#f=1;g(){return this.#f}}'); } catch (e) { miss.push('S:私有字段 #f（需 84+）'); }
@@ -483,8 +501,31 @@ private const val DSH_KERNEL_JS = """
   try { new RegExp('x', 'v'); } catch (e) { miss.push('A:RegExp v 标志（需 110+，chunk 实测未用到）'); }
   // 内核代次直读：UA 里的 Chrome 大版本即 WebView 内核代次（不经过 eval，CSP 也读得到）
   var m = (navigator.userAgent || '').match(/Chrome\/(\d+)/);
-  return 'CHROME=' + (m ? m[1] : '?') + '|' + (miss.length ? miss.join('|') : 'ALL-OK');
+  var rep = 'CHROME=' + (m ? m[1] : '?') + '|' + (miss.length ? miss.join('|') : 'ALL-OK');
+"""
+
+/** evaluateJavascript 版内核探针：返回结论串（回包被 ROM 丢掉时由 title 通道兜底）。 */
+private const val DSH_KERNEL_JS = """
+(function(){
+$DSH_KERNEL_PROBE
+  return rep;
 })()
+"""
+
+/**
+ * document-start 版内核探针：结论同时写 `window.__dshKernel` 与 `document.title`。
+ *
+ * title 通道的价值：`evaluateJavascript` 在**首文档**上的回包会被部分 ROM 丢弃，
+ * 而 onReceivedTitle 丢不掉 —— 内核过旧这种「白屏且无报错」的根因必须有一条稳的回传路径。
+ */
+private const val DSH_KERNEL_TITLE_JS = """
+(function(){
+  try {
+$DSH_KERNEL_PROBE
+    window.__dshKernel = rep;
+    try { document.title = '$KERNEL_TITLE_PREFIX' + rep; } catch (e2) {}
+  } catch (e) {}
+})();
 """
 
 /**
@@ -547,7 +588,8 @@ private const val DSH_DIAG_JS = """
   // 顺序：document-start 注入 → head 首个内联(__ModuleLoader__) → 阻塞 client.js →
   //       manifest(__DSH_BOOT__) → compat 注入脚本(看门狗/polyfill/静态回退) → body 末尾 boot-ready 承诺。
   // 任何一环缺失，其后的环节全都不可能出现 —— 断点位置即根因位置。
-  p('document-start 注入', typeof window.__dshHostCanvas !== 'undefined' ? '已生效' : '未生效（addDocumentStartJavaScript 没跑：画布钉色/错误收集/网络探针全丢）');
+  p('document-start 注入', typeof window.__dshHostCanvas !== 'undefined' ? ('已生效（钉色位置 ' + (window.__dshHostCanvasPos || '?') + '）') : '未生效（addDocumentStartJavaScript 没跑：画布钉色/错误收集/网络探针/内核探针全丢）');
+  p('内核探针(title)', typeof window.__dshKernel !== 'undefined' ? String(window.__dshKernel) : '未执行（document-start 注入没跑，或 title 被页面提前覆盖）');
   var ml = window.__ModuleLoader__;
   if (ml) {
     var q = ml.pendingQueue;
@@ -572,6 +614,30 @@ private const val DSH_DIAG_JS = """
   return L.join('\n');
 })()
 """
+
+/**
+ * `evaluateJavascript` 的挂起包装：回包即 JSON 字符串原文（可能为 `null` 字面量）。
+ *
+ * 存在的理由：看门狗要在协程里**同步等一次页面答复**（探 `#root`、发 JS 心跳），而
+ * evaluateJavascript 本身是异步回调式。异常（WebView 已销毁等）与超时都由调用方兜。
+ */
+private suspend fun WebView.evalJs(code: String): String? = suspendCancellableCoroutine { cont ->
+    val delivered = try {
+        evaluateJavascript(code) { raw ->
+            if (cont.isActive) cont.resume(raw)
+        }
+        true
+    } catch (_: Throwable) {
+        false
+    }
+    if (!delivered && cont.isActive) cont.resume(null)
+}
+
+/** 探一次 `#root` 子节点数；拿不到（WebView 没了 / JS 抛了）回 -1。 */
+private suspend fun probeRootKids(wv: WebView): Int {
+    val raw = withTimeoutOrNull(3_000) { wv.evalJs(DSH_BLANK_JS) } ?: return -1
+    return unescapeJsString(raw).substringBefore('|').trim().toIntOrNull() ?: -1
+}
 
 /** `evaluateJavascript` 回包是 JSON 字符串，按 JSON 规则反转义回来（单遍扫描，不连环替换）。 */
 private fun unescapeJsString(raw: String): String {
@@ -609,114 +675,6 @@ private fun unescapeJsString(raw: String): String {
 }
 
 /**
- * `window.androidBridge` —— 上游兼容层（`@dsh-android/dsh-host-web-compat` / `ui-responsive`）
- * 与页面共同依赖的那座桥。**不是可选装饰**：缺了它
- *  - `dir-pick` 端点 fail-closed，页面每 500ms 拿一次 403，目录选择永远转空；
- *  - 首帧主题拿不到 `getSystemDark()`，部分 ROM 的 WebView `matchMedia` 卡在浅色 → 深色下白闪；
- *  - 页面自己的「刷新」按钮直接弹「应用与页面的连接未装配」。
- *
- * 上游 `app/src/main` 的 `AndroidBridge.kt` 有 35 个方法，这里只实现**本页真能用上的最小集**，
- * 其余留空实现并返回上游约定的「不可用」形状（上游全部调用点都有守卫，缺方法不会炸）。
- * 目录选择器（`pickDirectory`） deliberately 不接：它要把 SAF 树 URI 翻成引擎能读的路径，
- * 没有壳侧存储映射就只能是半成品，而它压根不在白屏路径上。
- */
-private class DshBridge(
-    private val context: Context,
-    private val onReload: () -> Unit,
-) {
-    /** dir-pick 端点的鉴权头来源。与引擎进程环境里的 `DSH_PICK_TOKEN` 是同一份（轮换后旧值立即失效）。 */
-    @JavascriptInterface
-    fun getPickToken(): String = DeepSeekHarness.get(context).currentPickToken().orEmpty()
-
-    /**
-     * 首帧主题：兼容层在 head 解析期同步读它，拿不到才回落 `matchMedia`。
-     *
-     * **故意恒为深色，不读系统夜间模式**：harness 页面整块嵌在终端主题里（`TerminalTheme`
-     * 的底色 `#0B0E14` 是写死的深色，和系统主题无关）。系统是浅色时若照实返回 false，
-     * 兼容层会把首帧画布刷成 `#f1f3f1` —— 页面还没装配完的那一两秒，用户在深色壳里看到
-     * 一块**白屏**，然后才被上游主题接管。那正是要消灭的东西，所以这里报宿主真实的深色。
-     */
-    @JavascriptInterface
-    fun getSystemDark(): Boolean = true
-
-    /** 页面只认 zh / en / system 三态，其余语言一律交给 system（跟随 document.lang）。 */
-    @JavascriptInterface
-    fun getUiLanguage(): String = when (Locale.getDefault().language) {
-        "zh" -> "zh"
-        "en" -> "en"
-        else -> "system"
-    }
-
-    /** 页面「刷新界面」按钮：整页重载（含重新走 token 交换）。 */
-    @JavascriptInterface
-    fun reloadWebUI() {
-        onReload()
-    }
-
-    /** 复制回退通道：上游多处 `navigator.clipboard.writeText` 失败时走这里。 */
-    @JavascriptInterface
-    fun copyText(text: String?): Boolean {
-        val t = text ?: return false
-        if (t.isEmpty()) return false
-        return runCatching {
-            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                ?: return false
-            cm.setPrimaryClip(ClipData.newPlainText("dsh", t))
-            true
-        }.getOrDefault(false)
-    }
-
-    /** 站外链接交给系统浏览器。 */
-    @JavascriptInterface
-    fun openExternalLink(url: String?) {
-        val u = url?.trim().orEmpty()
-        if (u.isEmpty()) return
-        runCatching {
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse(u)).apply {
-                    if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-            )
-        }
-    }
-
-    /** 沉浸式开关：本页常驻全屏 WebView，没有可切的状态栏，恒 true、写入为空操作。 */
-    @JavascriptInterface
-    fun getImmersiveMode(): Boolean = true
-
-    @JavascriptInterface
-    fun setImmersiveMode(enabled: Boolean) {
-        // 上游 GeneralSettings 的开关有 localStorage 镜像兜底，这里不写也不会丢状态。
-    }
-
-    /** 控制台入口宿主未提供 —— 记日志即可，上游对缺失有明确的人话提示。 */
-    @JavascriptInterface
-    fun openConsole() {
-        android.util.Log.i("HarnessScreen", "页面请求打开控制台（宿主未提供该入口）")
-    }
-
-    /** 打开路径：宿主没有 SAF→路径 的映射，按上游约定的不可用形状返回。 */
-    @JavascriptInterface
-    fun openPathChooser(path: String?, mode: String?): String =
-        """{"ok":false,"reason":"host-unsupported"}"""
-
-    @JavascriptInterface
-    fun openNativePath(path: String?): Boolean = false
-
-    /** 目录选择：见类注释，宿主不实现选择器；轮询侧已 fail-closed，不会有人调到这里。 */
-    @JavascriptInterface
-    fun pickDirectory(requestId: String?) {
-        android.util.Log.w("HarnessScreen", "页面请求选择目录 requestId=$requestId（宿主未提供）")
-    }
-
-    @JavascriptInterface
-    fun settingsPath(): String = ""
-
-    @JavascriptInterface
-    fun incomingWorkspacePath(): String = ""
-}
-
-/**
  * 只放行 harness 自己的源（scheme://host:port 完全一致）。
  *
  * 桥上带着 pick token，所以**不能**再像原来那样见 `127.0.0.1` 就放行 —— 那等于把本机任意
@@ -734,6 +692,87 @@ private fun sameOrigin(a: String, b: String): Boolean {
     }
     if (a.isBlank() || b.isBlank()) return false
     return origin(a) == origin(b)
+}
+
+/** 设备语言标签（按偏好序，供 dsh 自己的 locale 探测器用）。 */
+private fun systemLanguages(context: Context): List<String> {
+    val locales = try {
+        context.applicationContext.resources.configuration.locales
+    } catch (_: Exception) {
+        null
+    }
+    val tags = locales?.let { list -> (0 until list.size()).map { list[it].toLanguageTag() } }.orEmpty()
+    return tags.filter { it.isNotBlank() }.ifEmpty { listOf(Locale.getDefault().toLanguageTag()) }
+}
+
+/**
+ * 当前模式最终会显示的语言（`zh` / `en`）。
+ *
+ * 移植自参考实现 `AppLanguage.expectedLocale`：显式选择直接返回；跟随系统时按 dsh 自己的
+ * 解析口径 —— 第一个命中已发布语言 id 的设备标签获胜（精确先于主子标签），都不中回落 `en`。
+ */
+private fun expectedLocale(mode: String, languages: List<String>): String {
+    if (mode == DshUiLanguage.MODE_ZH || mode == DshUiLanguage.MODE_EN) return mode
+    for (tag in languages.filter { it.isNotBlank() }.distinct()) {
+        val requested = tag.lowercase(Locale.ROOT)
+        if (requested == DshUiLanguage.MODE_ZH || requested == DshUiLanguage.MODE_EN) return requested
+        val primary = requested.substringBefore('-')
+        if (primary == DshUiLanguage.MODE_ZH || primary == DshUiLanguage.MODE_EN) return primary
+    }
+    return DshUiLanguage.MODE_EN
+}
+
+/**
+ * document-start 注入的 locale 引导脚本（移植自参考实现 `AppLanguage.bootstrapScript`）。
+ *
+ * dsh 只通过 WebView 里的 `__DSH_LOCALE__` 读语言偏好；没有它页面退回浏览器语言，
+ * 设置页会显示一个壳侧从未应用过的语言。桥在每次页面加载时读壳侧偏好，所以切换后
+ * 重载一次即可收敛。
+ *
+ * `onChange` 是唯一的「引擎 → 壳」通道，而 dsh 在页面加载期间会自行发布（一次是它激活的
+ * locale，一次是持久化设置域把值推进运行时时）—— 那些自动发布**不带用户意图**，只忽略
+ * 第一条会把剩下的全写回，那正是「跟随系统」被钉死成单一语言的原因（参考实现 issue #487）。
+ * 因此写回需要页面上一次真实交互（click / keydown / touchend 武装），且必须改变壳侧当前
+ * 显示的语言；「当前显示的语言」在调用时从桥里读，而不是在这里烘死 —— 本脚本每个 Activity
+ * 只装一次，而模式在它底下每次切换都在变。
+ *
+ * @param mode 壳侧存储的偏好（`system` / `zh` / `en`）；桥读不到时的兜底答案。
+ * @param languages 设备语言标签（按偏好序）。
+ */
+private fun dshLocaleBootstrapScript(mode: String, languages: List<String>): String {
+    val preference = if (mode == DshUiLanguage.MODE_SYSTEM) "null" else DshAndroidBridge.jsQuote(mode)
+    val ordered = languages.filter { it.isNotBlank() }.distinct()
+    val tags = (ordered.ifEmpty { listOf(DshUiLanguage.MODE_ZH) }).joinToString(",") {
+        DshAndroidBridge.jsQuote(it)
+    }
+    val baked = DshAndroidBridge.jsQuote(expectedLocale(mode, languages))
+    return "(function(){try{" +
+        "var tags=[$tags];var baked=$baked;var armed=false;" +
+        "function arm(){armed=true;setTimeout(function(){armed=false},0)}" +
+        "function shown(){" +
+        "var mode=null;" +
+        "try{var b=window.androidBridge;" +
+        "if(b&&typeof b.getUiLanguage==='function')mode=String(b.getUiLanguage())}catch(e){}" +
+        "if(mode==='zh'||mode==='en')return mode;" +
+        "if(mode==='system'){for(var i=0;i<tags.length;i++){" +
+        "var t=String(tags[i]).toLowerCase();" +
+        "if(t==='zh'||t==='en')return t;" +
+        "var p=t.split('-')[0];if(p==='zh'||p==='en')return p}" +
+        "return 'en'}" +
+        "return baked}" +
+        "try{document.addEventListener('click',arm,true);" +
+        "document.addEventListener('keydown',arm,true);" +
+        "document.addEventListener('touchend',arm,true)}catch(e){}" +
+        "globalThis.__DSH_LOCALE__={read:function(){return Promise.resolve({languages:tags,preference:$preference})}," +
+        "onChange:function(locale){if(!armed)return;armed=false;" +
+        "var next=String(locale);" +
+        // 桥只认三档；语言包 id 不在这里静默降级成「跟随系统」。
+        "if(next!=='zh'&&next!=='en')return;" +
+        "if(next===shown())return;" +
+        "try{var b=window.androidBridge;" +
+        "if(b&&typeof b.setUiLanguage==='function')b.setUiLanguage(next)" +
+        "}catch(e){}}};" +
+        "}catch(e){}})();"
 }
 
 /**
@@ -797,8 +836,16 @@ private fun HarnessWebView(
     var bootReady by remember { mutableStateOf(false) }
     /** 契约驱动的告因：stall/failed 行到达时自动顶面板，标题直接用它。 */
     var bootAlert by remember { mutableStateOf<String?>(null) }
-    /** 内核能力预检（DSH_KERNEL_JS）：null=未测，`OK`=全过，`BAD|S:…|A:…`=缺能力。 */
+    /** 内核能力预检（DSH_KERNEL_JS / DSH_KERNEL_TITLE_JS 双通道）：null=未测，`OK`=全过，`BAD|S:…|A:…`=缺能力。 */
     var kernelReport by remember { mutableStateOf<String?>(null) }
+    /** 主帧停滞时的**自动**重载次数（本次导航内）：自愈要有界，否则坏页面会被重载成死循环。 */
+    var autoReloads by remember { mutableIntStateOf(0) }
+    /** 首帧是否已提交（onPageCommitVisible）：渲染进程失活与「慢启动」的区分判据之一。 */
+    var frameCommitted by remember { mutableStateOf(false) }
+    /** WebView 重建纪元：渲染进程消失（onRenderProcessGone）时 +1，让 AndroidView 重新走 factory。 */
+    var webViewEpoch by remember { mutableIntStateOf(0) }
+    /** 页面协程作用域（引擎重启等长动作；DisposableEffect 销毁时随组合一起取消）。 */
+    val scope2 = rememberCoroutineScope()
 
     // 主帧走完 2.5s 后探一次实机 DOM。SPA 的 hydration 失败不触发任何 WebView 回调，
     // 只有真的去看 #root 才知道是不是白屏。
@@ -831,7 +878,11 @@ private fun HarnessWebView(
         if (wv != null && wv.canGoBack()) wv.goBack() else onClose()
     }
 
-    fun reload() {
+    /**
+     * 重载页面。[auto] = 看门狗自动发起的自愈重载（不重置 [autoReloads] 计数，
+     * 否则计数永远到不了上限、自愈变死循环）；用户/页面刷新按钮发起的重载重置计数。
+     */
+    fun reload(auto: Boolean = false) {
         loadError = null
         blankScreen = false
         stalledMain = false
@@ -840,11 +891,29 @@ private fun HarnessWebView(
         subErrors = emptyList()
         diag = null
         pageDone = false
+        frameCommitted = false
         bootLines = emptyList()
         bootReady = false
+        if (!auto) autoReloads = 0
         navStartedAt = System.currentTimeMillis()
         loadedUrl = url
         webView?.loadUrl(url)
+    }
+
+    /** 页面「刷新界面」按钮与诊断面板「重启引擎」共用的引擎重启（停止旧进程 → 重新拉起 → 重载）。 */
+    fun restartEngine(): Boolean {
+        val h = DeepSeekHarness.get(context)
+        if (!h.isRunning() && autoReloads >= 2) return false
+        scope2.launch {
+            withContext(Dispatchers.IO) { h.stop() }
+            val r = withContext(Dispatchers.IO) { h.start() }
+            r.onSuccess { reload(auto = true) }
+                .onFailure {
+                    loadError = "引擎重启失败：${it.message}"
+                    panelOpen = true
+                }
+        }
+        return true
     }
 
     fun collectDiag() {
@@ -858,6 +927,11 @@ private fun HarnessWebView(
             val body = unescapeJsString(raw.orEmpty())
             diag = buildString {
                 append(body)
+                // #381：首帧提交状态（onPageCommitVisible）。「慢启动」与「死页面」的
+                // 区分判据 —— 帧都没画出来过，与加载完只是 hydration 慢是两种病。
+                append("\n\n── 首帧提交 ──\n")
+                append(if (frameCommitted) "已提交（页面画出来过至少一帧）" else "未提交（渲染进程未画出首帧）")
+                append("\n自动重载次数: ").append(autoReloads).append(" / 2")
                 // #380：上游看门狗契约行紧跟现场之后 —— 它带着 pendingBundles/badBundles/
                 // rendered/pendingBoot，是「资源没到」与「入口没执行」的分水岭。
                 if (bootLines.isNotEmpty()) {
@@ -875,6 +949,19 @@ private fun HarnessWebView(
                     } else {
                         append(kr.removePrefix("CHROME=").split('|').joinToString("\n") { "· $it" })
                     }
+                }
+                // #381：引擎进程状态与日志尾部。白屏最难判的一种是引擎自己退了（23:26 实锤
+                // code=0）：页面请求挂在半空，WebView 一个回调都不给，只有日志尾部能一眼定案。
+                val harness = DeepSeekHarness.get(context)
+                append("\n\n── 引擎进程 ──\n")
+                append("存活: ").append(
+                    if (harness.isRunning()) "是（127.0.0.1:${harness.activePort()}）" else "否（已退出）",
+                )
+                val engineLogs = runCatching { harness.logs() }.getOrDefault("")
+                if (engineLogs.isNotBlank()) {
+                    val lines = engineLogs.lines()
+                    append("\n── 引擎日志（尾部 ${minOf(lines.size, 40)} / ${lines.size} 行） ──\n")
+                    append(lines.takeLast(40).joinToString("\n"))
                 }
             }
         }
@@ -907,15 +994,82 @@ private fun HarnessWebView(
         diag = null
     }
 
-    // 主帧看门狗：15s 还没 onPageFinished，说明卡在某个子资源上（最典型的是 <head> 里的
-    // 阻塞 <script src> 不返回）。进度条早在 100% 前就停了，页面一个字不出 —— 这时不自动弹，
-    // 用户看到的就只有一块白，没有任何线索。
-    // #380：`bootReady` 是第二道门 —— 上游看门狗已报「页面真渲染出来了」就不再误报。
+    // 主帧看门狗（#381 重写）：15s 还没 onPageFinished ⇒ 卡在某个子资源上（最典型的是 head 里的
+    // 阻塞 combo 脚本不返回 —— 它挂着，body 末尾的 boot-ready 承诺就永不执行，入口 chunk 永久
+    // await，白屏且进度条停住）。三级处置，逐级升级：
+    //   1. 先探 #root：已有内容 = 只是慢，再给 30s（45s 仍无 boot 契约才升级，不误伤慢启动）；
+    //   2. #root 空且**引擎进程已退出** ⇒ 请求挂在半空、永远不会返回（23:26 实锤 code=0 的形态），
+    //      直接顶面板并附引擎日志尾部 —— 这条路径以前完全没有覆盖；
+    //   3. #root 空且引擎活着 ⇒ 有界自动重载（≤2 次）自愈瞬时挂起，仍不动才顶面板。
     LaunchedEffect(navStartedAt) {
         if (navStartedAt == 0L) return@LaunchedEffect
         delay(MAIN_FRAME_STALL_MS)
-        if (!pageDone && !bootReady) {
-            autoOpenPanel("主帧 ${MAIN_FRAME_STALL_MS / 1000}s 未加载完成（进度 $progress%）", stall = true)
+        if (pageDone || bootReady) return@LaunchedEffect
+        val wv = webView
+        val kids = if (wv != null) probeRootKids(wv) else -1
+        if (kids > 0) {
+            // 页面在渲染只是慢：再给 30s，到 45s 仍无 boot 契约才升级
+            delay(30_000)
+            if (!pageDone && !bootReady) {
+                autoOpenPanel("启动 45s 未完成（boot 契约未到达，进度 $progress%）", stall = true)
+            }
+            return@LaunchedEffect
+        }
+        // #root 空：先看引擎还在不在 —— 引擎退了，页面请求挂在半空，等再久也不会动
+        val harness = DeepSeekHarness.get(context)
+        if (!harness.isRunning()) {
+            autoOpenPanel(
+                "引擎进程已退出 —— 页面请求挂在半空，永远不会返回。诊断里已附引擎日志尾部。",
+                stall = true,
+            )
+            return@LaunchedEffect
+        }
+        if (autoReloads < 2) {
+            autoReloads++
+            reload(auto = true)
+            return@LaunchedEffect
+        }
+        autoOpenPanel("主帧 ${MAIN_FRAME_STALL_MS / 1000}s 未加载完成（进度 $progress%）", stall = true)
+    }
+
+    // 冻结看门狗（移植自参考实现 EngineStartFlow.freezeRunnable，issue #36 荣耀 MagicUI 6.1 实锤）：
+    // 页面 JS 主线程冻结（渲染进程失活）时，页内定时器也跑不动，WebView 一个回调都不给 ——
+    // 用户看到「卡死」而不是任何提示。主线程每 10s 发一次 JS 心跳，回调不再返回即判失活：
+    // 页面在场 >45s 且 >20s 无应答 ⇒ 前台静默 reload 一次（有界，latch 防重复）。
+    // 主帧没走完时不参与（那归主帧看门狗管，口径与上游「onPageFinished 处启动」一致）。
+    LaunchedEffect(navStartedAt) {
+        if (navStartedAt == 0L) return@LaunchedEffect
+        while (isActive && !pageDone) {
+            delay(1_000)
+        }
+        val startedAt = System.currentTimeMillis()
+        var jsAckAt = startedAt
+        var pingOutstanding = false
+        var freezeReloaded = false
+        while (isActive) {
+            delay(10_000)
+            val wv = webView ?: continue
+            if (bootReady) break
+            val now = System.currentTimeMillis()
+            if (now - startedAt > 45_000 && now - jsAckAt > 20_000) {
+                if (!freezeReloaded) {
+                    freezeReloaded = true
+                    android.util.Log.w(
+                        "HarnessScreen",
+                        "webview JS 无响应，渲染进程冻结（frozenMs=${now - jsAckAt}）",
+                    )
+                    reload(auto = true)
+                }
+                jsAckAt = now
+                pingOutstanding = false
+            } else if (!pingOutstanding) {
+                pingOutstanding = true
+                val ack = withTimeoutOrNull(5_000) { wv.evalJs("1") }
+                if (ack != null) {
+                    jsAckAt = System.currentTimeMillis()
+                }
+                pingOutstanding = false
+            }
         }
     }
 
@@ -924,202 +1078,270 @@ private fun HarnessWebView(
             .fillMaxSize()
             .background(TerminalTheme.backgroundColor)
     ) {
-        AndroidView(
-            modifier = Modifier
-                .fillMaxSize()
-                // 系统导航栏与输入法避让：否则引擎页底部（输入框、会话列表）会被手势区/键盘压住
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .imePadding(),
-            factory = { ctx ->
-                WebView(ctx).apply {
-                    settings.apply {
-                        javaScriptEnabled = true
-                        domStorageEnabled = true
-                        // 本地引擎页面不需要文件/内容访问，也不需要混合内容：
-                        // 开着只会扩大攻击面（引擎页与本地 127.0.0.1 同源，不需要跨源放行）
-                        allowFileAccess = false
-                        allowContentAccess = false
-                        mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                        cacheMode = WebSettings.LOAD_NO_CACHE
-                        mediaPlaybackRequiresUserGesture = true
-                        javaScriptCanOpenWindowsAutomatically = false
-                        setSupportMultipleWindows(false)
-                        setGeolocationEnabled(false)
-                        loadWithOverviewMode = true
-                        useWideViewPort = true
-                        setSupportZoom(true)
-                        builtInZoomControls = true
-                        displayZoomControls = false
-                        defaultTextEncodingName = "utf-8"
-                    }
-                    // 深色跟随 App 自身主题。这项能力在 WebView provider 上、不在系统版本上，
-                    // 所以必须走能力门而不是判 SDK_INT —— App 本身就是深色，故两路反色都关掉，
-                    // 否则页面会被二次压暗（部分 ROM 还会把 WebView 强行反色）。
-                    runCatching {
-                        when {
-                            WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING) ->
-                                WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, false)
-                            WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK) -> {
-                                @Suppress("DEPRECATION")
-                                WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_OFF)
+        // #381：WebView 重建纪元 —— 渲染进程消失（onRenderProcessGone）时 epoch+1，
+        // key 变化让 AndroidView 重新走 factory 拿一个**新** WebView。不重建则界面留在
+        // 一个永不响应的 WebView 上，用户看到「卡死」而不是「崩了」（参考实现同款处置）。
+        key(webViewEpoch) {
+            AndroidView(
+                modifier = Modifier
+                    .fillMaxSize()
+                    // 系统导航栏与输入法避让：否则引擎页底部（输入框、会话列表）会被手势区/键盘压住
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .imePadding(),
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        // 版本敏感设置单面真源（移植自参考实现 WebViewShim.applyBaseline）：
+                        // provider 能力门判深色跟随 + appOwnsTheme（引擎 UI 自配色，
+                        // 禁止 WebView 算法改色把页面二次压暗）。
+                        DshWebViewShim.applyBaseline(settings, appOwnsTheme = true)
+                        settings.apply {
+                            allowContentAccess = false
+                            javaScriptCanOpenWindowsAutomatically = false
+                            setSupportMultipleWindows(false)
+                            setGeolocationEnabled(false)
+                            loadWithOverviewMode = true
+                            useWideViewPort = true
+                            setSupportZoom(true)
+                            builtInZoomControls = true
+                            displayZoomControls = false
+                            defaultTextEncodingName = "utf-8"
+                        }
+                        webChromeClient = object : WebChromeClient() {
+                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                progress = newProgress
                             }
-                        }
-                    }
-                    webChromeClient = object : WebChromeClient() {
-                        override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                            progress = newProgress
-                        }
 
-                        // #380：上游 boot 看门狗的 console 契约入口（三条前缀见文件内常量）。
-                        // 页内 40s 看门狗现场采得再齐（pendingBundles / badBundles / engineHttp /
-                        // rendered / pendingBoot），壳侧不接就全部丢失 —— 白屏只剩「等 40s」。
-                        // ready ⇒ 停 15s 看门狗并清误报；stall/failed ⇒ 直接顶诊断面板。
-                        override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                            val cm = consoleMessage ?: return false
-                            val msg = cm.message() ?: return false
-                            if (!msg.startsWith(BOOT_STALL_PREFIX) &&
-                                !msg.startsWith(BOOT_READY_PREFIX) &&
-                                !msg.startsWith(BOOT_FAILED_PREFIX)
-                            ) {
-                                return false
-                            }
-                            val lvl = when (cm.messageLevel()) {
-                                ConsoleMessage.MessageLevel.ERROR -> "E"
-                                ConsoleMessage.MessageLevel.WARNING -> "W"
-                                ConsoleMessage.MessageLevel.TIP -> "I"
-                                ConsoleMessage.MessageLevel.DEBUG -> "D"
-                                else -> "L"
-                            }
-                            val line = "[$lvl] $msg"
-                            android.util.Log.e("HarnessScreen", "boot 契约: $msg")
-                            bootLines = (bootLines + line).takeLast(30)
-                            when {
-                                msg.startsWith(BOOT_READY_PREFIX) -> onBootReady()
-                                msg.startsWith(BOOT_FAILED_PREFIX) ->
-                                    autoOpenPanel("上游看门狗：客户端插件装配失败（boot 契约 failed 行，见下）")
-                                else ->
-                                    autoOpenPanel("上游看门狗：启动 40s 未完成（boot 契约 stall 行，见下）")
-                            }
-                            return true
-                        }
-                    }
-                    webViewClient = object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(
-                            view: WebView,
-                            request: WebResourceRequest,
-                        ): Boolean {
-                            val u = request.url.toString()
-                            // 引擎自己的页面（含会话内跳转、token 交换后的 303 回跳）照常加载。
-                            // 判据收紧成「同源」：桥上带着 pick token，不能再像原来那样见
-                            // 127.0.0.1 就放行 —— 那等于让本机任意端口的页面都能读 token。
-                            if (sameOrigin(u, url)) return false
-                            // 站外链接交给系统，不在引擎页里打开
-                            return runCatching {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, request.url)
-                                )
-                            }.isSuccess
-                        }
-
-                        override fun onPageStarted(
-                            view: WebView?,
-                            url: String?,
-                            favicon: android.graphics.Bitmap?,
-                        ) {
-                            // 新导航一开始就复位。**不 override 这个方法**是老实现的坑：
-                            // pageDone 只有 reload() 会复位，于是 onPageFinished 之后再发生导航
-                            // （303 回跳、站内跳转）时它一直是 true —— 看门狗与白屏探针全部失效。
-                            pageDone = false
-                            stalledMain = false
-                            panelOpen = false
-                            blankScreen = false
-                            subErrors = emptyList()
-                            // #380：契约行与就绪标记按文档轮换 —— 上一份文档报的 ready
-                            // 不担保新文档（303 回跳会走第二个文档）。
-                            bootLines = emptyList()
-                            bootReady = false
-                            bootAlert = null
-                            navStartedAt = System.currentTimeMillis()
-                        }
-
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            pageDone = true
-                        }
-
-                        override fun onReceivedHttpError(
-                            view: WebView,
-                            request: WebResourceRequest,
-                            errorResponse: WebResourceResponse,
-                        ) {
-                            val code = errorResponse.statusCode
-                            // 上游把每个 /api 都挡在签名 cookie 后面（401）；
-                            // 主框架被拒说明 cookie 过期或没取到 → 重新走一遍鉴权再加载
-                            if (code == 401 && request.isForMainFrame) {
-                                onAuthRetry()
-                                return
-                            }
-                            // 子资源的 HTTP 层错误：与 onReceivedError（网络层失败）互补。
-                            // 主帧 200 而整屏全白，八成是 bootstrap / 某个 chunk 在这里 404/500 了。
-                            if (!request.isForMainFrame && code >= 400) {
-                                val line = "HTTP $code ← ${request.url}"
-                                subErrors = subErrors + line
-                                android.util.Log.w("HarnessScreen", "子资源 HTTP 错误: $line")
-                                val u = request.url.toString()
-                                // 关键路径（插件装配 / 静态资源）失败 → 直接弹面板，别等用户自己发现
-                                if (u.contains("/plugins/") || u.contains("/assets/")) {
-                                    autoOpenPanel("关键子资源失败：$line")
+                            // #381：内核探针的 title 回传通道。document-start 注入的探针把结论
+                            // 写进 document.title（DSH_KERNEL:…）—— 部分 ROM 会把首文档的
+                            // evaluateJavascript 回包丢掉，title 回调丢不掉。
+                            override fun onReceivedTitle(view: WebView?, title: String?) {
+                                val t = title ?: return
+                                if (!t.startsWith(KERNEL_TITLE_PREFIX)) return
+                                val rep = t.removePrefix(KERNEL_TITLE_PREFIX)
+                                if (rep.isBlank()) return
+                                kernelReport = rep
+                                if (rep.contains("S:")) {
+                                    android.util.Log.e("HarnessScreen", "内核能力预检(title 通道)：语法级缺失 ⇒ $rep")
                                 }
                             }
-                        }
 
-                        override fun onReceivedError(
-                            view: WebView,
-                            request: WebResourceRequest,
-                            error: WebResourceError,
-                        ) {
-                            val line = "${error.errorCode} ${error.description} ← ${request.url}"
-                            if (request.isForMainFrame) {
-                                loadError = "主框架加载失败：$line"
-                            } else {
-                                // 子资源失败不弹错页（页面还能用），但必须记账：
-                                // 主框架 200 而整屏全白，就是某个 JS chunk 在这里 404 了
-                                subErrors = subErrors + line
-                                android.util.Log.w("HarnessScreen", "子资源失败: $line")
+                            // #380：上游 boot 看门狗的 console 契约入口（三条前缀见文件内常量）。
+                            // 页内 40s 看门狗现场采得再齐（pendingBundles / badBundles / engineHttp /
+                            // rendered / pendingBoot），壳侧不接就全部丢失 —— 白屏只剩「等 40s」。
+                            // ready ⇒ 停 15s 看门狗并清误报；stall/failed ⇒ 直接顶诊断面板。
+                            override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                                val cm = consoleMessage ?: return false
+                                val msg = cm.message() ?: return false
+                                if (!msg.startsWith(BOOT_STALL_PREFIX) &&
+                                    !msg.startsWith(BOOT_READY_PREFIX) &&
+                                    !msg.startsWith(BOOT_FAILED_PREFIX)
+                                ) {
+                                    return false
+                                }
+                                val lvl = when (cm.messageLevel()) {
+                                    ConsoleMessage.MessageLevel.ERROR -> "E"
+                                    ConsoleMessage.MessageLevel.WARNING -> "W"
+                                    ConsoleMessage.MessageLevel.TIP -> "I"
+                                    ConsoleMessage.MessageLevel.DEBUG -> "D"
+                                    else -> "L"
+                                }
+                                val line = "[$lvl] $msg"
+                                android.util.Log.e("HarnessScreen", "boot 契约: $msg")
+                                bootLines = (bootLines + line).takeLast(30)
+                                when {
+                                    msg.startsWith(BOOT_READY_PREFIX) -> onBootReady()
+                                    msg.startsWith(BOOT_FAILED_PREFIX) ->
+                                        autoOpenPanel("上游看门狗：客户端插件装配失败（boot 契约 failed 行，见下）")
+                                    else ->
+                                        autoOpenPanel("上游看门狗：启动 40s 未完成（boot 契约 stall 行，见下）")
+                                }
+                                return true
                             }
                         }
-                    }
-                    // 桥必须在 loadUrl 之前装好：页面 head 解析期就同步调 getPickToken()/getSystemDark()
-                    addJavascriptInterface(DshBridge(ctx) { reload() }, "androidBridge")
-                    loadedUrl = url
-                    navStartedAt = System.currentTimeMillis()
-                    loadUrl(url)
-                    webView = this
-                    onWebViewReady(this)
-                    // #380：内核能力预检。**必须在第一次 loadUrl 之后**调（早于首文档的
-                    // evaluateJavascript 在部分 ROM 上被丢弃）。缺 class static{}
-                    // （WebView 94+）这类**语法**能力时入口 chunk 解析期整体不执行：
-                    // React 永不挂载 —— 白屏、无报错、重试无效。提前问出来，页顶挂警示条，
-                    // 把「白屏」翻译成「升级 WebView / 系统」。
-                    runCatching {
-                        evaluateJavascript(DSH_KERNEL_JS) { raw ->
-                            val r = unescapeJsString(raw.orEmpty()).trim()
-                            kernelReport = r.ifEmpty { null }
-                            // 语法级缺失 = 入口 chunk 在这台设备上不可能解析成功，必须留痕
-                            if (r.contains("S:")) {
-                                android.util.Log.e("HarnessScreen", "内核能力预检：语法级缺失 ⇒ $r")
+                        webViewClient = object : WebViewClient() {
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView,
+                                request: WebResourceRequest,
+                            ): Boolean {
+                                val u = request.url.toString()
+                                // 引擎自己的页面（含会话内跳转、token 交换后的 303 回跳）照常加载。
+                                // 判据收紧成「同源」：桥上带着 pick token，不能再像原来那样见
+                                // 127.0.0.1 就放行 —— 那等于让本机任意端口的页面都能读 token。
+                                if (sameOrigin(u, url)) return false
+                                // 站外链接交给系统，不在引擎页里打开
+                                return runCatching {
+                                    context.startActivity(
+                                        Intent(Intent.ACTION_VIEW, request.url)
+                                    )
+                                }.isSuccess
+                            }
+
+                            override fun onPageStarted(
+                                view: WebView?,
+                                url: String?,
+                                favicon: android.graphics.Bitmap?,
+                            ) {
+                                // 新导航一开始就复位。**不 override 这个方法**是老实现的坑：
+                                // pageDone 只有 reload() 会复位，于是 onPageFinished 之后再发生导航
+                                // （303 回跳、站内跳转）时它一直是 true —— 看门狗与白屏探针全部失效。
+                                pageDone = false
+                                frameCommitted = false
+                                stalledMain = false
+                                panelOpen = false
+                                blankScreen = false
+                                subErrors = emptyList()
+                                // #380：契约行与就绪标记按文档轮换 —— 上一份文档报的 ready
+                                // 不担保新文档（303 回跳会走第二个文档）。
+                                bootLines = emptyList()
+                                bootReady = false
+                                bootAlert = null
+                                navStartedAt = System.currentTimeMillis()
+                            }
+
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                pageDone = true
+                            }
+
+                            // #381：首帧提交（移植自参考实现 #242）。登记「页面画出来过一帧」——
+                            // 「慢启动」与「死页面」的区分判据；只登记不改背景色
+                            // （深色底色的可诊断性是它存在的全部理由）。
+                            // 形参改名 pageUrl：本方法的入参就叫 url，会遮住 composable 的
+                            // 目标页 url（老写法 this@HarnessWebView 对无接收者函数同样不成立）。
+                            override fun onPageCommitVisible(view: WebView?, pageUrl: String?) {
+                                val u = pageUrl ?: return
+                                if (sameOrigin(u, url)) frameCommitted = true
+                            }
+
+                            override fun onReceivedHttpError(
+                                view: WebView,
+                                request: WebResourceRequest,
+                                errorResponse: WebResourceResponse,
+                            ) {
+                                val code = errorResponse.statusCode
+                                // 上游把每个 /api 都挡在签名 cookie 后面（401）；
+                                // 主框架被拒说明 cookie 过期或没取到 → 重新走一遍鉴权再加载
+                                if (code == 401 && request.isForMainFrame) {
+                                    onAuthRetry()
+                                    return
+                                }
+                                // 子资源的 HTTP 层错误：与 onReceivedError（网络层失败）互补。
+                                // 主帧 200 而整屏全白，八成是 bootstrap / 某个 chunk 在这里 404/500 了。
+                                if (!request.isForMainFrame && code >= 400) {
+                                    val line = "HTTP $code ← ${request.url}"
+                                    subErrors = subErrors + line
+                                    android.util.Log.w("HarnessScreen", "子资源 HTTP 错误: $line")
+                                    val u = request.url.toString()
+                                    // 关键路径（插件装配 / 静态资源）失败 → 直接弹面板，别等用户自己发现
+                                    if (u.contains("/plugins/") || u.contains("/assets/")) {
+                                        autoOpenPanel("关键子资源失败：$line")
+                                    }
+                                }
+                            }
+
+                            override fun onReceivedError(
+                                view: WebView,
+                                request: WebResourceRequest,
+                                error: WebResourceError,
+                            ) {
+                                val line = "${error.errorCode} ${error.description} ← ${request.url}"
+                                if (request.isForMainFrame) {
+                                    loadError = "主框架加载失败：$line"
+                                } else {
+                                    // 子资源失败不弹错页（页面还能用），但必须记账：
+                                    // 主框架 200 而整屏全白，就是某个 JS chunk 在这里 404 了
+                                    subErrors = subErrors + line
+                                    android.util.Log.w("HarnessScreen", "子资源失败: $line")
+                                }
+                            }
+
+                            // #381：TLS 失败（引擎走 http://127.0.0.1 不走 TLS，本回调只在被跳到
+                            // 外部 https 页面时触发）。保持默认拒绝语义，只落诊断 ——
+                            // 安全敏感面不得为诊断而弱化（与参考实现同口径）。
+                            override fun onReceivedSslError(
+                                view: WebView,
+                                handler: android.webkit.SslErrorHandler,
+                                error: android.net.http.SslError,
+                            ) {
+                                android.util.Log.w(
+                                    "HarnessScreen",
+                                    "SSL 错误: ${error.primaryError} ← ${error.url}",
+                                )
+                                handler.cancel()
+                            }
+
+                            // #381：渲染进程被杀（低内存/OOM/厂商治理）—— 不处理则 Activity 留在
+                            // 一个永不响应的 WebView 上，用户看到「卡死」而不是「崩了」。
+                            // 处置：落日志 + epoch+1 重建 WebView（引擎不重启；页面随新 WebView 重载）。
+                            // 类型是 android.webkit.RenderProcessGoneDetail（没有 WebView 前缀）。
+                            override fun onRenderProcessGone(
+                                view: WebView,
+                                detail: android.webkit.RenderProcessGoneDetail,
+                            ): Boolean {
+                                android.util.Log.w(
+                                    "HarnessScreen",
+                                    "渲染进程消失 didCrash=${detail.didCrash()}",
+                                )
+                                (view.parent as? ViewGroup)?.removeView(view)
+                                runCatching { view.destroy() }
+                                if (webView === view) webView = null
+                                webViewEpoch++
+                                return true
                             }
                         }
-                    }
-                    // document-start 注入：修 viewport + 抓页面错误。
-                    // dsh 的前端是桌面布局，viewport 若写成固定宽度（如 width=1280），
-                    // 在手机上会按桌面视口渲染再缩放 —— 表现为只看到页面最左边一条。
-                    // 这里在文档开始前就把 viewport 改成设备宽度，并在运行期持续纠正
-                    // （前端可能在 hydration 后重写它）。同时把 error / unhandledrejection
-                    // 收进 __dshDiag，诊断按钮直接读它 —— 不再靠猜。
-                    runCatching {
-                        androidx.webkit.WebViewCompat.addDocumentStartJavaScript(
-                            this,
-                            """
+                        // 桥必须在 loadUrl 之前装好：页面 head 解析期就同步调 getPickToken()/getSystemDark()。
+                        // 方法面与上游 AndroidBridge 逐字对齐（移植自参考实现，去品牌化）——
+                        // WebView 的 JS 桥按实参个数匹配 Java 方法，缺方法 = 页面侧 Error: Method not found。
+                        addJavascriptInterface(
+                            DshAndroidBridge(
+                                context = ctx,
+                                onKeepScreen = { enable ->
+                                    val a = ctx as? Activity
+                                    a?.runOnUiThread {
+                                        if (enable) {
+                                            a.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                                        } else {
+                                            a.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                                        }
+                                    }
+                                },
+                                onGetSystemDark = { true },
+                                onSettingsPathRequest = {
+                                    val f = java.io.File(
+                                        java.io.File(DeepSeekHarness.get(ctx).home, ".dsh"),
+                                        "settings.yaml",
+                                    )
+                                    if (f.isFile) f.absolutePath else ""
+                                },
+                                onGetUiLanguage = { DshUiLanguage.get(ctx) },
+                                onSetUiLanguage = { mode -> DshUiLanguage.set(ctx, mode) },
+                                onGetImmersiveMode = { true },
+                                onCopyTextRequest = { text -> DshAndroidBridge.writeClipboard(ctx, text) },
+                                onRestartEngine = { restartEngine() },
+                                onShutdownToGuide = { onClose() },
+                                onReloadWebUI = { reload() },
+                                onOpenConsole = {
+                                    android.util.Log.i("HarnessScreen", "页面请求打开控制台（宿主未提供该入口）")
+                                },
+                                onOpenNativePath = { path -> DshAndroidBridge.openPathExternally(ctx, path) },
+                                onIncomingWorkspacePath = { DeepSeekHarness.get(ctx).workspace.absolutePath },
+                            ),
+                            "androidBridge",
+                        )
+                        // #381（致命修正）：document-start 注入必须在**第一次 loadUrl 之前**注册。
+                        // 老实现把 addDocumentStartJavaScript 放在 loadUrl 之后 —— 首次导航
+                        // 完全不生效：viewport 修正 / 画布钉色 / 错误收集 / 网络探针 / 内核探针
+                        // 全丢，浅色设备首帧就是一块纯白，且白屏时一行诊断都采不到。
+                        // 顺序：locale 引导（页面同步读 __DSH_LOCALE__）→ 内核 title 探针
+                        //       → viewport/画布/错误收集 → 网络探针。
+                        runCatching {
+                            androidx.webkit.WebViewCompat.addDocumentStartJavaScript(
+                                this,
+                                dshLocaleBootstrapScript(
+                                    DshUiLanguage.get(ctx),
+                                    systemLanguages(ctx),
+                                ) + "\n" +
+                                    DSH_KERNEL_TITLE_JS + "\n" +
+                                    """
 (function(){
   try {
     var applying = false;
@@ -1145,31 +1367,60 @@ private fun HarnessWebView(
       });
     } catch (e) {}
   } catch (e) {}
-  // ── 首帧画布（2026-10-24 实测后补）───────────────────────────────────────
+  // ── 首帧画布（#381 重写）───────────────────────────────────────────────
   // 上游 index.html 的 boot <style> 把画布钉成浅色：
   //   :root{color-scheme:light}body{background-color:#fff}
-  //   @media(prefers-color-scheme:dark){:root{color-scheme:dark}body{background-color:#151517}}
+  //   @media(prefers-color-scheme:dark){:root{color-scheme:dark}body{background-color:#151517}
   // 而 compat 的 applyCanvasTheme() 只写 documentElement.style.background —— body 自己有
   // 背景色时那一条被完全盖住，F1 那条「首帧即主题色」的修复在这里**不生效**。
   // 宿主界面恒为深色终端主题（TerminalTheme.backgroundColor #0B0E14），浅色设备上
   // 「11MB 引导包还在下」的那几秒就是一块纯白 —— 用户看到的就是白屏。
-  // 这里在 document-start（早于一切解析）把画布钉成终端底色，
-  // #root 长出子节点（React 挂载）即刻松手，主题交还页面自己。
+  // 这里在文档开始前把画布钉成终端底色，#root 长出子节点（React 挂载）即刻松手。
+  //
+  // #381 两处修正（老版在这两点上全部落败）：
+  //  ① document-start 期 documentElement 通常还没建好，老版一次性 append 静默失败；
+  //  ② 老版挂在 head 且不重排，与 prepend 注入的 boot 样式同序打平后级联落败。
+  // 现在：documentElement/head 任一就绪即挂，未就绪等 DOM 事件 + 16ms 轮换重试（≤3s）；
+  //      最终形态是 html 元素末尾子节点（文档序最后 ⇒ 级联必胜）；选择器带 :root
+  //      才能压过 boot 的 :root{color-scheme:light}（:root 特异性高于裸 html/body）。
   (function(){
     try {
       if (window.__dshHostCanvas) return;
-      window.__dshHostCanvas = true;
       var BOOT = '#0B0E14';
       var st = document.createElement('style');
-      st.textContent = 'html,body{background-color:' + BOOT + ' !important;color-scheme:dark !important;}';
-      (document.head || document.documentElement).appendChild(st);
-      var released = false;
+      st.textContent = ':root,html,body{background-color:' + BOOT + ' !important;color-scheme:dark !important;}';
+      var done = false;
+      var place = function(){
+        if (done) return true;
+        try {
+          var host = document.documentElement || document.head;
+          if (!host) return false;
+          host.appendChild(st);
+          return true;
+        } catch (e) { return false; }
+      };
+      if (!place()) {
+        var tries = 0;
+        var timer = setInterval(function(){
+          tries++;
+          if (place() || tries > 180) clearInterval(timer);
+        }, 16);
+        document.addEventListener('DOMContentLoaded', function(){ place(); });
+        window.addEventListener('load', function(){ place(); });
+      }
+      // 只有真的挂进去了才置位 —— 老版本在 appendChild **之前**置 flag，
+      // append 抛错时诊断里显示「已生效」，把没注入说成已注入。
+      if (st.parentNode) {
+        window.__dshHostCanvas = true;
+        window.__dshHostCanvasPos = (document.documentElement && st.parentNode === document.documentElement) ? 'html-last' : 'head';
+      }
       var release = function(){
-        if (released) return;
+        if (done) return true;
         var r = document.getElementById('root');
         if (r && r.childElementCount > 0) {
-          released = true;
+          done = true;
           if (st.parentNode) st.parentNode.removeChild(st);
+          window.__dshHostCanvasPos = 'released';
           return true;
         }
         return false;
@@ -1194,24 +1445,43 @@ private fun HarnessWebView(
     } catch (x) {}
   });
 })();
-""" + DSH_NET_JS + """
-                            """.trimIndent(),
-                            setOf("*")
-                        )
-                    }.onFailure { android.util.Log.w("HarnessScreen", "注入失败", it) }
+""" +                                     DSH_NET_JS,
+                                setOf("*"),
+                            )
+                        }.onFailure { android.util.Log.w("HarnessScreen", "注入失败", it) }
+                        loadedUrl = url
+                        navStartedAt = System.currentTimeMillis()
+                        loadUrl(url)
+                        webView = this
+                        onWebViewReady(this)
+                        // #380：内核能力预检（evaluateJavascript 通道；title 通道的备份，
+                        // 两条通道结论一致，ROM 丢哪条都不影响红条判定）。
+                        // 缺私有字段（84+）/ 逻辑赋值（85+）这类**语法**能力时入口 chunk
+                        // 解析期整体不执行：React 永不挂载 —— 白屏、无报错、重试无效。
+                        runCatching {
+                            evaluateJavascript(DSH_KERNEL_JS) { raw ->
+                                val r = unescapeJsString(raw.orEmpty()).trim()
+                                kernelReport = r.ifEmpty { null }
+                                // 语法级缺失 = 入口 chunk 在这台设备上不可能解析成功，必须留痕
+                                if (r.contains("S:")) {
+                                    android.util.Log.e("HarnessScreen", "内核能力预检：语法级缺失 ⇒ $r")
+                                }
+                            }
+                        }
+                    }
+                },
+                update = { wv ->
+                    // url 变了就重载。401 重试会重新取 token 生成新 url —— 老实现只在 url 空白时
+                    // 补载，于是新 url 永远不加载，页面停在旧 token 的反复 401 上，白屏到死。
+                    // blank 判断保留：factory 重建（WebView 被销毁过）时兜底。
+                    if (wv.url.isNullOrBlank() || wv.url == "about:blank" || loadedUrl != url) {
+                        loadedUrl = url
+                        navStartedAt = System.currentTimeMillis()
+                        wv.loadUrl(url)
+                    }
                 }
-            },
-            update = { wv ->
-                // url 变了就重载。401 重试会重新取 token 生成新 url —— 老实现只在 url 空白时
-                // 补载，于是新 url 永远不加载，页面停在旧 token 的反复 401 上，白屏到死。
-                // blank 判断保留：factory 重建（WebView 被销毁过）时兜底。
-                if (wv.url.isNullOrBlank() || wv.url == "about:blank" || loadedUrl != url) {
-                    loadedUrl = url
-                    navStartedAt = System.currentTimeMillis()
-                    wv.loadUrl(url)
-                }
-            }
-        )
+            )
+        }
 
         // #380：内核能力预警条。**仅语法级缺失（S:）才挂**——那意味着入口 chunk 在解析期
         // 整体不执行，引擎界面在这台设备上不可能跑起来，把「白屏」翻译成「升级 WebView」。
@@ -1363,6 +1633,7 @@ private fun HarnessWebView(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         HarnessAction("重试") { reload() }
                         HarnessAction("读诊断") { collectDiag() }
+                        HarnessAction("重启引擎") { restartEngine() }
                         HarnessAction("重新取鉴权") {
                             loadError = null
                             blankScreen = false
