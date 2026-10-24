@@ -443,26 +443,35 @@ private const val BOOT_FAILED_PREFIX = "[dsh-boot-failed]"
 /**
  * WebView 内核能力预检（#380）：在页面加载**之前**问一遍 JS 引擎会什么。
  *
- * 为什么要它：白屏最难向用户解释的一种是「设备 WebView 内核太老」。入口 chunk
- * （`assets/index-*.js`）实测含 `class static{}` 静态初始化块（Chrome/WebView 94+，
- * 已逐处核对是真语法不是字符串）、vendor 含私有字段（84+）—— **语法级**需求，
- * compat 的 polyfill 只补运行时 API（Promise.withResolvers 等），补不了语法：
- * 缺任何一样，入口 chunk 在解析期整体不执行，React 永不挂载，白屏且几乎没有报错。
+ * 为什么要它：白屏最难向用户解释的一种是「设备 WebView 内核太老」。这些是**语法级**
+ * 需求 —— compat 的 polyfill 只补运行时 API（Promise.withResolvers 等），补不了语法：
+ * 缺任何一项，入口 chunk 在解析期整体不执行，React 永不挂载，白屏且几乎没有报错。
+ *
+ * 出厂口径（B20261024-2115 起，对齐参考实现 kelai141/dsh-mobile-apk）：内置 dist 已在
+ * 构建期按上游 `check-browser-syntax-floor` 门禁降到 chrome87（esbuild 0.25.12 双 arm
+ * 差分归零 + TS AST 零 static{}）—— `class static{}`（94+）与可选链（80+）已被降级
+ * 消除；esbuild 的 chrome87 口径**不降**私有字段（84+）/ 逻辑赋值（85+）/ 空值合并
+ * （80+），这三项就是当前的硬门槛。红条只在 `S:` 缺失时出现；`A:` 仅说明内核代次。
  *
  * 返回 `CHROME=<UA 大版本>|ALL-OK` 或 `CHROME=<版本>|S:项…|A:项…`：
  *  - `S:` = 语法级缺失（**致命**，polyfill 救不了，只能升级 WebView 或换 transpile 包）；
- *  - `A:` = 运行时 API 缺失（compat polyfill 可兜底，不致命，仅说明内核代次）。
- * ⚠ 历史坑（本版已修）：v 标志原来用 `new RegExp('[[]','v')` 探测 —— 该图案在 v 模式下
- * **同样非法**，现代引擎也抛 SyntaxError ⇒ 红条对每台设备误报。v 标志只验旗标接受性；
- * 且入口/vendor chunk 实测零处 v 模式正则，它永远不致命。
+ *  - `A:` = 运行时 API 缺失或已降级语法缺失（不致命，仅说明内核代次）。
+ * ⚠ 历史坑 1（#380 已修）：v 标志原来用 `new RegExp('[[]','v')` 探测 —— 该图案在 v
+ *    模式下**同样非法**，现代引擎也抛 SyntaxError ⇒ 红条对每台设备误报。v 标志只验旗标
+ *    接受性；且出厂 chunk 实测零处 v 模式正则，它永远不致命。
+ * ⚠ 历史坑 2（B20261024-2115 已修）：static{} 原列为 `S:` 致命项 —— 那是**未降级**
+ *    dist 的口径（入口 chunk 实测 2 处，9:1811 / 13:9117）。内置 dist 降级后它已不致命，
+ *    改列 `A:`；只有换回未降级包时才回到致命。
  */
 private const val DSH_KERNEL_JS = """
 (function(){
   var miss = [];
-  // ── 语法级（polyfill 救不了；缺一项入口 chunk 解析期整体不执行）──
-  try { new Function('class X{static{}}'); } catch (e) { miss.push('S:class static{} 块（需 WebView 94+）'); }
+  // ── 语法级硬门槛（出厂 chrome87 口径未降级的三项；缺一项入口 chunk 解析期整体不执行）──
   try { new Function('class X{#f=1;g(){return this.#f}}'); } catch (e) { miss.push('S:私有字段 #f（需 84+）'); }
   try { new Function('var a;a??=1'); } catch (e) { miss.push('S:??= 逻辑赋值（需 85+）'); }
+  try { new Function('var a;a??1'); } catch (e) { miss.push('S:?? 空值合并（需 80+）'); }
+  // ── 已被出厂降级消除的语法（缺失仅说明内核代次，不致命）──
+  try { new Function('class X{static{}}'); } catch (e) { miss.push('A:class static{} 块（需 94+；出厂 dist 已降级，换未降级包才致命）'); }
   // ── 运行时 API（compat polyfill 可兜底，缺失不致命，仅说明内核代次）──
   if (typeof [].at !== 'function') miss.push('A:Array.prototype.at（需 92+，可 polyfill）');
   if (typeof Promise.withResolvers !== 'function') miss.push('A:Promise.withResolvers');
@@ -746,8 +755,10 @@ private fun sameOrigin(a: String, b: String): Boolean {
  *  6. （#380）`onConsoleMessage` 接上游 boot 看门狗的 console 契约：`[dsh-boot-stall]`
  *     / `[dsh-boot-ready]` / `[dsh-boot-failed]` 三条前缀，40s 卡死现场（挂起 bundle、
  *     4xx bundle、引擎 HTTP、rendered/pendingBoot）从此不再丢失；ready 到达即停 15s 误报；
- *  7. （#380）加载前的内核能力预检（`DSH_KERNEL_JS`）：缺 `class static{}` 这类**语法**
- *     能力 ⇒ 入口 chunk 解析期整体不执行，页顶直接挂警示条，把白屏翻译成「升级 WebView」。
+ *  7. （#380）加载前的内核能力预检（`DSH_KERNEL_JS`）：缺私有字段（84+）/ 逻辑赋值（85+）
+ *     这类**语法**能力 ⇒ 入口 chunk 解析期整体不执行，页顶直接挂警示条，把白屏翻译成
+ *     「升级 WebView」。（B20261024-2115 起内置 dist 已在构建期降到 chrome87，`static{}`
+ *     不再致命；口径与历史坑见 DSH_KERNEL_JS 注释。）
  * 任一中招，或主帧 15s 还没走完（进度条停住、页面不出字），就把诊断面板顶上来
  * （半透明盖在 WebView 上，不销毁页面），右下角常驻一个「诊断」悬浮钮，随时读现场。
  */

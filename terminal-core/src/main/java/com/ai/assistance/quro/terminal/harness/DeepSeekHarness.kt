@@ -55,10 +55,14 @@ class DeepSeekHarness(private val context: Context) {
         /**
          * 资产版本：内容变了就 +1，触发重新解压。
          *
-         * 16 = 引入「按内容嗅探补执行位」与 engine.log 持久化。**必须 +1**：
-         * 老设备上已经用旧的 0644 解压过一次，不升版本就不会重解，node/bash 依旧没有执行位。
+         * 16 = 引入「按内容嗅探补执行位」与 engine.log 持久化。
+         * 17 = 浏览器语法下限降级（对齐参考实现 kelai141/dsh-mobile-apk 的
+         *      check-browser-syntax-floor 门禁）：dist 与全部 lib/client.js 在构建期用
+         *      esbuild@0.25.12 降到 chrome87，消除入口 chunk 的 `class static{}`
+         *      （Chromium 94+）—— 老 WebView 解析期 SyntaxError ⇒ 白屏无报错。
+         *      **必须 +1**：老设备已按 v=16 解压过未降级字节，不升版本不会重解。
          */
-        private const val RUNTIME_VERSION = 16
+        private const val RUNTIME_VERSION = 17
         private const val MARK = ".dsh_v"
 
         /** dsh 默认端口。 */
@@ -135,7 +139,7 @@ class DeepSeekHarness(private val context: Context) {
          * dsh 壳」只能靠它。它同时进 `diagnose()` 输出与 HarnessScreen 顶栏 —— 界面上看不到戳，
          * 就等于装错包，这一条是出包自证链的一部分（同 LANXIU / Moyu 的做法）。
          */
-        const val BUILD_STAMP = "B20261024-2050"
+        const val BUILD_STAMP = "B20261024-2115"
 
         @Volatile
         private var instance: DeepSeekHarness? = null
