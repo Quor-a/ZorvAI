@@ -1184,6 +1184,12 @@ private fun LocalPage(
         StatusLine("核心层（qemu / mo2x / 标准库 / uspace2）", st.coreReady)
         StatusLine("基准程序 andromo", st.benchReady)
         StatusLine("编译层（zig，按需）", st.zigReady)
+        Spacer(Modifier.height(6.dp))
+        // 铁律：界面看不到这个戳 = 装的不是这个包（版本号被锁死，戳是唯一区分手段）。
+        SimpleText(
+            "构建 " + MoyuUbuntu.BUILD_STAMP + " · /data/local/tmp + Shizuku，不经 App 沙箱",
+            TerminalTheme.onSurfaceVariant
+        )
     }
 
     if (!st.shellReady) {
