@@ -102,8 +102,40 @@ class DeepSeekHarness(private val context: Context) {
         /** 日志文件还算「可能是本代引擎写的」的时间窗（App 重启后引擎仍活着时靠它兜底）。 */
         private const val TOKEN_LOG_FRESH_MS = 10L * 60 * 1000
 
+        /**
+         * index 就绪判据：bootstrap 批次的 URL 前缀。
+         *
+         * `dsh-client-modules` 在**自己的 fiber** 里注册 `webserver/index-inject`，
+         * 而 fallback 座位（`dsh-host-frontend-static`）在 HTTP 层一起来就能答
+         * 200 / 303 / 401 —— **两者之间有窗口期**。窗口期里把 WebView 打开，
+         * 拿到的是没有这一行的 index：页面一个脚本都不加载，整屏纯白、无任何文字，
+         * 而 compat 的静态占位与 40s 看门狗都挂在 `</head>` 前，同样不会现身
+         * （上游注释自己记着这个「自我参照死角」）。
+         *
+         * 所以「引擎活着」必须和「前端树装配完」分开判，后者只看这一行在不在。
+         */
+        private val BOOTSTRAP_MARKER = "plugins/??@deepseek-ai/dsh-client-modules/client.js"
+
+        /** `<base href="./">`：`dsh-host-frontend-static` 渲染 index 时插的，文档相对 URL 全靠它。 */
+        private val BASE_HREF_MARKER = "<base href=\"./\">"
+
+        /** boot-readiness 钩子（`webserver` 的 `READY_MARKUP`）。 */
+        private const val READY_HOOK_MARKER = "__DSH_BOOT_READY__"
+
         /** 持久化 cookie 的 prefs 键。 */
         private const val KEY_COOKIE = "cookie"
+
+        /** 持久化 pick token 的 prefs 键（跨 App 重启复用同一个引擎时，页面仍拿得到）。 */
+        private const val KEY_PICK_TOKEN = "pick_token"
+
+        /**
+         * 本次构建的识别戳。
+         *
+         * versionName / versionCode 是用户的，不许动；于是区分「桌上这个 APK 里装的是哪一版
+         * dsh 壳」只能靠它。它同时进 `diagnose()` 输出与 HarnessScreen 顶栏 —— 界面上看不到戳，
+         * 就等于装错包，这一条是出包自证链的一部分（同 LANXIU / Moyu 的做法）。
+         */
+        const val BUILD_STAMP = "B20261024-1850"
 
         @Volatile
         private var instance: DeepSeekHarness? = null
@@ -212,6 +244,42 @@ class DeepSeekHarness(private val context: Context) {
     /** 鉴权 cookie 的内存缓存（跨进程重启后由 prefs 兜底）。 */
     @Volatile
     private var cachedCookie: String? = null
+
+    /**
+     * dir-pick 端点的鉴权 token（上游 `DSH_PICK_TOKEN`）。
+     *
+     * 上游壳**每次启动引擎都重新生成**一个，写进引擎 env；页面侧经
+     * `window.androidBridge.getPickToken()` 读同一个值，以 `x-dsh-pick-token`
+     * 头发回来。缺了它 compat 是 **fail-closed**：`/api/android/dir-pick/poll`
+     * 每 500ms 拿一次 403，永远转空。
+     */
+    @Volatile
+    private var pickTokenValue: String? = null
+
+    /**
+     * 当前引擎代的 pick token；没启动过就用 prefs 里那份（App 重启后引擎还活着时，
+     * 页面仍要能读到同一个值，否则轮询继续 403）。
+     */
+    fun currentPickToken(): String? =
+        pickTokenValue ?: prefs.getString(KEY_PICK_TOKEN, null)?.takeIf { it.isNotBlank() }
+
+    /** 生成（或复用）一个 pick token。base64url(32 随机字节)，与上游同形。 */
+    private fun ensurePickToken(): String {
+        pickTokenValue?.let { return it }
+        val stored = prefs.getString(KEY_PICK_TOKEN, null)?.takeIf { it.isNotBlank() }
+        val token = stored ?: Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(ByteArray(32).also { java.security.SecureRandom().nextBytes(it) })
+        pickTokenValue = token
+        prefs.edit().putString(KEY_PICK_TOKEN, token).apply()
+        return token
+    }
+
+    /** 换一代引擎就换一个 pick token（上游同策略：不跨代复用）。 */
+    private fun rotatePickToken(): String {
+        pickTokenValue = null
+        prefs.edit().remove(KEY_PICK_TOKEN).apply()
+        return ensurePickToken()
+    }
 
     /**
      * 运行时是否装齐了。
@@ -460,6 +528,9 @@ class DeepSeekHarness(private val context: Context) {
                 "DSH_MOBILE_MANAGED_ENGINE" to "1",
                 "DSH_ENGINE_PORT" to usePort.toString(),
             )
+            // 每代引擎换一个 pick token：页面经 androidBridge.getPickToken() 读它，
+            // 轮换后旧 token 立即失效，别的本地页面/进程也没法伪造目录选择结果
+            rotatePickToken()
             fun build(argv: List<String>): ProcessBuilder =
                 ProcessBuilder(argv).also { b ->
                     b.directory(workspace)
@@ -496,9 +567,15 @@ class DeepSeekHarness(private val context: Context) {
 
             // 等就绪。**判据是 HTTP 应答，不是 TCP 可连**：端口通只代表"有东西在听"，
             // 可能是别的进程（上游 EngineAvailability.PORT_FOREIGN）；页面能不能服务，
-            // 只有拿到 200/303/401 才算数（401 = 引擎活着但缺鉴权，同样是就绪）。
+            // 只有拿到 200/303/401 才算数（401 = 引擎活着但缺鉴权）。
+            //
+            // 但「HTTP 层活着」只算一半：`dsh-client-modules` 的 index-inject 注册在
+            // 自己的 fiber 里，晚于 fallback 座位就绪。窗口期里的 index 不带 bootstrap
+            // 脚本 → WebView 打开就是一个脚本都不加载的纯白屏。所以 `probe.serving`
+            // 之后还要再过一道 [awaitIndexReady]，确认正文里真有那一行。
             val deadline = System.currentTimeMillis() + READY_TIMEOUT_MS
             var lastProbe = "（尚未探活）"
+            var lastIndex = "（尚未取到 index）"
             while (System.currentTimeMillis() < deadline) {
                 if (!p.isAlive) {
                     proc = null
@@ -512,8 +589,15 @@ class DeepSeekHarness(private val context: Context) {
                     val probe = probeEngine(usePort)
                     lastProbe = describeProbe(probe)
                     if (probe.serving) {
-                        appendLog("[就绪] $lastProbe")
-                        return@withContext Result.success(usePort)
+                        // HTTP 层活着只是第一半：还要 index 里真的带着 bootstrap 脚本
+                        // （dsh-client-modules 装配完才有），否则打开就是纯白屏
+                        val idxNote = awaitIndexReady(usePort, deadline) { p.isAlive }
+                        if (idxNote == null) {
+                            appendLog("[就绪] $lastProbe；index 已带 bootstrap 脚本 ✓")
+                            return@withContext Result.success(usePort)
+                        }
+                        lastIndex = idxNote
+                        appendLog("[等待前端装配] $idxNote")
                     }
                 } else {
                     // 从引擎自报的 URL 行里抓端口（比裸 PORT_RE 可靠：那行带 token，一定是本引擎）
@@ -522,18 +606,29 @@ class DeepSeekHarness(private val context: Context) {
                         val probe = probeEngine(reported)
                         lastProbe = describeProbe(probe)
                         if (probe.serving) {
-                            activePort = reported
-                            appendLog("[端口] 引擎实际监听 $reported")
-                            appendLog("[就绪] $lastProbe")
-                            return@withContext Result.success(reported)
+                            val idxNote = awaitIndexReady(reported, deadline) { p.isAlive }
+                            if (idxNote == null) {
+                                activePort = reported
+                                appendLog("[端口] 引擎实际监听 $reported")
+                                appendLog("[就绪] $lastProbe；index 已带 bootstrap 脚本 ✓")
+                                return@withContext Result.success(reported)
+                            }
+                            lastIndex = idxNote
+                            appendLog("[等待前端装配] $idxNote")
                         }
                     }
                     // 兜底：日志里所有像端口的数字都试一遍
                     for (cand in PORT_RE.findAll(logs()).mapNotNull { it.groupValues[1].toIntOrNull() }) {
                         if (probeEngine(cand).serving) {
-                            activePort = cand
-                            appendLog("[端口] 引擎实际监听 $cand（兜底匹配）")
-                            return@withContext Result.success(cand)
+                            val idxNote = awaitIndexReady(cand, deadline) { p.isAlive }
+                            if (idxNote == null) {
+                                activePort = cand
+                                appendLog("[端口] 引擎实际监听 $cand（兜底匹配）")
+                                appendLog("[就绪] index 已带 bootstrap 脚本 ✓")
+                                return@withContext Result.success(cand)
+                            }
+                            lastIndex = idxNote
+                            appendLog("[等待前端装配] $idxNote")
                         }
                     }
                 }
@@ -545,7 +640,7 @@ class DeepSeekHarness(private val context: Context) {
             Result.failure(
                 IllegalStateException(
                     "等待引擎就绪超时（${READY_TIMEOUT_MS / 1000}s），已终止该进程。" +
-                        "最后一次探活：$lastProbe\n" + logs().takeLast(2000)
+                        "最后一次探活：$lastProbe\nindex 体检：$lastIndex\n" + logs().takeLast(2000)
                 )
             )
         } catch (e: Exception) {
@@ -931,6 +1026,8 @@ class DeepSeekHarness(private val context: Context) {
         m["TERMUX_APP__DATA_DIR"] = context.filesDir.parentFile?.absolutePath
             ?: context.filesDir.absolutePath
         m.putAll(credentialEnv())
+        // dir-pick 端点鉴权（fail-closed）：缺了它页面每 500ms 拿一次 403，永远转空
+        m["DSH_PICK_TOKEN"] = ensurePickToken()
         return m
     }
 
@@ -1126,6 +1223,109 @@ class DeepSeekHarness(private val context: Context) {
         else -> "HTTP ${p.code}（端口 ${if (p.listening) "在监听" else "不在监听"}）"
     }
 
+    /** index 正文的结构体检结果。 */
+    data class IndexProbe(
+        val code: Int,
+        val length: Int,
+        val hasBootstrap: Boolean,
+        val hasBaseHref: Boolean,
+        val hasReadyHook: Boolean,
+        val head: String,
+        val error: String? = null,
+    ) {
+        /** 三条全中才算「前端树装配完」——少任何一条，打开就是白屏。 */
+        val ready: Boolean get() = code == 200 && hasBootstrap && hasBaseHref
+    }
+
+    /**
+     * 取一次 index 正文并做结构校验（移植上游「启动前先验 index」的思路）。
+     *
+     * 为什么要读正文而不是只看状态码：见 [BOOTSTRAP_MARKER] 的注释 ——
+     * HTTP 层就绪与 `dsh-client-modules` 装配完之间有窗口期，窗口期里的 index
+     * **不带 bootstrap 脚本**，WebView 打开就是一个脚本都不加载的纯白屏。
+     *
+     * 带上 cookie 取：不带会拿到 401 的 text/plain（那同样「能连上」），
+     * 而我们要检的正是 200 正文里的那一行。
+     */
+    private fun fetchIndex(port: Int, cookie: String?): IndexProbe {
+        val conn = try {
+            URL("http://127.0.0.1:$port/").openConnection(Proxy.NO_PROXY) as HttpURLConnection
+        } catch (e: Exception) {
+            return IndexProbe(0, 0, false, false, false, "", "${e.javaClass.simpleName}: ${e.message}")
+        }
+        return try {
+            conn.requestMethod = "GET"
+            conn.instanceFollowRedirects = false
+            conn.connectTimeout = 4000
+            conn.readTimeout = 10_000
+            if (!cookie.isNullOrBlank()) conn.setRequestProperty("Cookie", cookie)
+            val code = conn.responseCode
+            val stream = if (code in 200..399) conn.inputStream else conn.errorStream
+            val text = runCatching {
+                stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }
+            }.getOrNull().orEmpty()
+            IndexProbe(
+                code = code,
+                length = text.length,
+                hasBootstrap = text.contains(BOOTSTRAP_MARKER),
+                hasBaseHref = text.contains(BASE_HREF_MARKER, ignoreCase = true),
+                hasReadyHook = text.contains(READY_HOOK_MARKER),
+                head = text.take(600).ifBlank { "（正文为空）" },
+            )
+        } catch (e: Exception) {
+            IndexProbe(0, 0, false, false, false, "", "${e.javaClass.simpleName}: ${e.message}")
+        } finally {
+            runCatching { conn.disconnect() }
+        }
+    }
+
+    /** index 体检的人类可读描述 —— 直接进日志与诊断页。 */
+    private fun describeIndex(i: IndexProbe): String = when {
+        i.error != null -> "取 index 失败（${i.error}）"
+        i.code == 401 -> "HTTP 401，还没带上可用 cookie"
+        i.code == 303 -> "HTTP 303，等着换 cookie"
+        i.code != 200 -> "HTTP ${i.code}，非 200"
+        i.ready -> "HTTP 200，${i.length}B，bootstrap 脚本与 <base> 都在 ✓"
+        !i.hasBootstrap && !i.hasBaseHref ->
+            "HTTP 200，${i.length}B，但既无 bootstrap 脚本也无 <base> —— 插件装配层没生效"
+        !i.hasBootstrap ->
+            "HTTP 200，${i.length}B，有 <base> 但无 bootstrap 脚本 —— dsh-client-modules 还没装配完"
+        else -> "HTTP 200，${i.length}B，有 bootstrap 脚本但无 <base> —— 文档相对 URL 解析不了"
+    }
+
+    /**
+     * 等 index 真的带着 bootstrap 脚本。
+     *
+     * @param isAlive 引擎进程是否还活着（死了就别等了）
+     * @return 就绪返回 null；超时返回最后一次体检描述
+     */
+    private suspend fun awaitIndexReady(
+        port: Int,
+        deadline: Long,
+        isAlive: () -> Boolean,
+    ): String? {
+        var last = "（尚未取到 index）"
+        var cookieRefreshed = false
+        while (System.currentTimeMillis() < deadline) {
+            if (!isAlive()) return last
+            var cookie = currentCookie()
+            if (cookie == null && !cookieRefreshed) {
+                cookie = ensureAuthCookie()
+                cookieRefreshed = true
+            }
+            val idx = fetchIndex(port, cookie)
+            last = describeIndex(idx)
+            if (idx.ready) return null
+            // 401 = cookie 过期/没取到：重取一轮再试（只重取一次，避免坏 token 打成死循环）
+            if (idx.code == 401 && !cookieRefreshed) {
+                cookieRefreshed = true
+                continue
+            }
+            delay(500)
+        }
+        return last
+    }
+
     /**
      * engine.log 三代轮转。
      *
@@ -1292,6 +1492,10 @@ class DeepSeekHarness(private val context: Context) {
                 else "✗ 取不到（靠 P1 自铸兑底）")
             appendLine("鉴权 cookie   : " +
                 if (currentCookie() != null) "✓ 有可用 cookie" else "✗ 无（打开即 401）")
+            appendLine("pick token    : " +
+                if (currentPickToken() != null) "✓ 已生成（dir-pick 轮询可鉴权）"
+                else "✗ 未生成（dir-pick 每 500ms 拿 403）")
+            appendLine("构建戳        : $BUILD_STAMP（版本号锁死，区分包装只能靠它）")
             appendLine("凭证文件      : " +
                 if (credentialsFile.isFile) "✓（可自铸 cookie）" else "✗（自铸兜底不可用）")
             appendLine()
@@ -1301,6 +1505,7 @@ class DeepSeekHarness(private val context: Context) {
             if (isRunning()) {
                 appendLine("=== HTTP 探活 ===")
                 appendLine(describeProbe(probeEngine(activePort)))
+                appendLine(describeIndex(fetchIndex(activePort, currentCookie())))
                 appendLine()
             }
             appendLine("=== 最近日志（尾部）===")
