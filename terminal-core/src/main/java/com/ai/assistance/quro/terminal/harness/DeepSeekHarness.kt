@@ -61,8 +61,14 @@ class DeepSeekHarness(private val context: Context) {
          *      esbuild@0.25.12 降到 chrome87，消除入口 chunk 的 `class static{}`
          *      （Chromium 94+）—— 老 WebView 解析期 SyntaxError ⇒ 白屏无报错。
          *      **必须 +1**：老设备已按 v=16 解压过未降级字节，不升版本不会重解。
+         * 18 = 直接移植 kelai141/dsh-mobile-apk 全量插件栈（12 插件 + marketplace +
+         *      canvas + pnpm + 两个 shim，删 usr/ 瘦身）—— 该包误打了 xz，真机解压报
+         *      "Not in GZIP format" 安装失败。
+         * 19 = 同一暂存树改回 gz 重打（App 侧纯 Java GZIPInputStream，不认 xz）。
+         *      **必须 +1**：v=18 安装全部失败，但个别设备可能留下半解压树，不升版本
+         *      mark 对不上也会重解——升了更稳，杜绝任何复用残树的可能。
          */
-        private const val RUNTIME_VERSION = 18
+        private const val RUNTIME_VERSION = 19
         private const val MARK = ".dsh_v"
 
         /** dsh 默认端口。 */
@@ -139,7 +145,7 @@ class DeepSeekHarness(private val context: Context) {
          * dsh 壳」只能靠它。它同时进 `diagnose()` 输出与 HarnessScreen 顶栏 —— 界面上看不到戳，
          * 就等于装错包，这一条是出包自证链的一部分（同 LANXIU / Moyu 的做法）。
          */
-        const val BUILD_STAMP = "B20261024-2226"
+        const val BUILD_STAMP = "B20261024-2247"
 
         @Volatile
         private var instance: DeepSeekHarness? = null
