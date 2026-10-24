@@ -338,15 +338,93 @@ object ToolCapabilityDirectory {
             priority = 4
         ),
 
+        "zorvai_capabilities" to ToolInfo(
+            name = "zorvai_capabilities",
+            category = ToolCategory.ACCESSIBILITY,
+            description = "列出宿主（ZorvAI）当前能提供的手机控制能力及各自的前提条件：" +
+                "读屏与无障碍、触控与输入、屏幕与录制、应用与通知、系统与特权（Shizuku/root）、文件与浏览器。" +
+                "harness 的 agent 在调用 mcp__zorvai__* 之前先问它，" +
+                "避免缺权限时反复重试、或对着不可用的能力瞎猜。",
+            useCases = listOf(
+                "harness 现在能用哪些手机能力",
+                "Shizuku 到底授权了没",
+                "无障碍开了吗",
+                "读屏/点击这些能不能用"
+            ),
+            examples = listOf(
+                "zorvai_capabilities",
+                "zorvai_capabilities(group=system)"
+            ),
+            parameters = mapOf(
+                "group" to "只查某一组：screen/touch/app/system/file"
+            ),
+            tips = listOf(
+                "返回的是实时快照，会标出每项当前是否可用、缺什么条件",
+                "标「需要 Shizuku 已授权 / 需要无障碍权限」时，先让用户去设置里授权",
+                "工具名带 mcp__zorvai__ 前缀的是给 harness 用的，同名工具在 ZorvAI 内直接可用"
+            ),
+            relatedTools = listOf("harness", "read_screen", "shizuku_exec"),
+            priority = 6
+        ),
+
+        "harness" to ToolInfo(
+            name = "harness",
+            category = ToolCategory.TERMINAL_LINUX,
+            description = "DeepSeek Harness（dsh）—— DeepSeek 官方 agent harness，完整内置：" +
+                "Node 26（bionic 构建）+ dsh 0.2.1-rc.2 全量插件包 + 它自带的前端界面。" +
+                "不经 Ubuntu、不经终端、不联网安装。start 起 Web 服务（自带完整 UI，会话/插件/设置都在里面）；" +
+                "task 走 headless profile 直接让 harness 跑完一整套 agent 循环并把答案返回 —— " +
+                "把「需要完整 agent 工作流」的活儿外包给它是这个工具的核心价值。",
+            useCases = listOf(
+                "把这件事交给 DeepSeek Harness 去做",
+                "打开 DeepSeek Harness 的界面",
+                "启动 / 停止 harness 服务",
+                "看看 harness 运行日志",
+                "harness 起不来帮我看下原因",
+                "配置 harness 的模型 key"
+            ),
+            examples = listOf(
+                "harness(action=\"setup\")",
+                "harness(action=\"start\")",
+                "harness(action=\"task\", task=\"把 src 下所有 console.log 改成统一 logger\")",
+                "harness(action=\"status\")",
+                "harness(action=\"diag\")"
+            ),
+            parameters = mapOf(
+                "action" to "setup/start/stop/restart/status/logs/url/task/set_key/diag/bridge_on/bridge_off/bridge_status/plugins",
+                "task" to "task 动作交给 harness 执行的任务文本",
+                "session_id" to "task 时续用已有会话",
+                "json" to "task 时输出 NDJSON 事件流",
+                "port" to "start 端口，默认 3080",
+                "provider" to "set_key 的厂商：deepseek/openai/anthropic",
+                "key" to "set_key 的 API key",
+                "timeout_seconds" to "task 超时，默认 600"
+            ),
+            tips = listOf(
+                "首次用 action=setup 解压运行时（约 240MB，需几分钟）",
+                "harness 有自己的界面：start 后用 WebView 打开 127.0.0.1:3080，不要在 ZorvAI 里重做它的 UI",
+                "task 是让 harness 干活的正路：它会自己规划、读文件、跑命令、改代码",
+                "harness 需要自己的模型 key（DEEPSEEK_API_KEY 等），与 ZorvAI 的模型互不相干",
+                "task 很慢是正常的（agent 循环），timeout 默认 600 秒",
+                "起不来先看 action=diag 和 action=logs，别猜",
+                "白屏 ≠ 没启动：action=status 看进程、action=logs 看 launch token 行，diag 会连执行位/前端 dist/cookie 一起查"
+            ),
+            relatedTools = listOf("terminal", "moyu"),
+            priority = 5
+        ),
+
         "moyu" to ToolInfo(
             name = "moyu",
             category = ToolCategory.TERMINAL_LINUX,
-            description = "墨语言（Mo）独立运行时 v1.165.0：编译/运行/调试 .mo 程序，读写源码修 bug，" +
-                "包管理（mo.toml + deps + mo.lock，免 git 走 tarball + 四级镜像回退），依赖图分析。" +
-                "**AArch64 原生目标**：native_build 把 .mo 编成 ARM64 静态 ELF（mo2x 转译 freestanding C + 内置 zig 编译），" +
-                "产物不链 libc、不经 qemu、由 Android 直接 execve —— 比 x86_64 经 qemu 翻译快一个量级；注意它是用户态系统程序，不是 Linux 内核。" +
-                "工具链（moc/molink/mols/modb/dwmo/mo2c/mo2x/seed）与 aarch64 静态 qemu 随 APK 内置，" +
-                "全部零依赖，**不需要 Ubuntu / proot / 终端**，直接用 App 进程调用。",
+            description = "墨语言（Mo）—— 完整运行在 Ubuntu 内的系统级语言：编译/运行/调试 .mo 程序，读写源码修 bug，" +
+                "调用内置工具链，管理依赖，跑测试与修复闭环，构建自举系统与裸机内核。" +
+                "架构：proot 承载 Ubuntu（APK 内置 aarch64 rootfs），墨语言工具链（moc/mo2x/mols/molink/dwmo/modb/seed）、" +
+                "x86_64 翻译器 qemu-x86_64-static、zig 交叉编译器、uspace2 自举系统**全部装在 Ubuntu 里**" +
+                "（/opt/molang、/opt/zig、/usr/local/bin/mo）——设备上不构建、不转译工具链、不需要点构建按钮，也没有第二套分散的运行时。" +
+                "🔴 **不经过宿主 App 沙箱**：box64 那条路已真机证伪（NDK 编的 bionic 动态 PIE 要墨语言自家非标 libc 符号版本，" +
+                "App 沙箱里 execve ENOENT），宿主侧只剩 graph/resolve/test/aifix 依赖它，语言执行一律走 Ubuntu。" +
+                "**AArch64 原生目标**：native_build 把 .mo 编成 ARM64 静态 ELF，产物不链 libc、不经 qemu，" +
+                "由 Android 原生执行 —— 这是墨语言在手机上的最快路径；它是用户态系统程序，不是 Linux 内核。",
             useCases = listOf(
                 "写个墨语言程序并跑起来",
                 "编译我的 .mo 文件",
@@ -355,6 +433,7 @@ object ToolCapabilityDirectory {
                 "用墨语言起个 HTTP 服务",
                 "编个安卓能直接跑的 ARM64 原生程序",
                 "用墨语言写个自己的系统跑起来",
+                "跑一下墨语言的测试用例",
                 "看看墨语言标准库和示例"
             ),
             examples = listOf(
@@ -362,32 +441,49 @@ object ToolCapabilityDirectory {
                 "moyu(action=\"build_run\", code=\"func main() { print(\\\"hi\\\") }\", name=\"hi.mo\")",
                 "moyu(action=\"compile\", path=\"/data/.../moyu/workspace/demo.mo\")",
                 "moyu(action=\"run\", path=\"/data/.../moyu/workspace/demo.elf\")",
-                "moyu(action=\"read\", path=\"/data/.../moyu/mo/bin/../src/compiler.mo\")",
+                "moyu(action=\"exec\", tool=\"mo2x\", args=\"-h\")",
+                "moyu(action=\"read\", path=\"/opt/molang/src/compiler.mo\")",
                 "moyu(action=\"native_build\", path=\"uspace2.mo\", target=\"aarch64\")",
                 "moyu(action=\"native_run\", path=\"workspace/uspace2.arm64\")",
+                "moyu(action=\"test\", filter=\"01_\")",
+                "moyu(action=\"selfhosted\")",
+                "moyu(action=\"kernel_build\")",
                 "moyu(action=\"cc_diag\")"
             ),
             parameters = mapOf(
-                "action" to "setup/compile/run/build_run/exec/list/read/write/diagnose/graph/pkg_init/dep_install/dep_fetch/dep_list/dep_tree/dep_verify/net_diag/native_build/native_run/native_targets/cc_diag/native_setup",
-                "target" to "native_build 目标：aarch64（默认，Android 原生执行）/ x86_64（qemu）/ kern-aarch64（裸机，仅模拟器）",
-                "opt" to "native_build 优化级别：-O2（默认）/ -O0（快、省内存）",
+                "action" to "setup/compile/run/build_run/exec/list/read/write/diagnose/pkg_init/dep_install/dep_fetch/" +
+                    "dep_list/dep_tree/dep_verify/graph/net_diag/test/aifix/resolve/native_build/native_run/native_targets/" +
+                    "cc_diag/native_setup/selfhosted/system_image/system_build/kernel_build/kernel_info/" +
+                    "native_status/native_deploy/native_bench/native_exec/native_compile/native_system/native_cleanup（共 37 个）",
+                "target" to "native_build 目标：aarch64（默认，Android 原生执行）/ x86_64（qemu 翻译）/ kern-aarch64（裸机，仅模拟器）",
+                "opt" to "native_build 优化级别：-O2（默认，交付用）/ -O0（快、省内存，迭代用）",
                 "path" to "源文件或可执行文件路径",
                 "code" to "write 时的源码内容",
                 "name" to "write 时的文件名",
-                "tool" to "exec 时的工具名",
-                "args" to "exec 时的参数"
+                "tool" to "exec 时的工具名：moc/molink/mols/modb/dwmo/mo2c/mo2x/seed",
+                "args" to "exec 时的参数",
+                "old" to "aifix 时被替换的原文（文件中唯一）",
+                "new" to "aifix 时的替换文本",
+                "filter" to "test/aifix 只跑匹配的用例名，空=全部",
+                "max_cases" to "test 最多跑前 N 个用例，0=不限",
+                "host" to "resolve 的域名/IPv4（墨语言 lib/net.mo 无 DNS）",
+                "git" to "dep_install 的 git 仓库地址",
+                "layer" to "native_deploy 部署哪层：core（约6.4MB）/ zig（约176MB）",
+                "n" to "native_bench 筛法上限"
             ),
             tips = listOf(
-                "首次使用先 action=setup 解压运行时",
-                "纯静态工具链，无需 apt/Ubuntu/终端",
+                "首次使用先 action=setup：自动备好 Ubuntu rootfs，再把工具链/编译器/自举系统增量解压落地",
+                "墨语言与 DeepSeek Harness 是两个独立系统：harness 跑宿主 app 域，墨语言跑 proot 的 Ubuntu guest",
                 "修 bug 流程：read 源码 → write 改后版本 → build_run 验证",
-                "装依赖用 dep_install，编译前 App 会自动同步 deps 到源目录",
-                "moc 不支持 -I，依赖能 import 靠的是目录同步",
-                "网络走 Android 网络栈，无需配置；不支持 HTTPS",
+                "test 跑内置用例；aifix 会做「打补丁→测试过→撤补丁→测试必须失败」的硬校验，别用它掩盖问题",
+                "装依赖用 dep_install / dep_fetch，编译前 App 会自动同步 deps 到源目录（moc 不支持 -I）",
+                "resolve 先把域名解析成 IP 整数：墨语言 lib/net.mo 无 DNS，不解析就连不上",
                 "要交付原生系统程序用 native_build（aarch64）：产物无 libc、不经 qemu，Android 直接执行",
                 "aarch64 产物校验看「AArch64 (0xB7) + 无 PT_INTERP」两项，只看到构建成功不算数",
                 "编译慢属正常（zig 首次建缓存），快速迭代用 opt=\"-O0\"，交付前换回 -O2",
-                "native_run 会按产物真实架构自动选执行方式，不用手填目标"
+                "native_run 会按产物真实架构自动选执行方式，不用手填目标",
+                "🔴 裸机内核（kern-aarch64）不能在 proot/Ubuntu 里执行 —— 它自己就是提供系统调用的那一层，只能 kernel_build 编 + kernel_info 看 ELF 结构自证",
+                "起不来先 action=diagnose，它会逐环自检并直接说缺哪一环"
             ),
             relatedTools = listOf("moyu", "terminal"),
             priority = 5
@@ -1357,6 +1453,7 @@ object ToolCapabilityDirectory {
             // 墨语言独立运行时（编译/运行 .mo、读写源码修 bug）。必须与 QuroToolRouter.categorize 同源，
             // 否则 tool_discovery / tool_router 列不出它，AI 根本不知道有这门语言可用。
             name == "moyu" || name.startsWith("moyu_") -> ToolCategory.TERMINAL_LINUX
+            name == "harness" || name.startsWith("harness_") -> ToolCategory.TERMINAL_LINUX
             name.startsWith("ui_") -> ToolCategory.UI_CARDS
             name.startsWith("skill__") -> ToolCategory.AI_CAPABILITIES
             // CodeCanvas 确定性渲染出图（codecanvas_* 5 个工具）。

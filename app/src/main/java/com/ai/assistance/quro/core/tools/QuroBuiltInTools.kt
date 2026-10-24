@@ -460,6 +460,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // 工具链是 x86_64 静态可执行、qemu 是 aarch64 静态，两者零依赖 → 直接在 App 私有目录进程调用，
     // **不依赖 Ubuntu/proot**。用于编译/运行 .mo、读写源码修 bug、调 mols/modb 等工具链。
     r.register(MoyuTool())
+    r.register(ZorvaiCapabilitiesTool())   // 能力门：harness 侧先问「我能用什么」再动手
+    r.register(HarnessTool())   // DeepSeek Harness：内置完整 Node 运行时 + dsh，自带 Web 界面
     // 隔离沙箱（应用私有目录隔离，路径穿越防护）
     r.register(QuroSandboxTool())
     // 应用私有数据库只读查询（应用私有目录隔离，只读安全）

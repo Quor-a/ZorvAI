@@ -81,6 +81,7 @@ object MoyuExec {
         env: Map<String, String> = emptyMap(),
         timeoutMs: Long = 180_000,
         viaLauncher: Boolean = true,
+        stdoutTo: File? = null,
     ): Result = withContext(Dispatchers.IO) {
         if (!binary.isFile) {
             return@withContext Result(-1, "找不到可执行文件：${binary.absolutePath}")
@@ -88,17 +89,29 @@ object MoyuExec {
         val dir = (workDir ?: File(context.filesDir, "moyu/workspace")).apply { mkdirs() }
         val mergedEnv = baseEnv(context) + env
 
+        // ⓪ 目标已经在 nativeLibraryDir（唯一保证可 execve 的 App 内目录）→ 直接执行。
+        // 实测有些 ROM 拒绝 memfd（execveat 与 /proc/self/fd 都 EACCES），对这类目标
+        // 先走 memfd 只会白白多一次失败尝试；直接 exec 才是那条能成的路。
+        val nativeDir = runCatching { context.applicationInfo.nativeLibraryDir }.getOrNull()
+        if (!nativeDir.isNullOrBlank() && binary.absolutePath.startsWith(nativeDir)) {
+            val r = spawn(listOf(binary.absolutePath) + args, dir, mergedEnv, timeoutMs, stdoutTo)
+            if (r.code != 126 && r.code != 127) {
+                return@withContext r.copy(viaLauncher = false)
+            }
+            Log.w(TAG, "nativeLibraryDir 直接执行失败（code=${r.code}）：${r.output.take(300)}")
+        }
+
         // ① 经 memfd 启动器
         if (viaLauncher && hasLauncher(context)) {
             val cmd = listOf(launcher(context).absolutePath, binary.absolutePath) + args
-            val r = spawn(cmd, dir, mergedEnv, timeoutMs)
+            val r = spawn(cmd, dir, mergedEnv, timeoutMs, stdoutTo)
             // 127 = 启动器内三种方式全失败；126 = 启动器自身读不了目标。
             // 这两种才值得再试"直接执行"，其余退出码是目标程序自己的，必须原样返回。
             if (r.code != 127 && r.code != 126) {
                 return@withContext r.copy(viaLauncher = true)
             }
             Log.w(TAG, "memfd 启动失败（code=${r.code}），改试直接执行：${r.output.take(300)}")
-            val r2 = spawn(listOf(binary.absolutePath) + args, dir, mergedEnv, timeoutMs)
+            val r2 = spawn(listOf(binary.absolutePath) + args, dir, mergedEnv, timeoutMs, stdoutTo)
             if (r2.code != 126 && r2.code != 127) {
                 return@withContext r2.copy(viaLauncher = false)
             }
@@ -121,7 +134,7 @@ object MoyuExec {
         }
 
         // ② 直接执行
-        val r = spawn(listOf(binary.absolutePath) + args, dir, mergedEnv, timeoutMs)
+        val r = spawn(listOf(binary.absolutePath) + args, dir, mergedEnv, timeoutMs, stdoutTo)
         r.copy(viaLauncher = false)
     }
 
@@ -130,14 +143,25 @@ object MoyuExec {
         dir: File,
         env: Map<String, String>,
         timeoutMs: Long,
+        stdoutTo: File? = null,
     ): Result = withContext(Dispatchers.IO) {
         try {
             val pb = ProcessBuilder(cmd)
             pb.directory(dir)
-            pb.redirectErrorStream(true)
+            if (stdoutTo != null) {
+                // stdout 直接落文件（如 `xz -d -c` 的输出），stderr 仍要能读回
+                stdoutTo.parentFile?.mkdirs()
+                pb.redirectOutput(ProcessBuilder.Redirect.to(stdoutTo))
+            } else {
+                pb.redirectErrorStream(true)
+            }
             pb.environment().putAll(env)
             val p = pb.start()
-            val out = p.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val out = if (stdoutTo != null) {
+                p.errorStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            } else {
+                p.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            }
             val done = p.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
             if (!done) {
                 p.destroyForcibly()

@@ -1291,9 +1291,9 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_00991" formatted="false">（组合为空）</string>
     <string name="qk_00992">组件 %1$s</string>
     <string name="qk_00993" formatted="false">单独</string>
-    <string name="qk_00994" formatted="false">新对�?</string>
-    <string name="qk_00995">这是来自 %1$s 用户 %2$s 的机器人对话�?</string>
-    <string name="qk_00996" formatted="false">对话已清空�?</string>
+    <string name="qk_00994" formatted="false">新对话</string>
+    <string name="qk_00995">这是来自 %1$s 用户 %2$s 的机器人对话。</string>
+    <string name="qk_00996" formatted="false">对话已清空。</string>
     <string name="qk_00997">
 
 [当前屏幕 UI 结构]
@@ -1301,48 +1301,48 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_00998" formatted="false">[屏幕理解：以下为当前屏幕实时截屏（MediaProjection 媒体投影 / 屏幕捕获）]</string>
     <string name="qk_00999">[本轮已根据触发词自动激活以下技能，请按其对用户消息作答]
 %1$s</string>
-    <string name="qk_01000">[用户已选择技能�?%1$s」，请严格按以下指令处理其本条消息]
+    <string name="qk_01000">[用户已选择技能「%1$s」，请严格按以下指令处理其本条消息]
 ### %2$s
 %3$s</string>
-    <string name="qk_01001">[上下文信�? - 用户当前选择的工作区/ACI/技能]
+    <string name="qk_01001">[上下文信息 - 用户当前选择的工作区/ACI/技能]
 %1$s</string>
-    <string name="qk_01002" formatted="false">⚠️ 尚未配置模型 API Key，请点右上角模型芯片 →「在模型设置中管理」填�? baseUrl / apiKey / model�?</string>
-    <string name="qk_01003">convId=%1$s (job cancelled �? 已停止生�?)</string>
-    <string name="qk_01004" formatted="false">�? 已停止生成�?</string>
-    <string name="qk_01005" formatted="false">⚠️ 回复生成失败�?${(e.message ?: </string>
+    <string name="qk_01002" formatted="false">⚠️ 尚未配置模型 API Key，请点右上角模型芯片 →「在模型设置中管理」填写 baseUrl / apiKey / model。</string>
+    <string name="qk_01003">convId=%1$s (job cancelled，已停止生成)</string>
+    <string name="qk_01004" formatted="false">⏹ 已停止生成。</string>
+    <string name="qk_01005" formatted="false">⚠️ 回复生成失败：${(e.message ?: </string>
     <string name="qk_01006">生成回复异常 convId=%1$s</string>
-    <string name="qk_01007" formatted="false">回复生成失败�?${e.message ?: </string>
-    <string name="qk_01008" formatted="false">⚠️ 发生错误�?${(e.message ?: </string>
-    <string name="qk_01009" formatted="false">⚠️ 语音球出错了�?${e.message ?: </string>
-    <string name="qk_01010" formatted="false">执行�?</string>
+    <string name="qk_01007" formatted="false">回复生成失败：${e.message ?: </string>
+    <string name="qk_01008" formatted="false">⚠️ 发生错误：${(e.message ?: </string>
+    <string name="qk_01009" formatted="false">⚠️ 语音球出错了：${e.message ?: </string>
+    <string name="qk_01010" formatted="false">执行中</string>
     <string name="qk_01011" formatted="false">执行完成</string>
     <string name="qk_01012" formatted="false">执行失败</string>
     <string name="qk_01013" formatted="false">等待执行</string>
     <string name="qk_01014">丢弃后台延迟卡片 ownerId=%1$s（非可见且无 liveBuffer，避免串台）</string>
-    <string name="qk_01015" formatted="false">空对�?</string>
-    <string name="qk_01016" formatted="false">帮我打开/查一�?</string>
-    <string name="qk_01017" formatted="false">帮我打开 / 查一�? / 调用 XX</string>
+    <string name="qk_01015" formatted="false">空对话</string>
+    <string name="qk_01016" formatted="false">帮我打开/查一下</string>
+    <string name="qk_01017" formatted="false">帮我打开 / 查一下 / 调用 XX</string>
     <string name="qk_01018" formatted="false">我要调用 XX 工具</string>
-    <string name="qk_01019" formatted="false">有点�?</string>
+    <string name="qk_01019" formatted="false">有点累</string>
     <string name="qk_01020" formatted="false">要我帮你做吗</string>
     <string name="qk_01021" formatted="false">打开快手</string>
     <string name="qk_01022" formatted="false">快手</string>
     <string name="qk_01023" formatted="false">好的我来帮你打开</string>
     <string name="qk_01024" formatted="false">电量多少</string>
-    <string name="qk_01025" formatted="false">有什么应�?</string>
-    <string name="qk_01026" formatted="false">帮我处理一�?</string>
+    <string name="qk_01025" formatted="false">有什么应用</string>
+    <string name="qk_01026" formatted="false">帮我处理一下</string>
     <string name="qk_01027" formatted="false">搞个那个</string>
-    <string name="qk_01028" formatted="false">弄一�?</string>
-    <string name="qk_01029" formatted="false">弄一下那�?</string>
+    <string name="qk_01028" formatted="false">弄一下</string>
+    <string name="qk_01029" formatted="false">弄一下那个</string>
     <string name="qk_01030" formatted="false">那个</string>
     <string name="qk_01031" formatted="false">这个</string>
     <string name="qk_01032" formatted="false">我猜你是想要...</string>
-    <string name="qk_01033" formatted="false">大概是这个意�?</string>
+    <string name="qk_01033" formatted="false">大概是这个意思</string>
     <string name="qk_01034" formatted="false">看起来很明确</string>
     <string name="qk_01035" formatted="false">之前用户说过类似的话</string>
-    <string name="qk_01036" formatted="false">你是�?</string>
-    <string name="qk_01037" formatted="false">你能做什�?</string>
-    <string name="qk_01038" formatted="false">画一�?...</string>
+    <string name="qk_01036" formatted="false">你是谁</string>
+    <string name="qk_01037" formatted="false">你能做什么</string>
+    <string name="qk_01038" formatted="false">画一个...</string>
     <string name="qk_01039" formatted="false">生成图片</string>
     <string name="qk_01040" formatted="false">帮我做张海报</string>
     <string name="qk_01041" formatted="false">图片描述</string>
@@ -1351,20 +1351,20 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_01044" formatted="false">帮我剪个视频</string>
     <string name="qk_01045" formatted="false">视频描述</string>
     <string name="qk_01046" formatted="false">图片路径</string>
-    <string name="qk_01047" formatted="false">可选问�?</string>
+    <string name="qk_01047" formatted="false">可选问题</string>
     <string name="qk_01048" formatted="false">音频路径</string>
     <string name="qk_01049" formatted="false">可选语言</string>
     <string name="qk_01050" formatted="false">视频路径</string>
     <string name="qk_01051" formatted="false">预览这个文件</string>
-    <string name="qk_01052" formatted="false">渲染一�?</string>
+    <string name="qk_01052" formatted="false">渲染一下</string>
     <string name="qk_01053" formatted="false">看看这个</string>
     <string name="qk_01054" formatted="false">文件路径</string>
-    <string name="qk_01055" formatted="false">可选标�?</string>
+    <string name="qk_01055" formatted="false">可选标签</string>
     <string name="qk_01056" formatted="false">创建文档</string>
     <string name="qk_01057" formatted="false">新建文件</string>
     <string name="qk_01058" formatted="false">写个HTML</string>
     <string name="qk_01059" formatted="false">内容</string>
-    <string name="qk_01060" formatted="false">播放工作区里的音�?</string>
+    <string name="qk_01060" formatted="false">播放工作区里的音频</string>
     <string name="qk_01061" formatted="false">播放视频</string>
     <string name="qk_01062" formatted="false">打开这个文档</string>
     <string name="qk_01063" formatted="false">查看PDF</string>
@@ -1384,31 +1384,31 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_01077" formatted="false">帮我写篇文章</string>
     <string name="qk_01078" formatted="false">你希望文章是正式风格还是轻松风格？主题是什么？</string>
     <string name="qk_01079" formatted="false">删除这个文件</string>
-    <string name="qk_01080" formatted="false">确定要删除文�? XXX 吗？此操作不可恢�?</string>
+    <string name="qk_01080" formatted="false">确定要删除文件 XXX 吗？此操作不可恢复</string>
     <string name="qk_01081" formatted="false">发条消息</string>
     <string name="qk_01082" formatted="false">发给谁？内容是什么？</string>
     <string name="qk_01083" formatted="false">打开应用</string>
-    <string name="qk_01084" formatted="false">打开哪个应用�?</string>
-    <string name="qk_01085" formatted="false">帮我查一�?</string>
-    <string name="qk_01086" formatted="false">查什么内容？从哪里查�?</string>
-    <string name="qk_01087" formatted="false">设置一�?</string>
+    <string name="qk_01084" formatted="false">打开哪个应用？</string>
+    <string name="qk_01085" formatted="false">帮我查一下</string>
+    <string name="qk_01086" formatted="false">查什么内容？从哪里查？</string>
+    <string name="qk_01087" formatted="false">设置一下</string>
     <string name="qk_01088" formatted="false">设置什么？具体参数是什么？</string>
-    <string name="qk_01089" formatted="false">运行一�?</string>
+    <string name="qk_01089" formatted="false">运行一下</string>
     <string name="qk_01090" formatted="false">运行什么？在哪里运行？</string>
     <string name="qk_01091" formatted="false">说明文字</string>
     <string name="qk_01092" formatted="false">按钮文本</string>
-    <string name="qk_01093" formatted="false">返回�?</string>
-    <string name="qk_01094" formatted="false">内容(Markdown/HTML/纯文�?)</string>
+    <string name="qk_01093" formatted="false">返回值</string>
+    <string name="qk_01094" formatted="false">内容(Markdown/HTML/纯文本)</string>
     <string name="qk_01095" formatted="false">标签</string>
     <string name="qk_01096" formatted="false">提示</string>
-    <string name="qk_01097" formatted="false">图片URL(可�?)</string>
-    <string name="qk_01098" formatted="false">点击的按钮�?</string>
-    <string name="qk_01099" formatted="false">输入的�?</string>
-    <string name="qk_01134">当前用户的名字是�?%1$s」。在合适的场合可以直接用这个名字称呼用户，但不要每句话都刻意叫名字。
+    <string name="qk_01097" formatted="false">图片URL(可选)</string>
+    <string name="qk_01098" formatted="false">点击的按钮值</string>
+    <string name="qk_01099" formatted="false">输入的值</string>
+    <string name="qk_01134">当前用户的名字是「%1$s」。在合适的场合可以直接用这个名字称呼用户，但不要每句话都刻意叫名字。
 </string>
-    <string name="qk_01430">（ACI 尚未就绪�?%1$s）
+    <string name="qk_01430">（ACI 尚未就绪：%1$s）
 </string>
-    <string name="qk_01443">- 路径规则：path �?**相对工作区根目录**的路径（�? MyApp/src/Main.java），不要带盘�?/绝对路径、不�? .. 逃逸；写完后告诉用户文件在「工具箱-工作区」里，绝对路径是 %1$s/相对路径。
+    <string name="qk_01443">- 路径规则：path 是**相对工作区根目录**的路径（如 MyApp/src/Main.java），不要带盘符/绝对路径、不要用 .. 逃逸；写完后告诉用户文件在「工具箱-工作区」里，绝对路径是 %1$s/相对路径。
 </string>
     <string name="qk_01466" formatted="false">已保存并启用云模型服务 ✓</string>
     <string name="qk_01467" formatted="false">云模型配置已保存</string>

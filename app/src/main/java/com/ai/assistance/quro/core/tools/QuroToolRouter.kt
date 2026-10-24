@@ -129,6 +129,7 @@ class QuroToolRouter(
             // 墨语言（Mo）独立运行时：编译/运行 .mo、读写源码修 bug。工具链零依赖、不经 Ubuntu，
             // 属于高频开发能力，故常开下发（漏了这里 = 每轮靠检索召回，弱模型容易说"不会"）。
             "moyu",
+            "harness",
             "dev_env",
             "fluid_cloud_notify",
             // 隔离沙箱 + 私有数据库只读查询（应用内免权限）
@@ -494,6 +495,8 @@ class QuroToolRouter(
                 ToolCapabilityDirectory.ToolCategory.TERMINAL_LINUX
             // 墨语言独立运行时：必须与 ToolCapabilityDirectory.inferCategory 同源，
             // 否则本函数末尾 `else -> null` 会让 moyu 从路由索引里彻底消失。
+            name == "harness" || name.startsWith("harness_") ->
+                ToolCapabilityDirectory.ToolCategory.TERMINAL_LINUX
             name == "moyu" || name.startsWith("moyu_") ->
                 ToolCapabilityDirectory.ToolCategory.TERMINAL_LINUX
             name.startsWith("ui_") -> ToolCapabilityDirectory.ToolCategory.UI_CARDS

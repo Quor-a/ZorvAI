@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.work.Configuration
 import com.ai.assistance.quro.core.QuroCrashLogger
 import com.ai.assistance.quro.core.mcp.QuroLocalMcpManager
+import com.ai.assistance.quro.terminal.harness.HarnessBridgeHook
 import com.ai.assistance.quro.core.tools.QuroImportedToolRegistry
 import com.ai.assistance.quro.core.tools.QuroScheduledTaskScheduler
 import com.ai.assistance.quro.core.bot.QuroBotManager
@@ -73,6 +74,11 @@ class QuroApplication : Application(), Configuration.Provider {
         // 尽早注入：qstr() 在 attachBaseContext / ContentProvider 阶段就可能被调用，
         // 晚注入会短暂返回空串（表现成界面文案空白、磁贴标题空白）。
         com.ai.assistance.quro.util.QuroI18nRt.appContext = appCtx
+        // 墨语言原生通道（/data/local/tmp + Shizuku）的特权执行通道。
+        // 只是把一个 object 赋给 terminal-core 的注入点，不触碰 Shizuku、不起进程，
+        // 所以在任何进程、任何早阶段都安全。未授权时 [com.ai.assistance.quro.terminal.moyu.PrivilegedShell.isReady]
+        // 为 false，整条通道自动降级，不影响墨语言主链路。
+        com.ai.assistance.quro.core.moyu.QuroShizukuShell.install()
         QuroCrashLogger.install(this)
         // LSPosed 作用域标记自愈：每次启动先清除旧标记；若本应用被 LSPosed 纳入作用域，
         // QuroXposedModule 会在 attachBaseContext 的 Xposed 钩子（afterHookedMethod）重新写入，
@@ -116,6 +122,12 @@ class QuroApplication : Application(), Configuration.Provider {
     private fun isMainProcess(): Boolean = currentProcessName()?.let { it == packageName } ?: true
 
     override fun onCreate() {
+        // harness 的 agent 需要宿主（ZorvAI）的手机能力：读屏、点击、滑动、截图、
+        // 启动应用、Shizuku 系统命令……这些只在 app 模块实现，经 MCP 桥注册给引擎。
+        // 这里注入实现，terminal-core 在 harness 启动前会调用它。
+        HarnessBridgeHook.ensureBridge = { ctx ->
+            com.ai.assistance.quro.core.tools.HarnessBridge.enable(ctx)
+        }
         super.onCreate()
 
         // 非 @Composable 位置的取串运行时（工具类 / 回调 / 协程里的界面文案）依赖它。

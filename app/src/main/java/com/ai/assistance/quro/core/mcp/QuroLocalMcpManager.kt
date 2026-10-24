@@ -38,6 +38,8 @@ object QuroLocalMcpManager {
         servers[a]?.stop()
         servers.remove(a)
 
+        // quro_tool handler 需要应用上下文才能拿到 ZorvAI 工具注册表
+        QuroLocalMcpDispatcher.appContext = context.applicationContext
         val server = QuroLocalMcpServer(validated)
         val port = runCatching { server.start() }.getOrElse { return "本地 MCP 启动失败: ${it.message}" }
         servers[a] = server
@@ -72,6 +74,7 @@ object QuroLocalMcpManager {
     /** 应用启动时调用：自动拉起所有已持久化的本地 MCP，使其恢复可用（界面自动拉取注册）。 */
     @Synchronized
     fun startAll(context: Context) {
+        QuroLocalMcpDispatcher.appContext = context.applicationContext
         val locals = QuroMcpClientPrefs.loadLocal(context)
         locals.forEach { cfg ->
             if (cfg.toolDefs.isBlank()) return@forEach

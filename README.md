@@ -124,6 +124,7 @@
 | **特权层 L1–L5** | 无障碍 → Shizuku（uid 0/2000）→ 设备管理员 → ROOT（su）→ 应用内 Linux（proot + Ubuntu 24.04）。其中 **L1–L4 由 `PrivilegeLevel` 枚举承载**（系统权限），**L5 不在枚举内**，由 Linux 环境是否就绪决定 |
 | **终端 / Linux 沙箱** | 完整终端模拟器：proot + Ubuntu 24.04 ARM64 真实用户空间；PTY 伪终端（`/dev/ptmx` + `fork/exec`）；前台服务保活（specialUse，息屏/切 App 不被杀）；ACI 跨进程 26 个能力（终端服务单一入口 + `action` 分发）；4 种 IPC 接入（ContentProvider / Deep Link / Intent / BroadcastReceiver）；多会话管理 |
 | **墨语言 Mo（独立运行时）** | 内置 **墨语言 v1.165.0** 完整工具链（moc / molink / mols / modb / dwmo / mo2c / mo2x / seed） + aarch64 静态 qemu，**全部零依赖、不经 Ubuntu/proot/终端**；支持编译运行、包管理（mo.toml + deps + mo.lock，免 git 走 tarball + 4 级镜像回退）、依赖图分析、源码读写（AI 可直接修 bug）；socket 直通 Android 网络栈，可跑 HTTP 服务端 |
+| **DeepSeek Harness** | 内置完整 dsh 0.2.1-rc.2（Node 26 bionic 运行时 + 全量插件包 + 自带界面），AI 可通过 headless 通道把整套 agent 工作流外包给它 |
 | **MCP** | MCP 客户端（WebSocket / HTTP 传输）、应用内本地 MCP 服务，可由 AI 部署/调用、**MCP-ACI 桥接** |
 | **引擎 / 运行时** | CMS 引擎共享运行时（NODE / PYTHON / SSH / JAVA / RUST / GO）、CMS v2 模块、内置浏览器（Android WebView 运行时）、本地语音 STT / TTS |
 | **IM 通道** | 飞书（WebSocket）/ QQBot（官方 WS）/ 微信 iLink（HTTP 长轮询 35s） |
@@ -439,6 +440,64 @@ ZorvAI 的做法是一个随包内置的 aarch64 启动器：以 `libmoexec.so` 
 - 退出码诊断：`137` 内存不足被回收 / `159` seccomp 拦截系统调用 / `139` 段错误 / `134` 断言失败
 
 ---
+
+## DeepSeek Harness · 内置完整 agent 产品
+
+ZorvAI 内置了 **DeepSeek Harness（dsh）0.2.1-rc.2** 的完整运行时 —— 它是 DeepSeek 官方的
+agent harness，**自带完整的界面、组件、会话与插件体系**，不是 ZorvAI 的一个子功能面板。
+
+### 为什么需要专门做一层运行时
+
+dsh 是 Node.js 应用（`dsh web` 起 HTTP 服务 + 自带前端）。要让它在 Android 上跑，有三道坎，
+每一道都必须真正解决，不是加个参数就行：
+
+| 坎 | 事实 | 做法 |
+|---|---|---|
+| Node 运行时 | Node 官方的 linux-arm64 构建链接 **glibc**，Android 是 **bionic**，直接 exec 跑不起来 | 用 Termux 维护的 arm64 构建（node **26.12.1**，bionic 链接） |
+| 动态库 | node 的 `DT_NEEDED` 除系统库外还要 `z / cares / sqlite3 / ffi / crypto / ssl / icu×2 / libc++_shared` | 用 `DT_NEEDED` 闭包精确求解后随包内置（10 个库，45.5MB），启动时 `LD_LIBRARY_PATH` 指路 |
+| 可执行权限 | `targetSdk ≥ 29` 的 App 私有目录被 SELinux 禁止 `execve` | node 由 `nativeLibraryDir` 里的 memfd 启动器拉起（`libmoexec.so`） |
+
+**还有一处原生模块要重编**：`node-pty`（dsh 的终端/子进程插件用它）官方只提供 glibc 预编译，
+依赖 `libc.so.6` / `ld-linux-aarch64.so.1`，Android 加载不了。ZorvAI 自带了它的 bionic 编译版本：
+
+- `pty.cc` 需要 `<pty.h>`、`openpty(3)`、`forkpty(3)` —— **bionic 从来没实现过**，但底层原语
+  （`posix_openpt` / `grantpt` / `unlockpt` / `ptsname` / `TIOCSCTTY`）都有，于是用原语把两个
+  便利函数重建出来（`tools/dsh-runtime/pty_shim.h`），NDK 交叉编出 `pty.node` + `spawn-helper`
+- 产物验证：`DT_NEEDED = liblog / libc++_shared / libm / libdl / libc`，**无 glibc**
+
+### 资产与体积
+
+| 项 | 说明 |
+|---|---|
+| 内置资产 | `assets/dsh-runtime.pack`（**89.8MB**，tar.xz；解压后 627.9MB / 48790 文件） |
+| 运行时目录 | `filesDir/dsh/`（`bin/node` + `lib/` + `dsh/node_modules`） |
+| 用户数据 | `filesDir/dsh/home`（`DSH_HOME`：会话、附件、设置、凭据都在这里） |
+| 工作区 | `filesDir/dsh/workspace` |
+| 解压方式 | nativeLibraryDir 的 `libbusybox.so` 先 `xz -d` 再 `tar xf`（纯 Java 没有 xz 解码器） |
+| 入口 | 工具中心 → DeepSeek Harness |
+
+体积上做过的取舍：`node_modules` 按 **linux-arm64** 平台安装（自动跳过 230MB 的 win32 二进制，
+含 182MB 的 `libreoffice-kit-win32-x64`）；删掉 glibc 不可用的 `sherpa-onnx-linux-arm64`（38.4MB，
+语音插件的本地 STT 在 Android 上不可用）；`node-pty` 的其他平台 prebuilds 全删。
+
+### 两条使用路径
+
+**给人用 —— 它自己的界面**：`start` 起服务后，WebView 加载 `http://127.0.0.1:3080`。
+会话、插件、设置、主题全部由 harness 自带前端负责，**App 侧不重做它的 UI，也不裁剪它的功能**。
+服务只绑 `127.0.0.1`（上游拒绝通配地址，因为绑定所有网卡等于把远程代码执行暴露到局域网）。
+
+**给 AI 用 —— headless 通道**：`dsh --profile headless <task>` 是「答一个任务就退出」的一次性入口，
+直接跑 core Agent/Session，**没有 Host、没有 HTTP、没有浏览器层**。ZorvAI 的 `harness` 工具用它
+把「需要一整套 agent 工作流」的活儿外包出去：harness 自己规划、读文件、跑命令、改代码，
+答案走 stdout 带回来。支持 `--session-id` 续用会话、`--json` 输出 NDJSON 事件流。
+
+### AI 工具 `harness`
+
+`setup` / `start` / `stop` / `restart` / `status` / `logs` / `url` / **`task`** / `set_key` / `diag`
+
+模型凭据：harness 有自己的模型配置（`DEEPSEEK_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`，
+或在它自己的界面里写 `settings.yaml`），**与 ZorvAI 的模型配置互不相干**。`set_key` 存的 key 会在
+`start` 与 `task` 时注入环境变量。
 
 ## 下载 / APK · Download
 
