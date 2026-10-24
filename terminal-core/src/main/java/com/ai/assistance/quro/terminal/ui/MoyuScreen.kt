@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ai.assistance.quro.terminal.moyu.MoyuLocal
 import com.ai.assistance.quro.terminal.moyu.MoyuNative
 import com.ai.assistance.quro.terminal.moyu.MoyuPkg
 import com.ai.assistance.quro.terminal.moyu.MoyuRuntime
@@ -97,6 +98,12 @@ fun MoyuScreen(onBack: () -> Unit) {
         }
     }
 
+    // 原生通道（/data/local/tmp + Shizuku）：与 Ubuntu 相互独立的一份复制。
+    val local = remember { MoyuLocal(context) }
+    var localProgress by remember { mutableStateOf("") }
+    var confirmZig by remember { mutableStateOf(false) }
+    var confirmClean by remember { mutableStateOf(false) }
+
     // 页面路由：null = 首页
     var page by remember { mutableStateOf<String?>(null) }
 
@@ -117,6 +124,23 @@ fun MoyuScreen(onBack: () -> Unit) {
         busy = true
         scope.launch {
             output = withContext(Dispatchers.IO) { block() }
+            refresh()
+            busy = false
+        }
+    }
+
+    /**
+     * 带实时进度的执行。
+     *
+     * 部署要把 6.4MB（甚至 176MB）分块推过去，几十秒里界面不能装死，
+     * 所以 [MoyuLocal.deployCore] 的 onProgress 直接写 [localProgress] ——
+     * Compose 的 MutableState 后台线程写是安全的，会自己回到主线程重组。
+     */
+    fun runLive(block: suspend (onProgress: (String) -> Unit) -> String) {
+        busy = true
+        localProgress = "准备中 …"
+        scope.launch {
+            output = withContext(Dispatchers.IO) { block { m -> localProgress = m } }
             refresh()
             busy = false
         }
@@ -150,6 +174,7 @@ fun MoyuScreen(onBack: () -> Unit) {
                         "deps" -> "依赖包"
                         "net" -> "网络"
                         "native" -> "编译与产物"
+                        "local" -> "原生通道"
                         "system" -> "自举系统"
                         "kernel" -> "自举内核"
                         else -> "墨语言"
@@ -242,6 +267,16 @@ fun MoyuScreen(onBack: () -> Unit) {
                     onChanged = { refresh() }
                 )
 
+                // 原生通道：/data/local/tmp + Shizuku，ARM64 产物原生跑
+                "local" -> LocalPage(
+                    local = local, tick = tick, busy = busy,
+                    progress = localProgress,
+                    runSafe = { blk -> runSafe(blk) },
+                    runLive = { blk -> runLive(blk) },
+                    onAskZig = { confirmZig = true },
+                    onAskClean = { confirmClean = true },
+                )
+
                 // 自举系统：uspace2 + ISO
                 "system" -> SystemPage(
                     ubuntu = ubuntu, tick = tick, busy = busy,
@@ -257,6 +292,27 @@ fun MoyuScreen(onBack: () -> Unit) {
 
             if (status.isNotBlank()) {
                 Block { SimpleText(status) }
+            }
+            if (localProgress.isNotBlank()) {
+                Block {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SimpleText("原生通道", TerminalTheme.onSurfaceVariant)
+                        Spacer(Modifier.weight(1f))
+                        if (busy) {
+                            CircularProgressIndicator(
+                                Modifier.size(12.dp), strokeWidth = 2.dp,
+                                color = TerminalTheme.accentColor
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        localProgress.takeLast(2000),
+                        color = TerminalTheme.onSurfaceColor,
+                        fontSize = 10.5.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
             }
             if (output.isNotBlank()) {
                 Block {
@@ -358,6 +414,53 @@ fun MoyuScreen(onBack: () -> Unit) {
                 }) { Text("删除") }
             },
             dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("取消") } }
+        )
+    }
+
+    // 编译层（zig）约 176MB，分块传要几十秒 —— 必须用户显式点头。
+    if (confirmZig) {
+        AlertDialog(
+            onDismissRequest = { confirmZig = false },
+            title = { Text("部署编译层？") },
+            text = {
+                Text(
+                    "zig 编译器约 176MB，要经 Shizuku 分块写入 /data/local/tmp，耗时几十秒。" +
+                        "不部署也能跑预编译的 andromo 基准和已产出的 ARM64 程序；" +
+                        "只有在设备上现场把 .mo 编成 ARM64 才需要它。",
+                    fontSize = 12.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmZig = false
+                    runLive { p -> local.deployZig(p).fold({ local.describe() }, { "失败：" + (it.message ?: "") }) }
+                }) { Text("部署") }
+            },
+            dismissButton = { TextButton(onClick = { confirmZig = false }) { Text("取消") } }
+        )
+    }
+
+    if (confirmClean) {
+        AlertDialog(
+            onDismissRequest = { confirmClean = false },
+            title = { Text("清空原生通道？") },
+            text = {
+                Text(
+                    "会 rm -rf " + MoyuLocal.REMOTE_ROOT + "。只影响这条独立复制出来的通道，" +
+                        "Ubuntu 里的墨语言不受任何影响。",
+                    fontSize = 12.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClean = false
+                    runSafe {
+                        local.cleanup()
+                            .fold({ "已清空 " + MoyuLocal.REMOTE_ROOT }, { "失败：" + (it.message ?: "") })
+                    }
+                }) { Text("清空") }
+            },
+            dismissButton = { TextButton(onClick = { confirmClean = false }) { Text("取消") } }
         )
     }
 }
@@ -499,6 +602,7 @@ private fun HomeContent(
         NavRow("标准库", libCount.toString() + " 个") { onOpen("libs") }
         NavRow("依赖包", if (depCount == 0) "未安装" else depCount.toString() + " 个") { onOpen("deps") }
         NavRow("编译与产物", "zig 交叉编译 · ARM64 ELF") { onOpen("native") }
+        NavRow("原生通道", "/data/local/tmp · Shizuku · 原生跑") { onOpen("local") }
         NavRow("网络", "socket / HTTP 服务") { onOpen("net") }
     }
 
@@ -1027,6 +1131,141 @@ private fun NativePage(
                     }
                 }
             }
+        }
+    }
+}
+
+// ═════════════ 二级：原生通道（/data/local/tmp + Shizuku）═════════════
+
+/**
+ * 墨语言 **原生通道** 页。
+ *
+ * 这条路径是「复制」不是「共用」：它从 APK 资产里重新解一份工具链落到
+ * `/data/local/tmp/quro-mo`，与 Ubuntu rootfs 里的 `/opt/molang` 毫无关系，
+ * 删一边不影响另一边。
+ *
+ * 存在的理由：targetSdk 34 下 App 私有目录 **禁止 execve**（SELinux
+ * untrusted_app 域，与 chmod 无关），`/data/local/tmp` + shell 域才是官方
+ * `adb push && adb shell` 的同一条路。墨语言 cfs-aarch64 后端产出的
+ * freestanding 静态 ELF（不链 libc、`svc #0` 直接陷入内核）在这条路上
+ * **原生跑**，连 proot 都不经过。
+ */
+@Composable
+private fun LocalPage(
+    local: MoyuLocal,
+    tick: Int,
+    busy: Boolean,
+    progress: String,
+    runSafe: (suspend () -> String) -> Unit,
+    runLive: (suspend ((String) -> Unit) -> String) -> Unit,
+    onAskZig: () -> Unit,
+    onAskClean: () -> Unit,
+) {
+    // status() 是 6 次 fileSize 的 Binder 往返，很快；tick 变化时重读。
+    val st = remember(tick) { local.status() }
+
+    // ① 通道状态
+    Block {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Title("原生通道")
+            Spacer(Modifier.weight(1f))
+            Dot(st.usable)
+            Spacer(Modifier.width(6.dp))
+            SimpleText(if (st.usable) "可用" else "未部署", TerminalTheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.height(6.dp))
+        SimpleText("独立复制的一份工具链，落在 " + MoyuLocal.REMOTE_ROOT + "，与 Ubuntu 内的墨语言互不相干。")
+        Spacer(Modifier.height(4.dp))
+        SimpleText("ARM64 产物由内核直接调度，不经 proot、不经 qemu。", TerminalTheme.onSurfaceVariant)
+        Spacer(Modifier.height(4.dp))
+        SimpleText(local.describe(), TerminalTheme.onSurfaceVariant)
+        Spacer(Modifier.height(10.dp))
+        StatusLine("Shizuku 特权 shell", st.shellReady)
+        StatusLine("核心层（qemu / mo2x / 标准库 / uspace2）", st.coreReady)
+        StatusLine("基准程序 andromo", st.benchReady)
+        StatusLine("编译层（zig，按需）", st.zigReady)
+    }
+
+    if (!st.shellReady) {
+        Block {
+            Title("需要 Shizuku")
+            Spacer(Modifier.height(6.dp))
+            SimpleText(
+                "App 自己写不进 /data/local/tmp，shell 也读不了 App 私有目录，两边 UID 不一样。" +
+                    "唯一不依赖额外权限的办法是让特权进程代写，所以这条通道走 Shizuku。"
+            )
+            Spacer(Modifier.height(8.dp))
+            SimpleText("去 系统权限 → L2 Shizuku 请求授权后再回来。", TerminalTheme.onSurfaceVariant)
+        }
+        return
+    }
+
+    // ② 部署
+    Block {
+        Title("部署")
+        Spacer(Modifier.height(6.dp))
+        SimpleText(
+            "核心层约 6.4MB（翻译器 + 标准库 + 自举系统 + 基准程序），自动部署即可。" +
+                "编译层是 zig，约 176MB，只在你要在设备上现场编译时才需要。"
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PrimaryAction(if (st.coreReady) "重新部署核心层" else "部署核心层", busy) {
+                runLive { p -> local.deployCore(p).fold({ local.describe() }, { "失败：" + (it.message ?: "") }) }
+            }
+            SmallAction(if (st.zigReady) "编译层已在位" else "部署编译层 (176MB)") { onAskZig() }
+        }
+        if (progress.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            SimpleText(progress.takeLast(500), TerminalTheme.onSurfaceVariant)
+        }
+    }
+
+    // ③ 原生执行
+    Block {
+        Title("原生执行")
+        Spacer(Modifier.height(6.dp))
+        SimpleText(
+            "andromo 是墨语言官方安卓原生示例：筛法数 π(n)。" +
+                "这个数字就是「ARM64 产物原生跑」的直接证据 —— 一个 AArch64 静态 ELF，" +
+                "内核直接调度，毫秒级出结果。"
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SmallAction("跑基准 π(200000)") {
+                runSafe { local.benchmark().fold({ it }, { "失败：" + (it.message ?: "") }) }
+            }
+            SmallAction("跑基准 π(20000)") {
+                runSafe { local.benchmark(20_000).fold({ it }, { "失败：" + (it.message ?: "") }) }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SmallAction("自举系统 uspace2") {
+                runSafe { local.enterSystem().fold({ it }, { "失败：" + (it.message ?: "") }) }
+            }
+            SmallAction("远端自检") {
+                runSafe { local.probe().fold({ it }, { "失败：" + (it.message ?: "") }) }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SmallAction("andromo.mo 现场编译") {
+                runSafe {
+                    val src = local.sourceFromAsset("examples/andromo.mo")
+                    if (src == null) "找不到 andromo.mo 源文件"
+                    else local.compileAndRun(src).fold({ it }, { "失败：" + (it.message ?: "") })
+                }
+            }
+            SmallAction("清空通道") { onAskClean() }
+        }
+        if (!st.zigReady) {
+            Spacer(Modifier.height(8.dp))
+            SimpleText(
+                "现场编译需要编译层（zig）。先点上面「部署编译层」，" +
+                    "或者直接用预编译好的 andromo 跑基准。",
+                TerminalTheme.onSurfaceVariant
+            )
         }
     }
 }

@@ -80,10 +80,10 @@ class MoyuUbuntu(
          * 「墨语言装进 Ubuntu」这套新通道 —— 界面上必须显示它，装上以后一眼可验。
          * **每次出包必改**（改包不改戳 = 用户装错包白跑一轮）。
          */
-        const val BUILD_STAMP = "B20261024-1420"
+        const val BUILD_STAMP = "B20261024-1530"
 
         /** 安装标记内容（改内置资产字节时必须 +1，否则老设备不重装）。 */
-        private const val INSTALL_VERSION = "v=3"
+        private const val INSTALL_VERSION = "v=4"
 
         /** guest 内路径（全部装在 Ubuntu rootfs 里，不是 bind 进来的）。 */
         const val GUEST_MOLANG = "/opt/molang"
