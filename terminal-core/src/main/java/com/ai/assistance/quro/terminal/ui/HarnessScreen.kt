@@ -444,31 +444,37 @@ private const val BOOT_FAILED_PREFIX = "[dsh-boot-failed]"
  * WebView 内核能力预检（#380）：在页面加载**之前**问一遍 JS 引擎会什么。
  *
  * 为什么要它：白屏最难向用户解释的一种是「设备 WebView 内核太老」。入口 chunk
- * （`assets/index-*.js`）含 `class static{}` 静态初始化块（Chrome/WebView 94+），
- * vendor chunk 含私有字段（84+），还有 RegExp `v` 标志（110+）—— **语法级**需求，
+ * （`assets/index-*.js`）实测含 `class static{}` 静态初始化块（Chrome/WebView 94+，
+ * 已逐处核对是真语法不是字符串）、vendor 含私有字段（84+）—— **语法级**需求，
  * compat 的 polyfill 只补运行时 API（Promise.withResolvers 等），补不了语法：
  * 缺任何一样，入口 chunk 在解析期整体不执行，React 永不挂载，白屏且几乎没有报错。
- * 上游注释与 2026-09-10 在 WebView 110 上的实测都指向这条路径。
  *
- * 返回 `OK` 或 `BAD|S:项…|A:项…`（S=语法级缺失，A=运行时 API 缺失）。
- * 语法级缺失时页面顶部直接挂警示条 —— 把「白屏」翻译成「升级 WebView」。
+ * 返回 `CHROME=<UA 大版本>|ALL-OK` 或 `CHROME=<版本>|S:项…|A:项…`：
+ *  - `S:` = 语法级缺失（**致命**，polyfill 救不了，只能升级 WebView 或换 transpile 包）；
+ *  - `A:` = 运行时 API 缺失（compat polyfill 可兜底，不致命，仅说明内核代次）。
+ * ⚠ 历史坑（本版已修）：v 标志原来用 `new RegExp('[[]','v')` 探测 —— 该图案在 v 模式下
+ * **同样非法**，现代引擎也抛 SyntaxError ⇒ 红条对每台设备误报。v 标志只验旗标接受性；
+ * 且入口/vendor chunk 实测零处 v 模式正则，它永远不致命。
  */
 private const val DSH_KERNEL_JS = """
 (function(){
   var miss = [];
-  // ── 语法级（polyfill 救不了；缺一项入口 chunk 就整体不执行）──
+  // ── 语法级（polyfill 救不了；缺一项入口 chunk 解析期整体不执行）──
   try { new Function('class X{static{}}'); } catch (e) { miss.push('S:class static{} 块（需 WebView 94+）'); }
   try { new Function('class X{#f=1;g(){return this.#f}}'); } catch (e) { miss.push('S:私有字段 #f（需 84+）'); }
   try { new Function('var a;a??=1'); } catch (e) { miss.push('S:??= 逻辑赋值（需 85+）'); }
-  try { new RegExp('[[]', 'v'); } catch (e) { miss.push('S:RegExp v 标志（需 110+）'); }
-  if (typeof [].at !== 'function') miss.push('S:Array.prototype.at（需 92+）');
-  // ── 运行时 API（compat 有 polyfill，缺失不致命，但同样说明内核代次）──
+  // ── 运行时 API（compat polyfill 可兜底，缺失不致命，仅说明内核代次）──
+  if (typeof [].at !== 'function') miss.push('A:Array.prototype.at（需 92+，可 polyfill）');
   if (typeof Promise.withResolvers !== 'function') miss.push('A:Promise.withResolvers');
   if (typeof structuredClone !== 'function') miss.push('A:structuredClone');
   if (typeof Array.fromAsync !== 'function') miss.push('A:Array.fromAsync');
   if (typeof AbortSignal === 'undefined' || typeof AbortSignal.any !== 'function') miss.push('A:AbortSignal.any');
   if (typeof Iterator === 'undefined') miss.push('A:Iterator');
-  return miss.length ? ('BAD|' + miss.join('|')) : 'OK';
+  // v 标志：只验旗标本身是否被接受（图案用 'x'，不用会在 v 模式下也非法的 '[[]'）。
+  try { new RegExp('x', 'v'); } catch (e) { miss.push('A:RegExp v 标志（需 110+，chunk 实测未用到）'); }
+  // 内核代次直读：UA 里的 Chrome 大版本即 WebView 内核代次（不经过 eval，CSP 也读得到）
+  var m = (navigator.userAgent || '').match(/Chrome\/(\d+)/);
+  return 'CHROME=' + (m ? m[1] : '?') + '|' + (miss.length ? miss.join('|') : 'ALL-OK');
 })()
 """
 
@@ -852,10 +858,12 @@ private fun HarnessWebView(
                 val kr = kernelReport
                 if (kr != null) {
                     append("\n\n── 内核能力预检 ──\n")
-                    append(
-                        if (kr == "OK") "全部通过（含 class static{} / 私有字段 / RegExp v）"
-                        else kr.removePrefix("BAD|").replace('|', '\n')
-                    )
+                    append("WebView 内核 Chrome/").append(kr.removePrefix("CHROME=").substringBefore('|')).append('\n')
+                    if (kr.endsWith("ALL-OK")) {
+                        append("语法与运行时能力全部通过（含 class static{} / 私有字段 / ??=）")
+                    } else {
+                        append(kr.removePrefix("CHROME=").split('|').joinToString("\n") { "· $it" })
+                    }
                 }
             }
         }
@@ -1085,8 +1093,9 @@ private fun HarnessWebView(
                         evaluateJavascript(DSH_KERNEL_JS) { raw ->
                             val r = unescapeJsString(raw.orEmpty()).trim()
                             kernelReport = r.ifEmpty { null }
-                            if (r.startsWith("BAD|")) {
-                                android.util.Log.e("HarnessScreen", "内核能力预检不通过：$r")
+                            // 语法级缺失 = 入口 chunk 在这台设备上不可能解析成功，必须留痕
+                            if (r.contains("S:")) {
+                                android.util.Log.e("HarnessScreen", "内核能力预检：语法级缺失 ⇒ $r")
                             }
                         }
                     }
@@ -1193,11 +1202,20 @@ private fun HarnessWebView(
             }
         )
 
-        // #380：内核能力预警条。语法级缺失（S:）= 引擎页面在这台设备上**不可能**跑起来
-        // （入口 chunk 解析期整体不执行），把「白屏」翻译成「升级 WebView / 系统」。
-        // 仅运行时 API 缺失（A:）不挂条 —— compat 的 polyfill 正是为它准备的，不打扰页面。
-        val kernel = kernelReport
-        if (kernel != null && kernel.startsWith("BAD|") && kernel.contains("S:")) {
+        // #380：内核能力预警条。**仅语法级缺失（S:）才挂**——那意味着入口 chunk 在解析期
+        // 整体不执行，引擎界面在这台设备上不可能跑起来，把「白屏」翻译成「升级 WebView」。
+        // 仅运行时 API 缺失（A:）不挂条：compat 的 polyfill 正是为它准备的，不打扰页面。
+        // 红条**列出真实缺失项与内核版本**——一张截图即可定论，不必再猜是不是误报
+        // （v0 的教训：v 标志测试图案写错，红条曾对每台设备误报）。
+        val kernelSyntaxMissing = kernelReport
+            ?.split('|')
+            ?.filter { it.startsWith("S:") }
+            ?: emptyList()
+        val kernelChrome = kernelReport
+            ?.removePrefix("CHROME=")
+            ?.substringBefore('|')
+            ?: "?"
+        if (kernelSyntaxMissing.isNotEmpty()) {
             Surface(
                 color = Color(0xFF7A2424),
                 modifier = Modifier
@@ -1207,8 +1225,10 @@ private fun HarnessWebView(
                 shape = RoundedCornerShape(10.dp),
             ) {
                 Text(
-                    "⚠ WebView 内核过旧，引擎界面无法运行：缺 class static{} 等语法能力（需 WebView 94+），" +
-                        "入口模块会被整体跳过 —— 这就是白屏的原因。请升级「Android System WebView」或系统后重试。",
+                    "⚠ WebView 内核过旧（Chrome/$kernelChrome），引擎界面无法运行：缺 " +
+                        kernelSyntaxMissing.joinToString("、") { it.removePrefix("S:") } +
+                        " —— 入口模块会被整体跳过，这就是白屏的原因。" +
+                        "请升级「Android System WebView」或系统后重试；无法升级请把此版本号反馈给开发者。",
                     color = Color.White,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(10.dp),
