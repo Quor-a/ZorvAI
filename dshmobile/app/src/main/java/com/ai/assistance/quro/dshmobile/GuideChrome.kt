@@ -96,7 +96,7 @@ internal fun buildGuideChrome(activity: ComponentActivity, callbacks: GuideCallb
       hairline,
     )
     addView(ImageView(activity).apply {
-      setImageResource(R.mipmap.ic_launcher)
+      setImageResource(R.mipmap.dshm_ic_launcher)
       layoutParams = FrameLayout.LayoutParams(
         dpix(R.dimen.ds_logo_size), dpix(R.dimen.ds_logo_size), Gravity.CENTER,
       )

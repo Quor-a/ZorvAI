@@ -122,7 +122,10 @@ class MainActivity : ComponentActivity() {
 
 
   internal val engineFlow by lazy { EngineStartFlow(this) }
-  internal val engineManager by lazy { EngineManager(this, pickToken) }
+  // #404 互控：进程级单例（见 DshmobileControl.manager）——本 Activity 与前台服务、
+  // ZorvAI 控制门面共用同一个 EngineManager，spawn 句柄全进程唯一，
+  // 任意入口都能探到/停掉当前引擎（构造参数语义不变：filesDir 同一、pickToken 同为进程级）。
+  internal val engineManager by lazy { DshmobileControl.manager(this) }
   private val downloadSaver by lazy { DownloadSaver(this, engineManager.dshDataDir) }
   // 文件选择/SAF 与媒体选择控制器：字段初始化即注册 ActivityResult（必须在 STARTED 前；
   // 与拆分前 MainActivity 字段初始化时序一致）。

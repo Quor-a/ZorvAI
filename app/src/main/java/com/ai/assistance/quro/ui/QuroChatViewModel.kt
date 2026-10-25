@@ -2643,6 +2643,12 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         )
         // ── 人格卡可视化开关「硬强制」规则已抽到 buildVisualSwitchEnforcement()，
         //    统一在系统提示词【末尾】（最高近因偏好）注入，本地/云端路径共用，避免埋在中段被小模型忽略。
+        // ══════════ 工具分类构架（需求 #403）══════════════
+        // 为什么注入：tools 字段下发的是扁平清单（~200 个工具名 + 描述），模型缺分类骨架，
+        // 遇到需求只能扫名字猜或事后调 tool_discovery。这里在清单之前先给「能力地图」——
+        // 21 个分类 + 每类代表工具（单一真相源 = ToolCapabilityDirectory，install 时由真实
+        // 注册表生成；本地模型在上面 early-return，不占它的紧张上下文）。
+        sb.append(com.ai.assistance.quro.core.tools.QuroToolTaxonomy.buildTaxonomySection(specs))
         sb.append(com.ai.assistance.quro.core.tools.QuroToolUsageHints.buildToolUseDirective())
         sb.append("\n### 工具清单（格式：工具名：用途 [· 常见说法/多用途]）\n")
         specs.forEach { s ->
@@ -2657,7 +2663,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "**⚠️【强制规则】当你不确定该用哪个工具时，必须立刻调用 `tool_discovery` 查询，禁止猜测、禁止假设、禁止跳过！**\n\n" +
             "查询方式：\n" +
             "1. **根据意图匹配（最常用）**：tool_discovery(action=\"match_intent\", intent=\"用户的需求描述\") → 推荐匹配的工具\n" +
-            "2. **查询所有分类**：tool_discovery(action=\"list_categories\") → 列出17个工具分类\n" +
+            "2. **查询所有分类**：tool_discovery(action=\"list_categories\") → 列出全部工具分类\n" +
             "3. **按分类查工具**：tool_discovery(action=\"list_tools\", category=\"NETWORK_WEB\") → 查看网络/Web类所有工具\n" +
             "4. **查看工具详情**：tool_discovery(action=\"get_tool_info\", tool_name=\"ai_browser\") → 获取工具使用指南\n" +
             "5. **获取最佳实践**：tool_discovery(action=\"get_best_practices\") → 工具使用原则和技巧\n" +

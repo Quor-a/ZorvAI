@@ -52,7 +52,9 @@ class EngineService : Service() {
     // 否则开机/系统重启后（START_STICKY 重投递或 BootReceiver 拉起）「用户已手动关停」被遗忘。
     userShutdown = isUserShutdownPersisted(this)
     // C1: reuse the process-level pick token (auth survives watchdog engine restarts, never blank-allow).
-    engineManager = EngineManager(this, EngineManager.ensurePickToken())
+    // #404 互控：engineProcess 句柄是实例字段——服务/UI/门面必须共用同一个 EngineManager，
+    // 否则 ZorvAI 停不掉别入口拉起的引擎（stopOwnedEngine 会以「保护未归属监听器」拒绝）。
+    engineManager = DshmobileControl.manager(this)
     serviceEpoch.set(ServiceEpoch())
     instance = this
     // 0.14.0-preview §6.2/§6.3：通知信道消费点 + 通知应答流（两者都是进程级幂等单例）。

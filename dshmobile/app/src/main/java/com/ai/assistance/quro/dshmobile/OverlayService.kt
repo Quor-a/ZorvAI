@@ -24,7 +24,7 @@ import java.net.URL
 /**
  * 悬浮球 v2（PRD-overlay-v2，rev5 定稿）。v1 四问题 + 状态建模错误全部结构性修复：
  *
- * - 收起 = 纯白球黑鲸（34dp，与应用图标同源 ic_launcher_foreground.png，bbox 裁剪居中），
+ * - 收起 = 纯白球黑鲸（34dp，与模块图标同源 dshm_ic_launcher_foreground.png，bbox 裁剪居中），
  *   状态 = 环绕低饱和光环（空闲微白 / 工作中蓝 / 离线红），球体不随状态变色（纯黑白）；
  * - 展开 = 上下两区合成一个圆角矩形（radius 30dp）：上区状态行（白球徽标 + 官方
  *   Deep diving 扫光（ShimmerTextView，无图标）+ 工具 ×N 徽标 + 运行时钟 + 箭头），
@@ -246,8 +246,8 @@ class OverlayService : Service() {
     val ballSize = ballSizeDp
     val haloSize = haloSizeDp
 
-    // 白球：白底圆 + 黑鲸鱼（ic_launcher_foreground.png，bbox 裁剪 x[102..328] y[130..300] 居中，撑 76%）
-    val icon = resources.getDrawable(R.drawable.ic_launcher_foreground, null)
+    // 白球：白底圆 + 黑鲸鱼（dshm_ic_launcher_foreground.png，bbox 裁剪 x[102..328] y[130..300] 居中，撑 76%）
+    val icon = resources.getDrawable(R.drawable.dshm_ic_launcher_foreground, null)
     val whale = ImageView(this).apply {
       setImageDrawable(icon)
       scaleType = ImageView.ScaleType.MATRIX

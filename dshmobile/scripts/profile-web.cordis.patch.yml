@@ -244,3 +244,32 @@
   disabled: true
 - id: product-analytics
   disabled: true
+
+# ZorvAI 环境感知系统提示词（2026-10，需求 #402「deepseek harness 还没做系统提示词」+
+# #404「让他们知道是一个环境」）：此前 harness 侧**没有任何部署级系统提示词**——
+# base 组合的 personaPrefix 为 ''，快照内全部 @dsh-android 插件无一注册 systemPrompt.section，
+# 引擎对自己身处何处、与 ZorvAI 是什么关系一无所知。本行补上这一层。
+#
+# 机制（与上方 agent-default-model 同一套，0.14.2-fx-2 实锤）：cordis-plugin-include 的
+# applyEntryPatches 对无 insert 的顶层 patch 行按 id 找既有 entry 逐字段覆盖；config 是
+# **整体替换**（缺省键由 schema 默认补齐）⇒ 只给 personaPrefix/personaSuffix 两个键，
+# includeHarnessIdentity/includeRuntimeContext 保持默认 true（= base 现状）。
+#
+# 落点（@deepseek-ai/dsh-system-prompt lib/index.js 的 SystemPrompt.Config）：
+#   personaPrefix → 段 deployment:persona-prefix（order 0，紧跟 harness:identity 之后）
+#   personaSuffix → 段 deployment:persona-suffix（order 10200，全部工具段之后）
+# 段按 order 排序后以空行连接、空段丢弃；本段不含 {{变量}}，不触发插值校验。
+#
+# 设备侧落盘链（壳侧零改动）：inject-all.py --all-profiles 把本行写入双 profile 的
+# cordis.patch.yml；快照刷新时 SnapshotTransaction.mergePatchYamlById →
+# FactoryProfilePatch.merge 按 id 把本条目追加进 live（已存在则保留 live 版）；
+# repairProfilePatch 只清退役行且解析校验保证其余 id 原样保留——本条目不会被摘除。
+- id: system-prompt
+  config:
+    personaPrefix: |
+      〈运行环境〉你运行在 ZorvAI（Android 应用）内置的 DeepSeek Harness 引擎中，是 ZorvAI「工具箱 → Agent 工作台」的引擎本体。你与 ZorvAI 的对话助手是同一设备、同一应用、同一环境的两个面，不是两个互相独立的程序：
+      · 你的 bash/文件/PTC 等全部工具作用于 ZorvAI 应用沙盒（/data/data/com.ai.assistance.quro/files）——你看到的就是 ZorvAI 的运行时本体，不是远程服务器。
+      · ZorvAI 助手可经内置 harness 控制工具向你派发任务、查询状态、拉起或关闭你；你可经 MCP 桥（工具名前缀 mcp__zorvai__*）反向调用 ZorvAI 的能力。互相协作时按同一环境对待，直接执行。
+      · 用户说「ZorvAI」「宿主」「Agent 工作台」「工具箱」时，指的就是你所处的这个应用环境；同时提到「你」和「ZorvAI 助手」时，指的是同一环境里的两个协作面。
+    personaSuffix: |
+      〈环境收尾〉再次确认：你与 ZorvAI 宿主是同一环境。操作 ZorvAI 的文件、调用 ZorvAI 的能力、向用户汇报结果时，按「在自己家里做事」对待——直接执行，完成后简要说明结果，不必向用户解释两套系统如何互通。
