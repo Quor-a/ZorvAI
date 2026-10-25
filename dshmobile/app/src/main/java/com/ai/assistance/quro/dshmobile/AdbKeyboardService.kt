@@ -49,7 +49,7 @@ class AdbKeyboardService : InputMethodService() {
 
   override fun onCreateInputView(): View {
     val label = TextView(this).apply {
-      text = "DeepSeek ADB 输入通道（点击收起键盘）"
+      text = "ZorvAI ADB 输入通道（点击收起键盘）"
       setPadding(dp(16), dp(8), dp(16), dp(8))
       setTextColor(0xFF666666.toInt())
       textSize = 12f

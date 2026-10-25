@@ -38,7 +38,7 @@ class OverlayHalo(private val svc: OverlayService) {
   //   窗口半宽 haloHalf = 25dp（= 贴边 margin 8dp + 球半径 17dp；整数恒等式见 OverlayService.haloSizeDp）
   //   球半宽  ballHalf = 17dp  →  可用环带宽度 = margin = 8dp
   //   描边宽 2dp、中线内缩 4.5dp → ring 外缘 = 25 - 4.5 = 20.5dp，内缘 = 18.5dp
-  //   落在 (17, 25) 内：既不压到白球（球面 17dp 以内被球覆盖），也不被窗口裁剪。
+  //   落在 (17, 25) 内：既不压到球面（球体 17dp 以内被球覆盖），也不被窗口裁剪。
   //   「更明显」的第三档来自硬边：glow 是径向渐变（峰值 alpha 随 stop 衰减），ring 是均匀描边。
   private val haloRingPx by lazy { (2 * svc.resources.displayMetrics.density).toInt() }
   private val haloRingInsetPx by lazy { (4.5 * svc.resources.displayMetrics.density).toInt() }
@@ -46,7 +46,7 @@ class OverlayHalo(private val svc: OverlayService) {
   // ── 空闲态按主题取色（P5-3，本批新增）───────────────────────────────────
   //
   // 缺陷：空闲色只有一档半透明白 0x60FFFFFF，压在**白色页面**上与背景同色（对比度 1.00:1）——
-  // 观感是「空闲时球边没有光环」，而悬浮球本身也是纯白球，浅色页上整组只剩那只黑鲸鱼。
+  // 观感是「空闲时球边没有光环」（#407 前悬浮球为纯白球，浅色页上只剩球体本身）。
   // 修法只能**压暗**；但压暗到白底可见的灰在深色页上只剩 1.2:1，**一个值通吃不了**
   // ⇒ 空闲底色按主题取。**两个档位都登记在 OverlayTheme 的色板里**（那是「悬浮球配色唯一来源」，
   // CallSiteContractTest 的 I-A3 组要求本文件不得出现枚举外的颜色字面量），本文件不新增色值。

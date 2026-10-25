@@ -19,23 +19,8 @@
   <string name="ds_starting">Starting</string>
   <string name="ds_updating">Updating</string>
   <string name="ds_undoing">Reverting</string>
+  <!-- Offline console entry (restored with #416: collateral deletion during APK self-update removal) -->
   <string name="ds_open_console">Open console</string>
-  <string name="ds_check_update">Check for updates</string>
-  <string name="ds_apk_checking">Checking…</string>
-  <string name="ds_apk_latest">APK is up to date %1$s</string>
-  <string name="ds_apk_not_checked">Not checked yet</string>
-  <string name="ds_apk_download">Download</string>
-  <string name="ds_apk_version_available">New version %1$s (current %2$s, %3$s)</string>
-  <string name="ds_apk_available">New APK %1$s found (current %2$s, %3$s). Tap Download to fetch and install.</string>
-  <string name="ds_apk_downloading">Downloading %1$d%%</string>
-  <string name="ds_apk_download_hint">Downloading %1$s (%2$s) from the mirror chain; keep the app in the foreground</string>
-  <string name="ds_apk_retry">Retry downloading and installing %1$s</string>
-  <string name="ds_apk_retry_install">Retry install</string>
-  <string name="ds_apk_need_permission">Install-unknown-apps permission is required; the settings page is open. Return after granting and the install continues.</string>
-  <string name="ds_apk_permission_denied">Install-unknown-apps permission was not granted. The APK is downloaded; grant it and tap the button again.</string>
-  <string name="ds_apk_installing">The system installer is open; reopen the app after installing</string>
-  <string name="ds_apk_permission_page_failed">This system has no install-unknown-apps settings page. Allow this app to install apps in system settings, then tap the button again.</string>
-  <string name="ds_apk_grant_install">Continue after granting</string>
   <string name="ds_copy_log">Copy</string>
   <string name="ds_log_title">engine.log</string>
   <string name="ds_runtime_ready">Runtime ready</string>

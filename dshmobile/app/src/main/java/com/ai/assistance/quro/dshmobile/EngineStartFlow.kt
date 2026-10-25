@@ -423,8 +423,6 @@ internal class EngineStartFlow(private val activity: MainActivity) {
   fun startUpdateCheck() {
     if (!OnlineUpdateGate.begin()) return
     val updateGeneration = ++updateUiGeneration
-    activity.guideRenderer.chrome.updateButton.isEnabled = false
-    activity.guideRenderer.chrome.updateButton.alpha = 0.55f
     activity.applyGuidePhase(GuidePhase.Updating, UiText.t(activity, "检查更新…", "Checking for updates…"))
     UpdateManager(activity).checkAndApply { st ->
       activity.runOnUiThread {
@@ -452,10 +450,6 @@ internal class EngineStartFlow(private val activity: MainActivity) {
             if (phase == GuidePhase.Error) "更新失败" else st.text,
             if (phase == GuidePhase.Error) st.text.removePrefix("更新失败：") else null,
           )
-        }
-        if (st.outcome != UpdateManager.UpdateOutcome.Working && st.outcome != UpdateManager.UpdateOutcome.Verifying) {
-          activity.guideRenderer.chrome.updateButton.isEnabled = true
-          activity.guideRenderer.chrome.updateButton.alpha = 1f
         }
       }
     }

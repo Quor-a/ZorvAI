@@ -82,6 +82,16 @@
 | zsh | 5.9.2-2 | MIT-style (zsh) | [termux-packages/zsh](https://github.com/termux/termux-packages/tree/master/packages/zsh) |
 | zstd | 1.5.7-1 | BSD-3-Clause | [termux-packages/zstd](https://github.com/termux/termux-packages/tree/master/packages/zstd) |
 
+## 内嵌引擎（DeepSeek Harness）
+
+| 组件 | 版本 | 许可证 | 上游源码 |
+|---|---|---|---|
+| @deepseek-ai/dsh（DeepSeek Harness 引擎与官方客户端/插件，npm `@deepseek-ai/*` 域） | 0.2.1-rc.2 | MIT | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) |
+| dsh-mobile-apk（本模块安卓移植直接来源，产品品牌已替换为 ZorvAI） | — | MIT | [kelai141/dsh-mobile-apk](https://github.com/kelai141/dsh-mobile-apk) |
+
+引擎 npm 依赖的许可证清单（MIT / Apache-2.0 / BSD / Unlicense，全量登记）由 `scripts/check-engine-overlay.mjs`
+门禁核验（`scripts/snapshot-config/engine-overlay-licenses.json`，license 字段漂移即拒打包）。
+
 ## Android SDK
 
 | 组件 | 版本 | 许可证 | 许可全文 | 上游源码 |

@@ -129,37 +129,11 @@ class OverlayPendingCardTest {
     assertTrue("无轮次时必须给出可见回执", stopBody.contains("flashStatus(\"当前没有正在运行的任务\")"))
   }
 
-  // ── P0-3：按钮卡在禁用的「下载中 100%」 ──────────────────────────────────
-
-  @Test
-  fun `安装权限缺失时按钮必须复原为可点`() {
-    // 0.14.6 单一真源重构：安装/授权推进迁到 ApkUpdateController，渲染改由 renderApkUpdate 统一负责。
-    // 不变量**没变**（P0-3）：权限缺失时按钮必须是**可点**的「授权后继续安装」，被拒返回后同样可点。
-    val renderer = codeOnly(source("GuidePageRenderer.kt"))
-    assertTrue("必须存在「授权后继续安装」这一可点态", renderer.contains("ds_apk_grant_install"))
-    assertTrue("需授权相位必须渲染为可点", renderer.contains("STATE_NEED_PERMISSION"))
-    // 拆成「检查」/「下载」两枚按钮后，这条判据落在**下载按钮**上：续继安装归它，而检查按钮在该相位
-    // 是禁用的。旧写法取 STATE_NEED_PERMISSION 之后 400 字符的窗口找 enabled = true，拆按钮后那段
-    // 窗口里先出现的是检查按钮的禁用，会误判成红——故改成直接断言该分支的下载按钮渲染。
-    val permIdx = renderer.indexOf("ApkUpdateState.STATE_NEED_PERMISSION ->")
-    assertTrue("需授权相位分支必须存在", permIdx >= 0)
-    val permBody = renderer.substring(permIdx, (permIdx + 800).coerceAtMost(renderer.length))
-    assertTrue("续继安装的按钮文案必须仍是「授权后继续安装」", permBody.contains("ds_apk_grant_install"))
-    val downloadRender = permBody.substringAfter("setDownloadButton(activity.getString(R.string.ds_apk_grant_install)")
-    assertTrue(
-      "权限缺失时的下载按钮必须可点（P0-3：旧缺陷是卡在禁用的「下载中 100%」）",
-      downloadRender.contains("enabled = true"),
-    )
-
-    val controller = codeOnly(source("ApkUpdateAction.kt"))
-    val canIdx = controller.indexOf("if (!UpdateChecker.canInstall(activity))")
-    assertTrue("必须有权限缺失分支", canIdx >= 0)
-    val canBody = controller.substring(canIdx, (canIdx + 900).coerceAtMost(controller.length))
-    assertTrue("权限缺失必须拉起授权页并如实回报是否拉起", canBody.contains("requestInstallPermission(activity)"))
-    assertTrue("拉不起来必须落到如实失败态（不假装拉起过）", canBody.contains("KIND_INSTALLER_UNAVAILABLE"))
-    val settle = controller.substringAfter("fun settleAfterResume()").take(900)
-    assertTrue("被拒返回后必须收敛到可解释终态（不会是永远转圈）", settle.contains("onFailed") || settle.contains("install("))
-  }
+  // ── P0-3：按钮卡在禁用的「下载中 100%」──已随 APK 自更新链删除（#416）──
+  //
+  // 原用例安装权限缺失时按钮必须复原为可点 守 GuidePageRenderer 的
+  // STATE_NEED_PERMISSION / ds_apk_grant_install 可点态与 ApkUpdateAction.kt 的
+  // settleAfterResume 收敛——载体文件均已随 #416 删除，不变量失去存在基础，用例随之退役。
 
   // ── P0-4：存储授权「点了没反应」 ─────────────────────────────────────────
 

@@ -193,23 +193,6 @@ export interface AndroidShellBridge {
   openNotifyChannelSettings?: (channelId: string) => boolean
   /** 发送五类测试通知，返回实际投递条数（0..5）；0 = 没发出去（权限/渠道不可用）。 */
   notifySendTest?: () => number
-  /**
-   * 0.14.6「检查更新 = 下载 APK 然后更新」（用户指令）的设置页入口。
-   *
-   * **单方法 + action 参数**，与壳侧 `AndroidBridge.apkUpdate(action)` **逐名对称**
-   * （`scripts/check-bridge-symmetry.mjs` 会拦不对称面；壳侧动作名是闭集，未知动作只读回状态）。动作：
-   *  - `"status"`：**只读**当前状态，不发起任何网络/安装动作；
-   *  - `"check"`：发起检查；
-   *  - `"install"`：对上次检查到的新版执行「下载 -> 校验 -> 拉起系统安装器」。
-   *
-   * 返回 JSON 字符串：{ok, state, version?, tag?, name?, current?, sizeBytes?, percent?, reused?, reason?, kind?, canStart, code?}
-   * —— ok 只表示**这次调用是否被受理**，**不表示更新成功**；reason 是壳侧给的用户可读中文，页面**原样展示**。
-   *
-   * 为什么是同步返回 JSON 而不是 Promise：`@JavascriptInterface` 不能回 Promise。
-   * 故页面用「发起 + 轮询读 status」两段式收敛（同 notify 面范式），**不依赖任何回调**——
-   * `window.__dshBridge` 有幂等守卫且被整体赋值，挂回调有被整体跳过/被覆盖的风险（见 host-web-compat 的 PICKER_SCRIPT）。
-   */
-  apkUpdate?: (action: string) => string
 }
 
 declare global {

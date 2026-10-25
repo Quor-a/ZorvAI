@@ -161,12 +161,6 @@ class AndroidBridge(
    * 应用无法调回」这句提示永远到不了用户眼前。与 FIX-4 同款修法：默认实现钉在真源上，
    * 不依赖 MainActivity 传参（漏接线这一失效形态从结构上消失）。
    */
-  /**
-   * 0.14.6：设置页「检查更新」入口（用户指令：更新 = 下载 APK 然后更新）。
-   * 单方法 + action 参数（status/check/start），返回 JSON `{"ok":..,"state":..,...}`。
-   * 同步桥不能回 Promise，长动作只能「发起 + 轮询 status」，故状态机放在壳侧（ApkUpdateAction）。
-   */
-  private val onApkUpdate: (String) -> String = { _ -> """{"ok":false,"state":"idle","reason":"bridge not wired"}""" },
   private val onNotifySelfCheck: () -> String = {
     val app = ShellAppContext.get()
     if (app == null) """{"ok":false,"reason":"no-shell-context"}"""
@@ -626,22 +620,6 @@ class AndroidBridge(
    */
   @JavascriptInterface
   fun setNotifySetting(key: String, value: Boolean): String = onSetNotifySetting(key, value)
-
-  /**
-   * 0.14.6：APK 自更新入口（设置页「检查更新」行）。
-   *
-   * @param action `status`（只读当前状态，**不发起任何网络/安装动作**）/ `check`（发起检查）/
-   *   `start`（确认下载并安装：下载 → 体积与 sha256 校验 → 拉起系统安装器；未持安装权限时先拉授权页
-   *   并回 `need-permission`）。
-   * @return JSON：`{"ok":bool,"state":"idle|checking|up-to-date|available|downloading|installing|need-permission|failed", ...}`
-   *   —— `ok` 只表示**这次调用是否被受理**，不表示更新成功；`reason` 一律是用户可读中文
-   *   （不含内部标识符）。
-   *
-   * 与既有「检查更新」按钮（引导页）**共用同一状态机**，两入口不会互相打架；
-   * 全程无自动请求：必须用户显式点 `check` / `start`。
-   */
-  @JavascriptInterface
-  fun apkUpdate(action: String): String = onApkUpdate(action)
 
   /**
    * 0.14.1 批 4：通知自检（每个渠道的系统实际状态 + 是否被降级 + 该走哪个设置页）。
