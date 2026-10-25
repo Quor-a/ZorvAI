@@ -73,16 +73,28 @@ class DeepSeekHarness(private val context: Context) {
          *      activate）。pack 字节已变，**必须 +1** 触发全量重解压覆盖旧 package.json；
          *      Kotlin 侧另加 ensureProfileBundles() 每次启动自愈（仿参考实现的
          *      ensureHardBundlesSelected），双保险。
-         * 21 = 白屏根因三连修（#389 / #389b / #390）：
-         *      #389 host-webserver READY_MARKUP 的 `??=`（Chrome 85+ SyntaxError，解析期
-         *      整段死）重写为 ES5 手工 deferred；注入行模板 globalThis→self。
-         *      #389b 9 文件 130 处动态 `import()` 改写为 `__dshImp` 三路径桥（原生 /
-         *      CSP 外链 module / <63 inline module）+ 共享注册表 `self.__dshReg`。
-         *      #390 Kotlin 侧：WebView 底色钉深色、注入 JS 的 globalThis→self、
-         *      UA 直读兜底种子。pack 字节已变，**必须 +1** 触发全量重解压覆盖旧 dist。
-         */
-        private const val RUNTIME_VERSION = 21
+     * 21 = 白屏根因三连修（#389 / #389b / #390）：
+     *      #389 host-webserver READY_MARKUP 的 `??=`（Chrome 85+ SyntaxError，解析期
+     *      整段死）重写为 ES5 手工 deferred；注入行模板 globalThis→self。
+     *      #389b 9 文件 130 处动态 `import()` 改写为 `__dshImp` 三路径桥（原生 /
+     *      CSP 外链 module / <63 inline module）+ 共享注册表 `self.__dshReg`。
+     *      #390 Kotlin 侧：WebView 底色钉深色、注入 JS 的 globalThis→self、
+     *      UA 直读兜底种子。pack 字节已变，**必须 +1** 触发全量重解压覆盖旧 dist。
+     * 22 = 完整内置 kelai141/dsh-mobile-apk 的 rc.2 适配集（pack 字节已变，**必须 +1**）：
+     *      engine 侧 8 条（SPJ F5 补 rename import + materialize 站走 helper；
+     *      F7/F8/H1/F6/N1/B2 语义复核；pi-ai 官方 pi-upstream-streaming-020 六文件）、
+     *      marketplace 侧 3 条（E 仓库折叠 / F 分页条 / J 全宽面板）+ 16 条配套 CSS。
+     *      另加 Kotlin 侧 applyRuntimePatches 覆盖式自愈（assets/patched 三件套，
+     *      与本 pack 内字节同源；树健康时 no-op）。
+     */
+        private const val RUNTIME_VERSION = 22
         private const val MARK = ".dsh_v"
+
+        /** 运行时补丁资产目录（assets/patched）：覆盖式自愈的补丁版字节。 */
+        private const val ASSET_PATCH_DIR = "patched"
+
+        /** 补丁应用记录目录（应用私有，随卸载清除；**不**进运行时树，避免被快照整体换掉）。 */
+        private const val ASSET_PATCH_RECORD_DIR = "asset-patch-records"
 
         /** dsh 默认端口。 */
         const val DEFAULT_PORT = 3080
@@ -158,7 +170,7 @@ class DeepSeekHarness(private val context: Context) {
          * dsh 壳」只能靠它。它同时进 `diagnose()` 输出与 HarnessScreen 顶栏 —— 界面上看不到戳，
          * 就等于装错包，这一条是出包自证链的一部分（同 LANXIU / Moyu 的做法）。
          */
-        const val BUILD_STAMP = "B20261025-1340"
+        const val BUILD_STAMP = "B20261025-1424"
 
         @Volatile
         private var instance: DeepSeekHarness? = null
@@ -488,6 +500,11 @@ class DeepSeekHarness(private val context: Context) {
         // PTC node wrapper + pnpm shim（幂等烧写，路径按运行期实际值）——同样必须在启动前
         runCatching { ensureRuntimeShims() }
             .onFailure { Log.w(TAG, "烧写运行时 shim 失败", it) }
+
+        // 运行时补丁覆盖（幂等自愈）：把 assets/patched 下我们自己的补丁版写回运行时树。
+        // 树健康时是纯 no-op；快照被旧 pack 污染/解压写坏时靠它每次 spawn 前纠回来。
+        runCatching { applyRuntimePatches() }
+            .onFailure { Log.w(TAG, "应用运行时补丁失败", it) }
 
         // 挂上宿主的手机能力：把 ZorvAI 的全部工具经 MCP 桥注册给引擎，
         // harness 的 agent 于是能直接用 read_screen / tap_screen / swipe_screen /
@@ -1228,6 +1245,87 @@ class DeepSeekHarness(private val context: Context) {
         }
     }
 
+    // ─────────────────────────── 运行时补丁（assets/patched 覆盖式自愈）───────────────────────────
+
+    /**
+     * 把 assets/patched 下的补丁版覆盖到运行时树对应位置（幂等）。
+     *
+     * **为什么有这一层**：pack 里本就是打过补丁的字节 —— Android 应用域对 app-data 调
+     * link(2) 恒被拒（EACCES/EPERM），rename 回退已经烧进 `dsh-attachment-local` /
+     * `dsh-fs-local` / `dsh-session-persistence-jsonl` 三个包的 lib/index.js。
+     * 覆盖式补丁是**自愈兜底**：快照被旧版 pack 污染、或解压器写坏目标文件时，
+     * 每次 spawn 前把我们的字节重新写回去。树健康时它是纯 no-op（逐字节相同就不写）。
+     *
+     * **为什么资产必须取自我们自己的暂存树**：参考实现（kelai141/dsh-mobile-apk）的
+     * 同名三份资产重建在它那份快照的旧源码上；直接覆盖到我们这棵 0.2.1-rc.2 树上，
+     * 会把引擎升级带来的新代码擦掉——它自己的注释就记着这个坑（"the rc.2-locked
+     * asset was erasing the engine upgrade's own new code, e.g. breaking prompt via
+     * stale persistence API"）。所以这里覆盖的字节与本 pack 内的字节**同源**：
+     * 只不少写、不倒退。
+     *
+     * 每次 spawn 前调用；目标包不在树里（依赖布局变了）就跳过并记一行。
+     */
+    private fun applyRuntimePatches() {
+        val pkgs = File(root, "dsh/node_modules/@deepseek-ai")
+        applyAssetPatch(
+            "$ASSET_PATCH_DIR/attachment-local-index.js",
+            File(pkgs, "dsh-attachment-local/lib/index.js"),
+        )
+        applyAssetPatch(
+            "$ASSET_PATCH_DIR/session-persistence-jsonl-index.js",
+            File(pkgs, "dsh-session-persistence-jsonl/lib/index.js"),
+        )
+        applyAssetPatch(
+            "$ASSET_PATCH_DIR/fs-local-index.js",
+            File(pkgs, "dsh-fs-local/lib/index.js"),
+        )
+    }
+
+    /**
+     * 覆盖式补丁：内容指纹判等（资产与目标逐字节比），资产更新后能重新施加，
+     * 不会被旧的标记字符串绊住（标记式补丁的 v1→v2 资产更新 bug）。
+     */
+    private fun applyAssetPatch(asset: String, target: File) {
+        // 布局跟踪：树里没有这个包（依赖图变了）就跳过，不往树里扔死覆盖层。
+        if (!target.parentFile.isDirectory) {
+            appendLog("[补丁] 目标包不在树里，跳过: $asset")
+            return
+        }
+        val outcome = applyAssetPatchCore(
+            asset = asset,
+            target = target,
+            recordFile = assetPatchRecordFile(asset),
+            apkIdentity = assetPatchApkIdentity(),
+            readAsset = { context.assets.open(asset).use { it.readBytes() } },
+            log = { msg -> appendLog(msg) },
+        )
+        when (outcome) {
+            AssetPatchOutcome.WRITTEN -> appendLog("[补丁] 已写入: $asset")
+            AssetPatchOutcome.SKIPPED_FAST_PATH, AssetPatchOutcome.SKIPPED_ALREADY_EQUAL ->
+                appendLog("[补丁] 已就位(${outcome.name}): $asset")
+            AssetPatchOutcome.ASSET_MISSING ->
+                Log.w(TAG, "运行时补丁资产缺失或不可写: $asset")
+        }
+    }
+
+    /** 补丁记录落点：应用私有目录，**不进**运行时树（那棵树会被快照整体换掉）。 */
+    private fun assetPatchRecordFile(asset: String): File =
+        File(File(context.filesDir, ASSET_PATCH_RECORD_DIR), asset.replace('/', '_') + ".rec")
+
+    /** 安装包身份：资产字节只随安装包变化，用它绑定记录（免每次启动读资产算摘要）。 */
+    private fun assetPatchApkIdentity(): String = try {
+        val info = context.packageManager.getPackageInfo(context.packageName, 0)
+        val code = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            info.longVersionCode
+        } else {
+            @Suppress("DEPRECATION") info.versionCode.toLong()
+        }
+        code.toString() + ":" + info.lastUpdateTime
+    } catch (t: Throwable) {
+        // 取不到身份时给一个必然不匹配的值：宁可每次走内容比对，也不要在快路径上赌。
+        "unknown"
+    }
+
     /**
      * 引擎与它的所有子进程共用的环境。
      *
@@ -1800,5 +1898,200 @@ internal object SnapshotFileMode {
             return true
         }
         return length >= 2 && prefix[0] == '#'.code.toByte() && prefix[1] == '!'.code.toByte()
+    }
+}
+
+// ─────────────────────────── 运行时补丁核心（纯逻辑）───────────────────────────
+//
+// 覆盖式补丁的判据链（移植 kelai141/dsh-mobile-apk 的 applyAssetPatchCore，
+// 资产字节换成本仓暂存树的同源版本，见 [DeepSeekHarness.applyRuntimePatches]）：
+//
+//   ① 先读记录跑快路径判据 —— 命中就返回，**不读资产**；
+//   ② 快路径未命中 ⇒ 读资产（读不出 = ASSET_MISSING，与旧行为一致）；
+//   ③ 目标存在且与资产逐字节相同 ⇒ SKIPPED_ALREADY_EQUAL，**但仍刷新记录**
+//      （否则下一次启动还会重读资产做比对，快路径永远不命中）；
+//   ④ 其余 ⇒ 写入目标并刷新记录。
+//
+// 为什么不能「只看 mtime/size 就跳过」：这是安全敏感面（补丁会把上游 package 的
+// lib/index.js 覆盖成我们的版本），而「mtime 与 size 相同但内容不同」完全可能
+// （同尺寸改写、字节翻转）。快路径的判据因此**不是**元数据相同，而是：
+//   本安装包（versionCode + lastUpdateTime）**曾经**把这份资产写成了目标文件当前的内容
+//   （记录落在应用私有目录），且目标文件的 size/mtime 与记录一致、内容摘要与记录一致。
+// 三条与关系任一不成立就退回完整内容比对——没有可信记录时，无论 size/mtime 多像，
+// 都必然走到 ③，那正是「同尺寸不同内容」被正确识别的路径。
+
+/** 补丁应用的结果（调用方据此决定打哪条日志）。 */
+internal enum class AssetPatchOutcome {
+    /** 快路径命中：安装包身份 + size/mtime + 摘要三者一致，未读资产、未写目标。 */
+    SKIPPED_FAST_PATH,
+
+    /** 走了完整内容比对，目标已与资产逐字节相同，未写。 */
+    SKIPPED_ALREADY_EQUAL,
+
+    /** 资产被成功写入目标（首次打补丁或资产更新）。 */
+    WRITTEN,
+
+    /** 资产读不出来（打包缺件）或写不进去——「跳过 + 告警」，不影响引擎启动。 */
+    ASSET_MISSING,
+}
+
+/** 记录里的内容摘要形态（64 位小写十六进制；与 [sha256Hex] 同口径）。 */
+private val SHA256_HEX = Regex("[0-9a-f]{64}")
+
+/**
+ * 补丁应用记录：**只在本进程写入成功后**才落盘，用于下一次启动的快路径判定。
+ *
+ * @param apkIdentity 安装包身份（versionCode:lastUpdateTime）；变了就整条失效
+ * @param assetSize 写入的资产字节数
+ * @param contentSha256 写入内容的 SHA-256（十六进制小写）
+ * @param targetSize 写入后目标文件的大小
+ * @param targetMtime 写入后目标文件的 mtime（毫秒）
+ */
+internal data class AssetPatchRecord(
+    val apkIdentity: String,
+    val assetSize: Long,
+    val contentSha256: String,
+    val targetSize: Long,
+    val targetMtime: Long,
+) {
+    /** 单行序列化（空格分隔；身份与摘要是无空白字符的短标识，不需要转义）。 */
+    fun encode(): String = listOf(
+        apkIdentity,
+        assetSize.toString(),
+        contentSha256,
+        targetSize.toString(),
+        targetMtime.toString(),
+    ).joinToString(" ")
+
+    companion object {
+        /** 解析记录；空/字段缺失/数字不合法一律 null（**不得**把不可解析的记录当成命中）。 */
+        fun parse(raw: String?): AssetPatchRecord? {
+            val parts = raw?.trim()?.split(' ') ?: return null
+            if (parts.size != 5) return null
+            if (parts[0].isEmpty()) return null
+            // 摘要必须是 64 位十六进制：畸形记录（半截写入 / 乱码）一律判不可解析——
+            // 宁可退化到内容比对，也不要把一条读不懂的记录当成「内容已认证」。
+            if (!SHA256_HEX.matches(parts[2])) return null
+            val assetSize = parts[1].toLongOrNull() ?: return null
+            val targetSize = parts[3].toLongOrNull() ?: return null
+            val targetMtime = parts[4].toLongOrNull() ?: return null
+            if (assetSize < 0L || targetSize < 0L) return null
+            return AssetPatchRecord(parts[0], assetSize, parts[2], targetSize, targetMtime)
+        }
+    }
+}
+
+/**
+ * 快路径判据（纯函数）：三条与关系，任一不成立就必须退回内容比对。
+ *
+ * **这一条是本机制的安全边界**：它只回答「能不能省掉这次读盘」，绝不回答「内容对不对」。
+ * 所以「记录缺席」「身份变了」「size/mtime 变了」都返回 false，调用方随之走逐字节比对。
+ */
+internal fun assetPatchFastPathHit(
+    record: AssetPatchRecord?,
+    apkIdentity: String,
+    targetExists: Boolean,
+    targetSize: Long,
+    targetMtime: Long,
+    targetDigest: String?,
+): Boolean {
+    if (record == null) return false
+    if (!targetExists) return false
+    if (record.apkIdentity != apkIdentity) return false
+    if (record.targetSize != targetSize) return false
+    if (record.targetMtime != targetMtime) return false
+    // **内容认证**（关键，不可省）：size 与 mtime 都可以被伪造/还原，只有摘要能证明目标文件
+    // 现在的内容仍是本包装过的那份。没有这一步，快路径就成了「同尺寸改写也照样跳过」的绕过。
+    if (targetDigest == null) return false
+    if (!targetDigest.equals(record.contentSha256, ignoreCase = true)) return false
+    return true
+}
+
+/**
+ * applyAssetPatch 的**核心**（依赖注入，JVM 单测用真实文件 + 内存资产即可全覆盖）。
+ *
+ * 执行顺序即安全边界，不可重排：
+ *  ① 先读记录并跑快路径判据（[assetPatchFastPathHit]）——命中就返回，**不读资产**；
+ *  ② 快路径未命中 ⇒ 读资产（读不出 = [AssetPatchOutcome.ASSET_MISSING]）；
+ *  ③ 目标存在且与资产逐字节相同 ⇒ [AssetPatchOutcome.SKIPPED_ALREADY_EQUAL]，**但仍刷新记录**；
+ *  ④ 其余 ⇒ 写入目标并刷新记录。
+ */
+internal fun applyAssetPatchCore(
+    asset: String,
+    target: File,
+    recordFile: File,
+    apkIdentity: String,
+    readAsset: () -> ByteArray,
+    log: (String) -> Unit = {},
+): AssetPatchOutcome {
+    val rawRecord = try { recordFile.takeIf { it.isFile }?.readText() } catch (_: Throwable) { null }
+    val record = AssetPatchRecord.parse(rawRecord)
+    // 读一次目标（随后内容比对若需要可直接复用，不重复读盘）。
+    val existing = try { target.takeIf { it.isFile }?.readBytes() } catch (_: Throwable) { null }
+    if (existing != null && assetPatchFastPathHit(
+            record = record,
+            apkIdentity = apkIdentity,
+            targetExists = true,
+            targetSize = existing.size.toLong(),
+            targetMtime = target.lastModified(),
+            targetDigest = sha256Hex(existing),
+        )
+    ) {
+        // 快路径命中：内容摘要与记录一致 ⇒ 目标就是本包装过的那份，无需读资产、无需写入。
+        return AssetPatchOutcome.SKIPPED_FAST_PATH
+    }
+    val assetBytes = try {
+        readAsset()
+    } catch (e: Throwable) {
+        log("runtime patch asset unreadable: " + asset)
+        return AssetPatchOutcome.ASSET_MISSING
+    }
+    if (existing != null && existing.contentEquals(assetBytes)) {
+        // 内容已经一致：不写文件，但**补记录**——否则每次启动都会重读资产做比对。
+        writeAssetPatchRecord(recordFile, sha256Hex(assetBytes), assetBytes.size.toLong(), target, apkIdentity)
+        return AssetPatchOutcome.SKIPPED_ALREADY_EQUAL
+    }
+    return try {
+        target.parentFile?.mkdirs()
+        target.writeBytes(assetBytes)
+        writeAssetPatchRecord(recordFile, sha256Hex(assetBytes), assetBytes.size.toLong(), target, apkIdentity)
+        AssetPatchOutcome.WRITTEN
+    } catch (e: Throwable) {
+        log("runtime patch failed: " + asset + " -> " + e.message)
+        AssetPatchOutcome.ASSET_MISSING
+    }
+}
+
+/** 字节的 SHA-256（十六进制小写）。快路径的内容认证与记录都走它，口径唯一。 */
+internal fun sha256Hex(bytes: ByteArray): String =
+    MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+
+/** 记录落盘（失败不影响补丁本身：下一次启动退化为完整内容比对）。 */
+internal fun writeAssetPatchRecord(
+    recordFile: File,
+    contentSha256: String,
+    assetSize: Long,
+    target: File,
+    apkIdentity: String,
+) {
+    try {
+        recordFile.parentFile?.mkdirs()
+        val record = AssetPatchRecord(
+            apkIdentity = apkIdentity,
+            assetSize = assetSize,
+            contentSha256 = contentSha256,
+            targetSize = target.length(),
+            targetMtime = target.lastModified(),
+        )
+        // 先写临时再 rename：半截记录就算落下去也被 parse 判非法（退化到内容比对），
+        // 但 rename 让「原子性」这件事不依赖解析器的宽容。
+        val tmp = File(recordFile.parentFile, recordFile.name + ".tmp")
+        tmp.writeText(record.encode())
+        if (!tmp.renameTo(recordFile)) {
+            recordFile.writeText(record.encode())
+            tmp.delete()
+        }
+    } catch (_: Throwable) {
+        // 记录写不出去不影响本次补丁结果，只是下次启动多走一次内容比对。
     }
 }
