@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-  <!-- 启动图标背景(保持) -->
-  <color name="ic_launcher_background">#ffffff</color>
+  <!-- 启动图标背景(保持)；dshm_ 前缀避宿主 ic_launcher_background（drawable 型）撞名 -->
+  <color name="dshm_ic_launcher_background">#ffffff</color>
 
   <!-- UI 设计 token:Apple 式黑白极简(浅色)。铬面只允许近中性灰(羊皮纸微蓝容许),
        色相仅留给 ok/warn/danger 语义信号族 —— 由 GuidePaletteMonochromeTest 守护。 -->
