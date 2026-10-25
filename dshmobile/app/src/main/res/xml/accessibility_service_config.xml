@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  设备控制无障碍服务配置（0.13.5 W4）。
+
+  轻载设计：事件面只保留「窗口状态变化 / 内容变化 / 滚动」三类，且仅用于把快照标记为
+  失效（200ms 节流）；不订阅文本变化等高频事件，也不在事件里做遍历。
+
+  canRetrieveWindowContent：取当前窗口节点树（语义快照）。
+  canPerformGestures：无节点可点时用 dispatchGesture 做坐标兜底（归一化坐标路径）。
+  canTakeScreenshot：API 30+ 的 takeScreenshot()——截屏不再依赖 ADB（见 A11Y-CONTROL-DESIGN.md §2.2）。
+  flagReportViewIds：让 resource-id 可用（rid: 引用）。
+  flagRetrieveInteractiveWindows：可读取非活动窗口（弹窗/输入法窗口）。
+  notificationTimeout 200ms：内容变化事件的系统级节流。
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewScrolled"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
+    android:description="@string/a11y_service_description"
+    android:notificationTimeout="200"
+    android:summary="@string/a11y_service_summary" />

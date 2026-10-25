@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#121418" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)">
+<title>AI root 权限免责声明</title>
+<style>
+  :root {
+    color-scheme: dark light;
+    --bg: #121418;
+    --surface: #191c22;
+    --surface-2: #1f232b;
+    --border: #2b3039;
+    --text: #e9ecf1;
+    --text-dim: #9aa3b2;
+    --text-faint: #6d7684;
+    --danger: #ff6b6b;
+    --danger-soft: rgba(255, 107, 107, .12);
+    --warn: #ffb454;
+    --warn-soft: rgba(255, 180, 84, .12);
+    --ok: #4ade80;
+    --radius: 12px;
+    --gap: 16px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f8fa;
+      --surface: #ffffff;
+      --surface-2: #f1f3f6;
+      --border: #e2e5ea;
+      --text: #1a1d23;
+      --text-dim: #5b6472;
+      --text-faint: #8a93a2;
+      --danger: #d33a3a;
+      --danger-soft: rgba(211, 58, 58, .08);
+      --warn: #a86400;
+      --warn-soft: rgba(168, 100, 0, .09);
+      --ok: #15803d;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    padding: 20px 16px max(28px, env(safe-area-inset-bottom));
+    background: var(--bg);
+    color: var(--text);
+    font: 15.5px/1.75 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-wrap: break-word;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ── 头部 ───────────────────────────────────────────── */
+  .head {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .shield {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--danger-soft);
+    color: var(--danger);
+    display: grid;
+    place-items: center;
+  }
+  .shield svg { width: 20px; height: 20px; display: block; }
+  h1 {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.35;
+    letter-spacing: .01em;
+    text-wrap: balance;
+  }
+  .sub {
+    margin: 4px 0 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text-faint);
+  }
+
+  /* ── 顶部危险卡 ─────────────────────────────────────── */
+  .callout {
+    margin-top: 20px;
+    padding: 14px 16px;
+    background: var(--danger-soft);
+    border: 1px solid rgba(255, 107, 107, .28);
+    border-left: 3px solid var(--danger);
+    border-radius: var(--radius);
+  }
+  @media (prefers-color-scheme: light) {
+    .callout { border-color: rgba(211, 58, 58, .25); }
+  }
+  .callout .lead {
+    margin: 0;
+    font-weight: 600;
+    color: var(--danger);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .callout .body {
+    margin: 6px 0 0;
+    font-size: 14.5px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+
+  /* ── 章节 ───────────────────────────────────────────── */
+  section { margin-top: 26px; }
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    text-wrap: balance;
+  }
+  h2::before {
+    content: "";
+    width: 3px;
+    height: 14px;
+    border-radius: 2px;
+    background: var(--warn);
+    flex: none;
+  }
+  section.risk h2::before { background: var(--danger); }
+  section.bound h2::before { background: var(--ok); }
+
+  /* ── 列表（卡片式） ─────────────────────────────────── */
+  ul.rows {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+  }
+  ul.rows > li {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .num {
+    width: 22px;
+    height: 22px;
+    margin-top: 1px;
+    border-radius: 7px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 12px;
+    font-weight: 600;
+    display: grid;
+    place-items: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    margin: 8px 0 0 7px;
+    border-radius: 50%;
+    background: var(--danger);
+    box-shadow: 0 0 0 4px var(--danger-soft);
+  }
+  section.bound .dot { background: var(--ok); box-shadow: 0 0 0 4px rgba(74, 222, 128, .12); }
+  li h3.t, li .t { margin: 0; font-size: 15.5px; font-weight: 600; line-height: 1.5; }
+  li .d { color: var(--text-dim); font-size: 14px; line-height: 1.7; }
+  li .d strong { color: var(--text); font-weight: 600; }
+
+  code {
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    font-size: 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  /* ── 责任边界强调块 ─────────────────────────────────── */
+  .emphasis {
+    margin-top: 10px;
+    padding: 13px 15px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14.5px;
+    line-height: 1.75;
+    color: var(--text);
+  }
+  .emphasis b { color: var(--danger); }
+
+  /* ── 页脚 ───────────────────────────────────────────── */
+  footer {
+    margin-top: 26px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    color: var(--text-faint);
+    font-size: 12.5px;
+    line-height: 1.7;
+  }
+</style>
+</head>
+<body>
+
+  <div class="head">
+    <span class="shield" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3l7 3v5.5c0 4.2-2.9 7.6-7 9.5-4.1-1.9-7-5.3-7-9.5V6l7-3z"/>
+        <path d="M12 8.5v4"/>
+        <circle cx="12" cy="15.6" r=".9" fill="currentColor" stroke="none"/>
+      </svg>
+    </span>
+    <div>
+      <h1>AI root 权限免责声明</h1>
+      <p class="sub">随应用内置的离线文档 · 内容不随版本之外的因素改变</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <p class="lead">开启「AI root 权限」意味着把整台设备交给 AI 使用</p>
+    <p class="body">
+      <code translate="no">root</code> 身份下，AI 可读写任何应用数据、修改系统设置、安装或卸载软件、擦除文件，
+      且这些操作<strong>不受应用沙箱与常规权限模型约束</strong>。
+    </p>
+  </div>
+
+  <section>
+    <h2>这个开关实际做了什么</h2>
+    <ul class="rows">
+      <li>
+        <span class="num">1</span>
+        <div>
+          <h3 class="t">策略门</h3>
+          <div class="d">
+            当 <code translate="no">Shizuku</code> 通道以 <code translate="no">root</code>（<code translate="no">uid 0</code>）运行时，
+            未开启本开关则特权通道<strong>整体拒绝执行</strong>；开启后特权命令按通道身份（<code translate="no">root</code>）执行。
+          </div>
+        </div>
+      </li>
+      <li>
+        <span class="num">2</span>
+        <div>
+          <h3 class="t">知情同意</h3>
+          <div class="d">
+            开启前必须阅读本声明并勾选「已阅读」；同意与本声明的<strong>内容版本</strong>绑定，应用升级不需重新确认，仅当本声明内容更新时才需重新确认；
+            取消勾选会同时关闭开关。
+          </div>
+        </div>
+      </li>
+      <li>
+        <span class="num">3</span>
+        <div>
+          <h3 class="t">它不是技术沙箱</h3>
+          <div class="d">
+            开关只控制「是否向 AI 开放这条通道」。通道一旦以 <code translate="no">root</code> 运行，任意
+            <code translate="no">shell</code> 命令在该通道下本就没有限制——<strong>不存在「只允许安全命令」的技术隔离</strong>，
+            本开关也不承诺这一点。
+          </div>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <section class="risk">
+    <h2>风险</h2>
+    <ul class="rows">
+      <li>
+        <span class="dot" aria-hidden="true"></span>
+        <div>
+          <h3 class="t">数据误删或覆盖</h3>
+          <div class="d">AI 可能在执行任务时误删或覆盖数据，含照片、聊天记录与应用数据。</div>
+        </div>
+      </li>
+      <li>
+        <span class="dot" aria-hidden="true"></span>
+        <div>
+          <h3 class="t">系统改动</h3>
+          <div class="d">AI 可能改动系统设置或分区内容，导致设备无法正常启动，甚至需要重装系统。</div>
+        </div>
+      </li>
+      <li>
+        <span class="dot" aria-hidden="true"></span>
+        <div>
+          <h3 class="t">隐私暴露</h3>
+          <div class="d">AI 读取的内容可能包含隐私数据，如账号凭据、聊天记录与支付信息。</div>
+        </div>
+      </li>
+      <li>
+        <span class="dot" aria-hidden="true"></span>
+        <div>
+          <h3 class="t">风险本来就在</h3>
+          <div class="d">
+            上述风险在未开启本开关时同样存在——只要设备已 <code translate="no">root</code> 且
+            <code translate="no">Shizuku</code> 以 <code translate="no">root</code> 运行。本开关提供的是
+            <strong>你知情并同意的记录</strong>，不是风险消失的保证。
+          </div>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <section class="bound">
+    <h2>责任边界</h2>
+    <div class="emphasis">
+      开启本开关后，<b>AI 进行的一切破坏性操作（删除、篡改、格式化、刷机等）由使用者自行承担全部责任</b>，
+      与开发者及本项目完全无关。开发者不对数据丢失、设备损坏、系统不稳定、保修失效或任何间接损失负责。
+      请在使用前完成备份，并在可信的任务范围内使用。
+    </div>
+  </section>
+
+  <section>
+    <h2>建议</h2>
+    <ul class="rows">
+      <li>
+        <span class="dot" aria-hidden="true" style="background:var(--warn);box-shadow:0 0 0 4px var(--warn-soft)"></span>
+        <div>
+          <h3 class="t">用完即关</h3>
+          <div class="d">仅在需要时开启；关闭后特权通道立即恢复整体拒绝。</div>
+        </div>
+      </li>
+      <li>
+        <span class="dot" aria-hidden="true" style="background:var(--warn);box-shadow:0 0 0 4px var(--warn-soft)"></span>
+        <div>
+          <h3 class="t">不执行来路不明的指令</h3>
+          <div class="d">不要在开启状态下让 AI 执行来源不明的指令或脚本。</div>
+        </div>
+      </li>
+      <li>
+        <span class="dot" aria-hidden="true" style="background:var(--warn);box-shadow:0 0 0 4px var(--warn-soft)"></span>
+        <div>
+          <h3 class="t">保持备份</h3>
+          <div class="d">重要数据保持离线备份。</div>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <footer>
+    继续操作即表示你已理解并接受上述全部风险。若不同意，请不要勾选「已阅读」。
+  </footer>
+
+</body>
+</html>

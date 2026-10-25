@@ -1,0 +1,83 @@
+{
+  "serial": "emulator-5562",
+  "phase": "PASS",
+  "checks": [
+    {
+      "name": "宽窗口原生横向标签和并排会话",
+      "status": "PASS",
+      "details": {
+        "width": 1067,
+        "layout": {
+          "panel": {
+            "x": 680,
+            "y": 0,
+            "width": 387.3333435058594,
+            "height": 600,
+            "top": 0,
+            "right": 1067.3333435058594,
+            "bottom": 600,
+            "left": 680
+          },
+          "root": {
+            "x": 0,
+            "y": 0,
+            "width": 1067.3333740234375,
+            "height": 600,
+            "top": 0,
+            "right": 1067.3333740234375,
+            "bottom": 600,
+            "left": 0
+          },
+          "fullscreen": false
+        },
+        "screenshot": "ui-01-wide-parallel.png"
+      }
+    }
+  ],
+  "commands": [
+    [
+      "adb",
+      "-s",
+      "emulator-5562",
+      "shell",
+      "run-as",
+      "com.ai.assistance.quro.dshmobile",
+      "ls",
+      "files/.snapshot-fingerprint"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5562",
+      "shell",
+      "pidof",
+      "com.ai.assistance.quro.dshmobile"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5562",
+      "forward",
+      "tcp:0",
+      "localabstract:webview_devtools_remote_64502"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5562",
+      "shell",
+      "input",
+      "tap",
+      "1276",
+      "36"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5562",
+      "exec-out",
+      "screencap",
+      "-p"
+    ]
+  ]
+}

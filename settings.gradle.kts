@@ -31,7 +31,10 @@ include(":app", ":aidl-aci-browser", ":aidl-aci-core", ":mnn", ":llama", ":lib_a
     ":cluster-model", ":cluster-bridge", ":cluster-engine", ":cluster-storage", ":cluster-ui", ":cluster-fake",
     // CodeCanvas 出图 SDK（脚本驱动多引擎多后端，纯端侧渲染，不依赖任何服务器）
     // 依赖方向：app → renderer-compose / renderer-canvas / renderer-svg / engine-kotlindsl / llm-connector → codecanvas-core
-    ":codecanvas-core", ":engine-kotlindsl", ":renderer-canvas", ":renderer-compose", ":renderer-svg", ":llm-connector")
+    ":codecanvas-core", ":engine-kotlindsl", ":renderer-canvas", ":renderer-compose", ":renderer-svg", ":llm-connector",
+    // dsh-mobile-apk 完整内置（kelai141/dsh-mobile-apk，已去品牌化为 com.ai.assistance.quro.dshmobile）：
+    // library 模块，壳 UI/服务/引擎管理全部进 ZorvAI；入口由工具箱显式拉起，不抢 LAUNCHER。
+    ":dshmobile:app")
 project(":mnn").projectDir = file("llm/mnn")
 project(":llama").projectDir = file("llm/llama")
 // CodeCanvas 子模块实际位于 codecanvas/<模块名>/，模块名与目录名不同名，必须显式指路

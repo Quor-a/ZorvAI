@@ -1,0 +1,145 @@
+# build-apk.yml — 云端从源重建 dsh-mobile APK（自包含，宿主=本 APK 仓库）
+#
+# 目标：源码更新后云端能「从源重建快照 + 打包 APK」，不依赖协调库。
+# 整套构建链（build-snapshot/inject/门禁脚本、@dsh-android 插件、插架子仓库、vendor、底座、LICENSES）
+# 均随本仓库提交；本 workflow 只操作本仓库（GITHUB_REPOSITORY = dsh-mobile-apk）。
+#
+# 流程：检出自仓库(node/python/java) -> 按统一清单准备并构建插件一次 -> stage 底座 base/
+#       -> node scripts/build-snapshot-013.mjs <abi>（Termux 源装配 + 注入 + 门禁 + 归档）
+#       -> node scripts/build-apk.mjs <abi>（注入插件 + 门禁 + gradle + 产物）
+#       -> upload-artifact（不出 Release）。
+# 注：build-snapshot（Termux 包下载 + 归档压缩）+ 插件 npm 构建较重，需一次 dry-run 迭代验证。
+
+name: build-apk
+
+on:
+  workflow_dispatch:
+    inputs:
+      abi:
+        description: '目标 ABI（可多选）'
+        type: choice
+        options: [arm64, x86_64, 'both']
+        default: 'both'
+      suffix:
+        description: 'APK 版本后缀（默认空=正式版纯净版本号；测试构建显式传 -fix 等）'
+        type: string
+        default: ''
+      source_audit:
+        description: '仅在来源审计 PR 分支上运行固定源码/签名输入构建'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  source-audit:
+    if: ${{ inputs.source_audit }}
+    uses: ./.github/workflows/build-apk-source.yml
+
+  build:
+    if: ${{ !inputs.source_audit }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        abi: ${{ fromJSON(inputs.abi == 'both' && '["arm64","x86_64"]' || format('["{0}"]', inputs.abi)) }}
+      fail-fast: false
+    env:
+      # build-apk.mjs 依赖本仓库顶层 scripts/plugins/vendor/base；apk 仓库 = $GITHUB_WORKSPACE
+      DSH_APK_DIR: ${{ github.workspace }}
+    steps:
+      # 每个 ABI job 只需要本 ABI 的 base-usr 与共用 base-dsh；先缓存，未命中才按路径拉取。
+      # checkout 的 lfs:true 是按 ref fetch，不能从 fetch-depth:0 推断它会下载历史全部 LFS。
+      - name: 检出本仓库（不含 LFS 归档；底座下方按需拉取）
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          lfs: false
+      - name: 缓存底座归档（命中则跳过 LFS 拉取）
+        id: lfs-base
+        uses: actions/cache@v4
+        with:
+          path: base
+          key: lfsbase-${{ matrix.abi }}-${{ hashFiles(format('base/base-dsh.tar.xz'), format('base/base-usr-{0}.tar.xz', matrix.abi)) }}
+      - name: 按需拉取 LFS 底座（仅本 ABI，未命中缓存时）
+        if: steps.lfs-base.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -e
+          git lfs install --local
+          git lfs pull --include="base/base-usr-${{ matrix.abi }}.tar.xz,base/base-dsh.tar.xz"
+      - name: 断言底座确实已落地（拒绝 LFS pointer 冒充文件）
+        shell: bash
+        run: |
+          set -e
+          node scripts/require-lfs-materialized.mjs \
+            "base/base-usr-${{ matrix.abi }}.tar.xz" "base/base-dsh.tar.xz"
+
+      - name: 准备运行时（node；dsh-client-ui-responsive 的 tsdown 要求 node ^22.18 || >=24.11）
+        uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - name: python -> python3（脚本用 `python`）
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y python3 python-is-python3 || sudo ln -sf /usr/bin/python3 /usr/bin/python
+          python --version
+      - name: 准备 Java（gradle 需要）
+        uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+
+      - name: 准备并构建插件（统一清单、锁解析与单次构建）
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 清单保证 termux 先于 linux-env；host-web-compat 使用登记的发布产物。
+          mapfile -t plugin_dirs < <(node -e "const fs=require('node:fs'); const {dirs}=require('./scripts/plugin-dirs.json'); console.log(dirs.filter(d=>JSON.parse(fs.readFileSync(d+'/package.json','utf8')).scripts?.build).join('\n'))")
+          test "${#plugin_dirs[@]}" -gt 0
+          for d in "${plugin_dirs[@]}"; do
+            node scripts/source-build/install-project-dependencies.mjs "$d" .deploy-tmp/source-build/plugin-lock-resolution-build.json
+            (cd "$d" && npm run build)
+          done
+
+      - name: stage 底座归档（base/ -> .deploy-tmp/<base-dir>/）
+        shell: bash
+        run: |
+          set -e
+          abi="${{ matrix.abi }}"
+          # build-snapshot-013.mjs 的 BASE_DIR：arm64 -> arm64-base；x86_64 -> x64-base（缩写，勿写 x86_64-base）
+          if [ "$abi" = "arm64" ]; then bdir="arm64-base"; else bdir="x64-base"; fi
+          mkdir -p ".deploy-tmp/${bdir}"
+          [ -f "base/base-usr-${abi}.tar.xz" ] || { echo "缺 base/base-usr-${abi}.tar.xz"; exit 1; }
+          cp "base/base-usr-${abi}.tar.xz" ".deploy-tmp/${bdir}/base-usr.tar.xz"
+          [ -f "base/base-dsh.tar.xz" ] && cp "base/base-dsh.tar.xz" ".deploy-tmp/${bdir}/base-dsh.tar.xz"
+          du -sh ".deploy-tmp/${bdir}"
+
+      - name: 构建快照 ${abi}（build-snapshot，Termux 源装配 + 注入 + 门禁 + 归档）
+        shell: bash
+        run: |
+          set -e
+          node scripts/build-snapshot-013.mjs "${{ matrix.abi }}"
+
+      - name: 构建 APK ${abi}（注入插件 + 门禁 + gradle + 产物）
+        shell: bash
+        run: |
+          set -e
+          node scripts/build-apk.mjs --abi "${{ matrix.abi }}" --suffix "${{ github.event.inputs.suffix }}"
+
+      - name: 上传前复核最终 APK 签名
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/check-apk-signatures.mjs --self-test
+          mapfile -t apks < <(find out -type f -name '*.apk' | sort)
+          [ "${#apks[@]}" -eq 1 ] || { echo "::error::当前 ABI 产物数不是 1: ${#apks[@]}"; exit 1; }
+          node scripts/check-apk-signatures.mjs --apk "${apks[0]}" --keystore keystore/debug.keystore
+
+      - name: 上传 APK 产物（本地下载 debug；不出 Release）
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-mobile-apk-${{ matrix.abi }}${{ github.event.inputs.suffix }}
+          # 版本目录来自 app/build.gradle.kts（ST-06）：写死 out/v0.13.0 会在版本 bump 后静默
+          # 落到 if-no-files-found: error（云端链「构建成功但无产物」）。
+          path: out/v*/*.apk
+          if-no-files-found: error
+          retention-days: 30

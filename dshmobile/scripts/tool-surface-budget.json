@@ -1,0 +1,41 @@
+{
+  "baseline": 18528,
+  "perPlugin": {
+    "dsh-android-bridge": {
+      "count": 4,
+      "bytes": 1464
+    },
+    "dsh-android-manage": {
+      "count": 14,
+      "bytes": 7897
+    },
+    "dsh-android-browser": {
+      "count": 19,
+      "bytes": 4973
+    },
+    "dsh-android-vdisplay": {
+      "count": 4,
+      "bytes": 1575
+    },
+    "dsh-android-file-open": {
+      "count": 1,
+      "bytes": 159
+    },
+    "dsh-android-linux-env": {
+      "count": 2,
+      "bytes": 340
+    }
+  },
+  "initialVisible": 2951,
+  "maskedGroups": [
+    "phone",
+    "browser",
+    "virtual-display"
+  ],
+  "visibleTools": [
+    "android_capabilities",
+    "android_env_recipe",
+    "android_file_incoming_status",
+    "android_toolchain_status"
+  ]
+}

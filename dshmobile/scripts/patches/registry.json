@@ -1,0 +1,408 @@
+{
+  "$comment": "vendor 固化插件补丁登记表（apply-patches.mjs 消费；id 必须与 IMPLS 一一对应，启动时交叉校验）。marker 语义见 README。",
+  "patches": [
+    {
+      "id": "managed-port-bind-EP1",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-host-webserver/lib/index.js",
+      "scope": "engine",
+      "summary": "本壳引擎仅在 EADDRINUSE 时回退一次到 OS 原子分配端口，并发布实际监听端点",
+      "provenance": "2026-10-23 同机多 DSH 宿主端口冲突；Node listen(0) 与上游 getOrigin 实际监听地址同源",
+      "marker": "dsh-mobile managed atomic port bind (EP1)"
+    },
+    {
+      "id": "profile-link-skip-PL1",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js",
+      "scope": "engine",
+      "summary": "profile 第三方软链遇权限、缺失或非目录错误时跳过并告警，保留其它链接与系统故障诊断",
+      "provenance": "2026-10-23 启动事故：共享存储插件软链 EACCES 阻断 profile 组合",
+      "marker": "dsh-mobile profile link skip (PL1)"
+    },
+    {
+      "id": "sidebar-bubble-reorder-B1",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-sidebar-right/lib/client.js",
+      "scope": "engine",
+      "summary": "为窄窗口气泡导航提供同分栏 reorderIn：复用 placeTab，保留当前活动标签，拒绝失效会话与跨分栏目标",
+      "provenance": "2026-10-17 右侧多任务面板气泡导航；发布版控制器未公开 DockKit 排序动作",
+      "marker": "dsh-mobile sidebar bubble reorder (B1)"
+    },
+    {
+      "id": "market-B",
+      "target": "dshmarketplace-plugin/lib/index.js",
+      "summary": "安装 runner execPath 安全化：TERMUX__PREFIX 兜底烧写快照内 node 绝对路径",
+      "provenance": "0.13.1；apk issue #83/#89（linker64 回退污染 process.execPath → bad ELF magic: 23212f75）",
+      "marker": "execPath:(process.env.TERMUX__PREFIX"
+    },
+    {
+      "id": "market-D-server",
+      "target": "dshmarketplace-plugin/lib/index.js",
+      "summary": "搜索响应 compat/compatNote 富化（Wc()）+ mobile: 前缀过滤 desktop 条目 + COMPAT_MAP 幂等刷新",
+      "provenance": "0.13.2 W1（patch D server 侧）；兼容性数据出码 scripts/patches/data/compat-map.json",
+      "marker": "function Wc("
+    },
+    {
+      "id": "market-route-auth-U2",
+      "target": "dshmarketplace-plugin/lib/index.js",
+      "summary": "为商城 search/install exact 路由接入 client-connection 的 Host/Origin/浏览器会话栅栏；缺连接服务也拒绝",
+      "provenance": "0.14.0 apk #222 全量 /api 路由审计：商城 install 会改 profile，不能依赖被 exact-first 分派绕过的 /api prefix",
+      "marker": "dsh-mobile marketplace route auth (U2)"
+    },
+    {
+      "id": "market-D-client",
+      "target": "dshmarketplace-plugin/lib/client.js",
+      "summary": "卡片兼容徽章（dshm-compat 四色）+ 搜索框「仅移动端可用」复选框",
+      "provenance": "0.13.2 W1（patch D client 侧）",
+      "marker": "dshm-compat"
+    },
+    {
+      "id": "undo-E1",
+      "target": "dsh-undo-savepoint/lib/client.js",
+      "summary": "移除头部撤销/恢复/快照按钮（保留快照徽章）",
+      "provenance": "0.13.0 真机适配；产品决策用户拍板：头部只留快照徽章",
+      "marker": "size: 14 }), t(\"snapshots\")]（存在=未应用）"
+    },
+    {
+      "id": "undo-E2",
+      "target": "dsh-undo-savepoint/lib/client.js",
+      "summary": "移除 KeyBindRow 函数区域（settings.general.item 注册组件）",
+      "provenance": "0.13.0 真机适配（手机无键盘）",
+      "marker": "//#region KeyBindRow (settings.general.item)（存在=未应用）"
+    },
+    {
+      "id": "undo-E3",
+      "target": "dsh-undo-savepoint/lib/client.js",
+      "summary": "移除 settings.general.item 注册块（undo-keys 快捷键行）",
+      "provenance": "0.13.0 真机适配（Ctrl+Alt+Z/Y 录入行彻底移除）",
+      "marker": "}, KeyBindRow)));（存在=未应用）"
+    },
+    {
+      "id": "undo-E4",
+      "target": "dsh-undo-savepoint/lib/client.js",
+      "summary": "移除全局 keydown 键盘监听（无快捷键配置后的死监听）",
+      "provenance": "0.13.0 真机适配",
+      "marker": "\"dsh-undo-savepoint: keyboard\"（存在=未应用）"
+    },
+    {
+      "id": "undo-E5",
+      "target": "dsh-undo-savepoint/lib/client.js",
+      "summary": "移除 exports.KeyBindRow 导出",
+      "provenance": "0.13.0 真机适配（E2/E3 连带）",
+      "marker": "exports.KeyBindRow（存在=未应用）"
+    },
+    {
+      "id": "undo-E6",
+      "target": "dsh-undo-savepoint/lib/client.js",
+      "summary": "徽章文本裁剪（去掉相对时间，防与 Session log 重叠）",
+      "provenance": "0.13.0 真机适配",
+      "marker": "relativeTime(stat.latest, t) || \"\"（存在=未应用）"
+    },
+    {
+      "id": "undo-E7",
+      "target": "dsh-undo-savepoint/lib/client.js",
+      "summary": "徽章宽度封顶（max-width:30vw + 省略号，新增类）",
+      "provenance": "0.13.0 真机适配（双保险）",
+      "marker": "gap:5px;white-space:nowrap;flex:none;max-width:30vw（存在=已应用）"
+    },
+    {
+      "id": "undo-E8",
+      "target": "dsh-undo-savepoint/lib/client.js",
+      "summary": "快照徽章折叠成小绿点（数量与含义挪进 title/aria-label，点击行为不变；20x20 圆形后置覆盖胶囊样式）",
+      "provenance": "2026-09-10 用户定例；360dp 竖屏头部被模式徽章/打开方式/…/右栏键占满，文字徽章挤标题且更窄处错位",
+      "marker": "dsh-mobile dot-only badge"
+    },
+    {
+      "id": "undo-safe-align-S1",
+      "target": "dsh-undo-savepoint/lib/core.mjs",
+      "summary": "safe 生成逻辑使用最终快照的 exact entry id/name 权属：只隔离无法匹配工厂身份的 insert 子条目，保留用户源码、unknown fields 与全部顶层 disable 行",
+      "provenance": "2026-09-26 追版 0.4.9；用户口径「undo 要确保保留我们自己的插件」。上游 safeModeSet 原把 cordis.patch.yml 整份覆写成只含一条 insert 的最小文件，实测会摘掉 12 个 @dsh-android/* 引用与 7 条 disabled: true（含安全关键的 client-hmr，会重开 /plugins/events 无鉴权 SSE）",
+      "marker": "dsh-mobile safe ownership identity v2"
+    },
+    {
+      "id": "undo-safe-transaction-S2",
+      "target": "dsh-undo-savepoint/lib/core.mjs",
+      "summary": "Safe Mode 为 patch、home 与包状态写入主备份及独立 SHA-256 内容寻址恢复副本；任一路双副本失效即拒绝全部 live 写入。新 web 状态绑定 profile；兼容唯一既有 scoped marker，双位置冲突 fail closed",
+      "provenance": "2026-10-05 Hard/Soft/Data 重构审计：多个 Safe Mode 入口曾在改配置后才写状态，崩溃会丢失退出依据",
+      "requires": [
+        "undo-safe-align-S1"
+      ],
+      "marker": "dsh-mobile safe mode transaction (S2) with CAS recovery failover, web-store resolver and factory-bundle filter (S5)"
+    },
+    {
+      "id": "undo-api-auth-U1",
+      "target": "dsh-undo-savepoint/lib/index.js",
+      "summary": "为 /api/undo 更长 prefix 重建 Host/Origin、浏览器会话和壳侧 controlToken 鉴权；所有读写在 body/快照操作前失败关闭",
+      "provenance": "0.14.0 apk #222：exact 先于 prefix、longest-prefix 路由分派使 /api/undo 绕过 client-connection 的 /api 信任栅栏",
+      "marker": "dsh-mobile undo route auth (U1)"
+    },
+    {
+      "id": "narb-android-N1",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/node-addon-require-builtin/lib/index.js",
+      "scope": "engine",
+      "summary": "Android 无预编译 node-addon-require-builtin 绑定 → 回落 require(moduleId)（壳侧已以 --expose-internals 起 node，该 flag 恰暴露 rc.1 internalModules() 需要的五个 internal/modules/*）",
+      "provenance": "0.14.2 追上游 0.1.7-rc.1；rc.1 的 dsh-app-boot 新增该依赖（0.1.5 夹具零命中）。设备 boot-fail.log 连记 4 轮 host preparation failed / No usable native binding found for node-addon-require-builtin-android-x64",
+      "marker": "dsh-mobile native-binding fallback (N1)"
+    },
+    {
+      "id": "flock-android-F3",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/node-addon-system/lib/flock.js",
+      "scope": "engine",
+      "summary": "Android 无预编译 flock 绑定 → 按上游 browser-worker 先例 stub 为立即成功（单进程宿主，进程内写声明已排除写者）；Landlock 无替代（Android 走 shell-termux 写面栅栏）",
+      "provenance": "0.13.7 追上游 0.1.5；0.1.5 新增 node-addon-system/flock 依赖（模拟器实测：缺包导致整树 boot 失败）",
+      "marker": "dsh-mobile flock fallback (F3)"
+    },
+    {
+      "id": "attach-durable-F2",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-attachment-local/lib/index.js",
+      "scope": "engine",
+      "summary": "附件持久化 Android 三件套：① 祖先 fsync 在应用私有路径（/data/user/0）EACCES 即止步（原实现一路 sync 到文件系统根 → 所有图片上传被 api-proxy 兜底成 session/agent-busy）；② publishImmutableAlias.source 与 publishStagedObject.staged.path 两处 link(2) 在 EACCES/EPERM/ENOTSUP 时回退 rename（Android SELinux 拒 hardlink）；③ publishStagedObject 的 unlink(staged.path) 容忍 ENOENT（回退 rename 已消费 staged 文件）",
+      "provenance": "① 2026-09-10 实测（模拟器 16416：上传图片发送 → prompt rejected (session/agent-busy)，details.reason=EACCES open '/data/user/0'；同一根因解释 read_image 读任意路径都报同一 EACCES）；② ③ 2026-09-14 review C1（此前只在运行时 asset：资产↔快照逐字节同源判据落地时快照侧补齐）",
+      "marker": "dsh-mobile durable-walk guard"
+    },
+    {
+      "id": "spj-migration-link-F5",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-session-persistence-jsonl/lib/index.js",
+      "scope": "engine",
+      "summary": "会话迁移发布的 link(2) 回退：publishCurrentExclusive 与 materialize 两处站点在 EACCES/EPERM/ENOTSUP 时改用模块顶层 rename 发布",
+      "provenance": "2026-09-11 apk issue #154（用户实测 + 贡献者 PR #156 定位）；Android 应用域 SELinux 禁 hardlink → 升级前写入的会话全部打不开",
+      "marker": "dsh-mobile link->rename fallback"
+    },
+    {
+      "id": "publish-exclusive-F7",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-session-persistence-jsonl/lib/index.js",
+      "scope": "engine",
+      "summary": "发布独占语义找回 + 失败回收：F5 的 rename 回退会静默覆盖已存在的目标（link 的 EEXIST 语义在 Android 上成死代码）→ O_EXCL 原子占位抽成模块级小函数 dshMobileClaimExclusive()，F5 的两站（publishCurrentExclusive + materializePosix）共用：publish 站输家得 EEXIST 并 return false、materialize 站输家得 EEXIST 并抛出（该站上游只有抛错通道）；两站占位成功后 rename 失败一律 unlink 回收占位，防 0 字节残留让之后每次发布都输掉竞争",
+      "provenance": "2026-09-12 apk issue #170 / FX-207.1+207.2（审计 F5 输出）；触发面 = 双引擎进程并发发布同一会话/同一日志；跨进程独占只剩原子发布是 flock-android-F3 stub 的后果",
+      "requires": [
+        "spj-migration-link-F5"
+      ],
+      "marker": "dsh-mobile exclusive materialize (F7)"
+    },
+    {
+      "id": "fs-local-link-F8",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-fs-local/lib/index.js",
+      "scope": "engine",
+      "summary": "文件写工具 createIfAbsent 的 link(2) 回退：dsh-fs-observation-policy 对「未观察过/确认不存在」的路径判 createIfAbsent，dsh-fs-local 的 writeFileAtomic 只能用 link(2) 做 no-replace 发布且失败即抛（该分支无回退）→ Android 应用域恒拒 hardlink（EACCES）⇒ 真机上 write 工具建不了任何新文件（覆盖已存在文件走 rename，正常）。修法：EACCES/EPERM/ENOTSUP 时改用 O_EXCL 占位 + rename 等价实现 no-replace（保住 link 的独占语义，输家仍得 EEXIST 与同一拒绝文案），rename 失败回收占位防 0 字节残留",
+      "provenance": "2026-09-22 apk issue #246（真机实测三连：write 新建失败 / write 覆盖成功 / edit 修改成功；同域 ln 直接失败佐证）；与坑位 #77 / attach-durable-F2 / spj-migration-link-F5 同一 sepolicy 限制的第 4 个站点。0.13.3 曾以「上游 0.1.2-rc.1 已原生覆盖 rename 回退」为由退役 fs-local-index.js，该结论对 createIfAbsent 站点不成立（0.1.5-rc.1 实测全文仅此一处 link、无任何回退）",
+      "marker": "dsh-mobile link->rename fallback (F8)"
+    },
+    {
+      "id": "combo-probe-P1",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js",
+      "scope": "engine",
+      "summary": "把 compose 探针送进产品内（收口 t_compose_total 恒 -1）：在 compose() 返回处打印 `[perf] compose #N at=.. dur=..` 与 `[perf] TOTAL calls=.. totalMs=.. instances=.. firstAt=..ms singles=.. loopP99Ms=.. loopSamples=.. comboCache=..`（字段齐备，无值报 -1）；只主线程安装（worker 的 calls=0 TOTAL 不得冒充真读数）；不新增快照成员、壳侧解析器零改动",
+      "provenance": "0.14.1 块F（T6 设备实测真因 + 详档 §5.1 C6/P-AC-04）：42/42 恒为 -1；preload/注入方案结构性无效——① count-compose 的 TOTAL 只在 process.on('exit') 打印，落在 killExistingEngine() 内、早于 rotateEngineLog()，被搬进 engine.log.1 而新生代从偏移 0 读不到；② --import/NODE_OPTIONS 在 file-based worker 线程也执行（Node v24.17 实测，引擎树至少 5 处 worker），worker 临终打 calls=0 而解析取最后一条，得到「非 -1 但为 0」的假绿，且 NODE_OPTIONS 会继承到 agent 全部子进程、缺 COMBO_LIB 直接 exit(2)。落点在 compose() 返回处 = LISTEN 之后、首个页面请求路径上，正是 C2 要测的同步块",
+      "marker": "dsh-mobile combo probe (P1)"
+    },
+    {
+      "id": "client-registry-scan-C4",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js",
+      "scope": "engine",
+      "summary": "每个同步 flush 按名称单次索引 Loader 条目，错误回调后失效；nearestPackage 已解析的 manifest 在 resolveMeta 内复用。保留同步构造错误、启动 settle 顺序及运行期/HMR即时语义",
+      "provenance": "2026-10-06 MuMu 0.14.5 受控细分：client 构造 flush 193 次 Loader 遍历、38021 行；typert 初始 flush 193 次 qualifies、24181 行。独立CPU样本证实反复遍历热点；C4总体预算仍须无诊断冷启动复测，不以局部耗时改善认绿。",
+      "marker": "dsh-mobile registry scan C4",
+      "requiredMarkers": [
+        "dsh-mobile gateway client source G1"
+      ]
+    },
+    {
+      "id": "client-index-loader-barrier-G2",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-host-frontend-static/lib/index.js",
+      "scope": "engine",
+      "summary": "首页 HTML 取 client graph 前等待宿主 Loader settle；clientModules 已注册的 deferred startup flush 会先执行，静态资源不经过等待",
+      "provenance": "SN-1-16 MuMu 第 4 轮冷启失败：同一进程初始 __DSH_BOOT__ 59 项、首次 GET / 后稳定 69 项；首页曾在 P1 deferred startup flush 前调用 webServer.renderIndex，图快照遗漏 10 个后续插件并让 50 个 client entry pending。入库证据：scripts/patches/tests/fixtures/dsh-host-frontend-static-SN16/evidence/graph.json；SN16 实际运行时源码字节与包身份 hash 见同目录 capture.json、package.json 与 fixture manifest",
+      "marker": "dsh-mobile client index Loader barrier (G2)"
+    },
+    {
+      "id": "typert-registry-scan-C4",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-typert-loader/lib/index.js",
+      "scope": "engine",
+      "summary": "每个同步 flush 单次索引已挂接名称；异步 typert manifest 完成后仍扫描 live Loader，防已移除条目误注册。错误回调后索引失效，显式包与激活失败语义保留",
+      "provenance": "2026-10-06 MuMu 0.14.5 受控细分：client 构造 flush 193 次 Loader 遍历、38021 行；typert 初始 flush 193 次 qualifies、24181 行。独立CPU样本证实反复遍历热点；C4总体预算仍须无诊断冷启动复测，不以局部耗时改善认绿。",
+      "marker": "dsh-mobile typert scan C4"
+    },
+    {
+      "id": "perf-compile-cache-flush-N2",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/lib/bin.js",
+      "scope": "engine",
+      "summary": "NODE_COMPILE_CACHE 主动落盘：Node 只在正常退出时写编译缓存，而壳侧停引擎是有界宽限的 SIGTERM/SIGKILL、系统还会整进程回收，换树后的新条目长期写不进去——bin.js 周期 flush（40s 首刷 + 5min）+ exit 兜底，硬杀最多丢一个周期内的新增编译",
+      "provenance": "2026-09-14 缓存审计（docs/HANDOFF-COMBO-CACHE-2026-09-14.md §1；设备证据：09-12 23:07 后编译缓存零新增而 09-14 三次快照刷新）",
+      "marker": "dsh-mobile compile cache flush (N2)"
+    },
+    {
+      "id": "boot-third-party-isolation-G3",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js",
+      "scope": "engine",
+      "summary": "第三方插件 boot 期失败隔离：boot() 经隔离式挂载器挂 root include——失败条目若属用户自装（非 @deepseek-ai/* / @dsh-android/* / 出货具名插件）则用既有 patch 机制加 disabled:true 后重试，并点名列出被跳过的插件；官方/出厂插件失败、无法识别的失败、或超过隔离上限 8 个仍响亮失败",
+      "provenance": "2026-09-19 真实用户反馈（报错反馈/0.14.0/20260919-125714-engine-died-during-boot，华为 NOH-AN00 / Android 31 / arm64 / 0.14.0 vc39）：用户自装 dsh-live2d-pets 在 import 期抛 SyntaxError（@deepseek-ai/dsh-settings 不再导出 settingsNamespace）→ engine exit=1。boot-pending-G1 结构上无法覆盖：G1 锚点在 assertEntriesActivated（dsh-app-boot:1472-1505），而 import 失败在更早的 boot:1552 → mountRootInclude:553 → loader EntryTree.update（cordis-plugin-loader:86/97）→ updateError('import')（:309）处就抛出，assertEntriesActivated:1555 根本不可达",
+      "marker": "dsh-mobile third-party boot isolation (G3)"
+    },
+    {
+      "id": "external-draft-conversation-seam-J1",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js",
+      "scope": "engine",
+      "overlayCheck": false,
+      "summary": "向 ConversationController 补受控 addFiles(sessionId, files) seam：复用既有 createDrafts、InputHub shell.addAttachments 与 refusal release，不创建第二条上传或自动发送路径",
+      "provenance": "0.14.0 外部打开草稿：host queue/source 仍 opaque；客户端必须在新空会话可寻址后调用既有 composer 草稿链，不能直接 cast 私有 createDrafts 或伪造 input change",
+      "marker": "dsh-mobile external draft addFiles seam (J1)"
+    },
+    {
+      "id": "arkweb-resource-protocol-H1",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-resources/lib/client.js",
+      "scope": "engine",
+      "summary": "ArkWeb 对 dsh-resource://<type>/... 丢失 hostname 时，局部按地址文法恢复 type；标准 URL 行为和其他 scheme 不变",
+      "provenance": "0.14.0 apk #221：HarmonyOS ArkWeb 令 protocolOf() 取不到 file provider，文件预览报资源服务不可用",
+      "marker": "dsh-mobile ArkWeb resource authority fallback (H1)"
+    },
+    {
+      "id": "reference-drill-F6",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-reference/lib/client.js",
+      "scope": "engine",
+      "summary": "移动形态（html[data-dsh-mobile-form]）下目录行的落定动作改为下钻：点行体进子目录而不是把文件夹变成引用；桌面行为不变",
+      "provenance": "2026-09-11 apk #163（用户拍板交互）；上游把「下钻」只绑在行尾 chevron/Tab 上，手机上点不到",
+      "marker": "dsh-mobile mobile-folder-drill (F6)"
+    },
+    {
+      "id": "terminal-inspector-android-D1",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-subprocess-local/lib/runner-launch-B2zsQ1Dz.js",
+      "scope": "engine",
+      "summary": "Android 平台进程检查器：Node 在 Android 上把 process.platform 报成 android，createProcessInspector 只映射 linux/darwin/win32 而直接 throw（新建终端报 terminal inspection is unsupported on platform android）——把 android 归入既有 Linux 分支；不放松其它平台的 throw",
+      "provenance": "2026-09-26 设备实测（16416）：侧边栏新建终端 → subprocess-local: terminal inspection is unsupported on platform android；Android 即 Linux 内核，/proc 与 syscall 表（x64/arm64）一致",
+      "marker": "dsh-mobile android is linux (D1)",
+      "targetDiscovery": {
+        "directory": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-subprocess-local/lib",
+        "filenamePrefix": "runner-launch-",
+        "contains": [
+          "function createProcessInspector(platform = process.platform",
+          "terminal inspection is unsupported on platform"
+        ]
+      }
+    },
+    {
+      "id": "pi-upstream-streaming-020",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js",
+      "additionalTargets": [
+        "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@earendil-works/pi-ai/dist/api/anthropic-messages.js",
+        "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@earendil-works/pi-ai/dist/api/bedrock-converse-stream.js",
+        "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@earendil-works/pi-ai/dist/api/mistral-conversations.js",
+        "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@earendil-works/pi-ai/dist/api/openai-responses-shared.js",
+        "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@earendil-works/pi-ai/dist/api/pi-messages.js"
+      ],
+      "scope": "engine",
+      "summary": "保留官方0.2.0-rc.2的pi-ai0.87.1六个provider streaming补丁，raw overlay之后严格恢复",
+      "provenance": "Official639ed015 patches/@earendil-works__pi-ai@0.87.1.patch SHA256 b9bcce474fb2ac44633dff0fa722816a5bff5451b4575d5874035ea14ba70a4f; exact context/idempotent, no fuzzy matching",
+      "marker": "official pi-ai0.87.1 six-file streaming state checked by exact pinned contexts",
+      "verifier": "pi-upstream-streaming-020"
+    },
+    {
+      "id": "mimo-thinking-toggle-056",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-llm-pi-ai/lib/index.js",
+      "additionalTargets": [
+        "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js"
+      ],
+      "scope": "engine",
+      "summary": "MiMo OpenAI Completions thinking.type 二态开关：保留关闭值、仅显示关闭/开启、传回多轮 reasoning_content，不发送 reasoning_effort",
+      "provenance": "Issue #56; MiMo 官方 openai-completions 协议 profile; exact pinned runtime anchors",
+      "marker": "dsh-mobile MiMo thinking toggle (issue #56)",
+      "requires": [
+        "pi-upstream-streaming-020"
+      ],
+      "verifier": "mimo-thinking-toggle-056"
+    },
+    {
+      "id": "pi-toolcall-G2",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js",
+      "scope": "engine",
+      "summary": "流式 tool_call 空名止血：出口丢弃空名调用（连同其 tool result）+ arguments 保证非空；累加器把缺 index/id 的续块合并进唯一在途调用",
+      "provenance": "0.13.5 W2；apk issue #124（中转网关续块无 index/id → 新建空名块 → 回放被网关 400 invalid tool_call）",
+      "marker": "dsh-mobile tool_call guard (G2)",
+      "requires": [
+        "pi-upstream-streaming-020"
+      ]
+    },
+    {
+      "id": "fs-local-digest-guard-B",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-fs-local/lib/index.js",
+      "scope": "engine",
+      "summary": "文件写工具的版本守卫被『只改元数据、不改内容』误触发（0.14.2 缺陷 B）。现象：模型读文件后，只要第三方对共享存储里的同一文件做一次 touch/chmod/同字节改名，edit 就恒判 FS_STALE_VERSION ⇒ 模型陷入「读→编辑失败→读」死循环。真因：版本 token = dev:ino:size:mtimeNs:ctimeNs，内容一字未改但 mtime/ctime 变了即版本不等，守卫把元数据噪声误判成内容变更。修法：版本不一致时**先比内容摘要**——摘要相同则放行（确认是元数据噪声），不同则照旧抛 FS_STALE_VERSION（CAS 语义不变），无摘要记录亦照旧抛（引擎重启后安全回落）。摘要表有界（最近 256 条，LRU 淘汰）。摘要对**原始字节**计算，避开 readForEdit 的 LF 归一化与 readWholeText 的口径差。不改 ctimeNs：反向实验证明删它会在「同尺寸 + mtime 还原」下放过真实改动（假阴性）。",
+      "provenance": "2026-09-26 用户报障（模型陷入读→编辑失败→读死循环）+ Lead 专项侦察实测：应用挂载命名空间内 touch/chmod 两例 STALE=true（内容未变），真实改内容例 STALE=true（必须为真）；已排除 FUSE 抖动/挂载别名/延迟落定/媒体扫描/read 自改 ctime/realpath 分叉。本机以真实部署产物 dsh-fs-local 0.1.7-rc.1 复现：TOUCH 与同字节 temp+rename 两例 REJECTED，CHMOD 一例因 NTFS 语义 ALLOWED（Linux 上 rw 路径不会顺带碰 ctime）。",
+      "marker": "dsh-mobile digest CAS fallback (B)"
+    },
+    {
+      "id": "ptc-argv-L1",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-ptc-runtime-node/lib/index.js",
+      "scope": "engine",
+      "summary": "PTC 子进程的 V8 堆参数从 argv 位置 1 移出改走 env.NODE_OPTIONS；并对解析出的可执行文件加绝对值/系统动态链接器两条守卫（fails loud，不静默回退、不猜替代路径）。",
+      "provenance": "0.14.2 fx-1 只把 profile 的 ptc-runtime.nodeExecutable 钉成绝对路径，未改 argv 构造，故 worker spawn bug 在 rc.2 产物上仍在（dsh-ptc-runtime-node/lib/index.js:947 逐字节：`...packaged ? [] : [heapFlag],`）。危害：packaged===false 时 heapFlag 落在 argv[1]，而 executable 若被解析成安卓系统链接器（direct exec 被拒时壳侧改用 /system/bin/linker64，process.execPath 随之被污染），linker64 把第一个非参数当程序路径，heapFlag 排在它前面 ⇒ linker64 自己报 error: expected absolute path: \"--max-old-space-size=512\" 退出，Node 从未被加载。附带如实记录一处**既有行为**（别误当新增副作用）：上游 subprocess-local 的 childEnv() 是 {...scrubbedParentEnv(), ...spec.env}（spawn.ts:44-54 posix 分支），targetEnvironment() 再 filter 掉值为 undefined 的项（runner-launch.ts:300-314），而现有代码那份 env 先把非启动项全部 tombstone 成 undefined（index.js:956）⇒ 今天 NODE_OPTIONS 本就被删掉（这正是 heapFlag 当初只能塞进 argv 的原因之一）。本补丁把「NODE_OPTIONS 完全消失」改成「NODE_OPTIONS 恰为我们的 heap flag」。如实登记的后果：引擎自己若设了 NODE_OPTIONS 会被我们覆盖，但既有行为里子进程本就看不到它，故不构成回归。",
+      "marker": "dsh-mobile ptc argv heap via NODE_OPTIONS (L1)"
+    },
+    {
+      "id": "ptc-android-native-A1",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-ptc-runtime-node/lib/index.js",
+      "scope": "engine",
+      "summary": "Android PTC linker64 argv 前缀与 host/child native 环境一致；保留既有有效 full-access 门与受限 fail-closed",
+      "provenance": "0.14.3 / official0.2.0-rc.2 source639ed015: Android environment tombstones + polluted linker execPath; native adaptation only, not a sandbox provider",
+      "marker": "dsh-mobile PTC Android linker prefix (A1)",
+      "requires": [
+        "ptc-argv-L1"
+      ],
+      "additionalTargets": [
+        "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-ptc-runtime-node/lib/process.js"
+      ],
+      "verifier": "ptc-android-native-A1",
+      "targetMarkers": {
+        "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-ptc-runtime-node/lib/process.js": "dsh-mobile PTC Android native environment (A1)"
+      }
+    },
+    {
+      "id": "file-upload-restart-R1",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-file-upload/lib/index.js",
+      "scope": "engine",
+      "summary": "Agent resolver 单槽注册改为同槽覆盖——cordis 重启 fiber 的顺序是「先跑新实例 body、后释放旧 effect」，上游对已占用槽直接 throw ⇒ session-controller 每次重启即判 FAILED，sessionController 服务永久缺席（在设置里换一次默认模型即触发）",
+      "provenance": "2026-09-28 模拟器 5556 实锤：设置里换一次默认模型 → 内置插件面板 196 个里 1 个失败（api-session-controller），此后新建会话/切模型恒报 sessionController is unavailable；诊断版 cordis（fiber 失败点写 stderr）拿到 file-upload: Agent resolver is already registered 栈；补丁后同机切模型 3 次 = 0 失败、0 报错",
+      "marker": "dsh-mobile file-upload resolver replace (R1)"
+    },
+    {
+      "id": "sidebar-keep-wide-B2",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-sidebar/lib/client.js",
+      "scope": "engine",
+      "summary": "手机形态让左抽屉收起态仍挂载宽内容（wide 恒真）+ 收起时不写 56px 内联宽度冻结；把 260 元素的 React 挂载从手势 touchmove 帧上移走",
+      "provenance": "2026-10-18 侧边栏手势真机实测：开方向拖动期 136ms 帧停顿 vs 关方向 69ms，根因是收起态卸载宽内容后手势内 ensureOpen 触发重挂载",
+      "marker": "dsh-mobile sidebar keep wide (B2)"
+    },
+    {
+      "id": "inspector-worker-expose-internals-472",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-experimental-inspector/lib/index.js",
+      "scope": "engine",
+      "summary": "inspector 的 Worker 不再清空 execArgv：显式传 --expose-internals，使 android-arm64 上 requireBuiltin 回退可用",
+      "provenance": "2026-10-21 apk issue #472：node-addon-require-builtin 无 android-arm64 预编译件，Worker 内 internal/modules/esm/loader 必 MODULE_NOT_FOUND（设备实测）",
+      "marker": "dsh-mobile inspector worker expose-internals (472)"
+    }
+  ],
+  "retired": [
+    {
+      "id": "market-A",
+      "target": "dshmarketplace-plugin/lib/index.js",
+      "retiredIn": "0.1.7",
+      "summary": "pre-execute 守卫——退役理由：上游 0.1.7 自己修好了该 waterfall 崩溃。listener 工厂现为 function b(t=c){return async(r,n)=>{let e=()=>typeof n==\"function\"?n():{kind:\"allow\"},s;try{s=await M(r,t)}catch{s=void 0}return s??e()}}——每条路径都返回一个 gate 对象（无 next 时回落 {kind:\"allow\"}），不再是恒返 undefined，故 0.1.5 的三处 tt() 锚点全部消失",
+      "provenance": "2026-09-26 追版实测：npm pack dshmarketplace-plugin@0.1.7 解包后 lib/index.js 内 b() 形态见上（.deploy-tmp/market-017/package/lib/index.js）",
+      "whyHere": "退役不等于删除：登记在此使 0.1.7 的原生修复可被复查；若上游将来把它改回「不调用 next 就返回 undefined」，这条记录就是判红的依据。"
+    },
+    {
+      "id": "market-C",
+      "target": "dshmarketplace-plugin/lib/client.js",
+      "retiredIn": "0.1.7",
+      "summary": "不可安装条目置灰（installable:false → disabled + title）——退役理由：上游 0.1.7 在服务端与工具面都新增 installCheck==\"passed\" 过滤，客户端拿不到不可安装的行，置灰无对象",
+      "provenance": "2026-09-26 实测 api/v1/plugins 分页 1200 条：installCheck===passed 共 800 条，其中 installable===false = 0、install 为空 = 0；未通过的 400 条里 installable===false = 85（这些行已被上游过滤，到不了客户端）",
+      "whyHere": "退役不等于删除：保留记录以便上游若撤掉 installCheck 过滤时能立刻发现置灰需求回归（届时重启 market-C 即可）。"
+    },
+    {
+      "id": "atomic-stale-lock-F4",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-atomic-write/lib/index.js",
+      "scope": "engine",
+      "retiredIn": "0.1.7-rc.2",
+      "guard": "scripts/patches/tests/atomic-stale-lock.test.mjs",
+      "summary": "孤儿写锁回收——退役理由：上游 rc.2 的 withFileLock 已自带 takeOverExitedLock()（claim 文件独占仲裁 + 回收前二次读锁 + 重新探活），语义比 F4 更严谨（F4 的二次核验留 TOCTOU 窗口；上游另防护「死者的 pid 被活进程复用」）",
+      "provenance": "2026-09-26 rc.2 追版实测（.deploy-tmp/lead-verify/f4probe.mjs，rc.2 真产物）：孤儿锁 15ms 内成功执行且锁被清除；活锁对照正确超时且锁保留 ⇒ 前提已被上游吸收",
+      "whyHere": "退役不等于删除：本条目让 probe-engine-anchors.mjs 继续为该包产出夹具，使 guard 测试能对**上游真产物**断言该能力仍在（上游若把它改回 operator action，guard 判红）。此前退役（A3/A5/C3）直接从 patches 删条目，代价是夹具随之停供、guard 测试跑不起来——本字段是那次教训的修正。"
+    }
+  ]
+}

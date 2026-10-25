@@ -1,0 +1,18 @@
+- insert:
+    - id: mobile-hard
+      name: '@dsh-android/dsh-shell-termux'
+      config:
+        keepUnknown: true
+    - id: upstream-hard
+      name: '@deepseek-ai/dsh-shipped-core'
+    - id: undo
+      name: dsh-undo-savepoint
+    - id: disabled-product
+      name: '@dsh-android/dsh-host-web-compat'
+      disabled: true
+- id: client-hmr
+  disabled: true
+- id: existing-official-override
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    displayName: user-owned override

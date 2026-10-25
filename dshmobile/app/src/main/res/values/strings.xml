@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">ZorvAI</string>
+  <string name="ds_brand_subtitle">内嵌运行时</string>
+  <string name="ds_start_engine">启动引擎</string>
+  <string name="ds_retry">重试</string>
+  <!-- 缺陷 D（fx-2）：启动失败时主按钮改为「安全模式启动」。
+       用户口径原话：「那个显示文字可以在启动失败时变成『安全模式启动』然后点一下就以 safe 状态运行」。
+       文案不承诺「一定能修复」——安全模式只摘第三方插件条目，救不了快照损坏等其它成因。 -->
+  <string name="ds_safe_start">安全模式启动</string>
+  <!-- 2026-10-03（复审第 3 点）：维护隔离未结算时，等待相位的主按钮改成这条明示出口——
+       点它会弹确认框（可取消），不是「打断自动恢复」，所以此时允许解锁按钮。
+       文案只承诺「清除隔离标记」，不承诺「一定能启动」。 -->
+  <string name="ds_clear_isolation">清除隔离并重试</string>
+  <string name="ds_safe_entered">已进入安全模式：第三方插件已摘除，本应用自有插件全部保留。修复指令已复制到剪贴板——打开控制台粘贴即可。重启应用后安全模式生效。</string>
+  <string name="ds_safe_prompt_copied">修复指令已复制到剪贴板（含本次报错原文）。</string>
+  <string name="ds_safe_prompt_copy_failed">修复指令复制到剪贴板失败（系统剪贴板不可用）——可打开控制台，按提示执行安全模式命令。</string>
+  <string name="ds_safe_failed">进入安全模式未成功：%1$s</string>
+  <string name="ds_safe_hint_short">也可点下方「安全模式启动」自救：只摘第三方插件、保留本应用插件，并把含报错原文的修复指令复制到剪贴板。</string>
+  <!-- CONTRACT §6：客户端插件装配失败（页面侧契约行 [dsh-boot-failed] 到壳侧失败面）。
+       文案如实：说清「已经试过自动回退」，并给出唯一出口（Error 相位主按钮=安全模式启动）。
+       %1$s = 失败原因短句（failedIds 或「未点名具体条目」）。禁 emoji。 -->
+  <string name="ds_client_plugin_fail_title">插件装配失败</string>
+  <string name="ds_client_plugin_fail_hint">界面插件没能装载（%1$s）。已尝试自动回退；仍失败可点下方「安全模式启动」：只摘第三方插件、保留本应用插件，并把含报错原文的修复指令复制到剪贴板。</string>
+  <!-- provider 缺失/升级窗口期：WebView 构造即抛，连引导页都建不起来——只能 Toast 告知。 -->
+  <string name="ds_webview_provider_missing">本机缺少可用的 WebView 内核（未安装、被停用或正在升级），请安装或更新 Android System WebView 后重试。</string>
+  <string name="ds_safe_hint">启动失败时可点「安全模式启动」：只摘除第三方插件、保留本应用插件，并把含报错原文的修复指令复制到剪贴板。也可打开控制台执行安全模式命令。</string>
+  <string name="ds_restart">重新启动</string>
+  <string name="ds_starting">启动中</string>
+  <string name="ds_updating">更新中</string>
+  <string name="ds_undoing">回撤中</string>
+  <string name="ds_open_console">打开控制台</string>
+  <string name="ds_check_update">检查更新</string>
+  <!-- 0.13.8 批 H：APK 自更新（仅手动；检查与下载是两枚独立按钮；下载后自动拉起授权/安装） -->
+  <string name="ds_apk_checking">检查中…</string>
+  <string name="ds_apk_latest">APK 已是最新 %1$s</string>
+  <string name="ds_apk_not_checked">尚未检查</string>
+  <string name="ds_apk_download">下载</string>
+  <!-- 版本号进独立状态行后，按钮文案只剩短词——长版本号不会再被固定高按钮截断 -->
+  <string name="ds_apk_version_available">新版本 %1$s（当前 %2$s，%3$s）</string>
+  <!-- ds_apk_confirm（下载并安装 %s）随单按钮三态一起下线：版本号进状态行后，没有哪个控件再需要它 -->
+  <string name="ds_apk_available">发现新版 APK %1$s（当前 %2$s，%3$s）——点「下载」开始下载并安装</string>
+  <string name="ds_apk_downloading">下载中 %1$d%%</string>
+  <string name="ds_apk_download_hint">正在从镜像链下载 %1$s（%2$s）——请保持应用在前台</string>
+  <string name="ds_apk_retry">重试下载并安装 %1$s</string>
+  <string name="ds_apk_retry_install">重试安装</string>
+  <string name="ds_apk_need_permission">需要「安装未知应用」权限，已打开授权页——开启后返回即自动安装</string>
+  <string name="ds_apk_permission_denied">未获得「安装未知应用」权限——APK 已下载，授权后可再点按钮继续安装</string>
+  <string name="ds_apk_installing">已拉起系统安装器——安装完成后重新打开应用即生效</string>
+  <!-- S1-10：授权页拉不起来时不得再说「已打开授权页」（少数 OEM 上那句承诺是假的） -->
+  <string name="ds_apk_permission_page_failed">这个系统没有「安装未知应用」授权页（未能打开）——请在系统设置里手动允许本应用安装应用后，再点按钮继续安装</string>
+  <!-- 0.14.1 批 2（P0-3）：权限缺失/被拒时按钮必须**可点**（文案说「再点按钮」，按钮就得真能点） -->
+  <string name="ds_apk_grant_install">授权后继续安装</string>
+  <string name="ds_copy_log">复制</string>
+  <string name="ds_log_title">engine.log</string>
+  <string name="ds_runtime_ready">运行时已就绪</string>
+  <string name="ds_runtime_pending">运行时待解压</string>
+  <string name="ds_storage_granted">存储已授权</string>
+  <string name="ds_storage_needed">去授权存储</string>
+  <string name="ds_storage_write_failed">存储写入失败</string>
+  <!-- S1-9：尚未探测既不能说「已就绪」也不能劝「去授权」（已授权用户会被劝再授权一次） -->
+  <string name="ds_storage_pending">存储：待探测</string>
+  <string name="ds_storage_pending_cd">存储状态尚未探测，点此立即探测一次</string>
+  <string name="ds_storage_write_failed_cd">存储写入失败，点此复制失败详情</string>
+  <string name="ds_storage_granted_cd">存储已就绪，无需操作</string>
+  <string name="ds_storage_detail_copied">已复制失败详情——可粘贴反馈给我们</string>
+  <string name="ds_storage_no_detail">没有可复制的失败详情（尚未有过一次失败记录）</string>
+  <string name="ds_storage_probing">正在探测存储…</string>
+  <!-- S1-13：首屏解释「这是什么 / 为什么要授权」（旧版首屏只有品牌名与一行副标题） -->
+  <string name="ds_brand_explain">本地 AI 任务，操作可见，随时可控</string>
+  <!-- S1-3：自动恢复期间主按钮必须锁住（旧版此时显示可点的「重试」，而重试必然同样失败） -->
+  <string name="ds_recovering">正在自动恢复</string>
+  <!-- S1-1：日志不存在时说清「没有可复制的日志」，而不是点了没反应 -->
+  <string name="ds_copy_log_empty">当前没有可复制的日志（引擎还没写过 engine.log）</string>
+  <string name="ds_log_copied">日志已复制</string>
+  <!-- S1-11/S1-12：通知权限改「到需要时才请求 + 先说明为什么」；渠道展示名从 `dsh` 改成人话
+       （渠道 ID 仍是 dsh，见 MainActivity.NOTIF_CHANNEL_ID） -->
+  <string name="ds_notify_channel_name">任务提醒与导出结果</string>
+  <string name="ds_notify_channel_desc">引擎任务状态、待答请求与文件导出的结果提醒</string>
+  <string name="ds_notify_permission_rationale">需要通知权限：引擎提问或等你授权时，只有通知能把你叫回来（任务会一直等）。未授权时这些提醒只能在应用内看到。</string>
+  <string name="ds_notify_denied_note">未授予通知权限：引擎提问与授权请求将不会出现在通知栏，只能在应用内看到。</string>
+  <!-- 0.13.2 ADB 输入通道 IME（ADBKeyboard 协议；引擎 android_ui_input 中文输入通道） -->
+  <string name="adb_keyboard_label">ZorvAI ADB 输入通道</string>
+  <!-- 0.13.5 W4：设备控制无障碍服务（语义控制面） -->
+  <string name="a11y_service_label">ZorvAI 设备控制</string>
+  <string name="a11y_service_summary">让 AI 助手以语义方式读取界面并操作控件</string>
+  <string name="a11y_service_description">开启后，AI 助手可以读取当前界面的控件（文本/描述/位置）并执行点击、输入、滚动等操作。仅在你主动开启时生效，关闭后立即失效；同时要求会话处于「完全访问」档位。</string>
+    <string name="ds_start_port_foreign">本地引擎端口正被其他程序使用，应用没有停止该程序。请关闭冲突应用后点「重试启动」，或重启设备。[port-foreign]</string>
+    <string name="ds_start_private_denied">应用无法写入自己的私有运行目录。公共文件授权不能解决此问题；请重启设备后再次打开应用，仍失败请打开控制台并复制日志反馈。安全模式只能隔离插件，不能修复目录权限。[private-storage-denied]</string>
+    <string name="ds_start_storage_full">设备报告存储空间不足。请释放空间后再点「安全模式启动」；该按钮只隔离插件，不会释放空间。不要清除本应用的数据。[storage-full]</string>
+    <string name="ds_start_runtime_unavailable">运行时或必需插件未就绪。请打开控制台并复制日志查看原因；安全模式保留现有恢复入口。[runtime-unavailable]</string>
+    <string name="ds_start_unknown">尚无法确定启动失败原因。请打开控制台或复制日志反馈；也可尝试安全模式，暂时隔离第三方插件。[start-unknown]</string>
+    <string name="ds_start_retry">重试启动</string>
+  <string name="ds_repair_assistant">启动修复助手</string>
+  <!-- 功能 B（0.14.6）：启动页故障诊断包的快捷分享入口。
+       入口只在「有可诊断证据」时出现（boot-fail/boot-diag 非空 或 失败相位），常态不显示；
+       点击即出系统分享面板，中间不加二次确认（B7）。 -->
+  <string name="ds_share_log">分享诊断包</string>
+  <string name="ds_share_log_working">正在打包诊断日志…</string>
+  <string name="ds_share_log_done">已生成诊断包 %1$s，请选择要发送到的应用</string>
+  <string name="ds_share_log_failed">分享未成功：%1$s</string>
+</resources>

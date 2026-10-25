@@ -1,0 +1,7 @@
+{
+  "$comment": "版本钉未对齐的显式声明（0.13.8-b ST-06 / F-ENV-05）。§8.4 的依赖边要求「先对齐 peer 基线，再扩 contract.inserted」——本文件让门禁在保持红-able 的前提下不假绿：accepted = 当前事实值（^/~ 归一后），一旦偏离（改成另一个错值、或新增未声明偏离）即红；一旦真正对齐（accepted 项消失）同样即红（stale 条目），迫使删除本条目。",
+  "gaps": [],
+  "clearedIn": {
+    "0.14.2": "0.13.7 起累积的 7 条声明全部清空：scripts/bump-plugin-pins.mjs 按 contract.json 把 10 个仓的 peer/dev 钉一次性抬到 0.1.7-rc.1（形态保留：精确钉照抄、caret 换地板）。其中 @deepseek-ai/dsh-client-runtime（只发到 0.1.1-rc.2 的冻结载体，vdisplay/bridge 当年据此声明「物理上无法钉到引擎主版本」）已随两个 client 入口改用 `import type { Context as ClientContext } from '@deepseek-ai/cordis'`（上游自身写法，见 dsh/packages/client/locale/src/client/index.ts:7）而**整条依赖被移除**——不是对齐了，而是不再需要它。该包当时还会把整棵 0.1.1 时代的引擎图拽进 npm 解析，与 rc.1 直接 ERESOLVE。"
+  }
+}

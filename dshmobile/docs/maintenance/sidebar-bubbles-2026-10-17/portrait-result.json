@@ -1,0 +1,539 @@
+{
+  "serial": "emulator-5556",
+  "phase": "PASS",
+  "checks": [
+    {
+      "name": "真实标签映射、竖向排列和可用区约束",
+      "status": "PASS",
+      "details": {
+        "width": 360,
+        "count": 12,
+        "screenshot": "ui-01-portrait-expanded.png"
+      }
+    },
+    {
+      "name": "原生触摸切换后收起，主会话和工具身份保留",
+      "status": "PASS",
+      "details": {
+        "selected": "tab3",
+        "screenshot": "ui-02-switched.png"
+      }
+    },
+    {
+      "name": "Android 返回优先收起气泡",
+      "status": "PASS",
+      "details": {
+        "active": "tab3"
+      }
+    },
+    {
+      "name": "外部点击只收起导航",
+      "status": "PASS",
+      "details": {
+        "active": "tab3"
+      }
+    },
+    {
+      "name": "多标签原生纵向滚动不触发排序或侧栏手势",
+      "status": "PASS",
+      "details": {
+        "from": 0,
+        "to": 12,
+        "screenshot": "ui-03-scrolled.png"
+      }
+    },
+    {
+      "name": "长按拖拽提交原生排序并保留活动面板",
+      "status": "PASS",
+      "details": {
+        "before": [
+          "tab3",
+          "tab5",
+          "tab6",
+          "tab7",
+          "tab8",
+          "tab9",
+          "tab10",
+          "tab11",
+          "tab12",
+          "tab13",
+          "tab14",
+          "tab15"
+        ],
+        "after": [
+          "tab3",
+          "tab6",
+          "tab7",
+          "tab5",
+          "tab8",
+          "tab9",
+          "tab10",
+          "tab11",
+          "tab12",
+          "tab13",
+          "tab14",
+          "tab15"
+        ],
+        "screenshot": "ui-04-reordered.png"
+      }
+    },
+    {
+      "name": "取消长按后的首次返回和焦点恢复",
+      "status": "PASS",
+      "details": {
+        "screenshot": "ui-05-canceled-hold-back.png"
+      }
+    },
+    {
+      "name": "对话、终端、浏览器、虚拟屏切换无重复实例",
+      "status": "PASS",
+      "details": {
+        "ids": [
+          {
+            "id": "tab3",
+            "kind": "terminal",
+            "contentId": "sidebar://terminal/81ac53fc-dc92-4291-878b-14bc2386bcb4"
+          },
+          {
+            "id": "tab5",
+            "kind": "conversation",
+            "contentId": "dsh-resource://conversation/session/session-b123a980-d0cf-4a81-bf9b-f1b8366297d7"
+          },
+          {
+            "id": "tab6",
+            "kind": "conversation",
+            "contentId": "dsh-resource://conversation/session/session-b19c1005-6e19-44e6-8979-450eafecd3b8"
+          },
+          {
+            "id": "tab7",
+            "kind": "conversation",
+            "contentId": "dsh-resource://conversation/session/session-ca85fe97-786d-49c6-86dd-9820eb0e5260"
+          },
+          {
+            "id": "tab8",
+            "kind": "conversation",
+            "contentId": "dsh-resource://conversation/session/session-2b4a1171-d769-4bea-8934-ffd0ad22a8ae"
+          },
+          {
+            "id": "tab9",
+            "kind": "conversation",
+            "contentId": "dsh-resource://conversation/session/session-abcb52df-f04b-4c22-a74c-366b69c93f30"
+          },
+          {
+            "id": "tab10",
+            "kind": "conversation",
+            "contentId": "dsh-resource://conversation/session/session-3f47f8d1-9329-4eb7-9c2a-1c95dda1d1c1"
+          },
+          {
+            "id": "tab11",
+            "kind": "conversation",
+            "contentId": "dsh-resource://conversation/session/session-118d414d-9632-421b-9f4e-2aef28d6559a"
+          },
+          {
+            "id": "tab12",
+            "kind": "conversation",
+            "contentId": "dsh-resource://conversation/session/session-2adec755-ed8b-4af4-9371-6054c8bbd904"
+          },
+          {
+            "id": "tab13",
+            "kind": "browser",
+            "contentId": "sidebar://browser/730bc87f-3cf0-40bf-bc4a-02c33b73bfda"
+          },
+          {
+            "id": "tab14",
+            "kind": "android-vdisplay",
+            "contentId": "sidebar://android-vdisplay"
+          },
+          {
+            "id": "tab15",
+            "kind": "guide",
+            "contentId": "sidebar://guide"
+          }
+        ],
+        "screenshot": "ui-06-tools-retained.png"
+      }
+    },
+    {
+      "name": "动画中连续开关状态稳定",
+      "status": "PASS",
+      "details": {
+        "open": true
+      }
+    },
+    {
+      "name": "关闭侧开标签保留原会话历史并选择下一面板",
+      "status": "PASS",
+      "details": {
+        "closed": "tab5",
+        "sourceSession": "session-b123a980-d0cf-4a81-bf9b-f1b8366297d7",
+        "active": "tab7",
+        "screenshot": "ui-07-closed-tab.png"
+      }
+    },
+    {
+      "name": "标签栏重建后原生收起与再次展开按钮可用",
+      "status": "PASS",
+      "details": {
+        "screenshot": "ui-08-native-controls.png"
+      }
+    }
+  ],
+  "commands": [
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "run-as",
+      "com.ai.assistance.quro.dshmobile",
+      "ls",
+      "files/.snapshot-fingerprint"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "pidof",
+      "com.ai.assistance.quro.dshmobile"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "forward",
+      "tcp:0",
+      "localabstract:webview_devtools_remote_1631"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "660",
+      "95"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "exec-out",
+      "screencap",
+      "-p"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "343",
+      "216"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "exec-out",
+      "screencap",
+      "-p"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "660",
+      "95"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "keyevent",
+      "4"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "660",
+      "95"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "16",
+      "760"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "660",
+      "95"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "swipe",
+      "392",
+      "1456",
+      "392",
+      "336",
+      "350"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "exec-out",
+      "screencap",
+      "-p"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "motionevent",
+      "DOWN",
+      "260",
+      "302"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "motionevent",
+      "MOVE",
+      "260",
+      "551"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "motionevent",
+      "UP",
+      "260",
+      "551"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "exec-out",
+      "screencap",
+      "-p"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "motionevent",
+      "DOWN",
+      "260",
+      "302"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "motionevent",
+      "CANCEL",
+      "260",
+      "302"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "keyevent",
+      "4"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "exec-out",
+      "screencap",
+      "-p"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "660",
+      "95"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "343",
+      "216"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "660",
+      "95"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "343",
+      "1206"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "660",
+      "95"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "343",
+      "1316"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "660",
+      "95"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "343",
+      "546"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "exec-out",
+      "screencap",
+      "-p"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "660",
+      "95"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "628",
+      "546"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "exec-out",
+      "screencap",
+      "-p"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "568",
+      "95"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "shell",
+      "input",
+      "tap",
+      "668",
+      "98"
+    ],
+    [
+      "adb",
+      "-s",
+      "emulator-5556",
+      "exec-out",
+      "screencap",
+      "-p"
+    ]
+  ]
+}

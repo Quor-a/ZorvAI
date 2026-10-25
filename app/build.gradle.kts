@@ -178,6 +178,8 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.annotation)
     implementation(libs.androidx.appcompat)
+    // QuroModelConfigScreen 模型目录选择器（SAF DocumentFile，fromTreeUri/isFile/listFiles）
+    implementation(libs.androidx.documentfile)
     implementation(libs.material)
     implementation(libs.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -252,6 +254,11 @@ dependencies {
     // 定位：AI 生成 GenUI JSON DSL → SDK 直接渲染成**原生 Compose 组件**（530+ 组件、样式/动画/交互/
     // 状态/技能），并通过 collectFrom 把表单输入聚合回 AI。SDK 自身不调用 LLM、无网络依赖。
     implementation(project(":genuiagent-sdk"))
+
+    // dsh-mobile-apk 完整内置（上游 https://github.com/kelai141/dsh-mobile-apk，已去品牌化）：
+    // library 模块 com.ai.assistance.quro.dshmobile，自带引擎壳（MainActivity/EngineService/
+    // 快照解包 + 全部插件/补丁框架）。入口由 QuroToolCenterScreen 显式拉起，不抢 LAUNCHER。
+    implementation(project(":dshmobile:app"))
 
     // ── CodeCanvas 出图 SDK（codecanvas/ 目录，纯端侧渲染，无服务器依赖）──
     // 定位：脚本 → 绘图指令 → 位图/SVG。4 引擎 × 4 后端的中间层设计，

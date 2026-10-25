@@ -1,0 +1,157 @@
+{
+  "$comment": "跨层状态矩阵（0.13.8-b ST-25 登记制起点）。每条 = 一个「我方状态/镜像」的 持有者 + 写路径 + 外部真源 + 同步路径，外加一条**机器可核对**的 evidence（门禁逐条执行）。改一次状态更新一次：新增条目必须带真实 evidence，stale 条目（写路径消失/evidence 不再命中）即 FAIL。",
+  "fields": [
+    "holder",
+    "writePath",
+    "sourceOfTruth",
+    "syncPath"
+  ],
+  "states": [
+    {
+      "id": "engine-loopback-endpoint",
+      "holder": "壳侧 EngineEndpoint；绑定结果由当前世代的自有引擎产生",
+      "writePath": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/EngineAuth.kt:tokenFromCurrentLog → EngineEndpoint.kt:publishReportedPort",
+      "sourceOfTruth": "本轮自有引擎 server.address().port；.engine-endpoint.json 只保存下次启动偏好，不构成引擎归属证明",
+      "syncPath": "EngineProbe、Cookie、WebView、HTTP 与 Mux 读内存端点；EP1 在监听完成时更新 DSH_ENGINE_PORT，插件按请求读取；绑定中端口 0 拒绝发送",
+      "evidence": { "kind": "grep", "file": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/EngineEndpoint.kt", "pattern": "publishReportedPort" }
+    },
+    {
+      "id": "native-startup-repair-gate",
+      "holder": "RepairState",
+      "writePath": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/RepairState.kt:requireRepair / beginUserRetry / reset",
+      "sourceOfTruth": "自动重试预算耗尽与用户显式重试意图",
+      "syncPath": "普通启动/回前台保留故障页；用户点重试清 required/retries 再走原启动链；助手是独立可选出口",
+      "evidence": { "kind": "grep", "file": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/MainActivity.kt", "pattern": "retryEngineExplicitly" }
+    },
+    {
+      "id": "external-linux-environment",
+      "holder": "用户显式注入的外部 linuxBootstrap 服务；APK 只提供宿主适配与展示",
+      "writePath": "plugins/dsh-android-linux-env/src/linux-environment.ts:registerLinuxEnvironmentRoutes → linuxBootstrap.install/reinstall/uninstall/setAutoUpdateEnabled",
+      "sourceOfTruth": "外部 bootstrap 在 context.filesDir/linux-environment 下持久化的安装版本、应用版本基线、偏好与自动检查尝试；DSH_APP_VERSION 来自 BuildConfig",
+      "syncPath": "受鉴权 GET status 归一映射；POST 动作明确确认后委托同一服务并回读。客户端只做单次服务发现与显式刷新，无本地持久化副本；未注入 bootstrap 时无设置入口。",
+      "evidence": {
+        "kind": "grep",
+        "file": "dsh-mobile-apk/plugins/dsh-android-linux-env/src/linux-environment.ts",
+        "pattern": "bootstrap.setAutoUpdateEnabled"
+      }
+    },
+    {
+      "id": "immersive-mode",
+      "holder": "壳侧（ShellState / AndroidBridge）",
+      "writePath": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/ShellState.kt:setImmersiveMode",
+      "sourceOfTruth": "壳偏好 dsh_settings/immersive_mode",
+      "syncPath": "页面以壳侧读面 getImmersiveMode() 为唯一初值，不再用 localStorage 自证（ST-10）",
+      "evidence": {
+        "kind": "grep",
+        "file": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/AndroidBridge.kt",
+        "pattern": "fun getImmersiveMode"
+      }
+    },
+    {
+      "id": "overlay-enabled",
+      "holder": "壳侧（OverlayController / OverlayService）",
+      "writePath": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/OverlayController.kt",
+      "sourceOfTruth": "SYSTEM_ALERT_WINDOW 系统权限 + 服务实例在场 + 壳偏好",
+      "syncPath": "isEnabled = 偏好 && canDrawOverlays && 服务在场（ST-02 三真值合取）；页面只读该判定值",
+      "evidence": {
+        "kind": "grep",
+        "file": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/OverlayController.kt",
+        "pattern": "canDrawOverlays"
+      }
+    },
+    {
+      "id": "all-files-access",
+      "holder": "壳侧（AndroidBridge + prefs）",
+      "writePath": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/AndroidBridge.kt:hasAllFilesAccess/requestAllFilesAccess",
+      "sourceOfTruth": "Environment.isExternalStorageManager()（系统事实）",
+      "syncPath": "getter 每次现读系统事实（0.14.0：ADB 退役后不再有 syncFullAccess 壳内缓存与回前台收敛）",
+      "evidence": {
+        "kind": "grep",
+        "file": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/AndroidBridge.kt",
+        "pattern": "isExternalStorageManager"
+      }
+    },
+    {
+      "id": "a11y-control-channel",
+      "holder": "壳侧（DeviceControlService）+ 插件 dsh-android-manage",
+      "writePath": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/DeviceControlService.kt",
+      "sourceOfTruth": "AccessibilityManager 服务在线 + 控制队列轮询心跳",
+      "syncPath": "桥 a11yStatus() 实时读（含队列心跳），不缓存偏好（坑 46 僵尸 a11yEnabled 的根因）",
+      "evidence": {
+        "kind": "grep",
+        "file": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/AndroidBridge.kt",
+        "pattern": "fun a11yStatus"
+      }
+    },
+    {
+      "id": "shizuku-privileged-channel",
+      "holder": "壳侧（ShizukuTransport / ShizukuUserService）+ 插件 dsh-android-bridge",
+      "writePath": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/ShizukuTransport.kt",
+      "sourceOfTruth": "Shizuku API binder 可达（官方 Shizuku 或分支兼容实现，如 Stellar——0.14.8 起官方包名不再是能力判据，管理器包名只用于引导）+ UserService 绑定（live；授权只由管理器写，应用不自授）",
+      "syncPath": "控制队列 caps.shizuku 实时上报（ControlCarrier，5s TTL）；引擎侧 shizukuReady() 现读 caps，不做启动期快照（0.14.0：内置 adb 三条门随 AdbState 退役）",
+      "evidence": {
+        "kind": "grep",
+        "file": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/ControlCarrier.kt",
+        "pattern": "shizuku"
+      }
+    },
+    {
+      "id": "pick-token",
+      "holder": "壳侧（EngineAuth / AndroidBridge）",
+      "writePath": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/EngineAuth.kt",
+      "sourceOfTruth": "壳侧一次性 pick token",
+      "syncPath": "桥 getPickToken() 每次现读（不跨引擎重启缓存 token，否则静默拒绝）",
+      "evidence": {
+        "kind": "grep",
+        "file": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/AndroidBridge.kt",
+        "pattern": "fun getPickToken"
+      }
+    },
+    {
+      "id": "dev-log-enabled",
+      "holder": "壳侧（AndroidBridge + prefs）+ 壳侧 LogCollector",
+      "writePath": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/AndroidBridge.kt:setDevLogEnabled",
+      "sourceOfTruth": "壳偏好 + 日志目录是否真在写（事实值）",
+      "syncPath": "getDevLogEnabled() 目前返回偏好——事实值缺口已登记在 scripts/bridge-symmetry-baseline.json 的 preferenceGetters",
+      "evidence": {
+        "kind": "gate",
+        "file": "scripts/check-bridge-symmetry.mjs"
+      }
+    },
+    {
+      "id": "shipped-profile-manifest",
+      "holder": "构建链（快照出厂清单）",
+      "writePath": "scripts/lib/profile-seed.mjs",
+      "sourceOfTruth": "出厂 profile 清单 home/.dsh/profiles/<name>/package.json 的 dsh.profile.bundles",
+      "syncPath": "0.14.2 起该状态只剩「清单形状」：bundles 非空 + 无上游已不读的死键。原 profile-patch-reload（patchReload 出厂值 + N1 存量归一化）随上游删除该机制而退役——live reload 改由常驻空转的 dsh-client-hmr 承担，构建期不再写任何 reload 旋钮",
+      "evidence": {
+        "kind": "gate",
+        "file": "scripts/check-perf-instrumentation.mjs"
+      }
+    },
+    {
+      "id": "notify-ready-gate",
+      "holder": "壳侧（EngineStartFlow / OverlayService 通知应答流）",
+      "writePath": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/EngineStartFlow.kt",
+      "sourceOfTruth": "引擎进程存活 + WS 就绪（其 cookie 依赖 WebView 侧刷新）——纯动作广播冷启动时宿主 UI 未拉起 ⇒ ready 永不来（坑 93）",
+      "syncPath": "未就绪不投递：墙钟预算内轮询，宿主 UI 拉起（am start）后 ready 立刻到来并补投（实测 76ms）；预算常量单一来源 ENGINE_BOOT_BUDGET_MS",
+      "evidence": {
+        "kind": "grep",
+        "file": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/EngineStartFlow.kt",
+        "pattern": "ENGINE_BOOT_BUDGET_MS"
+      }
+    },
+    {
+      "id": "native-repair-handoff",
+      "holder": "壳侧（RepairState / EngineStartFlow / RepairActivity）",
+      "writePath": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/RepairState.kt:requireRepair/setRetries/reset",
+      "sourceOfTruth": "壳偏好 native-repair: required + retries",
+      "syncPath": "启动失败或客户端插件装配失败共用两次重试；耗尽后持久闸门阻止自动启动与监控继续动作，主页面按钮转为进入内置修复助手。页面就绪会复位闸门与预算。",
+      "evidence": {
+        "kind": "grep",
+        "file": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/RepairState.kt",
+        "pattern": "fun requireRepair"
+      }
+    }
+  ]
+}

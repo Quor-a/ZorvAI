@@ -44,7 +44,6 @@ import com.ai.assistance.quro.core.linux.LinuxDistro
 import com.ai.assistance.quro.core.linux.PackageManagerSpec
 import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
 import com.ai.assistance.quro.terminal.data.MirrorSource
-import com.ai.assistance.quro.terminal.ui.HarnessScreen
 import com.ai.assistance.quro.terminal.ui.MoyuScreen
 import com.ai.assistance.quro.terminal.data.PackageManagerType
 import com.ai.assistance.quro.terminal.utils.SourceManager
@@ -125,7 +124,7 @@ fun QuroToolCenterScreen(
                     // 墨语言（Mo）——独立运行时，不依赖 Ubuntu。新增入口不走 strings.xml，
                     // 直接用中文常量，避免为单个标题追加 i18n 键（项目铁律：qk_%05d 只追加）。
                     "moyu" -> "墨语言 Mo"
-                    "harness" -> "DeepSeek Harness"
+                    "harness" -> "Agent 工作台"
                     "plugins" -> stringResource(R.string.qk_02779)
                     else -> stringResource(R.string.qk_02772)
                 },
@@ -149,8 +148,16 @@ fun QuroToolCenterScreen(
             "pkgmgr" -> PackageManagerPanel(context)
             // 复用 terminal-core 的 MoyuScreen（全屏 Column，自带返回），返回即回到工具列表
             "moyu" -> MoyuScreen(onBack = { selected = null })
-            // 复用 terminal-core 的 HarnessScreen；内部用 WebView 承载 harness 自己的完整前端
-            "harness" -> HarnessScreen(onBack = { selected = null })
+            // dsh-mobile-apk 完整内置（已去品牌化为 com.ai.assistance.quro.dshmobile）：
+            // 引擎壳是独立 Activity（自带 Node 运行时与完整界面），显式 Intent 拉起，
+            // 不抢宿主 LAUNCHER；NEW_TASK 防御非 Activity context。
+            "harness" -> {
+                val intent = Intent(context, com.ai.assistance.quro.dshmobile.MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { context.startActivity(intent) }
+                    .onFailure { Toast.makeText(context, "无法打开 Agent 工作台：${it.message}", Toast.LENGTH_LONG).show() }
+                selected = null
+            }
             "plugins" -> PluginManagerPanel(context)
         }
     }
@@ -165,7 +172,7 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         Triple("toolbox", stringResource(R.string.qk_00214), stringResource(R.string.qk_02783)),
         Triple("pkgmgr", stringResource(R.string.qk_02778), stringResource(R.string.qk_02784)),
         Triple("moyu", "墨语言 Mo", "独立运行时：编译/运行 .mo、AI 可直接读写源码修 bug，不依赖 Ubuntu"),
-        Triple("harness", "DeepSeek Harness", "DeepSeek 官方 agent harness 完整内置：自带 Node 运行时与完整界面，AI 可让它跑整套 agent 工作流"),
+        Triple("harness", "Agent 工作台", "完整内置 agent 工作台：自带 Node 运行时与完整界面，AI 可让它跑整套 agent 工作流"),
         Triple("sandbox", stringResource(R.string.qk_02773), stringResource(R.string.qk_02785)),
         Triple("db", stringResource(R.string.qk_02774), stringResource(R.string.qk_02786)),
         Triple("vispro", stringResource(R.string.qk_00021), stringResource(R.string.qk_02787)),

@@ -1,0 +1,17 @@
+Dir::Etc "@@PREFIX@@/etc/apt";
+Dir::Etc::parts "@@PREFIX@@/etc/apt/apt.conf.d";
+Dir::Etc::main "@@PREFIX@@/etc/apt/apt.conf";
+Dir::Etc::sourcelist "@@PREFIX@@/etc/apt/sources.list";
+Dir::Etc::sourceparts "@@PREFIX@@/etc/apt/sources.list.d";
+Dir::Etc::trustedparts "@@PREFIX@@/etc/apt/trusted.gpg.d";
+Dir::State "@@PREFIX@@/var/lib/apt";
+Dir::State::status "@@PREFIX@@/var/lib/dpkg/status";
+Dir::Cache "@@PREFIX@@/var/cache/apt";
+Dir::Bin::Methods "@@PREFIX@@/lib/apt/methods";
+Dir::Bin "@@PREFIX@@/bin";
+Dir::Bin::apt-key "@@PREFIX@@/bin/apt-key";
+Dir::Bin::dpkg "@@PREFIX@@/bin/dpkg";
+Dir::Bin::dpkg-deb "@@PREFIX@@/bin/dpkg-deb";
+Acquire::https::CaInfo "@@PREFIX@@/etc/tls/cert.pem";
+Dir::Log "@@PREFIX@@/var/log/apt";
+Dir::Log::History "@@PREFIX@@/var/log/apt/history";

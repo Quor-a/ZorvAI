@@ -1,0 +1,29 @@
+{
+  "name": "@dsh-android/dsh-session-delete",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Delete conversation: a session row menu action plus an authenticated host route that removes the stored session (the engine has no session/delete RPC).",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "license": "MIT",
+  "dsh": {
+    "client": {
+      "platform": "web"
+    }
+  },
+  "files": [
+    "lib/",
+    "src/",
+    "test/",
+    "README.md"
+  ]
+}

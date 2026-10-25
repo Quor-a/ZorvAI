@@ -1,0 +1,19 @@
+{
+  "$comment": "快照预装清单与镜像链（build-snapshot-013.mjs 消费）。targets=Termux 预装包（依赖闭包 BFS 自动展开）；android-tools 已于 0.14.0 退役（内置 adb 移除，特权执行改由壳侧 Shizuku UserService 承载，见 docs/SPEC-0.14.0-ROUND-2026-09-15.md §6）；termux 无 licenses 包（LICENSES 由基座/仓库文本兜底）。增删预装包只改本文件。",
+  "mirrors": [
+    "https://mirrors.tuna.tsinghua.edu.cn/termux/apt/termux-main",
+    "https://packages.termux.dev/apt/termux-main"
+  ],
+  "npmMirrors": ["https://registry.npmjs.org", "https://registry.npmmirror.com"],
+  "targets": [
+    "python", "python-pip", "perl", "ruby", "ripgrep", "zip", "vim", "openssl", "openssl-tool",
+    "zsh", "socat", "busybox", "dpkg", "termux-exec", "termux-elf-cleaner", "termux-keyring",
+    "git"
+  ],
+  "pnpm": { "version": "10.12.1", "pkg": "pnpm" },
+  "canvas": {
+    "version": "1.0.8",
+    "comment": "仅 arm64 装配（npm 无 android-x86_64 triple）；x86_64 维持 attachment-formats 懒加载守卫降级",
+    "pkgs": ["@napi-rs/canvas", "@napi-rs/canvas-android-arm64"]
+  }
+}

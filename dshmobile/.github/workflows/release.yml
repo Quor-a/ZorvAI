@@ -1,0 +1,385 @@
+# release.yml — 一键正式发布链（workflow_dispatch：传入 version + notes）
+#
+# 目标（用户口径）：workflow_dispatch 输入 version + notes -> CI 自动完成
+#   【构建快照（arm64 + x86_64）-> 打包 APK（双 ABI）-> 跑门禁 -> 上传待发布 artifact -> 独立 job 建 draft Release】
+#
+# 当前结构（2026-10-05）：snapshot 与 APK 构建/验证 job 只读并上传 artifact；publish job 下载同一 artifact，
+#   仅负责创建 draft Release 与上传资产。完整 GitHub runner 发布尚未在本轮触发验证。
+#   - **测试包不走这里**：测试包在本地构建（-Fast / -Suffix 等），理由与影响见
+#     docs/0.14.2-fx-2-DEFECTS-AND-PLAN.md 的 G.2。
+#
+# 刻意保守：只出 draft Release（人工核对后手动转正式）；不 push main；凡未端到端验证的步骤注释里标 [未验证]。
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（不带 v，如 0.14.5）；必须等于 app/build.gradle.kts 的 versionName'
+        required: true
+        type: string
+      notes:
+        description: '发布说明 markdown 正文；留空则落 notes 模板并保留待填写'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  # ── J1 从源重建快照（双 ABI）─────────────────────────────────────────────
+  # 独立 job：这是整链最重的一段（本地约 4 分钟/ABI），且不需要 gradle；失败时可只重跑它。
+  snapshot:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        abi: [arm64, x86_64]
+      fail-fast: false
+    env:
+      DSH_APK_DIR: ${{ github.workspace }}
+    steps:
+      # 每个快照 job 只拉当前 ABI 的 base-usr 与共用 base-dsh，base/ 缓存命中则跳过拉取。
+      # checkout 的 lfs:true 按 ref fetch；历史 LFS 对象盘点不能当作单次 CI 下载量。
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          lfs: false                    # 见上方说明：改按需拉取，勿改回 true
+      # 缓存键取 **pointer 文件的哈希**：pointer 内含 oid+size，对象一变键即变，不会命中陈旧归档。
+      - name: 缓存底座归档（命中则跳过 LFS 拉取）
+        id: lfs-base
+        uses: actions/cache@v4
+        with:
+          path: base
+          key: lfsbase-${{ matrix.abi }}-${{ hashFiles('base/base-dsh.tar.xz', format('base/base-usr-{0}.tar.xz', matrix.abi)) }}
+      - name: 按需拉取 LFS 底座（仅本 ABI，未命中缓存时）
+        if: steps.lfs-base.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -e
+          git lfs install --local
+          git lfs pull --include="base/base-usr-${{ matrix.abi }}.tar.xz,base/base-dsh.tar.xz"
+      # 守卫：按需拉取失败时工作区会留下约 130 字节的 pointer 文本——它「看起来是个文件」，
+      # 能被 cp/tar 读到，失败会以「tar 解压出错」之类难懂的下游症状出现。这里在源头判红。
+      - name: 断言底座确实已落地（拒绝 LFS pointer 冒充文件）
+        shell: bash
+        run: |
+          set -e
+          node scripts/require-lfs-materialized.mjs \
+            "base/base-usr-${{ matrix.abi }}.tar.xz" "base/base-dsh.tar.xz"
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - name: python -> python3
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y python3 python-is-python3 || sudo ln -sf /usr/bin/python3 /usr/bin/python
+          python --version
+      # 快照构建期会跑 check-browser-syntax-floor（判据 1 依赖真实 TypeScript 解析器），
+      # 并注入各插件的 lib/ ⇒ 缺依赖会以 exit 2「无法判定」拒发（首次派发实测：release run 36352307693 两个 ABI 同因失败）。
+      - name: 准备快照语法工具链（仅依赖，不构建产品插件）
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 原始快照消费官方引擎与底座；这里只需 TypeScript/esbuild 解析和降级工具。
+          #
+          # 为什么必须装 **两个**包（2026-10-08 实锤，release run 37856843613 两 ABI 同因失败）：
+          #   check-browser-syntax-floor 把 esbuild 钉在 ESBUILD_PIN=0.25.12（判据 2 的兼容表就是口径，
+          #   漂移即 exit 2）。它的候选顺序是 plugins/dsh-android-bridge -> dsh-android-vdisplay ->
+          #   dsh-client-ui-responsive -> node_modules。
+          #   dsh-client-ui-responsive 的锁图里 esbuild 是 0.21.5（经 tsdown 传递依赖），它**自己并不声明** esbuild；
+          #   只装它会让解析命中 0.21.5 -> 版本漂移 -> exit 2 -> 快照不可发布。
+          #   plugins/dsh-android-bridge 显式声明 esbuild ^0.25.0（锁图 0.25.12），是候选链上第一个能满足 pin 的载体。
+          #   它无 file: 依赖（不同于 linux-env 需要 termux 先构建），故可在本步单独安装。
+          # 注意：本步**只装依赖、不构建**产品插件（保持 CI 瘦身的初衷）；
+          # 且**不得**据此放宽门禁——版本漂移仍应 fail-loud，这里只是确保链上确实存在钉住的版本。
+          for d in dsh-client-ui-responsive plugins/dsh-android-bridge; do
+            node scripts/source-build/install-project-dependencies.mjs "$d" \
+              ".deploy-tmp/source-build/plugin-lock-resolution-${{ matrix.abi }}.json"
+          done
+      - name: stage 底座归档（base/ -> .deploy-tmp/<base-dir>/）
+        shell: bash
+        run: |
+          set -e
+          if [ "${{ matrix.abi }}" = "arm64" ]; then bdir="arm64-base"; else bdir="x64-base"; fi
+          mkdir -p ".deploy-tmp/${bdir}"
+          [ -f "base/base-usr-${{ matrix.abi }}.tar.xz" ] || { echo "缺 base/base-usr-${{ matrix.abi }}.tar.xz"; exit 1; }
+          cp "base/base-usr-${{ matrix.abi }}.tar.xz" ".deploy-tmp/${bdir}/base-usr.tar.xz"
+          [ -f "base/base-dsh.tar.xz" ] && cp "base/base-dsh.tar.xz" ".deploy-tmp/${bdir}/base-dsh.tar.xz"
+          du -sh ".deploy-tmp/${bdir}"
+      - name: 构建快照（Termux 源装配 + 注入 + 归档）
+        shell: bash
+        run: |
+          set -e
+          # 原生 Linux 直跑；WSL 重入只在 win32 触发（构建脚本自身判定）。
+          node scripts/build-snapshot-013.mjs "${{ matrix.abi }}"
+      - name: 断言产物存在
+        shell: bash
+        run: |
+          set -e
+          f=".deploy-tmp/snapshot-013/${{ matrix.abi }}/snapshot.tar.xz"
+          [ -f "$f" ] || { echo "::error::快照未产出: $f"; exit 1; }
+          ls -l "$f"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-${{ matrix.abi }}
+          path: .deploy-tmp/snapshot-013/${{ matrix.abi }}/snapshot.tar.xz
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-locks-${{ matrix.abi }}
+          path: .deploy-tmp/source-build/plugin-lock-resolution-${{ matrix.abi }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+  # ── J2 打包 + 门禁 + 待发布 artifact（无远程写权限）─────────────────────
+  release:
+    needs: [snapshot]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    env:
+      DSH_APK_DIR: ${{ github.workspace }}
+      ANDROID_USER_HOME: ${{ github.workspace }}/.android-home
+    steps:
+      # LFS 流量治理（0.14.5）：本 job **完全不需要** LFS 底座。
+      #   取证：scripts/build-apk-013.ps1:252 只消费 `.deploy-tmp/snapshot-013/<abi>/snapshot.tar.xz`
+      #   并在缺席时明确提示「先跑 build-snapshot-013.mjs」——它从不读 base/。
+      #   底座由上面的 snapshot job 消费；此处原先的 `lfs: true` 纯属浪费。
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          lfs: false
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: python -> python3
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y python3 python-is-python3 || sudo ln -sf /usr/bin/python3 /usr/bin/python
+      - uses: actions/download-artifact@v4
+        with:
+          path: .deploy-tmp/snapshot-013
+      - name: 归置快照为 ABI 命名（对齐 release/ 规范）
+        shell: bash
+        run: |
+          set -e
+          mkdir -p snapshot
+          cp .deploy-tmp/snapshot-013/snapshot-arm64/snapshot.tar.xz  snapshot/snapshot-arm64.tar.xz
+          cp .deploy-tmp/snapshot-013/snapshot-x86_64/snapshot.tar.xz snapshot/snapshot-x86_64.tar.xz
+          for abi in arm64 x86_64; do
+            [ -f "snapshot/snapshot-${abi}.tar.xz" ] || { echo "::error::缺 snapshot/snapshot-${abi}.tar.xz"; exit 1; }
+          done
+          ls -l snapshot/
+      - name: 版本与纪律断言（versionName == 输入）
+        shell: bash
+        run: |
+          set -e
+          VER=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -1)
+          CODE=$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts | head -1)
+          echo "build.gradle versionName=$VER versionCode=$CODE ; input=${{ inputs.version }}"
+          [ "$VER" = "${{ inputs.version }}" ] || { echo "::error::versionName($VER) != 输入——先改 build.gradle.kts 并走 PR"; exit 1; }
+          echo "ver=$VER" >> "$GITHUB_ENV"
+          echo "code=$CODE" >> "$GITHUB_ENV"
+      - name: 准备固定签名 keystore（与历史发布同一把）
+        run: |
+          mkdir -p "$ANDROID_USER_HOME/.android"
+          cp keystore/debug.keystore "$ANDROID_USER_HOME/.android/debug.keystore"
+          ls -l "$ANDROID_USER_HOME/.android/debug.keystore"
+      - name: 准备 Android SDK build-tools（apksigner 供产出侧签名断言）
+        run: |
+          yes | sudo "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" >/dev/null 2>&1 || true
+          find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name apksigner | tail -1
+      - name: 准备插件依赖（lock-only 后 npm ci；构建由正式入口统一执行）
+        shell: bash
+        run: |
+          set -e
+          # 正式构建入口和依赖准备读取同一清单；有 build 的包才需要安装，顺序保持 termux 在前。
+          mapfile -t plugin_dirs < <(node -e "const {dirs}=require('./scripts/plugin-dirs.json'); console.log(dirs.filter(d=>require('./'+d+'/package.json').scripts?.build).join('\n'))")
+          test "${#plugin_dirs[@]}" -gt 0
+          for d in "${plugin_dirs[@]}"; do
+            node scripts/source-build/install-project-dependencies.mjs "$d" \
+              .deploy-tmp/source-build/plugin-lock-resolution-release.json
+          done
+      - name: Kotlin 单测（check-kotlin-test-count 的输入）
+        shell: bash
+        run: |
+          set -e
+          # 为什么必须在这里跑：聚合门禁里的 check-kotlin-test-count.mjs **按设计**在没有
+          # gradle 结果时判红（它拒绝「一个用例都没跑」冒充通过，见脚本 :352-361）。
+          # 没有本步，发布链会**必然**死在那条门禁上；而 G.0 ⑤ 记录的正是这条结构性脱节
+          # （CI 只跑 compileDebugKotlin，从不跑 Kotlin 单测、也从不调这个计数门禁）。
+          # 结果目录 app/build/test-results/testDebugUnitTest 会被下面的门禁就地读取并比对基线。
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest --no-daemon --console=plain
+      # 上游源码门禁统一读 contract.upstreamRepo；旧 dsh/ 与 readonly 审核树不得代替 0.2 build input。
+      # 缺输入会 SKIP，而 --require 拒绝 SKIP；源码版本、提交和 describe 都必须与合同一致。
+      - name: 检出上游源码树（0.2 固定提交；合同路径）
+        shell: bash
+        run: |
+          set -e
+          mkdir -p .deploy-tmp
+          git clone --filter=blob:none --no-checkout https://github.com/deepseek-ai/deepseek-harness.git .deploy-tmp/deepseek-harness
+          # 提交与标签一律从合同读，不写死：写死会随每次引擎追版静默漂移，
+          # 0.14.8 追 0.2.1-rc.2 时该步直接判红（contract 已升而 workflow 仍钉 0.2.0-rc.2）。
+          # 合同是唯一真源；这里只断言「检出的树与合同逐字相符」。
+          COMMIT=$(node -p 'require("./scripts/contract.json").upstream.commit')
+          TAG=$(node -p 'require("./scripts/contract.json").baseline')
+          git -C .deploy-tmp/deepseek-harness checkout --detach "$COMMIT"
+          test "$(git -C .deploy-tmp/deepseek-harness rev-parse HEAD)" = "$COMMIT"
+          test "$(git -C .deploy-tmp/deepseek-harness describe --tags --always)" = "dsh-v$TAG"
+          # packageManager / engines 也由合同提供（上游 0.2.1 把 pnpm 由 11.7.0 抬到 11.28.5），
+          # 写死同样会漂移；合同缺字段即判红，避免「没登记就当通过」。
+          node -e 'const c=require("./scripts/contract.json"), p=require("./.deploy-tmp/deepseek-harness/package.json"); if(c.upstreamRepo!==".deploy-tmp/deepseek-harness" || !c.baseline || !c.upstream.commit || !c.upstream.packageManager || !c.upstream.enginesNode || p.version!==c.baseline || p.packageManager!==c.upstream.packageManager || p.engines.node!==c.upstream.enginesNode) throw Error("release source identity does not match contract")'
+          test -d .deploy-tmp/deepseek-harness/packages/client/ui-theme/src/styles || { echo "::error::上游令牌定义面缺席"; exit 1; }
+      # 本地链期望的输入位是 .deploy-tmp/snapshot-013/<abi>/snapshot.tar.xz（**注入前**），
+      # 注入/降级/门禁/打包都在链内完成。J1 产出的正是注入前快照，归置到该位置即可。
+      - name: 归置快照为本地链输入位（pre-injection；注入由链内完成）
+        shell: bash
+        run: |
+          set -e
+          mkdir -p .deploy-tmp/snapshot-013/arm64 .deploy-tmp/snapshot-013/x86_64
+          cp snapshot/snapshot-arm64.tar.xz .deploy-tmp/snapshot-013/arm64/snapshot.tar.xz
+          cp snapshot/snapshot-x86_64.tar.xz .deploy-tmp/snapshot-013/x86_64/snapshot.tar.xz
+          ls -l .deploy-tmp/snapshot-013/*/snapshot.tar.xz
+      # 复用仓库自有的本地链，而不是在 YAML 里手搓流水线：链内已包含浏览器语法下限降级、
+      # 单 pass 注入（@dsh-android + vendor 外部插件 + 权威 patch，--all-profiles）、产物面门禁、
+      # 双 ABI 打包，以及 -ExportSnapshots 的「注入后快照 == APK 内嵌快照」一致性校验。
+      # 手搓版缺降级与注入 ⇒ check-inject-completeness 如实判红（真实 run 36356397292）。
+      - name: 从本次快照恢复模型能力目录（跨 job 同源）
+        shell: bash
+        run: |
+          set -euo pipefail
+          CATALOG_ROOT=".deploy-tmp/release-model-catalog"
+          PI="usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@earendil-works/pi-ai"
+          mkdir -p "$CATALOG_ROOT"
+          # 单次流式解压，只物化目录声明；不依赖 J1 未上传的 lib 或上一次工作区缓存。
+          xz -d -T8 -c .deploy-tmp/snapshot-013/arm64/snapshot.tar.xz | tar -xf - -C "$CATALOG_ROOT" "$PI/package.json" "$PI/dist/providers/data"
+          node scripts/gen-model-catalog.mjs --engine-root "$CATALOG_ROOT" --out plugins/dsh-model-capability/lib/catalog-snapshot.json
+      - name: 本地链全量（语法降级 + 注入 + 门禁 + 双 ABI 打包 + 注入后快照导出）
+        shell: bash
+        run: |
+          set -e
+          chmod +x gradlew
+          pwsh -NoProfile -File scripts/build-apk-013.ps1 -Suffix "" -ExportSnapshots
+      - name: 子仓打包（复用正式入口已构建产物）
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p plugins
+          for d in dsh-shell-termux dsh-client-ui-responsive dsh-host-web-compat; do
+            (cd "$d" && npm pack --pack-destination "$GITHUB_WORKSPACE/plugins")
+          done
+          count=$(find plugins -maxdepth 1 -name '*.tgz' | wc -l)
+          [ "$count" -eq 3 ] || { echo "::error::子仓 tgz 必须恰好 3 件"; exit 1; }
+      - name: 归集发布资产（APK + 注入后快照 + 子仓 tgz）
+        shell: bash
+        run: |
+          set -e
+          OUT="release/v${ver}"
+          mkdir -p "$OUT/apk" "$OUT/snapshot" "$OUT/plugins" "$OUT/provenance"
+          cp .deploy-tmp/source-build/plugin-lock-resolution-release.json "$OUT/provenance/"
+          for abi in arm64 x86_64; do
+            cp ".deploy-tmp/snapshot-013/plugin-locks-${abi}/plugin-lock-resolution-${abi}.json" "$OUT/provenance/"
+          done
+          ls -l "out/v${ver}"
+          for f in out/v${ver}/*.apk; do [ -f "$f" ] && cp "$f" "$OUT/apk/"; done
+          for f in out/v${ver}/snapshot-*.tar.xz; do [ -f "$f" ] && cp "$f" "$OUT/snapshot/"; done
+          for f in out/v${ver}/*.sha256; do [ -f "$f" ] && cp "$f" "$OUT/snapshot/"; done
+          # 子仓 tgz 由上一「子仓打包」步产出；这里不许 || true 吞掉缺件（发布资产会静默少 3 件）。
+          cp plugins/*.tgz "$OUT/plugins/"
+          ls -lR "$OUT"
+          apk_count=$(find "$OUT/apk" -name '*.apk' | wc -l)
+          [ "$apk_count" -ge 2 ] || { echo "::error::APK 少于 2 件（双 ABI 缺件）"; exit 1; }
+          node scripts/check-apk-signatures.mjs --self-test
+          node scripts/check-apk-signatures.mjs --dir "$OUT/apk" --keystore keystore/debug.keystore
+          snap_count=$(find "$OUT/snapshot" -name 'snapshot-*.tar.xz' | wc -l)
+          [ "$snap_count" -ge 2 ] || { echo "::error::注入后快照少于 2 件"; exit 1; }
+      - name: MANIFEST.txt + notes.md
+        shell: bash
+        env:
+          RELEASE_NOTES: ${{ inputs.notes }}
+        run: |
+          set -e
+          OUT="release/v${ver}"
+          ( cd "$OUT" && find . -type f ! -name MANIFEST.txt ! -name notes.md | sort | while read -r f; do
+              rel=${f#./}
+              echo "$(sha256sum "$f" | awk '{print $1}')  ${rel}  $(stat -c%s "$f")"
+            done > MANIFEST.txt )
+          # 用 env 传多行 notes（避免把表达式直接嵌进 heredoc——YAML 缩进与多行内容都会出问题）
+          printf '%s\n' "$RELEASE_NOTES" > "$OUT/notes.md"
+          [ -s "$OUT/notes.md" ] || printf '# v%s 发布说明\n\n## 改动\n- \n' "${ver}" > "$OUT/notes.md"
+          cat "$OUT/MANIFEST.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-v${{ inputs.version }}
+          path: release/v${{ inputs.version }}/
+          retention-days: 30
+
+  publish:
+    needs: [release]
+    if: ${{ needs.release.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-v${{ inputs.version }}
+          path: release/v${{ inputs.version }}
+      - name: 确认待发布包结构
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="${{ inputs.version }}"
+          DIR="release/v${VER}"
+          test -s "$DIR/notes.md"
+          test -s "$DIR/MANIFEST.txt"
+          apk_count=$(find "$DIR/apk" -maxdepth 1 -type f -name '*.apk' | wc -l)
+          [ "$apk_count" -ge 2 ] || { echo "::error::下载的 Release artifact 缺少双 ABI APK"; exit 1; }
+          # MANIFEST is made after signature verification in the build job. Matching every downloaded APK
+          # to its manifest digest proves publish is handling the exact verified bytes, without rebuilding or re-signing.
+          while IFS= read -r apk; do
+            rel="${apk#${DIR}/}"
+            expected=$(awk -v file="$rel" '$2 == file { print $1; count++ } END { if (count != 1) exit 1 }' "$DIR/MANIFEST.txt") || { echo "::error::MANIFEST 缺少唯一条目: $rel"; exit 1; }
+            actual=$(sha256sum "$apk" | awk '{print $1}')
+            [ "$actual" = "$expected" ] || { echo "::error::下载后的 APK 与已验证 artifact MANIFEST 不同: $rel"; exit 1; }
+            echo "发布字节核对通过: $rel sha256=$actual"
+          done < <(find "$DIR/apk" -maxdepth 1 -type f -name '*.apk' | sort)
+      - name: 建 draft Release 并上传已验证资产
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -e
+          VER="${{ inputs.version }}"
+          TAG="v${VER}"
+          # 幂等：已存在则复用，避免重跑 422
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "release $TAG 已存在，复用"
+          else
+            gh release create "$TAG" --repo "${{ github.repository }}" --draft \
+              --title "dsh-mobile $TAG" --notes-file "release/v${VER}/notes.md"
+          fi
+          for f in release/v${VER}/apk/*.apk release/v${VER}/snapshot/*.tar.xz release/v${VER}/plugins/*.tgz release/v${VER}/provenance/*.json release/v${VER}/MANIFEST.txt release/v${VER}/notes.md; do
+            [ -f "$f" ] || continue
+            gh release upload "$TAG" "$f" --repo "${{ github.repository }}" --clobber
+          done
+          gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name'
+
+  # Creating a draft with GITHUB_TOKEN does not emit a new workflow-triggering release event.
+  # Explicitly refresh Pages here; only the latest public stable release is eligible.
+  # Publishing the draft later also triggers pages.yml via release: published.
+  sync-pages:
+    needs: [publish]
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml

@@ -1,0 +1,10 @@
+{
+  "$comment": "base-dsh 合并后的剥离清单（安全审计 C1：基座提取自运行设备，分发快照只含配置与依赖）。secretLeaves=机密文件（存在即删）；stalePnpmState=陈旧 pnpm 状态（指向旧 store，致市场安装 ERR_PNPM_UNEXPECTED_STORE）；runtimeDirs=运行时数据目录（首启再生）。settings.yaml 不在剥离列——由 seed-settings.yaml 模板覆写。",
+  "secretLeaves": [".credentials.yaml", ".anonymous-user-id", "settings.yaml.imported"],
+  "stalePnpmState": [
+    "profiles/web/node_modules/.modules.yaml",
+    "profiles/web/node_modules/.pnpm-workspace-state-v1.json",
+    "profiles/web/pnpm-lock.yaml"
+  ],
+  "runtimeDirs": ["sessions", "storages", "attachments", "llm-deepseek"]
+}

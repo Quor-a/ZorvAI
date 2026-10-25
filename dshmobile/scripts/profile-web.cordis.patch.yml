@@ -1,0 +1,246 @@
+# gateway/client 由继承的 base/typert-gateway 唯一行提供，不在此重复 insert。
+# 0.14.7 的 host-fiber 时序适配随 client-registry-scan-C4 注入；controllers 全部保留。
+# Android adaptation (M1.1 final form): dsh-shell-termux replaces the temporary patch v2.
+# Protection boundary = Termux app domain (SELinux u0_aXXX) + approval flow;
+# sandboxMode explicitly declares workspace-write (permission-presets mount prerequisite), enforcement honestly reported as partial.
+- id: bash-sandbox
+  disabled: true
+- insert:
+    - id: shell-termux
+      name: '@dsh-android/dsh-shell-termux'
+      config:
+        # bash/toolchain point at the in-shell snapshot (same domain as the engine, self-contained, no Termux App dependency):
+        # the Termux App's bash belongs to u0_a423 with 700 perms, so the engine (u0_a461) cross-uid
+        # accessSync(X_OK) check always fails (measured "is not executable"). The in-shell
+        # usr/bin ships bash/curl/node; wget is now distributed with the snapshot too.
+        bashPath: /data/data/com.ai.assistance.quro/files/usr/bin/bash
+        prefix: /data/data/com.ai.assistance.quro/files/usr
+        home: /data/data/com.ai.assistance.quro/files/home
+        cwd: /data/data/com.ai.assistance.quro/files/home
+        timeoutMs: 120000
+        maxTimeoutMs: 600000
+        # 写面栅栏（0.13.0 D21）：默认档位仅工作区与选定共享目录；danger-full-access 为完全访问档位
+        # （开放共享存储全域，仍限应用域沙盒）。workspaceRoot/sharedDirs 为全局单一实例，
+        # 由 dsh-android-linux-env 插件在设置页动态维护（此处的初始值仅出厂基线）。
+        writeMode: workspace-write
+        workspaceRoot: /data/data/com.ai.assistance.quro/files/home/.dsh/workspaces
+        sharedDirs: []
+    - id: host-web-compat
+      name: '@dsh-android/dsh-host-web-compat'
+# 0.1.5（2026-09-10 追上游）：ui-layout 不再禁用——它已成为布局服务中枢
+# （ctx.layout、键控 main 面板槽、rightbar 的 track/fullscreen 汇报），
+# ui-conversation / ui-sidebar / ui-sidebar-right 都依赖它；禁用即会话与左栏同时不可用。
+# dsh-client-ui-responsive 0.2.0 起改为「移动适配层」：只注入 CSS/DOM 与移动外壳，不再注册 root 槽。
+- insert:
+    - id: ui-responsive
+      name: '@dsh-android/dsh-client-ui-responsive'
+
+# 0.13.7（2026-09-10 用户拍板退役）：dsh-attachment-formats 不再挂载。
+# 它是 0.12.1 期的「附件格式扩展」过渡插件（PDF 文本层 / Office 结构化 / 扫描件 OCR），
+# 自带一个 composer 附件按钮（class dshaf-btn）——上游 0.1.5 已有自己的附件入口
+# （dsh-client-file-upload + onShowFileChooser 官方通道）与文档预览（documentpreview 内含
+# pdfjs），两个「添加附件」按钮并排出现（窄屏尤其挤）。包体仍在基座快照内，不再装载即等于退役；
+# 若日后需要 Office/OCR 能力，恢复本节 insert 即可（一行可逆）。
+# ZorvAI 裁定（2026-10）：dsh-undo-savepoint **重新挂载**。上游 0.14.8 把它从新快照装配面退役
+# （壳侧 repairProfilePatch 摘除工厂安装项），但撤销保存点是内置 dsh-mobile 的核心能力：
+# 壳侧 UndoGate 的配置/插件代码树急救回退依赖它产生的快照。ref vendor 目录仍带 0.4.9 固化副本
+# （lib 已打 E1-E8/S1/S2/U1 移动端补丁），随本快照注入 profiles/web/node_modules。
+# 配套：FactoryProfilePatch.RETIRED_FACTORY_ENTRIES 已清空（不再摘除本条目）。
+- insert:
+    - id: dsh-undo
+      name: 'dsh-undo-savepoint'
+
+# 插件市场（0.13.0 F4，M3.3）：dshmarketplace-plugin——会话 /store 命令、设置页市场、agent 工具与技能文件。
+- insert:
+    - id: dshmarketplace
+      name: dshmarketplace-plugin
+
+# 在外部应用打开（0.1.5 新增，桌面编排）：上游 host/client 探查 Finder/Terminal/编辑器目录，
+# Android 上没有等价候选。两条 row 关闭，改由注入层的会话头部入口 + 壳侧系统选择器（PathOpen）承担。
+- id: open-in-app
+  disabled: true
+- id: ui-open-in-app
+  disabled: true
+
+# HMR / 插件热重载（review C12，2026-09-14）：上游 client-hmr 的 `/plugins/events` SSE 通道
+# 无任何鉴权（回环上任意本地应用可订阅构建事件流），且它在上游 bundle 里恒挂载；移动侧没有
+# live reload 收益（patchReload 已归一为 startup，见 perf-patch-reload-N1），整行禁用收口端口面。
+- id: client-hmr
+  disabled: true
+
+# 手机管理授权桥（0.13.0 F1.7，M3.2）：dsh-android-bridge——授权状态机/失败关闭/审计；
+# 门控限死为完全访问档位（自动审批模式不构成开放条件）。
+- insert:
+    - id: android-bridge
+      name: '@dsh-android/dsh-android-bridge'
+
+# 手机管理工具面（0.13.0 F1.6，M3.2）：dsh-android-manage——观察/动作/等待闭环，全部失败关闭。
+- insert:
+    - id: android-manage
+      name: '@dsh-android/dsh-android-manage'
+
+# 工具链与环境设置面板（0.13.0 F1.3/F1.5，M3.2）：dsh-android-linux-env——工具链状态/环境配方/
+# 共享目录与镜像设置视图；同时是 shell-termux 写面栅栏（workspaceRoot/sharedDirs，见上文 L20-22）
+# 的设置页维护面——不装载则共享目录设置无处维护（审校 C4 2026-08-23：注入四件套缺此条目）。
+- insert:
+    - id: android-linux-env
+      name: '@dsh-android/dsh-android-linux-env'
+
+# 文件直达会话（0.13.0 F5，M3.5）：dsh-android-file-open——外部文件强制新会话请求/状态/清理。
+- insert:
+    - id: android-file-open
+      name: '@dsh-android/dsh-android-file-open'
+
+
+# Default model（0.13.0 C3 端点级实锤修正，2026-08-25）：此前 pin 到 opencode-go
+# （OpenCode Zen Go，opencode.ai/zen/go/v1）——该网关实测对无有效 key 请求返回扁平
+# 404（"Not found"），且用户误以为在配 OpenRouter、实际请求发去 Zen Go → 全模型 404、
+# 换 key 无用（openclaw #69898 / opencode #31041 同源撞车）。0.13.0 默认改回 dsh 官方
+# deepseek-official：壳 shellEnv() 已注入 DEEPSEEK_API_KEY（files/deepseek-key.txt 私有文件），
+# 零额外配置、国内可达、开箱即用。opencode-go 仍在「添加自定义供应商」列表中可选。
+# 设置界面 agent-default-model 段为用户级（UI 保存会覆盖此默认）。
+#
+# 写法（0.14.2-fx-2 修正，2026-09-28）：**就地按上游 id 覆盖 config**，不再 disable + 换 id insert。
+# 机制依据：cordis-plugin-include 的 applyEntryPatches 对无 insert 的 patch 走「按 id 找既有 entry
+# 并逐字段覆盖」（vendor/include/src/index.ts:109-123）⇒ config 可直接打在既有行上。注意 config 是
+# **整体替换不是深合并**（实测 {a,b} 打 {b} 只剩 {b}），所以 provider 与 model 两个键都要给全。
+#
+# 为什么改（现象→原因→影响面）：旧写法禁掉上游 agent-default-model 再用新 id `agent-default-model-mobile`
+# 重新 insert 同一个包，只为塞一份 config。后果是**引入了一个服务供给单点**：session-controller 的 inject
+# 依赖里有 agentDefaultModel，一旦这条自定义 id 的 entry 未激活（pending），session-controller 就跟着
+# pending ⇒ boot 仍报成功（它不在上游 requiredStartupEntryIds 的 7 个 id 内）但 ctx.sessionController 缺席，
+# 任何 session/selectModel 派发都得到 `active Service "sessionController" is unavailable`。
+# 已知且有意的行为变更：live entry id 由 `agent-default-model-mobile` 变回上游的 `agent-default-model`。
+# settings 的 namespace **就是 entry.options.id**（packages/settings/settings/src/index.ts:315/326/382），
+# 因此**旧 `agent-default-model-mobile` namespace 里存过的「默认模型」值会读不到**，回落为本行 pin 的
+# deepseek-official / deepseek-v4-flash。影响面：仅限在设置界面显式改过默认模型的用户，且只影响「默认模型」
+# 一项（不涉及其它 settings 段）；改回设置界面重选一次即可。这是为消除单点而接受的代价。
+- id: agent-default-model
+  config:
+    provider: deepseek-official
+    model: deepseek-v4-flash
+
+# Android directory-picker composition (2026-08-16 fix):
+# the bundle's directory-picker-auto resolves to browse on Android (platform !== linux) and registers
+# a browse backend for ctx.directoryPicker — colliding with dsh-host-web-compat's native singleton
+# (the later registrant throws duplicate service, the whole auto mount fails → the UI's directory-flow
+# slot has no occupant → add/switch workspace entries stop working).
+# Fix: disable auto; host-web-compat exclusively owns the capability (kind: native,
+# dir-pick endpoint + token auth + shell SAF picker); explicitly mount the
+# ui-directory-picker-native surface (renderless flow calling host.pickDirectory).
+- id: directory-picker
+  disabled: true
+- insert:
+    - id: picker-native-surface
+      name: '@deepseek-ai/dsh-client-ui-directory-picker-native'
+
+# 【0.14.1 摘除（用户裁定，勿再挂回）】隐式模型同步插件 @aiwayds/dsh-model-sync（0.13.3 W7 引入，
+# vendor 固化副本）已移除。原因（2026-09-19 审查 §9 实锤，两条语义在同一个 models 数组上必然打架）：
+#   插件语义 =「受管路由以 pi.dev 远端目录为唯一事实来源，settings.yaml 只是它的投影」；
+#   用户心智 =「我配置的 provider 才该出现在我的设置里」。
+# 具体后果三条：① 默认路由（opencode-go / zai-coding-cn / minimax-cn / xiaomi-token-plan-cn）
+# 多数用户从未配置过，却被整段写进 providers；② 投影语义 + keepBuiltinOnly=true ⇒ 用户删掉的模型
+# 下一个周期（≤240min）被写回来（「怎么也删不掉」）；③ 与 dsh-model-capability 叠加后同一批
+# entry 上是两个插件的笔迹，归因困难。
+# 摘除面：本 patch 的 insert 行 + scripts/plugin-dirs.json 的 externals + vendor/dsh-model-sync/。
+# 存量数据不自动清理（无法可靠区分插件写入与用户手写）：残留条目与 ~/.dsh/models-store.json
+# 的处置见 docs/CHANGELOG.md 的 0.14.1 条目。
+
+# 侧栏 AI 浏览器（0.13.8 新插件 @dsh-android/dsh-android-browser）：宿主半——tier 判定、面板数据契约、
+# 壳桥 op 名（BROWSER_OPS，见其 src/contract.ts）。**browser\* 不进 A11Y_OPS**（方案 §4.5）。
+# 本轮壳侧尚未实现壳桥分支，op 名先冻结在契约里（未挂载 = 引擎不加载，故此处先挂载）。
+- insert:
+    - id: android-browser
+      name: '@dsh-android/dsh-android-browser'
+
+# 虚拟屏（0.13.8 新插件 @dsh-android/dsh-android-vdisplay）：Shizuku 特权通道的能力状态面 + 只读状态端点
+# + vd\* op 声明（VD_OPS，见其 src/status.ts）；像素合成留在壳侧 SurfaceView。vd\* 同样不进 A11Y_OPS。
+- insert:
+    - id: android-vdisplay
+      name: '@dsh-android/dsh-android-vdisplay'
+
+# 删除对话（上游 issue #493）：会话行菜单「删除对话」+ 受鉴权 host 路由 /api/session-delete
+# （引擎无 session/delete RPC，由本插件补）。ZorvAI 2026-10 裁定完整内置 ref 官方注入集（不再挑选）：
+# ref 仓 plugin-dirs.json dirs 与本 patch 均挂载它，lib 取活树部署版（0.1.0，package.json 无 dsh peer，
+# 已在 contract.runtimeCompat.noPeerRows 登记判定）。路由鉴权走 same-origin authenticated。
+- insert:
+    - id: session-delete
+      name: '@dsh-android/dsh-session-delete'
+
+# PTC 代码执行（TypeScript 代码块）：**nodeExecutable 必须显式钉死**，不得依赖 `process.execPath`。
+#
+# 现场（用户 2026-09-27 报障）：「连最小的程序（return 1 + 1;）都失败了，共试了 4 次」，
+# 报错 code run failed (worker-exit): Node process exited before completing (1):
+#     error: expected absolute path: "--max-old-space-size=512"
+#
+# 真因链（设备实测逐段复现）：
+#   ① 壳侧 EngineManager.startWithArgs 在 direct exec 被拒时改用系统链接器：
+#      build(listOf("/system/bin/linker64") + args)（EngineManager.kt:1126）。这是 Android 15+
+#      对 app-data ELF 的既定绕法，引擎本身照常起来。
+#   ② 但此时 **process.execPath 变成 /apex/com.android.runtime/bin/linker64**（实测：
+#      /system/bin/linker64 <node> -e "console.log(process.execPath)" 输出 linker64 自身）。
+#   ③ NodePtcRuntime 的 nodeExecutable 出厂缺省就是 process.execPath
+#      （ptc-runtime-node/src/index.ts:76 config.nodeExecutable ?? process.execPath），于是每个代码块
+#      子进程的 argv 成为 [linker64, "--max-old-space-size=512", <process.js>, ...]
+#      （同文件 :223 [executable, heapFlag, ...bootstrapArgs]）。
+#   ④ linker64 把**第一个非选项参数**当程序路径，--max-old-space-size=512 正好排在它
+#      —— 于是它自己报 expected absolute path 并退出，Node 根本没被加载。实测原样复现：
+#        /system/bin/linker64 --max-old-space-size=512 <node> -e 1
+#        → error: expected absolute path: "--max-old-space-size=512"（与本缺陷逐字节相同）。
+#
+# 为什么模拟器上不复现：x86_64 模拟器 direct exec 成功，execPath 就是真的 node，绕不到链接器这一支。
+# 这也是它只在部分真机上出现的原因——**与设备是否走链接器回落有关，与用户代码无关**。
+#
+# 修法：把执行器钉成快照内 node 的绝对路径（与上方 shell-termux 的 bashPath 同口径、
+# 同一份快照），从此这条链路**完全不读 process.execPath**。
+# 0.14.8（0.2.1-rc.2）：上游把该配置键从 nodeExecutable 改成 launch:{kind,executable}，语义不变。
+#
+# 【0.14.2 追加】上面这条「钉成 bin/node 绝对路径」只解决了 execPath 被污染，**没有解决 env**：
+# PTC 给子进程传的是显式过滤后的 env（ptc-runtime-node 的 STARTUP_ENVIRONMENT_NAMES 只放
+# PATH/PATHEXT/SYSTEMROOT/WINDIR/TEMP/TMP），LD_LIBRARY_PATH 不在其中 ⇒ 子进程里的 node 找不到
+# libz.so.1 等 DT_NEEDED（Permissive 模拟器报 CANNOT LINK；Enforcing 真机则 app 域 exec app-data ELF
+# 直接被拒 ⇒ EACCES，即用户截图的 code run failed）。
+# 故执行器改指**快照内的 wrapper 脚本** usr/libexec/dsh-node（由 build-snapshot-013.mjs 7c1 生成；
+# 0.14.8 起该配置键为 launch.executable，见下方 launch 块）：
+#   #!/system/bin/sh
+#   export LD_LIBRARY_PATH=<prefix>/lib
+#   exec /system/bin/linker64 <prefix>/bin/node "$@"
+# 脚本非 ELF ⇒ 内核走 shebang 读它，不触发 app-data ELF exec；LD_LIBRARY_PATH 由 wrapper 自己 export，
+# 不依赖被 tombstone 的继承；linker64 只**读取** node 而非 exec，绕开 execute_no_trans。
+# 设备实测（16416，同 env 只差是否走 wrapper）：直连 node → CANNOT LINK libz.so.1；wrapper → CHILD-OK。
+# 逆转条件：上游把 LD_LIBRARY_PATH（或等价的动态链接器搜索路径）纳入 PTC 子进程 env 白名单后，本行可改回 bin/node。
+# 与 marketplace 补丁 B 是同一族修法（那里的 execPath:process.execPath 也曾被 linker64 回退污染，
+# 导致 bad ELF magic）——同一环境事实，第二次咬人。
+# 逆转条件：上游 NodePtcRuntime 自己解析执行世界里的 node（不再缺省取 process.execPath）后，本行可撤。
+- id: ptc-runtime
+  config:
+    # 0.14.8 追版（0.2.1-rc.2）：上游删除 nodeExecutable，改为必填 launch 联合类型
+    # （ptc-runtime-node/src/config.ts：{kind:'node-script'|'embedded', executable, bootstrapPath?}）。
+    # 不带 .default() ⇒ 缺省不再回落到 process.execPath，必须显式钉住；kind=node-script 时
+    # heapFlag 仍排在 argv[1]（index.ts 的 ...packaged ? [] : [heapFlag]），故 wrapper 与 ptc-argv-L1 都保留。
+    launch:
+      kind: node-script
+      executable: /data/data/com.ai.assistance.quro/files/usr/libexec/dsh-node
+
+# Office→PDF（0.14.2 追版决策，2026-09-25 实测）——**显式禁用上游 web-app bundle 的 office-to-pdf 行**。
+# rc.1 新增该行（0.1.5 的 web-app bundle 里 office 零命中），它运行时依赖
+# @deepseek-ai/libreoffice-kit，而该依赖在本平台**无条件不可用**：
+#   libreoffice-kit 的 platformTarget() 只认 darwin/win32/linux-glibc ⇒ Android 下
+#   process.platform === 'android' 返回 undefined ⇒ resolveEngine() 落到
+#   `if (platform !== 'linux') throw new Error('Unsupported LibreOfficeKit host: android-x64')`
+#   —— **无条件抛**。152 MB 的 -wasm 引擎也救不了（同样被 platform !== 'linux' 挡掉），
+#   所以「补依赖」在本平台买不到任何能力，只会：① 快照 +10 MB JS 闭包；② 引入 MPL-2.0 依赖
+#   （本清单原本全为非 copyleft）。不禁该行的后果不是缺能力，而是 **boot 阶段崩**
+#   （Cannot find package '@deepseek-ai/libreoffice-kit'，设备实测），也就是该行本身挡路。
+# 上游对「没有转换器」的既定降级路径就是 UI 的 unavailable 提示（ui-sidebar-documentpreview
+# README：移除 remote.officeToPdf 注入即恢复不可用指引）⇒ 禁行 = 用上游自己的降级面。
+# 凭据：check-engine-overlay 正向闭包的 RUNTIME_MISSING_OK 登记了同一条（两处必须同进同出）。
+# 逆转条件：出现 Android 上真能跑的引擎实现 ⇒ 同时删掉本行与那条豁免。
+- id: office-to-pdf
+  disabled: true
+# Official 0.2.0-rc.2 desktop product telemetry/analytics are not Android services.
+# Retain the shared otel service and official ui-settings-session-log upload control.
+- id: desktop-product-telemetry
+  disabled: true
+- id: product-analytics
+  disabled: true
