@@ -66,7 +66,6 @@ class DeepSeekHarness(private val context: Context) {
          *      "Not in GZIP format" 安装失败。
          * 19 = 同一暂存树改回 gz 重打（App 侧纯 Java GZIPInputStream，不认 xz）。
          *      **必须 +1**：v=18 安装全部失败，但个别设备可能留下半解压树，不升版本
-         *      mark 对不上也会重解——升了更稳，杜绝任何复用残树的可能。
          * 20 = profile package.json 补 `dsh.profile.bundles`（dsh-base + dsh-web-app）——
          *      缺它整棵引擎条目树不装配：webserver/tools/subprocess/commands 等服务方
          *      一个都不在树里，10 个 @dsh-android 插件 + dsh-mcp-client 全部
@@ -74,8 +73,15 @@ class DeepSeekHarness(private val context: Context) {
          *      activate）。pack 字节已变，**必须 +1** 触发全量重解压覆盖旧 package.json；
          *      Kotlin 侧另加 ensureProfileBundles() 每次启动自愈（仿参考实现的
          *      ensureHardBundlesSelected），双保险。
+         * 21 = 白屏根因三连修（#389 / #389b / #390）：
+         *      #389 host-webserver READY_MARKUP 的 `??=`（Chrome 85+ SyntaxError，解析期
+         *      整段死）重写为 ES5 手工 deferred；注入行模板 globalThis→self。
+         *      #389b 9 文件 130 处动态 `import()` 改写为 `__dshImp` 三路径桥（原生 /
+         *      CSP 外链 module / <63 inline module）+ 共享注册表 `self.__dshReg`。
+         *      #390 Kotlin 侧：WebView 底色钉深色、注入 JS 的 globalThis→self、
+         *      UA 直读兜底种子。pack 字节已变，**必须 +1** 触发全量重解压覆盖旧 dist。
          */
-        private const val RUNTIME_VERSION = 20
+        private const val RUNTIME_VERSION = 21
         private const val MARK = ".dsh_v"
 
         /** dsh 默认端口。 */
@@ -152,7 +158,7 @@ class DeepSeekHarness(private val context: Context) {
          * dsh 壳」只能靠它。它同时进 `diagnose()` 输出与 HarnessScreen 顶栏 —— 界面上看不到戳，
          * 就等于装错包，这一条是出包自证链的一部分（同 LANXIU / Moyu 的做法）。
          */
-        const val BUILD_STAMP = "B20261025-0100"
+        const val BUILD_STAMP = "B20261025-1155"
 
         @Volatile
         private var instance: DeepSeekHarness? = null
