@@ -492,7 +492,7 @@ private const val KERNEL_TITLE_PREFIX = "DSH_KERNEL:"
  */
 private const val DSH_KERNEL_PROBE = """
   var miss = [];
-  // ── 语法项（B20261025-1340 起全部降为 A:，实锤口径见下）──────────────────
+  // ── 语法项（出厂校准起全部降为 A:，实锤口径见 Kotlin 侧 KDoc）──────────────────
   // 2026-10-25 全量 AST 复扫（TypeScript 解析器，非字节 grep）：出厂浏览器面
   //   · dsh-web-frontend/dist 3 个 JS + 87 个 lib/client*.js（@deepseek-ai 与
   //     home/profiles 镜像两处 node_modules 全扫）
