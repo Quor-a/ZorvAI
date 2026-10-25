@@ -609,7 +609,10 @@ private const val DSH_DIAG_JS = """
   p('Promise.withResolvers', typeof Promise.withResolvers);
   p('structuredClone', typeof structuredClone);
   p('AbortSignal.any', (typeof AbortSignal !== 'undefined') ? typeof AbortSignal.any : 'AbortSignal 缺失');
-  p('Iterator', typeof globalThis.Iterator);
+  // #390：self 而不是 globalThis —— globalThis 是 Chrome 71+ 的 API，地板内核（62/63）上
+  // 读它直接 ReferenceError，而这里不在 try 里：整个诊断脚本当场中断，按「诊断」零输出。
+  // self 是 window 的同义词，所有代次都有。口径与 #389 host-webserver 注入行模板同款修正。
+  p('Iterator', typeof self.Iterator);
   p('Cookie', document.cookie ? document.cookie.replace(/=[^;]{12,}/g, '=<已脱敏>') : '(空)');
   return L.join('\n');
 })()
@@ -729,6 +732,11 @@ private fun expectedLocale(mode: String, languages: List<String>): String {
  * 设置页会显示一个壳侧从未应用过的语言。桥在每次页面加载时读壳侧偏好，所以切换后
  * 重载一次即可收敛。
  *
+ * #390：挂点是 `self.__DSH_LOCALE__` 而不是 `globalThis.__DSH_LOCALE__` —— globalThis 是
+ * Chrome 71+ 的 API，地板内核（62/63）上读它 ReferenceError，本脚本又整段包在 try 里：
+ * 异常被吞、`__DSH_LOCALE__` 永不挂上，旧设备上语言引导静默失效（页面退浏览器语言）。
+ * self 是 window 同义词，所有代次可用；与 #389 host-webserver 注入行模板同款修正。
+ *
  * `onChange` 是唯一的「引擎 → 壳」通道，而 dsh 在页面加载期间会自行发布（一次是它激活的
  * locale，一次是持久化设置域把值推进运行时时）—— 那些自动发布**不带用户意图**，只忽略
  * 第一条会把剩下的全写回，那正是「跟随系统」被钉死成单一语言的原因（参考实现 issue #487）。
@@ -763,7 +771,7 @@ private fun dshLocaleBootstrapScript(mode: String, languages: List<String>): Str
         "try{document.addEventListener('click',arm,true);" +
         "document.addEventListener('keydown',arm,true);" +
         "document.addEventListener('touchend',arm,true)}catch(e){}" +
-        "globalThis.__DSH_LOCALE__={read:function(){return Promise.resolve({languages:tags,preference:$preference})}," +
+        "self.__DSH_LOCALE__={read:function(){return Promise.resolve({languages:tags,preference:$preference})}," +
         "onChange:function(locale){if(!armed)return;armed=false;" +
         "var next=String(locale);" +
         // 桥只认三档；语言包 id 不在这里静默降级成「跟随系统」。
@@ -1449,6 +1457,26 @@ private fun HarnessWebView(
                                 setOf("*"),
                             )
                         }.onFailure { android.util.Log.w("HarnessScreen", "注入失败", it) }
+                        // #390：WebView 底色钉成终端深色（与 document-start 的画布钉色同值）。
+                        // WebView 默认背景是纯白，而画布钉色只覆盖**文档内容** —— 首帧之前
+                        // （渲染进程刚起、文档还没 commit 的那几帧）露出来的是 WebView 自己的
+                        // 背景色：浅色设备上那就是一次白闪，用户看到的就是「白屏」。
+                        // 这一行在 loadUrl 之前，保证从第一帧起就是深色。
+                        setBackgroundColor(0xFF0B0E14.toInt())
+                        // #390：UA 直读兜底种子。JS 探针有两条回传通道（evaluateJavascript
+                        // 回包 + document.title），部分 ROM 两条都会丢 —— 那种设备上
+                        // kernelReport 永远是 null，诊断面板里「内核能力预检」整节消失，
+                        // 白屏时最该看的「这台设备内核多少」反而看不到。Kotlin 侧读 UA 不经过
+                        // JS、不经过回调，100% 可靠：先落地做底，JS 探针回包到了再覆盖成完整
+                        // 结论（探针的 S:/A: 判定以它的为准，本种子不带任何能力判定，
+                        // 因此也不会误触红条 —— 红条只认 S: 前缀）。
+                        val uaText = settings.userAgentString.orEmpty()
+                        val uaMajor = Regex("Chrome/(\\d+)").find(uaText)?.groupValues?.get(1)
+                        kernelReport = if (uaMajor != null) {
+                            "CHROME=$uaMajor|UA 直读兜底（JS 探针回包未达，仅版本号可靠）"
+                        } else {
+                            "CHROME=?|UA 直读兜底（未解析到 Chrome 版本：${uaText.take(80)}）"
+                        }
                         loadedUrl = url
                         navStartedAt = System.currentTimeMillis()
                         loadUrl(url)
