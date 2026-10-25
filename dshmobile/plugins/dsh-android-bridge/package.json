@@ -1,0 +1,59 @@
+{
+  "name": "@dsh-android/dsh-android-bridge",
+  "description": "Android privilege bridge: ADB authorization state machine, fail-closed execution, audit — the only controlled privilege-extension channel (PRD F1.7)",
+  "version": "0.2.4",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p . && tsc -p tsconfig.client.json --noEmit && node build-client.mjs",
+    "typecheck": "tsc -p . --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "test": "npm run build && node --test test/capability-gate.test.mjs test/capability-unlock-persistence.test.mjs test/control.test.mjs test/protocol-negotiation.test.mjs test/notify-projection.test.mjs test/privilege-status.test.mjs test/wireless-live.test.mjs test/a11y-freshness.test.mjs test/route-auth.test.mjs test/engine-port-auth.test.mjs test/screen-scope.test.mjs test/shell-ops.test.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/dsh-client-ui-settings": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
+    "@deepseek-ai/schemastery": "3.18.5",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-util-values": "0.2.1-rc.2",
+    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/dsh-client-ui-settings": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
+    "@deepseek-ai/schemastery": "3.18.5",
+    "@types/node": "^24.0.0",
+    "@types/react": "~18.3.1",
+    "esbuild": "^0.25.0",
+    "react": "^18.2.0",
+    "typescript": "^5.5.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kelai141/dsh-mobile.git"
+  }
+}

@@ -1,0 +1,62 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  min-width: 0;
+}
+
+.name {
+  margin: 0;
+  font-size: var(--dsh-content-font-size, 14px);
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.path {
+  margin: 0;
+  font-family: var(--dsw-font-markdown-code-font-family, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.primary,
+.secondary {
+  flex: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.primary {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.secondary {
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+}
+
+.failure {
+  margin: 4px 0 0;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  color: var(--dsw-alias-state-error-primary);
+}

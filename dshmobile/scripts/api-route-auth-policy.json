@@ -1,0 +1,722 @@
+{
+  "$comment": "0.14.0 #222 API route inventory. Every exact/prefix registration owned by the mobile product must be listed. protected routes require a local auth marker; public routes require a narrow response marker and explicit rationale. upstreamRoutes（D2）审计上游 packages/**/src/** 的注册面：每条上游 web/upgrade/fetch 注册站点必须有一条显式判定（protected / public / not-mounted），反向断言与 stale 检查见 check-api-route-auth.mjs 的上游段。",
+  "version": 1,
+  "routeRegistrations": [
+    {
+      "source": "vendor/dsh-undo-savepoint/lib/index.js",
+      "expected": 1
+    },
+    {
+      "source": "vendor/dshmarketplace-plugin/lib/index.js",
+      "expected": 2
+    },
+    {
+      "source": "plugins/dsh-android-bridge/src/index.ts",
+      "expected": 1
+    },
+    {
+      "source": "plugins/dsh-android-bridge/src/control-queue.ts",
+      "expected": 2
+    },
+    {
+      "source": "plugins/dsh-android-file-open/src/index.ts",
+      "expected": 5
+    },
+    {
+      "source": "plugins/dsh-android-linux-env/src/index.ts",
+      "expected": 3
+    },
+    {
+      "source": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "expected": 1
+    },
+    {
+      "source": "plugins/dsh-android-browser/src/index.ts",
+      "expected": 1
+    },
+    {
+      "source": "plugins/dsh-android-vdisplay/src/index.ts",
+      "expected": 1
+    },
+    {
+      "source": "dsh-host-web-compat/lib/index.js",
+      "expected": 3
+    },
+    {
+      "source": "plugins/dsh-session-delete/src/index.js",
+      "expected": 3
+    }
+  ],
+  "dynamicPathExpressions": [
+    {
+      "source": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "expression": "path",
+      "resolvesTo": [
+        "/api/android/linux-environment/status",
+        "/api/android/linux-environment/check",
+        "/api/android/linux-environment/install",
+        "/api/android/linux-environment/reinstall",
+        "/api/android/linux-environment/uninstall",
+        "/api/android/linux-environment/auto-update-on",
+        "/api/android/linux-environment/auto-update-off"
+      ],
+      "literalEvidence": "for (const [action, path] of ROUTES)",
+      "reason": "Linux 环境路由由 ROUTES 的动作/路径成对常量注册；七条鉴权与方法判据共用同一 handler，不能另起无鉴权入口。"
+    },
+    {
+      "source": "plugins/dsh-android-browser/src/index.ts",
+      "expression": "BROWSER_ROUTES.status",
+      "resolvesTo": [
+        "/api/android/browser/status"
+      ],
+      "literalEvidence": "/api/android/browser/status",
+      "reason": "契约常量表（contract.ts 的 BROWSER_ROUTES）集中定义路径；原样字面量在本文件/契约面在场，改动必踩门禁。"
+    },
+    {
+      "source": "plugins/dsh-android-linux-env/src/index.ts",
+      "expression": "path",
+      "resolvesTo": [
+        "/api/android/env/status",
+        "/api/android/env/recipe"
+      ],
+      "literalEvidence": "/api/android/env/status",
+      "reason": "for-of 配对表解构键（表内两条路径字面量由 dynamicRoutePathLiterals 全量发现并锁定）。"
+    },
+    {
+      "source": "plugins/dsh-android-vdisplay/src/index.ts",
+      "expression": "VD_STATUS_PATH",
+      "resolvesTo": [
+        "/api/android/vdisplay/status"
+      ],
+      "literalEvidence": "/api/android/vdisplay/status",
+      "reason": "状态面常量在 status.ts 单一来源定义（面板与工具面同源）；字面量在场即声明可核验。"
+    },
+    {
+      "source": "vendor/dshmarketplace-plugin/lib/index.js",
+      "expression": "et",
+      "resolvesTo": [
+        "/api/dshmarketplace/search"
+      ],
+      "literalEvidence": "et=`${O}/search`",
+      "reason": "minified 打包名（0.1.7 重命名：原 Q；base 常量亦由 q 改为 O）：以 base 常量拼接（模板串形态），literalEvidence 证明表达式解析到登记的 search 路由。0.1.7 追版同时把客户端 D 补丁的 mobile: 过滤挂在该 handler 上，故本行是双补丁共用的锚点。"
+    },
+    {
+      "source": "vendor/dshmarketplace-plugin/lib/index.js",
+      "expression": "rt",
+      "resolvesTo": [
+        "/api/dshmarketplace/install"
+      ],
+      "literalEvidence": "rt=`${O}/install`",
+      "reason": "同 et（0.1.7 重命名：原 V）：base 常量 O 拼接的 install 路由；变更拼接形态或路径都会直接判红。"
+    }
+  ],
+  "routes": [
+    {
+      "id": "linux-environment-status",
+      "path": "/api/android/linux-environment/status",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "registration": "path,",
+      "endpointSource": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "access": "protected",
+      "authMarker": "authorizeMobileRoute(req, options.auth())",
+      "authCallMarker": "authorizeMobileRoute(req, options.auth())"
+    },
+    {
+      "id": "linux-environment-check",
+      "path": "/api/android/linux-environment/check",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "registration": "path,",
+      "endpointSource": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "access": "protected",
+      "authMarker": "authorizeMobileRoute(req, options.auth())",
+      "authCallMarker": "authorizeMobileRoute(req, options.auth())"
+    },
+    {
+      "id": "linux-environment-install",
+      "path": "/api/android/linux-environment/install",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "registration": "path,",
+      "endpointSource": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "access": "protected",
+      "authMarker": "authorizeMobileRoute(req, options.auth())",
+      "authCallMarker": "authorizeMobileRoute(req, options.auth())"
+    },
+    {
+      "id": "linux-environment-reinstall",
+      "path": "/api/android/linux-environment/reinstall",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "registration": "path,",
+      "endpointSource": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "access": "protected",
+      "authMarker": "authorizeMobileRoute(req, options.auth())",
+      "authCallMarker": "authorizeMobileRoute(req, options.auth())"
+    },
+    {
+      "id": "linux-environment-uninstall",
+      "path": "/api/android/linux-environment/uninstall",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "registration": "path,",
+      "endpointSource": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "access": "protected",
+      "authMarker": "authorizeMobileRoute(req, options.auth())",
+      "authCallMarker": "authorizeMobileRoute(req, options.auth())"
+    },
+    {
+      "id": "linux-environment-auto-update-on",
+      "path": "/api/android/linux-environment/auto-update-on",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "registration": "path,",
+      "endpointSource": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "access": "protected",
+      "authMarker": "authorizeMobileRoute(req, options.auth())",
+      "authCallMarker": "authorizeMobileRoute(req, options.auth())"
+    },
+    {
+      "id": "linux-environment-auto-update-off",
+      "path": "/api/android/linux-environment/auto-update-off",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "registration": "path,",
+      "endpointSource": "plugins/dsh-android-linux-env/src/linux-environment.ts",
+      "access": "protected",
+      "authMarker": "authorizeMobileRoute(req, options.auth())",
+      "authCallMarker": "authorizeMobileRoute(req, options.auth())"
+    },
+    {
+      "id": "undo-api",
+      "path": "/api/undo",
+      "kind": "prefix",
+      "registrationSource": "vendor/dsh-undo-savepoint/lib/index.js",
+      "registration": "path: '/api/undo'",
+      "endpointSource": "vendor/dsh-undo-savepoint/lib/index.js",
+      "access": "protected",
+      "authMarker": "dsh-mobile undo route auth (U1)",
+      "authCallMarker": "dshMobileUndoAuthorize(req)"
+    },
+    {
+      "id": "marketplace-search",
+      "path": "/api/dshmarketplace/search",
+      "kind": "exact",
+      "registrationSource": "vendor/dshmarketplace-plugin/lib/index.js",
+      "registration": "path:et",
+      "endpointSource": "vendor/dshmarketplace-plugin/lib/client.js",
+      "access": "protected",
+      "authMarker": "dsh-mobile marketplace route auth (U2)",
+      "authCallMarker": "dshMobileMarketplaceRouteAuthorized(n,e)"
+    },
+    {
+      "id": "marketplace-install",
+      "path": "/api/dshmarketplace/install",
+      "kind": "exact",
+      "registrationSource": "vendor/dshmarketplace-plugin/lib/index.js",
+      "registration": "path:rt",
+      "endpointSource": "vendor/dshmarketplace-plugin/lib/client.js",
+      "access": "protected",
+      "authMarker": "dsh-mobile marketplace route auth (U2)",
+      "authCallMarker": "dshMobileMarketplaceRouteAuthorized(n,e)"
+    },
+    {
+      "id": "privilege-status",
+      "path": "/api/android/privilege/status",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-bridge/src/index.ts",
+      "registration": "path: '/api/android/privilege/status'",
+      "endpointSource": "plugins/dsh-android-bridge/src/index.ts",
+      "access": "public",
+      "publicResponseMarker": "sendJson(res, 200, buildPrivilegeStatusPayload(svc, controlToken() !== undefined))",
+      "rationale": "Only a structured capability/status view is returned. It contains no control token, request body, filesystem path, UI tree, screenshot, or mutation route."
+    },
+    {
+      "id": "control-pending",
+      "path": "/api/android/ui/pending",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-bridge/src/control-queue.ts",
+      "registration": "path: '/api/android/ui/pending'",
+      "endpointSource": "plugins/dsh-android-bridge/src/control-queue.ts",
+      "access": "protected",
+      "authMarker": "tokenMatches(token(), body.token)",
+      "authCallMarker": "tokenMatches(token(), body.token)"
+    },
+    {
+      "id": "control-result",
+      "path": "/api/android/ui/result",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-bridge/src/control-queue.ts",
+      "registration": "path: '/api/android/ui/result'",
+      "endpointSource": "plugins/dsh-android-bridge/src/control-queue.ts",
+      "access": "protected",
+      "authMarker": "tokenMatches(token(), body.token)",
+      "authCallMarker": "tokenMatches(token(), body.token)"
+    },
+    {
+      "id": "file-incoming",
+      "path": "/api/android/file-incoming",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-file-open/src/index.ts",
+      "registration": "path: '/api/android/file-incoming'",
+      "endpointSource": "plugins/dsh-android-file-open/src/index.ts",
+      "access": "protected",
+      "authMarker": "authorizeIncomingRoute(req, authOptions())",
+      "authCallMarker": "authorizeIncomingRoute(req, authOptions())"
+    },
+    {
+      "id": "file-incoming-claim",
+      "path": "/api/android/file-incoming/claim",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-file-open/src/index.ts",
+      "registration": "path: '/api/android/file-incoming/claim'",
+      "endpointSource": "plugins/dsh-android-file-open/src/index.ts",
+      "access": "protected",
+      "authMarker": "authorizeIncomingRoute(req, authOptions())",
+      "authCallMarker": "authorizeIncomingRoute(req, authOptions())"
+    },
+    {
+      "id": "file-incoming-content",
+      "path": "/api/android/file-incoming/content",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-file-open/src/index.ts",
+      "registration": "path: '/api/android/file-incoming/content'",
+      "endpointSource": "plugins/dsh-android-file-open/src/index.ts",
+      "access": "protected",
+      "authMarker": "authorizeIncomingRoute(req, authOptions())",
+      "authCallMarker": "authorizeIncomingRoute(req, authOptions())"
+    },
+    {
+      "id": "file-incoming-complete",
+      "path": "/api/android/file-incoming/complete",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-file-open/src/index.ts",
+      "registration": "path: '/api/android/file-incoming/complete'",
+      "endpointSource": "plugins/dsh-android-file-open/src/index.ts",
+      "access": "protected",
+      "authMarker": "authorizeIncomingRoute(req, authOptions())",
+      "authCallMarker": "authorizeIncomingRoute(req, authOptions())"
+    },
+    {
+      "id": "file-incoming-clean",
+      "path": "/api/android/file-incoming/clean",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-file-open/src/index.ts",
+      "registration": "path: '/api/android/file-incoming/clean'",
+      "endpointSource": "plugins/dsh-android-file-open/src/index.ts",
+      "access": "protected",
+      "authMarker": "authorizeIncomingRoute(req, authOptions())",
+      "authCallMarker": "authorizeIncomingRoute(req, authOptions())"
+    },
+    {
+      "id": "env-status",
+      "path": "/api/android/env/status",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-linux-env/src/index.ts",
+      "registration": "path,",
+      "endpointSource": "plugins/dsh-android-linux-env/src/index.ts",
+      "access": "protected",
+      "authMarker": "authorizeMobileRoute(req, authOptions())",
+      "authCallMarker": "authorizeMobileRoute(req, authOptions())"
+    },
+    {
+      "id": "env-recipe",
+      "path": "/api/android/env/recipe",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-linux-env/src/index.ts",
+      "registration": "path,",
+      "endpointSource": "plugins/dsh-android-linux-env/src/index.ts",
+      "access": "protected",
+      "authMarker": "authorizeMobileRoute(req, authOptions())",
+      "authCallMarker": "authorizeMobileRoute(req, authOptions())"
+    },
+    {
+      "id": "directory-pick-poll",
+      "path": "/api/android/dir-pick/poll",
+      "kind": "exact",
+      "registrationSource": "dsh-host-web-compat/lib/index.js",
+      "registration": "path: '/api/android/dir-pick/poll'",
+      "endpointSource": "dsh-host-web-compat/lib/index.js",
+      "access": "protected",
+      "authMarker": "if (!authorized(req))",
+      "authCallMarker": "if (!authorized(req))"
+    },
+    {
+      "id": "directory-pick-result",
+      "path": "/api/android/dir-pick/result",
+      "kind": "exact",
+      "registrationSource": "dsh-host-web-compat/lib/index.js",
+      "registration": "path: '/api/android/dir-pick/result'",
+      "endpointSource": "dsh-host-web-compat/lib/index.js",
+      "access": "protected",
+      "authMarker": "if (!authorized(req))",
+      "authCallMarker": "if (!authorized(req))"
+    },
+    {
+      "id": "open-path",
+      "path": "/api/android/open-path",
+      "kind": "exact",
+      "registrationSource": "dsh-host-web-compat/lib/index.js",
+      "registration": "path: '/api/android/open-path'",
+      "endpointSource": "dsh-host-web-compat/lib/index.js",
+      "access": "protected",
+      "authMarker": "if (!authorized(req))",
+      "authCallMarker": "if (!authorized(req))"
+    },
+    {
+      "id": "browser-status",
+      "path": "/api/android/browser/status",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-browser/src/index.ts",
+      "registration": "path: BROWSER_ROUTES.status",
+      "endpointSource": "plugins/dsh-android-browser/src/contract.ts",
+      "access": "protected",
+      "authMarker": "authorizeIncomingRoute(req, authOptions())",
+      "authCallMarker": "authorizeIncomingRoute(req, authOptions())"
+    },
+    {
+      "id": "vdisplay-status",
+      "path": "/api/android/vdisplay/status",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-vdisplay/src/index.ts",
+      "registration": "path: VD_STATUS_PATH",
+      "endpointSource": "plugins/dsh-android-vdisplay/src/status.ts",
+      "access": "public",
+      "publicResponseMarker": "sendJson(res, 200, await readVdToolSnapshot(faceOf()))",
+      "rationale": "Only fail-closed VirtualDisplay readiness metadata is returned. It contains no pixels, UI tree, input, task command, shell output, path, or credential."
+    },
+    {
+      "id": "runtime-cache-scan",
+      "path": "/api/android/runtime-cache/scan",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-linux-env/src/index.ts",
+      "registration": "path: '/api/android/runtime-cache/scan'",
+      "endpointSource": "plugins/dsh-android-linux-env/src/index.ts",
+      "access": "protected",
+      "authMarker": "authorizeMobileRoute(req, authOptions())",
+      "authCallMarker": "authorizeMobileRoute(req, authOptions())"
+    },
+    {
+      "id": "runtime-cache-execute",
+      "path": "/api/android/runtime-cache/execute",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-linux-env/src/index.ts",
+      "registration": "path: '/api/android/runtime-cache/execute'",
+      "endpointSource": "plugins/dsh-android-linux-env/src/index.ts",
+      "access": "protected",
+      "authMarker": "authorizeMobileRoute(req, authOptions())",
+      "authCallMarker": "authorizeMobileRoute(req, authOptions())"
+    },
+    {
+      "id": "session-delete-version",
+      "path": "/api/session-delete-version",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-session-delete/src/index.js",
+      "registration": "path: '/api/session-delete-version'",
+      "endpointSource": "plugins/dsh-session-delete/src/index.js",
+      "access": "protected",
+      "authMarker": "connection.requestRejection(req)",
+      "authCallMarker": "authorize(req, res, ctx)"
+    },
+    {
+      "id": "session-delete-trace",
+      "path": "/api/session-delete-trace",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-session-delete/src/index.js",
+      "registration": "path: '/api/session-delete-trace'",
+      "endpointSource": "plugins/dsh-session-delete/src/index.js",
+      "access": "protected",
+      "authMarker": "connection.requestRejection(req)",
+      "authCallMarker": "authorize(req, res, ctx)"
+    },
+    {
+      "id": "session-delete",
+      "path": "/api/session-delete",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-session-delete/src/index.js",
+      "registration": "path: '/api/session-delete'",
+      "endpointSource": "plugins/dsh-session-delete/src/index.js",
+      "access": "protected",
+      "authMarker": "connection.requestRejection(req)",
+      "authCallMarker": "authorize(req, res, ctx)"
+    }
+  ],
+  "upstreamRoutes": [
+    {
+      "source": "packages/api/gateway/src/index.ts",
+      "form": "upgrade",
+      "expression": "REMOTE_STREAM_MUX_PATH",
+      "pathText": "/api/remote.mux",
+      "verdict": "protected",
+      "authMarker": "webCtx.connection.admitConnection(req)",
+      "authCallMarker": "webCtx.connection.admitConnection(req)",
+      "bundleRowId": "typert-gateway",
+      "pathEvidence": {
+        "file": "packages/api/gateway/src/stream-protocol.ts",
+        "marker": "export const REMOTE_STREAM_MUX_PATH = '/api/remote.mux'"
+      },
+      "evidence": "升级路由无 kind 字段；0.2.1 起注册块内的鉴权标记是 webCtx.connection.admitConnection(req)——它同 admit() 一样先过 Host/Origin 栅栏 + browserAuth 认证，再加 socket 归属检查；rejection 即 rejectRemoteStreamUpgrade，与 client-connection 的 /api 前缀同一道门。"
+    },
+    {
+      "source": "packages/api/session-controller/src/media-references.ts",
+      "form": "fetch",
+      "expression": "'/api/file'",
+      "pathText": "/api/file",
+      "verdict": "protected",
+      "guardedBy": "packages/client/connection/src/index.ts :: web :: API_PATH",
+      "bundleRowId": "session-controller",
+      "evidence": "字面量精确 Fetch 路由，注册在 ctx.connection.fetch 上；该 carrier 由 client-connection 的 /api 前缀 handler 承担鉴权后才分发（见 guardedBy 行），自身无独立 guard。"
+    },
+    {
+      "source": "packages/client/connection/src/index.ts",
+      "form": "web",
+      "expression": "API_PATH",
+      "kind": "prefix",
+      "pathText": "/api",
+      "verdict": "protected",
+      "authMarker": "connection.admit(req)",
+      "authCallMarker": "connection.admit(req)",
+      "bundleRowId": "connection",
+      "pathEvidence": {
+        "file": "packages/client/connection/src/api-path.ts",
+        "marker": "export const API_PATH = '/api'"
+      },
+      "evidence": "Host/Origin 栅栏 + browserAuth 的 requestRejection/admit 落在注册块内；这是全部 /api 面（除更长精确/前缀路由）的唯一入口。"
+    },
+    {
+      "source": "packages/client/connection/src/index.ts",
+      "form": "web",
+      "expression": "CONNECT_PATH",
+      "kind": "exact",
+      "pathText": "/connect",
+      "verdict": "protected",
+      "authMarker": "connection.authorizeConnect(req, res)",
+      "authCallMarker": "connection.authorizeConnect(req, res)",
+      "bundleRowId": "connection",
+      "pathEvidence": {
+        "file": "packages/client/connection/src/connect-protocol.ts",
+        "marker": "export const CONNECT_PATH = '/connect'"
+      },
+      "evidence": "启动令牌交换路由：注册块内 handler 调 connection.authorizeConnect(req, res)——先 isTrusted 的 Host/Origin 栅栏，再 browserAuth.authorizeConnect 认证并发布凭据；失败 403/401。"
+    },
+    {
+      "source": "packages/client/connection/src/rpc-host.ts",
+      "form": "web",
+      "expression": "channel",
+      "kind": "prefix",
+      "pathText": null,
+      "dynamicPathReason": "channel 是 HostConnectionService.register() 的形参，调用方传什么就注册什么；上游 prod 调用面只有 rpc.host 的共享通道常量（API_PATH=/api），且 assertChannel() 拒绝 /api 本身。",
+      "verdict": "protected",
+      "authMarker": "this.admit(req)",
+      "authCallMarker": "this.admit(req)",
+      "bundleRowId": "connection",
+      "evidence": "同一 class 内的私有注册路径：admit() 不被通过即不回 bridge；/api 前缀这条已由 guardedBy 形态覆盖，此处按同源注册块判定。"
+    },
+    {
+      "source": "packages/client/file-upload/src/index.ts",
+      "form": "fetch",
+      "expression": "FILE_UPLOAD_PATH",
+      "pathText": "/api/session/uploadFileBinary",
+      "verdict": "protected",
+      "guardedBy": "packages/client/connection/src/index.ts :: web :: API_PATH",
+      "bundleRowId": "file-upload",
+      "pathEvidence": {
+        "file": "packages/client/file-upload/src/protocol.ts",
+        "marker": "export const FILE_UPLOAD_PATH = '/api/session/uploadFileBinary'"
+      },
+      "evidence": "经 connection.fetch 注册的精确路由；请求先过 client-connection 的 /api 前缀 handler（admit 栅栏），未过栅栏不会到达共享 carrier。"
+    },
+    {
+      "source": "packages/client/hmr/src/index.ts",
+      "form": "web",
+      "expression": "EVENTS_ENDPOINT",
+      "kind": "exact",
+      "pathText": "/plugins/events",
+      "verdict": "not-mounted",
+      "disabledRowId": "client-hmr",
+      "bundleRowId": "client-hmr",
+      "pathEvidence": {
+        "file": "packages/client/hmr/src/events.ts",
+        "marker": "export const EVENTS_ENDPOINT = '/plugins/events'"
+      },
+      "evidence": "该行无任何本地鉴权（回环上任意本地应用可订阅构建事件流）；移动侧无 live reload 收益，profile patch 顶层 disabled: true 整行摘除，故路由在发行 profile 里不存在。"
+    },
+    {
+      "source": "packages/client/modules/src/index.ts",
+      "form": "web",
+      "expression": "PLUGIN_ROUTE",
+      "kind": "prefix",
+      "pathText": "/plugins",
+      "verdict": "public",
+      "publicResponseMarker": "return { status: 404 }",
+      "bundleRowId": "modules",
+      "pathEvidence": {
+        "file": "packages/client/modules/src/index.ts",
+        "marker": "const PLUGIN_ROUTE = '/plugins'"
+      },
+      "evidence": "只发已公告的 client bundle 与 source map：非 GET/HEAD 返回 405（bundleResource 首行判据），未公告资源返回 404（窄响应 marker）。模板字面量 /plugins/${id}/client.js 里嵌了上游自带的 $ {...} 形态，故这里用 404 分支作 marker。"
+    },
+    {
+      "source": "packages/client/ui-deliverables/src/present-open.ts",
+      "form": "fetch",
+      "expression": "PRESENT_HOST_PATH",
+      "pathText": "/api/present.host",
+      "verdict": "protected",
+      "guardedBy": "packages/client/connection/src/index.ts :: web :: API_PATH",
+      "bundleRowId": "ui-deliverables",
+      "pathEvidence": {
+        "file": "packages/client/ui-deliverables/src/presented.ts",
+        "marker": "export const PRESENT_HOST_PATH = '/api/present.host'"
+      },
+      "evidence": "Connection 共享 carrier 上的精确 Fetch 路由；承载在 /api 前缀 handler 的 admit 栅栏之后，未过栅栏到不了这里。"
+    },
+    {
+      "source": "packages/client/ui-deliverables/src/present-open.ts",
+      "form": "fetch",
+      "expression": "CHANGED_FILES_PATH",
+      "pathText": "/api/changes.summary",
+      "verdict": "protected",
+      "guardedBy": "packages/client/connection/src/index.ts :: web :: API_PATH",
+      "bundleRowId": "ui-deliverables",
+      "pathEvidence": {
+        "file": "packages/client/ui-deliverables/src/changes.ts",
+        "marker": "export const CHANGED_FILES_PATH = '/api/changes.summary'"
+      },
+      "evidence": "同 PRESENT_HOST_PATH 的 carrier 与栅栏：读取变更摘要必须先过程序化 admit，栅栏不过即 401/403。"
+    },
+    {
+      "source": "packages/client/ui-deliverables/src/present-open.ts",
+      "form": "fetch",
+      "expression": "path",
+      "pathText": null,
+      "dynamicPathReason": "for-of 配对表解构键：表内三项路径常量（PRESENT_OPEN_PATH/CHANGES_OPEN_PATH/CHANGES_DIFF_PATH）由路径常量声明所在文件逐字锁定，本表达式无法在构建期收敛成单一字符串。",
+      "verdict": "protected",
+      "guardedBy": "packages/client/connection/src/index.ts :: web :: API_PATH",
+      "bundleRowId": "ui-deliverables",
+      "evidence": "循环注册的三个 /api/... 路径同样落在 connection.fetch 上，鉴权由 /api 前缀 handler 的 admit 栅栏承担；表内常量逐字在场保证路径不可静默漂移。"
+    },
+    {
+      "source": "packages/credentials/deepseek-account-platform/src/index.ts",
+      "form": "web",
+      "expression": "'/oauth/callback'",
+      "kind": "exact",
+      "pathText": "/oauth/callback",
+      "verdict": "protected",
+      "authMarker": "!validState || !receivedCode",
+      "authCallMarker": "timingSafeEqual(Buffer.from(receivedState), Buffer.from(state))",
+      "bundleRowId": "deepseek-account",
+      "evidence": "PKCE 回跳：32 字节 random state 常量时间比对 + 只接受 GET + 单一 code/state + 已消费/超时返回 410；失败一律 400。gate 判据落在注册块内的 timingSafeEqual 调用形态上。"
+    },
+    {
+      "source": "packages/host/open-in-app/src/index.ts",
+      "form": "web",
+      "expression": "OPEN_IN_APP_APPS_PATH",
+      "kind": "exact",
+      "pathText": "/open-in-app/apps",
+      "verdict": "not-mounted",
+      "disabledRowId": "open-in-app",
+      "bundleRowId": "open-in-app",
+      "pathEvidence": {
+        "file": "packages/host/open-in-app/src/shared.ts",
+        "marker": "export const OPEN_IN_APP_APPS_PATH = '/open-in-app/apps'"
+      },
+      "evidence": "Android 没有等价的外部应用候选；profile patch 顶层 disabled: true 摘除 host 行，改由壳侧系统选择器（PathOpen）承担，故该路由在发行 profile 里不存在。"
+    },
+    {
+      "source": "packages/host/open-in-app/src/index.ts",
+      "form": "web",
+      "expression": "OPEN_IN_APP_ICON_PREFIX_PATH",
+      "kind": "prefix",
+      "pathText": "/open-in-app/icon",
+      "verdict": "not-mounted",
+      "disabledRowId": "open-in-app",
+      "bundleRowId": "open-in-app",
+      "pathEvidence": {
+        "file": "packages/host/open-in-app/src/shared.ts",
+        "marker": "export const OPEN_IN_APP_ICON_PREFIX_PATH = '/open-in-app/icon'"
+      },
+      "evidence": "同 OPEN_IN_APP_APPS_PATH：整行 disabled 后三条注册都随插件一起消失，图标前缀路由同样不存在。"
+    },
+    {
+      "source": "packages/host/open-in-app/src/index.ts",
+      "form": "web",
+      "expression": "OPEN_IN_APP_OPEN_PATH",
+      "kind": "exact",
+      "pathText": "/open-in-app/open",
+      "verdict": "not-mounted",
+      "disabledRowId": "open-in-app",
+      "bundleRowId": "open-in-app",
+      "pathEvidence": {
+        "file": "packages/host/open-in-app/src/shared.ts",
+        "marker": "export const OPEN_IN_APP_OPEN_PATH = '/open-in-app/open'"
+      },
+      "evidence": "同 OPEN_IN_APP_APPS_PATH：POST 打开路由随 disabled 行一起不挂载；壳侧 PathOpen 通道是移动端替代面。"
+    },
+    {
+      "source": "packages/session-query/session-log-export/src/index.ts",
+      "form": "fetch",
+      "expression": "SESSION_LOG_EXPORT_PATH",
+      "pathText": "/api/session.export",
+      "verdict": "protected",
+      "guardedBy": "packages/client/connection/src/index.ts :: web :: API_PATH",
+      "bundleRowId": "session-log-download",
+      "pathEvidence": {
+        "file": "packages/session-query/session-log-export/src/routes.ts",
+        "marker": "export const SESSION_LOG_EXPORT_PATH = '/api/session.export'"
+      },
+      "evidence": "会话日志 ZIP 下载走 connection.fetch；/api 前缀 handler 的 admit 栅栏之前不会到达该 Fetch 路由，故不需要自带 guard。"
+    },
+    {
+      "source": "packages/experimental/inspector/src/host/plugin.ts",
+      "form": "fetch",
+      "expression": "INSPECTOR_BOOTSTRAP_PATH",
+      "pathText": "/api/experimental-inspector/bootstrap",
+      "verdict": "not-mounted",
+      "packageName": "@deepseek-ai/dsh-experimental-inspector",
+      "pathEvidence": {
+        "file": "packages/experimental/inspector/src/shared/web.ts",
+        "marker": "export const INSPECTOR_BOOTSTRAP_PATH = '/api/experimental-inspector/bootstrap'"
+      },
+      "evidence": "实验性 Inspector 的浏览器 bootstrap Fetch 路由。不挂载依据：上游 packages/bundle/base/cordis.patch.yml 与 packages/bundle/web-app/cordis.patch.yml 均无 inspector 行，本仓 scripts/profile-web.cordis.patch.yml 也无 insert ⇒ 发行 profile 不加载该插件。"
+    },
+    {
+      "source": "packages/experimental/inspector/src/host/plugin.ts",
+      "form": "web",
+      "expression": "DEVTOOLS_PATH",
+      "kind": "prefix",
+      "pathText": "/inspector/devtools",
+      "verdict": "not-mounted",
+      "packageName": "@deepseek-ai/dsh-experimental-inspector",
+      "pathEvidence": {
+        "file": "packages/experimental/inspector/src/host/plugin.ts",
+        "marker": "const DEVTOOLS_PATH = '/inspector/devtools'"
+      },
+      "evidence": "DevTools 静态资源前缀路由，随 experimental-inspector 插件一起注册。该包不在 base/web-app bundle 行（packages/bundle/{base,web-app}/cordis.patch.yml 零命中），本仓 scripts/profile-web.cordis.patch.yml 无 insert ⇒ 发行 profile 不挂载。"
+    },
+    {
+      "source": "packages/experimental/inspector/src/host/plugin.ts",
+      "form": "upgrade",
+      "expression": "`${DEVTOOLS_PATH",
+      "pathText": "/inspector/devtools/cdp",
+      "verdict": "not-mounted",
+      "packageName": "@deepseek-ai/dsh-experimental-inspector",
+      "pathEvidence": {
+        "file": "packages/experimental/inspector/src/host/plugin.ts",
+        "marker": "path: `${DEVTOOLS_PATH}/cdp`"
+      },
+      "evidence": "CDP WebSocket upgrade 路由，与 DevTools 前缀同属 experimental-inspector。该包不在 base/web-app bundle 行、本仓 profile patch 无 insert，发行 profile 不加载，upgrade 监听同理不存在。"
+    },
+    {
+      "source": "packages/experimental/webhook-github/src/index.ts",
+      "form": "web",
+      "expression": "config.path",
+      "kind": "exact",
+      "pathText": null,
+      "dynamicPathReason": "配置字段：path 来自部署方 cordis.yml 的 Config.path，不是构建期常量；0.2.1 起包从 packages/webhook/ 移到 packages/experimental/webhook-github/（包名不变），但 base/web-app bundle 无该行，装配面不会加载。",
+      "verdict": "not-mounted",
+      "packageName": "@deepseek-ai/dsh-webhook-github",
+      "evidence": "依据三条：packages/bundle/base/cordis.patch.yml 与 packages/bundle/web-app/cordis.patch.yml 均无 webhook-github 行；本仓 scripts/profile-web.cordis.patch.yml 无 insert；上游 apps/cli/package.json 的 dependencies 已无该包（仅留在 devDependencies），发布安装树不产出。发行 profile 不挂载，config.path 无实际注册。"
+    }
+  ]
+}

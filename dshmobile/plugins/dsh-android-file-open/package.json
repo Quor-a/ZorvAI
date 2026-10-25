@@ -1,0 +1,35 @@
+{
+  "name": "@dsh-android/dsh-android-file-open",
+  "description": "External file to blank session: receive a safe incoming path, create an unsent generic file-attachment draft, and route the UI through opaque queue metadata",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["lib"],
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "npm run build && node --test test/auth.test.mjs"
+  },
+  "dependencies": {
+    "@dsh-android/dsh-android-bridge": "file:../dsh-android-bridge"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
+    "@deepseek-ai/cordis": "4.0.5"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
+    "@deepseek-ai/cordis": "4.0.5",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.5.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kelai141/dsh-mobile.git"
+  }
+}

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DeepCode 控制台</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --ds-bg: #F5F5F7;
+    --ds-surface: #FFFFFF;
+    --ds-input: #F5F5F7;
+    --ds-border: rgba(0, 0, 0, 0.10);
+    --ds-text-primary: #1D1D1F;
+    --ds-text-secondary: #6E6E73;
+    --ds-text-tertiary: #86868B;
+    --ds-accent: #1D1D1F;
+    --ds-accent-pressed: #3A3A3C;
+    --ds-text-on-accent: #FFFFFF;
+    --ds-danger: #D70015;
+    --ds-danger-soft: rgba(215, 0, 21, 0.08);
+    --ds-chip: #F2F2F4;
+    --ds-radius: 8px;
+    --ds-ease: cubic-bezier(0.32, 0.72, 0, 1);
+    --inset-top: env(safe-area-inset-top, 0px);
+    --inset-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ds-bg: #000000;
+      --ds-surface: #1C1C1E;
+      --ds-input: #2C2C2E;
+      --ds-border: rgba(255, 255, 255, 0.16);
+      --ds-text-primary: #F5F5F7;
+      --ds-text-secondary: #98989D;
+      --ds-text-tertiary: #6E6E73;
+      --ds-accent: #F5F5F7;
+      --ds-accent-pressed: #C7C7CC;
+      --ds-text-on-accent: #1D1D1F;
+      --ds-danger: #FF6960;
+      --ds-danger-soft: rgba(255, 105, 96, 0.16);
+      --ds-chip: #2C2C2E;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--ds-bg);
+    color: var(--ds-text-primary);
+    font-family: ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    overscroll-behavior: none;
+  }
+  #top { flex: none; padding: calc(8px + var(--inset-top)) 14px 10px; background: var(--ds-bg); border-bottom: 1px solid var(--ds-border); }
+  #statusbar { display: flex; align-items: center; gap: 10px; min-height: 38px; }
+  #close, .ghost, .chip, #send, #jump {
+    appearance: none; font: inherit; border: 0; border-radius: var(--ds-radius); cursor: pointer;
+  }
+  #close { background: var(--ds-chip); color: var(--ds-text-primary); padding: 8px 10px; font-size: 12px; font-weight: 600; }
+  #close:active, #send:active, #jump:active { transform: scale(0.98); }
+  #statusbar .title { font-weight: 600; font-size: 15px; white-space: nowrap; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 6px 9px; border-radius: var(--ds-radius); background: var(--ds-chip); color: var(--ds-text-secondary); font-size: 11px; overflow: hidden; }
+  .pill.grow { flex: 1; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ds-text-tertiary); flex: none; }
+  .dot.ok { background: var(--ds-text-primary); }
+  .dot.err { background: var(--ds-danger); }
+  .dot.ok.pulse { animation: pulse 1.6s var(--ds-ease) infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+  #engineStatus, #consoleStatus { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #tools { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .ghost { background: transparent; color: var(--ds-text-secondary); font-size: 12px; font-weight: 600; padding: 7px 4px; }
+  .ghost:active { color: var(--ds-text-primary); }
+  .ghost[disabled] { color: var(--ds-text-tertiary); }
+  #output { flex: 1; overflow-y: auto; padding: 14px 16px 20px; white-space: pre-wrap; word-break: break-all; line-height: 1.65; scrollbar-width: thin; scrollbar-color: var(--ds-text-tertiary) transparent; }
+  #output::-webkit-scrollbar { width: 6px; }
+  #output::-webkit-scrollbar-thumb { background: var(--ds-text-tertiary); border-radius: var(--ds-radius); }
+  #output::-webkit-scrollbar-track { background: transparent; }
+  #output .prompt { color: var(--ds-text-secondary); font-weight: 700; }
+  #output .muted { color: var(--ds-text-tertiary); }
+  #jump { position: absolute; right: 16px; bottom: 92px; background: var(--ds-surface); color: var(--ds-text-primary); border: 1px solid var(--ds-border); padding: 8px 10px; font-size: 12px; font-weight: 600; display: none; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16); }
+  #dock { flex: none; padding: 8px 12px calc(10px + var(--inset-bottom)); background: var(--ds-bg); border-top: 1px solid var(--ds-border); }
+  #chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+  #chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; background: var(--ds-chip); color: var(--ds-text-secondary); padding: 7px 9px; font-size: 11px; }
+  .chip:active { color: var(--ds-text-primary); }
+  #inputrow { display: flex; gap: 8px; align-items: stretch; }
+  #cmdwrap { flex: 1; min-width: 0; background: var(--ds-input); border: 1px solid var(--ds-border); border-radius: var(--ds-radius); display: flex; align-items: center; transition: border-color 180ms var(--ds-ease), box-shadow 180ms var(--ds-ease); }
+  #cmdwrap.focus { border-color: var(--ds-text-secondary); box-shadow: 0 0 0 2px var(--ds-border); }
+  #cmd { flex: 1; min-width: 0; background: transparent; color: var(--ds-text-primary); border: 0; padding: 12px 14px; font-family: inherit; font-size: 14px; outline: none; }
+  #cmd::placeholder { color: var(--ds-text-tertiary); }
+  #cmd:disabled { opacity: 0.5; }
+  #send { background: var(--ds-accent); color: var(--ds-text-on-accent); padding: 0 16px; font-size: 13px; font-weight: 700; flex: none; min-width: 64px; transition: transform 140ms var(--ds-ease), background 140ms var(--ds-ease), opacity 140ms var(--ds-ease); }
+  #send:active { background: var(--ds-accent-pressed); }
+  #send:disabled { opacity: 0.4; }
+  #wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  #engineHint { padding: 7px 9px; margin-top: 7px; border-radius: var(--ds-radius); background: var(--ds-chip); font-size: 11px; line-height: 1.4; color: var(--ds-text-secondary); }
+  #enginePill[role=button] { cursor: pointer; }
+</style>
+</head>
+<body>
+  <div id="top">
+    <div id="statusbar">
+      <button id="close" type="button" aria-label="返回管理中心">返回</button>
+      <span class="title">控制台</span>
+      <span class="pill grow"><span class="dot" id="bashDot"></span><span id="consoleStatus">启动中…</span></span>
+    </div>
+    <div id="tools">
+      <span class="pill grow" id="enginePill" role="button" title="点此立即重新检测引擎"><span class="dot" id="engineDot"></span><span id="engineStatus">引擎检测中…</span></span>
+      <button class="ghost" id="copyBtn" type="button" aria-label="复制输出">复制</button>
+      <button class="ghost" id="clearBtn" type="button" aria-label="清空输出">清空</button>
+      <button class="ghost" id="restartBtn" type="button" aria-label="重连控制台">重连</button>
+    </div>
+    <div id="engineHint" style="display:none"></div>
+  </div>
+  <div id="wrap">
+    <div id="output"><span class="muted">快照内嵌 Termux bash。引擎未运行时也可排查启动失败。</span><br><br></div>
+    <button id="jump" type="button">回到底部</button>
+  </div>
+  <div id="dock">
+    <div id="chips">
+      <button class="chip" type="button" data-cmd="uname -a">uname</button>
+      <button class="chip" type="button" data-cmd="ps">ps</button>
+      <button class="chip" type="button" data-cmd="df -h">df</button>
+      <button class="chip" type="button" data-cmd="echo $HOME && pwd">pwd</button>
+    </div>
+    <div id="inputrow">
+      <div id="cmdwrap">
+        <input id="cmd" type="text" placeholder="输入命令，回车执行" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send">
+      </div>
+      <button id="send" type="button">发送</button>
+    </div>
+  </div>
+<script>
+(function () {
+  var output = document.getElementById('output');
+  var cmd = document.getElementById('cmd');
+  var cmdwrap = document.getElementById('cmdwrap');
+  var send = document.getElementById('send');
+  var engineStatus = document.getElementById('engineStatus');
+  var engineDot = document.getElementById('engineDot');
+  var bashDot = document.getElementById('bashDot');
+  var consoleStatus = document.getElementById('consoleStatus');
+  var jump = document.getElementById('jump');
+  var maxLines = 2000;
+  var history = [];
+  var historyIndex = -1;
+  var draft = '';
+  var ready = false;
+  var stickBottom = true;
+
+  try {
+    history = JSON.parse(localStorage.getItem('dsh-console-history') || '[]');
+    if (!Array.isArray(history)) history = [];
+  } catch (e) { history = []; }
+
+  function trimOutput() {
+    var children = output.childNodes;
+    if (children.length > maxLines) {
+      for (var i = 0; i < children.length - maxLines + 500; i++) {
+        var el = children[i];
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+      }
+    }
+  }
+
+  function atBottom() {
+    return output.scrollHeight - output.scrollTop - output.clientHeight < 48;
+  }
+  function scrollBottom() {
+    output.scrollTop = output.scrollHeight;
+    stickBottom = true;
+    jump.style.display = 'none';
+  }
+
+  output.addEventListener('scroll', function () {
+    stickBottom = atBottom();
+    jump.style.display = stickBottom ? 'none' : 'block';
+  });
+  jump.addEventListener('click', scrollBottom);
+
+  window.__consoleAppend = function (text) {
+    if (!text) return;
+    var node = document.createElement('span');
+    node.textContent = text;
+    output.appendChild(node);
+    trimOutput();
+    if (stickBottom) scrollBottom();
+  };
+
+  /**
+   * 控制台状态由**壳侧显式给出**（S1-18）。
+   *
+   * 旧实现（本函数的前身 `__consoleStatus`）从文案里做子串正则判就绪：
+   *   if (/已启动/.test(t)) ready; else if (/退出|失败|缺失/.test(t)) not-ready;
+   * ——只要措辞改动一次（「bash 已启动」→「控制台已就绪」之类），判据就**静默错判**：
+   * 页面永远停在「启动中」、输入框永久禁用，而壳侧一切正常。这类「判据挂在文案上」的
+   * 结构性问题在审查档 §3.1 记为 S1-18。现在状态是**枚举**，文案只用于显示。
+   */
+  var missingState = false;
+
+  function setReady(on, text, state) {
+    ready = !!on;
+    // missing = 快照里的 bash 不存在：再点「重连」必然同样失败（S1-16），故换成「返回应用」。
+    missingState = (state === 'missing');
+    cmd.disabled = !ready;
+    send.disabled = !ready;
+    bashDot.className = 'dot ' + (ready ? 'ok pulse' : 'err');
+    if (text) consoleStatus.textContent = text;
+    restartBtn.textContent = missingState ? '返回应用' : '重连';
+    restartBtn.dataset.mode = missingState ? 'close' : 'restart';
+    restartBtn.title = missingState ? '快照缺失，重连不会有变化；返回应用可重试启动' : '重新拉起 bash';
+    if (missingState) {
+      // 死路必须在页面上说清「为什么重连没用 + 怎么办」，而不是留一个必然失败的唯一按钮。
+      setEngineHint('快照缺失：控制台依赖运行时里的 bash。请返回应用重试启动（会自动重建运行时）；仍失败则重装应用。');
+    }
+  }
+
+  window.__consoleState = function (state, text) {
+    var t = text || '';
+    consoleStatus.textContent = t;
+    if (state === 'ready') setReady(true, t, state);
+    else if (state === 'starting') setReady(false, t, state);
+    else setReady(false, t, state);   // failed / exited / missing
+  };
+
+  window.__consoleInsets = function (top, bottom, ime) {
+    document.documentElement.style.setProperty('--inset-top', (top || 0) + 'px');
+    document.documentElement.style.setProperty('--inset-bottom', Math.max(bottom || 0, ime || 0) + 'px');
+  };
+
+  /** 引擎栏下方的说明行（S1-17：只报状态不给动作，等于让用户自己猜下一步）。 */
+  function setEngineHint(text) {
+    var el = document.getElementById('engineHint');
+    if (!el) return;
+    el.textContent = text || '';
+    el.style.display = text ? 'block' : 'none';
+  }
+
+  function refreshEngine() {
+    try {
+      var raw = window.consoleBridge.engineStatus();
+      var info = JSON.parse(raw);
+      if (info && info.running) {
+        engineStatus.textContent = '引擎 ' + info.latencyMs + 'ms';
+        engineDot.className = 'dot ok';
+        setEngineHint('');
+      } else {
+        // S1-17：离线时给**动作**，不只给状态：这一行本身可点（立即重试探活），
+        // 并在下面写清两条真实出路。
+        engineStatus.textContent = '引擎离线（点此重试）';
+        engineDot.className = 'dot err';
+        setEngineHint('引擎未运行：可回到应用启动引擎（或看 engine.log 排查）。控制台本身不依赖引擎，仍可用。');
+      }
+    } catch (e) {
+      engineStatus.textContent = '引擎检测失败（点此重试）';
+      engineDot.className = 'dot err';
+      setEngineHint('无法读取引擎状态（桥不可用）。控制台本身不依赖引擎，仍可用。');
+    }
+  }
+
+  function persistHistory() {
+    try { localStorage.setItem('dsh-console-history', JSON.stringify(history.slice(-50))); } catch (e) {}
+  }
+
+  function submit() {
+    var text = cmd.value;
+    if (!text.trim() || !ready) return;
+    cmd.value = '';
+    history.push(text);
+    if (history.length > 50) history.shift();
+    historyIndex = -1;
+    draft = '';
+    persistHistory();
+    var node = document.createElement('span');
+    node.textContent = '\n';
+    output.appendChild(node);
+    var prompt = document.createElement('span');
+    prompt.className = 'prompt';
+    prompt.textContent = '$ ';
+    output.appendChild(prompt);
+    var echo = document.createElement('span');
+    echo.textContent = text + '\n';
+    output.appendChild(echo);
+    trimOutput();
+    scrollBottom();
+    try { window.consoleBridge.submit(text); } catch (e) {}
+  }
+
+  send.addEventListener('click', submit);
+  cmd.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); submit(); return; }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!history.length) return;
+      if (historyIndex < 0) draft = cmd.value;
+      historyIndex = historyIndex < 0 ? history.length - 1 : Math.max(0, historyIndex - 1);
+      cmd.value = history[historyIndex];
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (historyIndex < 0) return;
+      historyIndex += 1;
+      if (historyIndex >= history.length) {
+        historyIndex = -1;
+        cmd.value = draft;
+      } else {
+        cmd.value = history[historyIndex];
+      }
+    }
+  });
+  cmd.addEventListener('focus', function () { cmdwrap.classList.add('focus'); });
+  cmd.addEventListener('blur', function () { cmdwrap.classList.remove('focus'); });
+
+  document.getElementById('close').addEventListener('click', function () {
+    try { window.consoleBridge.close(); } catch (e) {}
+  });
+  document.getElementById('clearBtn').addEventListener('click', function () {
+    output.textContent = '';
+  });
+  document.getElementById('copyBtn').addEventListener('click', function () {
+    var text = output.innerText || '';
+    var btn = document.getElementById('copyBtn');
+    try {
+      if (window.consoleBridge.copyText) window.consoleBridge.copyText(text);
+      btn.textContent = '已复制';
+      setTimeout(function () { btn.textContent = '复制'; }, 1200);
+    } catch (e) {}
+  });
+  document.getElementById('restartBtn').addEventListener('click', function () {
+    // S1-16：快照缺失时这个按钮的语义是「返回应用」，不是「重连」——重连必然同样失败
+    // （bash 根本不存在），旧实现把用户锁在一个只有死按钮的页面上。
+    if (this.dataset.mode === 'close') {
+      try { window.consoleBridge.close(); } catch (e) {}
+      return;
+    }
+    setReady(false, '正在重连…');
+    try { window.consoleBridge.restart(); } catch (e) {}
+  });
+  // S1-17：引擎栏可点 = 立即重试探活（离线时不再只是「报个状态」，而是给一个动作）。
+  document.getElementById('enginePill').addEventListener('click', function () { refreshEngine(); });
+  document.querySelectorAll('.chip').forEach(function (el) {
+    el.addEventListener('click', function () {
+      cmd.value = el.getAttribute('data-cmd') || '';
+      cmd.focus();
+    });
+  });
+
+  cmd.disabled = true;
+  send.disabled = true;
+  refreshEngine();
+  setInterval(refreshEngine, 3000);
+})();
+</script>
+</body>
+</html>

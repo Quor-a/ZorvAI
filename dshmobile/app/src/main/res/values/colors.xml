@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- 启动图标背景(保持) -->
+  <color name="ic_launcher_background">#ffffff</color>
+
+  <!-- UI 设计 token:Apple 式黑白极简(浅色)。铬面只允许近中性灰(羊皮纸微蓝容许),
+       色相仅留给 ok/warn/danger 语义信号族 —— 由 GuidePaletteMonochromeTest 守护。 -->
+  <color name="ds_bg">#F5F5F7</color>
+  <color name="ds_surface">#FFFFFF</color>
+  <color name="ds_surface_muted">#F5F5F7</color>
+  <color name="ds_chip">#F2F2F4</color>
+  <color name="ds_button_surface">#E8E8ED</color>
+  <color name="ds_border">#14000000</color>
+  <color name="ds_hairline">#1A000000</color>
+  <color name="ds_text_primary">#1D1D1F</color>
+  <color name="ds_text_secondary">#6E6E73</color>
+  <color name="ds_text_tertiary">#86868B</color>
+  <color name="ds_text_on_accent">#FFFFFF</color>
+  <color name="ds_accent">#1D1D1F</color>
+  <color name="ds_accent_pressed">#3A3A3C</color>
+  <color name="ds_accent_soft">#0D000000</color>
+  <color name="ds_ok">#34C759</color>
+  <color name="ds_warn">#FF9500</color>
+  <color name="ds_danger">#D70015</color>
+  <color name="ds_danger_soft">#14D70015</color>
+  <color name="ds_progress_track">#14000000</color>
+  <color name="ds_scrim">#E6F5F5F7</color>
+</resources>

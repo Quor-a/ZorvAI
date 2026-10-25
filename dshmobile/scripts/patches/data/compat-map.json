@@ -1,0 +1,34 @@
+{
+  "$comment": "补丁 D 的兼容性数据（原硬编码于 patch-marketplace.mjs，Phase 2a 出码为数据文件）。compatMap 按 fullName 末段匹配；compatNote 为 compat 值 → 用户可见说明。增补别名只改本文件——apply-patches --apply 会对已修补文件做 map 幂等刷新。",
+  "compatMap": {
+    "modlens": "ok",
+    "dsh-better-sidebar": "ok",
+    "dsh-whale-widget": "ok",
+    "deepseek-balance-whale-widget": "ok",
+    "dsh-ads": "ok",
+    "dsh-at-file": "ok",
+    "dsh-routing-suite": "ok",
+    "dsh-web": "ok",
+    "dsh-context": "ok",
+    "anysearch-dsh": "ok",
+    "dsh-mnemon": "ok",
+    "whale-girl": "ok",
+    "dsh-market": "ok",
+    "dsh-pocket": "ok",
+    "dsh-im": "ok",
+    "dsh-desktop": "desktop",
+    "pilot-harness": "desktop",
+    "guizang-dsh-desktop": "desktop",
+    "deepseek-harness-studio": "desktop",
+    "dsh-transparent-ui-plugin": "desktop",
+    "dsh-desktop-base": "desktop",
+    "dsh-ios": "desktop",
+    "dsh-browser": "native"
+  },
+  "compatNote": {
+    "ok": "移动端可用",
+    "desktop": "仅桌面（bionic 不可用）",
+    "native": "含原生依赖（bionic 未验证）",
+    "unknown": "未验证（装前留意）"
+  }
+}

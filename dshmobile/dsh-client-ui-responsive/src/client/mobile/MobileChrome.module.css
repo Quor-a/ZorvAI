@@ -1,0 +1,101 @@
+/*
+ * Phone chrome. Two occupants share this sheet:
+ * - .mask, the drawer backdrop (frame-wide overlay seat);
+ * - .toggle, the drawer button seated in upstream's own header row
+ *   (conversation.header.leading; see SidebarToggle.tsx).
+ * Outside the phone form the mask entry stays mounted but draws nothing (an empty
+ * box must not eat taps), while the header toggle keeps upstream's own header sizing.
+ */
+
+.root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 25;
+}
+
+.toggle,
+.mask {
+  display: none;
+}
+
+/*
+ * The drawer toggle, sized for the header's own 30px title row. It must not carry a
+ * filled background of its own: it sits beside upstream's title cluster, so it reads
+ * as one more header icon (the previous 44px band gave it a box of its own).
+ */
+/* Phones only: at desktop width upstream keeps its own sidebar toggle in the rail, so
+   rendering ours there would put two sidebar buttons on screen (measured on 16384:
+   upstream's "收起侧边栏" at x=240 plus ours at x=300). The band this replaced was
+   media-gated too; the gate moves onto the rule itself. Keyed on the injected
+   html[data-dsh-mobile-form] marker, the single source of the 767px form. */
+html[data-dsh-mobile-form] .toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  /* S3-19: the pending badge hangs off this button, so it is the positioning box. */
+  position: relative;
+  width: 28px;
+  height: 28px;
+  margin-inline-end: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+html[data-dsh-mobile-form] .toggle:active {
+  background: var(--dsw-alias-button-floating-fill);
+}
+
+@media (max-width: 767px) {
+  /* The drawer (mobile-form.css, z 30) slides over the frame; the mask sits
+     between the centre column and the drawer, so a tap beside the drawer
+     closes it. */
+  .mask {
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--ds-transition-duration-slow, 200ms) var(--ds-ease-in-out, ease);
+    z-index: 25;
+  }
+
+  .mask[data-open] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mask {
+    transition: none;
+  }
+}
+html[data-dsh-mobile-form] .badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dsw-alias-brand-primary, #3d6df0);
+  pointer-events: none;
+}
+
+/* S3-19：侧栏收起时提示「有浏览器标签待展开」——不给文字的话用户完全不知道有东西在等。 */
+html[data-dsh-mobile-form] .pendingHint {
+  align-self: center;
+  margin-left: 6px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+

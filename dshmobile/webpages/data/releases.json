@@ -1,0 +1,60 @@
+{
+  "tag": "v0.14.9",
+  "publishedAt": "2026-10-22T13:37:12Z",
+  "source": "release",
+  "generatedAt": "2026-10-22T13:47:42.090Z",
+  "assets": [
+    {
+      "name": "dsh-android-dsh-client-ui-responsive-0.3.3.tgz",
+      "size": 284941
+    },
+    {
+      "name": "dsh-android-dsh-host-web-compat-0.1.14.tgz",
+      "size": 37057
+    },
+    {
+      "name": "dsh-android-dsh-shell-termux-0.2.0.tgz",
+      "size": 9526
+    },
+    {
+      "name": "dsh-mobile-apk-v0.14.9-arm64.apk",
+      "size": 161996841
+    },
+    {
+      "name": "dsh-mobile-apk-v0.14.9-x86_64.apk",
+      "size": 158532117
+    },
+    {
+      "name": "MANIFEST.txt",
+      "size": 1387
+    },
+    {
+      "name": "notes.md",
+      "size": 18197
+    },
+    {
+      "name": "plugin-lock-resolution-arm64.json",
+      "size": 949
+    },
+    {
+      "name": "plugin-lock-resolution-release.json",
+      "size": 3732
+    },
+    {
+      "name": "plugin-lock-resolution-x86_64.json",
+      "size": 949
+    },
+    {
+      "name": "snapshot-arm64.tar.xz",
+      "size": 156717748
+    },
+    {
+      "name": "snapshot-x86_64.tar.xz",
+      "size": 153253008
+    }
+  ],
+  "sha256": {
+    "arm64": "38e8421be56a96323893bcc80286203749ff806fb140f185c883f6cc5512c049",
+    "x86_64": "13dd5991a6c2ebfe0598451ea348dc1b162effa24bc1780ac5e293b20fcaa072"
+  }
+}

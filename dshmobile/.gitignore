@@ -1,0 +1,44 @@
+build/
+.gradle/
+.gradle-home/
+local.properties
+# 顶层 node_modules（check-browser-syntax-floor 的 typescript 落点）：门禁工具依赖，不入库
+node_modules/
+snapshot/
+app/src/main/assets/snapshot.tar.xz
+# 快照指纹声明值（0.13.8-b ST-04 / F-ENV-01）：由构建链在拷贝 tar 后重写，与 tar 同属「本地产物」，
+# 不入库——入库会造成「声明值是某一次单 ABI 构建的事实」，且与上面 tar 的忽略语义不一致。
+# 出库后净检出/CI 下 tar 与 sha 均缺席，门禁打印 SKIP 计数；构建链以 --require 严格跑（缺席即失败）。
+app/src/main/assets/snapshot.sha256
+# 与快照同生的本地清单：由 build-hard-manifest.mjs 从当前 tar 生成，不能把单次打包事实提交。
+app/src/main/assets/plugin-hard-manifest.json
+# 敏感数据（安全审计 2026-08-14）
+*.credentials.yaml
+token*
+*.key
+*.pem
+*.p12
+.kotlin/
+# 插件构建产物（云端/本地 npm 构建生成，不入库；2026-08-31 收口）
+plugins/*/lib/
+plugins/*/node_modules/
+plugins/*/cbin_*
+
+# Python 编译缓存
+__pycache__/
+
+# 发布页站点的构建产物（由 webpages/tools/build.mjs 生成，不入库）
+webpages/dist/
+
+# 本地临时工作区（排查截图与中间产物）：0.14.0 两次误入提交后固化
+.deploy-tmp/
+
+# 两条打包链与来源审计的 APK 产物目录（云端与本地共用，不入库）
+out/
+
+# Windows 环境变量展开失败产生的幻影目录（字面量 %SystemDrive% 被当成目录名，
+# 内含 ProgramData\Microsoft\Windows\Caches\*.db）。它不是仓库内容，任何提交都不该带上。
+%SystemDrive%/
+
+# gh CLI 在 CWD 下落的设备状态（我这边只读调用产生，非仓库内容）
+.local/

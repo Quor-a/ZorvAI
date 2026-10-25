@@ -1,0 +1,52 @@
+{
+  "$comment": "桥面对称性基线（0.13.8-b ST-26）。基线 = 本轮实测的存量不对称；门禁只许它变少：新增不对称即 FAIL，条目消失（已修）也必须删除条目否则 stale FAIL。每条必须有 reason；pairs 显式声明「名字对不上但语义成对」的 setter/getter（例：setAvailable ↔ getBackAvailable）。0.14.0：ADB 授权面（adbShell/getAdbState/setAdbAllow/setAdbPair/revokeAdbPair/discoverAdbPorts）随内置 adb 退役删除，a11y* 三条已补进页面类型面——对应基线条目已移除。",
+  "surfaces": [
+    {
+      "id": "androidBridge",
+      "kotlin": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/AndroidBridge.kt",
+      "ts": "dsh-client-ui-responsive/src/client/android-bridge.ts",
+      "tsBlock": "interface AndroidShellBridge {"
+    },
+    {
+      "id": "backGateBridge",
+      "kotlin": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/BackGate.kt",
+      "kotlinStart": "class BackGateBridge(",
+      "ts": "dsh-client-ui-responsive/src/client/mobile/back-stack.ts",
+      "tsInlineBlock": "dshBackBridge?:"
+    },
+    {
+      "$comment": "G-6（2026-09-25）：ConsoleActivity.ConsoleBridge 的 6 个方法此前不在任何门禁扫描面（本门禁只扫 androidBridge / backGateBridge）。它的消费者是 assets/console.html 里的普通 JS，没有 TS 类型声明，故用 jsCallMarker 从**真实调用点**取面。",
+      "id": "consoleBridge",
+      "kotlin": "dsh-mobile-apk/app/src/main/java/com/ai/assistance/quro/dshmobile/ConsoleActivity.kt",
+      "kotlinStart": "inner class ConsoleBridge",
+      "ts": "dsh-mobile-apk/app/src/main/assets/console.html",
+      "jsCallMarker": "window.consoleBridge"
+    }
+  ],
+  "pairs": [
+    { "surface": "backGateBridge", "setter": "setAvailable", "getter": "getBackAvailable", "reason": "名字不含同一 token（available vs backAvailable），但语义成对：上行信号 + 只读回读" }
+  ],
+  "kotlinOnly": [
+    { "surface": "androidBridge", "method": "version", "reason": "页面侧类型面未声明；版本字符串当前无页面消费者（保留面）" },
+    { "surface": "androidBridge", "method": "checkEngine", "reason": "页面侧类型面未声明；引擎探活由壳侧看门狗消费，页面无消费者" },
+    { "surface": "androidBridge", "method": "keepScreenOn", "reason": "页面侧类型面未声明；由 MainActivity 注入 CSS/生命周期路径调用" },
+    { "surface": "androidBridge", "method": "showNotification", "reason": "页面侧类型面未声明；§8.2 #67 已实测 JS 侧零调用者（桥面公开但无页面消费）" },
+    { "surface": "androidBridge", "method": "pickDirectory", "reason": "页面侧类型面未声明；目录选择走 host-web-compat 的 SAF 桥，不经该入口" },
+    { "surface": "androidBridge", "method": "settingsPath", "reason": "页面侧类型面未声明；由注入层 settings-document.ts 直接读 window.androidBridge（类型面待补，见 ST-26 后续）" },
+    { "surface": "androidBridge", "method": "exportSettingsDocument", "reason": "页面侧类型面未声明；apk #168 新增，注入层直读" },
+    { "surface": "androidBridge", "method": "copyText", "reason": "页面侧类型面未声明；composer 回退路径直读" },
+    { "surface": "androidBridge", "method": "requestAllFilesAccess", "reason": "页面侧类型面未声明；设置页权限引导由壳侧 Intent 承担" },
+    { "surface": "androidBridge", "method": "getPickToken", "reason": "页面侧类型面未声明；token 由引擎侧 pick 端点消费，页面不读" },
+    { "surface": "backGateBridge", "method": "getBackAvailable", "reason": "页面侧只声明了上行 setAvailable；getter 供设备侧断言/自证，页面声明待补（本轮登记为已知缺口，不假绿）" },
+    { "surface": "consoleBridge", "method": "ready", "reason": "页面不轮询 ready()：会话状态由壳侧主动 pushStatus() 推给页面（ConsoleActivity.kt:68/114），页面用推来的 state==='ready' 驱动按钮使能，故无调用点。保留为壳侧只读探针面（供调试与外部断言）；G-6 把它纳入扫描面后必须登记，否则删掉它不会有任何门禁报警" }
+  ],
+  "tsOnly": [],
+  "setterWithoutGetter": [
+    { "surface": "androidBridge", "method": "setRootGranted", "reason": "issue #262（0.14.2-fx-2-root.1）：读面是复合状态 rootGrantState()（granted/consentValid/channelRoot 一次带出），写方法自身即写后回读返回同一全量 JSON——单字段 getter 会造成第二份真源，故有意不设" },
+    { "surface": "androidBridge", "method": "setRootConsent", "reason": "issue #262（0.14.2-fx-2-root.1）：同 setRootGranted——同意位只是 rootGrantState() 的一个字段，写后回读已覆盖读面" }
+  ],
+  "preferenceGetters": [
+    { "surface": "androidBridge", "method": "getOverlayEnabled", "reason": "返回持久化偏好，而非 OverlayController.isEnabled 事实值（偏好 && canDrawOverlays && 服务在场）——ST-02 已改壳侧判定，桥面 getter 仍返偏好；本条保留至桥面同步事实值" },
+    { "surface": "androidBridge", "method": "getDevLogEnabled", "reason": "返回 dev 开关偏好，未回读「日志目录是否真在写」的事实值" }
+  ]
+}

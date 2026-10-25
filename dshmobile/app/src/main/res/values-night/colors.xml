@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- 暗色镜像:纯黑画布 + 反转墨色 accent(白底黑字主操作)。铬面同样只允许近中性灰。 -->
+  <color name="ds_bg">#000000</color>
+  <color name="ds_surface">#1C1C1E</color>
+  <color name="ds_surface_muted">#2C2C2E</color>
+  <color name="ds_chip">#2C2C2E</color>
+  <color name="ds_button_surface">#343437</color>
+  <color name="ds_border">#26FFFFFF</color>
+  <color name="ds_hairline">#2EFFFFFF</color>
+  <color name="ds_text_primary">#F5F5F7</color>
+  <color name="ds_text_secondary">#98989D</color>
+  <color name="ds_text_tertiary">#6E6E73</color>
+  <color name="ds_text_on_accent">#1D1D1F</color>
+  <color name="ds_accent">#F5F5F7</color>
+  <color name="ds_accent_pressed">#C7C7CC</color>
+  <color name="ds_accent_soft">#1EFFFFFF</color>
+  <color name="ds_ok">#30D158</color>
+  <color name="ds_warn">#FF9F0A</color>
+  <color name="ds_danger">#FF6960</color>
+  <color name="ds_danger_soft">#26FF6960</color>
+  <color name="ds_progress_track">#2EFFFFFF</color>
+  <color name="ds_scrim">#E6000000</color>
+</resources>

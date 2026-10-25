@@ -144,7 +144,9 @@
 
     <!-- 文件写入权限（Android 9 及以下）：Android 10+ 由 Scoped Storage 接管，
          但对低版本设备（minSdk=26）仍需声明才能往外部存储写文件/文档。 -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <!-- maxSdkVersion=28：宿主策略口径（库模块 dshmobile 声明 29，合并冲突时以宿主为准；
+         API 29+ 分区存储下该权限本就是 no-op，实际写放行走 MANAGE_EXTERNAL_STORAGE）。 -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" tools:replace="android:maxSdkVersion" />
 
     <!-- 通话状态与移动网络信息：获取 SIM 运营商、蜂窝网络类型、IMEI 等设备标识，
          补充 get_network_info 的能力（目前只能判断 WIFI/CELLULAR，拿不到运营商细节）。 -->

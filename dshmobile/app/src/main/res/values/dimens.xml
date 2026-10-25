@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <dimen name="ds_space_4">4dp</dimen>
+  <dimen name="ds_space_8">8dp</dimen>
+  <dimen name="ds_space_12">12dp</dimen>
+  <dimen name="ds_space_16">16dp</dimen>
+  <dimen name="ds_space_20">20dp</dimen>
+  <dimen name="ds_space_24">24dp</dimen>
+  <dimen name="ds_space_32">32dp</dimen>
+  <dimen name="ds_space_40">40dp</dimen>
+  <dimen name="ds_space_48">48dp</dimen>
+  <dimen name="ds_radius_sm">8dp</dimen>
+  <dimen name="ds_radius_md">16dp</dimen>
+  <dimen name="ds_radius_card">18dp</dimen>
+  <dimen name="ds_radius_pill">999dp</dimen>
+  <dimen name="ds_radius_icon">18dp</dimen>
+  <dimen name="ds_progress_height">5dp</dimen>
+  <dimen name="ds_logo_size">28dp</dimen>
+  <dimen name="ds_logo_shell">52dp</dimen>
+  <dimen name="ds_btn_height">52dp</dimen>
+  <dimen name="ds_btn_secondary_height">48dp</dimen>
+  <dimen name="ds_dot">8dp</dimen>
+  <dimen name="ds_guide_gutter">24dp</dimen>
+  <dimen name="ds_guide_max_width">440dp</dimen>
+</resources>

@@ -1,0 +1,19 @@
+# Private official Browser source
+
+This directory contains private MIT-licensed source from the immutable local reference `.deploy-tmp/upstream-020rc2` at source revision `639ed015`, targeting DSH 0.2.0-rc.2. It is not a public client entrypoint, and never imports a feature plugin's runtime exports.
+
+The original BrowserBody, BrowserTitle and Browser CSS implement the pictured official address bar, start/restore content and title. The surrounding official SidebarRight guide card, tab strip and docking framework are consumed through their registrations rather than copied. The guide artwork comes from the platform UI primitives.
+
+[SOURCE.json](SOURCE.json) records each original source path and normalized source SHA-256. [LICENSE](LICENSE) retains DeepSeek's MIT notice. The logged private changes isolate the locale/store namespace and pass the owning GUI occurrence id into the neutral page factory. No Iframe or Electron implementation/factory is copied. BrowserBody and BrowserTitle retain their original structure and stylesheet.
+
+## Native adapter integration
+
+The adjacent Android adapter owns per-Session + UI-tab-occurrence to native-tab bindings. Native navigation and history remain authoritative, and native tab metadata is published to the renderer through injected keyed observables. Address-only checkpoints do not serialize native history. Profile availability must be explicit; absent/unsupported native profiles display their returned reason and cannot make presentation appear ready. The canonical browser type takes the builtin kind at extension priority with one guide entry; a separate guide-less android-browser resolver retains old layout occurrence ids without rewriting layouts.
+
+The narrow bridge command accepts only open/back/forward/reload/select/close/status/tabs, with session and optional native tabId, uiTabId and URL. Successful state replies echo session (or ownerSessionId), ok/available, an authoritative tabs array, native tabId, and explicit profileAvailable/profileReason (or profile.available/profile.reason). Tab summaries include tabId, optional uiTabId, URL/title, pageGeneration, loadState, canGoBack/canGoForward, identityId and viewportWidth/viewportHeight. A targeted reply without a tabs array updates only its returned tab and cannot authorize removal of other GUI tabs. select binds the named native tab to uiTabId without forcing presentation; it may rebind a previous GUI occurrence only after the client confirms that occurrence is absent from the complete Sidebar inventory.
+
+Bounds, viewport and identity calls include session, native tabId and uiTabId. Bounds target only BrowserBody's committed viewport, not the address bar, companion row or Sidebar chrome. Framework tab.visible, ancestor geometry, ResizeObserver, MutationObserver, rAF and app-portal visibility govern native presentation. DOM detach, occurrence abort during HMR and provider disposal hide only; explicit Sidebar close/replacement calls the targeted native close handler, and cleanup failure preserves the UI tab. Nothing closes an entire native workspace.
+
+## External verification required
+
+No builds, typechecks, unit tests, browser automation, CDP, ADB or device tests were run for this source change. Existing dependency pins remain 0.1.7 and must be upgraded by the parent before evaluating target 0.2 API compatibility. The parent owns manifests, build configuration, emitted bundles, APK bridge implementation and source/build mirrors. External checks must cover slot/keyed-hook registration, single guide entry, native multiple-tab adoption/close, collapsed/background Session behavior, legacy layout preservation, HMR hide-only cleanup, floating/docking bounds, DOM menus over native content, successful and rejected identity/viewport changes, and explicit unsupported-profile reasons.

@@ -1,0 +1,864 @@
+name: build-apk-source
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build-arm64:
+    runs-on: ubuntu-latest
+    env:
+      DSH_APK_DIR: ${{ github.workspace }}
+    steps:
+      - name: Checkout project source without Git LFS runtime archives
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          lfs: false
+
+      - name: Prepare build tools
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify pinned source replacement before the expensive build
+        run: |
+          python3 -m unittest discover -s scripts/source-build -p 'test_*.py' -v
+          node --test scripts/source-build/*.test.mjs scripts/check-apk-signatures.test.mjs scripts/resolve-version-suffix.test.mjs
+          node scripts/source-build/check-package-lock-roots.mjs
+      - name: Install archive and signature tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y xz-utils gnupg unzip
+
+      # 产出侧签名断言要用 apksigner，而它属于 Android SDK 的 build-tools——
+      # runner 镜像上是否预装并不稳定（本仓 pr-gate / release 两条链都显式
+      # `sdkmanager "build-tools;36.0.0"`），故在这里**提前**解析：拿不到就当场判红，
+      # 不让它拖到出包之后才失败。解析结果落盘供打包步骤复用。
+      - name: Resolve the Android SDK apksigner
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy-tmp/source-build
+          sdk_roots=()
+          if [ -n "${ANDROID_HOME:-}" ]; then sdk_roots+=("$ANDROID_HOME"); fi
+          if [ -n "${ANDROID_SDK_ROOT:-}" ]; then sdk_roots+=("$ANDROID_SDK_ROOT"); fi
+          sdk_roots+=("/usr/local/lib/android/sdk" "$HOME/Android/Sdk")
+          resolve_apksigner() {
+            local root candidate
+            for root in "${sdk_roots[@]}"; do
+              [ -d "$root/build-tools" ] || continue
+              candidate=$(find "$root/build-tools" -maxdepth 2 -type f -name apksigner | sort | tail -1 || true)
+              if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+                printf '%s\n' "$candidate"
+                return 0
+              fi
+            done
+            return 1
+          }
+          apksigner_bin="$(resolve_apksigner || true)"
+          if [ -z "$apksigner_bin" ]; then
+            echo "apksigner 不在场，尝试用 sdkmanager 装 build-tools（与 pr-gate / release 同一做法）"
+            for root in "${sdk_roots[@]}"; do
+              if [ -x "$root/cmdline-tools/latest/bin/sdkmanager" ]; then
+                yes | sudo "$root/cmdline-tools/latest/bin/sdkmanager" "build-tools;36.0.0" >/dev/null 2>&1 || true
+                break
+              fi
+            done
+            apksigner_bin="$(resolve_apksigner || true)"
+          fi
+          if [ -z "$apksigner_bin" ]; then
+            echo "::error::找不到 apksigner；ANDROID_HOME='${ANDROID_HOME:-<unset>}' ANDROID_SDK_ROOT='${ANDROID_SDK_ROOT:-<unset>}'"
+            for root in "${sdk_roots[@]}"; do
+              echo "--- 列目录: $root"
+              ls -la "$root" 2>&1 | sed -n '1,20p'
+            done
+            exit 1
+          fi
+          printf '%s\n' "$apksigner_bin" > .deploy-tmp/source-build/apksigner-path.txt
+          echo "apksigner: $apksigner_bin"
+          "$apksigner_bin" version
+          # 自证（坑 203）：先用这把 keystore 签一个探针包、再把它读回来，验证「apksigner 能读出期望
+          # 指纹」这条判据本身可用。放在构建**前**，是为了让工具/keystore 的问题在 2 分钟内暴露，
+          # 而不是等 30 分钟的打包跑完才在末尾判红（前两轮各因此烧掉一小时，且产物被丢弃）。
+          expected_signing_certificate='1dde9d980f62b715f29c20b421063f1d3d796085adf7de7e9907dd16d845bcbd'
+          mkdir -p .deploy-tmp/source-build/signing-self-test
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('.deploy-tmp/source-build/signing-self-test/probe.zip', 'w') as archive:
+              archive.writestr('AndroidManifest.xml', '<manifest/>')
+          PY
+          self_test_apk=.deploy-tmp/source-build/signing-self-test/probe.apk
+          "$apksigner_bin" sign --min-sdk-version 26 \
+            --ks keystore/debug.keystore --ks-pass pass:android \
+            --ks-key-alias androiddebugkey --out "$self_test_apk" \
+            .deploy-tmp/source-build/signing-self-test/probe.zip
+          # 探针包的 manifest 是纯文本，apksigner 无法自行判定 minSdk，必须显式给（真实 APK 不需要）。
+          probe_output=$("$apksigner_bin" verify --print-certs --verbose --min-sdk-version 26 "$self_test_apk" 2>&1 || true)
+          probe_normalized=$(printf '%s' "$probe_output" | tr 'A-F' 'a-f' | tr -d ':')
+          if ! printf '%s' "$probe_normalized" | grep -q "$expected_signing_certificate"; then
+            echo "::error::签名自证失败：用仓库 keystore 签出的探针包读不到期望指纹 $expected_signing_certificate"
+            echo "--- apksigner sign/verify 原始输出开始 ---"
+            printf '%s\n' "$probe_output"
+            echo "--- apksigner 原始输出结束 ---"
+            exit 1
+          fi
+          echo "签名自证通过：keystore 可签名，且 apksigner 能读出期望指纹"
+
+      - name: Checkout pinned DeepSeek Harness source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy-tmp
+          # 已存在则复用：CI 每轮全新目录，本地复跑却会撞 `destination path already exists`。
+          # 下面几条 fetch/checkout 本身幂等，只有 clone 不是，故只守这一条。
+          if [ ! -d .deploy-tmp/deepseek-harness/.git ]; then
+            git clone --filter=blob:none --no-checkout --depth=1 https://github.com/deepseek-ai/deepseek-harness.git .deploy-tmp/deepseek-harness
+          fi
+          # 合同是唯一真源（0.14.8 起不再写死）：写死的提交/标签会在每次引擎追版后静默失效。
+          COMMIT=$(node -p 'require("./scripts/contract.json").upstream.commit')
+          TAG=$(node -p 'require("./scripts/contract.json").baseline')
+          git -C .deploy-tmp/deepseek-harness fetch --depth=1 origin "$COMMIT"
+          git -C .deploy-tmp/deepseek-harness fetch --depth=1 origin "refs/tags/dsh-v$TAG:refs/tags/dsh-v$TAG"
+          # A previous interrupted build may have modified tracked inputs before this checkout.
+          # Reset only this dedicated source checkout; preserve ignored dependency caches.
+          test "$(realpath .deploy-tmp/deepseek-harness)" = "$(realpath .)/.deploy-tmp/deepseek-harness"
+          git -C .deploy-tmp/deepseek-harness checkout -- .
+          git -C .deploy-tmp/deepseek-harness clean -fdq
+          git -C .deploy-tmp/deepseek-harness checkout --detach "$COMMIT"
+          test "$(git -C .deploy-tmp/deepseek-harness rev-parse HEAD)" = "$COMMIT"
+          test "$(git -C .deploy-tmp/deepseek-harness describe --tags --always)" = "dsh-v$TAG"
+          node -e 'const c=require("./scripts/contract.json"); if(c.upstreamRepo!==".deploy-tmp/deepseek-harness" || !c.baseline || !c.upstream.commit) throw Error("source workflow identity does not match contract")'
+          node -e 'const c=require("./scripts/contract.json"), p=require("./.deploy-tmp/deepseek-harness/package.json"); if(!c.upstream.packageManager || !c.upstream.enginesNode || p.version!==c.baseline || p.packageManager!==c.upstream.packageManager || p.engines.node!==c.upstream.enginesNode) throw Error("official Harness runtime policy changed")'
+
+      - name: Checkout pinned component sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy-tmp/component-sources
+          # 三个项目组件来自本次 APK 提交；逐文件核对来源，避免独立仓旧 pin 拒绝已交付修复。
+          node scripts/source-build/record-project-components.mjs inputs \
+            .deploy-tmp/source-build/project-component-provenance.json
+          # 市场插件用**固定 npm 发布产物**，不用组件源码树：我们的镜像与全部 market-* 补丁都是
+          # 按发布字节定义的（vendor/dshmarketplace-plugin/PATCHES.md：镜像来自 0.1.7.tgz），
+          # 而从源码树重建会得到不同字节 —— 0.1.5 时代就踩过（源码构建产物与发布产物闭合形态不同，
+          # 需要一条源码构建专用的补丁改写兜着）。改用发布产物后该改写随之退役，锚点天然对齐。
+          marketplace_tarball=.deploy-tmp/component-sources/dshmarketplace-plugin-0.1.7.tgz
+          curl --fail --location --retry 3 --max-time 300 \
+            https://registry.npmjs.org/dshmarketplace-plugin/-/dshmarketplace-plugin-0.1.7.tgz \
+            --output "$marketplace_tarball"
+          printf '%s  %s\n' '881c21ec33a4a91ad65c61676540faab4122440e3f9685f69939533a6dbbc0c1' "$marketplace_tarball" | sha256sum --check -
+          # Verify the checked-in manifest differs from the hash-pinned publish by only the declared peers.
+          node scripts/source-build/prepare-marketplace-metadata.mjs "$marketplace_tarball" \
+            vendor/dshmarketplace-plugin/package.json .deploy-tmp/source-build/marketplace-metadata-delta.json --check
+          test "$(realpath vendor/dshmarketplace-plugin)" = "$(realpath .)/vendor/dshmarketplace-plugin"
+          rm -rf vendor/dshmarketplace-plugin
+          mkdir -p vendor/dshmarketplace-plugin
+          tar -xzf "$marketplace_tarball" -C vendor/dshmarketplace-plugin --strip-components=1
+          # Extraction must not silently restore the published prerelease-incompatible peer declarations.
+          node scripts/source-build/prepare-marketplace-metadata.mjs "$marketplace_tarball" \
+            vendor/dshmarketplace-plugin/package.json .deploy-tmp/source-build/marketplace-metadata-delta.json --apply
+          test "$(node -p "require('./vendor/dshmarketplace-plugin/package.json').version")" = "0.1.7"
+
+      - name: Build and pack DeepSeek Harness from source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/.deploy-tmp/source-build"
+          # Previous stage interruption may leave the project overlay in its source-only form.
+          # Regenerate from the immutable audited project commit, not the previous run artifact.
+          git show "$GITHUB_SHA:scripts/snapshot-config/engine-overlay.json" > scripts/snapshot-config/engine-overlay.json
+          cd .deploy-tmp/deepseek-harness
+          # Reset only the dedicated build checkout on rerun; retain ignored caches.
+          # All vendor sources now follow the official target; no older commit is staged.
+          git checkout -- .
+          git clean -fdq
+          corepack enable
+          corepack pnpm install --frozen-lockfile
+          test "$(corepack pnpm --version)" = "11.7.0"
+          corepack pnpm --version > "$GITHUB_WORKSPACE/.deploy-tmp/source-build/package-manager-versions.txt"
+          printf 'deployment pnpm: ' >> "$GITHUB_WORKSPACE/.deploy-tmp/source-build/package-manager-versions.txt"
+          # corepack's fetcher has no download deadline: a stalled connection leaves the
+          # step silent forever rather than failing (measured 2026-09-26: the pnpm 12.2.0
+          # fetch logged nothing for 43 minutes until the run was cancelled, while the
+          # frozen install ahead of it had finished in 18 s). Bound each attempt with
+          # `timeout` and retry, then warm the cache once here so the deploy call below
+          # reuses the same binary instead of downloading again.
+          deployment_pnpm=""
+          for attempt in 1 2 3 4 5; do
+            if deployment_pnpm="$(timeout 240 corepack pnpm@12.2.0 --pm-on-fail=ignore --version)"; then
+              break
+            fi
+            deployment_pnpm=""
+            echo "corepack pnpm@12.2.0 attempt ${attempt} did not complete within 240s; retrying" >&2
+            sleep $((attempt * 10))
+          done
+          test -n "$deployment_pnpm"
+          printf '%s\n' "$deployment_pnpm" >> "$GITHUB_WORKSPACE/.deploy-tmp/source-build/package-manager-versions.txt"
+          root_manifest="package.json"
+          root_manifest_backup="$GITHUB_WORKSPACE/.deploy-tmp/source-build/harness-root-package.json.original"
+          cp "$root_manifest" "$root_manifest_backup"
+          node <<'NODE'
+          const crypto = require('node:crypto')
+          const fs = require('node:fs')
+          const path = 'package.json'
+          const reportPath = `${process.env.GITHUB_WORKSPACE}/.deploy-tmp/source-build/harness-build-script-exclusion.json`
+          const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex')
+          const original = fs.readFileSync(path, 'utf8')
+          // Official Harness appends the Electron desktop bundle to build:lib:host. This
+          // source audit builds an Android APK: @deepseek-ai/dsh-desktop is private,
+          // absent from the engine overlay, and outside the apps/cli production
+          // deploy closure, while the recursive bundle pass below already bundles
+          // every workspace package. Removing the clause restores the 0.1.5-rc.1
+          // build shape. The clause is dropped for the build only and the root manifest is
+          // restored before anything is packed, so every packed manifest stays
+          // exactly as the pinned release ships it.
+          const clause = ' && pnpm --filter @deepseek-ai/dsh-desktop run bundle'
+          const occurrences = original.split(clause).length - 1
+          if (occurrences !== 1) {
+            throw new Error(`expected exactly one desktop bundle clause in the pinned root manifest, found ${occurrences}`)
+          }
+          const temporary = original.replace(clause, '')
+          fs.writeFileSync(path, temporary)
+          const report = {
+            file: 'package.json',
+            field: 'scripts.build:lib:host',
+            originalValue: JSON.parse(original).scripts['build:lib:host'],
+            temporaryValue: JSON.parse(temporary).scripts['build:lib:host'],
+            originalManifestSha256: sha256(original),
+            temporaryManifestSha256: sha256(temporary),
+            restoredAfterBuild: true,
+            reason: 'The pinned Harness release builds the Electron desktop app from build:lib:host. The source audit produces an Android APK, where @deepseek-ai/dsh-desktop is private, absent from the engine overlay and outside the apps/cli production deploy closure; the recursive bundle pass already covers every workspace package.',
+          }
+          fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n')
+          console.log(`harness desktop bundle excluded for the source build: ${report.originalValue.length} -> ${report.temporaryValue.length} chars`)
+          NODE
+          corepack pnpm run build
+          cp "$root_manifest_backup" "$root_manifest"
+          corepack pnpm --recursive --if-present run bundle
+          corepack pnpm run build:web
+          # Audit all overlay-pinned vendor source bytes at the official target.
+          # No source replacement or second compilation of older packages occurs.
+          python3 "$GITHUB_WORKSPACE/scripts/source-build/prepare-harness-vendor-overrides.py" \
+            "$GITHUB_WORKSPACE/.deploy-tmp/deepseek-harness" \
+            "$GITHUB_WORKSPACE/scripts/snapshot-config/engine-overlay.json" \
+            "$GITHUB_WORKSPACE/.deploy-tmp/source-build/harness-vendor-overrides.json"
+          node "$GITHUB_WORKSPACE/scripts/source-build/reconcile-harness-vendor-lock.mjs" \
+            "$GITHUB_WORKSPACE/.deploy-tmp/deepseek-harness" \
+            "$GITHUB_WORKSPACE/.deploy-tmp/source-build/harness-vendor-overrides.json" \
+            "$GITHUB_WORKSPACE/.deploy-tmp/source-build/harness-vendor-lock-reconciliation.json"
+
+          workspace_config="$GITHUB_WORKSPACE/.deploy-tmp/deepseek-harness/pnpm-workspace.yaml"
+          workspace_backup="$GITHUB_WORKSPACE/.deploy-tmp/source-build/pnpm-workspace.original.yaml"
+          package_backup_dir="$GITHUB_WORKSPACE/.deploy-tmp/source-build/pnpm-deploy-runtime-closure"
+          package_backup="$package_backup_dir/apps-cli-package.json.original"
+          lock_backup="$package_backup_dir/pnpm-lock.yaml.original"
+          cp "$workspace_config" "$workspace_backup"
+          mkdir -p "$package_backup_dir"
+          cp apps/cli/package.json "$package_backup"
+          cp pnpm-lock.yaml "$lock_backup"
+          restore_deploy_inputs() {
+            cp "$workspace_backup" "$workspace_config"
+            cp "$package_backup" apps/cli/package.json
+            cp "$lock_backup" pnpm-lock.yaml
+          }
+          trap restore_deploy_inputs EXIT
+          python3 "$GITHUB_WORKSPACE/scripts/source-build/prepare-pnpm-deploy-policy.py" \
+            "$workspace_config" \
+            "$GITHUB_WORKSPACE/.deploy-tmp/source-build/pnpm-deploy-build-policy.json"
+          cp "$GITHUB_WORKSPACE/.deploy-tmp/source-build/pnpm-deploy-build-policy.json" \
+            "$GITHUB_WORKSPACE/.deploy-tmp/source-build/source-build-policy.json"
+          node "$GITHUB_WORKSPACE/scripts/source-build/prepare-pnpm-deploy-runtime-closure.mjs" \
+            "$GITHUB_WORKSPACE/.deploy-tmp/deepseek-harness" \
+            "$GITHUB_WORKSPACE/scripts/snapshot-config/engine-overlay.json" \
+            "$package_backup_dir" \
+            "$GITHUB_WORKSPACE/.deploy-tmp/source-build/pnpm-deploy-runtime-closure.json"
+          corepack pnpm install --lockfile-only --no-frozen-lockfile
+          corepack pnpm install --frozen-lockfile --ignore-scripts
+          # `pnpm deploy` 要求目标目录为空，否则 ERR_PNPM_DEPLOY_DIR_NOT_EMPTY；CI 每轮全新工作区
+          # 故从不暴露，本地复跑必撞。语义上这里要的就是「全新的部署树」，故清掉即忠实。
+          # Refuse an empty/misdirected workspace or symlinked staging parent before cleanup.
+          test -n "$GITHUB_WORKSPACE"
+          test "$(realpath "$GITHUB_WORKSPACE/.deploy-tmp")" = "$(realpath "$GITHUB_WORKSPACE")/.deploy-tmp"
+          rm -rf -- "$GITHUB_WORKSPACE/.deploy-tmp/engine-deploy"
+          corepack pnpm@12.2.0 --pm-on-fail=ignore --filter @deepseek-ai/dsh deploy --prod "$GITHUB_WORKSPACE/.deploy-tmp/engine-deploy"
+          cp pnpm-lock.yaml "$GITHUB_WORKSPACE/.deploy-tmp/source-build/pnpm-deploy-runtime-closure.lock.yaml"
+          restore_deploy_inputs
+          trap - EXIT
+          cd "$GITHUB_WORKSPACE"
+          node <<'NODE'
+          const crypto = require('node:crypto')
+          const fs = require('node:fs')
+          const { createRequire } = require('node:module')
+          const path = require('node:path')
+          const yaml = createRequire(path.resolve('.deploy-tmp/deepseek-harness/apps/cli/package.json'))('js-yaml')
+          const lockPath = '.deploy-tmp/source-build/pnpm-deploy-runtime-closure.lock.yaml'
+          const lock = yaml.load(fs.readFileSync(lockPath, 'utf8'))
+          const reportPath = '.deploy-tmp/source-build/pnpm-deploy-runtime-closure.json'
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'))
+          const digest = (value) => crypto.createHash('sha256').update(value).digest('hex')
+          const exact = (name, version) => {
+            const key = Object.keys(lock.packages ?? {}).find((entry) => entry === `${name}@${version}` || entry.startsWith(`${name}@${version}(`))
+            if (!key) throw new Error(`temporary runtime lock is missing ${name}@${version}`)
+            return { lockKey: key, resolution: lock.packages[key].resolution }
+          }
+          report.resolvedLockfileSha256 = digest(fs.readFileSync(lockPath))
+          report.androidRuntimeDependencies.resolvedPackages = {
+            koffi: exact('koffi', '3.2.1'),
+            koffiAndroidArm64: exact('@koromix/koffi-android-arm64', '3.2.1'),
+            sharpWasm32: exact('@img/sharp-wasm32', '0.35.3'),
+          }
+          fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n')
+          const policyPath = '.deploy-tmp/source-build/source-build-policy.json'
+          const policy = JSON.parse(fs.readFileSync(policyPath, 'utf8'))
+          policy.androidRuntimePackages = {
+            audit: '.deploy-tmp/source-build/android-native-runtime-packages.json',
+            trustedPublisherInputs: [
+              { name: '@koromix/koffi-android-arm64', version: '3.2.1', upstream: 'https://github.com/Koromix/koffi', role: 'Android ARM64 Node-API binding for Koffi' },
+              { name: '@img/sharp-wasm32', version: '0.35.3', upstream: 'https://github.com/lovell/sharp', role: 'WebAssembly fallback for Sharp on Android' },
+            ],
+            lockfileSha256: report.resolvedLockfileSha256,
+            lockfileIntegrityEntries: report.androidRuntimeDependencies.resolvedPackages,
+            note: 'These runtime binaries are publisher-provided official packages, not local source builds. Their package identity, resolution integrity, runtime payload hashes, ABI or module path are recorded by the source-build audits.'
+          }
+          fs.writeFileSync(policyPath, JSON.stringify(policy, null, 2) + '\n')
+          NODE
+          python3 scripts/source-build/prune-harness-preview.py \
+            .deploy-tmp/deepseek-harness \
+            .deploy-tmp/engine-deploy \
+            .deploy-tmp/source-build/harness-web-preview-exclusion.json
+          cp scripts/snapshot-config/engine-overlay.json .deploy-tmp/source-build/engine-overlay.original.json
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = 'scripts/snapshot-config/engine-overlay.json'
+          const manifest = JSON.parse(fs.readFileSync(path, 'utf8'))
+          const baseHash = require('node:crypto').createHash('sha256').update(fs.readFileSync(path)).digest('hex')
+          const sourceOnlyVendorTop = { 'partial-json': '0.1.7' }
+          for (const [name, version] of Object.entries(sourceOnlyVendorTop)) {
+            const existing = manifest.vendorTop?.[name]
+            if (existing && existing !== version) throw new Error(`source-only runtime pin conflicts for ${name}: ${existing} vs ${version}`)
+            manifest.vendorTop = { ...(manifest.vendorTop ?? {}), [name]: version }
+          }
+          fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n')
+          const policyPath = '.deploy-tmp/source-build/source-build-policy.json'
+          const policy = JSON.parse(fs.readFileSync(policyPath, 'utf8'))
+          policy.sourceOnlyVendorTop = {
+            baseOverlaySha256: baseHash,
+            packages: sourceOnlyVendorTop,
+            reason: 'A clean Termux bootstrap does not inherit the partial-json transitive copy present in the legacy LFS runtime base; keep its exact Harness runtime version in the source-built engine overlay.'
+          }
+          policy.harnessVendorSourceOverrides = '.deploy-tmp/source-build/harness-vendor-overrides.json'
+          policy.harnessVendorSourceOverridesSha256 = require('node:crypto').createHash('sha256').update(fs.readFileSync('.deploy-tmp/source-build/harness-vendor-overrides.json')).digest('hex')
+          policy.harnessVendorLockReconciliation = '.deploy-tmp/source-build/harness-vendor-lock-reconciliation.json'
+          policy.harnessVendorLockReconciliationSha256 = require('node:crypto').createHash('sha256').update(fs.readFileSync('.deploy-tmp/source-build/harness-vendor-lock-reconciliation.json')).digest('hex')
+          fs.writeFileSync(policyPath, JSON.stringify(policy, null, 2) + '\n')
+          NODE
+          node scripts/source-build/export-dsh-engine.mjs \
+            .deploy-tmp/deepseek-harness .deploy-tmp/engine-overlay
+          node scripts/source-build/inject-dsh-engine-packages.mjs \
+            .deploy-tmp/engine-deploy .deploy-tmp/engine-overlay \
+            scripts/snapshot-config/engine-overlay.json \
+            .deploy-tmp/source-build/first-party-deploy-injection.json
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = 'scripts/snapshot-config/engine-overlay.json'
+          const manifest = JSON.parse(fs.readFileSync(path, 'utf8'))
+          const injection = JSON.parse(fs.readFileSync('.deploy-tmp/source-build/first-party-deploy-injection.json', 'utf8'))
+          const runtimeClosure = JSON.parse(fs.readFileSync('.deploy-tmp/source-build/pnpm-deploy-runtime-closure.json', 'utf8'))
+          const sourcePackages = Object.entries(manifest.packages ?? {})
+            .filter(([name]) => name.startsWith('@deepseek-ai/'))
+            .map(([name, version]) => ({ name, version }))
+          if (sourcePackages.length !== injection.packageCount) throw new Error(`injected ${injection.packageCount} first-party packages, overlay lists ${sourcePackages.length}`)
+          for (const { name } of sourcePackages) delete manifest.packages[name]
+          fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n')
+          const sourceBuildPolicyPath = '.deploy-tmp/source-build/source-build-policy.json'
+          const sourceBuildPolicy = JSON.parse(fs.readFileSync(sourceBuildPolicyPath, 'utf8'))
+          fs.writeFileSync('.deploy-tmp/source-build/source-build-policy.json', JSON.stringify({
+            ...sourceBuildPolicy,
+            omittedFirstPartyPackageOverlays: sourcePackages,
+            firstPartySourceInjection: injection,
+            pnpmDeployRuntimeClosure: runtimeClosure,
+            firstPartyOverlayReason: 'The source-built package tarballs are injected into the physical targets of the pnpm deploy package links before bootstrap packaging. This supplies built lib files while preserving each package symlink and its sibling virtual-store dependency links; the snapshot builder skips re-extracting these packages.',
+            exportedFirstPartyTarballs: 'Built from the pinned source, hashed in source-build-manifest.json, and injected into the pnpm deploy tree before that tree is copied into the APK runtime.',
+          }, null, 2) + '\n')
+          fs.writeFileSync('.deploy-tmp/source-build/effective-engine-overlay.json', JSON.stringify(manifest, null, 2) + '\n')
+          NODE
+
+      - name: Authenticate official Termux bootstrap and extract signing keys
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy-tmp/source-build
+          # Reuse only an authenticated cache hit; an interrupted curl may leave a partial ZIP.
+          # Read the canonical pin without importing/executing the bootstrap preparer.
+          bootstrap_sha256=$(python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          tree = ast.parse(Path("scripts/source-build/prepare-termux-bootstrap.py").read_text())
+          pins = [ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
+                  and any(isinstance(target, ast.Name) and target.id == "BOOTSTRAP_SHA256" for target in node.targets)]
+          if len(pins) != 1 or len(pins[0]) != 64 or any(c not in "0123456789abcdef" for c in pins[0]):
+              raise ValueError("invalid bootstrap SHA-256 pin")
+          print(pins[0])
+          PY
+          )
+          if ! printf '%s  %s\n' "$bootstrap_sha256" .deploy-tmp/source-build/bootstrap-aarch64.zip | sha256sum --check --status 2>/dev/null; then
+            curl --fail --location --retry 3 \
+              'https://github.com/termux/termux-packages/releases/download/bootstrap-2026.09.20-r1%2Bapt.android-7/bootstrap-aarch64.zip' \
+              --output .deploy-tmp/source-build/bootstrap-aarch64.zip
+          fi
+          # 先清空解包目标：本步对**同一目录**重跑不安全——上一轮按 SYMLINKS.txt 建出的符号链接
+          # 会让这一轮的 safe_member 解析出界（报 `bootstrap path escaped staging root`）。
+          # CI 每轮全新目录所以从不暴露，本地复跑必踩；清掉即幂等。
+          rm -rf .deploy-tmp/source-build/bootstrap-extracted
+          python3 scripts/source-build/prepare-termux-bootstrap.py \
+            --extract-bootstrap-only \
+            .deploy-tmp/source-build/bootstrap-aarch64.zip \
+            .deploy-tmp/source-build/bootstrap-extracted/usr
+
+      - name: Build project plugins from source
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 注意：这里**不含** vendor/dshmarketplace-plugin —— 它是固定 npm 发布产物，tarball 里已带
+          # 打好包的 lib/；再跑一次 `npm run build` 会用不同工具链产出不同字节，把我们按发布字节定义的
+          # market-* 补丁全部锚空（0.1.5 时代就是这么踩的）。
+          mapfile -t plugin_dirs < <(node -e "const fs=require('node:fs'); const {dirs}=require('./scripts/plugin-dirs.json'); console.log(dirs.filter(d=>JSON.parse(fs.readFileSync(d+'/package.json','utf8')).scripts?.build).join('\n'))")
+          test "${#plugin_dirs[@]}" -gt 0
+          for d in "${plugin_dirs[@]}"; do
+            echo "== source build $d =="
+            # Declaration roots alone are not a resolved graph. Resolve lock-only first, then npm ci.
+            node scripts/source-build/install-project-dependencies.mjs "$d" \
+              .deploy-tmp/source-build/plugin-lock-resolution.json
+            (cd "$d" && npm run build)
+          done
+
+      - name: Apply project patches to the pinned marketplace artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/source-build/apply-source-marketplace-patches.mjs vendor --apply
+          node <<'NODE'
+          const crypto = require('node:crypto')
+          const fs = require('node:fs')
+          const path = require('node:path')
+          const packageRoot = 'vendor/dshmarketplace-plugin'
+          const tarball = '.deploy-tmp/component-sources/dshmarketplace-plugin-0.1.7.tgz'
+          const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+          const patchRegistry = JSON.parse(fs.readFileSync('scripts/patches/registry.json', 'utf8'))
+          const marketplacePatches = patchRegistry.patches
+            .filter((patch) => patch.target.startsWith('dshmarketplace-plugin/'))
+            .map(({ id, target }) => ({ id, target }))
+          // 期望集：注册表里必须仍在场的市场补丁。上游退役（market-A / market-C，0.1.7）时必须同步本清单，
+          // 否则来源构建在「补丁步骤」判红——那正是本清单存在的意义：补丁集变化必须被人工看一眼。
+          const expectedPatches = ['market-B', 'market-D-server', 'market-route-auth-U2', 'market-D-client']
+          // 反向断言：已退役的补丁不得悄悄回到注册表（退役记录见 registry.json 的 retired 段）。
+          const retiredPatches = ['market-A', 'market-C']
+          for (const id of expectedPatches) {
+            if (!marketplacePatches.some((patch) => patch.id === id)) throw new Error(`missing registered marketplace patch: ${id}`)
+          }
+          for (const id of retiredPatches) {
+            if (marketplacePatches.some((patch) => patch.id === id)) {
+              throw new Error(`retired marketplace patch is registered again: ${id} —— 重启退役补丁须人工复核来源链适配器与本清单`)
+            }
+          }
+          const sourcePackage = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'))
+          const provenance = {
+            repository: 'https://github.com/DshMarketPlace/dsh-plugins-store',
+            // 输入是**固定 npm 发布产物**（不是组件源码树）：我们的镜像与 market-* 补丁都按发布字节定义。
+            publishedTarball: 'https://registry.npmjs.org/dshmarketplace-plugin/-/dshmarketplace-plugin-0.1.7.tgz',
+            publishedTarballSha256: sha256(tarball),
+            metadataDelta: JSON.parse(fs.readFileSync('.deploy-tmp/source-build/marketplace-metadata-delta.json', 'utf8')),
+            adaptedManifestSha256: sha256(path.join(packageRoot, 'package.json')),
+            packageVersion: sourcePackage.version,
+            inputKind: 'pinned npm publish artifact (trusted binary input, hash-pinned in the workflow)',
+            inputReason: 'The vendored mirror and every market-* patch are defined against the published bytes (vendor/dshmarketplace-plugin/PATCHES.md); rebuilding from the component source tree yields different bytes and mis-anchors those patches.',
+            projectCommit: process.env.GITHUB_SHA,
+            patchRegistrySha256: sha256('scripts/patches/registry.json'),
+            patchImplementationSha256: sha256('scripts/patches/apply-patches.mjs'),
+            patchMode: 'ensure (--apply)',
+            registeredMarketplacePatches: marketplacePatches,
+            generatedAndPatchedOutputs: {
+              'lib/index.js': sha256(path.join(packageRoot, 'lib/index.js')),
+              'lib/client.js': sha256(path.join(packageRoot, 'lib/client.js')),
+            },
+          }
+          fs.writeFileSync('.deploy-tmp/source-build/marketplace-source-provenance.json', JSON.stringify(provenance, null, 2) + '\n')
+          NODE
+
+      - name: Add Node.js to the clean Termux base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy-tmp/source-build
+          cp scripts/snapshot-config/preinstall.json .deploy-tmp/source-build/preinstall.original.json
+          test -s .deploy-tmp/source-build/engine-overlay.original.json
+          node -e 'const fs=require("fs"); const p="scripts/snapshot-config/preinstall.json"; const x=JSON.parse(fs.readFileSync(p,"utf8")); if (!x.targets.includes("nodejs-lts")) x.targets.push("nodejs-lts"); x.requiredTargets=["nodejs-lts"]; fs.writeFileSync(p,JSON.stringify(x,null,2)+"\n")'
+          node <<'NODE'
+          const fs = require('fs')
+          const path = 'scripts/snapshot-config/engine-overlay.json'
+          const manifest = JSON.parse(fs.readFileSync(path, 'utf8'))
+          const omitted = manifest.keepUnpublished ?? []
+          manifest.keepUnpublished = []
+          fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n')
+          const policyPath = '.deploy-tmp/source-build/source-build-policy.json'
+          const policy = JSON.parse(fs.readFileSync(policyPath, 'utf8'))
+          policy.omittedLegacyKeepUnpublished = omitted
+          policy.omittedLegacyKeepUnpublishedReason = 'These packages are absent from the pinned Harness source commit and are unmounted legacy residue inherited only from the old LFS runtime base.'
+          fs.writeFileSync(policyPath, JSON.stringify(policy, null, 2) + '\n')
+          fs.writeFileSync('.deploy-tmp/source-build/effective-engine-overlay.json', JSON.stringify(manifest, null, 2) + '\n')
+          NODE
+
+      - name: Verify signed Termux repository and stage pinned packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/source-build/prepare-termux-signed-repo.py \
+            .deploy-tmp/source-build/bootstrap-extracted/usr \
+            .deploy-tmp/source-build/termux-webroot \
+            scripts/snapshot-config/preinstall.json
+
+      - name: Cross-compile node-pty Android binding from pinned source
+        shell: bash
+        run: |
+          set -euo pipefail
+          ndk_archive=.deploy-tmp/source-build/android-ndk-r30-linux.zip
+          ndk_sha1='5107f898313790e449e87eee2183d9a20602dee9'
+          # 已存在且钉死的哈希对得上就跳过下载：本地复跑省 704 MB（CI 每轮全新目录，无操作）。
+          # 跳过不等于放行——下面那条 sha1sum --check 无论下载与否都照跑。
+          if ! printf '%s  %s\n' "$ndk_sha1" "$ndk_archive" | sha1sum --check --status 2>/dev/null; then
+            curl --fail --location --retry 3 \
+              https://dl.google.com/android/repository/android-ndk-r30-linux.zip \
+              --output "$ndk_archive"
+          fi
+          printf '%s  %s\n' "$ndk_sha1" "$ndk_archive" | sha1sum --check -
+          printf '%s\n' '5107f898313790e449e87eee2183d9a20602dee9' \
+            > .deploy-tmp/source-build/ndk-archive-sha1.txt
+          # 同上：`unzip` 无 -o，目录已在时会走交互式覆盖确认，非交互环境读到 EOF 即判死。
+          rm -rf .deploy-tmp/source-build/ndk/android-ndk-r30
+          unzip -q "$ndk_archive" -d .deploy-tmp/source-build/ndk
+          node_deb=$(python3 - <<'PY'
+          import json, pathlib
+          report = json.loads(pathlib.Path('.deploy-tmp/source-build/termux-packages-provenance.json').read_text())
+          packages = [item for item in report['packages'] if item['package'] == 'nodejs-lts']
+          if len(packages) != 1:
+              raise SystemExit('signed Termux repository must contain exactly one nodejs-lts package')
+          print(pathlib.Path('.deploy-tmp/source-build/termux-webroot') / packages[0]['filename'])
+          PY
+          )
+          mkdir -p .deploy-tmp/source-build/node-deb-extracted
+          dpkg-deb --extract "$node_deb" .deploy-tmp/source-build/node-deb-extracted
+          node_header=$(find .deploy-tmp/source-build/node-deb-extracted -path '*/include/node/node_api.h' -print -quit)
+          test -n "$node_header"
+          node_headers=$(dirname "$node_header")
+          node scripts/source-build/build-node-pty-android.mjs \
+            .deploy-tmp/engine-deploy \
+            "$node_headers" \
+            .deploy-tmp/source-build/ndk/android-ndk-r30 \
+            .deploy-tmp/source-build/node-pty-android-build.json
+          node scripts/source-build/check-android-native-runtime-packages.mjs \
+            .deploy-tmp/engine-deploy \
+            .deploy-tmp/source-build/android-native-runtime-packages.json
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = '.deploy-tmp/source-build/source-build-policy.json'
+          const policy = JSON.parse(fs.readFileSync(path, 'utf8'))
+          policy.nodePtyAndroidSourceBuild = {
+            report: '.deploy-tmp/source-build/node-pty-android-build.json',
+            source: 'node-pty@1.2.0-beta.15 pinned npm package with the Harness lockfile integrity and patch',
+            headers: 'nodejs-lts headers from the SHA256-authenticated Termux package in the signed repository',
+            toolchain: 'Google Android NDK r30, Linux archive SHA1 5107f898313790e449e87eee2183d9a20602dee9',
+          }
+          fs.writeFileSync(path, JSON.stringify(policy, null, 2) + '\n')
+          NODE
+
+      - name: Assemble clean Termux base with the source-built Android binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy-tmp/arm64-base
+          python3 scripts/source-build/prepare-termux-bootstrap.py \
+            .deploy-tmp/source-build/bootstrap-aarch64.zip \
+            .deploy-tmp/deepseek-harness \
+            .deploy-tmp/engine-deploy \
+            .deploy-tmp/arm64-base/base-usr.tar.xz
+
+      - name: Build runtime snapshot from verified inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          original=".deploy-tmp/source-build/preinstall.original.json"
+          test -f "$original"
+          restore_config() { cp "$original" scripts/snapshot-config/preinstall.json; }
+          server_pid=""
+          cleanup() {
+            restore_config
+            if [ -n "$server_pid" ]; then kill "$server_pid" 2>/dev/null || true; fi
+          }
+          trap cleanup EXIT
+          node -e 'const fs=require("fs"); const p="scripts/snapshot-config/preinstall.json"; const x=JSON.parse(fs.readFileSync(p,"utf8")); x.mirrors=["http://127.0.0.1:8787"]; fs.writeFileSync(p,JSON.stringify(x,null,2)+"\n")'
+          python3 -m http.server 8787 --bind 127.0.0.1 \
+            --directory .deploy-tmp/source-build/termux-webroot \
+            > .deploy-tmp/source-build/termux-http.log 2>&1 &
+          server_pid=$!
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8787/dists/stable/main/binary-aarch64/Packages.gz >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --silent --fail http://127.0.0.1:8787/dists/stable/main/binary-aarch64/Packages.gz >/dev/null
+          if node scripts/build-snapshot-013.mjs arm64; then
+            :
+          else
+            node <<'NODE'
+          const fs = require('node:fs')
+          const path = require('node:path')
+          const esbuild = require('./plugins/dsh-android-bridge/node_modules/esbuild')
+          const root = '.deploy-tmp/snapshot-013/arm64/stage/root'
+          let failures = 0
+          function walk(dir, rel = '') {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const childRel = rel ? `${rel}/${entry.name}` : entry.name
+              const full = path.join(dir, entry.name)
+              if (entry.isDirectory()) walk(full, childRel)
+              else if (entry.isFile() && (/(^|\/)dsh-web-frontend\/dist\/.*\.js$/.test(childRel) || /(^|\/)lib\/client\.js$/.test(childRel))) {
+                try { esbuild.transformSync(fs.readFileSync(full, 'utf8'), { loader: 'js', logLevel: 'silent', target: 'chrome87' }) }
+                catch (error) {
+                  failures++
+                  console.error(`CHROME87 transform failed: ${childRel}`)
+                  for (const item of error.errors ?? []) console.error(item.text)
+                }
+              }
+            }
+          }
+          if (fs.existsSync(root)) walk(root)
+          if (!failures) console.error('CHROME87 diagnostic found no failing file in the retained stage tree')
+          NODE
+            exit 1
+          fi
+          # Build-time fixture capture only: exact cached source/raw overlay files, including PI/PTC companions.
+          # The full pre-omission overlay is required; never relabel old fixtures or guess output chunk/hash.
+          node scripts/probe-engine-anchors.mjs --fixtures --capture-only \
+            --overlay .deploy-tmp/source-build/engine-overlay.original.json \
+            --source-manifest .deploy-tmp/engine-overlay/source-build-manifest.json
+          # 引擎补丁的副本收敛：pnpm 布局下同一包在上层与 `.pnpm/**` store 各有一份物理文件，
+          # 而引擎树补丁只按登记表的顶层 target 写入 ⇒ store 副本保持原样；运行时按依赖查找
+          # 可能解析到 store 那份（设备实锤：node-addon-require-builtin 未打补丁 ⇒ 引擎 boot 硬崩；
+          # 同批 pi-toolcall-G2 亦然）。这里把已打补丁那份的字节写全，随后由快照检查器断言
+          # 「任何副本都不得缺 marker」，两道一起保证这类差异不再出厂。
+          node scripts/source-build/reconcile-engine-patch-copies.mjs \
+            .deploy-tmp/snapshot-013/arm64/stage/root/usr/lib/node_modules/@deepseek-ai/dsh \
+            .deploy-tmp/source-build/engine-patch-copy-reconciliation.json
+          node scripts/source-build/materialize-dsh-pnpm-packages.mjs \
+            .deploy-tmp/snapshot-013/arm64/stage/root/usr/lib/node_modules/@deepseek-ai/dsh \
+            .deploy-tmp/engine-overlay/source-build-manifest.json \
+            .deploy-tmp/source-build/pnpm-package-materialization.json
+          snapshot_archive="$GITHUB_WORKSPACE/.deploy-tmp/snapshot-013/arm64/snapshot.tar.xz"
+          snapshot_repacked="$GITHUB_WORKSPACE/.deploy-tmp/snapshot-013/arm64/snapshot.source-built.tar.xz"
+          (
+            cd .deploy-tmp/snapshot-013/arm64/stage/root
+            tar -c --mtime=@1704067200 usr home/.dsh home/.gitconfig 2>/dev/null \
+              | xz -T8 -6 > "$snapshot_repacked"
+          )
+          mv "$snapshot_repacked" "$snapshot_archive"
+          sha256sum "$snapshot_archive" | cut -d' ' -f1 > .deploy-tmp/snapshot-013/arm64/snapshot.sha256
+          node scripts/source-build/check-dsh-runtime-dependencies.mjs \
+            .deploy-tmp/snapshot-013/arm64/stage/root/usr/lib/node_modules/@deepseek-ai/dsh \
+            .deploy-tmp/source-build/post-snapshot-runtime-dependency-check.json
+          node scripts/source-build/check-android-native-runtime-packages.mjs \
+            .deploy-tmp/snapshot-013/arm64/stage/root/usr/lib/node_modules/@deepseek-ai/dsh \
+            .deploy-tmp/source-build/post-snapshot-native-runtime-check.json
+          node scripts/source-build/check-dsh-source-snapshot.mjs "$snapshot_archive"
+
+      - name: Verify the repository debug signing keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 固定签名（坑 202）：本链曾现场生成一次性证书，等于重新引入 e65818a 修掉的缺陷
+          # ——每次构建新密钥，产物既装不上已有安装，两次构建的包也互相覆盖不了。
+          # 项目规范（gotchas 坑 10 / DEPENDENCIES.md / design.md）是
+          # 「CI 与本地同一把 keystore/debug.keystore」，来源链同样走这一把：
+          # 产物可 install -r -t 覆盖、签名可复现，与正式产物的区别只在 -source 版本后缀与 artifact 名。
+          # 这里只查「在场」；证书指纹的判据放在产出侧（用 apksigner，输出不随语言/JDK 版本变），
+          # 因为 keytool -list -v 的文本既会本地化、新版 JDK 上还可能直接抛异常。
+          test -f keystore/debug.keystore
+
+      - name: 单元测试门禁前置（:app:testDebugUnitTest 全量）
+        shell: bash
+        run: |
+          set -e
+          # 为什么必须在这里跑：APK 步调用的 scripts/build-apk.mjs 会执行聚合门禁集，其中之一是
+          # check-kotlin-test-count.mjs，它**按设计**在没有 gradle 结果时判红——拒绝「一个用例都没跑」
+          # 冒充通过（上游 0.14.2-fx-2 的 G.0 ⑤ 正是这条结构性脱节：CI 只跑 compileDebugKotlin、
+          # 从不跑 Kotlin 单测也从不调该计数门禁，于是「测试类被删」时 CI 仍绿）。
+          # 修法随上游合并而来时去掉了 --allow-missing，故**调用方必须先产出结果**；本地链与
+          # 发布链（release.yml）都已在 APK 步之前跑本步，来源链此前漏了它，实测必死在该门禁上。
+          # 结果目录 app/build/test-results/testDebugUnitTest 会被后续门禁就地读取并比对基线。
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest --no-daemon --console=plain
+
+      - name: Build ARM64 APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          overlay_gate_backup=.deploy-tmp/source-build/check-engine-overlay.original.mjs
+          cp scripts/check-engine-overlay.mjs "$overlay_gate_backup"
+          restore_overlay() {
+            cp .deploy-tmp/source-build/engine-overlay.original.json scripts/snapshot-config/engine-overlay.json
+            cp "$overlay_gate_backup" scripts/check-engine-overlay.mjs
+          }
+          trap restore_overlay EXIT
+          node <<'NODE'
+          const fs = require('node:fs')
+          const crypto = require('node:crypto')
+          const policyPath = '.deploy-tmp/source-build/source-build-policy.json'
+          const policy = JSON.parse(fs.readFileSync(policyPath, 'utf8'))
+          const digest = (path) => crypto.createHash('sha256').update(fs.readFileSync(path)).digest('hex')
+          policy.sourceBuiltEngineOverlayGate = {
+            originalGate: 'scripts/check-engine-overlay.mjs',
+            originalGateSha256: digest('.deploy-tmp/source-build/check-engine-overlay.original.mjs'),
+            temporaryAdapter: 'scripts/source-build/check-dsh-source-snapshot-gate.mjs',
+            temporaryAdapterSha256: digest('scripts/source-build/check-dsh-source-snapshot-gate.mjs'),
+            checker: 'scripts/source-build/check-dsh-source-snapshot.mjs',
+            checkerSha256: digest('scripts/source-build/check-dsh-source-snapshot.mjs'),
+            reason: 'The standard gate models the older flattened npm overlay; this source audit uses the pinned 0.2.0-rc.2 pnpm deploy tree. The replacement validates the final snapshot against the pinned source package manifest, pnpm dependency links, and registered engine patch markers.'
+          }
+          fs.writeFileSync(policyPath, JSON.stringify(policy, null, 2) + '\n')
+          NODE
+          node scripts/source-build/restore-overlay-pins.mjs \
+            scripts/snapshot-config/engine-overlay.json \
+            .deploy-tmp/source-build/source-build-policy.json
+          cp scripts/source-build/check-dsh-source-snapshot-gate.mjs scripts/check-engine-overlay.mjs
+          node scripts/build-apk.mjs --abi arm64 --suffix -source
+          echo "构建步骤退出，记录产物来源；上传前统一验证三签与证书"
+          find out -type f -name '*.apk' -print -exec sha256sum {} \; > .deploy-tmp/source-build/apk-sha256.txt
+          echo "apk-sha256.txt 行数: $(wc -l < .deploy-tmp/source-build/apk-sha256.txt)"
+          if [ ! -s .deploy-tmp/source-build/apk-sha256.txt ]; then
+            echo "::error::未产出 APK 清单（.deploy-tmp/source-build/apk-sha256.txt 为空）"
+            exit 1
+          fi
+          find .deploy-tmp/engine-overlay -maxdepth 1 -type f -name '*.tgz' -print0 \
+            | sort -z | xargs -0 -r sha256sum \
+            > .deploy-tmp/source-build/engine-overlay-sha256.txt
+          find .deploy-tmp/snapshot-013/arm64/.debs -maxdepth 1 -type f -name '*.tgz' -print0 \
+            | sort -z | xargs -0 -r sha256sum \
+            > .deploy-tmp/source-build/runtime-tarballs-sha256.txt
+          for d in plugins/dsh-android-bridge plugins/dsh-android-manage plugins/dsh-android-linux-env plugins/dsh-android-file-open plugins/dsh-model-capability plugins/dsh-android-browser plugins/dsh-android-vdisplay dsh-shell-termux dsh-client-ui-responsive vendor/dshmarketplace-plugin; do
+            sha256sum "$d/package.json" "$d/package-lock.json" 2>/dev/null || true
+          done > .deploy-tmp/source-build/plugin-lock-sha256.txt
+          printf '%s\n' "$GITHUB_SHA" > .deploy-tmp/source-build/project-source-commit.txt
+          node scripts/source-build/record-project-components.mjs outputs \
+            .deploy-tmp/source-build/project-component-provenance.json
+          node -e 'const fs=require("fs"); const cp=require("child_process"); const project=JSON.parse(fs.readFileSync(".deploy-tmp/source-build/project-component-provenance.json","utf8")); const out={projectCommit:project.projectCommit,deepseekHarnessCommit:cp.execFileSync("git",["-C",".deploy-tmp/deepseek-harness","rev-parse","HEAD"],{encoding:"utf8"}).trim(),components:project.components}; out.components["dshmarketplace-plugin"]={source:"pinned npm publish artifact",tarball:"https://registry.npmjs.org/dshmarketplace-plugin/-/dshmarketplace-plugin-0.1.7.tgz",tarballSha256:require("crypto").createHash("sha256").update(fs.readFileSync(".deploy-tmp/component-sources/dshmarketplace-plugin-0.1.7.tgz")).digest("hex")}; out.components["dsh-undo-savepoint"]={source:"checked-in JavaScript source",fileSha256:require("crypto").createHash("sha256").update(fs.readFileSync("vendor/dsh-undo-savepoint/lib/index.js")).digest("hex")}; fs.writeFileSync(".deploy-tmp/source-build/component-source-provenance.json",JSON.stringify(out,null,2)+"\n")'
+          sha256sum app/build.gradle.kts build.gradle.kts settings.gradle.kts \
+            > .deploy-tmp/source-build/android-build-inputs-sha256.txt
+          gradle_artifacts="${GRADLE_USER_HOME:-$HOME/.gradle}/caches/modules-2/files-2.1"
+          find "$gradle_artifacts" -type f \( -name '*.jar' -o -name '*.aar' \) -print0 \
+            | sort -z | xargs -0 -r sha256sum \
+            > .deploy-tmp/source-build/gradle-artifacts-sha256.txt
+          cat .deploy-tmp/source-build/apk-sha256.txt
+
+      - name: Snapshot semantic normalization digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 语义归一化摘要（坑 210）——**必须从产出的 APK 取快照**。
+          # 检查器（check-dsh-source-snapshot.mjs）看到的是注入**前**的快照，而 APK 装的是
+          # 注入**后**的（build-apk.mjs 的 snapIn，经 inject-all.py 生成）；两者条目数都不同
+          # （实测 42443 vs 42839）。把注入前那份的摘要公布出去，等于给外部复核方一个他们
+          # 复算不出来的值——而「可被外部独立复核」正是这条链的核心主张。这是坑 183
+          # （「发布链的快照输入必须是注入后产物」）的同型复发：**只有这一处跑在注入前**，
+          # 其余门禁（build-apk.mjs:304-320）全在 snapIn 上跑。
+          # 本步与复核方**做同一件事**：拿 APK → 取 assets/snapshot.tar.xz → 归一化 → 比摘要。
+          #
+          # 取**本轮刚产出**的那个 APK，不能取「字典序第一」。本地 out/ 会累积历次版本的产物
+          # （实测：v0.14.2-fx-2 排在 v0.14.3 之前），`find|sort|head -1` 于是挑中最旧那个 ⇒
+          # 公布的摘要描述的是**上一轮**的树，复核方拿本轮发货 APK 复算必然对不上——正是上面这段
+          # 「给外部一个他们复算不出来的值」所警告的情形，只是换了个触发方式（坑 227）。
+          # CI 每轮全新工作区、out/ 只有一个，故从不暴露；与坑 215-218 同族：工作区干净是 CI 的
+          # 隐含前提，不是链的语义。按 mtime 取最新（CI 侧无操作），并把选中的产物打出来留痕。
+          apk=$(find out -type f -name '*.apk' -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
+          test -n "$apk"
+          echo "normalization source APK: $apk"
+          work=.deploy-tmp/source-build/normalization
+          rm -rf "$work"
+          mkdir -p "$work/tree"
+          unzip -p "$apk" assets/snapshot.tar.xz > "$work/snapshot.tar.xz"
+          tar -xJf "$work/snapshot.tar.xz" -C "$work/tree"
+          node scripts/source-build/normalize-snapshot.mjs "$work/tree" \
+            --out .deploy-tmp/source-build/snapshot-normalization.json
+          rm -rf "$work"
+
+      - name: Reverify final APK files before artifact upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/check-apk-signatures.mjs --self-test
+          mapfile -t apks < <(find out -type f -name '*.apk' | sort)
+          [ "${#apks[@]}" -gt 0 ] || { echo "::error::source build has no final APKs"; exit 1; }
+          args=()
+          for apk in "${apks[@]}"; do args+=(--apk "$apk"); done
+          node scripts/check-apk-signatures.mjs "${args[@]}" --apksigner "$(cat .deploy-tmp/source-build/apksigner-path.txt)" --keystore keystore/debug.keystore
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs'
+          import { readKeystoreCertificate } from './scripts/check-apk-signatures.mjs'
+          writeFileSync('.deploy-tmp/source-build/signing-certificate-sha256.txt', readKeystoreCertificate('keystore/debug.keystore') + '\n')
+          NODE
+
+      - name: Upload APK and provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-mobile-apk-arm64-source-${{ github.sha }}
+          path: |
+            out/v*/*.apk
+            .deploy-tmp/arm64-base/base-usr.tar.xz.provenance.json
+            .deploy-tmp/source-build/termux-packages-provenance.json
+            .deploy-tmp/engine-overlay/source-build-manifest.json
+            .deploy-tmp/source-build/apk-sha256.txt
+            .deploy-tmp/source-build/engine-overlay-sha256.txt
+            .deploy-tmp/source-build/runtime-tarballs-sha256.txt
+            .deploy-tmp/source-build/plugin-lock-sha256.txt
+            .deploy-tmp/source-build/plugin-lock-resolution.json
+            .deploy-tmp/source-build/marketplace-metadata-delta.json
+            .deploy-tmp/source-build/project-source-commit.txt
+            .deploy-tmp/source-build/component-source-provenance.json
+            .deploy-tmp/source-build/project-component-provenance.json
+            .deploy-tmp/source-build/marketplace-source-provenance.json
+            .deploy-tmp/source-build/marketplace-patch-adapter.json
+            .deploy-tmp/source-build/source-build-policy.json
+            .deploy-tmp/source-build/effective-engine-overlay.json
+            .deploy-tmp/source-build/harness-vendor-overrides.json
+            .deploy-tmp/source-build/harness-vendor-lock-reconciliation.json
+            .deploy-tmp/source-build/harness-pnpm-lock.original.yaml
+            .deploy-tmp/source-build/harness-build-script-exclusion.json
+            .deploy-tmp/source-build/harness-root-package.json.original
+            .deploy-tmp/source-build/android-build-inputs-sha256.txt
+            .deploy-tmp/source-build/gradle-artifacts-sha256.txt
+            .deploy-tmp/source-build/signing-certificate-sha256.txt
+            .deploy-tmp/source-build/package-manager-versions.txt
+            .deploy-tmp/source-build/pnpm-deploy-build-policy.json
+            .deploy-tmp/source-build/pnpm-deploy-runtime-closure.json
+            .deploy-tmp/source-build/pnpm-deploy-runtime-closure.lock.yaml
+            .deploy-tmp/source-build/android-native-runtime-packages.json
+            .deploy-tmp/source-build/node-pty-android-build.json
+            .deploy-tmp/source-build/ndk-archive-sha1.txt
+            .deploy-tmp/source-build/post-snapshot-native-runtime-check.json
+            .deploy-tmp/source-build/harness-web-preview-exclusion.json
+            .deploy-tmp/source-build/post-snapshot-runtime-dependency-check.json
+            .deploy-tmp/source-build/source-engine-snapshot-check.json
+            .deploy-tmp/source-build/snapshot-normalization.json
+            .deploy-tmp/source-build/pnpm-package-materialization.json
+            .deploy-tmp/source-build/engine-patch-copy-reconciliation.json
+            scripts/patches/tests/fixtures/manifest.json
+            scripts/patches/tests/fixtures/*-*.*.*-rc.*/**
+          if-no-files-found: error
+          retention-days: 30

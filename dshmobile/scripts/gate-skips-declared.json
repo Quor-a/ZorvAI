@@ -1,0 +1,25 @@
+{
+  "_doc": [
+    "发布链（check-release-gates.mjs --run --require）允许的 SKIP 声明表：**未声明或超额的 SKIP 一律判红**。",
+    "为什么需要它：有些 SKIP 不是「取不到判据」，而是**该输入在发布链的时序里必然不在场**——这类必须具名写清理由，",
+    "才不至于把纪律变成「谁都能顺手 SKIP」。声明是逐门禁的：max = 允许的 SKIP 计数上限。"
+  ],
+  "gates": {
+    "check-tool-output-schema.mjs": {
+      "max": 3,
+      "why": "三处不适用：dsh-shell-termux / dsh-client-ui-responsive 源码无 defineTool（非工具插件），dsh-host-web-compat 无 src/index.ts——这三者没有可校的 output.schema。剩下的工具插件逐个真跑（覆盖 7 个插件 / 156 个校验分支）。"
+    },
+    "check-boot-budget.mjs": {
+      "max": 2,
+      "why": "C5 与 C5+ 两条都取不到判据，根因同一：正向对照需要**打过 A5/P1 探针补丁的引擎树**，而补丁在**注入阶段**打（设备实测同源：stage 树无探针面、注入后快照有）。发布链前置门禁跑在注入之前，故该对照取不到判据。为什么是 2 而不是 1：C5 三态判据在 boot singles=-1（A5 计数器退役后的哨兵值，非读数）且对照未跑时如实记 skip，C5+ 作为独立成条的正向对照同样记 skip——同一次结构性缺口产生两条 SKIP，0.14.2 引入三态 C5 时只申报了 1，属**申报漏项**，不是判据变化。如实记 SKIP，两条都不算绿；C1-C4/C6 六项全部按真实产物真检。"
+    },
+    "check-build-parallel-cap.mjs": {
+      "max": 1,
+      "why": "受约束清单里的 scripts/source-build/check-dsh-source-snapshot.mjs 属于来源审计链——那是 apk 仓独有执行面（协调仓不携带 scripts/source-build/**），该文件在协调仓必然缺席，故记 1 项具名 SKIP；apk 仓该文件在场、SKIP=0。文件在场时断言强度不变。"
+    },
+    "check-mcp-client-deps.mjs": {
+      "max": 2,
+      "why": "两处 SKIP 的输入在发布链时序里必然不在场：① 单 ABI 调用时另一 ABI 的快照不在场；② 快照缺席时无法枚举包树（预检档 exit 0 记账，发布链以 --require 强制齐全）。0.14.2-fx-2 缺陷 H：本门禁守的是**不在我们装配行面上**的宿主（用户自挂的 @deepseek-ai/dsh-mcp-client）的运行期依赖闭包——正向闭包门禁 check-engine-overlay（只对三份 cordis.patch.yml 问责）结构性看不见它，这正是设备侧 boot 硬崩的那条。"
+    }
+  }
+}

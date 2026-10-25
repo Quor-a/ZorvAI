@@ -1,0 +1,57 @@
+{
+  "upstream": "https://github.com/deepseek-ai/deepseek-harness",
+  "sourceRevision": "639ed015",
+  "target": "0.2.0-rc.2",
+  "hashEncoding": "UTF-8, LF, one final newline (source text from immutable checkout)",
+  "files": [
+    {
+      "source": "packages/client/ui-sidebar-browser/src/client/view/BrowserBody.tsx",
+      "sha256": "18376811bc1c44a3cb2658710f64b7cea39948319befd70d34d819e98a2e8ede"
+    },
+    {
+      "source": "packages/client/ui-sidebar-browser/src/client/view/BrowserTitle.tsx",
+      "sha256": "52f0ca11ed86f31b488e165ebd4a5285fe8d45bda1916deb5bae1703491fb728"
+    },
+    {
+      "source": "packages/client/ui-sidebar-browser/src/client/view/BrowserPresentation.ts",
+      "sha256": "49f421cab07c3e59c056263959af9420c51e5f2e8d753d1f2a0aea8ef0c33f17"
+    },
+    {
+      "source": "packages/client/ui-sidebar-browser/src/client/view/Browser.module.css",
+      "sha256": "787ffc87ef674562ef1758e3d7452809ebb19cd4d5853a6dc4207c7b3c6c4039"
+    },
+    {
+      "source": "packages/client/ui-sidebar-browser/src/client/browser/BrowserController.ts",
+      "sha256": "56ddd382b91c5b5572f8d64231049c9882e1e6e682f0eaa64000bd895f8a5764"
+    },
+    {
+      "source": "packages/client/ui-sidebar-browser/src/client/browser/BrowserFrame.ts",
+      "sha256": "1244d5223f0141d61a871e499b2edb46d60dd702fad0fa3cc43b50fd42b65b2f"
+    },
+    {
+      "source": "packages/client/ui-sidebar-browser/src/client/browser/BrowserPage.ts",
+      "sha256": "b1da75c554e7245290dc2f61f3dfc67e69f0001a6d5d469b4c9d3ea9f1f826d2"
+    },
+    {
+      "source": "packages/client/ui-sidebar-browser/src/client/browser/BrowserPersistence.ts",
+      "sha256": "8eb0c5db55901a101df62a432ec377cd47dc14946407cc317396b5c8363ad245"
+    },
+    {
+      "source": "packages/client/ui-sidebar-browser/src/client/browser/store.ts",
+      "sha256": "ea0fd46bd40f244c99a8f476ce5ff83207e5e746723ad02af208ddff4743acf0"
+    },
+    {
+      "source": "packages/client/ui-sidebar-browser/src/client/browser/url.ts",
+      "sha256": "d182addd84c9a8b080622012ded2176ce6b438f998f4d6b1de220e8bd93ca0f6"
+    },
+    {
+      "source": "packages/client/ui-sidebar-browser/src/client/locales.ts",
+      "sha256": "09053f21a2530a380995c809296af6cbd13d776b673e6fa48ea38cd39058cae6"
+    }
+  ],
+  "localChanges": [
+    "Rename locale namespace to androidSidebarBrowser; add native controls copy.",
+    "Use separate Android browser view-state persistence key; add optional nativeTabId checkpoint.",
+    "Pass owning UI tabId into private BrowserPage factory."
+  ]
+}

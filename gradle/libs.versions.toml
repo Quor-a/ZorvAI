@@ -5,6 +5,9 @@ composeBom = "2026.01.01"
 coreKtx = "1.15.0"
 appcompat = "1.7.0"
 annotation = "1.9.0"
+# QuroModelConfigScreen 的模型目录选择器（SAF DocumentFile）：1.0.1 是最后稳定版，
+# API 面（fromTreeUri/isFile/listFiles）自 2018 起未变，minSdk 26 无兼容问题。
+documentfile = "1.0.1"
 material = "1.12.0"
 lifecycleRuntimeKtx = "2.8.7"
 activityCompose = "1.9.3"
@@ -42,6 +45,7 @@ bouncycastle = "1.78.1"
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleRuntimeKtx" }
