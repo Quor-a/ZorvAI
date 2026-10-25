@@ -124,14 +124,12 @@ fun HarnessScreen(onBack: () -> Unit) {
 
     // 进入 harness 界面。
     //
-    // **主路径是带 token 的 URL**（上游 MainActivity.loadConfirmedEnginePage）：
-    //   loadUrl(if (token != null) ENGINE_URL + "/?token=" + token else ENGINE_URL)
-    // 让引擎自己走 303 + Set-Cookie 完成自愈。这条链不依赖壳侧任何 cookie 操作，
-    // 也就不依赖「token 行还在日志里」「CookieManager 落库时序」这些容易碎的环节 ——
-    // 之前裸 loadUrl + 只注入 cookie 的那版，任何一个环节慢一步就是整屏白。
-    //
-    // cookie 注入降级为**预热**：提前把 /api 请求带上鉴权，少一次 401 往返；
-    // 换不到也不阻塞打开界面（token URL 自己会换）。
+    // **主路径是 cookie + 根 URL**（与参考实现 loadConfirmedEnginePage 逐条对齐）：
+    //   先 ensureAuthCookie 并注入 CookieManager，然后 loadUrl(ENGINE_URL) 不带 token ——
+    //   少一次 303 往返，也不依赖「token 行还在日志里」这种易碎环节。
+    //   token URL 降级为**无 cookie 时的自愈路径**：拿不到 cookie 才带 token，让引擎自己
+    //   303 + Set-Cookie。cookie 失效（引擎重启换密钥等）由 onReceivedHttpError(401, 主帧)
+    //   → onAuthRetry → 重取 token 换新 URL 兜住，有界重试不会死循环。
     fun openHarnessUi() {
         // 进程可能刚刚死掉（按钮是照着 running 快照画的）。这时候打开 WebView 只会得到一块
         // 拒绝连接的白屏，还得靠用户自己回过味来 —— 先在这儿挡住，说清楚发生了什么。
@@ -158,7 +156,13 @@ fun HarnessScreen(onBack: () -> Unit) {
             } else {
                 status = "未取到鉴权 cookie（日志里还没有 token，或该引擎版本不要求鉴权）"
             }
-            harnessUrl = if (token != null) {
+            harnessUrl = if (cookie != null) {
+                // 与参考实现 loadConfirmedEnginePage 同款：已注入鉴权 cookie 就直接加载
+                // 根路径，少一次 303 往返（token URL 只在拿不到 cookie 时用，让引擎自己
+                // 303 + Set-Cookie 自愈）。cookie 失效时 onReceivedHttpError(401, 主帧)
+                // 会走 onAuthRetry 自动重取，不会卡死。
+                harness.baseUrl()
+            } else if (token != null) {
                 harness.baseUrl() + "/?token=" + token
             } else {
                 harness.baseUrl()
@@ -462,14 +466,13 @@ private const val KERNEL_TITLE_PREFIX = "DSH_KERNEL:"
  * 需求 —— compat 的 polyfill 只补运行时 API（Promise.withResolvers 等），补不了语法：
  * 缺任何一项，入口 chunk 在解析期整体不执行，React 永不挂载，白屏且几乎没有报错。
  *
- * 出厂口径（B20261024-2115 起，对齐参考实现 kelai141/dsh-mobile-apk）：内置 dist 已在
- * 构建期按上游 `check-browser-syntax-floor` 门禁降到 chrome87（esbuild 0.25.12 双 arm
- * 差分归零 + TS AST 零 static{}）—— `class static{}`（94+）与可选链（80+）已被降级
- * 消除；esbuild 的 chrome87 口径**不降**私有字段（84+）/ 逻辑赋值（85+）/ 空值合并
- * （80+），这三项就是当前的硬门槛。红条只在 `S:` 缺失时出现；`A:` 仅说明内核代次。
+ * 出厂口径（B20261025-1340 起，AST 实锤）：内置 dist 的浏览器面字节（dist 3 文件 +
+ * 87 个 client bundle + index 16 段内联脚本）对 static{} / 私有字段 / 逻辑赋值 /
+ * 空值合并六类构造零命中，实际语法地板 = chrome73。探针里的语法项因此全部降为
+ * `A:`（仅说明内核代次）——红条（`S:`）不再因它们误报；只有换回未降级包时才需
+ * 把下面三项升回 `S:`。运行时 API 缺失（`A:`）由 compat polyfill 兜底，不致命。
  *
- * 返回 `CHROME=<UA 大版本>|ALL-OK` 或 `CHROME=<版本>|S:项…|A:项…`：
- *  - `S:` = 语法级缺失（**致命**，polyfill 救不了，只能升级 WebView 或换 transpile 包）；
+ * 返回 `CHROME=<UA 大版本>|ALL-OK` 或 `CHROME=<版本>|A:项…`：
  *  - `A:` = 运行时 API 缺失或已降级语法缺失（不致命，仅说明内核代次）。
  * ⚠ 历史坑 1（#380 已修）：v 标志原来用 `new RegExp('[[]','v')` 探测 —— 该图案在 v
  *    模式下**同样非法**，现代引擎也抛 SyntaxError ⇒ 红条对每台设备误报。v 标志只验旗标
@@ -477,6 +480,11 @@ private const val KERNEL_TITLE_PREFIX = "DSH_KERNEL:"
  * ⚠ 历史坑 2（B20261024-2115 已修）：static{} 原列为 `S:` 致命项 —— 那是**未降级**
  *    dist 的口径（入口 chunk 实测 2 处，9:1811 / 13:9117）。内置 dist 降级后它已不致命，
  *    改列 `A:`；只有换回未降级包时才回到致命。
+ * ⚠ 历史坑 3（B20261025-1340 实锤）：私有字段 / `??=` / `??` 三项也曾被列为 `S:`，
+ *    依据是「esbuild chrome87 不降级它们」。2026-10-25 用正确 token 全量 AST 复扫发现
+ *    出厂字节对这三类**零命中**（此前 317 处「逻辑赋值」是把 `&=`/`|=` 位运算误报的
+ *    假阳性），故一并降为 `A:`。语法地板理论死亡后，白屏剩余嫌疑只有设备专有的
+ *    「某请求挂起 / JS 解析慢」——由请求时间线与进度轨迹（collectDiag）现场分辨。
  *
  * #381：探针体抽成 [DSH_KERNEL_PROBE] 一个常量，两个消费面共用，杜绝两份漂移：
  *  - [DSH_KERNEL_JS]：loadUrl 之后 evaluateJavascript 现问（部分 ROM 丢首文档回包）；
@@ -484,10 +492,17 @@ private const val KERNEL_TITLE_PREFIX = "DSH_KERNEL:"
  */
 private const val DSH_KERNEL_PROBE = """
   var miss = [];
-  // ── 语法级硬门槛（出厂 chrome87 口径未降级的三项；缺一项入口 chunk 解析期整体不执行）──
-  try { new Function('class X{#f=1;g(){return this.#f}}'); } catch (e) { miss.push('S:私有字段 #f（需 84+）'); }
-  try { new Function('var a;a??=1'); } catch (e) { miss.push('S:??= 逻辑赋值（需 85+）'); }
-  try { new Function('var a;a??1'); } catch (e) { miss.push('S:?? 空值合并（需 80+）'); }
+  // ── 语法项（B20261025-1340 起全部降为 A:，实锤口径见下）──────────────────
+  // 2026-10-25 全量 AST 复扫（TypeScript 解析器，非字节 grep）：出厂浏览器面
+  //   · dsh-web-frontend/dist 3 个 JS + 87 个 lib/client*.js（@deepseek-ai 与
+  //     home/profiles 镜像两处 node_modules 全扫）
+  //   · 真引擎 serve 的 index.html 16 段内联脚本（74,264 B）
+  // 对 ClassStaticBlock / PrivateIdentifier / &&= / ||= / ??= / ?? 六类构造**零命中**，
+  // esbuild chrome73 双 arm 差分归零 ⇒ 出厂字节实际语法地板 = chrome73。
+  // 因此下面三项缺失只说明内核代次，不再致命（换回未降级包时才需升回 S:）。
+  try { new Function('class X{#f=1;g(){return this.#f}}'); } catch (e) { miss.push('A:私有字段 #f（需 84+；出厂字节零命中，不致命）'); }
+  try { new Function('var a;a??=1'); } catch (e) { miss.push('A:??= 逻辑赋值（需 85+；出厂字节零命中，不致命）'); }
+  try { new Function('var a;a??1'); } catch (e) { miss.push('A:?? 空值合并（需 80+；出厂字节零命中，不致命）'); }
   // ── 已被出厂降级消除的语法（缺失仅说明内核代次，不致命）──
   try { new Function('class X{static{}}'); } catch (e) { miss.push('A:class static{} 块（需 94+；出厂 dist 已降级，换未降级包才致命）'); }
   // ── 运行时 API（compat polyfill 可兜底，缺失不致命，仅说明内核代次）──
@@ -802,12 +817,15 @@ private fun dshLocaleBootstrapScript(mode: String, languages: List<String>): Str
  *  6. （#380）`onConsoleMessage` 接上游 boot 看门狗的 console 契约：`[dsh-boot-stall]`
  *     / `[dsh-boot-ready]` / `[dsh-boot-failed]` 三条前缀，40s 卡死现场（挂起 bundle、
  *     4xx bundle、引擎 HTTP、rendered/pendingBoot）从此不再丢失；ready 到达即停 15s 误报；
- *  7. （#380）加载前的内核能力预检（`DSH_KERNEL_JS`）：缺私有字段（84+）/ 逻辑赋值（85+）
- *     这类**语法**能力 ⇒ 入口 chunk 解析期整体不执行，页顶直接挂警示条，把白屏翻译成
- *     「升级 WebView」。（B20261024-2115 起内置 dist 已在构建期降到 chrome87，`static{}`
- *     不再致命；口径与历史坑见 DSH_KERNEL_JS 注释。）
+ *  7. （#380）加载前的内核能力预检（`DSH_KERNEL_JS`）。B20261025-1340 起语法项全部降为
+ *     `A:`：出厂字节 AST 实锤零命中（地板 chrome73），缺私有字段/逻辑赋值/空值合并不再
+ *     致命，红条（`S:`）不再因它们误报；运行时 API 缺失由 compat polyfill 兜底。
+ *  8. （B20261025-1340）`shouldInterceptRequest` 请求时间线 + `onProgressChanged` 进度
+ *     轨迹：桌面复刻全绿而设备纯黑时，指出 WebView 实际发出哪些请求、卡在哪一条、
+ *     cookie 有没有随请求发出，并区分「网络挂起（进度冻住）」与「JS/解析慢（到顶不出 UI）」。
  * 任一中招，或主帧 15s 还没走完（进度条停住、页面不出字），就把诊断面板顶上来
- * （半透明盖在 WebView 上，不销毁页面），右下角常驻一个「诊断」悬浮钮，随时读现场。
+ * （半透明盖在 WebView 上，不销毁页面；autoOpenPanel 会顺手 collectDiag 采全现场），
+ * 右下角常驻一个「诊断」悬浮钮，随时读现场。
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -850,6 +868,21 @@ private fun HarnessWebView(
     var autoReloads by remember { mutableIntStateOf(0) }
     /** 首帧是否已提交（onPageCommitVisible）：渲染进程失活与「慢启动」的区分判据之一。 */
     var frameCommitted by remember { mutableStateOf(false) }
+    /** WebView 实际发出的资源请求时间线（shouldInterceptRequest 逐条记账，含主文档）。
+     *
+     *  为什么必须有它：桌面复刻（真引擎 + 全部 document-start 注入）在 Chrome 上完整渲染，
+     *  而设备纯黑 —— 引擎/字节/鉴权/语法全部实锤无罪后，唯一还没被观测过的面就是
+     *  「WebView 在设备上到底发出了哪些请求、卡在哪一条」。挂起点 = 时间线最后一条；
+     *  cookie 是否真的随请求发出也一并记（壳侧 CookieManager 注入生不生效一眼可验）。
+     */
+    var resRequests by remember { mutableStateOf<List<String>>(emptyList()) }
+    /** 进度轨迹（onProgressChanged 去重采样）：卡在哪个百分比不动了，是「网络挂起」
+     *  （进度冻住）与「JS 慢/解析慢」（进度到顶但不出 UI）的分水岭。 */
+    var progressTrace by remember { mutableStateOf<List<String>>(emptyList()) }
+    /** 进度最后一次变化的时间（看门狗据此区分「慢」与「挂起」：
+     *  弱设备下 12.4MB combo 下载中进度持续在动，此时重载 = 把下了一半的扔掉重来，
+     *  正是慢设备的死亡螺旋；只有进度冻住才重载自愈）。 */
+    var lastProgressChangeAt by remember { mutableStateOf(0L) }
     /** WebView 重建纪元：渲染进程消失（onRenderProcessGone）时 +1，让 AndroidView 重新走 factory。 */
     var webViewEpoch by remember { mutableIntStateOf(0) }
     /** 页面协程作用域（引擎重启等长动作；DisposableEffect 销毁时随组合一起取消）。 */
@@ -902,6 +935,9 @@ private fun HarnessWebView(
         frameCommitted = false
         bootLines = emptyList()
         bootReady = false
+        resRequests = emptyList()
+        progressTrace = emptyList()
+        lastProgressChangeAt = System.currentTimeMillis()
         if (!auto) autoReloads = 0
         navStartedAt = System.currentTimeMillis()
         loadedUrl = url
@@ -935,6 +971,22 @@ private fun HarnessWebView(
             val body = unescapeJsString(raw.orEmpty())
             diag = buildString {
                 append(body)
+                // ── WebView 请求时间线 + 进度轨迹（B20261025-1340 新增）────────────
+                // 桌面复刻全绿而设备纯黑时，这两段是唯一还没被观测过的面的现场：
+                // 时间线指出 WebView 实际发出了哪些请求、卡在哪一条（含 cookie 有无），
+                // 进度轨迹区分「网络挂起（冻住）」与「JS/解析慢（到顶不出 UI）」。
+                append("\n\n── WebView 请求时间线（shouldInterceptRequest，")
+                append(resRequests.size)
+                append(" 条） ──\n")
+                if (resRequests.isEmpty()) {
+                    append("（一条都没有 —— WebView 未发出任何资源请求）")
+                } else {
+                    append(resRequests.joinToString("\n"))
+                }
+                append("\n\n── 进度轨迹 ──\n")
+                append(if (progressTrace.isEmpty()) "（无采样）" else progressTrace.joinToString(" "))
+                append("\n当前进度: ").append(progress).append("%")
+                append("\npageDone: ").append(pageDone)
                 // #381：首帧提交状态（onPageCommitVisible）。「慢启动」与「死页面」的
                 // 区分判据 —— 帧都没画出来过，与加载完只是 hydration 慢是两种病。
                 append("\n\n── 首帧提交 ──\n")
@@ -953,7 +1005,7 @@ private fun HarnessWebView(
                     append("\n\n── 内核能力预检 ──\n")
                     append("WebView 内核 Chrome/").append(kr.removePrefix("CHROME=").substringBefore('|')).append('\n')
                     if (kr.endsWith("ALL-OK")) {
-                        append("语法与运行时能力全部通过（含 class static{} / 私有字段 / ??=）")
+                        append("语法与运行时能力全部通过（出厂字节地板 chrome73，AST 实锤零命中）")
                     } else {
                         append(kr.removePrefix("CHROME=").split('|').joinToString("\n") { "· $it" })
                     }
@@ -1004,11 +1056,14 @@ private fun HarnessWebView(
 
     // 主帧看门狗（#381 重写）：15s 还没 onPageFinished ⇒ 卡在某个子资源上（最典型的是 head 里的
     // 阻塞 combo 脚本不返回 —— 它挂着，body 末尾的 boot-ready 承诺就永不执行，入口 chunk 永久
-    // await，白屏且进度条停住）。三级处置，逐级升级：
+    // await，白屏且进度条停住）。四级处置，逐级升级：
     //   1. 先探 #root：已有内容 = 只是慢，再给 30s（45s 仍无 boot 契约才升级，不误伤慢启动）；
     //   2. #root 空且**引擎进程已退出** ⇒ 请求挂在半空、永远不会返回（23:26 实锤 code=0 的形态），
     //      直接顶面板并附引擎日志尾部 —— 这条路径以前完全没有覆盖；
-    //   3. #root 空且引擎活着 ⇒ 有界自动重载（≤2 次）自愈瞬时挂起，仍不动才顶面板。
+    //   3. #root 空但**进度仍在推进** ⇒ 弱设备下 12.4MB combo 还在下，此时重载等于把下了
+    //      一半的扔掉重来（慢设备死亡螺旋，B20261025-1340 实锤补此级）：再给 15s，只在
+    //      进度也冻住时才升级到重载；
+    //   4. #root 空、进度冻住、引擎活着 ⇒ 有界自动重载（≤2 次）自愈瞬时挂起，仍不动才顶面板。
     LaunchedEffect(navStartedAt) {
         if (navStartedAt == 0L) return@LaunchedEffect
         delay(MAIN_FRAME_STALL_MS)
@@ -1032,12 +1087,23 @@ private fun HarnessWebView(
             )
             return@LaunchedEffect
         }
+        // 进度还在动 = 只是慢（下载/解析中），不是挂起：再给一轮，绝不重载
+        if (System.currentTimeMillis() - lastProgressChangeAt < 5_000) {
+            delay(MAIN_FRAME_STALL_MS)
+            if (!pageDone && !bootReady) {
+                autoOpenPanel(
+                    "主帧 ${MAIN_FRAME_STALL_MS * 2 / 1000}s 未加载完成（进度 $progress%，仍在推进 —— 慢而非挂起）",
+                    stall = true,
+                )
+            }
+            return@LaunchedEffect
+        }
         if (autoReloads < 2) {
             autoReloads++
             reload(auto = true)
             return@LaunchedEffect
         }
-        autoOpenPanel("主帧 ${MAIN_FRAME_STALL_MS / 1000}s 未加载完成（进度 $progress%）", stall = true)
+        autoOpenPanel("主帧 ${MAIN_FRAME_STALL_MS / 1000}s 未加载完成（进度 $progress%，已冻结）", stall = true)
     }
 
     // 冻结看门狗（移植自参考实现 EngineStartFlow.freezeRunnable，issue #36 荣耀 MagicUI 6.1 实锤）：
@@ -1117,6 +1183,12 @@ private fun HarnessWebView(
                         webChromeClient = object : WebChromeClient() {
                             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                                 progress = newProgress
+                                // 去重采样：同一个百分比只记一次，轨迹就是「爬升史」
+                                if (progressTrace.lastOrNull()?.endsWith(" $newProgress%") != true) {
+                                    val dt = System.currentTimeMillis() - navStartedAt
+                                    progressTrace = (progressTrace + "[+${dt}ms] $newProgress%").takeLast(40)
+                                    lastProgressChangeAt = System.currentTimeMillis()
+                                }
                             }
 
                             // #381：内核探针的 title 回传通道。document-start 注入的探针把结论
@@ -1167,6 +1239,26 @@ private fun HarnessWebView(
                             }
                         }
                         webViewClient = object : WebViewClient() {
+                            // 每个资源请求都记账（含主文档）。返回 null = 交给 WebView 默认加载，
+                            // 不改变任何加载行为，只留证据。挂起点 = 时间线最后一条。
+                            override fun shouldInterceptRequest(
+                                view: WebView,
+                                request: WebResourceRequest,
+                            ): android.webkit.WebResourceResponse? {
+                                val dt = System.currentTimeMillis() - navStartedAt
+                                val hasCookie = runCatching {
+                                    request.requestHeaders?.keys?.any {
+                                        it.equals("Cookie", ignoreCase = true)
+                                    } ?: false
+                                }.getOrDefault(false)
+                                val tag = if (request.isForMainFrame) "主帧" else "子资源"
+                                resRequests = (
+                                    resRequests +
+                                        "[+${dt}ms] $tag ${request.method} ${request.url} cookie=${if (hasCookie) "有" else "无"}"
+                                    ).takeLast(60)
+                                return null
+                            }
+
                             override fun shouldOverrideUrlLoading(
                                 view: WebView,
                                 request: WebResourceRequest,
@@ -1203,6 +1295,9 @@ private fun HarnessWebView(
                                 bootLines = emptyList()
                                 bootReady = false
                                 bootAlert = null
+                                resRequests = emptyList()
+                                progressTrace = emptyList()
+                                lastProgressChangeAt = System.currentTimeMillis()
                                 navStartedAt = System.currentTimeMillis()
                             }
 
