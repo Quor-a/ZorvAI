@@ -49,7 +49,6 @@ import { openSessionForNotify, type SessionOpenFace } from './mobile/notify-land
 import { DevSection } from './dev-section/DevSection.tsx'
 import { PhoneControlSection } from './dev-section/phone-control.tsx'
 import { NotifySettingsSection } from './dev-section/notify-settings.tsx'
-import { ApkUpdateSection } from './dev-section/apk-update.tsx'
 import { DEV_SECTION_CSS } from './dev-section/dev-section.css.ts'
 import { GeneralSettings } from './general-settings/GeneralSettings.tsx'
 import { GENERAL_SETTINGS_CSS } from './general-settings/general-settings.css.ts'
@@ -104,6 +103,7 @@ import type { NativeBrowserControlsInjected } from './mobile/native-browser-adap
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { IncomingDraftConsumer } from './mobile/incoming-draft.ts'
 import { createIncomingDraftRuntime } from './mobile/incoming-runtime.ts'
+import { ZorvaiBrandMark, BrandTitle } from './mobile/brand-slot.tsx'
 
 // Contract exports only (export-convergence rule): the plugin surface is
 // `apply` and `inject`; every component, marker, and helper stays internal.
@@ -306,16 +306,8 @@ export function apply(ctx: ClientContext): void {
     children: { 'settings.dev.item': { kind: 'list', scope: 'root' } },
   }, DevSection))
 
-  // 应用更新（用户拍板「更新块继续放设置页、从开发者选项提出来」）：应用怎么更新是每个用户都要用到的
-  // 能力，此前唯一入口埋在开发者选项里（对普通用户不可达）——提级为设置页一级分区。
-  // order 96：排在通知（97）/ 手机控制（98）/ 开发者选项（99）之前——它是「维护本应用自身」的动作，
-  // 与那三项「配置应用行为」的性质不同，放列表更靠上的位置用户才找得到。
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: 'android-apk-update',
-    order: 96,
-    label: () => tr('应用更新', 'App updates'),
-  }, ApkUpdateSection))
+  // 应用更新分区已删除（#416 用户拍板「非官方的直接删除」）：ZorvAI 侧的版本分发由宿主应用
+  // 自行负责，harness 不再提供 APK 自更新入口，壳侧 UpdateChecker/ApkUpdateAction 同步移除。
 
   // 通知（0.14.1 批 3 / P3-5）：提醒方式与「关掉会怎样」是每个用户都要做的决定，
   // 此前唯一入口埋在开发者选项里（对普通用户不可达）——提级为设置页一级分区。
@@ -392,6 +384,20 @@ export function apply(ctx: ClientContext): void {
   // See the module header for why this is a CSS override on the vendor's own
   // attribute rather than a vendor edit.
   ctx.effect(() => injectStyle('vendor-chrome-hide', VENDOR_CHROME_HIDE_CSS), 'ui-responsive: hide vendor header chrome')
+
+  // ── ZorvAI 品牌槽（#407）────────────────────────────────────────────────
+  // 上游新会话空态的品牌位 `conversation.hero.brand.mark`（ui-conversation 的 single 槽）
+  // 回落 DeepSeek 鱼标；本包把它占位为 ZorvAI 品牌（与壳侧启动页/宿主图标同源同构）。
+  // document.title 里的上游产品名没有槽可改，由 BrandTitle 在 DOM 层改写（见 brand-slot.tsx）。
+  ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({
+    name: 'conversation.hero.brand.mark',
+  }, ZorvaiBrandMark))
+
+  ctx.effect(() => {
+    const brandTitle = new BrandTitle()
+    brandTitle.attach()
+    return () => { brandTitle.detach() }
+  }, 'ui-responsive: ZorvAI document title')
 
   // 0.14.7 点按蓝色蒙层：WebView 的 UA 默认 -webkit-tap-highlight-color 是 ICS 蓝，声明在 :root
   // 让它被整棵文档继承（该属性可继承），只抹这一条，不动上游的 :active 与 :focus-visible 反馈。

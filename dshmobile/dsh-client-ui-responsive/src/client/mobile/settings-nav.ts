@@ -61,7 +61,6 @@ const OWN_SECTION_DESCRIPTIONS: ReadonlyMap<string, string> = new Map([
   ['手机控制', '屏幕、虚拟屏与特权通道'],
   ['通知', '任务提醒与授权请求'],
   ['模型能力', '补齐第三方模型的思考档位'],
-  ['应用更新', '检查新版本并下载安装包'],
 ])
 
 /** English descriptions for the same own sections; the keys stay the registered labels. */
@@ -70,7 +69,6 @@ const OWN_SECTION_DESCRIPTIONS_EN: ReadonlyMap<string, string> = new Map([
   ['手机控制', 'Screen, virtual displays, and privileged channels'],
   ['通知', 'Task alerts and approval requests'],
   ['模型能力', 'Thinking levels for third-party models'],
-  ['应用更新', 'Check for a new version and download the installer'],
 ])
 
 /**
@@ -132,18 +130,6 @@ const OWN_SECTION_ICONS: ReadonlyMap<string, SectionIcon> = new Map([
       'M5.875 3C5.875 6.33333 7.54167 8 10.875 8C7.54167 8 5.875 9.66667 5.875 13C5.875 9.66667 4.20833 8 0.875 8C4.20833 8 5.875 6.33333 5.875 3Z',
       'M12.375 1.55823C12.375 3.39156 13.2917 4.30823 15.125 4.30823C13.2917 4.30823 12.375 5.22489 12.375 7.05823C12.375 5.22489 11.4583 4.30823 9.625 4.30823C11.4583 4.30823 12.375 3.39156 12.375 1.55823Z',
       'M12.375 10.4418C12.375 11.7751 13.0417 12.4418 14.375 12.4418C13.0417 12.4418 12.375 13.1084 12.375 14.4418C12.375 13.1084 11.7083 12.4418 10.375 12.4418C11.7083 12.4418 12.375 11.7751 12.375 10.4418Z',
-    ],
-  }],
-  // IconDownloadOutlineMedium：对应「检查新版本并下载安装包」。
-  // 另一个候选是 IconRefreshOutlineMedium（回环箭头，语义上更贴「重新检查」），但本分区的用户动作
-  // 是**把一个新安装包取下来**，不是刷新当前内容；下载图标（向下箭头 + 托盘）表达的正是这件事。
-  // 三段全为描边，与 `sectionIcon` 只能表达「首段填充」的能力相符（填充段错位的坑见上一条）。
-  ['应用更新', {
-    viewBox: '0 0 16 16',
-    paths: [
-      'M8 1.95317V10.0469',
-      'M4.25 6.29688L8 10.0469L11.75 6.29688',
-      'M1.5 10.0469V13.158C1.5 13.3937 1.60536 13.6198 1.79289 13.7865C1.98043 13.9532 2.23478 14.0469 2.5 14.0469H13.5C13.7652 14.0469 14.0196 13.9532 14.2071 13.7865C14.3946 13.6198 14.5 13.3937 14.5 13.158V10.0469',
     ],
   }],
 ])

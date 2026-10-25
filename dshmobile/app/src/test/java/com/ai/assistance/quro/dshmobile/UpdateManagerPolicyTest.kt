@@ -110,8 +110,11 @@ class UpdateManagerPolicyTest {
     }
     assertEquals("both UI entry points discard callbacks from replaced/destroyed Activities", 2,
       Regex("updateGeneration != updateUiGeneration").findAll(flow).count())
-    assertTrue("Verifying stays nonterminal and keeps the update button disabled",
-      flow.contains("st.outcome != UpdateManager.UpdateOutcome.Working && st.outcome != UpdateManager.UpdateOutcome.Verifying"))
+    // #416：「keeps the update button disabled」这半随更新按钮删除已无载体；不变量**没变**的
+    // 是「Verifying 非终态」——现存载体是相位映射：Verifying 必须与 Working 同组走 Updating，
+    // 不得被并入 Error/Recovering/Info 任一终态相位（那会把「还在校验」误报成更新结束）。
+    assertTrue("Verifying 必须与 Working 同组视为非终态相位",
+      flow.contains("UpdateManager.UpdateOutcome.Working, UpdateManager.UpdateOutcome.Verifying -> GuidePhase.Updating"))
     assertTrue("online three-tick commit must use the candidate Hard manifest and the shared read-only health probe",
       manager.contains("PluginMounts.ensureHard(context, marker.fingerprint)") &&
         manager.contains("EngineProbe.completeSoftHealth(context, hard)"))

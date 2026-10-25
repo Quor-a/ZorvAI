@@ -44,7 +44,7 @@ function readOverlayEnabled(): boolean {
  */
 const confirmText = (): Record<'restart' | 'close' | 'clean', { title: string; desc: string; ok: string }> => ({
   restart: {
-    title: tr('重启 DeepCode？', 'Restart DeepCode?'),
+    title: tr('重启 ZorvAI？', 'Restart ZorvAI?'),
     desc: tr('将终止并自动重新启动本地引擎与页面（约数秒）。未发送的内容会保留在输入框。', 'The local engine and page restart in a few seconds. Unsent text stays in the box.'),
     ok: tr('重启', 'Restart'),
   },
@@ -354,12 +354,6 @@ export function DevSection({ renderSlot }: DevSectionProps) {
           用户反馈在设置页找不到它（入口原先只在这里，而真实用户不走开发者选项）。
           同一功能双实现是审查档 §5 的结构性根因，故这里只留指路、不再渲染同一组控件。 */}
       <p className="dsh-dev-hint">{tr('第三方模型能力在「设置 → 模型能力」里。', 'Third-party model options live in Settings > Model capabilities.')}</p>
-
-      {/* 0.15.0 提级：应用自更新入口已从开发者选项**提级**为设置页一级分区「应用更新」
-          （用户拍板「更新块继续放设置页、从开发者选项提出来」）。真因同「通知」与「模型能力」：
-          真实用户不走开发者选项，入口埋在这里等于不可达。
-          同一功能双实现是审查档 §5 的结构性根因，故这里只留指路、不再渲染同一组控件。 */}
-      <p className="dsh-dev-hint">{tr('应用更新在「设置 → 应用更新」里。', 'App updates live in Settings > App updates.')}</p>
 
       {/* 0.14.1 批 3（P3-5）：通知设置已从开发者选项**提级**为设置页一级分区「通知」。
           这里只留指路（同功能双实现是审查档 §5 的结构性根因，故不重复渲染同一组开关）。 */}

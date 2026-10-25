@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZorvAI 品牌标记（透明底）：白 Z 字标 + 青点，供自适应图标前景层 / 单色层与
+  悬浮球徽标复用（dshm_ 前缀避宿主 ic_launcher_foreground 同名）。
+  历史说明：此处原为 kelai141/dsh-mobile-apk 的鲸鱼 PNG（432 画布 + bbox 裁剪矩阵），
+  #407 已整体替换为 ZorvAI 品牌标记，OverlayService 的裁剪矩阵随之删除。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Z 字标记（白，粗圆角笔画，居中安全区） -->
+    <path
+        android:pathData="M34,40 H74 L34,70 H74"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="11"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <!-- 端侧 / on-device 节点（青点） -->
+    <path
+        android:pathData="M80,38 m-6,0 a6,6 0 1,1 12,0 a6,6 0 1,1 -12,0"
+        android:fillColor="#22D3EE" />
+</vector>

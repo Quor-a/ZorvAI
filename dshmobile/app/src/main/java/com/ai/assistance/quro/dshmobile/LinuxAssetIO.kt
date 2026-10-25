@@ -22,9 +22,9 @@ import java.net.URL
  *   * [SnapshotBundledAsset.digest]：流式 SHA-256 **并返回实读字节数**，一次读同时给出摘要与体量，
  *     正好对应「摘要 + 字节数都要验」。
  *
- * 刻意**不复用** `UpdateChecker.download`：它走 gh-proxy 镜像链（含第三方前缀），而本对象
- * 的来源面要求是「只认本仓 Releases 的 https 直连」，两者是相反的策略。这里只沿用它的
- * 连接超时/逐跳重定向/tmp + 原子 rename 形态，并把主机白名单改成逐跳强制。
+ * 刻意**不复用**（已随 #416 删除的）APK 自更新下载链：它走 gh-proxy 镜像链（含第三方前缀），
+ * 而本对象的来源面要求是「只认本仓 Releases 的 https 直连」，两者是相反的策略。这里只沿用
+ * 「连接超时/逐跳重定向/tmp + 原子 rename」这一形态，并把主机白名单改成逐跳强制。
  *
  * 绝不 shell out：解包全程走 commons-compress + tukaani xz 的进程内解码器。
  */

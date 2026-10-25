@@ -1,0 +1,20 @@
+NOTICE
+
+ZorvAI 内嵌运行时（dshmobile 模块）
+
+本模块包含衍生自 DeepSeek Harness 的代码（一级上游），DeepSeek Harness 以 MIT 许可证分发：
+
+  MIT License
+  Copyright (c) 2026 DeepSeek
+  上游仓库：https://github.com/deepseek-ai/deepseek-harness
+
+衍生部分保留其原始版权与许可证；引擎 npm 包（@deepseek-ai/* 域，0.2.1-rc.2）的许可证清单
+见 scripts/snapshot-config/engine-overlay-licenses.json（由 scripts/check-engine-overlay.mjs
+门禁核验）。
+
+本模块的安卓移植直接来源为 kelai141/dsh-mobile-apk（MIT，Copyright (c) 2026 kelai141，
+见各子包 LICENSE）。移植后的产品品牌为 ZorvAI（包名 com.ai.assistance.quro.dshmobile），
+品牌替换不改变上述各方的版权与许可证义务。
+
+Derived portions retain their original copyright and license. See the file
+headers of the derived sources for the exact provenance.

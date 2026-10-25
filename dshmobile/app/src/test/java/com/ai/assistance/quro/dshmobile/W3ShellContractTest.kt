@@ -80,23 +80,11 @@ class W3ShellContractTest {
     assertFalse("不得再出现字面量预算秒数", code.contains("\${60"))
   }
 
-  // ── FX-209.E1：缓存分支与新下载分支共用同一份校验 ──────────────────────────
-
-  @Test
-  fun bothDownloadPathsShareOneArtifactVerification() {
-    // 0.14.6 单一真源重构：下载推进逻辑从 GuidePageRenderer 迁到 ApkUpdateController
-    // （原因见该文件顶部：状态机长在视图里 => 健康态无入口 + 两入口会打架）。
-    // 本用例守的不变量**没变**：缓存复用分支与新下载分支必须共用同一份产物判定。
-    val body = memberBody(codeOnly(source("ApkUpdateAction.kt")), "private fun downloadAndInstall(")
-    assertTrue("必须调用统一的 verifyApkArtifact", body.contains("verifyApkArtifact("))
-    assertTrue("缓存复用分支必须走该判定", body.contains("artifactVerdict()"))
-    assertFalse(
-      "旧的内联大小判定必须消失（两条路径各写一套 = 判定强度不对称）",
-      body.contains("dest.length() == r.sizeBytes"),
-    )
-    val afterDownload = body.substringAfter("val used = UpdateChecker.download")
-    assertTrue("新下载分支也必须走同一判定（旧实现只判 HTTP 200）", afterDownload.contains("artifactVerdict()"))
-  }
+  // ── FX-209.E1：已随 APK 自更新链删除（#416）──────────────────────────────
+  //
+  // 原用例 bothDownloadPathsShareOneArtifactVerification 守「缓存分支与新下载分支共用同一份
+  // 产物判定」，读 ApkUpdateAction.kt 的 downloadAndInstall —— 该文件已随 #416「harness
+  // 设置-应用更新：非官方的直接删除」整文件删除，不变量失去载体，用例随之退役。
 
   // ── ST-12：已随内置 adb 退役**迁移**（0.14.0 §6）──
   //

@@ -3,7 +3,6 @@ package com.ai.assistance.quro.dshmobile
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
@@ -24,10 +23,11 @@ import java.net.URL
 /**
  * 悬浮球 v2（PRD-overlay-v2，rev5 定稿）。v1 四问题 + 状态建模错误全部结构性修复：
  *
- * - 收起 = 纯白球黑鲸（34dp，与模块图标同源 dshm_ic_launcher_foreground.png，bbox 裁剪居中），
- *   状态 = 环绕低饱和光环（空闲微白 / 工作中蓝 / 离线红），球体不随状态变色（纯黑白）；
- * - 展开 = 上下两区合成一个圆角矩形（radius 30dp）：上区状态行（白球徽标 + 官方
- *   Deep diving 扫光（ShimmerTextView，无图标）+ 工具 ×N 徽标 + 运行时钟 + 箭头），
+ * - 收起 = ZorvAI 深空渐变球 + 白 Z 标记（34dp，与模块品牌标同源
+ *   dshm_ic_launcher_foreground.xml，#407 替换掉上游鲸鱼资产），
+ *   状态 = 环绕低饱和光环（空闲微白 / 工作中蓝 / 离线红），球体不随状态变色；
+ * - 展开 = 上下两区合成一个圆角矩形（radius 30dp）：上区状态行（目标会话选择行 +
+ *   思考态扫光（ShimmerTextView，无图标）+ 工具 ×N 徽标 + 运行时钟 + ✕），
  *   下区输入行（输入框 + 品牌蓝圆发送（IconSendOutline16 白箭头）+ 红圆停止白方块 rx=3）；
  * - 引擎维（EngineProbe，应用级）与会话维（live 流，对话级）双维解耦——P7 纠正；
  * - 发送：session.prompt mode=steer（运行中插话）/queue（空闲）；目标会话 = 展开态顶部
@@ -54,7 +54,7 @@ class OverlayService : Service() {
   internal lateinit var wm: WindowManager
   internal val main = Handler(Looper.getMainLooper())
   private var rootView: FrameLayout? = null      // 窗口根（球 + 展开区）
-  private var ballView: View? = null             // 白球黑鲸（拖动手柄）
+  private var ballView: View? = null             // ZorvAI 深空球 + 白 Z 标记（拖动手柄）
   internal var haloView: View? = null            // 环绕低饱和光环
   internal var rootParams: WindowManager.LayoutParams? = null
   // 双窗口（0.13.2 修复「互吞」）：光环独立成 FLAG_NOT_TOUCHABLE 纯视觉窗口，
@@ -246,28 +246,28 @@ class OverlayService : Service() {
     val ballSize = ballSizeDp
     val haloSize = haloSizeDp
 
-    // 白球：白底圆 + 黑鲸鱼（dshm_ic_launcher_foreground.png，bbox 裁剪 x[102..328] y[130..300] 居中，撑 76%）
+    // ZorvAI 悬浮球（#407 去 kelai141 品牌）：深空渐变球体 + 白 Z 标记 + 青点。
+    // 旧形态为「纯白球 + 黑鲸鱼 PNG（432 画布 bbox 裁剪矩阵）」——鲸鱼是上游品牌资产，
+    // 已随 PNG 一并删除；新标记是 108 视口、内容居中的矢量，无需裁剪矩阵。
     val icon = resources.getDrawable(R.drawable.dshm_ic_launcher_foreground, null)
-    val whale = ImageView(this).apply {
+    val mark = ImageView(this).apply {
       setImageDrawable(icon)
-      scaleType = ImageView.ScaleType.MATRIX
-      // 432 画布中内容 bbox (102,130)-(328,300)，裁剪后居中；内容宽 227/高 171，
-      // 目标 = 球径 76% 留衬线（34dp 球 → 图标 ~26×19.6dp）
+      scaleType = ImageView.ScaleType.FIT_CENTER
     }
     val ball = LinearLayout(this).apply {
       orientation = LinearLayout.VERTICAL
       gravity = Gravity.CENTER
-      background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) }
-      addView(whale, LinearLayout.LayoutParams((26 * dp).toInt(), (20 * dp).toInt()))
+      background = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        colors = intArrayOf(0xFF0B2A3A.toInt(), 0xFF06121F.toInt())
+        orientation = GradientDrawable.Orientation.TL_BR
+        // 青色细描边：浅色页上勾出球体轮廓（旧白球靠自身亮度，深色球必须补边）
+        setStroke((1.5f * resources.displayMetrics.density).toInt(), 0x6622D3EE)
+      }
+      // 标记取球径 62%（34dp 球 → 21dp 方标），FIT_CENTER 等比缩放
+      val markPx = (ballSizeDp * 0.62f).toInt()
+      addView(mark, LinearLayout.LayoutParams(markPx, markPx))
     }
-    // 应用裁剪矩阵：内容 bbox → 目标大小，居中
-    val srcW = 227f; val srcH = 171f
-    val dstW = (26 * dp).toFloat(); val dstH = (20 * dp).toFloat()
-    val sx = dstW / srcW; val sy = dstH / srcH
-    val scale = minOf(sx, sy)
-    val dx = (dstW - srcW * scale) / 2f - 102f * scale
-    val dy = (dstH - srcH * scale) / 2f - 130f * scale
-    whale.imageMatrix = android.graphics.Matrix().apply { setScale(scale, scale); postTranslate(dx, dy) }
     ballView = ball
 
     // 球窗口 = 球尺寸（整个窗口就是可触摸的球，无空白吞区 → 「互吞」根治）。

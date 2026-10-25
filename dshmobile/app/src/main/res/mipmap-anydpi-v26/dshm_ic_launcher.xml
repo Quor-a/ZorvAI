@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- dshm_ 前缀：本模块作为 ZorvAI library 内置，启动图标资源必须与宿主 app 的
-     ic_launcher / ic_launcher_foreground 完全避名。合并后若同名，nodpi PNG 会在
-     资源解析中压过宿主 drawable/ 矢量，篡夺宿主自适应图标前景层（桌面图标被换）。
+     ic_launcher / ic_launcher_foreground 完全避名。合并后若同名，库侧资源会在
+     资源解析中压过宿主 drawable/ 矢量，篡夺宿主自适应图标（桌面图标被换）。
+     品牌面（#407）：前景层已由 kelai141 鲸鱼 PNG 换成 ZorvAI 白 Z 标记矢量
+     （drawable/dshm_ic_launcher_foreground.xml），底色为 ZorvAI 深空基色。
      本图标仅供 GuideChrome 启动页 Logo 与 OverlayService 悬浮球使用。 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
   <background android:drawable="@color/dshm_ic_launcher_background" />

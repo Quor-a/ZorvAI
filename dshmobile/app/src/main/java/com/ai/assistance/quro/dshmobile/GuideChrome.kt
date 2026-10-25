@@ -32,17 +32,8 @@ internal class GuideChrome(
   val copyLog: TextView,
   val shareLog: TextView,
   val primaryButton: Button,
+  /** 离线控制台入口：错误页/引导页常驻可点（undo 急救链的 UI 侧落点）。 */
   val consoleButton: Button,
-  val updateButton: Button,
-  /**
-   * 更新块的状态行（版本号 / 下载进度 / 失败原文）与下载按钮（检查、下载两枚各发各的动作）。
-   *
-   * 为什么这两枚**不在本文件挂任何父节点**：更新块住在管理中心，管理中心面板由
-   * GuideManagementController 搭建。每枚控件只有一个父节点，由使用者决定归属，构建期先认领会让
-   * 别处 addView 直接抛 IllegalStateException；而中心的"检查更新"是按需搬进去的，搬与不搬都要能编译、能单测。
-   */
-  val apkStatus: TextView,
-  val apkDownload: Button,
   /** Secondary startup action: retry the engine, or open the repair assistant. */
   val repairButton: Button,
   val runtimeChip: TextView,
@@ -55,10 +46,8 @@ internal class GuideChrome(
 
 internal class GuideCallbacks(
   val onStartEngine: () -> Unit,
+  /** 打开离线控制台（undo 急救 CLI 的运行界面）：错误页的显式恢复路径，不随任何更新链走。 */
   val onOpenConsole: () -> Unit,
-  val onCheckUpdate: () -> Unit,
-  /** 下载按钮：只做「开始下载 / 续继安装」，与检查按钮各自硬绑定，不再由一枚按钮推断下一步。 */
-  val onDownloadUpdate: () -> Unit,
   val onGrantStorage: () -> Unit,
   val onCopyLog: () -> Unit,
   val onShareLog: () -> Unit,
@@ -96,7 +85,8 @@ internal fun buildGuideChrome(activity: ComponentActivity, callbacks: GuideCallb
       hairline,
     )
     addView(ImageView(activity).apply {
-      setImageResource(R.mipmap.dshm_ic_launcher)
+      // ZorvAI 品牌标（#407：原为 kelai141 鲸鱼 mipmap，已换 drawable/dshm_brand_logo.xml）
+      setImageResource(R.drawable.dshm_brand_logo)
       layoutParams = FrameLayout.LayoutParams(
         dpix(R.dimen.ds_logo_size), dpix(R.dimen.ds_logo_size), Gravity.CENTER,
       )
@@ -438,44 +428,12 @@ internal fun buildGuideChrome(activity: ComponentActivity, callbacks: GuideCallb
   }
 
   val primaryButton = makePrimary()
+  // 离线控制台：#416 删 APK 自更新时它曾随 secondaryRow（console+update 半宽行）一起被删，
+  // 而那段 row 本就从未挂载——恢复时不再复原死代码，直接落成 actionBlock 里一枚全宽次级按钮。
+  // 引导页只在启动失败/错误相位露出，那正是需要 undo-emergency CLI 的时刻；健康态 showWeb()
+  // 整页藏掉，不会常占界面。WebUI 侧另有一条 AndroidBridge.openConsole 入口，两处并存不打架。
   val consoleButton = makeSecondary(activity.getString(R.string.ds_open_console), callbacks.onOpenConsole)
-  val updateButton = makeSecondary(activity.getString(R.string.ds_check_update), callbacks.onCheckUpdate)
   val repairButton = makeSecondary(activity.getString(R.string.ds_repair_assistant), callbacks.onRepairAssistant)
-
-  // 更新块的两枚新增控件：状态行（次要色小字）+ 下载按钮（与检查按钮同款次级样式，视觉上并列）。
-  //
-  // 两枚都**不加入任何布局**，默认 GONE，由管理中心的更新块决定何时挂上去：更新块落在哪里是
-  // 使用者的事，控件自己认领父节点就会把"将来换落点"变成"改两处"。检查按钮那条既有路径
-  // （管理中心 build 里先摘下来再挂进去）是同一判据的既有实现，这里只是不再走一遍"先挂在
-  // 死布局里、再被摘走"的弯路。
-  val apkStatus = TextView(activity).apply {
-    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-    // 次要色：状态行是次级信息，与管理中心的分区标题（ds_text_primary）同级会抢读者的注意力。
-    setTextColor(color(R.color.ds_text_secondary))
-    setLineSpacing(0f, 1.3f)
-    // 失败原因与版本行都可能偏长：允许折两行，超出交给省略号（不撑高更新块、不截断到别的控件）。
-    maxLines = 2
-    ellipsize = TextUtils.TruncateAt.END
-    visibility = View.GONE
-  }
-  val apkDownload = makeSecondary(activity.getString(R.string.ds_apk_download)) {
-    callbacks.onDownloadUpdate()
-  }.apply { visibility = View.GONE }
-
-  val secondaryRow = LinearLayout(activity).apply {
-    orientation = LinearLayout.HORIZONTAL
-    val lp = LinearLayout.LayoutParams(
-      ViewGroup.LayoutParams.MATCH_PARENT, dpix(R.dimen.ds_btn_secondary_height),
-    )
-    lp.topMargin = dpix(R.dimen.ds_space_8)
-    layoutParams = lp
-  }
-  val half = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
-  val halfEnd = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply {
-    marginStart = dpix(R.dimen.ds_space_8)
-  }
-  secondaryRow.addView(consoleButton, half)
-  secondaryRow.addView(updateButton, halfEnd)
 
   // Startup failure keeps both exits visible: retry the engine here, or hand the failure to the
   // native assistant. The row sits above the sticky primary button so neither action is hidden.
@@ -487,6 +445,15 @@ internal fun buildGuideChrome(activity: ComponentActivity, callbacks: GuideCallb
     ).apply { topMargin = dpix(R.dimen.ds_space_8) }
   }
   repairRow.addView(repairButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+
+  // 离线控制台行：与修复助手同款全宽次级按钮，常驻可见（引导页本身只在失败/错误相位露出）。
+  val consoleRow = LinearLayout(activity).apply {
+    orientation = LinearLayout.HORIZONTAL
+    layoutParams = LinearLayout.LayoutParams(
+      ViewGroup.LayoutParams.MATCH_PARENT, dpix(R.dimen.ds_btn_secondary_height),
+    ).apply { topMargin = dpix(R.dimen.ds_space_8) }
+  }
+  consoleRow.addView(consoleButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
   val gear = android.widget.ImageButton(activity).apply {
     setImageDrawable(android.graphics.drawable.RotateDrawable().apply {
@@ -520,6 +487,7 @@ internal fun buildGuideChrome(activity: ComponentActivity, callbacks: GuideCallb
     primaryRow.addView(gear, LinearLayout.LayoutParams(dpix(R.dimen.ds_btn_height), dpix(R.dimen.ds_btn_height)).apply {
       marginStart = dpix(R.dimen.ds_space_12)
     })
+    addView(consoleRow)
     addView(repairRow)
     addView(primaryRow)
   }
@@ -573,9 +541,6 @@ internal fun buildGuideChrome(activity: ComponentActivity, callbacks: GuideCallb
     shareLog = shareLog,
     primaryButton = primaryButton,
     consoleButton = consoleButton,
-    updateButton = updateButton,
-    apkStatus = apkStatus,
-    apkDownload = apkDownload,
     repairButton = repairButton,
     runtimeChip = runtimeChip,
     storageChip = storageChip,
