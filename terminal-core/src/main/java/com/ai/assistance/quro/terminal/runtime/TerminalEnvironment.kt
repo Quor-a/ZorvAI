@@ -8,10 +8,8 @@ import com.ai.assistance.quro.terminal.Pty
 import com.ai.assistance.quro.terminal.TerminalSession
 import com.ai.assistance.quro.terminal.data.PackageManagerType
 import com.ai.assistance.quro.terminal.runtime.Distro
-import com.ai.assistance.quro.terminal.utils.RootfsDownloader
 import com.ai.assistance.quro.terminal.utils.SourceManager
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -20,6 +18,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 /**
  * 终端运行环境引导器。
@@ -42,58 +41,32 @@ class TerminalEnvironment(context: Context) {
 
     private val sourceManager = SourceManager(context)
 
-    /** 当前选中的发行版，持久化在 SharedPreferences。LANXIU 已整体移除，只保留 Ubuntu。 */
-    private val distroPrefs = context.getSharedPreferences("terminal_distro", Context.MODE_PRIVATE)
-
-    /**
-     * 🔴 2026-10-23：LANXIU 已移除，但设备上 SharedPreferences 里可能还存着 "lanxiu"。
-     * 若不强制纠正，启动会指向一套不存在的 rootfs（表现为"环境永远未就绪/反复解压"）。
-     * 这里读到 LANXIU 一律回落 UBUNTU，并顺手把偏好覆盖掉。
-     */
-    var selectedDistro: Distro = Distro.fromId(distroPrefs.getString("selected_distro", null))
-        .takeIf { it != Distro.LANXIU } ?: Distro.UBUNTU.also {
-            distroPrefs.edit().putString("selected_distro", it.id).apply()
-        }
-
     private val envInitMutex = Mutex()
     private var isEnvInitialized = false
+
+    /** 最近一次环境初始化的失败原因（2026-10-26：云手机无 logcat，失败原因必须能展示给用户）。 */
+    @Volatile
+    var lastInitError: String? = null
+        private set
 
     private val activeSessions = ConcurrentHashMap<String, TerminalSession>()
 
     companion object {
         private const val TAG = "TerminalEnvironment"
         private const val UBUNTU_FILENAME = "ubuntu-noble-aarch64-pd-v4.18.0.tar.xz"
-        /** LANXIU（澜岫）安卓版 rootfs：本仓库 Release 标签（README 权威源）。 */
-        const val LANXIU_DOWNLOAD_URL =
-            "https://github.com/Quor-a/lanxiu-linux-android/releases/download/lanxiu-1.7.46-aarch64/lanxiu-aarch64-rootfs-20261020-r17.tar.xz"
-        /** 资产内容版本：改了内置 tar 包内容（如 rebrand 改 os-release、r10 proot 修复加 ld.so.cache）时 +1，
-         *  强制设备重抽。仅靠 lastUpdateTime 无法捕捉「同版本号改内容」，会导致设备继续用旧解压 rootfs。
-         *  8→14：内置最新 LANXIU r17（2026-10-20，扁平化后入库，官方 release 原包逐字节内容）。 */
+        /** 资产内容版本：改了内置 tar 包内容时 +1，强制设备重抽。
+         *  仅靠 lastUpdateTime 无法捕捉「同版本号改内容」，会导致设备继续用旧解压 rootfs。 */
         private const val ASSET_VERSION = 17
 
         /**
          * 「解压进行中」标记文件名（写在 rootfs 根下）。
          *
-         * install_rootfs 在解压**开始前**写入、在**关键文件全部校验通过后**删除。
-         * 它的存续期精确等于「解压这段时间」，因此是 UI 显示「正在解压…」和
-         * 会话初始化「按状态轮询而非固定超时」的依据（2026-10-21 用户要求）。
+         * 🔴 2026-10-27 v1.1.7 回归后：install_ubuntu（v1.1.7 原文）**不写**此标记，
+         * 因此 [isExtracting] 恒为 false（兼容保留；墨语言通道按 NEEDS_INSTALL/READY 推进）。
+         * 此前的 HEAD 版 install_rootfs 在解压开始前写入、校验通过后删除，存续期精确等于
+         * 「解压这段时间」，是 UI「正在解压…」与按状态轮询的依据（2026-10-21 用户要求）。
          */
         const val EXTRACT_MARK = ".extracting"
-
-        /**
-         * LANXIU 图形桌面（VNC）增量包：仅含 Xtigervnc + 15 个依赖库 + misc 字体索引，约 9.5MB。
-         *
-         * 🔴 为什么要单独做增量包（2026-10-19 真机事故根因）：
-         * 把 Xtigervnc 烤进 455MB 主 rootfs 后，设备上已有的旧 rootfs 永远满足 `install_rootfs`
-         * 的 `ready_check`（bash + os-release 都在），于是「换资产」只能靠把 455MB 整包
-         * **覆盖解压到 8 万多个已存在文件上**——这在手机上要数分钟，而 `prepareGuestRootfs`
-         * 只有 180s 上限：解压被杀 → 资产标记写不上 → 下次又从头解压 → **死循环，永远拿不到
-         * Xtigervnc**。真机表现就是 `nohup: failed to run command 'Xtigervnc': No such file or directory`。
-         *
-         * 改为叠加式小包后：每次 exec 前只需检查 `/usr/bin/Xtigervnc` 是否存在，缺则解这 9.5MB
-         * （秒级完成，远低于任何超时），老 av7 rootfs 也能就地补上，且完全不触碰主包。
-         */
-        private const val LANXIU_ADDON_FILENAME = "lanxiu-vnc-addon.tar.xz"
     }
 
     /**
@@ -112,11 +85,13 @@ class TerminalEnvironment(context: Context) {
                     linkNativeLibs()
                     createBusyboxSymlinks()
                     extractAssets()
-                    val startScript = generateStartScript(selectedDistro)
+                    ensureRootfsComplete()
+                    val startScript = generateStartScript()
                     File(filesDir, "common.sh").writeText(startScript)
                     Log.d(TAG, "Environment initialization completed successfully.")
                     true
                 } catch (e: Exception) {
+                    lastInitError = "${e.javaClass.simpleName}: ${e.message}"
                     Log.e(TAG, "Environment initialization failed", e)
                     false
                 }
@@ -137,43 +112,31 @@ class TerminalEnvironment(context: Context) {
             Log.d(TAG, "Created bin directory at: ${binDir.absolutePath}")
         }
         File(filesDir, "tmp").mkdirs()
-        // 双系统共享用户空间：app 拥有的公共 home，proot 启动时 bind 进两套 rootfs 的 /root。
-        // LANXIU 与 Ubuntu 共用同一个 home/数据，仅 OS 层不同；且 app 拥有它 -> /root 永远可遍历，
-        // 从根上消除 tar 包 agentuser/0700 的 /root 让 proot -w /root 进不去 -> getcwd 失败(exit 130)。
+        // 终端用户空间目录（app 拥有）：登录时 bind 进 guest 的 /root/shared（2026-10-26 起，
+        // /root 归还 rootfs 内自带家；这里是 LANXIU 时代共享遗产的容身之处）。
         File(filesDir, "proot_home").mkdirs()
-        // 🔴 CA 证书 bundle：初始化阶段就生成（幂等），覆盖 exec 与交互两条通道——两条路径都会走
-        // patch_lanxiu_rootfs 把 bundle 复制进内置 rootfs，确保 HTTPS 开箱即用，不依赖先跑哪条。
+        // 🔴 CA 证书 bundle：初始化阶段就生成（幂等）。v1.1.7 回归后 common.sh 无 patch_rootfs，
+        // 但内置 rootfs 自带 ca-certificates.crt（tarball 实证 219KB），HTTPS 开箱即用；
+        // bundle 仅作 execGuest 通道兜底（见 ensureCaBundle 注释）。
         ensureCaBundle()
     }
 
-    /**
-     * 判断文件是不是 **PIE（ET_DYN）** 可执行 ELF。
-     *
-     * 🔴 为什么必须判（2026-10-26 真机实测）：jniLibs 里的 `libbusybox.so` 与 `libbash.so`
-     * 是 **ET_EXEC（非 PIE）**，Android 10+ 一律拒绝执行，bionic 的报错原文就是
-     * `libbusybox.so has unexpected e_type: 2`。
-     * 而这两个 lib 被做成了 `usr/bin/busybox` 与 ~30 个 applet 符号链接
-     * （ls / grep / find / tar / xz / sed …），`usr/bin` 在 PATH 里排在 `/system/bin` 之前
-     * —— **把系统里本来能用的 toybox 全挡住了**。用户看到的现象因此是
-     * 「只有 wc / tail / head 能跑」（它们没被挡住，落到 /system/bin 的 toybox），
-     * 而 ls / grep / find 一敲就报 e_type。
-     */
-    private fun isPieElf(f: File): Boolean = runCatching {
-        f.inputStream().use { ins ->
-            val h = ByteArray(20)
-            var off = 0
-            while (off < h.size) {
-                val n = ins.read(h, off, h.size - off)
-                if (n <= 0) return@use false
-                off += n
-            }
-            val elf = h[0] == 0x7F.toByte() && h[1] == 'E'.code.toByte() &&
-                h[2] == 'L'.code.toByte() && h[3] == 'F'.code.toByte()
-            // e_type 在 offset 16..17，小端：3 = ET_DYN(PIE)，2 = ET_EXEC(非 PIE)
-            val eType = (h[16].toInt() and 0xFF) or ((h[17].toInt() and 0xFF) shl 8)
-            elf && eType == 3
-        }
-    }.getOrDefault(false)
+    // 🔴🔴🔴 不要复活 isPieElf / 任何 PIE 门控（2026-10-26 复盘定案）🔴🔴🔴
+    //
+    // jniLibs 里的 libbash.so / libbusybox.so / libloader.so 经 ELF 程序头解析均为
+    // **e_type=2（ET_EXEC）+ 无 PT_INTERP + 无 PT_DYNAMIC = 静态二进制**。
+    // 静态 ET_EXEC 由内核 binfmt_elf 直接映射执行，不经过动态链接器，
+    // Android 10+ 完全可以执行（v1.1.7 起真机一直这么跑，同一份二进制字节未变）。
+    //
+    // 6fbb0d46 引入的 isPieElf 把静态 ET_EXEC 误判为「Android 10+ 拒绝执行」，
+    // 于是跳过创建 binDir/bash 与 binDir/busybox 链接（还删掉历史链接）→
+    // startTerminalSession 的 Pty.start(bash, "-c", ...) 去 exec 一个**不存在的文件**
+    // → 终端必死。这就是「终端怎么修都还是废」的真因，与 Ubuntu 包/rootfs 无关。
+    //
+    // bionic 的 "libbusybox.so has unexpected e_type: 2" 只出现在 **dlopen** 场景
+    // （把 .so 当共享库加载），与 execve 执行无关，不能拿它当 exec 的判据。
+    //
+    // 因此 linkNativeLibs / createBusyboxSymlinks 必须**无条件建链**，与 v1.1.7 一致。
 
     private fun linkNativeLibs() {
         Log.d(TAG, "Linking native libraries from: $nativeLibDir")
@@ -191,29 +154,27 @@ class TerminalEnvironment(context: Context) {
             return
         }
 
-        // 🔴 非 PIE 就**不建链**（见 isPieElf 注释）：硬建出来只会成为一个
-        // 「exec 即报 e_type」的死命令，还顺带遮蔽 /system/bin 里能用的同名工具。
-        val busyboxUsable = isPieElf(busyboxSo)
-        if (!busyboxUsable) {
-            Log.w(
-                TAG,
-                "libbusybox.so 不是 PIE（ET_EXEC），Android 10+ 不可执行 —— 跳过 busybox 链接，" +
-                    "并清掉历史死链，让 PATH 落回 /system/bin 的 toybox",
-            )
-            runCatching { Files.deleteIfExists(busybox.toPath()) }
-        } else {
-            try {
+        // 🔴 2026-10-26 真机复盘：个别设备/ROM 的 /data 文件系统（FUSE/虚拟化层）
+        // 不支持符号链接，Files.createSymbolicLink 直接抛异常 -> 原来只 Log + return，
+        // 于是 binDir/bash 根本不存在 -> Pty.start exec 不存在的文件 -> 终端纯黑屏。
+        // 现在软链失败自动退回「实体拷贝」：busybox 才 1.5MB，五个库全拷不到 5MB，
+        // 换一刀切兼容。exec 语义与软链完全一致（都是可执行文件），无行为差异。
+        val busyboxOk = runCatching {
+            Files.deleteIfExists(busybox.toPath())
+            busyboxSo.setExecutable(true, false)
+            Files.createSymbolicLink(busybox.toPath(), busyboxSo.toPath())
+            busybox.exists() && busybox.canExecute()
+        }.getOrElse { e ->
+            Log.w(TAG, "busybox 符号链接失败（${e.javaClass.simpleName}: ${e.message}），退回实体拷贝")
+            false
+        }
+        if (!busyboxOk) {
+            runCatching {
                 Files.deleteIfExists(busybox.toPath())
-                busyboxSo.setExecutable(true, false)
-                Files.createSymbolicLink(busybox.toPath(), busyboxSo.toPath())
-                if (!(busybox.exists() && busybox.canExecute())) {
-                    Log.e(TAG, "Verification failed: busybox link not functional after creation")
-                    return
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to create busybox link using Java NIO", e)
-                return
-            }
+                busyboxSo.copyTo(busybox, overwrite = true)
+                busybox.setExecutable(true, false)
+                busybox.exists() && busybox.canExecute()
+            }.onFailure { Log.e(TAG, "busybox 实体拷贝也失败", it) }
         }
 
         val libraries = mapOf(
@@ -231,25 +192,23 @@ class TerminalEnvironment(context: Context) {
                 Log.w(TAG, "Native library not found: $libName")
                 return@forEach
             }
-            // 同样只看 PIE：非 PIE 的 libbash.so 硬链成 usr/bin/bash 只会得到一个
-            // 「exec 即报 e_type」的 bash。若树里已经有可用的真 bash（快照自带的 PIE bash），
-            // 就更不该用死链把它盖掉。
-            if (!isPieElf(libFile)) {
-                val existingReal = linkFile.isFile && !Files.isSymbolicLink(linkFile.toPath())
-                Log.w(
-                    TAG,
-                    "$libName 不是 PIE（ET_EXEC），Android 10+ 不可执行 —— 跳过 $linkName 链接" +
-                        if (existingReal) "（保留树里已有的真 $linkName）" else "",
-                )
-                if (!existingReal) runCatching { Files.deleteIfExists(linkFile.toPath()) }
-                return@forEach
-            }
-            try {
+            // 同 busybox：软链不可用（云手机 FS）时退回实体拷贝，保证 bash/loader/proot 一定可 exec。
+            val linkOk = runCatching {
                 Files.deleteIfExists(linkFile.toPath())
                 libFile.setExecutable(true, false)
                 Files.createSymbolicLink(linkFile.toPath(), libFile.toPath())
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to create $linkName link using Java NIO", e)
+                linkFile.exists() && linkFile.canExecute()
+            }.getOrElse { e ->
+                Log.w(TAG, "$linkName 符号链接失败（${e.javaClass.simpleName}: ${e.message}），退回实体拷贝")
+                false
+            }
+            if (!linkOk) {
+                runCatching {
+                    Files.deleteIfExists(linkFile.toPath())
+                    libFile.copyTo(linkFile, overwrite = true)
+                    linkFile.setExecutable(true, false)
+                    linkFile.exists() && linkFile.canExecute()
+                }.onFailure { Log.e(TAG, "$linkName 实体拷贝也失败", it) }
             }
         }
     }
@@ -261,26 +220,6 @@ class TerminalEnvironment(context: Context) {
             "sed", "stat", "sh", "tr", "tar", "uname", "xargs", "xz", "xxd"
         )
         val busybox = File(binDir, "busybox")
-        // 🔴 busybox 不可用（缺失 / 非 PIE 执行不了）时**绝不能建 applet 链接**：
-        // 它们会把 `/system/bin` 里同名且能用的 toybox 二进制挡住（usr/bin 在 PATH 前），
-        // 用户一敲 ls/grep/find 就是 `libbusybox.so has unexpected e_type: 2`。
-        // 顺手把历史版本留下的死链清掉（只删「指向 busybox 的符号链接」，真文件一概不碰）。
-        if (!busybox.exists() || !isPieElf(busybox)) {
-            Log.w(TAG, "busybox 不可用（缺失或非 PIE），跳过 applet 链接并清理历史死链")
-            var cleaned = 0
-            for (linkName in links) {
-                val lf = File(binDir, linkName)
-                val isLink = runCatching { Files.isSymbolicLink(lf.toPath()) }.getOrDefault(false)
-                if (!isLink) continue
-                val target = runCatching { Files.readSymbolicLink(lf.toPath()).toString() }.getOrNull()
-                if (target == null || target.contains("busybox")) {
-                    runCatching { Files.deleteIfExists(lf.toPath()) }
-                        .onSuccess { cleaned++ }
-                }
-            }
-            if (cleaned > 0) Log.i(TAG, "已清理 $cleaned 条指向 busybox 的死链，命令将落回 /system/bin")
-            return
-        }
         for (linkName in links) {
             try {
                 createSymbolicLink(busybox, linkName, binDir, true)
@@ -314,12 +253,7 @@ class TerminalEnvironment(context: Context) {
 
     private fun extractAssets() {
         try {
-            // Ubuntu 内置；LANXIU 亦内置（与 Ubuntu 同机制，不再首次按需下载）。
-            // 第三个是 LANXIU 图形桌面增量包（Xtigervnc + 依赖库 + 字体索引，~9.5MB）：
-            // 单独成包是为了「老 rootfs 就地补文件」，避开 455MB 整包重解压的超时死循环（详见常量注释）。
-            // 🔴 2026-10-23 用户决定：放弃 LANXIU，只保留完整 Ubuntu。assets 里已删除
-            // lanxiu 主包(389MB) 与 vnc 增量包(9.9MB)，因此这里不再尝试拷贝它们
-            // （否则每次启动都白跑一遍拷贝并刷缺失日志）。墨语言运行时是独立资产，
+            // Ubuntu 内置（唯一 rootfs 资产）。墨语言运行时是独立资产，
             // 由 MoyuRuntime 自行从 assets 解压到 filesDir/moyu，不参与 rootfs 安装。
             val assetNames = listOf(UBUNTU_FILENAME)
             val stampFile = File(filesDir, ".assets.stamp")
@@ -333,9 +267,6 @@ class TerminalEnvironment(context: Context) {
                 .find(prevStamp)
             val prevStampV = stampMatch?.groupValues?.get(1)?.toLongOrNull() ?: -1L
             val prevAssetV = stampMatch?.groupValues?.get(2)?.toIntOrNull() ?: -1
-            // versionChanged：App 重装(lastUpdateTime 变) 或 资产内容变更(ASSET_VERSION 升) 任一触发重抽。
-            // 关键：rebrand 等改了 tar 包内容但不升 versionCode 时，仅靠 lastUpdateTime 不会重抽，
-            // 导致设备继续用旧解压 rootfs（曾出现 status 仍显示 Qiyuan 而非 澜岫）。ASSET_VERSION +1 强制重抽。
             val versionChanged = prevStampV != installStamp || prevAssetV != ASSET_VERSION
 
             val newStamp = StringBuilder("v=$installStamp;av=$ASSET_VERSION\n")
@@ -390,28 +321,42 @@ class TerminalEnvironment(context: Context) {
         }
     }
 
-    private fun generateStartScript(distro: Distro): String {
-        val rootfsName = distro.rootfsFilename.replace(Regex("-pd.*"), "")
+    /**
+     * 生成启动脚本。
+     *
+     * 🔴🔴 2026-10-27：完整回归 v1.1.7 发布版脚本（用户指令「直接完整回归1.1.7终端」）。
+     * HEAD 自 df64c52b（10-18）起脚本膨胀到 434 行（暂存解压/原子换装/解压锁/资产标记/
+     * usrmerge 兜底/CA 兜底/就绪强检），真机实跑 common.sh 在设备上报
+     * 「line 433: syntax error: unexpected end of file」→ source 失败 → 安装/登录从未执行 → rootfs 目录不存在 → 全黑。
+     * 本地 bash -n 全绿而设备失败，根因未定位（已排除 CRLF：工作区纯 LF）。
+     * 结论：不再增量修，脚本载荷整体换回 v1.1.7 原文（约 106 行、真机验证过的形态）。
+     * tarball 实测佐证 v1.1.7 假设全部成立：标准 Ubuntu 24.04(noble) aarch64、usrmerge
+     * 布局（/bin→usr/bin）、root/.bashrc+.profile 为官方干净版、自带 ca-certificates.crt、
+     * 顶层包装目录 ubuntu-noble-aarch64/（install_ubuntu 的 mv 拍平正为此而设）。
+     * HEAD 旁支通道（execGuest/prepareGuestRootfs 等）的 Kotlin 调用点已同步改回
+     * v1.1.7 函数名（install_ubuntu/login_ubuntu）。
+     */
+    private fun generateStartScript(): String {
+        val ubuntuName = UBUNTU_FILENAME.replace(Regex("-pd.*"), "")
         val tmpDir = File(filesDir, "tmp").absolutePath
         val binDir = binDir.absolutePath
         val homeDir = filesDir.absolutePath
         val usrDir = usrDir.absolutePath
         val prootDistroPath = "$usrDir/var/lib/proot-distro"
-        val rootfsPath = "$prootDistroPath/installed-rootfs/${distro.rootfsDirName}"
+        val ubuntuPath = "$prootDistroPath/installed-rootfs/ubuntu"
 
         val aptSource = sourceManager.getSelectedSource(PackageManagerType.APT)
         val pipSource = sourceManager.getSelectedSource(PackageManagerType.PIP)
         val npmSource = sourceManager.getSelectedSource(PackageManagerType.NPM)
+        val rustSource = sourceManager.getSelectedSource(PackageManagerType.RUST)
 
         val common = """
         export TMPDIR=$tmpDir
         export BIN=$binDir
         export HOME=$homeDir
-        export SHARED_HOME=$homeDir/proot_home
-        export ROOTFS_PATH=$rootfsPath
-        export ROOTFS_TARBALL=${distro.rootfsFilename}
-        export ROOTFS_NAME=$rootfsName
-        export DISTRO_ID=${distro.id}
+        export UBUNTU_PATH=$ubuntuPath
+        export UBUNTU=$UBUNTU_FILENAME
+        export UBUNTU_NAME=$ubuntuName
         export L_NOT_INSTALLED="not installed"
         export L_INSTALLING="installing"
         export L_INSTALLED="installed"
@@ -433,329 +378,50 @@ class TerminalEnvironment(context: Context) {
           next=${'$'}((current + 1))
           printf "${'$'}next" > "${'$'}TMPDIR/progress"
         }
-        # 解析 guest 内 bash 真实路径：独立 aarch64 rootfs（如 LANXIU）bash 在 /usr/bin/bash，
-        # 而 Ubuntu(usrmerge) 在 /bin/bash。两者都要兼容，否则 LANXIU 登录会找不到 /bin/bash 而失败。
-        resolve_guest_bash(){
-          if [ -e "${'$'}ROOTFS_PATH/bin/bash" ]; then GUEST_BASH=/bin/bash
-          elif [ -e "${'$'}ROOTFS_PATH/usr/bin/bash" ]; then GUEST_BASH=/usr/bin/bash
-          else GUEST_BASH=/bin/bash; fi
-        }
-        # LANXIU 扁平 rootfs：实测 tar 包里【根本没有】顶层 /lib /bin /sbin 成员，也没有任何
-        # usrmerge 符号链接（只有 usr/lib / usr/bin / usr/sbin 等真实目录）。动态二进制 PT_INTERP
-        # 写死 /lib/ld-linux-aarch64.so.1，但 loader 实际在 /usr/lib——不补这根链接，proot exec
-        # 任何动态二进制都找不到 loader -> 报 ENOSYS（Function not implemented）崩。
-        #（2026-10-17 真机事故：LANXIU 一执行命令就 proot error Function not implemented）。
-        # 因此这根链接【必须每次 proot 启动前强制保证】，且要能对抗各种异常态：
-        #   - 缺失（正常解压后）：补；
-        #   - 被解压工具误建成空目录（busybox tar 在某些固件上会把 symlink 抽成空目录）：删空目录再补；
-        #   - 已是正确符号链接：跳过（幂等）；
-        #   - 非空目录（不该出现）：保留并告警，绝不强行破坏真内容。
-        # Ubuntu 本就这结构，幂等无害。末尾自检 loader 是否可达，不可达时给出明确告警便于排查。
-        fix_usrmerge_links(){
-          fix_one(){
-            d="${'$'}1"; t="${'$'}2"
-            if [ -d "${'$'}ROOTFS_PATH/${'$'}t" ]; then
-              cur="${'$'}ROOTFS_PATH/${'$'}d"
-              need=1
-              if [ -L "${'$'}cur" ]; then
-                [ "${'$'}(busybox readlink "${'$'}cur" 2>/dev/null)" = "${'$'}t" ] && need=0
-              fi
-              if [ "${'$'}need" = "1" ]; then
-                # 不是正确的符号链接：可能缺失，也可能被解压工具误建成目录/文件
-                if [ -e "${'$'}cur" ] && [ ! -L "${'$'}cur" ]; then
-                  if [ -d "${'$'}cur" ] && [ -z "${'$'}(busybox ls -A "${'$'}cur" 2>/dev/null)" ]; then
-                    # 空目录：解压工具误建成空目录的典型情形，安全删掉再补
-                    busybox rm -rf "${'$'}cur"
-                  elif [ -d "${'$'}cur" ]; then
-                    progress_echo "警告: /${'$'}d 是非空目录而非 usrmerge 链接，动态库可能无法加载"
-                  fi
-                fi
-                if [ ! -e "${'$'}cur" ]; then
-                  busybox ln -s "${'$'}t" "${'$'}cur" 2>/dev/null || ln -s "${'$'}t" "${'$'}cur" 2>/dev/null
-                fi
-              fi
-            fi
-          }
-          fix_one lib usr/lib
-          fix_one bin usr/bin
-          fix_one sbin usr/sbin
-          # 自检：loader 必须可达，否则 proot 启动会 ENOSYS（Function not implemented）
-          if [ ! -e "${'$'}ROOTFS_PATH/lib/ld-linux-aarch64.so.1" ] && [ ! -e "${'$'}ROOTFS_PATH/lib/ld-linux.so.2" ]; then
-            progress_echo "警告: 动态链接器 /lib/ld-linux 仍不可达，proot 可能无法启动"
-          fi
-        }
-        # LANXIU 专用兜底补丁（2026-10-18 真机实测根因）：LANXIU 扁平 rootfs 与 Ubuntu 两处差异，
-        # 必须每次 proot 启动前强制保证（ready_check 命中时 install_rootfs 的解压分支被跳过，旧逻辑
-        # 就不补这些，导致重解压前一直缺）。exec 与交互两条通道共用 install_rootfs，故在此统一兜底：
-        #  1) LANXIU 只有 /usr/bin/bash，没有 /usr/bin/sh（也无 dash）。execGuest/login_rootfs 调 /bin/sh
-        #     （经 usrmerge /bin->usr/bin 即 /usr/bin/sh）缺失即 proot 起不来（/bin/sh not found）。补 sh->bash。
-        #  2) tar 包保留 agentuser/0700 模式位 -> 各级目录 0700，挡 proot getcwd 向上遍历父链（实测
-        #     chmod 0755 各级目录后 pwd/getcwd 才正常）。仅 chmod 目录（绝不动文件，保 sudo 等 setuid 位），
-        #     并用隐藏标记文件避免每次 exec 全树扫描（重解压会清掉标记，自动重跑）。
-        patch_lanxiu_rootfs(){
-          cd "${'$'}ROOTFS_PATH" 2>/dev/null || return 0
-          if [ ! -e usr/bin/sh ]; then
-            busybox ln -sf bash usr/bin/sh 2>/dev/null || ln -sf bash usr/bin/sh 2>/dev/null
-          fi
-          if [ ! -e .lanxiu_patched_v1 ]; then
-            busybox find . -type d -exec chmod 0755 {} + 2>/dev/null || find . -type d -exec chmod 0755 {} + 2>/dev/null
-            : > .lanxiu_patched_v1 2>/dev/null
-          fi
-          # 🔴 CA 证书 bundle（宿主预先生成，落 ${'$'}HOME/ca-bundle.crt）：内置 LANXIU rootfs 原生缺 CA，
-          # curl HTTPS 会证书校验失败。复制进 guest /etc/ssl/certs 并让 curl/openssl 默认走它。
-          # 幂等：已存在则跳过。双上下文安全：guest(proot) 下 ${'$'}HOME=/root 无此文件 -> -f 不命中 ->
-          # 跳过（此时证书已由宿主侧首次运行时复制进 rootfs，持久生效，扛住重解压）。
-          if [ -f "${'$'}HOME/ca-bundle.crt" ] && [ ! -e etc/ssl/certs/ca-certificates.crt ]; then
-            busybox mkdir -p etc/ssl/certs 2>/dev/null || mkdir -p etc/ssl/certs 2>/dev/null
-            busybox cp -f "${'$'}HOME/ca-bundle.crt" etc/ssl/certs/ca-certificates.crt 2>/dev/null || cp -f "${'$'}HOME/ca-bundle.crt" etc/ssl/certs/ca-certificates.crt 2>/dev/null
-            [ -e etc/ssl/certs/ca-certificates.crt ] && ln -sf ca-certificates.crt etc/ssl/cert.pem 2>/dev/null
-          fi
-        }
         """.trimIndent()
 
-        // 解压：Ubuntu 的 tar 包顶层有 ubuntu-noble-aarch64/ 需拍平；LANXIU 是扁平 rootfs（无顶层目录）。
-        // 两者都用 busybox tar xf（与既有 Ubuntu 路径一致，busybox tar 自动识别 xz）。
-        val installRootfs = """
-        install_rootfs(){
-          mkdir -p "${'$'}ROOTFS_PATH" 2>/dev/null
-          # 共享用户空间目录（app 拥有），供两套 rootfs 的 /root 共用；configure_sources 也会写这里。
-          mkdir -p "${'$'}SHARED_HOME" 2>/dev/null
-          # 就绪判定（与 Kotlin isRootfsReady 对齐）：bash 在 /bin 或 /usr/bin + 发行版身份文件。
-          # 🔴 不能只看 etc/issue.net：Ubuntu 有 issue.net，但 LANXIU（独立 aarch64 rootfs）只有
-          # etc/os-release / etc/lanxiu-release，压根没有 issue.net。用 issue.net 会把「已解压好的澜岫」
-          # 永远判成未就绪 -> 每次会话都 rm -rf 重装，终端反复黑屏（2026-10-17 真机事故根因）。
-          # 同时保留旧实现的强校验意图：bash + 身份文件双条件，避免「半截解压」被误判为可用。
-          ready_check(){ { [ -e "${'$'}ROOTFS_PATH/bin/bash" ] || [ -e "${'$'}ROOTFS_PATH/usr/bin/bash" ]; } && { [ -e "${'$'}ROOTFS_PATH/etc/os-release" ] || [ -e "${'$'}ROOTFS_PATH/etc/issue.net" ]; }; }
-          # 🔴 资产版本标记（2026-10-19 真机根因）：ready_check 只证明「曾经解压过」，不证明「解压的就是当前这份资产」。
-          # 设备上旧的 av7 rootfs 永远满足 ready_check -> bump ASSET_VERSION 后新 tarball 只被拷进 filesDir、
-          # 永不重解压 -> rootfs 里压根没有 Xtigervnc，真机报
-          #   nohup: failed to run command 'Xtigervnc': No such file or directory
-          # 故：解压成功后在 rootfs 内写 .quro_asset_v=av=N，此后「就绪」还须比对标记与当前内置版本。
-          ASSET_VER=${ASSET_VERSION}
-          ASSET_MARK="${'$'}ROOTFS_PATH/.quro_asset_v"
-          asset_current(){ [ "`cat "${'$'}ASSET_MARK" 2>/dev/null`" = "av=${'$'}ASSET_VER" ]; }
-          # 🔴 LANXIU 图形桌面增量件（Xtigervnc + 依赖库 + 字体索引，~9.5MB）：幂等，只在缺失时解。
-          # 为什么不把 Xtigervnc 只放在主包：设备上已有的旧 rootfs 永远满足 ready_check，换资产就得把
-          # 455MB 主包「覆盖解压到 8 万多个已存在文件」——手机要数分钟，而宿主侧 prepareGuestRootfs
-          # 只有 180s 上限 -> 解压被 SIGKILL -> 标记写不上 -> 下次重头来，形成「永远升不上去」的死循环
-          # （2026-10-19 真机二次根因）。小包秒级解完，老 av7 rootfs 也能就地补文件，且完全不碰主包。
-          ADDON_TARBALL="${LANXIU_ADDON_FILENAME}"
-          install_lanxiu_addon(){
-            # 🔴 已在位（存在+可执行+非空）才直接返回；否则强制重解增量包补齐。
-            # 之前用 [ -e ] 判断，若上一版被 180s 超时打断留下半截/零字节的 Xtigervnc，会被误判为
-            # 已存在而跳过 -> 永远起不来（2026-10-20 真机现场：装了最新包仍失败的根因之一）。
-            if [ -x "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" ] && [ -s "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" ]; then
-              # 🔴 大小兜底：完整 Xtigervnc ≈ 2.9MB。若上一版被中断留下半截文件，虽非空且带可执行位，
-              # 但体积远小于此 -> 仍判为损坏，强制重解增量包（而不是带着半截二进制继续跑，VNC 必崩）。
-              XV_SZ=`wc -c < "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" 2>/dev/null || echo 0`
-              # 🔴 字体兜底（2026-10-21 真机）：Xvnc 起 X 必须有默认字体，addon 里的 X11 misc 字体
-              # 以前因为没有这条检查而永远补不上（Xtigervnc 在就整包跳过）→ 报 could not open
-              # default font 退出。这里连带校验 fixed 别名的目标字体，缺则重解 addon。
-              if [ "${'$'}XV_SZ" -ge 2000000 ] && [ -e "${'$'}ROOTFS_PATH/usr/share/fonts/X11/misc/fonts.alias" ] && [ -e "${'$'}ROOTFS_PATH/usr/share/fonts/X11/misc/10x20-ISO8859-1.pcf.gz" ]; then
-                return 0
-              fi
-            fi
-            if [ ! -e ~/"${'$'}ADDON_TARBALL" ]; then
-              # 设备没有增量包：若 Xtigervnc 已就位则放行，否则报错（提示需含增量包的包）。
-              if [ -x "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" ]; then
-                return 0
-              fi
-              progress_echo "LANXIU 桌面增量包缺失(${LANXIU_ADDON_FILENAME})，Xtigervnc 无法补齐"
-              return 1
-            fi
-            progress_echo "补齐 LANXIU 桌面组件(Xtigervnc + 依赖库)..."
-            if ! busybox tar xof ~/"${'$'}ADDON_TARBALL" -C "${'$'}ROOTFS_PATH/" 2>"${'$'}TMPDIR/addon_extract.err"; then
-              progress_echo "增量包解压报错：${'$'}(tail -n 1 "${'$'}TMPDIR/addon_extract.err" 2>/dev/null)"
-              return 1
-            fi
-            chmod 0755 "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" "${'$'}ROOTFS_PATH/usr/bin/tigervncconfig" 2>/dev/null
-            if [ ! -x "${'$'}ROOTFS_PATH/usr/bin/Xtigervnc" ]; then
-              progress_echo "增量包解压后仍未得到可用的 Xtigervnc"
-              return 1
-            fi
-            progress_echo "LANXIU 桌面组件已就位(Xtigervnc)"
-          }
-          # 🔴 2026-10-21 两处结构性修复（首次在 01:45/12:27 做过，被 12:37 的 git checkout 还原，此处重做）：
-          # (a) 资产标记不过 → 必须真正重解压。原「棉花分支」只把标记改成新版本号、内容一字不解，
-          #     于是换包/升资产在设备上永不生效（半截 rootfs 永远修不好，表现为「怎么改都还是废」）。
-          # (b) 清空 rootfs 之前必须先确认安装包在。原顺序是「先 rm -rf 再查包」，而包在解压成功后
-          #     就被删了 → 版本一变就「清空就绪系统 + 发现无包可装」= 自毁（Ubuntu 曾因此一起废）。
-          if ready_check && asset_current; then
-              VERSION=`grep '^PRETTY_NAME=' "${'$'}ROOTFS_PATH/etc/os-release" 2>/dev/null | head -n 1 | cut -d= -f2- | tr -d '"'`
-              [ -z "${'$'}VERSION" ] && VERSION=`cat "${'$'}ROOTFS_PATH/etc/issue.net" 2>/dev/null`
-              progress_echo "rootfs ${'$'}L_INSTALLED -> ${'$'}VERSION"
-              # 无论主 rootfs 新旧，都幂等补齐桌面组件（缺才解，已有直接返回）。
-              ${if (distro == Distro.LANXIU) "install_lanxiu_addon || true" else ":  # Ubuntu 不用 LANXIU 增量件"}
-          else
-            if [ ! -e ~/"${'$'}ROOTFS_TARBALL" ] && ready_check; then
-              # 无包但 rootfs 就绪：沿用现有系统、只对齐标记，绝不清空（否则就是自毁）
-              echo "av=${'$'}ASSET_VER" > "${'$'}ASSET_MARK" 2>/dev/null
-              progress_echo "rootfs 安装包缺失但现有 rootfs 就绪，沿用现有系统（标记对齐 av=${'$'}ASSET_VER）"
-              ${if (distro == Distro.LANXIU) "install_lanxiu_addon || true" else ":  # Ubuntu 不用 LANXIU 增量件"}
-            else
-            # 🔴 2026-10-22 解压互斥锁（用户追问「你知道哪个是最后的解压吗」——正是多入口并发解压）：
-            # prepareGuestRootfs / login_rootfs / execGuest 三条链路都会调 install_rootfs。若两个
-            # tar 同时往同一棵树解压，文件会互相覆盖/截断，于是校验**永远**判"不完整"→ 清空重来
-            # → 无限循环解压。用 mkdir 的原子性做互斥：抢不到锁说明别人正在解压，本次直接返回，
-            # 绝不并发第二个 tar。锁龄超 20 分钟视为死锁（进程被杀留下的），强制接管。
-            LOCK="${'$'}ROOTFS_PATH/.extract_lock"
-            if ! mkdir "${'$'}LOCK" 2>/dev/null; then
-              OLD=`find "${'$'}LOCK" -maxdepth 0 -mmin +20 2>/dev/null | wc -l`
-              if [ "${'$'}OLD" -gt 0 ] 2>/dev/null; then
-                progress_echo "检测到超时遗留的解压锁，接管继续"
-                rm -rf "${'$'}LOCK" 2>/dev/null
-                mkdir "${'$'}LOCK" 2>/dev/null || { progress_echo "其他解压进程仍在运行，稍后自动继续"; return 0; }
-              else
-                progress_echo "已有解压进程在进行中，本次跳过（避免并发解压互相破坏）"
-                return 0
-              fi
-            fi
-            if [ -n "${'$'}(ls -A "${'$'}ROOTFS_PATH" 2>/dev/null)" ]; then
-              progress_echo "rootfs 检测到半截解压，清理后重装..."
-              rm -rf "${'$'}ROOTFS_PATH"/* 2>/dev/null
-            fi
-            # 清掉旧资产标记（glob 不清点文件）：解压成功后才重写，避免「半截解压 + 旧标记」被判为已就绪而跳过重装。
-            rm -f "${'$'}ASSET_MARK" 2>/dev/null
-            # 同理清掉补丁标记：重解压后必须让 patch_lanxiu_rootfs 重新全树 chmod 0755。
-            rm -f "${'$'}ROOTFS_PATH/.lanxiu_patched_v1" 2>/dev/null
-            if [ ! -e ~/"${'$'}ROOTFS_TARBALL" ]; then
-              progress_echo "rootfs 安装包缺失，无法安装"
-              return 1
-            fi
-            progress_echo "rootfs ${'$'}L_NOT_INSTALLED, ${'$'}L_INSTALLING..."
-            # 空间预检：澜岫解压后约 460MB（Ubuntu 约 280MB）。空间不够先给明确提示，
-            # 好过 tar 解到一半失败只剩黑屏。
-            FREE_KB=`df -k "${'$'}HOME" 2>/dev/null | tail -n 1 | awk '{print ${'$'}4}'`
-            if [ -n "${'$'}FREE_KB" ] && [ "${'$'}FREE_KB" -lt 614400 ] 2>/dev/null; then
-              progress_echo "rootfs 解压需约 600MB 可用空间，当前仅 ${'$'}((FREE_KB / 1024))MB，请先清理设备存储"
-              return 1
-            fi
-            # 解压错误不再静默吞掉（原来 >/dev/null 2>&1，坏了只看到黑屏）：错误落盘 + 回显末行。
-            # -o: 不保留 tar 包属主/属组，全部归当前（应用）进程所有 -> 应用可遍历整棵树，
-            # 避免 tar 包里 agentuser/0700 的 /root 让 proot -w /root 进不去 -> getcwd 失败(exit 130)。
-            # 🔴 解压中标记（2026-10-21 用户要求）：从真正开始解压这一刻起 UI 就能显示「正在解压…」，
-            # 会话初始化也按 guestEnvStatus 轮询（INSTALLING→继续等），而不是到点就判失败。
-            # 注意：必须放在空间预检**之后**——否则空间不足提前 return 会留下标记，界面永久卡「正在解压」。
-            mkdir -p "${'$'}ROOTFS_PATH" 2>/dev/null
-            echo "start=`date '+%s' 2>/dev/null`" > "${'$'}ROOTFS_PATH/${EXTRACT_MARK}" 2>/dev/null
-            if ! busybox tar xof ~/"${'$'}ROOTFS_TARBALL" -C "${'$'}ROOTFS_PATH/" 2>"${'$'}TMPDIR/rootfs_extract.err"; then
-              progress_echo "rootfs 解压报错：${'$'}(tail -n 1 "${'$'}TMPDIR/rootfs_extract.err" 2>/dev/null)"
-              rm -f "${'$'}ROOTFS_PATH/${EXTRACT_MARK}" 2>/dev/null
-              rm -rf "${'$'}LOCK" 2>/dev/null
-              return 1
-            fi
-            ${if (distro == Distro.UBUNTU) "mv \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"/* \"${'$'}ROOTFS_PATH/\" 2>/dev/null\n            rm -rf \"${'$'}ROOTFS_PATH/${'$'}ROOTFS_NAME\"" else ":  # LANXIU rootfs 已是扁平布局，无需拍平"}
-            fix_usrmerge_links
-            # 🔴 解压完整性校验（2026-10-18 实测根因之一）：解压残缺 -> guest 动态二进制 proot
-            # 启动即 ENOSYS(Function not implemented)，进程极短命（进程采样器抓不到），表现为
-            # 「LANXIU exec 不起新进程」。解压后强制核验 loader 与 bash 可达，任一缺失立即报错返回，
-            # 把沉默的黑屏变成可见、可诊断的失败，而不是带着半截 rootfs 继续。
-            # 🔴 2026-10-22 无限循环解压的元凶就在这句：原来只认 /lib/ld-linux-aarch64.so.1，
-            # 而该 rootfs 的实体只有 usr/lib/ld-linux-aarch64.so.1（lib 只是 ->usr/lib 的符号链接，
-            # 解压顺序不巧时 lib 会先被建成空目录，链接补不上）→ 每轮解压完都判"不完整"→ return 1
-            # → av 标记不写 → 下次又清空重解压 → **无限循环**。现在四条路径任一命中即通过。
-            if [ ! -e "${'$'}ROOTFS_PATH/lib/ld-linux-aarch64.so.1" ] && [ ! -e "${'$'}ROOTFS_PATH/usr/lib/ld-linux-aarch64.so.1" ] && [ ! -e "${'$'}ROOTFS_PATH/lib/ld-linux.so.2" ] && [ ! -e "${'$'}ROOTFS_PATH/usr/lib/ld-linux.so.2" ]; then
-              progress_echo "rootfs 解压不完整：动态链接器 ld-linux 在 lib/ 与 usr/lib/ 均不可达"
-              rm -f "${'$'}ROOTFS_PATH/${EXTRACT_MARK}" 2>/dev/null
-              rm -rf "${'$'}LOCK" 2>/dev/null
-              return 1
-            fi
-            if [ ! -e "${'$'}ROOTFS_PATH/usr/bin/bash" ] && [ ! -e "${'$'}ROOTFS_PATH/bin/bash" ]; then
-              progress_echo "rootfs 解压不完整：guest bash 缺失"
-              rm -f "${'$'}ROOTFS_PATH/${EXTRACT_MARK}" 2>/dev/null
-              rm -rf "${'$'}LOCK" 2>/dev/null
-              return 1
-            fi
+        val installUbuntu = """
+        install_ubuntu(){
+          mkdir -p ${'$'}UBUNTU_PATH 2>/dev/null
+          if [ -z "${'$'}(ls -A ${'$'}UBUNTU_PATH)" ]; then
+            progress_echo "Ubuntu ${'$'}L_NOT_INSTALLED, ${'$'}L_INSTALLING..."
+            ls ~/${'$'}UBUNTU
+            progress_echo "Extracting Ubuntu rootfs..."
+            busybox tar xf ~/${'$'}UBUNTU -C ${'$'}UBUNTU_PATH/ >/dev/null 2>&1
+            rm -f ~/${'$'}UBUNTU
             echo "Extraction complete"
-            # 🔴 关键文件体检（2026-10-21 用户要求「不应该限制时间，而是解压检测完了没有」）：
-            # 只查 bash + loader 远远不够——解压被打断时这两个往往已经落地，真正缺的是
-            # libpixman / libxcb / libXau / xkb / X11 字体，表现为「库里都有却用不了」。
-            # 这里逐项核验跑桌面真正需要的文件，缺哪项直接报出来（而不是当成功）。
-            # 🔴 glibc 路径不能写死：Ubuntu(noble aarch64) 的 libc.so.6 在
-            # `usr/lib/aarch64-linux-gnu/` 下，**不在** usr/lib。之前 MUST 里写死
-            # `usr/lib/libc.so.6` → Ubuntu 每轮解压完都判"不完整" → 清空重解压 →
-            # **无限循环解压**（2026-10-23 用户现场）。这里改成两条路径任一命中即通过。
-            if [ ! -e "${'$'}ROOTFS_PATH/usr/lib/libc.so.6" ] && [ ! -e "${'$'}ROOTFS_PATH/usr/lib/aarch64-linux-gnu/libc.so.6" ]; then
-              progress_echo "rootfs 解压不完整，缺失: libc.so.6（usr/lib 与 usr/lib/aarch64-linux-gnu 均无）"
-              rm -f "${'$'}ROOTFS_PATH/${EXTRACT_MARK}" 2>/dev/null
-              rm -rf "${'$'}LOCK" 2>/dev/null
-              return 1
-            fi
-            MUST=""
-            ${if (distro == Distro.LANXIU) "MUST=\"${'$'}MUST usr/lib/libpixman-1.so.0 usr/lib/libxcb.so.1 usr/lib/libXau.so.6 usr/lib/libX11.so.6 usr/bin/weston usr/lib/libweston-14/x11-backend.so usr/share/X11/xkb/rules/evdev.xml usr/share/fonts/X11/misc/fonts.dir usr/share/fonts/X11/misc/10x20-ISO8859-1.pcf.gz\"" else ":  # Ubuntu 只需 glibc 基础件"}
-            MISSING=""
-            for f in ${'$'}MUST ; do
-              [ -e "${'$'}ROOTFS_PATH/${'$'}f" ] || MISSING="${'$'}MISSING ${'$'}f"
-            done
-            if [ -n "${'$'}MISSING" ]; then
-              progress_echo "rootfs 解压不完整，缺失:${'$'}MISSING"
-              rm -f "${'$'}ROOTFS_PATH/${EXTRACT_MARK}" 2>/dev/null
-              rm -rf "${'$'}LOCK" 2>/dev/null
-              return 1
-            fi
-            # 解压完整性校验已过：写「完成指纹」+ 资产版本标记，然后释放互斥锁。
-            # 🔴 `.extract_done` 就是「哪一次解压是最后一次」的权威答案：由**解压成功者自己写**，
-            # 内含完成时间戳、顶层条目数、资产版本。它存在 + 关键文件齐，才允许判 READY。
-            ITEMS=`ls -A "${'$'}ROOTFS_PATH" 2>/dev/null | wc -l`
-            echo "done=`date '+%s' 2>/dev/null` items=${'$'}ITEMS av=${'$'}ASSET_VER" > "${'$'}ROOTFS_PATH/.extract_done" 2>/dev/null
-            rm -f "${'$'}ROOTFS_PATH/${EXTRACT_MARK}" 2>/dev/null
-            echo "av=${'$'}ASSET_VER" > "${'$'}ASSET_MARK" 2>/dev/null
-            rm -rf "${'$'}LOCK" 2>/dev/null
-            # 防御：确保 rootfs 顶层对当前进程可遍历（动态库路径等）。
-            chmod 0755 "${'$'}ROOTFS_PATH" 2>/dev/null
-            # 共享用户空间：基础环境写进 SHARED_HOME/.bashrc（两套 rootfs 共用，幂等）。
-            grep -q 'ANDROID_DATA' "${'$'}SHARED_HOME/.bashrc" 2>/dev/null || echo 'export ANDROID_DATA=/home/' >> "${'$'}SHARED_HOME/.bashrc"
-            # 仅在校验通过后才删除安装包：避免「删除后被再次中断 -> 无包可重装」导致永久残废
-            if ready_check; then
-              rm -f ~/"${'$'}ROOTFS_TARBALL"
-            else
-              progress_echo "rootfs 解压校验失败，保留安装包以便重试"
-              rm -rf "${'$'}LOCK" 2>/dev/null
-              return 1
-            fi
-            # 主包（av8+）已含桌面组件；此处仍幂等检查一次，兼容「旧主包 + 新增量包」组合。
-            ${if (distro == Distro.LANXIU) "install_lanxiu_addon || true" else ":  # Ubuntu 不用 LANXIU 增量件"}
-            fi
+            mv ${'$'}UBUNTU_PATH/${'$'}UBUNTU_NAME/* ${'$'}UBUNTU_PATH/ 2>/dev/null
+            rm -rf ${'$'}UBUNTU_PATH/${'$'}UBUNTU_NAME
+            echo 'export ANDROID_DATA=/home/' >> ${'$'}UBUNTU_PATH/root/.bashrc
+          else
+            VERSION=`cat ${'$'}UBUNTU_PATH/etc/issue.net 2>/dev/null`
+            progress_echo "Ubuntu ${'$'}L_INSTALLED -> ${'$'}VERSION"
           fi
-          # DNS：写入多 nameserver 兜底（国内/海外通用）。LANXIU 原生缺失 resolv.conf，
-          # 仅靠此行保证开箱 DNS 可用；rootfs 内也烤入了一份默认 resolv.conf 作双保险。
-          cat > "${'$'}ROOTFS_PATH/etc/resolv.conf" <<'EOF'
-nameserver 8.8.8.8
-nameserver 1.1.1.1
-nameserver 223.5.5.5
-nameserver 119.29.29.29
-EOF
-          # 解压后自检：若目录仍为空（tar 包缺失或解压失败），报错退出，避免 proot 挂空目录。
-          if [ -z "${'$'}(ls -A "${'$'}ROOTFS_PATH" 2>/dev/null)" ]; then
-            progress_echo "rootfs 解压失败：请先确认安装包完整"
-            return 1
-          fi
-          # 🔴 LANXIU 兜底补丁：无论新鲜解压还是 ready 跳过解压分支，都强制补 usrmerge 链接 +
-          # sh 链接 + 目录权限（ready 命中时旧逻辑不跑 fix_usrmerge_links，这里统一兜底，覆盖 exec
-          # 与交互两条通道，且扛住 App 更新/rootfs 重解压自动重跑）。
-          fix_usrmerge_links
-          patch_lanxiu_rootfs
+          echo 'nameserver 8.8.8.8' > ${'$'}UBUNTU_PATH/etc/resolv.conf
         }
         """.trimIndent()
 
-        // 源配置：仅 Debian/Ubuntu 系写 apt/pip/npm；澜岫 用自家 qypkg，留空函数。
         val configureSources = """
         configure_sources(){
-          ${if (distro.isDebian) """
-          cat <<'EOF' > "${'$'}ROOTFS_PATH/etc/apt/sources.list"
+          # 配置APT源
+          cat <<'EOF' > ${'$'}UBUNTU_PATH/etc/apt/sources.list
         # From ZorvAI Settings - ${aptSource.name}
         deb ${aptSource.url} noble main restricted universe multiverse
         deb ${aptSource.url} noble-updates main restricted universe multiverse
         deb ${aptSource.url} noble-backports main restricted universe multiverse
         EOF
-          mkdir -p "${'$'}SHARED_HOME/.config/pip" 2>/dev/null
-          echo '[global]' > "${'$'}SHARED_HOME/.config/pip/pip.conf"
-          echo 'index-url = ${pipSource.url}' >> "${'$'}SHARED_HOME/.config/pip/pip.conf"
-          mkdir -p "${'$'}SHARED_HOME/.config/uv" 2>/dev/null
-          echo 'index-url = "${pipSource.url}"' > "${'$'}SHARED_HOME/.config/uv/uv.toml
-          mkdir -p "${'$'}SHARED_HOME" 2>/dev/null
-          echo 'registry=${npmSource.url}' > "${'$'}SHARED_HOME/.npmrc
-          """ else ":  # 澜岫 不需要 Debian 源配置"}
+
+          # 配置Pip/Uv源
+          mkdir -p ${'$'}UBUNTU_PATH/root/.config/pip 2>/dev/null
+          echo '[global]' > ${'$'}UBUNTU_PATH/root/.config/pip/pip.conf
+          echo 'index-url = ${pipSource.url}' >> ${'$'}UBUNTU_PATH/root/.config/pip/pip.conf
+
+          mkdir -p ${'$'}UBUNTU_PATH/root/.config/uv 2>/dev/null
+          echo 'index-url = "${pipSource.url}"' > ${'$'}UBUNTU_PATH/root/.config/uv/uv.toml
+
+          # 配置NPM源
+          mkdir -p ${'$'}UBUNTU_PATH/root 2>/dev/null
+          echo 'registry=${npmSource.url}' > ${'$'}UBUNTU_PATH/root/.npmrc
         }
         """.trimIndent()
 
@@ -770,28 +436,15 @@ EOF
             ""
         }
 
-        val loginRootfs = """
-        login_rootfs(){
-          mkdir -p "${'$'}ROOTFS_PATH/storage/emulated"
+        val loginUbuntu = """
+        login_ubuntu(){
+          mkdir -p "${'$'}UBUNTU_PATH/storage/emulated" 2>/dev/null
           # 终端「公用挂载主目录」：应用自有外部目录，不依赖存储权限，始终可用
-          mkdir -p "${'$'}ROOTFS_PATH/mnt/shared"
-          # 🔴 共享用户空间（双系统铁律 2026-10-18）：LANXIU 与 Ubuntu 共用同一个 app 拥有的 home，
-          # 仅 OS 层不同。把 SHARED_HOME bind 进 guest 的 /root -> 两套 rootfs 看到同一 home/数据，
-          # 用户文件在双系统间互通，且 /root 永远 app 可遍历，从根消除 tar 包 agentuser/0700 致
-          # proot -w /root 进不去 -> shell-init getcwd 失败(exit 130)。
-          mkdir -p "${'$'}SHARED_HOME"
-          mkdir -p "${'$'}SHARED_HOME/shared"
-          # 🔴 getcwd 铁律（同 guest_exec）：强制保证 guest /root 真实存在，宿主先 cd guest 根。
-          mkdir -p "${'$'}ROOTFS_PATH/root"
-          chmod 0755 "${'$'}ROOTFS_PATH/root" 2>/dev/null || true
-          cd "${'$'}ROOTFS_PATH"
-          G_CWD=/root; G_HOME=/root
-          resolve_guest_bash
-          fix_usrmerge_links
-          patch_lanxiu_rootfs
+          mkdir -p "${'$'}UBUNTU_PATH/mnt/shared" 2>/dev/null
+          mkdir -p "${'$'}UBUNTU_PATH/root/shared" 2>/dev/null
           exec ${'$'}BIN/proot \
             -0 \
-            -r "${'$'}ROOTFS_PATH" \
+            -r "${'$'}UBUNTU_PATH" \
             --link2symlink \
             -b /dev \
             -b /proc \
@@ -802,90 +455,31 @@ EOF
             -b /proc/self/fd/0:/dev/stdin \
             -b /proc/self/fd/1:/dev/stdout \
             -b /proc/self/fd/2:/dev/stderr \
-            -b "${'$'}SHARED_HOME":/root \
             -b "$sharedHostDir":/mnt/shared \
+            -b "$sharedHostDir":/root/shared \
             @SB@
-            -w "${'$'}G_CWD" \
+            -w /root \
             /usr/bin/env -i \
-              HOME="${'$'}G_HOME" \
+              HOME=/root \
               TERM=xterm-256color \
               LANG=en_US.UTF-8 \
-              PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/rust/bin:/usr/local/go/bin \
-              SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
-              CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
-              ${'$'}GUEST_BASH -lc "echo LOGIN_SUCCESSFUL; ldconfig >/dev/null 2>&1 || true; echo TERMINAL_READY; exec ${'$'}GUEST_BASH -il"
-        }
-        """.trimIndent().replace("@SB@", sharedStorageBindLines)
-
-        // 一次性执行入口：与 login_rootfs 同样的 proot 挂载，但**不进交互 shell**，
-        // 而是直接 `bash -lc "$1"` 跑完就退出。用于「远程连接」这类需要可靠退出码的场景，
-        // 与终端会话的提示符检测/命令队列完全解耦。
-        // 额外点：TERM=dumb + DEBIAN_FRONTEND=noninteractive，避免 apt 弹交互式对话框卡死。
-        val guestExec = """
-        guest_exec(){
-          mkdir -p "${'$'}ROOTFS_PATH/storage/emulated"
-          mkdir -p "${'$'}ROOTFS_PATH/mnt/shared"
-          # 🔴 共享用户空间（双系统铁律 2026-10-18）：同 login_rootfs，SHARED_HOME bind 进 /root。
-          mkdir -p "${'$'}SHARED_HOME"
-          mkdir -p "${'$'}SHARED_HOME/shared"
-          mkdir -p "${'$'}TMPDIR/zxremote"
-          # 🔴 getcwd 铁律（2026-10-18 真机事故）：LANXIU exec 通道 100% 因「proot -w 指向的 guest 目录
-          # 翻译失败 -> tracee 继承宿主 cwd(filesDir) 且 guest 内无此路径 -> shell-init getcwd ENOENT -> exit 130」。
-          # 三层兜底：① 宿主侧先 cd 进 guest 根(ROOTFS_PATH, -r 映射为 /, 永远可翻译)；
-          # ② **强制保证 guest /root 真实存在**(主机 mkdir, 不依赖 bind/rootfs 是否自带) -> -w /root 必能 chdir；
-          # ③ -w /root(必存在) + SHARED_HOME bind。任一失效仍有 guest / 可翻译, getcwd 不再 ENOENT。
-          mkdir -p "${'$'}ROOTFS_PATH/root"
-          chmod 0755 "${'$'}ROOTFS_PATH/root" 2>/dev/null || true
-          cd "${'$'}ROOTFS_PATH"
-          G_CWD=/root; G_HOME=/root
-          resolve_guest_bash
-          fix_usrmerge_links
-          echo GUEST_EXEC_START
-          # 🔴 与 Ubuntu 三通道（交互/sandbox/CMS）严格对齐：-0 -w /root 必须齐备。
-          # 用户 2026-10-18 8000 次高频采样证实 Ubuntu 三通道全带 -0 -w /root；LANXIU 缺此即
-          # 继承宿主 cwd / 无 root 仿真 -> getcwd ENOENT 或 proot 启动异常。G_CWD 恒为 /root。
-          exec ${'$'}BIN/proot \
-            -0 \
-            -r "${'$'}ROOTFS_PATH" \
-            --link2symlink \
-            -b /dev \
-            -b /proc \
-            -b /sys \
-            -b /dev/pts \
-            -b "${'$'}TMPDIR":/dev/shm \
-            -b /proc/self/fd:/dev/fd \
-            -b /proc/self/fd/0:/dev/stdin \
-            -b /proc/self/fd/1:/dev/stdout \
-            -b /proc/self/fd/2:/dev/stderr \
-            -b "${'$'}SHARED_HOME":/root \
-            -b "$sharedHostDir":/mnt/shared \
-            @SB@
-            -w "${'$'}G_CWD" \
-            /usr/bin/env -i \
-              HOME="${'$'}G_HOME" \
-              TERM=dumb \
-              LANG=en_US.UTF-8 \
-              DEBIAN_FRONTEND=noninteractive \
-              PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/rust/bin:/usr/local/go/bin \
-              SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
-              CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
-              ${'$'}GUEST_BASH -lc "ldconfig >/dev/null 2>&1 || true; ${'$'}1"
+              PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin \
+              /bin/bash -lc "echo LOGIN_SUCCESSFUL; echo TERMINAL_READY; exec /bin/bash -il"
         }
         """.trimIndent().replace("@SB@", sharedStorageBindLines)
 
         return """
         $common
-        $installRootfs
+        $installUbuntu
         $configureSources
-        $loginRootfs
-        $guestExec
+        $loginUbuntu
         clear_lines
         start_shell(){
-          install_rootfs
+          install_ubuntu
           configure_sources
           sleep 1
           bump_progress
-          login_rootfs
+          login_ubuntu
         }
         """.trimIndent()
     }
@@ -909,16 +503,17 @@ EOF
         return f != null && f.canRead()
     }
 
-    /** 某发行版的 rootfs 目录（proot-distro 布局，按 rootfsDirName 区分）。 */
-    fun rootfsDir(distro: Distro = selectedDistro): File =
-        File(File(usrDir, "var/lib/proot-distro"), "installed-rootfs/${distro.rootfsDirName}")
+    // ==================== 以下为兼容 API（墨语言 ⇢ Ubuntu 融合通道等外部调用方） ====================
+    // 发行版抽象已收敛为唯一 Ubuntu；参数保留 `distro: Distro = Distro.UBUNTU` 形状仅为兼容既有调用点。
+
+    /** rootfs 目录（proot-distro 布局）。 */
+    fun rootfsDir(distro: Distro = Distro.UBUNTU): File =
+        File(File(usrDir, "var/lib/proot-distro"), "installed-rootfs/ubuntu")
 
     /** rootfs 是否已解压可用（bash 实际位置 + 发行版身份文件）。
-     *  注意：独立 aarch64 rootfs（如 LANXIU）bash 在 /usr/bin/bash 而非 /bin/bash（无 /bin→/usr/bin 合并），
-     *  因此两种路径都要查，否则解压成功也永远判「未就绪」。
-     *  身份文件同样不能只认 issue.net：Ubuntu 有，澜岫只有 os-release / lanxiu-release。
-     *  与 common.sh 里 ready_check 保持完全一致的判定口径（bash + os-release|issue.net）。 */
-    fun isRootfsReady(distro: Distro = selectedDistro): Boolean {
+     *  bash 可能在 /bin/bash 或 /usr/bin/bash，两种路径都查。
+     *  与 v1.1.7 common.sh 里 install_ubuntu 的就绪口径一致（bash + os-release|issue.net）。 */
+    fun isRootfsReady(distro: Distro = Distro.UBUNTU): Boolean {
         val root = rootfsDir(distro)
         val hasBash = File(root, "bin/bash").exists() || File(root, "usr/bin/bash").exists()
         val hasIdentity = File(root, "etc/os-release").exists() || File(root, "etc/issue.net").exists()
@@ -926,16 +521,17 @@ EOF
     }
 
     /** rootfs 安装包是否还在本地（还在 = 尚未解压，可自动初始化）。 */
-    fun hasRootfsArchive(distro: Distro = selectedDistro): Boolean =
-        File(filesDir, distro.rootfsFilename).exists()
+    fun hasRootfsArchive(distro: Distro = Distro.UBUNTU): Boolean =
+        File(filesDir, UBUNTU_FILENAME).exists()
 
     /**
      * 是否正在解压（rootfs 内存在 `.extracting` 标记）。
      *
-     * 标记由 common.sh 的 install_rootfs 在**解压开始前**写入、**全部关键文件校验通过后**删除，
-     * 因此它的存在与否就是「解压到底完成没有」的权威信号——比任何固定超时都可靠。
+     * 🔴 2026-10-27 v1.1.7 回归后恒为 false：install_ubuntu（v1.1.7 原文）不写该标记。
+     * 方法保留是为兼容 HEAD 期调用点（guestEnvStatus 的 INSTALLING 分支不会命中，
+     * 解压期间表现为 NEEDS_INSTALL，解压完成即 READY）。
      */
-    fun isExtracting(distro: Distro = selectedDistro): Boolean {
+    fun isExtracting(distro: Distro = Distro.UBUNTU): Boolean {
         val mark = File(rootfsDir(distro), EXTRACT_MARK)
         if (!mark.exists()) return false
         // 🔴 陈旧标记兜底（2026-10-22）：解压进程被杀（OOM/用户划掉 App）后标记会残留，
@@ -953,47 +549,85 @@ EOF
      * libpixman / libxcb / libXau / xkb / 字体全没解出来 → 桌面必崩且看不出原因。
      * 这里把「跑起来真正需要的」逐项列出，缺哪项一目了然。
      */
-    fun rootfsMissingParts(distro: Distro = selectedDistro): List<String> {
+    fun rootfsMissingParts(distro: Distro = Distro.UBUNTU): List<String> {
         val root = rootfsDir(distro)
         if (!root.exists()) return listOf("rootfs 目录不存在")
-        // 通用底线（两套发行版都必须有）：能起 shell、能加载动态程序。
+        // 通用底线：能起 shell、能加载动态程序。
         // 🔴 libc 不能写进 must 列表：Ubuntu 的 libc.so.6 在 usr/lib/aarch64-linux-gnu 下，
-        // LANXIU 在 usr/lib 下，写死任一条都会让另一套永远判"不完整"→ 无限循环解压。
+        // 写死任一条都会让 rootfs 永远判"不完整"→ 无限循环解压。
         // 故下面单独用「两条路径任一」判定。
-        val common = emptyList<String>()
-        // 澜岫专属：Xtigervnc / weston x11 后端 / X 键盘映射 / X 默认字体的直连依赖。
-        // 🔴 这些**不能**拿去校验 Ubuntu（Ubuntu 本来就没有 weston/fonts/X11），否则 Ubuntu 会被误判成不完整。
-        val lanxiuOnly = listOf(
-            "usr/lib/libpixman-1.so.0",
-            "usr/lib/libxcb.so.1",
-            "usr/lib/libXau.so.6",
-            "usr/lib/libX11.so.6",
-            "usr/bin/weston",
-            "usr/lib/libweston-14/x11-backend.so",
-            "usr/share/X11/xkb/rules/evdev.xml",
-            "usr/share/fonts/X11/misc/fonts.dir",
-            "usr/share/fonts/X11/misc/10x20-ISO8859-1.pcf.gz",
-        )
-        val must = if (distro == Distro.LANXIU) common + lanxiuOnly else common
+        val must = emptyList<String>()
         val missing = must.filter { !File(root, it).exists() }.toMutableList()
-        // bash 两条路径任一存在即可（扁平 rootfs 可能只有 usr/bin/bash）
+        // bash 两条路径任一存在即可
         val hasBash = File(root, "bin/bash").exists() || File(root, "usr/bin/bash").exists()
         if (!hasBash) missing.add("bin/bash 或 usr/bin/bash")
-        // 动态链接器同样两条路径任一（扁平 rootfs 的实体在 usr/lib，lib 只是符号链接）
+        // 动态链接器同样两条路径任一
         val hasLd = File(root, "lib/ld-linux-aarch64.so.1").exists() ||
             File(root, "usr/lib/ld-linux-aarch64.so.1").exists() ||
             File(root, "lib/ld-linux.so.2").exists() ||
             File(root, "usr/lib/ld-linux.so.2").exists()
         if (!hasLd) missing.add("ld-linux-aarch64.so.1（lib/ 或 usr/lib/）")
-        // glibc 同样两条路径任一：Ubuntu 在 usr/lib/aarch64-linux-gnu，LANXIU 在 usr/lib
+        // glibc 同样两条路径任一
         val hasLibc = File(root, "usr/lib/libc.so.6").exists() ||
             File(root, "usr/lib/aarch64-linux-gnu/libc.so.6").exists()
         if (!hasLibc) missing.add("libc.so.6（usr/lib 或 usr/lib/aarch64-linux-gnu）")
         return missing
     }
 
-    /** 判定 guest 环境可用性等级（按发行版）。 */
-    fun guestEnvStatus(distro: Distro = selectedDistro): GuestEnvStatus = when {
+    /**
+     * 残骸 rootfs 自愈守卫（2026-10-27）。
+     *
+     * 🔴 背景（真机实证）：v1.1.7 的 install_ubuntu 就绪判据是「目录非空即已安装」——
+     * `if [ -z "$(ls -A $UBUNTU_PATH)" ]`。解压被中途掐断（v1.1.7 createNewSession 的
+     * 30s 超时 closeSession 杀 Pty）时，tar 按字母序先落地 bin/bash 等靠前条目，后部的
+     * usr/bin/id、var/lib/dpkg/status 还没解出 → 残骸目录非空 → 之后每次启动都判
+     * 「已安装」→ 残骸永不自愈：
+     *   · id 缺失 → /etc/profile 第 12 行 `id -u` 炸 → `-sh: 12: id: not found`、PS1 退化；
+     *   · dpkg 数据库 / apt lists 缺失 → apt update 能跑完但 install 全部
+     *     `E: Unable to locate package`（用户侧就是「能用但经常抽风」）。
+     *
+     * tarball 实证（check_tarball2.py）：19 个顶层条目、六项关键文件全部在包内，
+     * 排除「包本身缺件」——残骸只能来自「解压被杀」，解法就是删掉让 install_ubuntu 重解压。
+     *
+     * 时序安全性：只在 initializeEnvironment（envInitMutex 串行 + isEnvInitialized once）
+     * 内、extractAssets() 之后调用。此时 tarball 必在 filesDir（extractAssets 负责补拷，
+     * install_ubuntu 解压后会 rm 掉它，下次进来又补回），而真正的解压发生在 Pty 起来之后
+     * 的 common.sh install_ubuntu——本函数先于任何 Pty 执行，绝不可能删掉正在进行的解压。
+     * execGuest 通道也先过 initializeEnvironment，一处守卫全覆盖。
+     *
+     * 瘦身包兜底：设备无 tarball 副本时（APK 故意不含 rootfs 资产）跳过自愈——删了就没源了。
+     */
+    private fun ensureRootfsComplete() {
+        val root = rootfsDir()
+        if (!root.isDirectory) return                 // 从未安装：install_ubuntu 全量解压
+        if (root.listFiles().isNullOrEmpty()) return  // 空目录：同上
+        val missing = mutableListOf<String>()
+        // usrmerge 布局（/bin→usr/bin）：两条路径任一存在即算有，避免误判完整 rootfs。
+        if (!(File(root, "bin/bash").exists() || File(root, "usr/bin/bash").exists())) {
+            missing.add("bash")
+        }
+        if (!(File(root, "bin/id").exists() || File(root, "usr/bin/id").exists())) {
+            missing.add("id")
+        }
+        if (!(File(root, "bin/apt").exists() || File(root, "usr/bin/apt").exists())) {
+            missing.add("apt")
+        }
+        if (!File(root, "var/lib/dpkg/status").exists()) missing.add("var/lib/dpkg/status")
+        if (!File(root, "etc/profile").exists()) missing.add("etc/profile")
+        if (!File(root, "root/.bashrc").exists()) missing.add("root/.bashrc")
+        if (missing.isEmpty()) return                 // 完整：不动
+        if (!File(filesDir, UBUNTU_FILENAME).exists()) {
+            Log.w(TAG, "rootfs 残骸（缺 $missing）但 tarball 缺失，跳过自愈（瘦身包场景）")
+            return
+        }
+        Log.w(TAG, "rootfs 残骸自愈：缺 $missing → 删除 ${root.absolutePath}，下次启动重解压")
+        if (!root.deleteRecursively()) {
+            Log.e(TAG, "残骸 rootfs 删除失败，下次启动将重试：${root.absolutePath}")
+        }
+    }
+
+    /** 判定 guest 环境可用性等级。 */
+    fun guestEnvStatus(distro: Distro = Distro.UBUNTU): GuestEnvStatus = when {
         // 🔴 顺序铁律：「解压中」必须最先判。半截解压时 bash 常常已落地，若先判 READY 就会把
         // 正在解压的 rootfs 当成就绪（用户看到"就绪"但终端黑屏、桌面一启动就崩）。
         isExtracting(distro) -> GuestEnvStatus.INSTALLING
@@ -1015,17 +649,12 @@ EOF
     fun mailboxHostDir(): File = File(File(filesDir, "tmp"), "zxremote").apply { mkdirs() }
 
     /**
-     * 照搬 QuroLinuxEnv 之前的 rootfs 就绪动作：纯宿主侧解压 + usrmerge 链接修复，不开 proot。
-     * 复用 common.sh 的 install_rootfs / fix_usrmerge_links（二者只做文件操作/符号链接）。
-     * 必须在 execGuest 直接拉起 proot 之前跑，否则 LANXIU 扁平 rootfs 缺少 /bin→usr/bin 链接会导致
-     * guest 动态二进制 loader 找不到 -> proot ENOSYS。幂等：rootfs 已就绪时 install_rootfs 跳过解压。
-     */
-    /**
      * 生成 Android 系统 CA 证书 bundle 到 filesDir/ca-bundle.crt（幂等），供 guest 内 curl/openssl
-     * 走 HTTPS。内置 LANXIU rootfs 原生缺 CA 证书，curl 访问 HTTPS 会证书校验失败；宿主侧把
-     * /system/etc/security/cacerts 下所有 .0（Android 标准 CA 存储，哈希命名的 PEM 软链）拼成一个
-     * PEM bundle，[patch_lanxiu_rootfs] 会把它复制进 guest /etc/ssl/certs，[execGuest] 再导出
-     * SSL_CERT_FILE/CURL_CA_BUNDLE。宿主读不到 cacerts（权限/不存在）时返回 null，不报错、不回归。
+     * 走 HTTPS。内置 rootfs 自带 ca-certificates.crt（tarball 实证 219KB，v1.1.7 起即依赖它），
+     * 本 bundle 是 execGuest 通道的兜底：宿主侧把 /system/etc/security/cacerts 下所有 .0
+     * （Android 标准 CA 存储，哈希命名的 PEM 软链）拼成一个 PEM bundle，[execGuest] 导出
+     * SSL_CERT_FILE/CURL_CA_BUNDLE 时若 guest 内证书缺失可手动补。宿主读不到 cacerts
+     * （权限/不存在）时返回 null，不报错、不回归。
      */
     private fun ensureCaBundle(): File? {
         val out = File(filesDir, "ca-bundle.crt")
@@ -1051,24 +680,17 @@ EOF
      * 宿主侧确保 rootfs 解压 + usrmerge 链接就绪（不开 proot）。
      *
      * 公开原因：墨语言 ⇢ Ubuntu 融合通道（MoyuUbuntu）要在工具链落地前先保证 Ubuntu 就绪，
-     * 它与终端会话走同一条 install_rootfs 链路，只是目标发行版固定为 [Distro.UBUNTU]。
+     * 它与终端会话走同一条 install_ubuntu 链路（2026-10-27 回归 v1.1.7 函数名），目标固定为 Ubuntu。
      */
-    fun prepareGuestRootfs(distro: Distro = selectedDistro): Boolean {
+    fun prepareGuestRootfs(distro: Distro = Distro.UBUNTU): Boolean {
         val bash = File(binDir, "bash")
         if (!bash.exists()) {
             Log.e(TAG, "prepareGuestRootfs: 缺少宿主 bash（原生库未链接）")
             return false
         }
-        // prepare 走 common.sh 的 install_rootfs，目标由 selectedDistro 决定。
-        // 调用方指定别的发行版时临时切过去（selectedDistro 是纯内存 var，
-        // 赋值不写 prefs，持久化只发生在 setDistro），跑完恢复，互不影响。
-        val prev = selectedDistro
-        if (distro != prev) {
-            selectedDistro = distro
-            runCatching { File(filesDir, "common.sh").writeText(generateStartScript(distro)) }
-        }
+        // prepare 走 common.sh 的 install_ubuntu（v1.1.7 原文），目标固定 Ubuntu。
         return try {
-            val cmd = "source \"\$HOME/common.sh\" && install_rootfs && fix_usrmerge_links && echo PREPARE_DONE"
+            val cmd = "source \"\$HOME/common.sh\" && install_ubuntu && echo PREPARE_DONE"
             val pb = ProcessBuilder(bash.absolutePath, "-c", cmd)
             pb.directory(filesDir)
             pb.environment().putAll(baseEnv())
@@ -1081,11 +703,6 @@ EOF
         } catch (e: Exception) {
             Log.e(TAG, "prepareGuestRootfs 异常", e)
             false
-        } finally {
-            if (distro != prev) {
-                selectedDistro = prev
-                runCatching { File(filesDir, "common.sh").writeText(generateStartScript(prev)) }
-            }
         }
     }
 
@@ -1097,8 +714,7 @@ EOF
      *  2. 直接以 [ProcessBuilder] 拉起 proot（照搬 QuroLinuxEnv，走 App 主进程上下文，ptrace 可用），
      *     不再经 Pty.start(bash → guest_exec → exec proot) 的旧链路（该链路上下文不同导致 proot 注入
      *     loader 时 PEEKDATA 失败）；
-     *  3. proot 参数与 QuroLinuxEnv.buildProotLaunch 严格对齐（-0 -w /root 硬编码、同样 binds），
-     *     仅 rootfs/家目录换成 LANXIU 的共享 home。
+     *  3. proot 参数与 QuroLinuxEnv.buildProotLaunch 严格对齐（-0 -w /root 硬编码、同样 binds）。
      *
      * @param script guest 内要执行的 bash 脚本（可多行）
      * @param timeoutMs 超时上限；到期会尽力终止并标记 [GuestExecResult.timedOut]
@@ -1110,11 +726,6 @@ EOF
         onOutput: ((String) -> Unit)? = null,
         logFile: File? = null,
         detach: Boolean = false,
-        /**
-         * 目标发行版。默认跟随用户选择的全局发行版；墨语言通道显式传 [Distro.UBUNTU]，
-         * 保证「墨语言融合在 Ubuntu 里」这件事不被全局切换影响。
-         */
-        distro: Distro = selectedDistro,
         /**
          * 额外的 proot bind（如 `--bind=<宿主目录>:/opt/xxx`）。
          *
@@ -1129,19 +740,19 @@ EOF
         // 🔴 照搬 QuroLinuxEnv（Ubuntu 通道）：proot 直接由 ProcessBuilder 拉起，走 App 主进程上下文，
         // ptrace/PEEKDATA 可用。旧链路经 Pty.start(bash → source common.sh → guest_exec → exec proot)
         // 起 proot，native createSubprocess 的上下文不同，导致 proot 注入 loader 时 PEEKDATA 失败。
-        // 宿主侧预生成 CA 证书 bundle（幂等），供 patch_lanxiu_rootfs 复制进内置 rootfs，HTTPS 开箱即用。
+        // 宿主侧预生成 CA 证书 bundle（幂等）：rootfs 自带 ca-certificates.crt，此 bundle 仅兜底。
         ensureCaBundle()
         // 先确保 rootfs 解压 + usrmerge 链接就绪（纯宿主侧文件操作，不开 proot）。
-        if (!prepareGuestRootfs(distro)) {
-            return@withContext GuestExecResult(false, -1, "", false, "LANXIU rootfs 解压/就绪失败（见 Log）")
+        if (!prepareGuestRootfs()) {
+            return@withContext GuestExecResult(false, -1, "", false, "rootfs 解压/就绪失败（见 Log）")
         }
 
-        val rootfsPath = rootfsDir(distro).absolutePath
+        val rootfsPath = rootfsDir().absolutePath
         val prootBin = File(nativeLibDir, "libproot.so").absolutePath
         val tmpDir = File(filesDir, "tmp").absolutePath
-        // 🔴 getcwd 铁律：/root 必须 bind mount（与 Ubuntu 通道一致）getcwd 才正常；bind 的宿主目标
-        // proot_home 若缺失，bind 静默失败 -> /root 退回 rootfs 内建目录 -> 内置目录 getcwd 翻译在
-        // proot 5.0.0 下犯别扭（shell-init 警告、cd 报失真错误）。这里在 Kotlin 侧显式保证其存在且可遍历，
+        // 🔴 getcwd 铁律：/root 必须真实存在（与 Ubuntu 登录通道一致，2026-10-26 起 /root 归还
+        // rootfs 内自带家，共享 home 只挂 /root/shared）；proot_home 若缺失，bind 静默失败 ->
+        // /root/shared 挂不上但不影响 /root 本身。这里在 Kotlin 侧显式保证其存在且可遍历，
         // 不依赖 init/createDirectories 的隐式副作用。
         val sharedHome = File(filesDir, "proot_home").apply {
             mkdirs()
@@ -1150,7 +761,7 @@ EOF
         }.absolutePath
         // 🔴 getcwd 兜底 v5 配套：bind 的目标挂载点必须在 rootfs 内真实存在，否则 proot 会**静默跳过**
         // 该 bind -> -w /root 落空 -> 又回到「bash 继承宿主 cwd」的老坑。这里宿主侧硬保证它存在且可遍历，
-        // 不依赖 install_rootfs 的 chmod 是否执行过（execGuest 通道不走 patch_lanxiu_rootfs）。
+        // 不依赖 install_ubuntu 是否执行过 chmod（execGuest 通道不跑 common.sh 的登录函数）。
         runCatching {
             File(rootfsPath, "root").let { r ->
                 r.mkdirs()
@@ -1161,18 +772,18 @@ EOF
         val loader = File(nativeLibDir, "libproot-loader.so").absolutePath
 
         // proot 参数：与 QuroLinuxEnv.buildProotLaunch 严格对齐（含 /dev/urandom→/dev/random、
-        // /proc/net、filesDir:/quro），仅 rootfs/家目录换成 LANXIU 的共享 home。
+        // /proc/net、filesDir:/quro），仅 rootfs/家目录换成共享 home。
         val args = mutableListOf(
             prootBin,
             "--rootfs=$rootfsPath",
             "--link2symlink",
             "--bind=/dev",
-            "--bind=/dev/pts",      // 🔴 解锁 pty 分配：telnetd/sshd 需要 /dev/pts；common.sh 的 guest_exec/login_rootfs 已有，execGuest 直连 proot 此前漏绑 → 远程登录服务启动即死。与 -b /dev 并列显式绑定 devpts 文件系统。
+            "--bind=/dev/pts",      // 🔴 解锁 pty 分配：telnetd/sshd 需要 /dev/pts；common.sh 的 login_ubuntu 已有，execGuest 直连 proot 此前漏绑 → 远程登录服务启动即死。与 -b /dev 并列显式绑定 devpts 文件系统。
             "--bind=/dev/urandom:/dev/random",
             "--bind=/proc",
             "--bind=/proc/net:/proc/net",
             "--bind=/sys",
-            "--bind=$sharedHome:/root",   // 双系统共享 home（app 拥有，/root 永远可遍历）
+            "--bind=$sharedHome:/root/shared",   // 2026-10-26 /root 归属回归：共享 home 只挂 /root/shared（v1.1.7 形态，与 login_ubuntu 一致），/root 归还 rootfs 内自带家
             "--bind=$tmpDir:/tmp",
             "--bind=${filesDir.absolutePath}:/quro",
         )
@@ -1185,8 +796,8 @@ EOF
                 args.add("--bind=${ext.absolutePath}:${ext.absolutePath}")
             }
         }
-        // 🔴 getcwd 兜底 v5（2026-10-20 真机事故）：guest /root 是 bind 挂载点，proot `-w /root` 一旦
-        // 翻译失败（rootfs 内 /root 缺失 / 被 tar 里的 0700 挡住 / bind 被静默跳过），tracee 会继承宿主
+        // 🔴 getcwd 兜底 v5（2026-10-20 真机事故）：guest /root 一旦翻译失败（rootfs 内 /root 缺失 /
+        // 被 tar 里的 0700 挡住 / 历史 bind 被静默跳过），tracee 会继承宿主
         // cwd -> bash 启动即打
         //   shell-init: error retrieving current directory: getcwd: cannot access parent directories: Success
         // 然后**整个 -c 脚本一句都不执行**（真机界面只看到这一行红字，桌面永远起不来）。
@@ -1195,9 +806,9 @@ EOF
         // -0 仍保留（root 仿真，与 Ubuntu 三通道对齐）。
         args.add("-0")
         args.add("-w"); args.add("/")
-        // Ubuntu 用 /bin/sh -c（非登录、不清环境）；LANXIU rootfs 经 usrmerge 链接 /bin→usr/bin 后
+        // Ubuntu 用 /bin/sh -c（非登录、不清环境）；经 usrmerge 链接 /bin→usr/bin 后
         // /bin/sh 即 /usr/bin/sh，存在且可用，无需 -i/-lc 登录壳（那正是旧链路 getcwd ENOENT 的温床）。
-        // 🔴 解释器按 rootfs 实况选（2026-10-20）：LANXIU 是扁平 rootfs，可能只有 usr/bin/sh 而
+        // 🔴 解释器按 rootfs 实况选（2026-10-20）：rootfs 可能只有 usr/bin/sh 而
         // /bin → usr/bin 的 usrmerge 链接尚未建立。此时写死 /bin/sh 只会得到一个裸 ENOENT
         // （proot 报 execve("/bin/sh"): No such file or directory），界面无法区分是「解释器没了」
         // 还是「脚本内容错」。宿主侧直接看文件存在性，选不到才退回 /bin/sh（旧行为，不回归）。
@@ -1217,13 +828,13 @@ EOF
             "TERM" to "xterm-256color",
             "LANG" to "C.UTF-8",
             "DEBIAN_FRONTEND" to "noninteractive",
-            // 🔴 CA 证书：patch_lanxiu_rootfs 已将宿主生成的 bundle 复制进 guest /etc/ssl/certs，
+            // 🔴 CA 证书：rootfs 自带 /etc/ssl/certs/ca-certificates.crt（tarball 实证 219KB），
             // 这里显式导出，保证 curl/openssl/wget 默认走它（HTTPS 开箱即用，无需手动 export）。
             "SSL_CERT_FILE" to "/etc/ssl/certs/ca-certificates.crt",
             "CURL_CA_BUNDLE" to "/etc/ssl/certs/ca-certificates.crt",
             // 🔴 2026-10-21 决定性修复：LD_LIBRARY_PATH 原来只含宿主 nativeLibDir + binDir，
             // **完全不含 guest 的库目录**。动态链接器优先查 LD_LIBRARY_PATH，查不到才落 ld.so.cache；
-            // 而这个 rootfs 构建时 ldconfig 没跑（cache 不可靠），于是 Xtigervnc/weston/GTK 一律报
+            // 而这个 rootfs 构建时 ldconfig 没跑（cache 不可靠），桌面/GTK 程序一律报
             // "cannot open shared object file"（真机现象：libpixman / libcairo / libgdk-3 / libm 全说缺，
             // 但包内实体都在）。这里把 guest 标准库目录全部追加，宿主路径对 guest 无意义但无害。
             "LD_LIBRARY_PATH" to "$nativeLibDir:${binDir.absolutePath}:" +
@@ -1309,7 +920,7 @@ EOF
     fun baseEnvironment(): MutableMap<String, String> = baseEnv()
 
     /**
-     * 确保 host 级服务可用：尽力做原生库链接 + busybox 软链（不碰 Ubuntu rootfs），
+     * 确保 host 级服务可用：尽力做原生库链接 + busybox 软链（不碰 rootfs），
      * 并在 proot 后端需要但 common.sh 缺失时重建它。
      *
      * **注意：纯 Java 的 SSH 服务端（MINA）本就不依赖 busybox / proot**；原生库缺失
@@ -1321,7 +932,7 @@ EOF
         runCatching { createBusyboxSymlinks() }.onFailure { Log.w(TAG, "createBusyboxSymlinks 跳过", it) }
         runCatching {
             if (isEnvInitialized && !File(filesDir, "common.sh").exists()) {
-                File(filesDir, "common.sh").writeText(generateStartScript(selectedDistro))
+                File(filesDir, "common.sh").writeText(generateStartScript())
             }
         }
         return true
@@ -1330,32 +941,15 @@ EOF
     /** host 级 shell：Android 系统自带的 `/system/bin/sh`（真 shell，环境无关，无需 Ubuntu）。 */
     fun hostShellCommand(): Array<String> = arrayOf("/system/bin/sh")
 
-    /** 切换发行版：持久化偏好 + 重建 common.sh（让后续启动/后端用新目标）。 */
-    suspend fun setDistro(distro: Distro): Boolean {
-        selectedDistro = distro
-        distroPrefs.edit().putString("selected_distro", distro.id).apply()
-        runCatching { File(filesDir, "common.sh").writeText(generateStartScript(distro)) }
-        return true
-    }
-
-    /** 首次使用按需下载 LANXIU rootfs（约 88MB），落盘到 filesDir/<filename>。 */
-    suspend fun downloadLanxiuRootfs(
-        onProgress: ((downloaded: Long, total: Long, fraction: Float) -> Unit)? = null
-    ): Boolean {
-        val dest = File(filesDir, Distro.LANXIU.rootfsFilename)
-        if (dest.exists()) return true
-        return RootfsDownloader.download(LANXIU_DOWNLOAD_URL, dest, onProgress)
-    }
-
     /**
-     * 后端 shell：rootfs 就绪时进 proot 登录 shell（按选中发行版），否则退化为 host 的 busybox sh。
+     * 后端 shell：rootfs 就绪时进 proot 登录 shell，否则退化为 host 的 busybox sh。
      */
     fun backendShellCommand(): Array<String> {
         ensureHostBackendReady()
-        return if (isRootfsReady(selectedDistro)) {
+        return if (isRootfsReady()) {
             arrayOf(
                 File(binDir, "bash").absolutePath, "-c",
-                "source \$HOME/common.sh && install_rootfs && configure_sources && login_rootfs"
+                "source \$HOME/common.sh && install_ubuntu && configure_sources && login_ubuntu"
             )
         } else {
             hostShellCommand()
@@ -1364,47 +958,80 @@ EOF
 
     /** 当前后端类型（用于界面展示）。 */
     fun backendLabel(): String =
-        if (isRootfsReady(selectedDistro)) "${selectedDistro.displayName} (proot)" else "Host (busybox)"
+        if (isRootfsReady()) "Ubuntu (proot)" else "Host (busybox)"
 
     /**
-     * 可见交互终端（老栈 QuroShellSession 委托）启动命令。
+     * 🔴 启动自检（2026-10-26 真机复盘）：测试机是物理手机、经云电脑操作，抓不到 logcat，
+     * 终端黑屏时零诊断信息。本函数把启动链每一步的**实查结果**写成文本，由
+     * [com.ai.assistance.quro.terminal.TerminalManager] 在 Pty.start 前注入终端输出流
+     * （READY 前也会渲染，见 OutputProcessor），用户截图即可定位断点。
      *
-     * 仅当选中 [Distro.LANXIU] 且 rootfs 就绪（或 tar 包在、可 host 侧解压）时返回
-     * `(command, env)`，复用 common.sh 的 start_shell（含 install_rootfs / login_rootfs /
-     * patch_lanxiu_rootfs / 全部 usrmerge 修复 / CA / binds），与终端-core 新栈会话完全一致。
-     * 其余情况（Ubuntu 或 LANXIU 未就绪）返回 null，调用方回退 QuroLinuxEnv 的 Ubuntu/设备路径。
-     *
-     * 复用而非重写：LANXIU 的全部运行修复都在 TerminalEnvironment 内闭环，老栈只负责把这条
-     * `bash -c "source \$HOME/common.sh && start_shell"` 命令交给自己的 PTY/管道进程跑——两条
-     * 栈共用同一份 rootfs 与同一套修复，永不分叉。
+     * 覆盖项：ABI/架构、jniLibs 齐全性、bash/busybox 链接与实体可执行性、bash exec 实测
+     * （能抓出 EACCES/ENOEXEC/ENOENT 这类「链在但跑不了」）、tarball 落盘完整性、
+     * common.sh、rootfs 就绪/半截/锁/资产标记、剩余空间。
      */
-    fun visibleTerminalLaunch(): Pair<Array<String>, Array<String>>? {
-        if (selectedDistro != Distro.LANXIU) return null
-        val bash = File(binDir, "bash")
-        if (!bash.exists()) return null
-        // 确保原生库软链 + CA bundle：proot/loader/bash 必须存在，否则即便 rootfs 就绪也起不来。
-        runCatching { linkNativeLibs() }
-        runCatching { createBusyboxSymlinks() }
-        ensureCaBundle()
-        // 确保内置 LANXIU tar 包已落到 filesDir（APK asset → 文件），消除「TerminalManager 首次实例化
-        // 异步 extractAssets 尚未完成」的竞态；已抽过则 stamp 命中，本调用近乎零成本。
-        runCatching { extractAssets() }
-        // 确保 common.sh 为当前（LANXIU）版本（setDistro 已写；此处兜底切换后未初始化）。
-        runCatching { File(filesDir, "common.sh").writeText(generateStartScript(selectedDistro)) }
-        // LANXIU 仅在 rootfs 真正就绪（解压 + usrmerge 链接 + sh 链接）时才进 proot；
-        // 仅存在 tar 包但未解压 → prepareGuestRootfs（host 侧）先解压，成功才放行，
-        // 失败则回落 Ubuntu，避免「解压失败 → bash 退出 → 保活重建 → 再失败」死循环。
-        if (!isRootfsReady(Distro.LANXIU)) {
-            if (!hasRootfsArchive(Distro.LANXIU)) return null
-            if (!prepareGuestRootfs()) return null
+    fun startupDiagnostics(): String {
+        val sb = StringBuilder()
+        fun line(s: String) { sb.append(s).append("\r\n") }
+        line("==== ZorvAI 终端启动自检 B20261027-0010 ====")
+        line("[1] os.arch=${System.getProperty("os.arch")} abis=${Build.SUPPORTED_ABIS.joinToString(",")} sdk=${Build.VERSION.SDK_INT}")
+        val nld = File(nativeLibDir)
+        line("[2] nativeLibDir=$nativeLibDir isDir=${nld.isDirectory}")
+        if (nld.isDirectory) {
+            val libs = (nld.listFiles() ?: emptyArray()).sortedBy { it.name }
+            line("[2] jniLibs(${libs.size}): " + libs.joinToString(" ") { "${it.name}=${it.length()}" })
         }
-        val command = arrayOf(bash.absolutePath, "-c", "source \$HOME/common.sh && start_shell")
-        val env = baseEnv().map { "${it.key}=${it.value}" }.toTypedArray()
-        return command to env
+        val bashFile = File(binDir, "bash")
+        val linkTarget = runCatching { Files.readSymbolicLink(bashFile.toPath()) }.getOrNull()
+        line("[3] bash exists=${bashFile.exists()} 符号链接目标=$linkTarget canExec=${bashFile.canExecute()}")
+        val busyboxFile = File(binDir, "busybox")
+        line("[3] busybox exists=${busyboxFile.exists()} canExec=${busyboxFile.canExecute()}")
+        val execTest = runCatching {
+            val pb = ProcessBuilder(bashFile.absolutePath, "-c", "echo EXEC_OK")
+            pb.redirectErrorStream(true)
+            pb.directory(filesDir)
+            val p = pb.start()
+            val finished = p.waitFor(8, TimeUnit.SECONDS)
+            val out = runCatching { p.inputStream.bufferedReader().use { it.readText() }.trim() }.getOrDefault("")
+            if (finished) "exit=${p.exitValue()} out='${out.take(120)}'"
+            else { p.destroyForcibly(); "TIMEOUT(8s) out='${out.take(120)}'" }
+        }.getOrElse { e -> "FAIL ${e.javaClass.simpleName}: ${e.message}" }
+        line("[4] bash exec 实测: $execTest")
+        val tb = File(filesDir, UBUNTU_FILENAME)
+        line("[5] tarball exists=${tb.exists()} size=${tb.length()} (期望 64133552)")
+        val cs = File(filesDir, "common.sh")
+        val csLines = runCatching { cs.readLines().size }.getOrDefault(-1)
+        // 🔴 bash -n 实解（2026-10-27 回归版新增）：2130 版真机报「line 433: syntax error:
+        // unexpected end of file」而本地全绿，根因未定位。这条自检直接回答「设备上这份
+        // common.sh 到底能不能解析」——OK 则问题在 exec/权限层，FAIL 则文件本身被写坏。
+        val csSyntax = if (cs.exists()) runCatching {
+            val pb = ProcessBuilder(bashFile.absolutePath, "-n", cs.absolutePath)
+            pb.redirectErrorStream(true)
+            pb.directory(filesDir)
+            val p = pb.start()
+            val finished = p.waitFor(8, TimeUnit.SECONDS)
+            val out = runCatching { p.inputStream.bufferedReader().use { it.readText() }.trim() }.getOrDefault("")
+            if (finished && p.exitValue() == 0) "OK" else "FAIL[${out.take(200)}]"
+        }.getOrElse { e -> "ERR ${e.javaClass.simpleName}" } else "无文件"
+        line("[6] common.sh exists=${cs.exists()} size=${cs.length()} lines=$csLines bash -n=$csSyntax")
+        val rf = rootfsDir()
+        val mark = File(rf, ".quro_asset_v")
+        val lock = File(rf, ".extract_lock")
+        line("[7] rootfs ready=${isRootfsReady()} extracting=${isExtracting()} 缺项=${rootfsMissingParts()}")
+        line("[7] 资产标记='${runCatching { mark.readText().trim() }.getOrDefault("无")}' 解压锁存在=${lock.exists()} 顶层条目=${runCatching { rf.list()?.size }.getOrDefault(-1)}")
+        line("[8] 存储: filesDir 可用=${filesDir.usableSpace / 1048576}MB / 总=${filesDir.totalSpace / 1048576}MB")
+        line("==== 自检结束，以下为真实终端输出 ====")
+        return sb.toString()
     }
 
     fun startTerminalSession(sessionId: String): Pair<TerminalSession, Pty> {
         val bash = File(binDir, "bash").absolutePath
+        // 🔴 启动前硬校验（2026-10-26）：bash 链接缺失时进程会瞬间死亡且界面无任何提示，
+        // 这里显式报错并把链接补上，让「终端没反应」有据可查。
+        if (!File(bash).exists()) {
+            Log.e(TAG, "startTerminalSession: binDir/bash 不存在（原生库未链接？），尝试补链")
+            runCatching { linkNativeLibs() }
+        }
         val startScript = "source \$HOME/common.sh && start_shell"
 
         val command = arrayOf(bash, "-c", startScript)

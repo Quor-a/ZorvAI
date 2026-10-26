@@ -83,7 +83,7 @@ class QuroToolRouter(
             // 屏幕捕获授权（AI 主动发起 MediaProjection 系统授权，无需手动长按开关）
             "enable_screen_capture",
             "run_code", "creative_studio",
-            "terminal", "quroterm_exec",   // 合并后的统一终端工具（含 LANXIU 澜岫 / Ubuntu 双系统）
+            "terminal", "quroterm_exec",   // 合并后的统一终端工具（应用内 proot+Ubuntu / 设备 shell）
             "speak", "stop_speak",
             "set_alarm", "schedule_task", "list_scheduled_tasks", "delete_scheduled_task",
             "memory_save", "memory_list", "memory_search", "memory_delete",

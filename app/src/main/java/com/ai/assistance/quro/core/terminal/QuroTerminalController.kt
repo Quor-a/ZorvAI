@@ -5,10 +5,6 @@ import android.os.Environment
 import android.util.Log
 import com.ai.assistance.quro.activity.QuroApplication
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
-import com.ai.assistance.quro.terminal.TerminalManager
-import com.ai.assistance.quro.terminal.runtime.Distro
-import com.ai.assistance.quro.terminal.runtime.GuestEnvStatus
-import com.ai.assistance.quro.terminal.runtime.GuestExecResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import java.io.File
@@ -175,15 +171,6 @@ object QuroTerminalController {
             return runCommandInDevice(command, timeoutMs)
         }
 
-        // 双系统：选中 LANXIU 且 rootfs 就绪 → 走 TerminalManager.execGuest（独立 rootfs，
-        // 复用全部 LANXIU 修复），与可见终端、terminal_exec 共用同一套运行能力。
-        val tm = TerminalManager.getInstance(ctx)
-        val distro = tm.getDistro()
-        val lanxiuReady = tm.guestEnvStatus(Distro.LANXIU) == GuestEnvStatus.READY
-        if (distro == Distro.LANXIU && lanxiuReady) {
-            return runCommandInLanxiu(command, timeoutMs, ctx)
-        }
-
         // 尝试使用 Linux 环境（proot/Ubuntu）
         val linuxLaunch = QuroLinuxEnv.shellLaunch(ctx)
         if (linuxLaunch != null) {
@@ -258,21 +245,6 @@ object QuroTerminalController {
     /**
      * 在设备 shell 中执行命令（回退路径）。
      */
-    /**
-     * 在 LANXIU rootfs 中执行一次性命令（选中 LANXIU 且就绪时）。
-     * 复用 TerminalManager.execGuest（与 terminal_exec / 可见终端同一套运行能力，含全部 LANXIU 修复）。
-     */
-    private fun runCommandInLanxiu(command: String, timeoutMs: Long, context: Context): ShellResult {
-        return try {
-            val r: GuestExecResult = runBlocking(Dispatchers.IO) {
-                TerminalManager.getInstance(context).runInGuest(command, timeoutMs)
-            }
-            ShellResult(output = r.output.trim(), exitCode = r.code, timedOut = r.timedOut, error = r.error ?: "")
-        } catch (e: Throwable) {
-            ShellResult(output = "", exitCode = -1, error = e.message ?: "LANXIU 执行失败")
-        }
-    }
-
     private fun runCommandInDevice(command: String, timeoutMs: Long): ShellResult {
         var proc: Process? = null
         return try {

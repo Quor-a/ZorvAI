@@ -168,9 +168,9 @@ class DeepSeekHarness(private val context: Context) {
          *
          * versionName / versionCode 是用户的，不许动；于是区分「桌上这个 APK 里装的是哪一版
          * dsh 壳」只能靠它。它同时进 `diagnose()` 输出与 HarnessScreen 顶栏 —— 界面上看不到戳，
-         * 就等于装错包，这一条是出包自证链的一部分（同 LANXIU / Moyu 的做法）。
+         * 就等于装错包，这一条是出包自证链的一部分（同 Moyu 的做法）。
          */
-        const val BUILD_STAMP = "B20261026-1731"
+        const val BUILD_STAMP = "B20261027-0010"
 
         @Volatile
         private var instance: DeepSeekHarness? = null

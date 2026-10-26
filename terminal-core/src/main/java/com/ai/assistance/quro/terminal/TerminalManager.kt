@@ -1,7 +1,6 @@
 package com.ai.assistance.quro.terminal
 
 import android.content.Context
-import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
@@ -26,7 +25,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 /**
@@ -90,13 +88,6 @@ class TerminalManager private constructor(
                 INSTANCE ?: TerminalManager(context.applicationContext).also { INSTANCE = it }
             }
         }
-
-        /**
-         * 通知 App 侧保活服务重建可见（老栈）终端会话：切换发行版 / LANXIU 下载完成后发送。
-         * 老栈 QuroShellSession 在创建时读取 selectedDistro，只有「杀掉旧会话 → 重建」才能让
-         * 已运行的可见终端真正切到新发行版（否则只改了 selected_distro 标志，跑的仍是旧 rootfs）。
-         */
-        const val ACTION_TERMINAL_DISTRO_CHANGED = "com.ai.assistance.quro.action.TERMINAL_DISTRO_CHANGED"
 
         private const val TAG = "TerminalManager"
 
@@ -198,12 +189,15 @@ class TerminalManager private constructor(
         }
 
         // 🔴 2026-10-21 用户明确要求：「不应该限制时间，而是解压检测完了没有」。
-        // 原实现是 withTimeoutOrNull(660_000) 到点就 closeSession —— 而 closeSession 会取消
-        // 初始化协程，把正在解压的 rootfs 直接掐断，留下半截残废（下次又从头解压，这就是
-        // 「反复死循环」的根源之一）。改为**按状态轮询**：
+        // v1.1.7 原文是 withTimeoutOrNull(30_000) + 超时 closeSession —— closeSession 会
+        // 取消初始化协程，把正在解压的 rootfs 直接掐断，留下半截残废；而 install_ubuntu 的
+        // 「目录非空=已安装」判据让残骸永不自愈 → 死亡螺旋（2026-10-26 真机实证：id 缺失、
+        // dpkg/apt 数据缺失、抽风）。因此**刻意不恢复 30s 超时**，改为按状态轮询、绝不杀会话：
         //   · 会话变 READY → 成功返回；
-        //   · 还在解压（rootfs 内 .extracting 标记在）→ 一直等，绝不放弃；
-        //   · 30 分钟仅作极端保险，且失败信息明确告诉用户「还在解压/去清理存储」，不误导成"环境坏了"。
+        //   · 解压中 → 一直等（首启解压 3-8 分钟，慢机更久）；
+        //   · 30 分钟仅作极端保险，失败信息明确告诉用户「还在解压/去清理存储」。
+        // 注：v1.1.7 回归后 install_ubuntu 不写 .extracting 标记，isExtracting() 恒 false，
+        // 轮询实际就是「等 READY」；残骸自愈由 TerminalEnvironment.ensureRootfsComplete 负责。
         val deadline = System.currentTimeMillis() + 30 * 60 * 1000L
         while (System.currentTimeMillis() < deadline) {
             val session = terminalState.value.sessions.find { it.id == newSession.id }
@@ -256,47 +250,9 @@ class TerminalManager private constructor(
         return environment.initializeEnvironment()
     }
 
-    /**
-     * 在 proot guest 内执行一次性脚本（独立于终端会话的命令队列/提示符检测），
-     * 返回真实退出码与输出。详见 [TerminalEnvironment.execGuest]。
-     */
-    suspend fun runInGuest(
-        script: String,
-        timeoutMs: Long,
-        onOutput: ((String) -> Unit)? = null,
-    ): com.ai.assistance.quro.terminal.runtime.GuestExecResult =
-        environment.execGuest(script, timeoutMs, onOutput)
-
-    /** guest 环境（按发行版）的可用性等级。 */
-    fun guestEnvStatus(distro: Distro = environment.selectedDistro): com.ai.assistance.quro.terminal.runtime.GuestEnvStatus =
+    /** guest 环境的可用性等级。 */
+    fun guestEnvStatus(distro: Distro = Distro.UBUNTU): com.ai.assistance.quro.terminal.runtime.GuestEnvStatus =
         environment.guestEnvStatus(distro)
-
-    /** 当前选中的发行版（双系统切换）。 */
-    fun getDistro(): Distro = environment.selectedDistro
-
-    /** 切换发行版（持久化 + 重建 common.sh + 通知老栈可见终端重建）。 */
-    suspend fun setDistro(distro: Distro): Boolean {
-        val ok = environment.setDistro(distro)
-        rebuildInteractiveTerminal()
-        return ok
-    }
-
-    /** LAUNXIU rootfs 按需下载完成后，让老栈可见终端重建以切到新 rootfs。 */
-    fun rebuildInteractiveTerminal() {
-        try {
-            context.sendBroadcast(Intent(ACTION_TERMINAL_DISTRO_CHANGED))
-        } catch (_: Throwable) {
-            Log.w(TAG, "rebuildInteractiveTerminal: 广播发送失败（忽略）")
-        }
-    }
-
-    /** 可见交互终端（老栈 QuroShellSession）启动命令：选中 LANXIU 且就绪时返回，否则 null。 */
-    fun visibleTerminalLaunch(): Pair<Array<String>, Array<String>>? = environment.visibleTerminalLaunch()
-
-    /** 首次使用按需下载 LANXIU rootfs（约 88MB）。 */
-    suspend fun downloadLanxiuRootfs(
-        onProgress: ((downloaded: Long, total: Long, fraction: Float) -> Unit)? = null
-    ): Boolean = environment.downloadLanxiuRootfs(onProgress)
 
     fun startTerminalSession(sessionId: String): Pair<TerminalSession, Pty> {
         return environment.startTerminalSession(sessionId)

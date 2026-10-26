@@ -443,7 +443,7 @@ if [[ "$DO_INSTALL" == "1" ]]; then
     cp -f "$LOADER_BIN" "$ROOT/app/src/main/assets/linux_env/libproot-loader.so"
     echo "  → $ROOT/app/src/main/assets/linux_env/libproot-loader.so"
   fi
-  echo "⚠ 已覆盖运行时二进制，务必真机验证终端（Ubuntu + LANXIU 两套都要测）；"
+  echo "⚠ 已覆盖运行时二进制，务必真机验证终端（Ubuntu）；"
   echo "  回退：git checkout -- app/src/full/jniLibs terminal-core/src/main/jniLibs app/src/main/assets/linux_env"
 else
   echo ""

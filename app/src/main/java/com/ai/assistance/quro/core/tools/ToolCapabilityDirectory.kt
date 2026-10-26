@@ -302,25 +302,20 @@ object ToolCapabilityDirectory {
         "terminal" to ToolInfo(
             name = "terminal",
             category = ToolCategory.TERMINAL_LINUX,
-            description = "应用内统一终端工具（合并原 terminal_*/QuroTerm 全部能力，通过 action 分发）：status 查双系统状态、set_distro 在 Ubuntu 与 LANXIU(澜岫) 间切换、exec 在当前发行版执行命令、run 在应用沙盒内一次性执行。",
+            description = "应用内统一终端工具（合并原 terminal_*/QuroTerm 全部能力，通过 action 分发）：status 查 Linux 环境与全部会话状态、exec 在 Ubuntu 里执行命令、run 在应用沙盒内一次性执行。",
             useCases = listOf(
-                "查看终端双系统状态（selected_distro / ubuntu_ready / lanxiu_ready）",
-                "切到 LANXIU 澜岫：terminal(action=\"set_distro\", distro=\"lanxiu\")",
-                "切到 Ubuntu：terminal(action=\"set_distro\", distro=\"ubuntu\")",
-                "在 LANXIU / Ubuntu 里执行命令：terminal(action=\"exec\", command=\"...\")",
+                "查看终端与 Linux 环境状态（ubuntu_ready / 会话列表）",
+                "在 Ubuntu 里执行命令：terminal(action=\"exec\", command=\"...\")",
                 "在应用沙盒内跑一条 shell：terminal(action=\"run\", command=\"...\")"
             ),
             examples = listOf(
                 "terminal(action=\"status\")",
-                "terminal(action=\"set_distro\", distro=\"lanxiu\")",
                 "terminal(action=\"exec\", command=\"python3 -c 'print(1+1)'\")"
             ),
-            parameters = mapOf("action" to "status/exec/run/write/kill/set_distro/...", "command" to "exec/run 用的 shell 命令", "distro" to "set_distro 用的 ubuntu / lanxiu"),
+            parameters = mapOf("action" to "status/exec/run/write/kill/interrupt/sessions/session_new/session_switch/session_kill", "command" to "exec/run 用的 shell 命令"),
             tips = listOf(
-                "LANXIU(澜岫) 是内置 aarch64 Linux 发行版，用 qypkg 包管理（不是 apt），已随 App 发布、首次即用",
-                "Ubuntu 才用 apt；切到 LANXIU 后别对它用 apt",
-                "exec 的返回带 distro 字段，务必看它确认命令实际跑在哪套系统",
-                "LANXIU 与 Ubuntu 完全对等，都是终端里的对等发行版，能力对等"
+                "Ubuntu 用 apt 包管理",
+                "exec 的返回带 distro 字段，确认命令实际跑在哪（ubuntu / device）"
             ),
             relatedTools = listOf("quroterm_exec", "linux_run"),
             priority = 4

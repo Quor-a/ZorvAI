@@ -7,9 +7,6 @@ import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import com.ai.assistance.quro.core.linux.DETECT_DISTRO_CMD
 import com.ai.assistance.quro.core.linux.PkgAction
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
-import com.ai.assistance.quro.core.linux.QypkgPackageManager
-import com.ai.assistance.quro.terminal.TerminalManager
-import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 
 /**
@@ -93,9 +90,7 @@ class LinuxPackageTool : QuroTool {
     override val name: String = "linux_pkg"
     override val description: String =
         "在应用内 Linux 环境管理软件包：安装/卸载/更新软件源/升级/搜索/列出已装/查看详情/清理缓存/探测发行版。" +
-            "自动识别发行版并选用正确的包管理器（apt / apk / dnf / pacman）；" +
-            "当前选中澜岫 LANXIU 时自动改用其自带的 qypkg（支持 list 列出已装、remove 移除、install 安装设备上的 .qyp 包；" +
-            "qypkg 没有远程软件源，update/upgrade/search 会返回说明而非报错）。"
+            "自动识别发行版并选用正确的包管理器（apt / apk / dnf / pacman）。"
     override val parametersJson: String = """{
         "type":"object",
         "properties":{
@@ -114,15 +109,6 @@ class LinuxPackageTool : QuroTool {
         val pkgs = args.optString("packages", "")
             .split(Regex("[\\s,]+")).filter { it.isNotBlank() }
         val query = args.optString("query", "").trim()
-
-        // 🌿 澜岫 LANXIU 分流（2026-10-21 真机根因）：本工具原本一律走 [QuroLinuxEnv]（Ubuntu 通道），
-        // 在 LANXIU 里它读到的是 Ubuntu 的 os-release(24.04) → 判成 apt，而 LANXIU 只有自家
-        // qypkg-inst（路径 /usr/bin/qypkg-inst），于是每个操作都报 apt-get: not found / 不识别发行版。
-        // 这里按「当前选中的发行版」路由：LANXIU → TerminalManager.runInGuest + QypkgPackageManager。
-        val termMgr = runCatching { TerminalManager.getInstance(context) }.getOrNull()
-        if (termMgr != null && termMgr.getDistro().id == "lanxiu") {
-            return runQypkgInLanxiu(termMgr, action, pkgs, query)
-        }
 
         if (!QuroLinuxEnv.probeLenient(context).available) {
             QuroLinuxEnv.setup(context)
@@ -174,77 +160,6 @@ class LinuxPackageTool : QuroTool {
             if (tail.isNotBlank()) {
                 appendLine()
                 append(tail)
-            }
-        }.trim()
-    }
-
-    /**
-     * LANXIU 专用：在澜岫 guest 内用 qypkg-inst 执行包操作。
-     *
-     * 与 Ubuntu 通道的差异（均为 2026-10-21 真机核对）：
-     *  - 执行通道不同：LANXIU 走 [TerminalManager.runInGuest]（它按 selectedDistro 进 LANXIU rootfs），
-     *    而非 QuroLinuxEnv（只会进 Ubuntu rootfs）。
-     *  - 能力不同：qypkg 是本地包安装器，没有远程软件源，只有 -l（列表）/ -r（移除）/ <pkg.qyp>（安装）。
-     */
-    private fun runQypkgInLanxiu(
-        tm: TerminalManager,
-        action: PkgAction,
-        pkgs: List<String>,
-        query: String,
-    ): String {
-        val status = runCatching { tm.guestEnvStatus() }.getOrNull()
-        if (status == null || status.name != "READY") {
-            return "⏳ LANXIU 环境尚未就绪（当前状态：${status?.name ?: "未知"}）。" +
-                "请先在「终端 → LANXIU」完成首次解压安装（约数分钟），就绪后再用「${action.summary}」。"
-        }
-
-        val pm = QypkgPackageManager
-        val command = when (action) {
-            PkgAction.INSTALL -> {
-                if (pkgs.isEmpty()) return "install 需要 packages 参数（.qyp 包在设备上的路径，如 /sdcard/Download/foo.qyp）"
-                pm.install(pkgs)
-            }
-            PkgAction.REMOVE -> {
-                if (pkgs.isEmpty()) return "remove 需要 packages 参数（已安装的包名）"
-                pm.remove(pkgs)
-            }
-            PkgAction.UPDATE -> pm.update()
-            PkgAction.UPGRADE -> pm.upgrade()
-            PkgAction.SEARCH -> {
-                if (query.isBlank()) return "search 需要 query 参数"
-                pm.search(query)
-            }
-            PkgAction.LIST -> pm.listInstalled(query.ifBlank { null })
-            PkgAction.INFO -> {
-                if (pkgs.isEmpty()) return "info 需要 packages 参数"
-                pm.info(pkgs.first())
-            }
-            PkgAction.CLEAN -> pm.clean()
-            // detect 顺便把 qypkg 自检带上，一眼能看出它能不能跑
-            PkgAction.DETECT -> "cat /etc/os-release 2>/dev/null; echo '--- qypkg-inst -l ---'; qypkg-inst -l 2>&1 | head -n 20"
-        }
-
-        val timeout = if (action == PkgAction.INSTALL) 300_000L else 60_000L
-        val r = runCatching { runBlocking { tm.runInGuest(command, timeout) } }
-            .getOrElse { return "⚠️ 在 LANXIU 内执行失败：${it.message ?: it.javaClass.simpleName}" }
-
-        val tail = r.output.takeLast(2000)
-        return buildString {
-            append("${action.summary}｜包管理器：${pm.displayName}")
-            appendLine()
-            append("命令：$command")
-            appendLine()
-            when {
-                r.timedOut -> append("⚠️ 执行超时（${timeout / 1000}s）")
-                r.code == 0 -> append("✅ 成功")
-                else -> append("⚠️ 退出码 ${r.code}")
-            }
-            if (tail.isNotBlank()) {
-                appendLine()
-                append(tail)
-            } else if (action == PkgAction.LIST) {
-                appendLine()
-                append("（列表为空：尚未安装任何 .qyp 包）")
             }
         }.trim()
     }

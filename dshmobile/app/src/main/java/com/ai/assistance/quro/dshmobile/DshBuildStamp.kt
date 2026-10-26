@@ -12,5 +12,5 @@ package com.ai.assistance.quro.dshmobile
  * 随**引擎资产/补丁改动**变（EngineManager.snapshotFresh 对账）。两者都变才算「新包」。
  */
 internal object DshBuildStamp {
-  const val STAMP = "B20261026-1731"
+  const val STAMP = "B20261027-0010"
 }
