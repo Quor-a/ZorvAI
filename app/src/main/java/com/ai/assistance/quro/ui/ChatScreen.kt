@@ -9329,7 +9329,11 @@ private fun CleanupScreen(
     val paths = remember {
         mapOf(
             "appdata" to File(context.filesDir, "quro_data"),
-            "sandbox" to File(context.filesDir, "linux-sandbox"), // Ubuntu rootfs + tmp，体积最大
+            // 🔴 双 rootfs 合一（2026-10-27）：沙箱 = 终端 rootfs（AI 工具链与可见终端共用同一个
+            // rootfs，见 QuroLinuxEnv.rootfsPath 文档），不再是 linux-sandbox/rootfs。
+            // 旧目录 filesDir/linux-sandbox 现只剩 tmp / 快照 / 孤儿 rootfs（数据安全优先暂不删），
+            // 故不纳入本分类；清掉它会误伤快照且对真实沙箱无意义。
+            "sandbox" to File(QuroLinuxEnv.rootfsPath(context)),
             "logs" to (ext?.let { File(it, "QuroAI_logs") }
                 // 极端情况下拿不到外部目录（存储未挂载），退回 app 内部同名目录，
                 // 那里 QuroLlmClient 也有兜底写入（QuroLlmClient.kt:441 的 ?: filesDir 分支）。

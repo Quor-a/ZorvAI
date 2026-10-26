@@ -463,7 +463,7 @@ class TerminalEnvironment(context: Context) {
               HOME=/root \
               TERM=xterm-256color \
               LANG=en_US.UTF-8 \
-              PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin \
+              PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:/root/.cargo/bin:/root/.local/bin \
               /bin/bash -lc "echo LOGIN_SUCCESSFUL; echo TERMINAL_READY; exec /bin/bash -il"
         }
         """.trimIndent().replace("@SB@", sharedStorageBindLines)
@@ -824,7 +824,11 @@ class TerminalEnvironment(context: Context) {
         val env = mutableMapOf(
             "HOME" to "/root",
             "PWD" to "/",
-            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/rust/bin:/usr/local/go/bin",
+            // 🔴 双 rootfs 合一（2026-10-27）：补 /root/.cargo/bin:/root/.local/bin ——
+            // rustup 装的 rust 在 rootfs 自家 /root/.cargo/bin（终端侧 /root 归属回归后），
+            // uv 装的工具在 /root/.local/bin。不加这两项，execGuest 通道里 rustc/cargo
+            // 以及 uv 工具「装了却 command not found」（与 AI 侧 PATH 对齐，见 QuroLinuxEnv）。
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/rust/bin:/usr/local/go/bin:/root/.cargo/bin:/root/.local/bin",
             "TERM" to "xterm-256color",
             "LANG" to "C.UTF-8",
             "DEBIAN_FRONTEND" to "noninteractive",
@@ -973,7 +977,7 @@ class TerminalEnvironment(context: Context) {
     fun startupDiagnostics(): String {
         val sb = StringBuilder()
         fun line(s: String) { sb.append(s).append("\r\n") }
-        line("==== ZorvAI 终端启动自检 B20261027-0010 ====")
+        line("==== ZorvAI 终端启动自检 B20261027-0121 ====")
         line("[1] os.arch=${System.getProperty("os.arch")} abis=${Build.SUPPORTED_ABIS.joinToString(",")} sdk=${Build.VERSION.SDK_INT}")
         val nld = File(nativeLibDir)
         line("[2] nativeLibDir=$nativeLibDir isDir=${nld.isDirectory}")

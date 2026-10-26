@@ -28,7 +28,7 @@ class QuroTerminalTool : QuroTool {
 应用内终端统一工具（原 10 个 terminal_* 工具合并为一个）。通过 action 分发，所有终端能力都在这里：
 
 - run: 应用沙盒内一次性执行 shell 命令（设备 sh，无 proot/Linux）。返回 JSON：{exit_code, success, timed_out, output}。务必检查 exit_code/success。
-- exec: 在应用内 Linux 环境（proot + Ubuntu）里执行命令；返回带 distro 字段标明实际跑在哪（ubuntu / device）。Ubuntu 走 proot/Linux（沿用已建立的 linux-sandbox/rootfs 工具链），不可用时回退设备 sh。返回 JSON：{distro, source, exit_code, success, timed_out, output}。务必检查 exit_code/success。
+- exec: 在应用内 Linux 环境（proot + Ubuntu）里执行命令；返回带 distro 字段标明实际跑在哪（ubuntu / device）。Ubuntu 走 proot/Linux（与可见终端/「环境配置」页共用同一个 rootfs，用户已装的环境对 AI 可见），未就绪时会自动在后台开始安装（优先解压内置 Ubuntu，零下载）并返回失败，稍候重试即可。返回 JSON：{distro, source, exit_code, success, timed_out, output}。务必检查 exit_code/success。
 - write: 向当前交互式终端会话写入一行输入并回车（等价于在提示符后敲回车）。需终端界面已打开且存在活动会话；常用于让 AI 替用户在终端里执行命令或喂给交互式程序（如 python REPL）。
 - kill: 结束当前交互式终端会话（销毁常驻 shell 进程）。
 - status: 返回终端会话状态（是否存在、模式、是否忙碌、cwd、last_exit、last_interrupted）与 Linux 环境就绪度（ubuntu_ready）及全部会话列表。

@@ -112,7 +112,8 @@ object QuroTerminalBridge {
      * guest 路径 → 宿主路径映射。
      *
      * proot 内与宿主侧的路径对应关系（与 [QuroLinuxEnv] 完全一致，避免读写错位）：
-     *  - `/root/…`、`/home/…` → `homePath`（容器内 /root 与宿主 sandbox-home 同一目录）
+     *  - `/root/…`、`/home/…` → `homePath`（容器内 /root 与宿主 homePath 同一目录；
+     *    双 rootfs 合一后即终端 rootfs/root，2026-10-27）
      *  - `/sdcard/…`、`/storage/emulated/0/…` → 共享存储（无全文件访问权限时返回 null）
      *  - 其余绝对路径 → `rootfsPath`
      *  - 相对路径 → 以 /root（home）为基准

@@ -83,9 +83,11 @@ object QuroHostBridge {
             "--bind=/dev",
             "--bind=/proc",
             "--bind=/sys",
-            "--bind=$home:/root",
             "--bind=$tmp:/tmp",
         )
+        // /root：双 rootfs 合一后 home 就在 rootfs 内（= <rootfs>/root），恒等 bind 跳过
+        // （见 QuroLinuxEnv.homeInsideRootfs）；rootfs 自身的 / 绑定已让 guest /root 落到同一目录。
+        if (!QuroLinuxEnv.homeInsideRootfs(context)) args.add("--bind=$home:/root")
         if (File("/system/build.prop").canRead()) args.add("--bind=/system/build.prop:/system/build.prop")
         args.add("-0")
         args.add("-w"); args.add("/root")
@@ -93,7 +95,11 @@ object QuroHostBridge {
         args.add("/qurohost"); args.add("/bin/sh")
         val env = mutableMapOf(
             "HOME" to "/root",
-            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${usrBinDir.absolutePath}",
+            // 🔴 双 rootfs 合一（2026-10-27）：与 QuroLinuxEnv.buildProotLaunch / shellEnv 的 PATH
+            // 对齐，补 cargo/go 与**用户级安装**（/root/.cargo/bin：rustup 装的 rust；
+            // /root/.local/bin：uv/pip --user 装的工具）。缺这两项时 host 子 shell 里
+            // 「环境配置页明明装过却 command not found」。
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:/root/.cargo/bin:/root/.local/bin:${usrBinDir.absolutePath}",
             "TERM" to "xterm-256color",
             "LANG" to "C.UTF-8",
             "LD_LIBRARY_PATH" to "${sandboxDir.absolutePath}:${usrBinDir.absolutePath}",
