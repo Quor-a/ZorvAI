@@ -250,6 +250,20 @@ class TerminalManager private constructor(
         return environment.initializeEnvironment()
     }
 
+    /**
+     * 委托终端链路解压内置 rootfs（双 rootfs 合一，2026-10-27）。
+     *
+     * AI 工具链（QuroLinuxEnv：terminal_exec / linux_run / linux_pkg …）与可见终端共用同一个
+     * rootfs（filesDir/usr/var/lib/proot-distro/installed-rootfs/ubuntu）——用户「环境已经安装
+     * 为什么 AI 没有找到」的根因就是两侧各有一个 rootfs。合一后 AI 侧的 setup 需要「零下载
+     * 解压内置 tarball」的能力，而该能力（prepareGuestRootfs → common.sh install_ubuntu）
+     * 在 [TerminalEnvironment] 内，此处直通，避免 app 侧直接依赖 terminal-core 内部类。
+     *
+     * 幂等：rootfs 已就绪时 install_ubuntu 直接返回，成本仅一次宿主 bash 进程启动。
+     * 阻塞式（内部 600s 上限），调用方必须处于后台线程——QuroLinuxEnv 的 scope 即 Dispatchers.IO。
+     */
+    fun ensureGuestRootfs(): Boolean = environment.prepareGuestRootfs()
+
     /** guest 环境的可用性等级。 */
     fun guestEnvStatus(distro: Distro = Distro.UBUNTU): com.ai.assistance.quro.terminal.runtime.GuestEnvStatus =
         environment.guestEnvStatus(distro)

@@ -28,7 +28,8 @@ class TerminalExecTool : QuroTool {
     override val name: String = "terminal_exec"
     override val description: String =
         "在应用内终端执行一条 shell 命令（如 ls / pwd / cat file / getprop / ps / python3 / 写文件）。" +
-            "应用内 Linux 环境就绪时经 proot+Ubuntu 执行（免 root），否则回退设备 Toybox shell。" +
+            "应用内 Linux 环境就绪时经 proot+Ubuntu 执行（免 root）；未就绪时会自动在后台开始安装" +
+            "（优先解压内置 Ubuntu，零下载）并返回失败，请稍候重试——不要因此改用设备 shell。" +
             "返回 JSON：{source, exit_code, success, timed_out, output}。" +
             "**务必检查 exit_code / success**，不要只看 output 就断定命令成功。"
     override val parametersJson: String =
@@ -40,8 +41,9 @@ class TerminalExecTool : QuroTool {
         QuroAgentTrace.action("terminal", "执行命令", cmd)
 
         val json = JSONObject()
-        // Ubuntu：优先沿用已建立的 QuroLinuxEnv(linux-sandbox/rootfs) 工具链（含 python3 等），
-        // 不可用时由 QuroTerminalController 回退执行（内部仍会尝试 proot，最终回退设备 sh）。
+        // Ubuntu：优先沿用已建立的 QuroLinuxEnv（双 rootfs 合一后即终端 rootfs：
+        // filesDir/usr/var/lib/proot-distro/installed-rootfs/ubuntu，含 python3 等完整命令，
+        // 且与「环境配置」页安装的开发环境同一个 rootfs）。
         val st = QuroLinuxEnv.probeLenient(context)
         if (st.available) {
             val (code, text) = QuroLinuxEnv.run(context, cmd)
@@ -52,15 +54,20 @@ class TerminalExecTool : QuroTool {
             json.put("timed_out", false)
             json.put("output", text)
         } else {
-            val r = QuroTerminalController.runCommand(cmd)
+            // 🔴 不再静默回退设备 Toybox（2026-10-27）：那会让 AI 把 Android toybox 的输出
+            // （缺绝大多数 Linux 命令）当成 Linux 结果，进而误判「环境没装/命令不存在」。
+            // 环境未就绪时触发一次性安装（优先解压内置 Ubuntu tarball，零下载），
+            // 并返回明确的失败 JSON 让 AI 稍后重试。
+            QuroLinuxEnv.setup(context)
             json.put("distro", "ubuntu")
-            json.put("source", "device/Toybox")
-            json.put("exit_code", r.exitCode)
-            json.put("success", r.success)
-            json.put("timed_out", r.timedOut)
-            json.put("output", r.output)
-            if (r.error.isNotEmpty()) json.put("error", r.error)
-            if (r.timedOut) json.put("hint", "命令在超时前未结束，已被强制终止；若是交互式或持续输出的命令请改用 terminal_write")
+            json.put("source", "unavailable")
+            json.put("exit_code", -1)
+            json.put("success", false)
+            json.put("timed_out", false)
+            json.put("output", "⏳ Linux 环境未就绪，已自动在后台开始安装（优先解压内置 Ubuntu，零下载）。" +
+                "请稍候（通常几十秒）后重试同一条命令。原因：${st.reason}")
+            json.put("hint", "环境就绪前不要改用设备 shell 重试；也不要断定命令不存在——" +
+                "就绪后同一命令会在 proot+Ubuntu 内执行。")
         }
 
         val out = json.toString()

@@ -28,6 +28,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.os.Build
 import com.ai.assistance.quro.core.scripting.SandboxRuntime
 import com.ai.assistance.quro.core.python.PyEngine
+import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 
@@ -696,18 +697,17 @@ class RunCodeTool : QuroTool {
             }
         }
 
-        // 2. 本应用自带 Linux 沙箱 Python 与系统 Python（不再依赖第三方 Termux 包路径）
-        val base = ctx.filesDir.absolutePath
-        val candidate = listOf(
-            "$base/linux-sandbox/usr/bin/python3",
-            "$base/linux-sandbox/usr/bin/python",
-            "python3",
-            "python"
-        ).firstOrNull { java.io.File(it).exists() }
-        if (candidate != null) {
-            val result = execShell(ctx, "$candidate -c ${quoteShell(code)}")
-            return result
+        // 2. 应用内 Linux 沙箱 python3（双 rootfs 合一，2026-10-27）
+        //    🔴 必须经 proot 执行：rootfs（= 终端 rootfs filesDir/usr/var/lib/proot-distro/…）里的
+        //    python3 是 aarch64 glibc 动态链接二进制，在 Android 宿主上直接 exec 必 ENOENT。
+        //    旧实现列 `$base/linux-sandbox/usr/bin/python3` 候选是死代码（aarch64 二进制本就不能
+        //    在宿主直跑，且该目录早已不存在）。就绪判复用 probeLenient（含 shell 存在性闸门）。
+        if (QuroLinuxEnv.probeLenient(ctx).available) {
+            val (code, text) = QuroLinuxEnv.run(ctx, "python3 -c ${quoteShell(code)}", timeoutMs = 180_000)
+            val body = text.trim()
+            return if (body.isBlank()) "(proot Ubuntu python3，退出码=$code，无输出)" else "退出码=$code\n$body"
         }
+
         val sys = execShell(ctx, "python3 -c ${quoteShell(code)}")
         if (!sys.contains("not found") && !sys.startsWith(qstr(R.string.qk_01012))) {
             return sys

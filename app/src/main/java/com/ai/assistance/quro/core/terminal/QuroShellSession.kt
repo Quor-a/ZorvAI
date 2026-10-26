@@ -561,7 +561,7 @@ class QuroShellSession private constructor(
         appendLine("  linux:delete  <名称>            删除指定快照（回收空间）")
         appendLine("  linux:help                      显示本帮助")
         appendLine("说明：")
-        appendLine("  · 快照对象 = 宿主侧 sandbox-home（proot 内即 /root 可写层），不含 Ubuntu 本体。")
+        appendLine("  · 快照对象 = /root 可写层（proot 内即容器 /root，宿主侧同一目录），不含 Ubuntu 本体。")
         appendLine("  · apt 装进 base rootfs 的二进制不在快照范围内（已知边界）。")
         appendLine("  · 回滚后若终端已打开，重启终端生效。")
     }.trimEnd()

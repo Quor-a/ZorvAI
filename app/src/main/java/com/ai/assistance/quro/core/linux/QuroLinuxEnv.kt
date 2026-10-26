@@ -29,6 +29,7 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.GZIPInputStream
 import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.core.linux.PackageManagerType
@@ -65,6 +66,8 @@ object QuroLinuxEnv {
     /** chroot 配置 SharedPreferences 键名。 */
     private const val PREFS_NAME = "quro_linux_env"
     private const val KEY_USE_CHROOT = "use_chroot"
+    /** legacy sandbox-home → 终端 rootfs/root 一次性迁移完成标记（双 rootfs 合一，2026-10-27）。 */
+    private const val KEY_LEGACY_HOME_MIGRATED = "legacy_home_migrated_v1"
 
     /**
      * dpkg/apt 锁检测与释放 prologue —— 所有经 proot 的 apt/dpkg 安装脚本都应先执行。
@@ -180,25 +183,122 @@ object QuroLinuxEnv {
 
     private fun sandboxDir(context: Context) = File(context.filesDir, "linux-sandbox")
 
-    fun rootfsPath(context: Context): String =
-        File(sandboxDir(context), "rootfs").absolutePath
+    /**
+     * rootfs 根目录（宿主侧路径）。
+     *
+     * 🔴 双 rootfs 合一（2026-10-27，用户真机实证「这些环境已经安装为什么 AI 没有找到」）：
+     * 历史上同时存在两个互不相通的 Ubuntu rootfs：
+     *  - **终端侧**（TerminalEnvironment / 环境配置页 SetupScreen）：
+     *    `filesDir/usr/var/lib/proot-distro/installed-rootfs/ubuntu`，由内置 tarball
+     *    （ubuntu-noble-aarch64-pd-v4.18.0.tar.xz）经 common.sh `install_ubuntu` 零下载解压
+     *    （usrmerge 布局，自带 bash/python3/apt/dpkg）。用户在「环境配置」页 apt 装的
+     *    node/python/java/go、rustup 装的 rust 全落在这里；
+     *  - **AI 工具链侧**（本对象：terminal_exec / linux_run / linux_pkg / PacketCaptureTool /
+     *    PythonRunTool / QuroHostBridge / QuroTerminalBridge）：`filesDir/linux-sandbox/rootfs`，
+     *    镜像下载的极简 Ubuntu Base，与终端 rootfs 零交集。
+     * 用户在环境配置页看到 5 个环境全部「✓ 已安装」，AI 却在另一个 rootfs 里跑命令，
+     * 自然「找不到」；rust 更隐蔽——rustup 装进终端 rootfs 自家的 `/root/.cargo`，
+     * 而旧实现把外部 `sandbox-home` 绑成 `/root`，双重遮蔽（根因两半叠加 = 用户症状）。
+     *
+     * 合一方向 = **以终端 rootfs 为唯一 rootfs**：内置 tarball 零解压成本、且已是用户安装
+     * 开发环境的实际落地处；终端侧 2026-10-26 已做「/root 归属回归」，方向一致。
+     * 本函数改指终端 rootfs 后，全部消费方（run / shellLaunch / QuroHostBridge /
+     * PacketCaptureTool / PythonRunTool / QuroTerminalBridge / QuroShellSession / 终端 Reaper …）
+     * 自动跟随，无需逐个改。旧路径 `linux-sandbox/rootfs` 不再读写，作为孤儿保留
+     * （数据安全优先，不主动删）。
+     */
+    fun rootfsPath(context: Context): String = File(
+        File(File(File(context.filesDir, "usr"), "var/lib/proot-distro"), "installed-rootfs"),
+        "ubuntu",
+    ).absolutePath
 
     /**
      * /root 绑定目录（宿主侧路径；proot 内即 /root，二者必须始终同一目录，否则 CMS 模块/venv/引擎
      * 在宿主与容器间读写错位）。
      *
-     * 早期实现绑外部存储 `getExternalFilesDir(null)/sandbox-home`，但外部 FUSE/sdcardfs 对 proot 子进程
-     * 有写入与符号链接限制（SELinux 域 + FUSE 不支持 symlink）：容器内 /root 实际不可写，导致
-     * `python3 -m venv /root/cms-venv` 静默失败、CMS 引擎目录(/root/cms/_engine)建不了，表现就是
-     * 「Python 未注册 / PYTHON·NODE 共享引擎未拉起」（用户诊断出的 /root ACL/权限限制根因）。
-     * 改为绑 **app 内部存储**（sandboxDir/sandbox-home，真实 ext4/f2fs，支持符号链接与完整 Unix 权限，
-     * 与 proot 进程同 UID 同 SELinux 域，可自由读写），思路同 Termux 的 $PREFIX。宿主 homePath 与容器
-     * /root 仍同一目录，CMS 模块/venv/引擎读写一致。
+     * 🔴 双 rootfs 合一（2026-10-27）：随 [rootfsPath] 改指终端 rootfs，/root 归还 rootfs 内自带家
+     * （`<终端 rootfs>/root`），与终端侧 2026-10-26「/root 归属回归」决策对齐——终端
+     * login_ubuntu / execGuest 都已只把共享 home 绑到 `/root/shared`、/root 用 rootfs 自家。
+     * 这样 rustup 装进的 `/root/.cargo`、uv 装进的 `/root/.local/bin` 对 AI 直接可见
+     * （配合 PATH 补 `/root/.cargo/bin:/root/.local/bin`，见 [buildProotLaunch]/[shellEnv]）。
+     *
+     * **一次性迁移**：合一前 /root 绑的是 `linux-sandbox/sandbox-home`（AI 侧 venv / CMS 引擎 /
+     * 项目数据都在里面）。首次 rootfs 就绪后调用本函数时，把 legacy 顶层条目拷进新 /root
+     * （目标已存在则跳过，保留符号链接）；legacy 目录保留作备份不删。
+     * pref flag + 内存标志双保险防重复迁移。
+     *
+     * 🔴 绝不主动 mkdirs 造空 rootfs：rootfs 尚未解压时创建 `<rootfs>/root` 会让 common.sh
+     * `install_ubuntu` 的就绪判据（`ls -A` 非空即已安装）误判为已安装 → 跳过解压 →
+     * 永久残骸 rootfs。故仅当 rootfs 已真实非空时才建目录/触发迁移。
      */
     fun homePath(context: Context): String {
-        val target = File(sandboxDir(context), "sandbox-home")
-        target.mkdirs()
+        val rootfs = File(rootfsPath(context))
+        val target = File(rootfs, "root")
+        if (rootfs.isDirectory && rootfs.listFiles()?.isNotEmpty() == true) {
+            runCatching { target.mkdirs() }
+            migrateLegacyHomeOnce(context, target)
+        }
         return target.absolutePath
+    }
+
+    private val legacyHomeLock = Any()
+    private val legacyHomeMigrated = AtomicBoolean(false)
+
+    /**
+     * /root（[homePath]）是否就在 rootfs 内 —— 双 rootfs 合一后的**常态**。
+     *
+     * 合一前 home 在 rootfs 外（linux-sandbox/sandbox-home），必须显式 `--bind=$home:/root`；
+     * 合一后 home = `<rootfs>/root`，`--bind=$home:/root` 退化成「把自己绑给自己」的恒等 bind：
+     *  - proot 侧：rootfs 自身的 `/ → $rootfs` 绑定已让 guest /root 解析到同一目录，
+     *    重复绑定只会触发 proot 的 binding 冲突检测/重排（告警且行为不可预期）；
+     *  - chroot 侧：`mount -o bind $home $rootfs/root` 是恒等 bind mount，同样多余。
+     * 故各启动路径在 home 落于 rootfs 内时**跳过**该 bind，语义完全不变。
+     */
+    fun homeInsideRootfs(context: Context): Boolean {
+        val rootfs = runCatching { File(rootfsPath(context)).canonicalPath }.getOrNull() ?: return false
+        val home = runCatching { File(homePath(context)).canonicalPath }.getOrNull() ?: return false
+        return home == rootfs || home.startsWith(rootfs + File.separator)
+    }
+
+    /**
+     * 一次性迁移 legacy `linux-sandbox/sandbox-home` → 新 /root（终端 rootfs/root）。
+     *
+     * 只搬顶层条目（venv / cms / 项目目录整体拷，保留符号链接），目标已存在则跳过；
+     * legacy 目录保留不删（出问题可人工找回）。任何单条目失败只跳过它自己，不影响其余。
+     */
+    private fun migrateLegacyHomeOnce(context: Context, newHome: File) {
+        if (legacyHomeMigrated.get()) return
+        synchronized(legacyHomeLock) {
+            if (legacyHomeMigrated.get()) return
+            val prefs = runCatching {
+                context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+            }.getOrNull()
+            if (prefs?.getBoolean(KEY_LEGACY_HOME_MIGRATED, false) == true) {
+                legacyHomeMigrated.set(true)
+                return
+            }
+            val legacy = File(sandboxDir(context), "sandbox-home")
+            if (legacy.isDirectory) {
+                val entries = legacy.listFiles()
+                if (!entries.isNullOrEmpty()) {
+                    Log.i(TAG, "legacy home 迁移开始：${entries.size} 个顶层条目 → ${newHome.absolutePath}")
+                    var copied = 0
+                    entries.forEach { e ->
+                        val dst = File(newHome, e.name)
+                        if (!dst.exists()) {
+                            runCatching { copyTreePreservingSymlinks(e, dst) }
+                                .onSuccess { copied++ }
+                                .onFailure {
+                                    Log.w(TAG, "legacy home 迁移跳过条目 ${e.name}: ${it.message}")
+                                }
+                        }
+                    }
+                    Log.i(TAG, "legacy home 迁移完成：拷贝 $copied/${entries.size} 个条目（已存在/失败跳过，legacy 保留作备份）")
+                }
+            }
+            prefs?.edit()?.putBoolean(KEY_LEGACY_HOME_MIGRATED, true)?.apply()
+            legacyHomeMigrated.set(true)
+        }
     }
 
     fun tmpPath(context: Context): String =
@@ -234,10 +334,11 @@ object QuroLinuxEnv {
      * 于是构建台产物（filesDir/buildproject）、AI 经 workspace 工具写的数据在容器里
      * 一律「不存在」，ls/cat 全落空。缺的只是启动参数里的一个 `-b`，不是 Android 限制。
      *
-     * ⚠️ 已知边界：rootfs 自身位于 filesDir/linux-sandbox/rootfs，故容器内
-     * `/quro/linux-sandbox/rootfs` 就是沙箱自己（自包含挂载）。proot 的路径翻译是
-     * 有限深度前缀替换，不会死循环；但 `du /quro` / `find /quro` 会把 rootfs
-     * 重复计入一遍，属预期内损耗。
+     * ⚠️ 已知边界：双 rootfs 合一（2026-10-27）后 rootfs 位于
+     * `filesDir/usr/var/lib/proot-distro/installed-rootfs/ubuntu`，仍在 filesDir 内，
+     * 故容器内 `/quro/usr/var/lib/proot-distro/installed-rootfs/ubuntu` 就是沙箱自己
+     * （自包含挂载）。proot 的路径翻译是有限深度前缀替换，不会死循环；但 `du /quro` /
+     * `find /quro` 会把 rootfs 重复计入一遍，属预期内损耗。
      */
     const val APP_PRIVATE_MOUNT = "/quro"
 
@@ -408,6 +509,20 @@ object QuroLinuxEnv {
         if (!rootfs.isDirectory || (rootfs.listFiles()?.isEmpty() != false)) {
             return EnvStatus(false, prootPathStr, null, "rootfs 目录缺失或为空（${rootfs.absolutePath}）")
         }
+        // 🔴 shell 存在性闸门（双 rootfs 合一，2026-10-27）：rootfsPath 改指终端 rootfs 后，
+        // homePath()/CmsEngineDeployer 等消费方的 mkdirs 可能在 rootfs 尚未解压时造出
+        // `.../ubuntu/root`（甚至 `.../ubuntu/root/cms/_engine`）——目录非空但没有任何 shell，
+        // 旧判据会放行 → proot 启动即失败。故宽松探测也要求至少一个 shell 真实存在
+        // （usrmerge 布局下 /bin 多是指向 usr/bin 的符号链接，四条路径都要查）。
+        val hasShell = listOf("bin/sh", "usr/bin/sh", "bin/bash", "usr/bin/bash")
+            .any { File(rootfs, it).exists() }
+        if (!hasShell) {
+            return EnvStatus(
+                false, prootPathStr, null,
+                "rootfs 内未找到 shell（bin/sh|usr/bin/sh|bin/bash|usr/bin/bash 均不存在），" +
+                    "rootfs 可能尚未解压完成或只剩空目录骨架: ${rootfs.absolutePath}",
+            )
+        }
         // 存在即认为可用；可执行位/符号链接问题交给 proot 自己暴露。
         val strict = probe(context)
         if (!strict.available) {
@@ -553,6 +668,16 @@ object QuroLinuxEnv {
         if (!rootfs.isDirectory) {
             Log.w(TAG, "installDevToolchain: rootfs 不存在，跳过")
             return false
+        }
+        // 🔴 双 rootfs 合一（2026-10-27）早退：终端 tarball rootfs（ubuntu-noble-aarch64-pd）本身
+        // 就带 python3，且「环境配置」页是开发环境的唯一责任人（用户已在那按需装好各语言）。
+        // 不早退会在这里自动装 build-essential + ffmpeg（数百 MB）造成意外 churn，
+        // 也与用户已在环境配置页装好的东西重复/冲突。缺 python3 的极简 rootfs 仍走原安装逻辑。
+        val hasPython3 = File(rootfs, "usr/bin/python3").exists() || File(rootfs, "bin/python3").exists()
+        if (hasPython3) {
+            Log.i(TAG, "installDevToolchain: rootfs 已自带 python3（终端 tarball 完整 rootfs），" +
+                "开发环境交由「环境配置」页按需安装，跳过自动安装")
+            return true
         }
         val marker = File(rootfs, DEVTOOLS_MARKER)
         if (marker.exists()) {
@@ -769,7 +894,8 @@ object QuroLinuxEnv {
     }
 
     // ═══ 沙箱快照 / 回滚（P2 快照 · 支撑 P3 回滚）═══
-    // 快照对象 = 宿主侧 sandbox-home（proot 内即 /root 的可写层）：用户 venv / CMS 引擎 / 配置 / 项目文件。
+    // 快照对象 = [homePath]（proot 内即 /root 的可写层；双 rootfs 合一后 = 终端 rootfs/root）：
+    // 用户 venv / CMS 引擎 / 配置 / 项目文件。
     // 不快照 base rootfs（Ubuntu 本体，只读大体积）；apt 装进 base 的二进制不在快照范围，属已知边界。
 
     /** 快照根目录：sandboxDir/snapshots/<name>。 */
@@ -809,8 +935,8 @@ object QuroLinuxEnv {
     }
 
     /**
-     * 回滚到指定快照：复制快照到临时区 → 原子替换当前 sandbox-home。
-     * 失败时当前 sandbox-home 保持不变（临时区为独立副本，替换前不删除原数据）。
+     * 回滚到指定快照：复制快照到临时区 → 原子替换当前 /root（[homePath]）。
+     * 失败时当前 /root 保持不变（临时区为独立副本，替换前不删除原数据）。
      * @return 人类可读的结果文案
      */
     fun rollbackSandbox(context: Context, name: String): String {
@@ -1060,8 +1186,216 @@ object QuroLinuxEnv {
             else QuroDiag.log("LinuxEnv", "⚠ nativeLibraryDir 无 libtalloc.so，libproot-loader 可能加载失败")
         }
 
-        val rootfsDir = File(dir, "rootfs")
-        if (rootfsDir.exists()) rootfsDir.deleteRecursively()
+        // 🔴 双 rootfs 合一（2026-10-27）：rootfs 统一指向终端 rootfs（见 [rootfsPath] 文档）。
+        // 优先委托终端链路用**内置 tarball 零下载解压**（common.sh install_ubuntu，与终端 /
+        // 环境配置页同一个 rootfs —— 用户在那装的 node/python/java/go/rust 就此对 AI 可见）；
+        // 委托失败（瘦身包无内置 tarball / 解压失败）才回退旧的「网络下载极简 rootfs」路径。
+        val rootfsDir = File(rootfsPath(context))
+        val fromTerminal = ensureTerminalRootfs(context, rootfsDir)
+        if (!fromTerminal) {
+            diagLog(context, "终端链路未提供 rootfs，回退网络下载路径: ${rootfsDir.absolutePath}")
+            if (rootfsDir.exists()) rootfsDir.deleteRecursively()
+            downloadAndExtractRootfs(context, dir, rootfsDir, arch)
+        } else {
+            diagLog(context, "✅ 复用终端 rootfs（内置 tarball 解压，零下载）: ${rootfsDir.absolutePath}")
+        }
+
+        // 解压后立即校验 rootfs 真可用：/bin/sh 必须能在 rootfs 内部解析为可执行文件。
+        diagLog(context, "rootfs 就绪，rootfsDir=${rootfsDir.absolutePath}, 文件数=${rootfsDir.listFiles()?.size ?: 0}")
+        // 终端 rootfs 的就绪由 install_ubuntu 自己校验（bash + os-release|issue.net），
+        // 此处只提示不删不抛——它是终端侧共享资产，删了会连带废掉可见终端。
+        if (!fromTerminal && !rootfsBinRunnable(rootfsDir, "bin/sh")) {
+            val detail = "rootfs 解压后 /bin/sh 无法在 rootfs 内解析（解压残缺或符号链接创建失败），无法启动 Ubuntu"
+            diagLog(context, "⛔ $detail")
+            QuroDiag.log("LinuxEnv", "⛔ $detail")
+            rootfsDir.deleteRecursively()
+            throw IllegalStateException(detail)
+        }
+        diagLog(context, "✅ /bin/sh 校验通过")
+
+        _state.value = SandboxState.Installing("初始化…")
+        if (!fromTerminal) {
+            // 下载路径（极简 ubuntu-base）才需要权限/硬链接修复；终端 tarball 由宿主 bash + tar
+            // 解压，权限与硬链接天然正确，且全树 walk 在 1GB+ rootfs 上要几十秒，故跳过。
+            diagLog(context, "makeWritable 开始")
+            makeWritable(rootfsDir)
+            diagLog(context, "fixHardlinks 开始")
+            fixHardlinks(rootfsDir)
+        }
+
+        // 创建 usr/bin/ 目录和符号链接（参考上游 proot 实现）
+        diagLog(context, "创建 usr/bin/ 符号链接")
+        createUsrBinSymlinks(context, dir)
+
+        diagLog(context, "prepareRuntimeExtras 开始")
+        prepareRuntimeExtras(context, rootfsDir)
+
+        // 把 proot 打进 rootfs：容器内自持容器运行时（ULFA 零外部依赖）
+        diagLog(context, "installProotIntoRootfs 开始")
+        installProotIntoRootfs(context, rootfsDir)
+
+        // 先做一次 proot 基础能力测试（在 apt-get update 之前）
+        diagLog(context, "proot 基础测试：echo hello")
+        val baseTest = runProot(context, "echo PROOT_BASELINE_OK", timeoutMs = 15_000)
+        diagLog(context, "proot 基础测试结果: exit=${baseTest.first}, output=${baseTest.second.take(200)}")
+        if (baseTest.first != 0 || !baseTest.second.contains("PROOT_BASELINE_OK")) {
+            val detail = "proot 无法在 rootfs 内执行基础命令。\n" +
+                "proot路径: ${prootPath(context)}, exists=${File(prootPath(context)).exists()}\n" +
+                "proot可执行: ${File(prootPath(context)).canExecute()}\n" +
+                "rootfs: ${rootfsDir.absolutePath}, 文件数=${rootfsDir.listFiles()?.size}\n" +
+                "输出(exit ${baseTest.first}):\n${baseTest.second.take(800)}\n" +
+                "常见原因：1) proot loader 缺失或不兼容 2) SELinux 限制 ptrace 3) 设备不支持"
+            diagLog(context, "⛔ $detail")
+            QuroDiag.log("LinuxEnv", "⛔ $detail")
+            // 终端 rootfs 是终端侧共享资产：删了会连带废掉可见终端。fromTerminal 模式只告警不删不抛，
+            // 让后续 apt/smoke 步骤与真实启动去暴露错误（下载路径保留原严格语义）。
+            if (!fromTerminal) {
+                rootfsDir.deleteRecursively()
+                throw IllegalStateException(detail)
+            }
+            Log.w(TAG, "终端 rootfs 模式：proot 基础测试失败，继续（不删 rootfs）")
+        }
+        diagLog(context, "✅ proot 基础测试通过")
+
+        // 设置伪造系统数据（Android 限制了部分 /proc，Linux 程序需要）
+        diagLog(context, "设置伪造系统数据 (setup_fake_sysdata)")
+        setupFakeSysdata(context, rootfsDir)
+
+        // 修复 Android 权限兼容性（添加 Android 组 ID 到 /etc/group）
+        diagLog(context, "修复 Android 权限 (fix_permissions)")
+        fixPermissions(context, rootfsDir)
+
+        // 写 DNS / CA 证书 / nsswitch / 基础文件（联网修复：resolv.conf 用设备真实 DNS + 公共兜底；
+        // 最小 rootfs 无 ca-certificates，SSL 证书来自 Android 系统 CA 库；nsswitch 保证 getaddrinfo 查 DNS；
+        // hosts/timezone/apt keyrings 补齐基础环境）
+        diagLog(context, "写入 resolv.conf / CA 证书 / nsswitch / 基础文件")
+        writeResolvConf(rootfsDir, context)
+        syncCaCerts(context, rootfsDir)
+        ensureNsswitch(rootfsDir)
+        setupMiscFiles(context, rootfsDir)
+        // 绕过被阻断的 53 端口 DNS：宿主侧解析关键主机名写进 /etc/hosts，使 apt-get update 按 IP 直连；
+        // 再走应用层 DoH（443）解析镜像 IP 覆盖同一份 hosts，作为更彻底的 53 绕行兜底
+        bootstrapHosts(context, rootfsDir)
+        bootstrapHostsByDoH(context, rootfsDir)
+
+        var updated = false
+        var lastErr = ""
+        
+        // 优先使用用户选择的镜像源
+        val userMirror = getSelectedAptMirror(context)
+        diagLog(context, "使用用户选择的镜像源: $userMirror")
+        writeAptSources(rootfsDir, userMirror)
+        var r = runProot(context, "apt-get update -o Acquire::http::No-Cache=true -o Acquire::Max-FutureTime=0 -o Acquire::ForceIPv4=true", timeoutMs = 180_000)
+        diagLog(context, "apt-get update 结果: exit=${r.first}, output=${r.second.take(500)}")
+        if (r.first == 0) {
+            updated = true
+        } else {
+            lastErr = r.second
+            Log.w(TAG, "apt-get update 失败 (用户镜像: $userMirror): ${r.second.take(500)}")
+            
+            // 用户镜像失败时，回退到默认列表
+            for (mirror in UBUNTU_APT_MIRRORS) {
+                diagLog(context, "尝试 apt-get update (镜像: $mirror)")
+                writeAptSources(rootfsDir, mirror)
+                r = runProot(context, "apt-get update -o Acquire::http::No-Cache=true -o Acquire::Max-FutureTime=0 -o Acquire::ForceIPv4=true", timeoutMs = 180_000)
+                diagLog(context, "apt-get update 结果: exit=${r.first}, output=${r.second.take(500)}")
+                if (r.first == 0) { updated = true; break }
+                lastErr = r.second
+                Log.w(TAG, "apt-get update 失败 (镜像: $mirror): ${r.second.take(500)}")
+            }
+        }
+        if (!updated) {
+            val detail = "apt-get update 在所有镜像均失败。\n$lastErr"
+            diagLog(context, "⛔ $detail")
+            QuroDiag.log("LinuxEnv", "⛔ $detail")
+            // 终端 rootfs 是终端侧共享资产：删了会连带废掉可见终端，且用户完全可以在
+            // 「环境配置」页里重试 apt。故 fromTerminal 模式只告警不删不抛。
+            if (!fromTerminal) {
+                rootfsDir.deleteRecursively()
+                throw IllegalStateException(detail)
+            }
+            Log.w(TAG, "终端 rootfs 模式：apt-get update 失败，继续（rootfs 仍可用于已解压的命令）")
+        }
+        diagLog(context, "✅ apt-get update 成功")
+
+        // bash 是持久 shell 的基础，必须装。同时补齐联网/开发必需的底层库（ca-certificates 让 HTTPS 源与
+        // pip/npm 信任链可用；libcurl4 是多数编译/开发工具依赖；curl/wget 便于下载验证）。
+        // ★ 真因修复：apt-get update 带了 ForceIPv4 成功，但 install 不带会走 IPv6 拉 .deb 包，
+        // 真机 5G 下 connection-reset → exit 100（截图实证「update 成功、install 失败」）。
+        // 故 install 强制 ForceIPv4，并按镜像回退重试（先 rewrite sources + update 再装），--fix-missing 容单包 404。
+        _state.value = SandboxState.Installing("安装 bash / ca-certificates / libcurl4…")
+        diagLog(context, "安装基础包 (ForceIPv4 + 镜像回退 + 逐包回退)...")
+        // issue #11 问题7：整批失败时逐包回退——单个包「源不可用」不再葬送整个环境
+        val bash = aptInstallBasePackages(context, rootfsDir, "bash ca-certificates libcurl4 curl wget", userMirror, 240_000)
+        diagLog(context, "基础包安装结果: exit=${bash.first}, 摘要=\n${bash.second.take(60 * 120)}")
+        if (bash.first != 0) {
+            val detail = "基础包安装失败（exit ${bash.first}）：\n${bash.second}"
+            diagLog(context, "⛔ $detail")
+            QuroDiag.log("LinuxEnv", "⛔ $detail")
+            if (!fromTerminal) throw IllegalStateException(detail)
+            Log.w(TAG, "终端 rootfs 模式：基础包安装失败，继续（tarball rootfs 已自带 bash/ca-certificates）")
+        }
+        diagLog(context, "✅ 基础包安装成功")
+
+        // ★ 补齐开发工具链（python3 / ffmpeg / node / npm / git 等）：ubuntu-base 极简 rootfs 不含这些包，
+        // 而完整 Ubuntu 发行版自带这些包。此处显式安装，使 QuroAI 终端开箱即有完整 Linux 命令，
+        // 对齐「终端所有命令都能用」的体验。已装过（marker 存在）会自动跳过。
+        //
+        // 🔴 双 rootfs 合一：fromTerminal 模式**跳过**自动安装——终端 tarball rootfs 已含 python3，
+        // 且「环境配置」页是开发环境的唯一责任人（用户已在那装好 node/python/java/go/rust）。
+        // 在这里再自动装 build-essential + ffmpeg（数百 MB）会造成意外 churn 与用户困惑。
+        if (!fromTerminal) {
+            _state.value = SandboxState.Installing("安装开发工具链 (python3/ffmpeg/node/git)…")
+            diagLog(context, "安装开发工具链: $DEVTOOLS_CORE (+可选 $DEVTOOLS_OPTIONAL)")
+            installDevToolchain(context)
+        } else {
+            diagLog(context, "终端 rootfs 模式：跳过开发工具链自动安装（由「环境配置」页按需安装；tarball rootfs 已含 python3）")
+        }
+
+        // 通用 DNS（绕开被阻断的 53 端口）：装 dnscrypt-proxy（向上走 DoH/DNSCrypt 443 解析任意域名）。
+        // 非致命——装不上则退化到 /etc/hosts 预列主机，不影响既有流程。
+        _state.value = SandboxState.Installing("安装 dnscrypt-proxy（通用 DNS）…")
+        diagLog(context, "安装 dnscrypt-proxy...")
+        val dnsp = runProot(context, "apt-get install -y --no-install-recommends dnscrypt-proxy", timeoutMs = 180_000)
+        diagLog(context, "dnscrypt-proxy 安装结果: exit=${dnsp.first}, output=${dnsp.second.take(200)}")
+        if (dnsp.first == 0) {
+            diagLog(context, "启动 DoH 代理（通用 DNS）...")
+            ensureDnsProxy(context, rootfsDir)
+        } else {
+            diagLog(context, "dnscrypt-proxy 安装失败，通用 DNS 跳过（/etc/hosts 兜底）")
+        }
+
+        // ★ 部署后自检
+        _state.value = SandboxState.Installing("自检 proot 运行环境…")
+        diagLog(context, "smoke test: echo + id + apt-get --version")
+        val smoke = runProot(context, "echo QURO_SMOKETEST_OK; id -u; apt-get --version", timeoutMs = 30_000)
+        diagLog(context, "smoke test 结果: exit=${smoke.first}, output=${smoke.second.take(500)}")
+        if (smoke.first != 0 || !smoke.second.contains("QURO_SMOKETEST_OK")) {
+            val detail = "部署后自检失败：proot 在您的设备上无法在 rootfs 内执行命令。\n" +
+                "自检输出（exit ${smoke.first}）：\n${smoke.second.take(800)}"
+            diagLog(context, "⛔ $detail")
+            QuroDiag.log("LinuxEnv", "⛔ $detail")
+            // 同 apt 失败分支：终端 rootfs 是共享资产，fromTerminal 模式不删不抛，交给启动时报错。
+            if (!fromTerminal) {
+                rootfsDir.deleteRecursively()
+                throw IllegalStateException(detail)
+            }
+            Log.w(TAG, "终端 rootfs 模式：smoke test 失败，继续（不删 rootfs，实际启动时会暴露真实错误）")
+        }
+
+        diagLog(context, "=== ✅ 部署成功 ===")
+        _state.value = SandboxState.Ready
+        // 持久化「曾安装」标记：即使后续 rootfs 被系统清理，重检时也能识别为「丢失」并提示一键恢复。
+        markInstalled(context)
+    }
+
+    /**
+     * 旧路径（双 rootfs 合一前的原始安装方式）：网络下载极简 Ubuntu base rootfs 并解压到
+     * [rootfsDir]。仅当终端链路（内置 tarball 解压）不可用时回退到此，见 [ensureTerminalRootfs]。
+     *
+     * xz 优先、gz 兜底；两种都失败抛 IOException（由 [setup] 统一转 Error 态 + 诊断落盘）。
+     */
+    private suspend fun downloadAndExtractRootfs(context: Context, dir: File, rootfsDir: File, arch: String) {
         val tarGz = File(dir, "rootfs.tar.gz")
         val tarXz = File(dir, "rootfs.tar.xz")
         var extractSuccess = false
@@ -1122,165 +1456,61 @@ object QuroLinuxEnv {
             tarGz.delete()
             tarXz.delete()
         }
+    }
 
-        // 解压后立即校验 rootfs 真可用：/bin/sh 必须能在 rootfs 内部解析为可执行文件。
-        diagLog(context, "解压完成，rootfsDir=${rootfsDir.absolutePath}, 文件数=${rootfsDir.listFiles()?.size ?: 0}")
-        if (!rootfsBinRunnable(rootfsDir, "bin/sh")) {
-            val detail = "rootfs 解压后 /bin/sh 无法在 rootfs 内解析（解压残缺或符号链接创建失败），无法启动 Ubuntu"
-            diagLog(context, "⛔ $detail")
-            QuroDiag.log("LinuxEnv", "⛔ $detail")
-            rootfsDir.deleteRecursively()
-            throw IllegalStateException(detail)
+    /**
+     * 终端 rootfs 就绪判据（与 terminal-core `TerminalEnvironment.isRootfsReady` /
+     * common.sh `install_ubuntu` 的就绪口径严格一致：bash + 发行版身份文件）。
+     *
+     * 本地实现一份而不直接调 terminal-core：避免 app 模块对 terminal-core 内部类产生编译期依赖
+     * （QuroLinuxEnv 已被 AI 工具链在无终端 UI 的场景引用），同时判据变化时两边都看得见。
+     */
+    private fun isTerminalRootfsReady(rootfsDir: File): Boolean {
+        val hasBash = File(rootfsDir, "bin/bash").exists() || File(rootfsDir, "usr/bin/bash").exists()
+        val hasIdentity = File(rootfsDir, "etc/os-release").exists() || File(rootfsDir, "etc/issue.net").exists()
+        return hasBash && hasIdentity
+    }
+
+    /**
+     * 委托终端链路准备 rootfs（双 rootfs 合一，2026-10-27）。
+     *
+     * 终端侧（TerminalEnvironment）持有内置 tarball（ubuntu-noble-aarch64-pd-v4.18.0.tar.xz）
+     * 与 `install_ubuntu` 解压逻辑，是 rootfs 的**唯一责任人**；AI 工具链侧不再自己下载，
+     * 而是委托同一链路解压到同一目录，从根上消灭「两个 rootfs」。
+     *
+     * 步骤：
+     *  1. 已就绪（[isTerminalRootfsReady]）→ 直接复用，零成本；
+     *  2. 否则 `TerminalManager.initializeEnvironment()`（补拷 tarball / 写 common.sh /
+     *     残骸 rootfs 自愈 / 链宿主 bash）→ `ensureGuestRootfs()`（宿主 bash 跑
+     *     `source common.sh && install_ubuntu`，零下载解压，600s 上限）；
+     *  3.  再判一次就绪。
+     *
+     * @return true = 终端 rootfs 已就绪（调用方跳过下载路径，post-steps 走 best-effort）；
+     *         false = 终端链路无法提供 rootfs（瘦身包无 tarball / 宿主 bash 缺失 / 解压失败），
+     *         调用方回退旧的网络下载路径。
+     */
+    private suspend fun ensureTerminalRootfs(context: Context, rootfsDir: File): Boolean {
+        if (isTerminalRootfsReady(rootfsDir)) {
+            diagLog(context, "终端 rootfs 已就绪，直接复用: ${rootfsDir.absolutePath}")
+            return true
         }
-        diagLog(context, "✅ /bin/sh 校验通过")
-
-        _state.value = SandboxState.Installing("初始化…")
-        diagLog(context, "makeWritable 开始")
-        makeWritable(rootfsDir)
-        diagLog(context, "fixHardlinks 开始")
-        fixHardlinks(rootfsDir)
-
-        // 创建 usr/bin/ 目录和符号链接（参考上游 proot 实现）
-        diagLog(context, "创建 usr/bin/ 符号链接")
-        createUsrBinSymlinks(context, dir)
-
-        diagLog(context, "prepareRuntimeExtras 开始")
-        prepareRuntimeExtras(context, rootfsDir)
-
-        // 把 proot 打进 rootfs：容器内自持容器运行时（ULFA 零外部依赖）
-        diagLog(context, "installProotIntoRootfs 开始")
-        installProotIntoRootfs(context, rootfsDir)
-
-        // 先做一次 proot 基础能力测试（在 apt-get update 之前）
-        diagLog(context, "proot 基础测试：echo hello")
-        val baseTest = runProot(context, "echo PROOT_BASELINE_OK", timeoutMs = 15_000)
-        diagLog(context, "proot 基础测试结果: exit=${baseTest.first}, output=${baseTest.second.take(200)}")
-        if (baseTest.first != 0 || !baseTest.second.contains("PROOT_BASELINE_OK")) {
-            val detail = "proot 无法在 rootfs 内执行基础命令。\n" +
-                "proot路径: ${prootPath(context)}, exists=${File(prootPath(context)).exists()}\n" +
-                "proot可执行: ${File(prootPath(context)).canExecute()}\n" +
-                "rootfs: ${rootfsDir.absolutePath}, 文件数=${rootfsDir.listFiles()?.size}\n" +
-                "输出(exit ${baseTest.first}):\n${baseTest.second.take(800)}\n" +
-                "常见原因：1) proot loader 缺失或不兼容 2) SELinux 限制 ptrace 3) 设备不支持"
-            diagLog(context, "⛔ $detail")
-            QuroDiag.log("LinuxEnv", "⛔ $detail")
-            rootfsDir.deleteRecursively()
-            throw IllegalStateException(detail)
+        diagLog(context, "终端 rootfs 未就绪，委托终端链路解压（内置 tarball，零下载）...")
+        val ok = runCatching {
+            val tm = com.ai.assistance.quro.terminal.TerminalManager.getInstance(context)
+            // prepareGuestRootfs 依赖 common.sh（由 initializeEnvironment 生成）→ 必须先初始化。
+            // 它顺带做 extractAssets（补拷 tarball）+ ensureRootfsComplete（残骸自愈）+ linkNativeLibs。
+            tm.initializeEnvironment()
+            tm.ensureGuestRootfs()
+        }.getOrElse {
+            Log.w(TAG, "委托终端解压异常（回退下载路径）: ${it.message}")
+            false
         }
-        diagLog(context, "✅ proot 基础测试通过")
-
-        // 设置伪造系统数据（Android 限制了部分 /proc，Linux 程序需要）
-        diagLog(context, "设置伪造系统数据 (setup_fake_sysdata)")
-        setupFakeSysdata(context, rootfsDir)
-
-        // 修复 Android 权限兼容性（添加 Android 组 ID 到 /etc/group）
-        diagLog(context, "修复 Android 权限 (fix_permissions)")
-        fixPermissions(context, rootfsDir)
-
-        // 写 DNS / CA 证书 / nsswitch / 基础文件（联网修复：resolv.conf 用设备真实 DNS + 公共兜底；
-        // 最小 rootfs 无 ca-certificates，SSL 证书来自 Android 系统 CA 库；nsswitch 保证 getaddrinfo 查 DNS；
-        // hosts/timezone/apt keyrings 补齐基础环境）
-        diagLog(context, "写入 resolv.conf / CA 证书 / nsswitch / 基础文件")
-        writeResolvConf(rootfsDir, context)
-        syncCaCerts(context, rootfsDir)
-        ensureNsswitch(rootfsDir)
-        setupMiscFiles(context, rootfsDir)
-        // 绕过被阻断的 53 端口 DNS：宿主侧解析关键主机名写进 /etc/hosts，使 apt-get update 按 IP 直连；
-        // 再走应用层 DoH（443）解析镜像 IP 覆盖同一份 hosts，作为更彻底的 53 绕行兜底
-        bootstrapHosts(context, rootfsDir)
-        bootstrapHostsByDoH(context, rootfsDir)
-
-        var updated = false
-        var lastErr = ""
-        
-        // 优先使用用户选择的镜像源
-        val userMirror = getSelectedAptMirror(context)
-        diagLog(context, "使用用户选择的镜像源: $userMirror")
-        writeAptSources(rootfsDir, userMirror)
-        var r = runProot(context, "apt-get update -o Acquire::http::No-Cache=true -o Acquire::Max-FutureTime=0 -o Acquire::ForceIPv4=true", timeoutMs = 180_000)
-        diagLog(context, "apt-get update 结果: exit=${r.first}, output=${r.second.take(500)}")
-        if (r.first == 0) {
-            updated = true
-        } else {
-            lastErr = r.second
-            Log.w(TAG, "apt-get update 失败 (用户镜像: $userMirror): ${r.second.take(500)}")
-            
-            // 用户镜像失败时，回退到默认列表
-            for (mirror in UBUNTU_APT_MIRRORS) {
-                diagLog(context, "尝试 apt-get update (镜像: $mirror)")
-                writeAptSources(rootfsDir, mirror)
-                r = runProot(context, "apt-get update -o Acquire::http::No-Cache=true -o Acquire::Max-FutureTime=0 -o Acquire::ForceIPv4=true", timeoutMs = 180_000)
-                diagLog(context, "apt-get update 结果: exit=${r.first}, output=${r.second.take(500)}")
-                if (r.first == 0) { updated = true; break }
-                lastErr = r.second
-                Log.w(TAG, "apt-get update 失败 (镜像: $mirror): ${r.second.take(500)}")
-            }
+        if (!ok) {
+            diagLog(context, "终端链路解压未成功（可能无内置 tarball），回退下载路径")
         }
-        if (!updated) {
-            val detail = "apt-get update 在所有镜像均失败。\n$lastErr"
-            diagLog(context, "⛔ $detail")
-            QuroDiag.log("LinuxEnv", "⛔ $detail")
-            rootfsDir.deleteRecursively()
-            throw IllegalStateException(detail)
-        }
-        diagLog(context, "✅ apt-get update 成功")
-
-        // bash 是持久 shell 的基础，必须装。同时补齐联网/开发必需的底层库（ca-certificates 让 HTTPS 源与
-        // pip/npm 信任链可用；libcurl4 是多数编译/开发工具依赖；curl/wget 便于下载验证）。
-        // ★ 真因修复：apt-get update 带了 ForceIPv4 成功，但 install 不带会走 IPv6 拉 .deb 包，
-        // 真机 5G 下 connection-reset → exit 100（截图实证「update 成功、install 失败」）。
-        // 故 install 强制 ForceIPv4，并按镜像回退重试（先 rewrite sources + update 再装），--fix-missing 容单包 404。
-        _state.value = SandboxState.Installing("安装 bash / ca-certificates / libcurl4…")
-        diagLog(context, "安装基础包 (ForceIPv4 + 镜像回退 + 逐包回退)...")
-        // issue #11 问题7：整批失败时逐包回退——单个包「源不可用」不再葬送整个环境
-        val bash = aptInstallBasePackages(context, rootfsDir, "bash ca-certificates libcurl4 curl wget", userMirror, 240_000)
-        diagLog(context, "基础包安装结果: exit=${bash.first}, 摘要=\n${bash.second.take(60 * 120)}")
-        if (bash.first != 0) {
-            val detail = "基础包安装失败（exit ${bash.first}）：\n${bash.second}"
-            diagLog(context, "⛔ $detail")
-            QuroDiag.log("LinuxEnv", "⛔ $detail")
-            throw IllegalStateException(detail)
-        }
-        diagLog(context, "✅ 基础包安装成功")
-
-        // ★ 补齐开发工具链（python3 / ffmpeg / node / npm / git 等）：ubuntu-base 极简 rootfs 不含这些包，
-        // 而完整 Ubuntu 发行版自带这些包。此处显式安装，使 QuroAI 终端开箱即有完整 Linux 命令，
-        // 对齐「终端所有命令都能用」的体验。已装过（marker 存在）会自动跳过。
-        _state.value = SandboxState.Installing("安装开发工具链 (python3/ffmpeg/node/git)…")
-        diagLog(context, "安装开发工具链: $DEVTOOLS_CORE (+可选 $DEVTOOLS_OPTIONAL)")
-        installDevToolchain(context)
-
-        // 通用 DNS（绕开被阻断的 53 端口）：装 dnscrypt-proxy（向上走 DoH/DNSCrypt 443 解析任意域名）。
-        // 非致命——装不上则退化到 /etc/hosts 预列主机，不影响既有流程。
-        _state.value = SandboxState.Installing("安装 dnscrypt-proxy（通用 DNS）…")
-        diagLog(context, "安装 dnscrypt-proxy...")
-        val dnsp = runProot(context, "apt-get install -y --no-install-recommends dnscrypt-proxy", timeoutMs = 180_000)
-        diagLog(context, "dnscrypt-proxy 安装结果: exit=${dnsp.first}, output=${dnsp.second.take(200)}")
-        if (dnsp.first == 0) {
-            diagLog(context, "启动 DoH 代理（通用 DNS）...")
-            ensureDnsProxy(context, rootfsDir)
-        } else {
-            diagLog(context, "dnscrypt-proxy 安装失败，通用 DNS 跳过（/etc/hosts 兜底）")
-        }
-
-        // ★ 部署后自检
-        _state.value = SandboxState.Installing("自检 proot 运行环境…")
-        diagLog(context, "smoke test: echo + id + apt-get --version")
-        val smoke = runProot(context, "echo QURO_SMOKETEST_OK; id -u; apt-get --version", timeoutMs = 30_000)
-        diagLog(context, "smoke test 结果: exit=${smoke.first}, output=${smoke.second.take(500)}")
-        if (smoke.first != 0 || !smoke.second.contains("QURO_SMOKETEST_OK")) {
-            val detail = "部署后自检失败：proot 在您的设备上无法在 rootfs 内执行命令。\n" +
-                "自检输出（exit ${smoke.first}）：\n${smoke.second.take(800)}"
-            diagLog(context, "⛔ $detail")
-            QuroDiag.log("LinuxEnv", "⛔ $detail")
-            rootfsDir.deleteRecursively()
-            throw IllegalStateException(detail)
-        }
-
-        diagLog(context, "=== ✅ 部署成功 ===")
-        _state.value = SandboxState.Ready
-        // 持久化「曾安装」标记：即使后续 rootfs 被系统清理，重检时也能识别为「丢失」并提示一键恢复。
-        markInstalled(context)
+        val ready = isTerminalRootfsReady(rootfsDir)
+        diagLog(context, "委托终端链路结果: ok=$ok, 就绪=$ready")
+        return ready
     }
 
     /** 一次性执行命令（AI 工具用）。环境不可用返回原因。 */
@@ -1361,7 +1591,6 @@ object QuroLinuxEnv {
             // glibc getifaddrs 读不到网卡 → 默认路由解析失败、connect 报 Network unreachable（用户列的首个缺失项）。
             "--bind=/proc/net:/proc/net",
             "--bind=/sys",
-            "--bind=$home:/root",
             "--bind=$tmp:/tmp",
             // issue #11 ③：应用私有目录整个绑进沙箱（挂载点 /quro，见 APP_PRIVATE_MOUNT）。
             // 缺这一条 = 构建台产物 / 工作区数据在容器里完全不可见。
@@ -1369,6 +1598,9 @@ object QuroLinuxEnv {
         )
         // 设备共享存储（/sdcard）绑进沙箱，让 Linux 终端能访问 Downloads/DCIM/Documents 等（参考 Agora SharedFolderMounts）。
         sharedStorageHostDir(context)?.let { args.add("--bind=${it.absolutePath}:$SHARED_STORAGE_MOUNT") }
+        // /root：合一前 home 在 rootfs 外必须显式绑；合一后 home 就在 rootfs 内（= <rootfs>/root），
+        // 恒等 bind 只会触发 proot binding 冲突检测，跳过（见 [homeInsideRootfs]）。
+        if (!homeInsideRootfs(context)) args.add("--bind=$home:/root")
         // getprop 垫片可回落读 /system/build.prop，仅当该文件本就可读时绑定（避免整体启动失败）。
         if (File("/system/build.prop").canRead()) {
             args.add("--bind=/system/build.prop:/system/build.prop")
@@ -1381,7 +1613,7 @@ object QuroLinuxEnv {
             // 更新 PATH 包含 usr/bin/（bash 和 busybox 所在位置），并补齐
             // cargo（/var/cargo/bin）与 go（/usr/local/go/bin），否则工具中心-包管理里
             // go/cargo 相关命令会 Command not found。
-            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:${usrBinDir.absolutePath}",
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:/root/.cargo/bin:/root/.local/bin:${usrBinDir.absolutePath}",
             "TERM" to "xterm-256color",
             "LANG" to "C.UTF-8",
             "DEBIAN_FRONTEND" to "noninteractive",
@@ -1425,9 +1657,12 @@ object QuroLinuxEnv {
                 appendLine("mkdir -p $rootfs/tmp 2>/dev/null || true")
                 appendLine("mount -o bind $tmp $rootfs/tmp")
             }
-            // 挂载 home 目录到 /root
+            // 挂载 home 目录到 /root（双 rootfs 合一后 home 就在 rootfs 内时是恒等 bind，跳过；
+            // mkdir -p 仍保留，保证 rootfs 解压残缺时 /root 也存在）
             appendLine("mkdir -p $rootfs/root 2>/dev/null || true")
-            appendLine("mount -o bind $home $rootfs/root")
+            if (!homeInsideRootfs(context)) {
+                appendLine("mount -o bind $home $rootfs/root")
+            }
             // 挂载设备共享存储（/sdcard）进沙箱，终端可访问 Downloads/DCIM/Documents（参考 Agora SharedFolderMounts）
             sharedStorageHostDir(context)?.let { ss ->
                 appendLine("mkdir -p $rootfs/sdcard 2>/dev/null || true")
@@ -1472,7 +1707,7 @@ object QuroLinuxEnv {
 
         val env = mutableMapOf(
             "HOME" to "/root",
-            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:${usrBinDir.absolutePath}",
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:/root/.cargo/bin:/root/.local/bin:${usrBinDir.absolutePath}",
             "TERM" to "xterm-256color",
             "LANG" to "C.UTF-8",
             "DEBIAN_FRONTEND" to "noninteractive",
@@ -1908,7 +2143,10 @@ object QuroLinuxEnv {
                     appendLine("mount -o bind $tmp $rootfsPath/tmp")
                 }
                 appendLine("mkdir -p $rootfsPath/root 2>/dev/null || true")
-                appendLine("mount -o bind $home $rootfsPath/root")
+                // 恒等 bind 跳过（home 已在 rootfs 内，双 rootfs 合一，2026-10-27）
+                if (!homeInsideRootfs(context)) {
+                    appendLine("mount -o bind $home $rootfsPath/root")
+                }
                 if (File("/system/build.prop").canRead()) {
                     appendLine("mkdir -p $rootfsPath/system 2>/dev/null || true")
                     appendLine("mount -o bind /system/build.prop $rootfsPath/system/build.prop")
@@ -1953,9 +2191,10 @@ object QuroLinuxEnv {
             // apt-get / pip / npm 联网报 Network unreachable（与 AI 一次性执行路径 buildProotLaunch 对齐）。
             "--bind=/proc/net:/proc/net",
             "--bind=/sys",
-            "--bind=${homePath(context)}:/root",
             "--bind=${tmpPath(context)}:/tmp",
         )
+        // /root：合一后 home 就在 rootfs 内（= <rootfs>/root），恒等 bind 跳过（见 [homeInsideRootfs]）。
+        if (!homeInsideRootfs(context)) args.add("--bind=${homePath(context)}:/root")
         // 设备共享存储（/sdcard）绑进沙箱，让终端能访问 Downloads/DCIM/Documents 等（参考 Agora SharedFolderMounts）。
         sharedStorageHostDir(context)?.let { args.add("--bind=${it.absolutePath}:$SHARED_STORAGE_MOUNT") }
         // issue #11 ③：应用私有目录（filesDir）绑进沙箱，容器内可见为 /quro。
@@ -1983,7 +2222,7 @@ object QuroLinuxEnv {
                 "TERM=xterm-256color",
                 "HOME=/root",
                 "TMPDIR=${tmpPath(context)}",
-                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:${usrBinDir.absolutePath}",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:/root/.cargo/bin:/root/.local/bin:${usrBinDir.absolutePath}",
                 "LANG=C.UTF-8",
                 "DEBIAN_FRONTEND=noninteractive",
                 "LD_LIBRARY_PATH=${dir.absolutePath}:${usrBinDir.absolutePath}",
@@ -1995,7 +2234,7 @@ object QuroLinuxEnv {
             "HOME=/root",
             "TMPDIR=${tmpPath(context)}",
             // 更新 PATH 包含 usr/bin/（bash 和 busybox 所在位置），并补齐 cargo/go 工具链
-            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:${usrBinDir.absolutePath}",
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:/root/.cargo/bin:/root/.local/bin:${usrBinDir.absolutePath}",
             "LANG=C.UTF-8",
             "DEBIAN_FRONTEND=noninteractive",
             "LD_LIBRARY_PATH=${dir.absolutePath}:${usrBinDir.absolutePath}",
