@@ -2,7 +2,6 @@ package com.ai.assistance.quro.service
 import com.ai.assistance.quro.R
 import com.ai.assistance.quro.util.qstr
 
-import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.app.Notification
 import android.app.NotificationChannel
@@ -22,10 +21,24 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.app.NotificationCompat
 import com.ai.assistance.quro.activity.QuroMainActivity
+import com.ai.assistance.quro.dshmobile.DeviceControlService
 
 /**
- * Quro 无障碍服务（CapOS L1 通道）：
- * 服务连接后注册自身实例，供 CapOS 内核调用 performAction / dispatchGesture 执行界面自动化。
+ * Quro 无障碍服务（CapOS L1 通道）：**全应用唯一的无障碍服务**。
+ *
+ * #484（用户截图 `Zorv AI` + `ZorvAI 设备控制` 两项并列）：
+ * 合并前本应用在系统「无障碍」列表里注册了**两个**服务——ZorvAI 自己的
+ * [QuroAccessibilityService] 与 harness 的
+ * [com.ai.assistance.quro.dshmobile.DeviceControlService]。两者是同一项系统权限的两张门，
+ * 用户必须开两个开关，关一个就有一半能力失效（「手机操控」报未授权），是实打实的重复授权。
+ *
+ * 现在**只保留一个服务类**：本类直接继承 DeviceControlService，一套生命周期同时承担
+ *   - ZorvAI 侧：节点读取 / 点头 / 粘贴键盘 / 全局动作（本文件原有能力）；
+ *   - harness 侧：DeviceControlService 的语义快照、按路径回指的动作、takeScreenshot、
+ *     ControlCarrier 轮询登记（父类 onServiceConnected 里完成）。
+ * 于是系统设置里只剩一项，开一次两边都通。清单里另一处 `<service>` 已删除，
+ * `QuroPermissionHelper` 的启用判据也收敛成单一 ComponentName。
+ *
  * 仅实现标准无障碍能力，不收集任何隐私内容。
  *
  * 保活机制：
@@ -33,7 +46,7 @@ import com.ai.assistance.quro.activity.QuroMainActivity
  * 2. 定时自检：检测服务是否正常运行
  * 3. 掉线通知：服务断开时通知用户重新开启
  */
-class QuroAccessibilityService : AccessibilityService() {
+class QuroAccessibilityService : DeviceControlService() {
     companion object {
         private const val TAG = "QuroA11y"
         private const val CHANNEL_ID = "quro_a11y_channel"
@@ -73,8 +86,12 @@ class QuroAccessibilityService : AccessibilityService() {
     private var lastEventTime = 0L
 
     override fun onServiceConnected() {
+        // 🔴 super 必须最先调：父类 DeviceControlService 在这里完成 harness 侧的登记
+        // （instance / a11yEnabled 标记 / 控制令牌 / ControlCarrier 轮询承接）。
+        // 合并服务后这一段就是「一个服务同时供养两边」的关键，漏调会让 harness 侧永远
+        // 认为无障碍未开启（症状：手机操控报未授权，而系统里明明已经打开）。
         super.onServiceConnected()
-        Log.i(TAG, "无障碍服务已连接")
+        Log.i(TAG, "无障碍服务已连接（含设备控制通道）")
         instance = this
         onServiceStatusChanged?.invoke(true)
 
@@ -86,6 +103,8 @@ class QuroAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // 父类用事件给「语义快照」打失效标记（窗口/内容/滚动，200ms 节流），必须保留。
+        super.onAccessibilityEvent(event)
         // 记录最近事件时间，用于判断服务是否正常接收事件
         event?.let {
             lastEventTime = System.currentTimeMillis()
@@ -97,11 +116,13 @@ class QuroAccessibilityService : AccessibilityService() {
         // 注意：onInterrupt 由系统在「中断无障碍反馈」时调用（正常交互中频繁触发），
         // 并不代表服务已断开/被禁用，因此绝不能在此清空 instance —— 否则实时检测信号会抖动，
         // 表现为「授权已开但软件显示未检测到」。instance 只在服务真正销毁时清空（见 onDestroy）。
+        super.onInterrupt()
     }
 
     override fun onDestroy() {
         Log.w(TAG, "无障碍服务已销毁")
         stopSelfCheck()
+        // 先清本类实例，再交给父类做 harness 侧 teardown（置标记、注销 ControlCarrier）。
         instance = null
         onServiceStatusChanged?.invoke(false)
         super.onDestroy()

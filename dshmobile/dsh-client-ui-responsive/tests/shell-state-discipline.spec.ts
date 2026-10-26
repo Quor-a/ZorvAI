@@ -28,19 +28,16 @@ test('ST-09/ST-27：src 内不得存在 useState(() => window.androidBridge 这�
   expect(hits, '裸写一次性桥读必须改用 useShellState').toEqual([])
 })
 
-test('ST-09：壳体状态读点都经 useShellState（DevSection 三处 + 设置页一处）', () => {
+// #418 起 DevSection.tsx（开发者选项分区）已整体删除，功能迁入 ZorvAI 壳侧
+// 「清理存储」页；#429 起 notify-settings.tsx（通知分区）随之删除，功能迁入 ZorvAI 设置
+// 「通知 → Harness 通知」。本文件的点面门禁随之收刈到唯一仍在场的使用方（通用设置）。
+test('ST-09：壳体状态读点都经 useShellState（通用设置）', () => {
   const files = walk(SRC)
   // 路径分隔符跨平台（Windows 是 \\）：只按文件名判定
-  const dev = files.find((f) => f.endsWith('DevSection.tsx'))
   const general = files.find((f) => f.endsWith('GeneralSettings.tsx'))
   const hook = files.find((f) => f.endsWith('use-shell-state.ts'))
-  expect(dev && general && hook, '三个文件必须存在').toBeTruthy()
-  const devText = readFileSync(dev as string, 'utf8')
+  expect(general && hook, '两个文件必须存在').toBeTruthy()
   const genText = readFileSync(general as string, 'utf8')
-  expect(devText).toContain("from '../mobile/use-shell-state.ts'")
   expect(genText).toContain("from '../mobile/use-shell-state.ts'")
-  expect((devText.match(/useShellState</g) ?? []).length).toBeGreaterThanOrEqual(3)
   expect((genText.match(/useShellState</g) ?? []).length).toBeGreaterThanOrEqual(1)
-  // 反向：旧的裸读形态必须彻底消失（否则门禁形同虚设）
-  expect(/setAllFiles\(window\.androidBridge/.test(devText), 'DevSection 仍在 effect 里裸读桥').toBe(false)
 })

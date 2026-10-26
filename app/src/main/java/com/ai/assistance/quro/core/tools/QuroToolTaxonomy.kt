@@ -21,7 +21,7 @@ import com.ai.assistance.quro.core.QuroToolSpec
  * - 目录未 install（空）时回退为「枚举 + 描述」——不造工具名，避免幻觉；
  * - 不新增分类源：分类以 [ToolCapabilityDirectory.ToolCategory] 为准，
  *   新工具进哪个类由该目录的 inferCategory/handbook 决定，这里只做呈现；
- * - harness（Agent 工作台）归 TERMINAL_LINUX——与目录口径一致，
+ * - harness（DeepSeek Harness（工作台））归 TERMINAL_LINUX——与目录口径一致，
  *   「同一环境」的关系陈述在 QuroPlatformManifest.SYSTEM 第 ⑦ 段。
  */
 object QuroToolTaxonomy {

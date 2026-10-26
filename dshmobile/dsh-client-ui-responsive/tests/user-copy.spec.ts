@@ -9,8 +9,6 @@ import {
   UNKNOWN_CALL_REASON,
   describeCallReason,
   describeHttpFailure,
-  describeImportance,
-  describeNotifyWriteFailure,
   formatDuration,
   noticeDataAttrs,
   truncateWithEllipsis,
@@ -70,29 +68,6 @@ describe('describeHttpFailure（P3-1：状态码只作分档依据）', () => {
     expect(unauthorized).toContain('未获授权')
     // 页面侧的 500 来自本机应用自身（引擎/宿主），不是远端服务——措辞与壳侧的 httpFailure 刻意不同。
     expect(server).toContain('应用内部')
-  })
-})
-
-describe('describeNotifyWriteFailure（P3-1）', () => {
-  it('壳侧读回失败的原因给人话，且不回显码与内部 key', () => {
-    const text = describeNotifyWriteFailure('readback-mismatch')
-    expect(text).toContain('没有接受')
-    expect(text).not.toContain('readback-mismatch')
-    expect(describeNotifyWriteFailure('unknown-key')).not.toContain('unknown-key')
-    expect(describeNotifyWriteFailure(undefined)).not.toContain('unknown')
-  })
-})
-
-describe('describeImportance（P3-1：档位不印数字）', () => {
-  it('各档位给人话；非数字返回空串（整段省略而不是打印 ?）', () => {
-    for (const value of [0, 1, 2, 3, 4, 5]) {
-      const text = describeImportance(value)
-      expect(text.length, String(value)).toBeGreaterThan(2)
-      expect(text, '不得是裸数字：' + value).not.toBe(String(value))
-    }
-    expect(describeImportance(undefined)).toBe('')
-    expect(describeImportance('4')).toBe('')
-    expect(describeImportance(Number.NaN)).toBe('')
   })
 })
 

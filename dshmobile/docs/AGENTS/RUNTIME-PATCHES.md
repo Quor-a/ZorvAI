@@ -57,7 +57,7 @@
 ## 6. 与协调仓 scripts/patches/ 的分工边界
 
 **协调仓 `scripts/patches/`（apply-patches.mjs + registry.json + data/compat-map.json）是快照注入链的构建期补丁框架**，按 `scope` 分两路：
-- `scope: vendor` 打 vendor 固化插件（dshmarketplace-plugin B/D + **U2 exact-route browser-session 鉴权**；dsh-undo-savepoint E1-E8 + **S1 safe 保留自有插件** + **U1 `/api/undo` connection/token 鉴权与 no-store**），在 `build-apk-013.ps1` 阶段施加；对应行为回归在 `scripts/patches/tests/{undo-route-auth,market-route-auth}.test.mjs`。
+- `scope: vendor` 打 vendor 固化插件（dshmarketplace-plugin B/D + **U2 exact-route browser-session 鉴权**；dsh-undo-savepoint E1-E9 + **S1 safe 保留自有插件** + **U1 `/api/undo` connection/token 鉴权与 no-store**），在 `build-apk-013.ps1` 阶段施加；对应行为回归在 `scripts/patches/tests/{undo-route-auth,undo-settings-section,market-route-auth}.test.mjs`。
   - **2026-09-26 追版**：两个插件都追到上游新版（marketplace 0.1.5→0.1.7、undo 0.3.8→0.4.9）。已退役：marketplace A（上游 0.1.7 原生修 next 兜底）、marketplace C（上游 0.1.7 用 `installCheck==="passed"` 过滤掉不可安装条目）；新增 undo S1（safe 生成对齐壳侧 `SafeMode.kt`：只摘第三方、保留 `@dsh-android/*` 与全部 `disable` 行——上游原实现整份覆写会重开无鉴权的 `client-hmr` SSE）。详见各 vendor 的 `PATCHES.md` 与 `registry.json` 的 `retired` 段。undo 0.4.9 另有安全收益：`settings.yaml` 纳入脱敏（0.3.8 时代在快照范围内却不脱敏 ⇒ 明文进包）。
 - `scripts/check-api-route-auth.mjs` 与 `api-route-auth-policy.json` 不属于运行时 asset：它们扫描所有 mobile-owned WebServer registration source，要求 protected guard 或窄公开白名单，并在本地/云端/CI/发布链接线。file-incoming 的 queue、claim、content、complete、clean 五个 exact route 均属于 protected 面；content 只接受进程内 ticket，不能返回源绝对路径。
 - `scope: engine` 打引擎树内上游包，在 `build-snapshot-013.mjs` 0f 步施加并逐个复查 marker / exact verifier；当前活动清单见下方生成区。§7 的批次说明记录历史实现，不作为活动全集。
@@ -82,6 +82,7 @@
 | `undo-E6` | undefined | `dsh-undo-savepoint/lib/client.js` |
 | `undo-E7` | undefined | `dsh-undo-savepoint/lib/client.js` |
 | `undo-E8` | undefined | `dsh-undo-savepoint/lib/client.js` |
+| `undo-E9` | undefined | `dsh-undo-savepoint/lib/client.js` |
 | `undo-safe-align-S1` | undefined | `dsh-undo-savepoint/lib/core.mjs` |
 | `undo-safe-transaction-S2` | undefined | `dsh-undo-savepoint/lib/core.mjs` |
 | `undo-api-auth-U1` | undefined | `dsh-undo-savepoint/lib/index.js` |

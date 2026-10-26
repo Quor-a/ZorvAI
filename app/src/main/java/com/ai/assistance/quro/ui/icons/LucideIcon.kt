@@ -26,7 +26,20 @@ fun LucideIcon(
     )
 }
 
-private fun iconRes(name: String): Int = when (name) {
+/**
+ * 图标名归一化：`layout-dashboard` / `Layout-Dashboard` / ` layout_dashboard ` 一律变成
+ * `layout_dashboard`。
+ *
+ * 为什么必须有这一层：本函数是 `when` 的**精确字符串匹配**，而调用点散在 app / terminal-core /
+ * dshmobile 三个模块里，写法从不统一（lucide 官网用连字符，Kotlin 里有人写连字符、有人写下划线）。
+ * 任何一个拼错的名字都会一路掉到 `else`，而 `else` 此前回的是 **`ic_x`** —— 于是界面上出现一堆
+ * 语义完全无关的「×」（2026-10-26 用户截图：「可视化小卡片 / 动态UI组件 / AIP文档排版」三行全是 ×，
+ * GenUI Agent 那行也是 ×）。名字归一化让连字符/下划线/大小写不再能造成这种「静默降级」。
+ */
+private fun normalizeIconName(name: String): String =
+    name.trim().lowercase().replace('-', '_').replace(' ', '_')
+
+private fun iconRes(name: String): Int = when (normalizeIconName(name)) {
     "panel_left"       -> R.drawable.ic_panel_left
     "blocks"           -> R.drawable.ic_blocks
     "chevron_left"     -> R.drawable.ic_chevron_left
@@ -81,5 +94,20 @@ private fun iconRes(name: String): Int = when (name) {
     "qic_info"         -> R.drawable.qic_info
     "qic_running"      -> R.drawable.qic_running
 
-    else                -> R.drawable.ic_x
+    // ── 语义图标：补齐此前**只被调用、从未被映射**的名字（全部曾静默渲染成「×」）──
+    // 判据来自全仓扫描（app / terminal-core / dshmobile 的每一处 LucideIcon("…") 调用名
+    // 与映射表差分）：credit_card / layout_dashboard / folder / link / menu 五个名字没有
+    // 任何对应分支。前三者正是对话框「工具菜单」里可视化小卡片 / 动态UI组件 / AIP文档排版
+    // 三行的图标（用户 2026-10-26 截图：整列 ×）。
+    "credit_card"      -> R.drawable.qic_card   // 可视化小卡片：卡面 + 折线（单块数据）
+    "layout_dashboard" -> R.drawable.qic_layout // 动态UI组件：分区面板 + 旋钮（可交互）
+    "folder"           -> R.drawable.qic_folder
+    "link"             -> R.drawable.qic_link
+    "menu"             -> R.drawable.qic_menu
+    // AIP文档排版沿用 ic_file_text（本就有，此前只是调用名写成了 "file-text" 连字符）。
+
+    // 🔴 兜底**绝不能再是 `ic_x`**：`x` 是「关闭/删除」的语义，任何一个拼错的名字都会让
+    // 界面长出一个「×」，用户看到的是「这里有个叉」，而不是「图标漏配了」。
+    // 现在兜到 `qic_other`（中性「其它」图标），既不会误导用户，也便于一眼看出是漏配。
+    else               -> R.drawable.qic_other
 }

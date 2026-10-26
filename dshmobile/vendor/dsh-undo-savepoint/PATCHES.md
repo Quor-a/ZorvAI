@@ -34,11 +34,12 @@
 | E6 | `lib/client.js` | 重锚（原位命中） | 徽章去掉相对时间（只留「已存 N 份快照」） | 真机实测：长文本与「Session log」按钮重叠 |
 | E7 | `lib/client.js` | 重锚（原位命中） | `.u_badge` 封顶 `max-width:30vw` + 省略号 | 双保险：极端宽度下截断而非重叠 |
 | E8 | `lib/client.js` | 重锚（原位命中） | 快照徽章折叠成小绿点，数量挪进 title/aria-label | 2026-09-10 用户定例：360dp 竖屏头部被模式徽章/打开方式/…/右栏键占满 |
+| E9 | `lib/client.js` | 重锚（原位命中） | 摘除设置页「快照」分区（`settings.section` 一级分区 id `dsh-undo` + 其下 `settings.undo.item` 页面槽，含 `sectionOk` 门控整块） | 2026-10-26 用户拍板「快照和通知还在」：设置导航删「快照」「通知」两区（「手机控制」「开发者选项」已随上一包删除；通知侧 #429 迁 ZorvAI 设置，壳侧 `HarnessNotifyScreen` 直调 `NotifyCenter`）。保留头部 undo/redo 按钮 + 快照徽章、`SnapshotPanel`、急救 CLI 与 U1/S1/S2；`UndoSettingsSection`/`UndoMainPage` 定义与 exports 留为无害死代码 |
 | S1 | `lib/core.mjs` | **新增（本版分叉）** | safe 生成对齐壳侧 `SafeMode.kt`：只摘第三方 insert 子条目，保留 `@deepseek-ai/*`、`@dsh-android/*` 与两个具名插件，且保留全部顶层 `disabled: true` | 用户口径「undo 要确保保留我们自己的插件」。上游 `safeModeSet` 原把 `cordis.patch.yml` **整份覆写**成只含一条 insert 的最小文件，实测会摘掉 12 个 `@dsh-android/*` 引用与 7 条 disabled（含**安全关键的 `client-hmr`** ⇒ 会重开无鉴权的 `/plugins/events` SSE） |
 | U1 | `lib/index.js` | 重锚 | `/api/undo` prefix 在 handler 首行执行 Host/Origin、浏览器会话或壳侧实时 controlToken 鉴权；403 不可由 token 绕过，拒绝与成功 JSON 均 `no-store`，且拒绝先于 body 读取、快照枚举和任何写操作 | apk #222：更长 prefix 绕过 `/api` 信任栅栏；所有读写必须 fail-closed。**上游 0.4.9 新增的 M2（跨站 CSRF：Origin/Host 不符即拒）不替代本条**——M2 不做壳侧 controlToken、不做 `connection.requestRejection` 会话栅栏、也不保证「读 body 前失败关闭」 |
 
-保留：头部徽章（`u_badge`，点击打开快照管理面板）、`SnapshotPanel`（快照列表/回滚/删除/手动存档）、
-设置页「快照」分区（自动兜底开关、watch 防抖、保留数、自动清理、脱敏模式、目录）。
+保留：头部徽章（`u_badge`，E8 后为小绿点，点击打开快照管理面板）、`SnapshotPanel`（快照列表/回滚/删除/手动存档）、
+undo 急救 CLI（U1/S1/S2 全部能力）。设置页「快照」分区已随 E9 删除（2026-10-26 用户拍板）。
 
 ## 0.4.9 的结构变化（追版时要注意）
 
@@ -56,7 +57,7 @@ npm pack dsh-undo-savepoint@0.4.9 && tar -xzf dsh-undo-savepoint-0.4.9.tgz
 # 2) 覆盖本目录（保留 PATCHES.md；lib/ 整目录替换）
 # 3) 施加全部补丁
 node scripts/patches/apply-patches.mjs vendor --apply \
-  --only undo-E1,undo-E2,undo-E3,undo-E4,undo-E5,undo-E6,undo-E7,undo-E8,undo-safe-align-S1,undo-safe-transaction-S2,undo-api-auth-U1
+  --only undo-E1,undo-E2,undo-E3,undo-E4,undo-E5,undo-E6,undo-E7,undo-E8,undo-E9,undo-safe-align-S1,undo-safe-transaction-S2,undo-api-auth-U1
 # 4) 门禁自验
 node scripts/patches/apply-patches.mjs vendor --check   # 退出 0
 ```

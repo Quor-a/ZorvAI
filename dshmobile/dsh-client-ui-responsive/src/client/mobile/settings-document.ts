@@ -92,7 +92,7 @@ export class SettingsDocumentAction {
         ok: true,
         title: '已打开配置文件的副本',
         detail: '这是导出副本（Documents/dshdata/exports/config/settings.yaml），在它上面修改不会直接生效；'
-          + '改完请回到「设置 → 开发者选项 → 导入配置」。',
+          + '改完请回到 ZorvAI「设置 → 清理存储 → 导入配置」导入生效。',
       })
     }
   }

@@ -10,8 +10,10 @@ import org.junit.Test
 /**
  * 0.14.1 批 5「可发现性与热区」的行为回归（纯 JVM，无 Robolectric）。
  *
- * 覆盖 `docs/0.14.1-TODO-AND-RELEASE-GATE.md` §1.1 的 P5-1…P5-6，外加同域的两条 §3.2
- * （S2-15/S2-16 在客户端侧，见 client 仓的 phone-control.spec.tsx / dev-section.spec.tsx）。
+ * 覆盖 `docs/0.14.1-TODO-AND-RELEASE-GATE.md` §1.1 的 P5-1…P5-6。同域的两条 §3.2
+ * （S2-15/S2-16）原在客户端侧（phone-control.spec.tsx / dev-section.spec.tsx）；
+ * #417/#418 起 harness 侧 UI 与对应 spec 已删除，判据随功能迁入壳侧设置
+ * （「手机操控」/「清理存储」），由本仓 OverlayBatch5Test 与设置面测试在任。
  * 做法沿用本仓既有两条路子（同 OverlayPendingCardTest）：
  *  1. **纯函数判据**——语义直接可测，改坏即红（含**可比数字**：光环对比度是按 sRGB 亮度公式复算的，
  *     不是「看着差不多了」）；

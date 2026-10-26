@@ -4,28 +4,22 @@
  * Upstream client packages carry their own contracts: ui-layout declares
  * `shell.overlay` and `ctx.layout`, ui-conversation declares the session header
  * seats, ui-sidebar-right declares the right Sidebar's seats, and ui-session
- * declares the session standard props. What is left here is what this package
- * itself owns — the developer-options child seat its own section declares.
- * Context service types come from their actual declaration owners; local
- * approximations must not shadow slots or sessions during upstream adaptation.
+ * declares the session standard props. What is left here is the set of
+ * type-only imports that pull those contract owners into this package's
+ * program — their `declare module '@deepseek-ai/cordis'` augmentations are
+ * what put the services (`slots`, `sessions`, …) on `Context`. **Do not drop
+ * an import here**: deleting e.g. the renderer line makes every `ctx.slots`
+ * in index.ts stop typechecking (TS2339), which reads like a cordis bug but
+ * is just the augmentation leaving the program.
  *
- * The file must stay a module (it is, through the import below): a script-form
+ * The `settings.dev.item` child seat this file used to declare retired with
+ * #418: the developer-options section moved into the ZorvAI shell's cleanup
+ * screen and the WebUI registration is gone, so the SlotMap augmentation has
+ * no key left to declare and the block is removed with it.
+ *
+ * The file must stay a module (it is, through the imports below): a script-form
  * `declare module` would define a NEW module instead of merging with cordis.
  */
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
-
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-    interface SlotMap {
-        /**
-         * Android developer-options child seat. Declared by this plugin's own
-         * `settings.section` entry (the ADB panel and the other shell
-         * facilities mount here without opening their own navigation row), so
-         * its contract lives beside the declaration.
-         */
-        'settings.dev.item': { kind: 'list'; scope: 'root' };
-    }
-}
-
-

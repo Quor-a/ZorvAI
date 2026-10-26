@@ -336,7 +336,12 @@ test('回归：分组语义与工具名单未被改动（三组、phone 17 项�
   assert.deepEqual(Object.keys(DEVICE_TOOL_GROUPS).sort(), ['browser', 'phone', 'virtual-display'])
   assert.equal(DEVICE_TOOL_GROUPS.phone.length, 17)
   assert.equal(DEVICE_TOOL_GROUPS.browser.length, 19)
-  assert.equal(DEVICE_TOOL_GROUPS['virtual-display'].length, 4)
+  // 2026-10-26 判定性变更：virtual-display 4 → 5 项。
+  // 新增 android_vdisplay_launch_app（跨屏启动应用）。背景：壳侧 vdLaunchApp 早已实现、
+  // 六处登记链也齐，但模型面没有这个工具——模型能在虚拟屏里点击输入，却没有路先在屏里
+  // 启动一个应用，「只能打开不能操控」的根因就是缺这一处。经 capability-gate 归组判定
+  // （与 create/input 同组默认掩蔽、经 android_capabilities 解锁）后更新本计数。
+  assert.equal(DEVICE_TOOL_GROUPS['virtual-display'].length, 5)
 })
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,22 @@
+<!--
+  链接图标 —— 替换此前 `LucideIcon("link")` 误落到 else -> ic_x 的「×」。
+  两段圆角链环（几何对齐 lucide `link`），风格同 qic_*。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:pathData="M10.2 13.8 a5 5 0 0 0 7.07 0 l3 -3 a5 5 0 0 0 -7.07 -7.07 l-1.72 1.71"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+    <path android:pathData="M13.8 10.2 a5 5 0 0 0 -7.07 0 l-3 3 a5 5 0 0 0 7.07 7.07 l1.71 -1.71"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+</vector>

@@ -317,6 +317,67 @@ test('没有会话来源时不得伪造 auth（如实让服务面 fail-closed）
   assert.equal(calls[0].auth, undefined, '会话缺席时必须是 undefined（编一个假会话等于绕过档位门）')
   assert.equal(calls[0].args.session, undefined, 'payload 里同样不得凭空造会话')
 })
+
+// ── 2026-10-26 用户实报补漏：「虚拟屏只能打开不能操控」的最后一处登记 ──────────────
+//
+// 根因不是壳侧能力缺失：VdisplayController.launchApp（vdLaunchApp）早已实现，六处登记链
+// （VD_OPS / VdOp / SUPPORTED_OPS / ControlCarrier.VD_OPS / VdisplayOps.handle）也齐，
+// 但**模型面没有这个工具**——模型看得到 create/destroy/input，却没有路在虚拟屏里启动
+// 一个应用，于是「屏里什么都没有，谈何操控」。本工具补上模型面这一处，闭环才完整：
+//   create → launch_app（本工具）→ status 看宽高 → input（tap/swipe/text）操控。
+// 下面钉住三件事：参数如实映射、会话走 auth 形参（vdLaunchApp 同在 TIER_REQUIRED_OPS）、
+// 空包名本地拦（不打无效往返）。
+
+test('android_vdisplay_launch_app 必须注册，且 pkg/target 如实映射到壳侧 vdLaunchApp', async () => {
+  const { face, calls } = strictFace()
+  const tools = loadTools(face)
+  const launch = tools.find((t) => t.name === 'android_vdisplay_launch_app')
+  assert.ok(launch, 'android_vdisplay_launch_app 必须注册（虚拟屏操控闭环的入口）')
+  const value = await launch.execute(
+    { pkg: ' com.android.settings ', screenId: 'virtual-2' },
+    { agent: { session: 't' } },
+  )
+  assert.doesNotMatch(JSON.stringify(value ?? {}), LOST_RECEIVER, '不得出现服务方法接收者丢失')
+  assert.equal(calls.length, 1, '必须真的经控制队列调用到壳侧')
+  assert.equal(calls[0].op, 'vdLaunchApp')
+  assert.equal(calls[0].args.pkg, 'com.android.settings', 'pkg 需去空白后下行')
+  assert.equal(calls[0].args.target, 'virtual-2', '别名必须以 target 键下行（壳侧读 target）')
+  assert.equal(value.ok, true)
+})
+
+test('android_vdisplay_launch_app：会话必须以 auth 形参原样传对象（vdLaunchApp 属档位门 op）', async () => {
+  // 与 vdInput 同一条真因：TIER_REQUIRED_OPS 含 vdLaunchApp，只挂 payload.session 会被
+  // 服务面按 fail-closed 拒（denied-no-session）——0.14.1 设备实测过的缺陷类，不许再犯。
+  const { face, calls } = strictFace()
+  const launch = loadTools(face).find((t) => t.name === 'android_vdisplay_launch_app')
+  const session = { id: 'sess-C', snapshotEvents: () => [] }
+  const value = await launch.execute({ pkg: 'com.android.settings' }, { agent: { session } })
+  assert.equal(value.ok, true)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].args.session, 'sess-C', 'payload.session 带 id 字符串（壳侧归属校验用）')
+  assert.ok(calls[0].auth !== undefined, 'auth 必须显式传出——否则档位门 fail-closed 拒绝')
+  assert.equal(calls[0].auth.session, session, 'auth.session 必须是会话对象本身，不得降级成 id 字符串')
+})
+
+test('android_vdisplay_launch_app：空/纯空白 pkg 本地拦（不打无效往返）', async () => {
+  const { face, calls } = strictFace()
+  const launch = loadTools(face).find((t) => t.name === 'android_vdisplay_launch_app')
+  const rejected = await launch.execute({ pkg: '   ' }, { agent: { session: 't' } })
+  assert.equal(rejected.ok, false)
+  assert.equal(rejected.code, 'invalid-arguments')
+  assert.equal(calls.length, 0, '本地拦下的调用不得打到壳侧')
+  assertMatchesToolSchema(launch, rejected)
+})
+
+test('android_vdisplay_launch_app 已归入 virtual-display 能力组（默认掩蔽，facade 解锁）', async () => {
+  // 渐进披露判定（check-tool-surface-budget 的名字级门）：新工具不得裸奔在模型第一眼，
+  // 必须与 create/input 同组，经 android_capabilities(group=virtual-display) 解锁。
+  const gate = await import('../../dsh-android-bridge/lib/capability-gate.js')
+  const group = gate.DEVICE_TOOL_GROUPS['virtual-display']
+  assert.ok(Array.isArray(group), 'virtual-display 组必须存在')
+  assert.ok(group.includes('android_vdisplay_launch_app'),
+    'launch_app 必须在 virtual-display 掩蔽组内（否则模型第一眼多看见一个面，预算门禁会红）')
+})
 // ── 0.14.0 用户实报回归：序号复用 / 空闲回收 / 销毁权限 ──────────────────────
 
 test('序号复用：建→销毁→再建 的别名必须回到最小空闲号（不得单调递增）', async () => {

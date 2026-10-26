@@ -5,21 +5,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ZorvAI 控制台</title>
 <style>
+  /* ===== ZorvAI 品牌色板（唯一真源：genuiagent-sdk ZorvPalette.kt）=====
+     亮色：暖纸底（Paper 系）+ 陶土强调（Terracotta）+ 墨色文字（Ink 系）
+     暗色：暖近黑体系（BrandBackgroundDark 系）+ 提亮陶土（TerracottaDark）
+     审美原则：暖纸底、陶土强调、墨色文字；禁止蓝紫 AI 默认审美与纯灰白黑；
+     纸感微渐变只允许 linear-gradient（禁径向渐变）。 */
   :root {
     color-scheme: light dark;
-    --ds-bg: #F5F5F7;
-    --ds-surface: #FFFFFF;
-    --ds-input: #F5F5F7;
-    --ds-border: rgba(0, 0, 0, 0.10);
-    --ds-text-primary: #1D1D1F;
-    --ds-text-secondary: #6E6E73;
-    --ds-text-tertiary: #86868B;
-    --ds-accent: #1D1D1F;
-    --ds-accent-pressed: #3A3A3C;
-    --ds-text-on-accent: #FFFFFF;
-    --ds-danger: #D70015;
-    --ds-danger-soft: rgba(215, 0, 21, 0.08);
-    --ds-chip: #F2F2F4;
+    --ds-bg: #F4F1EA;               /* Paper：页面主底 */
+    --ds-bg-bright: #FBF9F4;        /* PaperBright：顶栏纸面微光 */
+    --ds-surface: #FFFFFF;          /* Card：浮层 / 引擎 pill */
+    --ds-input: #FFFFFF;            /* Card：输入框底 */
+    --ds-border: #D8D0C0;           /* Line：可见描边 */
+    --ds-border-soft: #E3DDD0;      /* LineSoft：发丝分隔线 */
+    --ds-text-primary: #211E1A;     /* Ink：主文字 */
+    --ds-text-secondary: #544D44;   /* InkSoft：次文字 */
+    --ds-text-tertiary: #938A7E;    /* Muted：弱文字 / 占位符 */
+    --ds-accent: #C25A38;           /* Terracotta：主强调 */
+    --ds-accent-pressed: #A8482B;   /* TerracottaPress：按下态 */
+    --ds-accent-soft: rgba(194, 90, 56, 0.14);   /* Terracotta 半透明：聚焦环 */
+    --ds-text-on-accent: #FFFFFF;   /* 陶土实底上的文字 */
+    --ds-danger: #B23A2E;           /* ErrorWarm：错误 */
+    --ds-danger-soft: #F6E3DF;      /* ErrorSoft */
+    --ds-success: #4E7A46;          /* Success：就绪 */
+    --ds-success-soft: #E4EDDF;     /* SuccessSoft */
+    --ds-sage: #6E7C62;             /* Sage：工具 / 辅助语义 */
+    --ds-sage-soft: #E7ECE2;        /* SageSoft：命令 chips 底 */
+    --ds-gold: #B8902F;             /* Gold：警示 */
+    --ds-gold-soft: #F6ECD5;        /* GoldSoft */
+    --ds-terracotta-soft: #F4E4DB;  /* TerracottaSoft：引擎提示行 */
+    --ds-paper2: #ECE7DC;           /* Paper2：pill / 按钮层叠 */
+    --ds-paper3: #E3DDD0;           /* Paper3：按下层叠 */
+    --ds-chip: #E7ECE2;
     --ds-radius: 8px;
     --ds-ease: cubic-bezier(0.32, 0.72, 0, 1);
     --inset-top: env(safe-area-inset-top, 0px);
@@ -27,19 +44,31 @@
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --ds-bg: #000000;
-      --ds-surface: #1C1C1E;
-      --ds-input: #2C2C2E;
-      --ds-border: rgba(255, 255, 255, 0.16);
-      --ds-text-primary: #F5F5F7;
-      --ds-text-secondary: #98989D;
-      --ds-text-tertiary: #6E6E73;
-      --ds-accent: #F5F5F7;
-      --ds-accent-pressed: #C7C7CC;
-      --ds-text-on-accent: #1D1D1F;
-      --ds-danger: #FF6960;
-      --ds-danger-soft: rgba(255, 105, 96, 0.16);
-      --ds-chip: #2C2C2E;
+      --ds-bg: #16130F;             /* BrandBackgroundDark：暗色主底 */
+      --ds-bg-bright: #211D18;      /* SurfaceDark：暗色顶栏微光 */
+      --ds-surface: #211D18;        /* SurfaceDark：浮层 */
+      --ds-input: #2C2820;          /* ContainerDark：输入框底 */
+      --ds-border: #4A4439;         /* LineDark：可见描边 */
+      --ds-border-soft: #3A352B;    /* LineSoftDark：发丝分隔线 */
+      --ds-text-primary: #EDE6DA;   /* OnDark：主文字 */
+      --ds-text-secondary: #A89E90; /* OnDarkSoft：次文字 */
+      --ds-text-tertiary: rgba(168, 158, 144, 0.66);
+      --ds-accent: #D9785A;         /* TerracottaDark：暗色主强调 */
+      --ds-accent-pressed: #C25A38; /* 暗色按下态回到 Terracotta */
+      --ds-accent-soft: rgba(217, 120, 90, 0.20);
+      --ds-text-on-accent: #211409; /* TerracottaDarkOn：暗陶土实底上的深墨字（对比度约 7:1，白字仅 3.10:1 不达 AA） */
+      --ds-danger: #E8836F;         /* ErrorDark：错误 */
+      --ds-danger-soft: rgba(232, 131, 111, 0.16);
+      --ds-success: #8FBF84;        /* SuccessDark：就绪 */
+      --ds-success-soft: rgba(143, 191, 132, 0.14);
+      --ds-sage: #9AA98C;           /* SageDark：工具 / 辅助语义 */
+      --ds-sage-soft: #2C2820;      /* ContainerDark 作暗色 soft 底 */
+      --ds-gold: #E0B75C;           /* WarningDark：警示 */
+      --ds-gold-soft: #332D24;      /* SurfaceHighestDark */
+      --ds-terracotta-soft: #332D24;
+      --ds-paper2: #211D18;
+      --ds-paper3: #2C2820;
+      --ds-chip: #2C2820;
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -47,55 +76,66 @@
   body {
     background: var(--ds-bg);
     color: var(--ds-text-primary);
-    font-family: ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    /* UI 框架文字走系统 sans-serif；终端输出与命令输入保留 monospace（功能性） */
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Noto Sans SC", "Segoe UI", Roboto, sans-serif;
     font-size: 13px;
     display: flex;
     flex-direction: column;
     overscroll-behavior: none;
   }
-  #top { flex: none; padding: calc(8px + var(--inset-top)) 14px 10px; background: var(--ds-bg); border-bottom: 1px solid var(--ds-border); }
+  /* 顶栏：纸面微渐变（linear-gradient）+ 发丝线 */
+  #top { flex: none; padding: calc(8px + var(--inset-top)) 14px 10px; background: linear-gradient(180deg, var(--ds-bg-bright), var(--ds-bg)); border-bottom: 1px solid var(--ds-border-soft); }
   #statusbar { display: flex; align-items: center; gap: 10px; min-height: 38px; }
   #close, .ghost, .chip, #send, #jump {
     appearance: none; font: inherit; border: 0; border-radius: var(--ds-radius); cursor: pointer;
   }
-  #close { background: var(--ds-chip); color: var(--ds-text-primary); padding: 8px 10px; font-size: 12px; font-weight: 600; }
+  #close { background: var(--ds-paper2); color: var(--ds-text-primary); padding: 8px 10px; font-size: 12px; font-weight: 600; }
+  #close:active { background: var(--ds-paper3); }
   #close:active, #send:active, #jump:active { transform: scale(0.98); }
-  #statusbar .title { font-weight: 600; font-size: 15px; white-space: nowrap; }
-  .pill { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 6px 9px; border-radius: var(--ds-radius); background: var(--ds-chip); color: var(--ds-text-secondary); font-size: 11px; overflow: hidden; }
+  #statusbar .title { font-weight: 600; font-size: 15px; white-space: nowrap; letter-spacing: 0.2px; }
+  /* 引擎 pill：Paper2 / Card 层叠，整颗可点（立即重试探活） */
+  .pill { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 6px 9px; border-radius: var(--ds-radius); background: var(--ds-paper2); color: var(--ds-text-secondary); font-size: 11px; overflow: hidden; }
   .pill.grow { flex: 1; }
+  #enginePill { background: var(--ds-surface); border: 1px solid var(--ds-border-soft); }
+  /* 状态点语义：就绪 = Success，错误 = ErrorWarm，未知 = Muted */
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ds-text-tertiary); flex: none; }
-  .dot.ok { background: var(--ds-text-primary); }
+  .dot.ok { background: var(--ds-success); }
   .dot.err { background: var(--ds-danger); }
   .dot.ok.pulse { animation: pulse 1.6s var(--ds-ease) infinite; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
   #engineStatus, #consoleStatus { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #tools { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
   .ghost { background: transparent; color: var(--ds-text-secondary); font-size: 12px; font-weight: 600; padding: 7px 4px; }
-  .ghost:active { color: var(--ds-text-primary); }
+  .ghost:active { color: var(--ds-accent); }
   .ghost[disabled] { color: var(--ds-text-tertiary); }
-  #output { flex: 1; overflow-y: auto; padding: 14px 16px 20px; white-space: pre-wrap; word-break: break-all; line-height: 1.65; scrollbar-width: thin; scrollbar-color: var(--ds-text-tertiary) transparent; }
+  /* 输出区：终端味保留，底色暖化；prompt 用陶土强调 */
+  #output { flex: 1; overflow-y: auto; padding: 14px 16px 20px; white-space: pre-wrap; word-break: break-all; line-height: 1.65; font-family: ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace; scrollbar-width: thin; scrollbar-color: var(--ds-text-tertiary) transparent; }
   #output::-webkit-scrollbar { width: 6px; }
   #output::-webkit-scrollbar-thumb { background: var(--ds-text-tertiary); border-radius: var(--ds-radius); }
   #output::-webkit-scrollbar-track { background: transparent; }
-  #output .prompt { color: var(--ds-text-secondary); font-weight: 700; }
+  #output .prompt { color: var(--ds-accent); font-weight: 700; }
   #output .muted { color: var(--ds-text-tertiary); }
-  #jump { position: absolute; right: 16px; bottom: 92px; background: var(--ds-surface); color: var(--ds-text-primary); border: 1px solid var(--ds-border); padding: 8px 10px; font-size: 12px; font-weight: 600; display: none; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16); }
-  #dock { flex: none; padding: 8px 12px calc(10px + var(--inset-bottom)); background: var(--ds-bg); border-top: 1px solid var(--ds-border); }
+  #jump { position: absolute; right: 16px; bottom: 92px; background: var(--ds-surface); color: var(--ds-text-primary); border: 1px solid var(--ds-border); padding: 8px 10px; font-size: 12px; font-weight: 600; display: none; box-shadow: 0 6px 20px rgba(33, 30, 26, 0.16); }
+  #dock { flex: none; padding: 8px 12px calc(10px + var(--inset-bottom)); background: var(--ds-bg); border-top: 1px solid var(--ds-border-soft); }
   #chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
   #chips::-webkit-scrollbar { display: none; }
-  .chip { flex: none; background: var(--ds-chip); color: var(--ds-text-secondary); padding: 7px 9px; font-size: 11px; }
-  .chip:active { color: var(--ds-text-primary); }
+  /* chips：SageSoft 语义分组，按下转 TerracottaSoft + 陶土文字 */
+  .chip { flex: none; background: var(--ds-sage-soft); color: var(--ds-sage); padding: 7px 9px; font-size: 11px; font-weight: 600; }
+  .chip:active { background: var(--ds-terracotta-soft); color: var(--ds-accent); }
   #inputrow { display: flex; gap: 8px; align-items: stretch; }
   #cmdwrap { flex: 1; min-width: 0; background: var(--ds-input); border: 1px solid var(--ds-border); border-radius: var(--ds-radius); display: flex; align-items: center; transition: border-color 180ms var(--ds-ease), box-shadow 180ms var(--ds-ease); }
-  #cmdwrap.focus { border-color: var(--ds-text-secondary); box-shadow: 0 0 0 2px var(--ds-border); }
-  #cmd { flex: 1; min-width: 0; background: transparent; color: var(--ds-text-primary); border: 0; padding: 12px 14px; font-family: inherit; font-size: 14px; outline: none; }
+  /* 聚焦环：Terracotta 半透明 */
+  #cmdwrap.focus { border-color: var(--ds-accent); box-shadow: 0 0 0 3px var(--ds-accent-soft); }
+  #cmd { flex: 1; min-width: 0; background: transparent; color: var(--ds-text-primary); border: 0; padding: 12px 14px; font-family: ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 14px; outline: none; }
   #cmd::placeholder { color: var(--ds-text-tertiary); }
   #cmd:disabled { opacity: 0.5; }
-  #send { background: var(--ds-accent); color: var(--ds-text-on-accent); padding: 0 16px; font-size: 13px; font-weight: 700; flex: none; min-width: 64px; transition: transform 140ms var(--ds-ease), background 140ms var(--ds-ease), opacity 140ms var(--ds-ease); }
+  /* 发送按钮：Terracotta 实底 */
+  #send { background: var(--ds-accent); color: var(--ds-text-on-accent); padding: 0 16px; font-size: 13px; font-weight: 700; flex: none; min-width: 64px; box-shadow: 0 1px 2px rgba(33, 30, 26, 0.14); transition: transform 140ms var(--ds-ease), background 140ms var(--ds-ease), opacity 140ms var(--ds-ease); }
   #send:active { background: var(--ds-accent-pressed); }
   #send:disabled { opacity: 0.4; }
   #wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  #engineHint { padding: 7px 9px; margin-top: 7px; border-radius: var(--ds-radius); background: var(--ds-chip); font-size: 11px; line-height: 1.4; color: var(--ds-text-secondary); }
+  /* 引擎提示行：TerracottaSoft 暖色 callout（S1-17：给状态也给动作） */
+  #engineHint { padding: 7px 9px; margin-top: 7px; border-radius: var(--ds-radius); background: var(--ds-terracotta-soft); border-left: 3px solid var(--ds-accent); font-size: 11px; line-height: 1.4; color: var(--ds-text-secondary); }
   #enginePill[role=button] { cursor: pointer; }
 </style>
 </head>
@@ -192,11 +232,10 @@
   /**
    * 控制台状态由**壳侧显式给出**（S1-18）。
    *
-   * 旧实现（本函数的前身 `__consoleStatus`）从文案里做子串正则判就绪：
-   *   if (/已启动/.test(t)) ready; else if (/退出|失败|缺失/.test(t)) not-ready;
-   * ——只要措辞改动一次（「bash 已启动」→「控制台已就绪」之类），判据就**静默错判**：
-   * 页面永远停在「启动中」、输入框永久禁用，而壳侧一切正常。这类「判据挂在文案上」的
-   * 结构性问题在审查档 §3.1 记为 S1-18。现在状态是**枚举**，文案只用于显示。
+   * 旧实现（本函数的前身）曾拿状态文案做子串正则来判就绪——只要措辞改动一次
+   * （「bash 已启动」→「控制台已就绪」之类），判据就**静默错判**：页面永远停在
+   * 「启动中」、输入框永久禁用，而壳侧一切正常。这类「判据挂在文案上」的结构性
+   * 问题在审查档 §3.1 记为 S1-18。现在状态是**枚举**，文案只用于显示。
    */
   var missingState = false;
 

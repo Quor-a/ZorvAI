@@ -146,6 +146,35 @@ class TerminalEnvironment(context: Context) {
         ensureCaBundle()
     }
 
+    /**
+     * 判断文件是不是 **PIE（ET_DYN）** 可执行 ELF。
+     *
+     * 🔴 为什么必须判（2026-10-26 真机实测）：jniLibs 里的 `libbusybox.so` 与 `libbash.so`
+     * 是 **ET_EXEC（非 PIE）**，Android 10+ 一律拒绝执行，bionic 的报错原文就是
+     * `libbusybox.so has unexpected e_type: 2`。
+     * 而这两个 lib 被做成了 `usr/bin/busybox` 与 ~30 个 applet 符号链接
+     * （ls / grep / find / tar / xz / sed …），`usr/bin` 在 PATH 里排在 `/system/bin` 之前
+     * —— **把系统里本来能用的 toybox 全挡住了**。用户看到的现象因此是
+     * 「只有 wc / tail / head 能跑」（它们没被挡住，落到 /system/bin 的 toybox），
+     * 而 ls / grep / find 一敲就报 e_type。
+     */
+    private fun isPieElf(f: File): Boolean = runCatching {
+        f.inputStream().use { ins ->
+            val h = ByteArray(20)
+            var off = 0
+            while (off < h.size) {
+                val n = ins.read(h, off, h.size - off)
+                if (n <= 0) return@use false
+                off += n
+            }
+            val elf = h[0] == 0x7F.toByte() && h[1] == 'E'.code.toByte() &&
+                h[2] == 'L'.code.toByte() && h[3] == 'F'.code.toByte()
+            // e_type 在 offset 16..17，小端：3 = ET_DYN(PIE)，2 = ET_EXEC(非 PIE)
+            val eType = (h[16].toInt() and 0xFF) or ((h[17].toInt() and 0xFF) shl 8)
+            elf && eType == 3
+        }
+    }.getOrDefault(false)
+
     private fun linkNativeLibs() {
         Log.d(TAG, "Linking native libraries from: $nativeLibDir")
 
@@ -162,17 +191,29 @@ class TerminalEnvironment(context: Context) {
             return
         }
 
-        try {
-            Files.deleteIfExists(busybox.toPath())
-            busyboxSo.setExecutable(true, false)
-            Files.createSymbolicLink(busybox.toPath(), busyboxSo.toPath())
-            if (!(busybox.exists() && busybox.canExecute())) {
-                Log.e(TAG, "Verification failed: busybox link not functional after creation")
+        // 🔴 非 PIE 就**不建链**（见 isPieElf 注释）：硬建出来只会成为一个
+        // 「exec 即报 e_type」的死命令，还顺带遮蔽 /system/bin 里能用的同名工具。
+        val busyboxUsable = isPieElf(busyboxSo)
+        if (!busyboxUsable) {
+            Log.w(
+                TAG,
+                "libbusybox.so 不是 PIE（ET_EXEC），Android 10+ 不可执行 —— 跳过 busybox 链接，" +
+                    "并清掉历史死链，让 PATH 落回 /system/bin 的 toybox",
+            )
+            runCatching { Files.deleteIfExists(busybox.toPath()) }
+        } else {
+            try {
+                Files.deleteIfExists(busybox.toPath())
+                busyboxSo.setExecutable(true, false)
+                Files.createSymbolicLink(busybox.toPath(), busyboxSo.toPath())
+                if (!(busybox.exists() && busybox.canExecute())) {
+                    Log.e(TAG, "Verification failed: busybox link not functional after creation")
+                    return
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create busybox link using Java NIO", e)
                 return
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to create busybox link using Java NIO", e)
-            return
         }
 
         val libraries = mapOf(
@@ -188,6 +229,19 @@ class TerminalEnvironment(context: Context) {
             val linkFile = File(binDir, linkName)
             if (!libFile.exists()) {
                 Log.w(TAG, "Native library not found: $libName")
+                return@forEach
+            }
+            // 同样只看 PIE：非 PIE 的 libbash.so 硬链成 usr/bin/bash 只会得到一个
+            // 「exec 即报 e_type」的 bash。若树里已经有可用的真 bash（快照自带的 PIE bash），
+            // 就更不该用死链把它盖掉。
+            if (!isPieElf(libFile)) {
+                val existingReal = linkFile.isFile && !Files.isSymbolicLink(linkFile.toPath())
+                Log.w(
+                    TAG,
+                    "$libName 不是 PIE（ET_EXEC），Android 10+ 不可执行 —— 跳过 $linkName 链接" +
+                        if (existingReal) "（保留树里已有的真 $linkName）" else "",
+                )
+                if (!existingReal) runCatching { Files.deleteIfExists(linkFile.toPath()) }
                 return@forEach
             }
             try {
@@ -207,6 +261,26 @@ class TerminalEnvironment(context: Context) {
             "sed", "stat", "sh", "tr", "tar", "uname", "xargs", "xz", "xxd"
         )
         val busybox = File(binDir, "busybox")
+        // 🔴 busybox 不可用（缺失 / 非 PIE 执行不了）时**绝不能建 applet 链接**：
+        // 它们会把 `/system/bin` 里同名且能用的 toybox 二进制挡住（usr/bin 在 PATH 前），
+        // 用户一敲 ls/grep/find 就是 `libbusybox.so has unexpected e_type: 2`。
+        // 顺手把历史版本留下的死链清掉（只删「指向 busybox 的符号链接」，真文件一概不碰）。
+        if (!busybox.exists() || !isPieElf(busybox)) {
+            Log.w(TAG, "busybox 不可用（缺失或非 PIE），跳过 applet 链接并清理历史死链")
+            var cleaned = 0
+            for (linkName in links) {
+                val lf = File(binDir, linkName)
+                val isLink = runCatching { Files.isSymbolicLink(lf.toPath()) }.getOrDefault(false)
+                if (!isLink) continue
+                val target = runCatching { Files.readSymbolicLink(lf.toPath()).toString() }.getOrNull()
+                if (target == null || target.contains("busybox")) {
+                    runCatching { Files.deleteIfExists(lf.toPath()) }
+                        .onSuccess { cleaned++ }
+                }
+            }
+            if (cleaned > 0) Log.i(TAG, "已清理 $cleaned 条指向 busybox 的死链，命令将落回 /system/bin")
+            return
+        }
         for (linkName in links) {
             try {
                 createSymbolicLink(busybox, linkName, binDir, true)

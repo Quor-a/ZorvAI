@@ -4,7 +4,7 @@
  * The shell bridge exists (androidBridge.getImmersiveMode / setImmersiveMode,
  * whose truth source is the shell's ShellState.ImmersiveMode) and the row
  * registers at the upstream settings.general.item extension point (auto
- * projected into the General section nav), mirroring DevSection.
+ * projected into the General section nav), like the plugin's other own rows.
  *
  * 0.13.3 (D6 收益省略): the font-size slider (WebView textZoom, 50–200%)
  * retired — upstream ui-theme now ships a native fontSize field (12–17px
@@ -19,9 +19,11 @@
  * ST-09: the read goes through useShellState (mount + visible/foreground
  * re-read + write-then-read-back), never a one-shot bridge read.
  *
- * 2026-10-23 UI: 这一块此前复用了「开发者选项」的 `dsh-dev-*` 样式（描边按钮 + 原生
- * 16px 勾选框 + 13px 提示），与通用设置里上游行（左标题/说明、右侧控件、0.5px 分隔线）
- * 并列时是两套行规——用户反馈「设置里有些 UI 很突兀」。现改为上游行骨架
+ * 2026-10-23 UI: 这一块此前复用了 dev-section.css.ts 的 `dsh-dev-*` 样式（该文件已于 #429
+ * 随通知分区删除；该套原属「开发者选项」分区，描边按钮 + 原生 16px 勾选框 + 13px 提示），
+ * 与通用设置里上游行
+ * （左标题/说明、右侧控件、0.5px 分隔线）并列时是两套行规——用户反馈「设置里有些 UI
+ * 很突兀」。现改为上游行骨架
  * （general-settings.css.ts）+ 上游控件（ui-primitives 的 Switch / SegmentedControl）：
  * 开关与下方「在使用官方模型 API 时上传 Session Log」同款，语言三分段与上游分段控件同款，
  * 不再出现只有本页才有的绿色选中态与浏览器原生勾选框。

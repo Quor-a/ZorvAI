@@ -53,6 +53,25 @@ class NotificationContractTest {
     ),
   ).readText()
 
+  /** 页面侧文件在三种布局下都**不在场**（#418 删除文件的「不得复活」断言用）。 */
+  private fun uiFileAbsent(rel: String): Boolean = listOf(
+    "../dsh-client-ui-responsive/" + rel,
+    "dsh-client-ui-responsive/" + rel,
+    "../../dsh-client-ui-responsive/" + rel,
+  ).none { File(it).isFile }
+
+  /**
+   * 主 ZorvAI app 模块（壳侧）源文件：本测试跑在 dshmobile 模块里，按三种工作目录布局解析
+   * （#429 起通知设置的唯一在用真源在壳侧 ui/HarnessNotifyScreen.kt 与 ui/ChatScreen.kt）。
+   */
+  private fun mainAppSource(rel: String): String = find(
+    listOf(
+      "../../app/src/main/java/com/ai/assistance/quro/" + rel,
+      "../app/src/main/java/com/ai/assistance/quro/" + rel,
+      "../../../app/src/main/java/com/ai/assistance/quro/" + rel,
+    ),
+  ).readText()
+
   /** 去掉注释行（形态名出现在注释里不算命中——与门禁只看代码的口径一致）。 */
   private fun codeOnly(src: String): String = src.lineSequence()
     .filterNot {
@@ -168,48 +187,57 @@ class NotificationContractTest {
   }
 
   @Test
-  fun FIX4设置入口必须真的可达_桥面与页面两侧都在场() {
-    // J-1 真缺陷：上面那条测试只断言「NotifyCenter.kt 里存在这些成员」——纯文本在场。
-    // 而实测这些成员在 app/src/main 全仓**零外部调用点**、桥面 35 个 @JavascriptInterface 无一
-    // 涉及 notify、页面侧 grep 0 命中 ⇒ 能力在、入口无，那条测试因实现不可达而**假绿**。
-    //
-    // 本测试把「可达性」本身变成断言：可达 = ①壳侧有 @JavascriptInterface 出口且**挂在真源默认实现**上
-    // （不依赖 MainActivity 传参，漏接线在结构上不可能复发）；②页面侧类型面声明了同名成员；
-    // ③页面侧确实调用它。三处任一缺失即判红——撤掉桥出口/撤掉页面接线/改成 {ok:false} 桩都会红。
-    val bridge = codeOnly(shellSource("AndroidBridge.kt"))
-    assertTrue("桥面必须有通知设置读出口", bridge.contains("fun getNotifySetting("))
-    assertTrue("桥面必须有通知设置写出口", bridge.contains("fun setNotifySetting("))
-    assertTrue("读出口必须挂在真源默认实现（不得是未接线桩）",
-      bridge.contains("NotifyCenter.settingsSnapshot(app)"))
-    assertTrue("写出口必须挂在真源默认实现（不得是未接线桩）",
-      bridge.contains("NotifyCenter.applySetting(app, key, value)"))
-    assertFalse("读出口不得回落到「未接线」文案（那就是不可达本身）",
-      Regex("""getNotifySetting[\s\S]{0,400}?未接线""").containsMatchIn(bridge))
+  fun FIX4设置入口必须真的可达_壳侧直调真源且WebUI不得复活() {
+    // J-1 真缺陷（0.14.1）：「NotifyCenter.kt 里存在这些成员」只是纯文本在场——实测全仓零外部
+    // 调用点、桥面无一涉及 notify ⇒ 能力在、入口无，源码断言因不可达而假绿。
+    // #429 用户拍板「通知迁 ZorvAI 设置、harness 侧 UI 删除」后，可达性判据整体搬到壳侧：
+    //   ① 壳侧唯一设置面 HarnessNotifyScreen 直调 NotifyCenter 六个成员（同一真源，不经 WebUI 桥）；
+    //   ② 入口链四段齐全：设置行 → onOpenHarnessNotify → showHarnessNotify → 渲染覆盖层；
+    //   ③ WebUI 三处（index.ts 注册 / 组件文件 / 两侧桥面六个方法）不得复活。
+    // 任一段缺失即判红——撤掉壳侧接线、点不进设置屏、或回潮注册 WebUI 分区都会红。
+    val screen = mainAppSource("ui/HarnessNotifyScreen.kt")
+    assertTrue("读快照必须直调真源", screen.contains("NotifyCenter.settingsSnapshot(context)"))
+    assertTrue("写设置必须直调真源", screen.contains("NotifyCenter.applySetting(context, key, value)"))
+    assertTrue("自检必须直调真源", screen.contains("NotifyCenter.selfCheck(context)"))
+    assertTrue("测试投递必须直调真源", screen.contains("NotifyCenter.sendTestAll(context)"))
+    assertTrue("应用级系统设置深链必须在场", screen.contains("NotifyCenter.appSettingsIntent(context)"))
+    assertTrue("渠道级系统设置深链必须在场", screen.contains("NotifyCenter.channelSettingsIntent(context, channelId)"))
 
-    // 页面侧类型面（android-bridge.ts）必须声明两个成员，否则调用没有类型面、漂移无人拦。
-    val ts = uiSource("src/client/android-bridge.ts")
-    assertTrue("页面类型面必须声明 getNotifySetting", ts.contains("getNotifySetting?:"))
-    assertTrue("页面类型面必须声明 setNotifySetting", ts.contains("setNotifySetting?:"))
+    // 入口链：设置行 → onOpenHarnessNotify → showHarnessNotify → 全屏覆盖层渲染壳侧设置屏。
+    val chat = mainAppSource("ui/ChatScreen.kt")
+    assertTrue("设置行必须接线到 onOpenHarnessNotify",
+      Regex("""SetRowClickable\([\s\S]{0,400}?onOpenHarnessNotify""").containsMatchIn(chat))
+    assertTrue("状态置位必须在场", chat.contains("onOpenHarnessNotify = { showHarnessNotify = true }"))
+    assertTrue("状态声明必须在场", chat.contains("var showHarnessNotify by remember"))
+    assertTrue("覆盖层必须渲染壳侧设置屏",
+      chat.contains("HarnessNotifyScreen(onClose = { showHarnessNotify = false }"))
 
-    // 页面侧必须有真实调用点（不是只声明不用）。
-    val ui = uiSource("src/client/dev-section/notify-settings.tsx")
-    assertTrue("页面必须调用读出口", ui.contains("getNotifySetting?.("))
-    assertTrue("页面必须调用写出口", ui.contains("setNotifySetting?.("))
-    assertTrue("写后必须读回判定（applied 不为 true 不得置位）", ui.contains("applied !== true"))
-
-    // 页面必须真的挂在**可达分区**里（否则组件存在但没人渲染 = 另一种不可达）。
-    // 0.14.1 批 3（P3-5）后挂载点从「开发者选项」**提级**为设置页一级分区「通知」——
-    // 断言随之改指新挂载点（旧断言把旧结构当契约，正是本轮要收的形态之一）：
-    //   ① index.ts 注册一级分区 android-notify，并指向本文件的区块组件；
-    //   ② 该区块组件渲染了 NotifySettingsRow（能力与入口同处一文件，结构上不可能只留其一）；
-    //   ③ 开发者选项**不再**内嵌同一组开关（同功能双实现是审查档 §5 的结构性根因）。
+    // WebUI 不得复活：index.ts 注册、组件文件、壳侧桥面与页面类型面的六个方法。
     val index = uiSource("src/client/index.ts")
-    assertTrue("通知设置必须注册为设置页一级分区", index.contains("id: 'android-notify'"))
-    assertTrue("一级分区必须指向本文件的区块组件", index.contains("NotifySettingsSection"))
-    assertTrue("区块组件必须渲染通知设置行", ui.contains("<NotifySettingsRow />"))
-    val section = uiSource("src/client/dev-section/DevSection.tsx")
-    assertFalse("开发者选项不得再内嵌同一组开关（只留一行指路）", section.contains("<NotifySettingsRow"))
-    assertTrue("开发者选项必须留一行指路文案", section.contains("设置 → 通知"))
+    assertFalse("WebUI 不得回潮注册通知分区", index.contains("android-notify"))
+    assertTrue("通知分区组件文件不得复活（#429 已删除）",
+      uiFileAbsent("src/client/dev-section/notify-settings.tsx"))
+    val bridge = codeOnly(shellSource("AndroidBridge.kt"))
+    for (method in listOf(
+      "fun getNotifySetting(", "fun setNotifySetting(", "fun notifySelfCheck(",
+      "fun openNotifyAppSettings(", "fun openNotifyChannelSettings(", "fun notifySendTest(",
+    )) {
+      assertFalse("壳侧桥面不得保留 " + method + "（页面已无调用方）", bridge.contains(method))
+    }
+    // 页面类型面同样不得复活（只查 `?:` 声明形态；删除注释里的方法名不算命中）。
+    val ts = uiSource("src/client/android-bridge.ts")
+    for (method in listOf(
+      "getNotifySetting?:", "setNotifySetting?:", "notifySelfCheck?:",
+      "openNotifyAppSettings?:", "openNotifyChannelSettings?:", "notifySendTest?:",
+    )) {
+      assertFalse("页面类型面不得复活 " + method, ts.contains(method))
+    }
+
+    // #418 的旧双实现载体继续不得复活（同功能双实现是审查档 §5 的结构性根因）。
+    assertTrue("开发者选项载体 DevSection.tsx 不得复活（#418 已删除）",
+      uiFileAbsent("src/client/dev-section/DevSection.tsx"))
+    assertTrue("运行时缓存载体 runtime-cache.tsx 不得复活（#418 已删除）",
+      uiFileAbsent("src/client/dev-section/runtime-cache.tsx"))
   }
 
   @Test

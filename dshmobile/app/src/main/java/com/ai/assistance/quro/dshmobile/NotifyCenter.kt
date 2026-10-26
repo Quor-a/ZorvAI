@@ -608,7 +608,8 @@ object NotifyCenter {
    * 渠道重要性 → 人话（唯一真源 [UserCopy.importance]，P3-1）。
    *
    * 旧实现回的是 `HIGH(4)` 这样的档位名——那是**诊断口径**，页面上出现过「（重要性 4）」。
-   * 现在两侧同源：本方法（自检面用）与页面侧 `describeImportance` 覆盖同一档位集合，且都不回数字。
+   * #429 通知设置迁入 ZorvAI 设置后，本方法（壳侧自检/设置面用）是该口径的唯一在用方；
+   * 页面侧同名助手（`describeImportance`）已随 WebUI 通知分区删除。
    */
   fun importanceLabel(importance: Int): String = UserCopy.importance(importance)
 

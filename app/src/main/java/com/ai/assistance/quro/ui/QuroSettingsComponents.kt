@@ -117,22 +117,23 @@ fun SetRow(
     checked: Boolean,
     onToggle: () -> Unit,
     scaled: (Int) -> TextUnit = { it.sp },
+    enabled: Boolean = true,
 ) {
     val cs = MaterialTheme.colorScheme
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp)).clickable(onClick = onToggle).padding(12.dp),
+            .clip(RoundedCornerShape(12.dp)).clickable(enabled = enabled, onClick = onToggle).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, Modifier.size(20.dp), tint = cs.onSurfaceVariant)
+        Icon(icon, contentDescription = null, Modifier.size(20.dp), tint = if (enabled) cs.onSurfaceVariant else Muted)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(name, fontSize = scaled(14), color = cs.onSurface)
+            Text(name, fontSize = scaled(14), color = if (enabled) cs.onSurface else Muted)
             if (sub.isNotBlank()) Text(sub, fontSize = scaled(11), color = Muted, modifier = Modifier.padding(top = 2.dp))
         }
         Switch(
             checked = checked,
-            onCheckedChange = { onToggle() },
+            onCheckedChange = if (enabled) { { onToggle() } } else null,
             colors = SwitchDefaults.colors(
                 checkedTrackColor = Accent,
                 checkedThumbColor = Color.White,
@@ -155,15 +156,16 @@ fun SetRowClickable(
     onClick: () -> Unit,
     scaled: (Int) -> TextUnit = { it.sp },
     danger: Boolean = false,
+    enabled: Boolean = true,
 ) {
     val dangerColor = Color(android.graphics.Color.parseColor("#C0432F"))
     val cs = MaterialTheme.colorScheme
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(12.dp),
+            .clip(RoundedCornerShape(12.dp)).clickable(enabled = enabled, onClick = onClick).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, Modifier.size(20.dp), tint = if (danger) dangerColor else cs.onSurfaceVariant)
+        Icon(icon, contentDescription = null, Modifier.size(20.dp), tint = if (danger) dangerColor else if (enabled) cs.onSurfaceVariant else Muted)
         Spacer(Modifier.width(12.dp))
         // 🔴 name/sub 这一列拿的是「剩余宽度」，而右侧 value + 箭头是不可压缩的固定内容。
         // 旧实现里 value 的 Text 不限宽也不限制行数，长文本（如「手机 Download/QuroAI_logs」）
@@ -172,7 +174,7 @@ fun SetRowClickable(
         Column(Modifier.weight(1f).widthIn(min = 48.dp)) {
             Text(
                 name, fontSize = scaled(14),
-                color = if (danger) dangerColor else cs.onSurface,
+                color = if (danger) dangerColor else if (enabled) cs.onSurface else Muted,
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
             )
             if (sub.isNotBlank()) {

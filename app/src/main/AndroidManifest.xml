@@ -607,10 +607,15 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- 无障碍服务（权限管理：无障碍权限引导） -->
+        <!-- 🔴 全应用**唯一**的无障碍服务（#484）。
+             合并前 dshmobile 也声明了一个（`.DeviceControlService`），两个一并进 APK 后
+             系统「无障碍」列表出现 `Zorv AI` 与 `ZorvAI 设备控制` 两项，用户开两个开关才
+             一半能力可用——这就是「权限重复没有融合」。现在本服务继承 DeviceControlService，
+             一套生命周期同时承担 ZorvAI 工具与 harness 控制面；label 明确写清它管两件事。 -->
         <service
             android:name=".service.QuroAccessibilityService"
             android:exported="false"
+            android:label="@string/qk_04410"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

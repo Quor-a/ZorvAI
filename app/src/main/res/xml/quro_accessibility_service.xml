@@ -1,10 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  🔴 全应用**唯一**的无障碍服务配置（#484 合并后）。
+
+  合并前有两份配置：本文件（ZorvAI 侧，`typeAllMask` + 少 flags）与
+  dshmobile 的 `accessibility_service_config.xml`（harness 设备控制侧，
+  窄事件面 + flagReportViewIds/flagRetrieveInteractiveWindows/flagIncludeNotImportantViews）。
+  两个 `<service>` 同时存在于一个 APK ⇒ 系统设置里两项，用户得开两个开关才有一半能力可用。
+
+  合并后只留这一份，取两边**能力的并集**：
+  · 事件面：窗口状态变化 / 内容变化 / 滚动 —— 正是 harness 侧需要的三类（给语义快照打
+    失效标记，200ms 节流），也是本应用唯一消费事件的地方（只记录最近事件时间）。
+    原来 ZorvAI 用 typeAllMask 过宽，订阅文本变化等高频事件只增加开销。
+  · flagReportViewIds：让 resource-id 可用（harness 的 rid: 引用、ZorvAI 的 read_screen）。
+  · flagRetrieveInteractiveWindows：可读非活动窗口（弹窗 / 输入法窗口）。
+  · flagIncludeNotImportantViews：把 not-important 节点也纳入，否则部分自绘控件取不到。
+  · canTakeScreenshot：API 30+ 的 takeScreenshot()，截屏不再依赖 ADB（两边共用）。
+  · canPerformGestures：无节点可点时用 dispatchGesture 做坐标兜底。
+  · notificationTimeout 200ms：内容变化事件的系统级节流。
+-->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewScrolled"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagDefault"
-    android:canRetrieveWindowContent="true"
+    android:accessibilityFlags="flagDefault|flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
     android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
     android:canTakeScreenshot="true"
     android:description="@string/quro_accessibility_desc"
-    android:notificationTimeout="100" />
+    android:notificationTimeout="200"
+    android:summary="@string/qk_04412" />

@@ -185,7 +185,7 @@ class W3ShellContractTest {
     assertTrue("取值函数必须封顶 8 且下探 1", code.contains("internal fun uvThreadPoolSize(cores: Int): Int = minOf(8, cores.coerceAtLeast(1))"))
   }
 
-  // ── 0.14.8 堆下限：引擎 V8 老生代上限必须由壳注入 ────────────────────────────
+  // ── 0.14.8 堆下限 + 2026-10-26 cgroup 钳制：引擎 V8 老生代上限必须由壳注入 ────────
 
   @Test
   fun shellEnvInjectsTheAdaptiveEngineHeap() {
@@ -194,7 +194,7 @@ class W3ShellContractTest {
     val code = codeOnly(source("EngineManager.kt"))
     assertTrue(
       "堆下限：shellEnv() 必须注入 NODE_OPTIONS = --max-old-space-size=<自适应值>",
-      code.contains("\"NODE_OPTIONS\" to heapOptionFrom(engineHeapMb(deviceTotalRamMb()))"),
+      code.contains("\"NODE_OPTIONS\" to heapOptionFrom(effectiveEngineHeapMb(deviceTotalRamMb(), appCgroupLimitMb()))"),
     )
     assertTrue(
       "必须有下限常量（低于它引擎可能起不来）",
@@ -215,6 +215,48 @@ class W3ShellContractTest {
     assertTrue(
       "读不到设备内存时必须退回下限，不得编造",
       code.contains("if (totalRamMb <= 0) return ENGINE_HEAP_FLOOR_MB"),
+    )
+  }
+
+  @Test
+  fun engineHeapIsClampedToTheAppCgroupCapacity() {
+    // 2026-10-26 引擎静默死亡诊断（RMX8899 16GB 实锤）：4096 天花板远超 app cgroup 墙，
+    // V8 增长中 RSS 先撞墙 ⇒ cgroup OOM killer 无声斩首 node（零遗言/无 tombstone）。
+    // 本判据锁「cgroup 钳制层真的接进了 shellEnv 的 NODE_OPTIONS 装配」这一半：
+    // 纯函数那一半由 EngineBootInstrumentationTest 锁值。
+    val code = codeOnly(source("EngineManager.kt"))
+    val collector = codeOnly(source("LogCollector.kt"))
+    assertTrue(
+      "必须存在 cgroup 份额常量（55%：cgroup 还要装 App 主进程 ~580MB 与 proot 子进程）",
+      code.contains("internal const val ENGINE_HEAP_CGROUP_SHARE_NUM: Int = 55"),
+    )
+    assertTrue(
+      "必须存在 cgroup 上限可信阈值（超过它的是无限制占位值，不是真实容量）",
+      code.contains("internal const val CGROUP_LIMIT_PLAUSIBLE_MB: Int = 8192"),
+    )
+    assertTrue(
+      "必须从 /proc/self/cgroup 读层级（自描述、无 root）",
+      code.contains("File(\"/proc/self/cgroup\")"),
+    )
+    assertTrue(
+      "cgroup 读数不可信时必须原样回退物理内存推导（读不到的设备零回归）",
+      code.contains("if (cgroupLimitMb <= 0 || cgroupLimitMb > CGROUP_LIMIT_PLAUSIBLE_MB) return derived"),
+    )
+    assertTrue(
+      "boot-start 行必须同时落 engineHeapMb 与 cgroupMb（诊断包可直接核对「天花板/墙」比值）",
+      collector.contains("\"note=boot-start engineHeapMb=\" + engineHeapMb + \" cgroupMb=\" + cgroupMb"),
+    )
+    assertTrue(
+      "RSS 采样收口必须落 engine-rss 行（零遗言死亡的唯一坐实判据）",
+      collector.contains("\"note=engine-rss peakMb=\$peakMb lastMb=\$lastMb samples=\$samples pid=\$pid\""),
+    )
+    assertTrue(
+      "spawn 后必须起 RSS 采样器（cgroup OOM 零遗言，RSS 曲线是唯一能留痕的判据）",
+      code.contains("startEngineRssSampler(process)"),
+    )
+    assertTrue(
+      "RSS 采样必须读 /proc/<pid>/status 的 VmRSS（同 uid 可读，SIGKILL 现场也有最后读数）",
+      code.contains("File(\"/proc/\$pid/status\")"),
     )
   }
 
@@ -296,8 +338,8 @@ class W3ShellContractTest {
     }
     val manager = codeOnly(source("EngineManager.kt"))
     assertTrue(
-      "引擎启动时刻必须由 spawn 点标记，并带上本次生效的堆值（0.14.8 堆下限）",
-      manager.contains("LogCollector.markBootStart(context, engineHeapMb(deviceTotalRamMb()))"),
+      "引擎启动时刻必须由 spawn 点标记，并带上本次生效的堆值与 cgroup 上限（0.14.8 堆下限 + 2026-10-26 cgroup 钳制）",
+      manager.contains("LogCollector.markBootStart(context, effectiveEngineHeapMb(deviceTotalRamMb(), cgroupMb), cgroupMb)"),
     )
     assertTrue("监听时刻必须由 spawn 起的观察线程标记", manager.contains("LogCollector.markListen(context)"))
     assertTrue("启动主路径必须兜底补一次 listen 标记", codeOnly(source("EngineStartFlow.kt")).contains("LogCollector.markListen(activity)"))

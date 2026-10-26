@@ -64,20 +64,14 @@
       android:name=".OverlayService"
       android:exported="false" />
 
-    <!-- 0.13.5 W4：设备控制无障碍服务（语义控制面：按需取节点快照 + performAction）。
-         用户在系统设置里开启一次即生效；未开启时控制通道失败关闭（回退 ADB 通道）。 -->
-    <service
-      android:name=".DeviceControlService"
-      android:exported="true"
-      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-      android:label="@string/a11y_service_label">
-      <intent-filter>
-        <action android:name="android.accessibilityservice.AccessibilityService" />
-      </intent-filter>
-      <meta-data
-        android:name="android.accessibilityservice"
-        android:resource="@xml/accessibility_service_config" />
-    </service>
+    <!-- 🔴 #484：**设备控制无障碍服务的 `<service>` 声明已删除**。
+         原来这里声明 `.DeviceControlService`，而 app 模块又声明了
+         `com.ai.assistance.quro.service.QuroAccessibilityService`，两者合并进同一个 APK 后
+         系统「无障碍」列表里出现两项（`Zorv AI` 与 `ZorvAI 设备控制`）——用户必须开两个开关，
+         关一个就有一半能力失效，正是用户报的「权限重复没有融合」。
+         现在只有一个服务：app 侧的 QuroAccessibilityService **继承** DeviceControlService，
+         一套生命周期同时承担 ZorvAI 工具与 harness 控制面（见该类 KDoc）。
+         本类的代码与 companion（statusJson/token/heartbeat/instance）原样保留，语义不变。 -->
 
     <!-- 0.13.0 F2/M3.4：开机自启接收器（恢复用户上次同意的运行状态；restart 后需已启动过）。 -->
     <receiver

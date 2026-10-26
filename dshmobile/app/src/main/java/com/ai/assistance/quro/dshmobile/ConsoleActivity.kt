@@ -81,8 +81,10 @@ class ConsoleActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     WindowCompat.setDecorFitsSystemWindows(window, false)
-    window.statusBarColor = getColor(R.color.ds_bg)
-    window.navigationBarColor = getColor(R.color.ds_bg)
+    // 控制台页面底色是 ZorvAI 品牌纸色（ds_console_bg），系统栏跟随页面底色：
+    // 全局 ds_bg 仍是苹果灰（#F5F5F7/#000000），暗色下与暖纸色页面会形成色差分界。
+    window.statusBarColor = getColor(R.color.ds_console_bg)
+    window.navigationBarColor = getColor(R.color.ds_console_bg)
     val isNight = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
       android.content.res.Configuration.UI_MODE_NIGHT_YES
     WindowInsetsControllerCompat(window, window.decorView).apply {
@@ -91,7 +93,7 @@ class ConsoleActivity : ComponentActivity() {
     }
     webView = WebView(this).apply {
       id = View.generateViewId()
-      setBackgroundColor(getColor(R.color.ds_bg))
+      setBackgroundColor(getColor(R.color.ds_console_bg))
       layoutParams = ViewGroup.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
       )

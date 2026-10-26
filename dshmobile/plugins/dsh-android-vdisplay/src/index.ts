@@ -399,6 +399,34 @@ export function apply(ctx: Context): void {
     },
   }))
 
+  // 跨屏启动应用（2026-10-26 用户实报补漏：「虚拟屏只能打开不能操控」的根因）：
+  // 壳侧 VdisplayController.launchApp（vdLaunchApp op）早已实现，六处登记链也齐
+  // （VD_OPS / VdOp / SUPPORTED_OPS / ControlCarrier.VD_OPS / VdisplayOps.handle），
+  // 但**模型面没有这个工具**——模型看得到 create/destroy/input，却没路在虚拟屏里
+  // 启动一个应用，于是「屏里什么都没有，谈何操控」。本工具补上最后一处。
+  ctx.tools.register(defineTool({
+    name: 'android_vdisplay_launch_app',
+    description:
+      '在虚拟屏里启动一个应用（跨屏拉起）：Shizuku 特权通道，把指定包名的应用拉到目标虚拟屏前台，'
+      + '真实屏前台不受影响。虚拟屏需先存在（android_vdisplay_create）；启动后先用'
+      + ' android_vdisplay_status 看该屏宽高，再用 android_vdisplay_input（tap/swipe/text）'
+      + '在屏内点击输入——这才是虚拟屏操控的完整闭环。失败时返回结构化 code/guidance，'
+      + '不要假设应用已启动。',
+    parameters: {
+      pkg: { type: 'string', required: true, description: '要启动的应用包名（如 com.android.settings）' },
+      screenId: { type: 'string', description: '目标虚拟屏别名 virtual-N（缺省取当前选中）' },
+    },
+    output: lifecycleOutput('虚拟屏启动应用') as never,
+    execute: async (args: Record<string, unknown> | undefined, exec: unknown) => {
+      const a = (args ?? {}) as { pkg?: string; screenId?: string }
+      const pkg = (a.pkg ?? '').trim()
+      if (pkg === '') return rejectInput('pkg 不能为空（应用包名，如 com.android.settings）') as never
+      const payload: Record<string, unknown> = { pkg }
+      if (typeof a.screenId === 'string' && a.screenId !== '') payload.target = a.screenId
+      return await callVdOp('vdLaunchApp', 45_000, exec, payload) as never
+    },
+  }))
+
   // 工具面决策更正（0.14.1 设备实测，2026-09-19）：此处原文写「本插件不新增模型面工具」，理由是
   // 「预算 + 模型在同义工具间试探」，并主张用 android_app_launch/android_ui_click 传 screenId 承担。
   // 该结论被设备实测推翻：**指引三处承诺 `android_vdisplay_input` 而它从未存在**

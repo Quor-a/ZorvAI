@@ -34,7 +34,15 @@ import java.util.concurrent.atomic.AtomicInteger
  *  - 动作按**路径回指**（不是持久节点引用）：路径失效即失败关闭，绝不猜测性点击；
  *  - 不做账号接管/验证码/支付；不隐藏自动化信号。
  */
-class DeviceControlService : AccessibilityService() {
+/**
+ * 设备控制无障碍服务（harness 语义控制面）。
+ *
+ * 🔴 #484：本类**不再自己出现在清单里**——由 app 模块的
+ * `com.ai.assistance.quro.service.QuroAccessibilityService` **继承**它，一个服务同时承担
+ * ZorvAI 工具与 harness 控制面。所以这里是 `open` 且生命周期方法都可被子类覆写；
+ * 合并前两者各是一个 `<service>`，系统里两项、要开两个开关（用户报的「权限重复」）。
+ */
+open class DeviceControlService : AccessibilityService() {
 
   companion object {
     private const val TAG = "dsh-a11y"

@@ -62,7 +62,7 @@
   <!-- 0.13.2 ADB 输入通道 IME（ADBKeyboard 协议；引擎 android_ui_input 中文输入通道） -->
   <string name="adb_keyboard_label">ZorvAI ADB 输入通道</string>
   <!-- 0.13.5 W4：设备控制无障碍服务（语义控制面） -->
-  <string name="a11y_service_label">ZorvAI 设备控制</string>
+  <string name="a11y_service_label">ZorvAI 无障碍与设备控制</string>
   <string name="a11y_service_summary">让 AI 助手以语义方式读取界面并操作控件</string>
   <string name="a11y_service_description">开启后，AI 助手可以读取当前界面的控件（文本/描述/位置）并执行点击、输入、滚动等操作。仅在你主动开启时生效，关闭后立即失效；同时要求会话处于「完全访问」档位。</string>
     <string name="ds_start_port_foreign">本地引擎端口正被其他程序使用，应用没有停止该程序。请关闭冲突应用后点「重试启动」，或重启设备。[port-foreign]</string>
@@ -79,4 +79,24 @@
   <string name="ds_share_log_working">正在打包诊断日志…</string>
   <string name="ds_share_log_done">已生成诊断包 %1$s，请选择要发送到的应用</string>
   <string name="ds_share_log_failed">分享未成功：%1$s</string>
+  <!-- #448 整页重写：环形仪表 + 相位步骤条（新组件，与旧卡片的文案体系独立） -->
+  <string name="ds_dial_a11y">引擎状态仪表</string>
+  <string name="ds_step_extract">抽取运行时</string>
+  <string name="ds_step_launch">启动引擎</string>
+  <string name="ds_step_ready">就绪</string>
+  <string name="ds_step_done">已完成</string>
+  <string name="ds_step_active">进行中</string>
+  <string name="ds_step_pending">未开始</string>
+  <string name="ds_step_failed">此处失败</string>
+  <!-- 相位短词：顶部状态胶囊与仪表环心共用（#448）。短到能塞进环心，仍要能区分处境。 -->
+  <string name="ds_phase_idle">待启动</string>
+  <string name="ds_phase_starting">启动中</string>
+  <string name="ds_phase_extracting">解压中</string>
+  <string name="ds_phase_updating">更新中</string>
+  <string name="ds_phase_recovering">恢复中</string>
+  <string name="ds_phase_undoing">回滚中</string>
+  <string name="ds_phase_error">已失败</string>
+  <string name="ds_phase_closed">已停止</string>
+  <string name="ds_phase_info">提示</string>
+  <string name="ds_management_cd">管理中心</string>
 </resources>

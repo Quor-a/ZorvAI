@@ -110,6 +110,13 @@
       "marker": "dsh-mobile dot-only badge"
     },
     {
+      "id": "undo-E9",
+      "target": "dsh-undo-savepoint/lib/client.js",
+      "summary": "摘除设置页「快照」分区：移除 settings.section 一级分区注册（id dsh-undo，label=t(settings.nav)）与其下 settings.undo.item 页面槽（含 sectionOk 门控整块）；保留头部 undo/redo 按钮与快照徽章、SnapshotPanel、急救 CLI 与 U1/S1/S2",
+      "provenance": "2026-10-26 用户拍板「快照和通知还在」：harness 设置导航中「快照」「通知」两区删除（「手机控制」「开发者选项」已随上一包删除）；通知侧 #429 迁 ZorvAI 设置（壳侧 HarnessNotifyScreen 直调 NotifyCenter），「快照」侧即本补丁摘除的 dsh-undo 插件设置分区。UndoSettingsSection/UndoMainPage 定义与 exports 留为无害死代码",
+      "marker": "// Snapshot settings: own sidebar section（存在=未应用）"
+    },
+    {
       "id": "undo-safe-align-S1",
       "target": "dsh-undo-savepoint/lib/core.mjs",
       "summary": "safe 生成逻辑使用最终快照的 exact entry id/name 权属：只隔离无法匹配工厂身份的 insert 子条目，保留用户源码、unknown fields 与全部顶层 disable 行",

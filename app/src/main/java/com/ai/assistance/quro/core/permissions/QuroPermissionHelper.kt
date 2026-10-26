@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import com.ai.assistance.quro.core.privilege.QuroRootGateway
 import com.ai.assistance.quro.core.privilege.QuroShizukuBridge
 import com.ai.assistance.quro.core.shizuku.QuroShizukuPkg
+import com.ai.assistance.quro.dshmobile.NotifyCenter
 import com.ai.assistance.quro.receiver.QuroDeviceAdminReceiver
 import com.ai.assistance.quro.service.QuroAccessibilityService
 import java.io.File
@@ -57,6 +58,7 @@ object QuroPermissionHelper {
             shizuku(context),
             admin(context),
             root(context),
+            notification(context),
         )
     }
 
@@ -172,9 +174,19 @@ object QuroPermissionHelper {
     }
 
     // 5) 无障碍服务
+    /**
+     * #417/#433 → #484：**只剩一个**无障碍服务。
+     *
+     * 历史上 harness 的 `DeviceControlService`（系统列表里的「ZorvAI 设备控制」）与 ZorvAI 的
+     * `QuroAccessibilityService`（「ZorvAI 无障碍」）是两个独立 `<service>`，合并进同一个 APK
+     * 后系统里出现两项、要开两个开关，关一个就有一半能力失效——用户报的「权限重复没有融合」。
+     *
+     * 现在 `QuroAccessibilityService` 继承 `DeviceControlService`，清单里只有一个服务，
+     * 所以这里也只判一个 ComponentName：开即全开，判据单一，不再有「开了一个还提示另一个」。
+     */
     private fun accessibility(ctx: Context, pkg: String): QuroPermissionItem {
-        val cn = android.content.ComponentName(ctx, QuroAccessibilityService::class.java)
-        val enabled = isAccessibilityServiceEnabled(ctx, cn.flattenToString())
+        val quro = android.content.ComponentName(ctx, QuroAccessibilityService::class.java)
+        val enabled = isAccessibilityServiceEnabled(ctx, quro.flattenToString())
         return QuroPermissionItem(
             id = "accessibility",
             title = qstr(R.string.qk_02300),
@@ -182,10 +194,13 @@ object QuroPermissionHelper {
             granted = enabled,
             guideIntent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
                 // 部分 ROM 支持直接定位到本服务
-                putExtra(":settings:fragment_args_key", cn.flattenToString())
-                putExtra("EXTRA_FRAGMENT_ARG_KEY", cn.flattenToString())
+                putExtra(":settings:fragment_args_key", quro.flattenToString())
+                putExtra("EXTRA_FRAGMENT_ARG_KEY", quro.flattenToString())
             },
-            note = if (enabled) "" else "在系统「无障碍」列表中找到「ZorvAI 无障碍」并开启",
+            note = when {
+                enabled -> "已开启（ZorvAI 无障碍与设备控制）"
+                else -> "在系统「无障碍」列表中找到「ZorvAI 无障碍与设备控制」并开启（一项即可）"
+            },
         )
     }
 
@@ -269,6 +284,35 @@ object QuroPermissionHelper {
             granted = verified == true,
             guideIntent = null,
             note = note,
+        )
+    }
+
+    // 9) 通知权限（POST_NOTIFICATIONS，Android 13+ 运行时权限）
+    /**
+     * 通知投递总闸（#429）：harness 的工作汇报 / 提问 / 授权请求与 ZorvAI 自己的
+     * AI 回复通知共用这一项。判定同时看运行时权限与系统总开关——只查权限会在
+     * 「用户在系统里关掉本应用通知」时误报已授予（权限仍在，通知不到）。
+     */
+    private fun notification(ctx: Context): QuroPermissionItem {
+        val runtimeGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ctx.hasPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            true // Android 13 以下安装即授
+        }
+        val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val systemOn = nm.areNotificationsEnabled()
+        val granted = runtimeGranted && systemOn
+        return QuroPermissionItem(
+            id = "notification",
+            title = qstr(R.string.qk_04131),
+            desc = "任务汇报、提问与授权请求的通知提醒（Harness 与 AI 回复通知共用）",
+            granted = granted,
+            guideIntent = if (granted) null else NotifyCenter.appSettingsIntent(ctx),
+            note = when {
+                granted -> "已授予，通知可正常到达"
+                !systemOn -> "系统已关闭本应用的全部通知——点「开启」去系统设置里恢复"
+                else -> "尚未授权——点「开启」后允许通知"
+            },
         )
     }
 

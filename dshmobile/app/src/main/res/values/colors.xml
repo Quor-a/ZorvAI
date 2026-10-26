@@ -4,26 +4,36 @@
        dshm_ 前缀避宿主 ic_launcher_background（drawable 型）撞名 -->
   <color name="dshm_ic_launcher_background">#06121F</color>
 
-  <!-- UI 设计 token:Apple 式黑白极简(浅色)。铬面只允许近中性灰(羊皮纸微蓝容许),
-       色相仅留给 ok/warn/danger 语义信号族 —— 由 GuidePaletteMonochromeTest 守护。 -->
-  <color name="ds_bg">#F5F5F7</color>
+  <!-- UI 设计 token:ZorvAI 品牌暖纸体系（2026-10-26 用户拍板「界面重写」，与 console.html
+       同源；唯一真源 genuiagent-sdk ZorvPalette.kt）。此前是 Apple 式黑白极简稿（#F5F5F7
+       羊皮纸灰 + #1D1D1F 墨 + 近黑 accent），用户截图点名「这个界面还是没有重写」后整面切换：
+       纸底 #F4F1EA / 卡片 #FFFFFF / 墨色文字 #211E1A / 陶土强调 #C25A38 / 暖线 #D8D0C0。
+       守护测试同步改为品牌契约（GuidePaletteMonochromeTest → 品牌锚点断言）。
+       语义信号族（ok/warn/danger）同样换为暖色族（ZorvPalette Success/Warning/ErrorWarm）。 -->
+  <color name="ds_bg">#F4F1EA</color>
+
+  <!-- 控制台（console.html）页面底色：ZorvAI 品牌暖纸色。ConsoleActivity 的状态栏/
+       导航栏/WebView 底色跟随它，避免暗色下与全局 ds_bg 出现色差分界。
+       亮色 = ZorvPalette.Paper #F4F1EA（与 ds_bg 同值，控制台是独立 token 便于单独演进），
+       暗色镜像见 values-night/colors.xml。 -->
+  <color name="ds_console_bg">#F4F1EA</color>
   <color name="ds_surface">#FFFFFF</color>
-  <color name="ds_surface_muted">#F5F5F7</color>
-  <color name="ds_chip">#F2F2F4</color>
-  <color name="ds_button_surface">#E8E8ED</color>
-  <color name="ds_border">#14000000</color>
-  <color name="ds_hairline">#1A000000</color>
-  <color name="ds_text_primary">#1D1D1F</color>
-  <color name="ds_text_secondary">#6E6E73</color>
-  <color name="ds_text_tertiary">#86868B</color>
+  <color name="ds_surface_muted">#ECE7DC</color>
+  <color name="ds_chip">#ECE7DC</color>
+  <color name="ds_button_surface">#E3DDD0</color>
+  <color name="ds_border">#D8D0C0</color>
+  <color name="ds_hairline">#E3DDD0</color>
+  <color name="ds_text_primary">#211E1A</color>
+  <color name="ds_text_secondary">#544D44</color>
+  <color name="ds_text_tertiary">#938A7E</color>
   <color name="ds_text_on_accent">#FFFFFF</color>
-  <color name="ds_accent">#1D1D1F</color>
-  <color name="ds_accent_pressed">#3A3A3C</color>
-  <color name="ds_accent_soft">#0D000000</color>
-  <color name="ds_ok">#34C759</color>
-  <color name="ds_warn">#FF9500</color>
-  <color name="ds_danger">#D70015</color>
-  <color name="ds_danger_soft">#14D70015</color>
-  <color name="ds_progress_track">#14000000</color>
-  <color name="ds_scrim">#E6F5F5F7</color>
+  <color name="ds_accent">#C25A38</color>
+  <color name="ds_accent_pressed">#A8482B</color>
+  <color name="ds_accent_soft">#F4E4DB</color>
+  <color name="ds_ok">#4E7A46</color>
+  <color name="ds_warn">#B08320</color>
+  <color name="ds_danger">#B23A2E</color>
+  <color name="ds_danger_soft">#F6E3DF</color>
+  <color name="ds_progress_track">#E3DDD0</color>
+  <color name="ds_scrim">#E6F4F1EA</color>
 </resources>

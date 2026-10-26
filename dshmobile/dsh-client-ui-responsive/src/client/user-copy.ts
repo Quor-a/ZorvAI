@@ -162,38 +162,6 @@ export function describeHttpFailure(action: string, status: number): string {
 }
 
 /**
- * 通知设置写失败原因 → 人话（P3-1 + P3-6）。
- *
- * 壳侧 `NotifyCenter.applySetting` 回 `unknown-key` / `readback-mismatch` 两个码：
- * 前者是本版不认识该开关（不该发生），后者是写完读回与预期不一致（系统拦了写入）。
- * 旧实现把码与内部 key 一起上屏（「未生效（readback-mismatch）：cat.question」），
- * 这里改成「哪一类开关没生效 + 下一步」，key 不收进句子。
- */
-export function describeNotifyWriteFailure(reason: string | undefined): string {
-  const code = (reason ?? '').trim()
-  if (code === 'readback-mismatch') return '系统没有接受这次改动（写入后读回不一致）——请重试；仍失败请到系统设置里直接修改通知权限'
-  if (code === 'unknown-key') return '本版不认识这个开关（应用安装包与页面版本不匹配）——请更新或重新安装应用'
-  return '开关未生效——请重试；仍失败可复制日志反馈'
-}
-
-/**
- * 通知渠道重要性（壳侧 `importance` 数字）→ 人话。
- *
- * 旧实现直接把数字印成「（重要性 4）」——数字档位对用户没有意义，用户要看的是
- * 「会不会响、会不会弹」。档位语义与 Android `NotificationManager.IMPORTANCE_*` 一一对应。
- * @param importance - 壳侧回的重要性整数。
- * @returns 「高（会弹出并响铃）」这类人话；非数字返回空串（调用方整段省略）。
- */
-export function describeImportance(importance: unknown): string {
-  if (typeof importance !== 'number' || !Number.isFinite(importance)) return ''
-  if (importance >= 4) return '高（会弹到屏幕上并响铃）'
-  if (importance === 3) return '默认（会响铃，不弹到屏幕上）'
-  if (importance === 2) return '低（只在通知栏提示，不响铃）'
-  if (importance === 1) return '极低（不响铃、不提示，仅在通知栏可见）'
-  return '已关闭（系统不再显示该渠道的通知）'
-}
-
-/**
  * 硬截断唯一入口（P3-4）：超长一律附省略号。
  *
  * 缺陷现场：`take(24)` / `slice(0, 20)` 这类硬截断把 `rm -rf /data/loca` 呈现成一条**看起来

@@ -7,11 +7,20 @@
 //  2. 行为：点一级行进入二级页、点返回逐级退回、首页返回才真的关设置；
 //  3. 边界：横屏（缺手机形态标记）一个字节都不写；我方自有分区才有短说明，第三方/上游行只有
 //     上游原本的 icon + label；返回首页不重建内容列（未保存的编辑不丢）。
+//
+// #429 起「通知」分区迁入 ZorvAI 设置，index.ts 里最后一个 settings.section 注册随之删除——
+// 我方自有分区注册数现为 0，夹具里的自有行一律用「模型能力」（表内先于本任务存在的死键，
+// 机制照测）；漂移用例随之改判「index.ts 不得注册任何 settings.section」。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { MobileSettingsNav } from '../src/client/mobile/settings-nav.ts'
 
-/** 我方 index.ts 里 settings.section 注册的 label（真源；下面的漂移用例直接读它）。 */
+/**
+ * 我方 index.ts 里 settings.section 注册的 label（真源；下面的漂移用例直接读它）。
+ *
+ * #416（应用更新）/ #417（手机控制）/ #418（开发者选项）/ #429（通知）后，这里**必须**返回
+ * 空数组——任何回潮注册都会让漂移用例当场变红（新增分区必须同时补 settings-nav 的三张表）。
+ */
 function ownRegisteredLabels(): string[] {
   const source = readFileSync('src/client/index.ts', 'utf8')
   return source
@@ -115,22 +124,22 @@ afterEach(() => {
 
 describe('设置首页：分类列表', () => {
   it('手机形态下把面板标成首页，并保留上游渲染顺序与图标', async () => {
-    const handle = buildPanel(['通用设置', '模型', '开发者选项', '手机控制', '通知'])
+    const handle = buildPanel(['通用设置', '模型', '模型能力', '第三方插件页', '内置插件'])
     nav = new MobileSettingsNav()
     nav.attach()
     expect(handle.panel.getAttribute('data-dsh-settings-level')).toBe('home')
     const rows = [...handle.panel.querySelectorAll('nav div:nth-child(2) > button')]
     expect(rows.map(row => row.querySelector('span')!.textContent)).toEqual(
-      ['通用设置', '模型', '开发者选项', '手机控制', '通知'])
+      ['通用设置', '模型', '模型能力', '第三方插件页', '内置插件'])
     // 每行仍是上游那个按钮 + 上游那个 svg 图标，外加我方一条装饰箭头。
     for (const row of rows) expect(row.querySelector('svg')).not.toBeNull()
   })
 
   it('一级行带标题 + 一行短说明 + 箭头；后续注册的行补插也照样收敛', async () => {
-    const handle = buildPanel(['通用设置', '开发者选项'])
+    const handle = buildPanel(['通用设置', '模型能力'])
     nav = new MobileSettingsNav()
     nav.attach()
-    expect(handle.rows.get('开发者选项')!.querySelector('[data-dsh-settings-nav-desc]')).not.toBeNull()
+    expect(handle.rows.get('模型能力')!.querySelector('[data-dsh-settings-nav-desc]')).not.toBeNull()
     const added = document.createElement('button')
     added.type = 'button'
     added.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))
@@ -165,12 +174,12 @@ describe('设置首页：分类列表', () => {
 
 describe('二级页：点一级分类进入', () => {
   it('点任意一级行进入二级页，标题取该行的注册名，焦点落到返回控件', () => {
-    const handle = buildPanel(['通用设置', '开发者选项'])
+    const handle = buildPanel(['通用设置', '模型能力'])
     nav = new MobileSettingsNav()
     nav.attach()
-    handle.rows.get('开发者选项')!.click()
+    handle.rows.get('模型能力')!.click()
     expect(handle.panel.getAttribute('data-dsh-settings-level')).toBe('detail')
-    expect(handle.panel.querySelector('[data-dsh-settings-bar-title]')!.textContent).toBe('开发者选项')
+    expect(handle.panel.querySelector('[data-dsh-settings-bar-title]')!.textContent).toBe('模型能力')
     expect(document.activeElement).toBe(back(handle.panel))
   })
 
@@ -218,26 +227,26 @@ describe('二级页：点一级分类进入', () => {
 
 describe('逐级返回', () => {
   it('二级页返回 -> 首页，焦点回到当前一级行，内容列节点原样（未保存编辑不丢）', () => {
-    const handle = buildPanel(['开发者选项'])
+    const handle = buildPanel(['模型能力'])
     nav = new MobileSettingsNav()
     nav.attach()
     const input = handle.content.querySelector('input')!
     input.value = '写了一半'
-    handle.rows.get('开发者选项')!.click()
+    handle.rows.get('模型能力')!.click()
     back(handle.panel).click()
     expect(handle.panel.getAttribute('data-dsh-settings-level')).toBe('home')
     expect(handle.panel.querySelector('[data-dsh-settings-bar-title]')!.textContent, '回到首页标题必须变回外壳标题').toBe('设置')
     expect(handle.content.querySelector('input')).toBe(input)
     expect((handle.content.querySelector('input') as HTMLInputElement).value).toBe('写了一半')
-    expect(document.activeElement).toBe(handle.rows.get('开发者选项'))
+    expect(document.activeElement).toBe(handle.rows.get('模型能力'))
     expect(handle.maskClicks(), '二级页返回不得关掉设置').toBe(0)
   })
 
   it('二级页的 Escape 只退回首页，不关设置', () => {
-    const handle = buildPanel(['开发者选项'])
+    const handle = buildPanel(['模型能力'])
     nav = new MobileSettingsNav()
     nav.attach()
-    handle.rows.get('开发者选项')!.click()
+    handle.rows.get('模型能力')!.click()
     const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
     handle.panel.dispatchEvent(escape)
     expect(escape.defaultPrevented).toBe(true)
@@ -248,10 +257,10 @@ describe('逐级返回', () => {
   // Android 返回逐级（detail -> home -> 关闭）不是靠新增返回栈层，而是靠 back-stack 的 dialog 层
   // 点蒙层这一步在本层被翻译成「降一级」；首页再按一次才落到 dialog 层真的关闭设置。
   it('二级页里点蒙层（系统返回的 dialog 层路径）只降一级，不关设置；首页再点一次才关', () => {
-    const handle = buildPanel(['开发者选项'])
+    const handle = buildPanel(['模型能力'])
     nav = new MobileSettingsNav()
     nav.attach()
-    handle.rows.get('开发者选项')!.click()
+    handle.rows.get('模型能力')!.click()
     // 第一次返回：dialog 层点蒙层 -> 只降一级。
     handle.mask.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     expect(handle.panel.getAttribute('data-dsh-settings-level'), '二级页的返回必须落回首页').toBe('home')
@@ -262,10 +271,10 @@ describe('逐级返回', () => {
   })
 
   it('返回首页 -> 再进二级页：仍是同一个内容列（不重挂载），可反复往返', () => {
-    const handle = buildPanel(['手机控制'])
+    const handle = buildPanel(['模型能力'])
     nav = new MobileSettingsNav()
     nav.attach()
-    const row = handle.rows.get('手机控制')!
+    const row = handle.rows.get('模型能力')!
     const content = handle.content
     for (let round = 0; round < 3; round += 1) {
       row.click()
@@ -307,7 +316,7 @@ describe('形态与生命周期边界', () => {
   })
 
   it('设置关闭（面板离开 DOM）后不留任何注入节点', async () => {
-    const handle = buildPanel(['通用设置', '开发者选项'])
+    const handle = buildPanel(['通用设置', '模型能力'])
     nav = new MobileSettingsNav()
     nav.attach()
     handle.overlay.remove()
@@ -316,7 +325,7 @@ describe('形态与生命周期边界', () => {
   })
 
   it('detach 收回全部注入物并把 DOM 还原成上游原样', () => {
-    const handle = buildPanel(['通用设置', '开发者选项'])
+    const handle = buildPanel(['通用设置', '模型能力'])
     nav = new MobileSettingsNav()
     nav.attach()
     nav.detach()
@@ -330,24 +339,14 @@ describe('形态与生命周期边界', () => {
 })
 
 describe('短说明的归属（D4/D5）', () => {
-  it('index.ts 注册的每个我方自有分区都拿到短说明（表与注册漂移会当场变红）', async () => {
+  it('index.ts 不得注册任何 settings.section 一级分区（#416/#417/#418/#429 全清后的漂移门禁）', () => {
     const labels = ownRegisteredLabels()
-    expect(labels.length, 'index.ts 里必须能读出我方自有分区').toBeGreaterThan(0)
-    const handle = buildPanel(labels)
-    nav = new MobileSettingsNav()
-    nav.attach()
-    for (const label of labels) {
-      const row = handle.rows.get(label)!
-      expect(row.getAttribute('data-dsh-settings-nav'), label + ' 应被认作我方自有分区').toBe('own')
-      const desc = row.querySelector('[data-dsh-settings-nav-desc]')
-      expect(desc, label + ' 必须有一行短说明').not.toBeNull()
-      expect((desc!.textContent ?? '').length, label + ' 的说明必须是一行短说明').toBeGreaterThan(0)
-      // 说明是补充信息：读屏读到的仍是上游注册名，说明本身不进可访问名。
-      expect(desc!.getAttribute('aria-hidden')).toBe('true')
+    // 应用更新 / 手机控制 / 开发者选项 / 通知四个分区都已迁 ZorvAI 壳侧或直接删除，
+    // index.ts 再注册任何一个都是回潮；表键（模型能力）现为死键，漂移判据只剩「零注册」。
+    expect(labels, 'index.ts 不得回潮注册 settings.section 一级分区').toEqual([])
+    for (const banned of ['通知', '开发者选项', '手机控制', '应用更新']) {
+      expect(labels, banned + ' 分区已删除，不得回潮注册').not.toContain(banned)
     }
-    expect(labels).toContain('开发者选项')
-    expect(labels).toContain('手机控制')
-    expect(labels).toContain('通知')
   })
 
   it('反证：上游与第三方行一个字都不改（无说明、label 原样、不隐藏）', () => {
@@ -374,20 +373,26 @@ describe('一级行的图标（只装饰我方自有分区）', () => {
     return svg!.getAttribute('viewBox') + '::' + ds
   }
 
-  it('三个自有 id 各行图标互不相同（否则用户无法凭图标区分分类）', () => {
-    const handle = buildPanel(['开发者选项', '手机控制', '通知'])
+  it('唯一自有分区（模型能力）的图标几何被钉住——防表键与几何被换错/弄丢', () => {
+    const handle = buildPanel(['模型能力'])
     nav = new MobileSettingsNav()
     nav.attach()
-    const fingerprints = [...handle.rows.keys()].map(label => iconFingerprint(handle.rows.get(label)!))
-    expect(new Set(fingerprints).size, '三个分类的图标必须两两不同').toBe(3)
+    // 几何取自上游 IconSparkleMedium（见 settings-nav.ts 的表注释）；整串钉死，
+    // 任何「换了一段 path / 丢了第三段 / viewBox 改动」都会在这里判红。
+    expect(iconFingerprint(handle.rows.get('模型能力')!)).toBe(
+      '0 0 16 16::'
+      + 'M5.875 3C5.875 6.33333 7.54167 8 10.875 8C7.54167 8 5.875 9.66667 5.875 13C5.875 9.66667 4.20833 8 0.875 8C4.20833 8 5.875 6.33333 5.875 3Z'
+      + '|M12.375 1.55823C12.375 3.39156 13.2917 4.30823 15.125 4.30823C13.2917 4.30823 12.375 5.22489 12.375 7.05823C12.375 5.22489 11.4583 4.30823 9.625 4.30823C11.4583 4.30823 12.375 3.39156 12.375 1.55823Z'
+      + '|M12.375 10.4418C12.375 11.7751 13.0417 12.4418 14.375 12.4418C13.0417 12.4418 12.375 13.1084 12.375 14.4418C12.375 13.1084 11.7083 12.4418 10.375 12.4418C11.7083 12.4418 12.375 11.7751 12.375 10.4418Z',
+    )
   })
 
   it('未知 id 仍是上游降级图标（我方图标只覆盖自己的行）', () => {
-    const handle = buildPanel(['开发者选项', '第三方插件页'])
+    const handle = buildPanel(['模型能力', '第三方插件页'])
     nav = new MobileSettingsNav()
     nav.attach()
     // 我方行：上游那个（齿轮）被隐藏，只留一个我方图标。
-    const own = handle.rows.get('开发者选项')!
+    const own = handle.rows.get('模型能力')!
     expect(own.querySelectorAll('svg[data-dsh-settings-nav-icon]')).toHaveLength(1)
     expect(own.querySelectorAll('svg[data-dsh-settings-nav-icon-hidden]')).toHaveLength(1)
     // 第三方行：上游图标原样，且没有我方图标、没有被隐藏。
@@ -398,12 +403,12 @@ describe('一级行的图标（只装饰我方自有分区）', () => {
   })
 
   it('detach 之后上游图标原样恢复（我方图标收回且隐藏标记去掉）', () => {
-    const handle = buildPanel(['开发者选项'])
+    const handle = buildPanel(['模型能力'])
     nav = new MobileSettingsNav()
     nav.attach()
     nav.detach()
     nav = undefined
-    const row = handle.rows.get('开发者选项')!
+    const row = handle.rows.get('模型能力')!
     expect(row.querySelector('svg[data-dsh-settings-nav-icon]')).toBeNull()
     expect(row.querySelector('svg[data-dsh-settings-nav-icon-hidden]')).toBeNull()
     expect(row.querySelector('svg'), '上游 svg 必须仍在行里').not.toBeNull()

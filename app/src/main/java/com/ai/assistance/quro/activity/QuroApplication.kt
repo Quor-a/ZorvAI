@@ -125,8 +125,9 @@ class QuroApplication : Application(), Configuration.Provider {
         // harness 的 agent 需要宿主（ZorvAI）的手机能力：读屏、点击、滑动、截图、
         // 启动应用、Shizuku 系统命令……这些只在 app 模块实现，经 MCP 桥注册给引擎。
         // 这里注入实现，terminal-core 在 harness 启动前会调用它。
+        // 🔴 用 ensureAuto 而非 enable：尊重用户显式关闭（bridge_off），不被 spawn 无脑复活。
         HarnessBridgeHook.ensureBridge = { ctx ->
-            com.ai.assistance.quro.core.tools.HarnessBridge.enable(ctx)
+            com.ai.assistance.quro.core.tools.HarnessBridge.ensureAuto(ctx)
         }
         super.onCreate()
 
@@ -203,6 +204,24 @@ class QuroApplication : Application(), Configuration.Provider {
             QuroImportedToolRegistry.load(applicationContext)
             // 自动拉起 AI 部署的本地 MCP 服务器，使其随应用启动即恢复可用（界面自动拉取注册）
             QuroLocalMcpManager.startAll(applicationContext)
+            // 🔴 互控桥自愈（2026-10-26 真机事故）：桥原先**只在「引擎每次 spawn 前」**建一次，
+            // 而引擎一次都没成功起来过时，它就一次都没建过 —— 实测后果：`<dshHome>/zorvai-tools.json`
+            // 不存在、127.0.0.1 上没有任何 /tool 监听，harness 侧只剩元工具 zorvai_bridge，
+            // `zorvai_*` / `mcp__zorvai__*` 两条通道全空。这里应用启动就建一遍，与引擎生命周期解耦。
+            // 放后台线程：enable 要构建整套工具注册表并起本地 server，不能压主线程。
+            // 用户显式关闭过互控桥时，ensureAuto 自己会跳过（见 HarnessBridge.PREF_USER_OFF）。
+            Thread(
+                {
+                    runCatching {
+                        val msg = com.ai.assistance.quro.core.tools.HarnessBridge
+                            .ensureAuto(applicationContext)
+                        android.util.Log.i("QuroApplication", "[互控桥] $msg")
+                    }.onFailure {
+                        android.util.Log.w("QuroApplication", "互控桥自愈失败", it)
+                    }
+                },
+                "quro-harness-bridge-boot",
+            ).apply { isDaemon = true }.start()
             // 恢复所有定时任务调度（开机/重启后自动重新排程）
             QuroScheduledTaskScheduler.ensureChannel(applicationContext)
             QuroScheduledTaskScheduler.scheduleAll(applicationContext)

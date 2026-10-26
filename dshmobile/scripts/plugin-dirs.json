@@ -6,6 +6,7 @@
     "dsh-host-web-compat",
     "plugins/dsh-android-bridge",
     "plugins/dsh-android-manage",
+    "plugins/dsh-android-zorvai-tools",
     "plugins/dsh-android-linux-env",
     "plugins/dsh-android-file-open",
     "plugins/dsh-android-browser",

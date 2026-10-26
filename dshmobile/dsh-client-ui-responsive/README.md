@@ -27,9 +27,9 @@ and transfer metadata remains compatible with global file-drop listeners.
 | Drawer entry | `shell.overlay` top bar with one toggle (the rail sits off-canvas on a phone, and no control is added to the composer row) |
 | Native "open with" | Session-header action (opens the workspace directory) and an `extension`-band tab type for archives/binaries — both raise the shell's chooser (MT Manager, system files) |
 | Composer | Insets (system bars + IME), narrow-screen control-row cap, popup width/height/shift guard, mobile Enter guard, and an upward paperclip source menu. The menu reuses the existing hidden multiple-file input: “Upload attachment” temporarily selects `*/*`; “Upload image” selects `image/*`; both preserve that filter through WebView's synchronous input-focus event, restore it when SAF settles, and use the upstream draft/upload flow. |
-| Browser and scope | The Files sidebar registers a native BrowserHost workbench beside workspace files. The Developer-options card 「屏幕与 Shizuku 控制」 owns the `virtual-only` / `real-only` / `all` screen-access selector; model tools cannot write it. |
+| Browser and scope | The Files sidebar registers a native BrowserHost workbench beside workspace files. |
 | External open/share | The consumer opens a blank temporary Session, claims opaque incoming metadata only after its Session scope exists, and adds one unsent generic file attachment through the upstream composer/upload path. It never creates an `@path` message and does not restore the draft after restart. |
-| Shell surfaces | Developer options section, Android general settings rows, export-result dialog, theme bridge, keyboard boundary |
+| Shell surfaces | Android general settings rows, export-result dialog, theme bridge, keyboard boundary |
 | Retired with 0.1.5 | The frame fork, the duplicated theme presenter, the injected 「上传图片」/「导出调试日志」 menu items, the image-pick bridge, and the CSS that hid upstream's own attachment buttons |
 
 ## Right-panel bubble tabs

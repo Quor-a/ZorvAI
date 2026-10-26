@@ -6,7 +6,9 @@ import com.ai.assistance.quro.util.qstr
 import com.ai.assistance.quro.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
@@ -33,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -56,7 +60,7 @@ import com.ai.assistance.quro.ui.theme.Line
  * 「项目地址」「在 GitHub 点个 Star」跳转到开源仓库；
  * 「开源许可声明」弹出本应用所用第三方依赖的许可证清单。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun QuroAboutScreen(onBack: () -> Unit = {}) {
     val ctx = LocalContext.current
@@ -235,82 +239,135 @@ fun QuroAboutScreen(onBack: () -> Unit = {}) {
     }
 
     if (showLicense) {
-        val licenses = listOf(
-            Triple(stringResource(R.string.qk_00519), "Apache-2.0", stringResource(R.string.qk_00520)),
-            Triple("AndroidX / Jetpack", "Apache-2.0", stringResource(R.string.qk_00521)),
-            Triple("Jetpack Compose", "Apache-2.0", stringResource(R.string.qk_00522)),
-            Triple("Material Components", "Apache-2.0", "Google"),
-            Triple("OkHttp", "Apache-2.0", stringResource(R.string.qk_00523)),
-            Triple("Kotlin Coroutines", "Apache-2.0", stringResource(R.string.qk_00524)),
-            Triple("Shizuku", "Apache-2.0", stringResource(R.string.qk_00525)),
-            Triple("android-image-cropper", "Apache-2.0", stringResource(R.string.qk_00526)),
-            Triple("Apache Commons Compress", "Apache-2.0", stringResource(R.string.qk_00527)),
-            Triple("QuickJS", "MIT", stringResource(R.string.qk_00528)),
-            Triple("Sherpa-NCNN", "Apache-2.0 / BSD-3", stringResource(R.string.qk_00529)),
-            Triple("GeckoView", "MPL-2.0", stringResource(R.string.qk_00530)),
-            Triple("org.json", "Public Domain", stringResource(R.string.qk_00531)),
-            Triple("Health Connect", "Apache-2.0", stringResource(R.string.qk_00532)),
-            Triple("JUnit", "EPL-2.0", stringResource(R.string.qk_00533)),
-            // ── 离线模型引擎 ──
-            Triple("MNN（Mobile Neural Network）", "Apache-2.0", stringResource(R.string.qk_00534)),
-            Triple("llama.cpp", "MIT", stringResource(R.string.qk_00535)),
-            Triple("ncnn", "BSD-3-Clause", stringResource(R.string.qk_00536)),
-            // ── 原生工具库 ──
-            Triple("proot", "GPL-2.0+", stringResource(R.string.qk_00537)),
-            Triple("talloc", "LGPL-3.0+", stringResource(R.string.qk_00538)),
-            Triple(stringResource(R.string.qk_00539), "GPL-2.0+ / MIT / BSD", stringResource(R.string.qk_00540)),
-            // ── 前端 JavaScript 库 ──
-            Triple("Three.js", "MIT", stringResource(R.string.qk_00541)),
-            Triple("Draco", "Apache-2.0", stringResource(R.string.qk_00542)),
-            Triple("CodeMirror", "MIT", stringResource(R.string.qk_00543)),
-            Triple("Brython", "BSD-3-Clause", stringResource(R.string.qk_00544)),
-            Triple("Mermaid", "MIT", stringResource(R.string.qk_00545)),
-            // ── 文档处理库 ──
-            Triple("pdf.js", "Apache-2.0", stringResource(R.string.qk_00546)),
-            Triple(stringResource(R.string.qk_00547), "BSD-3-Clause", stringResource(R.string.qk_00548)),
-            Triple("Mammoth.js", "BSD-2-Clause", stringResource(R.string.qk_00549)),
-            Triple("SheetJS", "Apache-2.0", stringResource(R.string.qk_00550)),
-            // ── PDF 字体 ──
-            Triple("Liberation Sans", "SIL OFL 1.1", stringResource(R.string.qk_00551)),
-            Triple("Foxit PDF Fonts", "BSD-3-Clause", stringResource(R.string.qk_00552)),
-            Triple(stringResource(R.string.qk_00553), "Apache-2.0", stringResource(R.string.qk_00554)),
-        )
+        // #485：清单不再硬编码在代码里 —— 读 assets/legal/third_party_licenses.json，
+        // 与仓库根 NOTICE 同一份数据（tools/gen_licenses.py 生成）。
+        // 原实现只列了 32 条手写名单，漏掉了实际随包的绝大多数组件（ECJ / LibreOffice Kit /
+        // libvips / Node.js / Python / BusyBox / bash / proot / QEMU / Zig / ripgrep /
+        // Ubuntu rootfs / p5.js / GSAP……），并且把 Shizuku、Yoga 的许可证写错了。
+        val licenseCtx = LocalContext.current
+        var catalog by remember { mutableStateOf<LicenseCatalog?>(null) }
+        var catalogError by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(Unit) {
+            runCatching { withContext(Dispatchers.IO) { LicenseCatalog.load(licenseCtx) } }
+                .onSuccess { catalog = it }
+                .onFailure { catalogError = it.message ?: it.javaClass.simpleName }
+        }
+        val zh = catalog?.isZh() ?: true
         AlertDialog(
             onDismissRequest = { showLicense = false },
             confirmButton = {
                 TextButton(onClick = { showLicense = false }) { Text(stringResource(R.string.qk_00065)) }
             },
-            title = { Text(stringResource(R.string.qk_00510), style = MaterialTheme.typography.titleMedium) },
+            title = {
+                Column {
+                    Text(stringResource(R.string.qk_00510), style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        when {
+                            catalogError != null -> qstr(R.string.qk_04413)
+                            catalog != null -> stringResource(
+                                R.string.qk_04414, catalog!!.total, catalog!!.generatedAt,
+                            )
+                            else -> qstr(R.string.qk_04415)
+                        },
+                        style = MaterialTheme.typography.bodySmall, color = Muted,
+                    )
+                }
+            },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    licenses.forEach { (name, lic, note) ->
-                        Column(Modifier.padding(vertical = 8.dp)) {
-                            Text(name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                            Box(
-                                Modifier
-                                    .padding(top = 4.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(
-                                        if (lic.startsWith("GPL")) Color(0xFFEF4444).copy(alpha = 0.15f)
-                                        else if (lic.startsWith("LGPL") || lic.startsWith("MPL")) Color(0xFFF59E0B).copy(alpha = 0.15f)
-                                        else Color(0xFF22C55E).copy(alpha = 0.15f)
-                                    )
-                                    .padding(horizontal = 7.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    lic,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (lic.startsWith("GPL")) Color(0xFFEF4444)
-                                    else if (lic.startsWith("LGPL") || lic.startsWith("MPL")) Color(0xFFF59E0B)
-                                    else Color(0xFF16A34A),
-                                )
-                            }
-                            if (note.isNotBlank()) {
-                                Text(note, fontSize = 11.sp, color = Muted, modifier = Modifier.padding(top = 3.dp))
+                val c = catalog
+                if (c == null) {
+                    Column {
+                        Text(
+                            catalogError ?: qstr(R.string.qk_04415),
+                            fontSize = 12.sp, color = Muted,
+                        )
+                    }
+                } else {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        // ① 许可证分布概览：先让用户看到「有多少组件、以什么协议为主」。
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            c.distribution.take(10).forEach { (lic, count) ->
+                                LicenseChip("$lic · $count", lic)
                             }
                         }
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        // ② copyleft 义务（GPL/LGPL 组件怎么合规）——清单里最该被读到的一段，
+                        //    所以放在最上面，而不是埋到页尾。
+                        val noticeText = if (zh) c.noticeZh else c.noticeEn
+                        if (noticeText.isNotBlank()) {
+                            Spacer(Modifier.height(10.dp))
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFFF59E0B).copy(alpha = 0.12f))
+                                    .padding(10.dp),
+                            ) {
+                                Text(
+                                    qstr(R.string.qk_04416),
+                                    fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFFB45309),
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(noticeText, fontSize = 11.sp, color = Muted, lineHeight = 16.sp)
+                            }
+                        }
+                        // ③ 按分类列组件
+                        c.categories.forEach { cat ->
+                            Spacer(Modifier.height(14.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    if (zh) cat.titleZh else cat.titleEn,
+                                    fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text("${cat.entries.size}", fontSize = 11.sp, color = Muted)
+                            }
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                            cat.entries.forEach { e ->
+                                Column(Modifier.padding(vertical = 7.dp)) {
+                                    Row(verticalAlignment = Alignment.Top) {
+                                        Text(
+                                            e.name,
+                                            fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        LicenseBadge(e.license, e.copyleft)
+                                    }
+                                    val note = if (zh) e.noteZh else e.noteEn
+                                    if (note.isNotBlank()) {
+                                        Text(
+                                            note, fontSize = 11.sp, color = Muted,
+                                            lineHeight = 15.sp,
+                                            modifier = Modifier.padding(top = 2.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        // ④ 页脚：本应用自身许可 + 源码位置
+                        Spacer(Modifier.height(14.dp))
+                        Text(
+                            stringResource(R.string.qk_04417, c.appLicense),
+                            fontSize = 11.sp, color = Muted,
+                        )
+                        if (c.appSource.isNotBlank()) {
+                            Text(
+                                c.appSource,
+                                fontSize = 11.sp, color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .padding(top = 2.dp)
+                                    .clickable { openUrl(c.appSource) },
+                            )
+                        }
                     }
                 }
             },
@@ -638,3 +695,44 @@ private fun userAgreementSections(): List<Pair<String, String>> = listOf(
 
     "十六、联系我们" to qstr(R.string.qk_00675),
 )
+// ── #485 许可证清单的展示组件 ────────────────────────────────────────────────
+
+/** 弱/强 copyleft 用琥珀/红，宽松许可用绿——与旧实现同一套语义色，只是改为按数据里的 copyleft 字段判定。 */
+private fun licenseTone(copyleft: Int): Pair<Color, Color> = when (copyleft) {
+    2 -> Color(0xFFEF4444) to Color(0xFFEF4444).copy(alpha = 0.15f)   // 强 copyleft（GPL）
+    1 -> Color(0xFFF59E0B) to Color(0xFFF59E0B).copy(alpha = 0.15f)   // 弱 copyleft（LGPL/MPL/EPL）
+    else -> Color(0xFF16A34A) to Color(0xFF22C55E).copy(alpha = 0.15f) // 宽松
+}
+
+/** 组件行尾的许可证徽标。 */
+@Composable
+private fun LicenseBadge(license: String, copyleft: Int) {
+    val (fg, bg) = licenseTone(copyleft)
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(bg)
+            .padding(horizontal = 7.dp, vertical = 2.dp),
+    ) {
+        Text(license, fontSize = 10.sp, fontWeight = FontWeight.Medium, color = fg)
+    }
+}
+
+/** 分布概览里的小胶囊（许可证 · 组件数）。 */
+@Composable
+private fun LicenseChip(text: String, license: String) {
+    val copyleft = when {
+        license.startsWith("GPL") || license.startsWith("AGPL") -> 2
+        license.startsWith("LGPL") || license.startsWith("MPL") || license.startsWith("EPL") -> 1
+        else -> 0
+    }
+    val (fg, bg) = licenseTone(copyleft)
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(bg)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        Text(text, fontSize = 10.sp, fontWeight = FontWeight.Medium, color = fg)
+    }
+}

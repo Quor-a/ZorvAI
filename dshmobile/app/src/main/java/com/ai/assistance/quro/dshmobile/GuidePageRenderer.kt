@@ -15,6 +15,30 @@ import java.io.File
 
 internal enum class GuidePhase { Idle, Starting, Extracting, Updating, Recovering, Undoing, Error, Closed, Info }
 
+/**
+ * 相位短词（#448）：顶部状态胶囊与仪表环心共用的一句话。
+ *
+ * 为什么要「短」：环心只有 ~120dp 可用，塞得下 2~4 个字；而 [applyGuidePhase] 收到的
+ * title 是完整句子（「启动失败，5s 后重试(1/2)」），进不了环心。两处都要能回答
+ * 「此刻在哪一步」，所以短词单独出一份，不靠截断长句。
+ *
+ * 穷举分支：新增相位忘了归类会落到 Info，编译期不会报错 —— 但至少不会是错的暗示。
+ */
+internal fun guidePhaseWord(context: android.content.Context, phase: GuidePhase): String =
+  context.getString(
+    when (phase) {
+      GuidePhase.Idle -> R.string.ds_phase_idle
+      GuidePhase.Starting -> R.string.ds_phase_starting
+      GuidePhase.Extracting -> R.string.ds_phase_extracting
+      GuidePhase.Updating -> R.string.ds_phase_updating
+      GuidePhase.Recovering -> R.string.ds_phase_recovering
+      GuidePhase.Undoing -> R.string.ds_phase_undoing
+      GuidePhase.Error -> R.string.ds_phase_error
+      GuidePhase.Closed -> R.string.ds_phase_closed
+      GuidePhase.Info -> R.string.ds_phase_info
+    },
+  )
+
 /** Stable user copy comes only from a structured failure code, never raw paths or exception text. */
 internal fun startupFailureHintResource(code: String?): Int = when (code) {
   EngineManager.REFUSAL_PORT_FOREIGN -> R.string.ds_start_port_foreign
@@ -239,10 +263,14 @@ internal class GuidePageRenderer(private val activity: MainActivity) {
   /** 测试界面三段式结构块：入场 stagger 动画按块依次淡入。 */
   private lateinit var brandBlock: View
   private lateinit var cardBlock: View
+  /** 诊断区块（#446）：与主状态卡分离的低权重组，入场动画第四棒。 */
+  private lateinit var diagBlock: View
   private lateinit var actionBlock: View
   var lastGuidePhase: GuidePhase = GuidePhase.Idle
     private set
   private var statusPulse: ObjectAnimator? = null
+  /** 光晕环呼吸动画（#446）：与 statusPulse 同起同停，幅度更小。 */
+  private var haloPulse: ObjectAnimator? = null
 
   // —— S1-2：状态副文案的仲裁状态（唯一写入口 pushHint 维护） ——
   private var startupRetryAction = false
@@ -387,17 +415,18 @@ internal class GuidePageRenderer(private val activity: MainActivity) {
     logSummary = chrome.logSummary
     brandBlock = chrome.brandBlock
     cardBlock = chrome.cardBlock
+    diagBlock = chrome.diagBlock
     actionBlock = chrome.actionBlock
-    chrome.versionLabel.text = "v" + HostVersion.name(activity)
+    chrome.versionLabel.text = "v" + HostVersion.name(activity) + " · " + DshBuildStamp.STAMP
     refreshGuideMeta()
     management.build()
     return chrome.root
   }
 
-  /** 测试界面入场：品牌区/状态卡/操作区依次淡入上移。仅在界面从隐藏变为可见时播放。 */
+  /** 测试界面入场：品牌区/状态卡/诊断区/操作区依次淡入上移。仅在界面从隐藏变为可见时播放。 */
   private fun animateGuideReveal() {
     val rise = 16 * activity.resources.displayMetrics.density
-    val items = listOf(brandBlock, cardBlock, actionBlock)
+    val items = listOf(brandBlock, cardBlock, diagBlock, actionBlock)
     items.forEachIndexed { i, v ->
       v.animate().cancel()
       v.alpha = 0f
@@ -476,13 +505,36 @@ internal class GuidePageRenderer(private val activity: MainActivity) {
 
     val dotColor = when (phase) {
       GuidePhase.Error, GuidePhase.Closed -> activity.getColor(R.color.ds_danger)
-      // 黑白稿里「进行中」统一为墨色脉冲，色相只留给真正的故障信号。
+      // 品牌稿里「进行中」统一为陶土脉冲，色相只留给真正的故障信号。
       GuidePhase.Starting, GuidePhase.Extracting, GuidePhase.Updating,
       GuidePhase.Recovering, GuidePhase.Undoing -> activity.getColor(R.color.ds_accent)
-      // Info = 中性事实陈述（本版没有这项能力、无需处理），既不是故障（红）也不是进行中（墨）。
+      // Info = 中性事实陈述（本版没有这项能力、无需处理），既不是故障（红）也不是进行中（陶土）。
       GuidePhase.Idle, GuidePhase.Info -> activity.getColor(R.color.ds_text_tertiary)
     }
     chrome.statusDot.background = DsUi.oval(dotColor)
+    // #447b：诊断终端卡头部的相位点与状态 dot 同一颜色（同一判据、同一时机）——
+    // 日志段亮着时，卡头也回答「引擎此刻是忙是挂」，不必回滚到主状态卡。
+    chrome.logDot.background = DsUi.oval(dotColor)
+    // #446：光晕环描边与主状态卡描边随相位重绘（同一判据、同一时机）——「是忙是挂」
+    // 看环色/卡边色就知道，不必先读标题。Closed 与 Error 同归故障面。
+    val failed = phase == GuidePhase.Error || phase == GuidePhase.Closed
+    styleStatusHalo(chrome.statusHalo, activity.resources, busy, failed)
+    // #448 整页重写的落点：旧版靠「白卡描边变红/变陶土」表达忙与挂，卡已经不存在了。
+    // 现在同一判据喂给三处：仪表环（弧色 + 环心短词）、相位步骤条（卡在哪一段）、
+    // 顶部状态胶囊（短词）。三处同源，不会互相打架。
+    chrome.dial.setTone(
+      when {
+        failed -> DialTone.Failed
+        busy -> DialTone.Busy
+        else -> DialTone.Ready
+      },
+    )
+    // 🔴 恒传 null：不画编造的比例。解压总量不可信（产品口径 P2），只表达「还在动」。
+    chrome.dial.setFraction(null)
+    val phaseWord = guidePhaseWord(activity, phase)
+    chrome.dial.setCenter(phaseWord)
+    chrome.stepper.applyPhase(phase)
+    chrome.phaseChip.text = phaseWord
     setStatusPulse(busy)
     refreshGuideMeta()
   }
@@ -705,9 +757,20 @@ internal class GuidePageRenderer(private val activity: MainActivity) {
         statusPulse = this
       }
       if (!anim.isStarted) anim.start()
+      // #446：光晕环与 dot 同步呼吸（幅度更小——环是容器，dot 是信号）。
+      val haloAnim = haloPulse ?: ObjectAnimator.ofFloat(chrome.statusHalo, View.ALPHA, 1f, 0.55f).apply {
+        duration = 900
+        repeatMode = ValueAnimator.REVERSE
+        repeatCount = ValueAnimator.INFINITE
+        interpolator = DsUi.ease
+        haloPulse = this
+      }
+      if (!haloAnim.isStarted) haloAnim.start()
     } else {
       statusPulse?.cancel()
+      haloPulse?.cancel()
       chrome.statusDot.alpha = 1f
+      chrome.statusHalo.alpha = 1f
     }
   }
 
@@ -715,6 +778,8 @@ internal class GuidePageRenderer(private val activity: MainActivity) {
   fun cancelPulse() {
     statusPulse?.cancel()
     statusPulse = null
+    haloPulse?.cancel()
+    haloPulse = null
     management.destroy()
   }
 

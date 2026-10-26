@@ -44,7 +44,7 @@
   <string name="ds_notify_permission_rationale">Notification permission is needed: when the engine asks a question or waits for approval, only a notification brings you back (the task waits forever). Without it these alerts stay in the app.</string>
   <string name="ds_notify_denied_note">Notification permission is not granted: engine questions and approval requests will not reach the notification shade; they stay in the app.</string>
   <string name="adb_keyboard_label">ZorvAI ADB input channel</string>
-  <string name="a11y_service_label">ZorvAI device control</string>
+  <string name="a11y_service_label">ZorvAI accessibility &amp; device control</string>
   <string name="a11y_service_summary">Lets the AI read the screen semantically and operate controls</string>
   <string name="a11y_service_description">When enabled, the AI can read the current screen controls (text, description, position) and tap, type, or scroll. It only works while you keep it on, stops as soon as you turn it off, and also requires a session in full-access mode.</string>
   <string name="ds_start_port_foreign">The local engine port is used by another program; this app did not stop it. Close the conflicting app and tap Retry, or restart the device. [port-foreign]</string>
@@ -58,4 +58,22 @@
   <string name="ds_share_log_working">Packaging diagnostic logs…</string>
   <string name="ds_share_log_done">Diagnostics %1$s ready; choose an app to send it to</string>
   <string name="ds_share_log_failed">Sharing failed: %1$s</string>
+  <string name="ds_dial_a11y">Engine status dial</string>
+  <string name="ds_step_extract">Extract runtime</string>
+  <string name="ds_step_launch">Launch engine</string>
+  <string name="ds_step_ready">Ready</string>
+  <string name="ds_step_done">Done</string>
+  <string name="ds_step_active">In progress</string>
+  <string name="ds_step_pending">Pending</string>
+  <string name="ds_step_failed">Failed here</string>
+  <string name="ds_phase_idle">Idle</string>
+  <string name="ds_phase_starting">Starting</string>
+  <string name="ds_phase_extracting">Extracting</string>
+  <string name="ds_phase_updating">Updating</string>
+  <string name="ds_phase_recovering">Recovering</string>
+  <string name="ds_phase_undoing">Rolling back</string>
+  <string name="ds_phase_error">Failed</string>
+  <string name="ds_phase_closed">Stopped</string>
+  <string name="ds_phase_info">Info</string>
+  <string name="ds_management_cd">Management</string>
 </resources>

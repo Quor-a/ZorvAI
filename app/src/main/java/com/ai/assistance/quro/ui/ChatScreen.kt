@@ -2,6 +2,7 @@ package com.ai.assistance.quro.ui
 import com.ai.assistance.quro.util.qstr
 import androidx.compose.ui.res.stringResource
 import com.ai.assistance.quro.R
+import com.ai.assistance.quro.dshmobile.DevTools
 
 import android.util.Log
 import android.net.Uri
@@ -313,8 +314,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.core.content.FileProvider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
@@ -354,6 +357,8 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
@@ -753,6 +758,12 @@ fun ChatScreen(
     val modelConfigRepo = QuroModelConfigRepository(LocalContext.current)
     var showAbout by remember { mutableStateOf(false) }
     var showCleanup by remember { mutableStateOf(false) }
+    // Harness 热更新屏：从设置「数据 → Harness 热更新」进入（#428，本地导入快照压缩包换运行时）
+    var showHarnessHotUpdate by remember { mutableStateOf(false) }
+    // Harness 通知设置屏：从设置「通知 → Harness 通知」进入（#429，通知从 harness WebUI 迁入 ZorvAI）
+    var showHarnessNotify by remember { mutableStateOf(false) }
+    // 手机操控设置屏：从设置「功能 → 手机操控」进入（#417，harness 手机控制区迁入 ZorvAI）
+    var showPhoneControl by remember { mutableStateOf(false) }
     var showFileManager by remember { mutableStateOf(false) }
     // ACI 管理中心屏：从设置「功能 → ACI 管理中心」进入（此前仅有 AI 工具 ui_open_aci 可打开，无手动按钮）
     var showAci by remember { mutableStateOf(false) }
@@ -1863,6 +1874,9 @@ fun ChatScreen(
             onSettingsToggleAiReplyNotify = { vm.setAiReplyNotify(!aiReplyNotify) },
             onOpenAbout = { showAbout = true },
             onOpenCleanup = { showCleanup = true },
+            onOpenHarnessHotUpdate = { showHarnessHotUpdate = true },
+            onOpenHarnessNotify = { showHarnessNotify = true },
+            onOpenPhoneControl = { showPhoneControl = true },
             onOpenFileManager = { showFileManager = true },
             onOpenAci = { showAci = true },
             onOpenMcp = { showMcp = true },
@@ -1881,7 +1895,14 @@ fun ChatScreen(
             // 从设置进入的子屏：返回键只关闭本层，保留设置（showSettings 仍 true）
             BackHandler { showPermission = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(Color(0xFFF2F2F7))) {
-                QuroPermissionScreen(onClose = { showPermission = false })
+                QuroPermissionScreen(
+                    onClose = { showPermission = false },
+                    // #476：手机操控并进权限页（设置首页不再单列），从权限页进去再回来也回权限页。
+                    onOpenPhoneControl = {
+                        showPermission = false
+                        showPhoneControl = true
+                    },
+                )
             }
         }
 
@@ -2041,6 +2062,38 @@ fun ChatScreen(
             BackHandler { showCleanup = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
                 CleanupScreen(onClose = { showCleanup = false }, scaled = { scaled(it) })
+            }
+        }
+
+        // Harness 热更新页：全屏覆盖层（从设置「数据 → Harness 热更新」进入，#428）
+        if (showHarnessHotUpdate) {
+            BackHandler { showHarnessHotUpdate = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
+                HarnessHotUpdateScreen(onClose = { showHarnessHotUpdate = false }, scaled = { scaled(it) })
+            }
+        }
+
+        // Harness 通知设置页：全屏覆盖层（从设置「通知 → Harness 通知」进入，#429）
+        if (showHarnessNotify) {
+            BackHandler { showHarnessNotify = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
+                HarnessNotifyScreen(onClose = { showHarnessNotify = false }, scaled = { scaled(it) })
+            }
+        }
+
+        // 手机操控设置页：全屏覆盖层（从设置「功能 → 手机操控」进入，#417）
+        if (showPhoneControl) {
+            BackHandler { showPhoneControl = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
+                PhoneControlScreen(
+                    // #476：手机操控只能从权限页进入，返回也回权限页（不回设置首页，
+                    // 否则用户会以为「手机操控」还是设置里独立的一项）。
+                    onClose = {
+                        showPhoneControl = false
+                        showPermission = true
+                    },
+                    scaled = { scaled(it) },
+                )
             }
         }
 
@@ -5372,6 +5425,8 @@ fun HistoryDrawer(
     generatingIds: Set<String> = emptySet(),
 ) {
     val cs = MaterialTheme.colorScheme
+    // #474：历史抽屉里现在有一条 DeepSeek Harness 入口，需要 context 拉 Activity。
+    val context = androidx.compose.ui.platform.LocalContext.current
     var lastGroup by remember { mutableStateOf("") }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
     var showDeleteAllConfirm by remember { mutableStateOf(false) }
@@ -5429,11 +5484,72 @@ fun HistoryDrawer(
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                LucideIcon("layout_dashboard", null, Modifier.size(18.dp), tint = cs.primary)
+                // 🔴 用 **GenUI Agent 自己的官方标志**（res/drawable/genui_logo.xml：
+                // 圆角方框 + G/U 几何融合 + 琥珀点缀点，本来就是它的应用 Logo）。
+                // 此前这里写 `LucideIcon("layout_dashboard")`，而 "layout_dashboard" 从来不在
+                // LucideIcon 的映射表里 → 静默掉到 `else -> ic_x` → 界面上是一个「×」。
+                // tint 必须 Unspecified：genui_logo 是彩色矢量（深青 #0D9488 / 高光 #14B8A6 /
+                // 白描边 / 琥珀 #F59E0B），染色会把它糊成单色块。
+                Icon(
+                    painter = androidx.compose.ui.res.painterResource(R.drawable.genui_logo),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = androidx.compose.ui.graphics.Color.Unspecified,
+                )
                 Spacer(Modifier.width(10.dp))
                 Text("GenUI Agent", fontSize = scaled(14), color = cs.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
                 Text(stringResource(R.string.qk_00176), fontSize = scaled(11), color = cs.onPrimaryContainer.copy(alpha = 0.7f))
+            }
+            // 内置 DeepSeek Harness 入口（#474 用户裁定）：
+            // 「Agent 工作台名字改回 deepseek harness，放到 zorvAI 的历史对话这里，GenUI 下面」。
+            // 所以它从工具箱挪到这里——工具箱是「造东西的工具」，它不是工具，是一个同环境的
+            // 另一个 agent 工作台，和历史对话并列才符合用户的心理位置。
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(cs.surfaceVariant.copy(alpha = 0.6f))
+                    .clickable {
+                        val intent = Intent(context, com.ai.assistance.quro.dshmobile.MainActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching { context.startActivity(intent) }
+                            .onFailure {
+                                Toast.makeText(
+                                    context,
+                                    "无法打开 DeepSeek Harness：${it.message}",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                    }
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 左侧用 **DeepSeek 官方标志**（#477：用户明确要求「图标用 DeepSeek 官方图标」；
+                // 此前沿用了通用 Hub 图标）。drawable/ic_deepseek.png 取自官方 favicon 225→192px。
+                Icon(
+                    painter = androidx.compose.ui.res.painterResource(R.drawable.ic_deepseek),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = androidx.compose.ui.graphics.Color.Unspecified,
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "DeepSeek Harness",
+                    fontSize = scaled(14),
+                    color = cs.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.weight(1f))
+                // 🔴 尾标不能再抄 GenUI 那行的「生成式界面」（qk_00176）——
+                // 那是 GenUI Agent 的定位描述，套到 Harness 上就成了「DeepSeek Harness 生成式界面」，
+                // 用户直接说是「乱写」。这里只放一个进入箭头，语义干净。
+                Icon(
+                    Icons.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = Muted,
+                    modifier = Modifier.size(18.dp),
+                )
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -5570,6 +5686,9 @@ private fun SheetOverlay(
     onSettingsToggleAiReplyNotify: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenCleanup: () -> Unit,
+    onOpenHarnessHotUpdate: () -> Unit,
+    onOpenHarnessNotify: () -> Unit,
+    onOpenPhoneControl: () -> Unit,
     onOpenFileManager: () -> Unit,
     onOpenAci: () -> Unit,
     onOpenMcp: () -> Unit,
@@ -5647,7 +5766,7 @@ private fun SheetOverlay(
                         onManagePersona, onOpenVoiceService,
                         onClearChat, settingsVoiceBallEnabled, onSettingsToggleVoiceBall,
                     settingsAiReplyNotify, onSettingsToggleAiReplyNotify,
-                        onOpenAbout, onOpenAci, onOpenMcp, onOpenCluster, onOpenSystemStatus, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenFileManager,
+                        onOpenAbout, onOpenAci, onOpenMcp, onOpenCluster, onOpenSystemStatus, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenHarnessHotUpdate, onOpenHarnessNotify, onOpenPhoneControl, onOpenFileManager,
                         onOpenGitHub = onOpenGitHub, onOpenModelHub = onOpenModelHub, scaled
                     )
                     else -> {}
@@ -5704,6 +5823,9 @@ private fun SettingsSheetContent(
     onOpenAppearance: () -> Unit,
     onExport: () -> Unit, onClear: () -> Unit,
     onOpenCleanup: () -> Unit,
+    onOpenHarnessHotUpdate: () -> Unit,
+    onOpenHarnessNotify: () -> Unit,
+    onOpenPhoneControl: () -> Unit,
     onOpenFileManager: () -> Unit,
     onOpenGitHub: () -> Unit,
     onOpenModelHub: () -> Unit,
@@ -5739,6 +5861,9 @@ private fun SettingsSheetContent(
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Usb, stringResource(R.string.qk_03845), stringResource(R.string.qk_03860), "", onOpenUsbDebug, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            // 🔴 #476：「手机操控」不再单独出现在设置里 —— 它是**权限的后续设置**
+            // （屏幕范围 / 虚拟屏 / Root 都要先有授权才谈得上），入口已并入「设置 → 权限」页内。
+            // 用户两次反馈「手机操控还是没有合到权限」，说明留在设置里就等于没合。
             SetRowClickable(Icons.Filled.Apps, stringResource(R.string.qk_01687), stringResource(R.string.qk_03869), "", onOpenDefaultApp, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Public, stringResource(R.string.qk_03844), stringResource(R.string.qk_03870), "", onOpenGitHub, scaled)
@@ -5776,13 +5901,26 @@ private fun SettingsSheetContent(
         }
         GroupCaption(stringResource(R.string.qk_01945))
         SetGroup {
-            SetRow(Icons.Filled.Notifications, stringResource(R.string.qk_03842), stringResource(R.string.qk_03856), settingsAiReplyNotify, onSettingsToggleAiReplyNotify, scaled)
+            // 🔴 #473 合并：这里**不再有两行**（「AI 回复通知」开关 + 「Harness 通知」子页）。
+            // 用户报「设置里面的 Harness 通知你没有合到 AI 回复通知」——两行就是两套通知的错觉。
+            // 现在只有一行：点进去是唯一的通知设置页，总开关（同一个键 quro_ui/ai_reply_notify）、
+            // 提醒方式、系统权限、测试都在里面。行尾只显示总开关的当前态。
+            SetRowClickable(
+                Icons.Filled.Notifications,
+                stringResource(R.string.qk_01945),
+                stringResource(R.string.qk_04133) + " · " +
+                    stringResource(if (settingsAiReplyNotify) R.string.qk_04161 else R.string.qk_04162),
+                "",
+                onOpenHarnessNotify,
+                scaled,
+            )
         }
         GroupCaption(stringResource(R.string.qk_03832))
         SetGroup {
             SetRowClickable(Icons.Filled.Download, stringResource(R.string.qk_03834), "", stringResource(R.string.qk_03839), onExport, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.DeleteSweep, stringResource(R.string.qk_03836), stringResource(R.string.qk_03853), "", onOpenCleanup, scaled)
+            SetRowClickable(Icons.Filled.SystemUpdate, stringResource(R.string.qk_04116), stringResource(R.string.qk_04117), "", onOpenHarnessHotUpdate, scaled)
             SetRowClickable(Icons.Filled.FolderOpen, stringResource(R.string.qk_02669), stringResource(R.string.qk_03857), "", onOpenFileManager, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.DeleteSweep, stringResource(R.string.qk_03840), "", "", onClear, scaled, danger = true)
@@ -9334,6 +9472,256 @@ private fun CleanupScreen(
         }
     }
 
+    // ════════════════════════════════════════════════════════════════
+    // 🔴🔴 #418 Harness 开发者选项（从 harness WebUI「开发者选项」设置区整体迁入）
+    //
+    // 功能面：调试日志开关、悬浮球开关、运行时缓存清理、来件临时区清理、引擎重启/停止、
+    // 控制台、配置导入/导出。真源全在 dshmobile 的 [DevTools] 门面（内部再分派
+    // DevLogControl / OverlayController / DshmobileControl / 引擎侧 HTTP 插件端点），
+    // 本页只负责状态、二次确认与回执——**不在 Kotlin 侧重写清理白名单**（权威实现在
+    // 引擎侧 TS 插件，双实现必然漂移）。
+    //
+    // 纪律（从 WebUI 侧一脉相承，改一行即违约）：
+    //  1. **读不到 ≠ 0**：来件占用/运行时缓存读不到一律显示「读不到」文案，绝不显示 0 B；
+    //  2. **写后回读**：开关真值 = [DevTools] 回读结果（偏好 && 采集器在跑 /
+    //     偏好 && 悬浮窗权限 && 服务实例在场），不做乐观置位；
+    //  3. **破坏性操作全部二次确认**（重启/停止/缓存清理/来件清理/导入配置）；
+    //  4. **阻塞调用一律 IO + busy 态**（引擎 HTTP、restart/stop、导入导出文件 IO）；
+    //  5. **失败给回执**（Toast + 原因），不静默、不把异常抛到 UI 层。
+    // ════════════════════════════════════════════════════════════════
+    var devLogOn by remember { mutableStateOf(false) }
+    var overlayOn by remember { mutableStateOf(false) }
+    var devAllFiles by remember { mutableStateOf(false) }
+    // 来件临时区占用：null = 读不到（**不是 0 B**，S3-16 口径）。
+    var incomingBytes by remember { mutableStateOf<Long?>(null) }
+    // 首次快照是否已回来（区分「加载中」与「读不到」——两者文案不同）。
+    var incomingLoaded by remember { mutableStateOf(false) }
+    // 运行时缓存扫描态：0 = 未扫/扫描中，1 = 真值，2 = 读不到。
+    var cacheScanState by remember { mutableStateOf(0) }
+    var cacheReclaimable by remember { mutableStateOf(0L) }
+    var cacheTargets by remember { mutableStateOf(listOf<JSONObject>()) }
+    // 上次运行时缓存清理的逐项回执（失败/跳过如实呈现，不粉饰成「已清干净」）。
+    var cacheReport by remember { mutableStateOf<List<String>?>(null) }
+    var cacheBusy by remember { mutableStateOf(false) }
+    var incomingBusy by remember { mutableStateOf(false) }
+    // 引擎起停 / 配置导入导出的忙碌标记（"" = 空闲；restart/stop/export/import）。
+    var devBusy by remember { mutableStateOf("") }
+    // 开发者选项二次确认："" = 无；cache/incoming/restart/stop/import。
+    var devConfirm by remember { mutableStateOf("") }
+
+    /** 失败回执 → 人话（guidance/error/text 优先，兜底「未知错误」）。 */
+    fun devReason(r: JSONObject): String {
+        val g = r.optString("guidance").ifBlank { r.optString("error") }.ifBlank { r.optString("text") }
+        return g.ifBlank { qstr(R.string.qk_04351) }
+    }
+
+    /** 快照轮询（3s）：两个开关真值 + 来件占用。HTTP 读全在 IO，绝不阻塞 UI。 */
+    LaunchedEffect(Unit) {
+        while (true) {
+            val snap = withContext(Dispatchers.IO) { DevTools.snapshot(context) }
+            devLogOn = snap.optBoolean("devLog", false)
+            overlayOn = snap.optBoolean("overlay", false)
+            devAllFiles = snap.optBoolean("allFiles", false)
+            val inc = snap.optJSONObject("incoming")
+            incomingLoaded = true
+            incomingBytes = if (inc != null && inc.optBoolean("ok", false) && inc.has("bytes")) {
+                inc.optLong("bytes", 0L)
+            } else {
+                null
+            }
+            delay(3000)
+        }
+    }
+
+    /** 运行时缓存扫描（只读；读不到回落状态 2，绝不冒充「0 B 无可清理」）。 */
+    fun refreshCache() {
+        if (cacheBusy) return
+        cacheBusy = true
+        cleanupScope.launch {
+            val r = withContext(Dispatchers.IO) { DevTools.runtimeCacheScan(context) }
+            if (r.optBoolean("ok", false)) {
+                cacheScanState = 1
+                cacheReclaimable = r.optLong("reclaimableBytes", 0L)
+                val arr = r.optJSONArray("targets")
+                cacheTargets = if (arr != null) (0 until arr.length()).map { arr.getJSONObject(it) } else emptyList()
+            } else {
+                cacheScanState = 2
+                cacheReclaimable = 0L
+                cacheTargets = emptyList()
+            }
+            cacheBusy = false
+        }
+    }
+
+    /** 来件临时区占用重读（点击状态行 / 清理后各走一次）。 */
+    fun refreshIncoming() {
+        if (incomingBusy) return
+        incomingBusy = true
+        cleanupScope.launch {
+            val inc = withContext(Dispatchers.IO) { DevTools.incomingUsage(context) }
+            incomingLoaded = true
+            val ok = inc.optBoolean("ok", false) && inc.has("bytes")
+            incomingBytes = if (ok) inc.optLong("bytes", 0L) else null
+            incomingBusy = false
+        }
+    }
+
+    // 进页面扫一次运行时缓存（目录遍历，按需触发，不进 3s 轮询）。
+    LaunchedEffect(Unit) { refreshCache() }
+
+    /** 跳过/失败原因码 → 人话（未知原因**不回显原码**，兜底句引导复制日志）。 */
+    fun devSkipReason(code: String): String = when (code) {
+        "not-allowlisted" -> qstr(R.string.qk_04364)
+        "absent" -> qstr(R.string.qk_04365)
+        "unreadable" -> qstr(R.string.qk_04366)
+        "log-root-unresolved" -> qstr(R.string.qk_04367)
+        "current-generation-absent" -> qstr(R.string.qk_04368)
+        "preserved" -> qstr(R.string.qk_04369)
+        "scope-rejected" -> qstr(R.string.qk_04370)
+        "vanished" -> qstr(R.string.qk_04371)
+        "aborted" -> qstr(R.string.qk_04372)
+        "remove-failed" -> qstr(R.string.qk_04373)
+        "" -> qstr(R.string.qk_04374)
+        else -> qstr(R.string.qk_04375)
+    }
+
+    /** 运行时缓存执行回包 → 逐项人话行（label 是 $DSH_HOME 形态，绝不含绝对路径）。 */
+    fun cacheReportLines(r: JSONObject): List<String> {
+        val arr = r.optJSONArray("items") ?: return emptyList()
+        return (0 until arr.length()).map { i ->
+            val it = arr.getJSONObject(i)
+            val label = it.optString("label").ifBlank { it.optString("id").ifBlank { "?" } }
+            val tail = when (it.optString("status")) {
+                "removed" -> qstr(R.string.qk_04361, formatFileSize(it.optLong("bytes", 0L)))
+                "failed" -> qstr(R.string.qk_04362) + "：" + devSkipReason(it.optString("reason"))
+                else -> qstr(R.string.qk_04363) + "：" + devSkipReason(it.optString("reason"))
+            }
+            label + " — " + tail
+        }
+    }
+
+    /** 调试日志开关（写后回读；采集器起不来时回读即 false，绝不冒充写入成功）。 */
+    fun toggleDevLog(on: Boolean) {
+        cleanupScope.launch {
+            val r = withContext(Dispatchers.IO) { DevTools.setDevLogEnabled(context, on) }
+            devLogOn = r.optBoolean("enabled", false)
+            if (!r.optBoolean("ok", false)) {
+                Toast.makeText(context, devReason(r), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    /** 悬浮球开关（ST-02：展示值以壳侧回读为准；缺权限路径 OverlayController 已自行引导 + Toast）。
+     *
+     * 为什么开启时用 `started` 而不是 `enabled` 置位：`OverlayService.instance` 由主线程
+     * onCreate 赋值，而本开关在 IO 线程发起，`isEnabled` 紧跟着读会撞上「startService 已接受、
+     * 实例还没上场」的竞态 —— 紧贴写后回读会把「已发起」误判成「没开」。`started`（startService
+     * 未抛异常）是事实；若服务随后真的没起来，3s 轮询的 `isEnabled` 会把开关拨回关闭，自愈且不撒谎。
+     */
+    fun toggleOverlay(on: Boolean) {
+        cleanupScope.launch {
+            val r = withContext(Dispatchers.IO) { DevTools.setOverlayEnabled(context, on) }
+            overlayOn = if (on) r.optBoolean("started", false) else r.optBoolean("enabled", false)
+            val msg = when {
+                on && r.optBoolean("started", false) -> qstr(R.string.qk_04310)
+                // 缺权限：壳侧已 Toast + 跳系统授权页，这里不重复播报
+                on && !r.optBoolean("canDrawOverlays", true) -> null
+                !on -> qstr(R.string.qk_04311)
+                else -> qstr(R.string.qk_04313)
+            }
+            if (msg != null) Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** 运行时缓存清理（破坏性；确认后执行，逐项回执 inline 展示，随后重扫）。 */
+    fun runCacheClean() {
+        if (cacheBusy) return
+        cacheBusy = true
+        cleanupScope.launch {
+            val r = withContext(Dispatchers.IO) { DevTools.runtimeCacheExecute(context) }
+            cacheBusy = false
+            if (r.optBoolean("ok", false)) {
+                val removed = r.optInt("removed", 0)
+                val failed = r.optInt("failed", 0)
+                val removedBytes = r.optLong("removedBytes", 0L)
+                val plannedBytes = r.optLong("plannedBytes", 0L)
+                cacheReport = cacheReportLines(r)
+                val msg = if (failed > 0) {
+                    qstr(R.string.qk_04322, removed, formatFileSize(removedBytes), formatFileSize(plannedBytes), failed)
+                } else {
+                    qstr(R.string.qk_04321, removed, formatFileSize(removedBytes), formatFileSize(plannedBytes))
+                }
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(context, devReason(r), Toast.LENGTH_LONG).show()
+            }
+            refreshCache()
+        }
+    }
+
+    /** 来件临时区一键清理（FX-205.5：只删本工具自有临时项；破坏性，确认后执行）。 */
+    fun runIncomingClean() {
+        if (incomingBusy) return
+        incomingBusy = true
+        cleanupScope.launch {
+            val r = withContext(Dispatchers.IO) { DevTools.cleanIncoming(context) }
+            incomingBusy = false
+            if (r.optBoolean("ok", false)) {
+                Toast.makeText(context, qstr(R.string.qk_04331, r.optInt("removed", 0)), Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, devReason(r), Toast.LENGTH_LONG).show()
+            }
+            refreshIncoming()
+        }
+    }
+
+    /** 引擎重启/停止（阻塞可达分钟级；回执 text 是人话结论，直接播报）。 */
+    fun runEngineAction(which: String) {
+        if (devBusy.isNotEmpty()) return
+        devBusy = which
+        cleanupScope.launch {
+            val r = withContext(Dispatchers.IO) {
+                if (which == "restart") DevTools.restartEngine(context) else DevTools.stopEngine(context)
+            }
+            devBusy = ""
+            Toast.makeText(context, r.optString("text").ifBlank { devReason(r) }, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** 配置导出/导入（阻塞文件 IO；成功回执带路径/hint，失败带原因）。 */
+    fun runConfigAction(which: String) {
+        if (devBusy.isNotEmpty()) return
+        devBusy = which
+        cleanupScope.launch {
+            val r = withContext(Dispatchers.IO) {
+                if (which == "export") DevTools.exportConfig(context) else DevTools.importConfig(context)
+            }
+            devBusy = ""
+            val msg = if (which == "export") {
+                if (r.optBoolean("ok", false)) {
+                    qstr(R.string.qk_04343, r.optString("path").ifBlank { "exports/config/settings.yaml" })
+                } else {
+                    qstr(R.string.qk_04344, r.optString("error").ifBlank { qstr(R.string.qk_04351) })
+                }
+            } else {
+                if (r.optBoolean("ok", false)) {
+                    qstr(R.string.qk_04348, r.optString("hint"))
+                } else {
+                    qstr(R.string.qk_04349, r.optString("error").ifBlank { qstr(R.string.qk_04351) })
+                }
+            }
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** 打开内置控制台（一次 startActivity，主线程可调）。 */
+    fun openDevConsole() {
+        val r = DevTools.openConsole(context)
+        if (!r.optBoolean("ok", false)) {
+            Toast.makeText(context, devReason(r), Toast.LENGTH_SHORT).show()
+        }
+    }
+
     Column(Modifier.fillMaxSize().background(cs.background)) {
         TopAppBar(
             title = { Text(stringResource(R.string.qk_03836)) },
@@ -9555,6 +9943,182 @@ private fun CleanupScreen(
                     danger = true
                 )
             }
+
+            // ═══ #418 Harness 开发者选项（从 WebUI 开发者选项设置区整体迁入） ═══
+            GroupCaption(stringResource(R.string.qk_04303))
+            SetGroup {
+                // 调试日志开关（ST-11：真值 = 偏好 && 采集器在跑；写后回读，不乐观置位）。
+                // 副标题随「所有文件访问」权限切换落点说明（读不到权限时如实说私有目录）。
+                SetRow(
+                    icon = Icons.Filled.Description,
+                    name = stringResource(R.string.qk_04304),
+                    sub = if (devAllFiles) stringResource(R.string.qk_04305)
+                    else stringResource(R.string.qk_04306),
+                    checked = devLogOn,
+                    onToggle = { toggleDevLog(!devLogOn) },
+                    scaled = scaled,
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                // 悬浮球开关（ST-02：真值 = 偏好 && 悬浮窗权限 && 服务实例在场）。
+                // 点名「任务面板入口」，与手机控制页的虚拟屏浮窗去混淆（P5-6）。
+                SetRow(
+                    icon = Icons.Filled.TouchApp,
+                    name = stringResource(R.string.qk_04308),
+                    sub = stringResource(R.string.qk_04309),
+                    checked = overlayOn,
+                    onToggle = { toggleOverlay(!overlayOn) },
+                    scaled = scaled,
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                // 运行时缓存（只读状态行：点击重新扫描；清理是下面那条破坏性行）。
+                // 三态口径（S3-16）：读不到 ≠ 0 B，也不是合法的「暂无可清理」空态。
+                SetRowClickable(
+                    icon = Icons.Filled.CleaningServices,
+                    name = stringResource(R.string.qk_04314),
+                    sub = when {
+                        cacheBusy -> stringResource(R.string.qk_04385)
+                        cacheScanState == 1 && cacheReclaimable > 0 ->
+                            stringResource(R.string.qk_04315, formatFileSize(cacheReclaimable), cacheTargets.size)
+                        cacheScanState == 1 -> stringResource(R.string.qk_04316)
+                        cacheScanState == 2 -> stringResource(R.string.qk_04317)
+                        else -> stringResource(R.string.qk_04385)
+                    },
+                    value = "",
+                    onClick = { refreshCache() },
+                    scaled = scaled,
+                    enabled = !cacheBusy,
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                // 清理运行时缓存（白名单制；确认弹窗列出待删项与体积，逐项回执）。
+                SetRowClickable(
+                    icon = Icons.Filled.DeleteSweep,
+                    name = stringResource(R.string.qk_04376),
+                    sub = stringResource(R.string.qk_04378),
+                    value = if (cacheBusy) stringResource(R.string.qk_04323) else "",
+                    onClick = { devConfirm = "cache" },
+                    scaled = scaled,
+                    danger = true,
+                    enabled = cacheScanState == 1 && cacheReclaimable > 0 && !cacheBusy,
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                // 来件临时区（文件直达分享进来的临时文件；占用展示 + 点击重读）。
+                SetRowClickable(
+                    icon = Icons.Filled.FolderOpen,
+                    name = stringResource(R.string.qk_04326),
+                    sub = when {
+                        incomingBusy -> stringResource(R.string.qk_04354)
+                        !incomingLoaded -> stringResource(R.string.qk_04354)
+                        incomingBytes == null -> stringResource(R.string.qk_04328)
+                        else -> stringResource(R.string.qk_04327, formatFileSize(incomingBytes ?: 0L))
+                    },
+                    value = "",
+                    onClick = { refreshIncoming() },
+                    scaled = scaled,
+                    enabled = !incomingBusy,
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                // 清理来件临时区（FX-205.5：只删本工具自有临时项；破坏性，确认后执行）。
+                SetRowClickable(
+                    icon = Icons.Filled.Delete,
+                    name = stringResource(R.string.qk_04380),
+                    sub = stringResource(R.string.qk_04379),
+                    value = if (incomingBusy) stringResource(R.string.qk_04323) else "",
+                    onClick = { devConfirm = "incoming" },
+                    scaled = scaled,
+                    danger = true,
+                    enabled = incomingBytes != null && (incomingBytes ?: 0L) > 0L && !incomingBusy,
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                // 引擎重启（阻塞可达分钟级；确认后执行，busy 态防重复点）。
+                SetRowClickable(
+                    icon = Icons.Filled.SystemUpdate,
+                    name = stringResource(R.string.qk_04333),
+                    sub = stringResource(R.string.qk_04381),
+                    value = if (devBusy == "restart") stringResource(R.string.qk_04358) else "",
+                    onClick = { devConfirm = "restart" },
+                    scaled = scaled,
+                    enabled = devBusy.isEmpty(),
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                // 引擎停止（停后不自动重启；破坏性，确认后执行）。
+                SetRowClickable(
+                    icon = Icons.Filled.PowerSettingsNew,
+                    name = stringResource(R.string.qk_04337),
+                    sub = stringResource(R.string.qk_04382),
+                    value = if (devBusy == "stop") stringResource(R.string.qk_04359) else "",
+                    onClick = { devConfirm = "stop" },
+                    scaled = scaled,
+                    danger = true,
+                    enabled = devBusy.isEmpty(),
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                // 控制台（运行时内嵌命令行；引擎没起来时也能用于诊断）。
+                SetRowClickable(
+                    icon = Icons.Filled.Terminal,
+                    name = stringResource(R.string.qk_04340),
+                    sub = stringResource(R.string.qk_04341),
+                    value = "",
+                    onClick = { openDevConsole() },
+                    scaled = scaled,
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                // 导出配置（私有 settings.yaml → Documents/dshdata/exports/config/）。
+                SetRowClickable(
+                    icon = Icons.Filled.Download,
+                    name = stringResource(R.string.qk_04342),
+                    sub = stringResource(R.string.qk_04350),
+                    value = if (devBusy == "export") stringResource(R.string.qk_04354) else "",
+                    onClick = { runConfigAction("export") },
+                    scaled = scaled,
+                    enabled = devBusy.isEmpty(),
+                )
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                // 导入配置（会覆盖当前配置；破坏性，确认后执行，旧配置留 .import-backup）。
+                SetRowClickable(
+                    icon = Icons.Filled.Upload,
+                    name = stringResource(R.string.qk_04345),
+                    sub = stringResource(R.string.qk_04383),
+                    value = if (devBusy == "import") stringResource(R.string.qk_04354) else "",
+                    onClick = { devConfirm = "import" },
+                    scaled = scaled,
+                    enabled = devBusy.isEmpty(),
+                )
+            }
+
+            // 隐私提示 + 两条指路（与 WebUI 开发者选项同款，必须保留）。
+            Text(
+                qstr(R.string.qk_04307),
+                fontSize = scaled(11), color = Muted,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp),
+            )
+            Text(
+                qstr(R.string.qk_04352),
+                fontSize = scaled(11), color = Muted,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp),
+            )
+            Text(
+                qstr(R.string.qk_04353),
+                fontSize = scaled(11), color = Muted,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp),
+            )
+
+            // 上次运行时缓存清理的逐项回执（失败/跳过如实呈现，不粉饰成「已清干净」）。
+            val reportLines = cacheReport
+            if (reportLines != null && reportLines.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                GroupCaption(stringResource(R.string.qk_04377))
+                SetGroup {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        reportLines.forEach { line ->
+                            Text(
+                                line,
+                                fontSize = scaled(11), color = Muted,
+                                modifier = Modifier.padding(vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -9656,6 +10220,79 @@ private fun CleanupScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showCleanupDialog = false }) { Text(qstr(R.string.qk_00011)) }
+            }
+        )
+    }
+
+    // ═══ #418 开发者选项二次确认（破坏性/中断性操作一律先确认） ═══
+    // 为什么五处都要确认：同页里破坏力同级的操作若有两种确认强度，用户无法从外观
+    // 预判哪一下会真的删东西（与 WebUI 侧 S3-14 同一纪律）。
+    if (devConfirm.isNotEmpty()) {
+        val which = devConfirm
+        val confirmTitle = when (which) {
+            "cache" -> qstr(R.string.qk_04318)
+            "incoming" -> qstr(R.string.qk_04329)
+            "restart" -> qstr(R.string.qk_04334)
+            "stop" -> qstr(R.string.qk_04338)
+            else -> qstr(R.string.qk_04346)
+        }
+        val confirmOk = when (which) {
+            "cache", "incoming" -> qstr(R.string.qk_04356)
+            "restart" -> qstr(R.string.qk_04355)
+            "stop" -> qstr(R.string.qk_04387)
+            else -> qstr(R.string.qk_04357)
+        }
+        AlertDialog(
+            onDismissRequest = { devConfirm = "" },
+            title = { Text(confirmTitle) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    when (which) {
+                        "cache" -> {
+                            // 删哪几项、各多大，执行前逐项列明（不可逆操作的后果说明）。
+                            Text(qstr(R.string.qk_04319, cacheTargets.size, formatFileSize(cacheReclaimable)))
+                            Spacer(Modifier.height(8.dp))
+                            cacheTargets.take(8).forEach { t ->
+                                val label = t.optString("label").ifBlank { t.optString("id").ifBlank { "?" } }
+                                Text(
+                                    "· $label — ${formatFileSize(t.optLong("bytes", 0L))}",
+                                    fontSize = 12.sp, color = Muted,
+                                )
+                            }
+                            if (cacheTargets.size > 8) {
+                                Text("· …", fontSize = 12.sp, color = Muted)
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            // 白名单制与「哪些不碰」是数据安全说明，必须保留。
+                            Text(qstr(R.string.qk_04320), fontSize = 12.sp, color = Muted)
+                        }
+                        "incoming" -> Text(qstr(R.string.qk_04330))
+                        "restart" -> Text(qstr(R.string.qk_04335))
+                        "stop" -> Text(qstr(R.string.qk_04339))
+                        else -> Text(qstr(R.string.qk_04347))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        devConfirm = ""
+                        when (which) {
+                            "cache" -> runCacheClean()
+                            "incoming" -> runIncomingClean()
+                            "restart", "stop" -> runEngineAction(which)
+                            else -> runConfigAction("import")
+                        }
+                    },
+                    enabled = when (which) {
+                        "cache" -> !cacheBusy
+                        "incoming" -> !incomingBusy
+                        else -> devBusy.isEmpty()
+                    },
+                ) { Text(confirmOk) }
+            },
+            dismissButton = {
+                TextButton(onClick = { devConfirm = "" }) { Text(qstr(R.string.qk_00011)) }
             }
         )
     }

@@ -34,6 +34,21 @@ class NotifyStructureBatch8Test {
   private fun bridgeCode(): String = codeOnly(source("src/main/java/com/ai/assistance/quro/dshmobile/NotifyBridge.kt"))
   private fun queueCode(): String = codeOnly(source("src/main/java/com/ai/assistance/quro/dshmobile/NotifyDecisionQueue.kt"))
 
+  /**
+   * 主 ZorvAI app 模块（壳侧）源文件：#429 起通知设置的唯一在用真源在壳侧
+   * `ui/HarnessNotifyScreen.kt`（WebUI 通知分区与桥面已删）。按三种工作目录布局解析。
+   */
+  private fun mainAppSource(relative: String): String {
+    val candidates = listOf(
+      File("../../app/src/main/java/com/ai/assistance/quro/$relative"),
+      File("../app/src/main/java/com/ai/assistance/quro/$relative"),
+      File("../../../app/src/main/java/com/ai/assistance/quro/$relative"),
+    )
+    val file = candidates.firstOrNull { it.isFile }
+      ?: throw AssertionError("找不到主 app 源码 $relative（工作目录 = " + File(".").absolutePath + "）")
+    return file.readText()
+  }
+
   private fun question(id: String, options: List<String>) =
     NotifyQuestion(id = id, header = "标题", question = "问题 " + id, options = options)
 
@@ -245,11 +260,12 @@ class NotifyStructureBatch8Test {
   @Test
   fun sendTestEntryIsWiredToTheRealImplementation() {
     assertTrue("必须有五类测试入口", centerCode().contains("fun sendTestAll("))
+    // #429 起页面侧桥面出口（AndroidBridge.notifySendTest / onNotifySendTest）随 WebUI 通知
+    // 分区整体删除，唯一在用入口改为壳侧 HarnessNotifyScreen 直调同一真源（sendTestAll）。
+    val screen = mainAppSource("ui/HarnessNotifyScreen.kt")
+    assertTrue("壳侧设置屏必须直调测试投递真源", screen.contains("NotifyCenter.sendTestAll(context)"))
     val bridge = codeOnly(source("src/main/java/com/ai/assistance/quro/dshmobile/AndroidBridge.kt"))
-    assertTrue("桥面必须有出口", bridge.contains("fun notifySendTest()"))
-    assertTrue("出口必须挂在真源默认实现（不得是未接线桩）", bridge.contains("NotifyCenter.sendTestAll(app)"))
-    assertTrue("必须返回真实条数（页面据此如实提示）", bridge.contains("private val onNotifySendTest: () -> Int"))
-    assertFalse("不得回落到恒 0 的桩", bridge.contains("onNotifySendTest: () -> Int = { 0 }"))
+    assertFalse("壳侧桥面不得保留 notifySendTest 出口（页面已无调用方）", bridge.contains("fun notifySendTest()"))
   }
 
   @Test

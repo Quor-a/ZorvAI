@@ -29,11 +29,18 @@ internal object UserCopy {
   // **内部标识**存在（渠道 ID、虚拟屏名前缀、日志 tag、代码注释），不得进用户可见文案。
   const val APP_NAME = "ZorvAI"
 
-  /** 无障碍服务名（系统设置里用户要照着找的那一项）。 */
-  const val A11Y_SERVICE_NAME = "$APP_NAME 设备控制"
+  /**
+   * 无障碍服务名（系统设置里用户要照着找的那一项）。
+   *
+   * 🔴 #484：合并前是「ZorvAI 设备控制」，而 app 侧还另有一个「Zorv AI」服务——系统列表里
+   * 两项、要开两个开关。现在只有一个服务（app 的 QuroAccessibilityService 继承
+   * DeviceControlService），标签取 `qk_04410`，这里必须与之逐字一致，否则用户照着这句话
+   * 去系统设置里找不到。
+   */
+  const val A11Y_SERVICE_NAME = "$APP_NAME 无障碍与设备控制"
 
   /** English form of [A11Y_SERVICE_NAME], matching `values-en` `a11y_service_label`. */
-  const val A11Y_SERVICE_NAME_EN = "$APP_NAME device control"
+  const val A11Y_SERVICE_NAME_EN = "$APP_NAME accessibility & device control"
 
   // ── 通知类别（唯一用词；同时是系统渠道名与设置页标签）──────────────────
   //

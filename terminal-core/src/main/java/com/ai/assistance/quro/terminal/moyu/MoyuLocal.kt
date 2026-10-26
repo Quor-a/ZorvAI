@@ -7,7 +7,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
-import java.util.zip.GZIPInputStream
 
 /**
  * 特权 shell 通道抽象。
@@ -272,6 +271,13 @@ class MoyuLocal(private val context: Context) {
         val benchReady: Boolean,
         val zigReady: Boolean,
         val remoteBytes: Long,
+        /**
+         * 核心层缺失的部件（安装标记 / qemu / mo2x / 标准库 / uspace2）。
+         *
+         * 用户投诉「墨语言没修」时只有一句「核心层未部署」根本没法定位 ——
+         * 把缺件摊到界面上，一张截图就是诊断结论。空列表 = 齐全。
+         */
+        val coreMissing: List<String> = emptyList(),
     ) {
         val deployed: Boolean get() = coreReady
         val usable: Boolean get() = shellReady && coreReady
@@ -292,12 +298,19 @@ class MoyuLocal(private val context: Context) {
         val zig = sh.fileSize("$REMOTE_ROOT/zig/zig")
         val coreReady = mark && qemu > 0 && mo2x > 0 && lib > 0 && uspace > 0
         val total = listOf(qemu, mo2x, lib, uspace, bench, zig).filter { it > 0 }.sum()
+        val missing = mutableListOf<String>()
+        if (!mark) missing.add("安装标记")
+        if (qemu <= 0) missing.add("qemu")
+        if (mo2x <= 0) missing.add("mo2x")
+        if (lib <= 0) missing.add("标准库")
+        if (uspace <= 0) missing.add("uspace2")
         return Status(
             shellReady = true,
             coreReady = coreReady,
             benchReady = bench > 0,
             zigReady = zig > 0,
             remoteBytes = total,
+            coreMissing = missing,
         )
     }
 
@@ -374,6 +387,11 @@ class MoyuLocal(private val context: Context) {
                     onProgress("传输 $rel … $pct%")
                 }
                 done += local.length()
+                // 🔴 推完一个删一个：暂存区只是传输中转，不是缓存库。
+                //    zig 一层 158MB，早先全留在 cacheDir 不删，下一次部署
+                //    （哪怕只有 6.4MB 的核心层）在存储紧张的机器上直接
+                //    ENOSPC —— 报出来是「写入远端失败」，看不出是空间问题。
+                runCatching { local.delete() }
             }
 
             onProgress("写 runner 脚本与安装标记 …")
@@ -574,79 +592,15 @@ class MoyuLocal(private val context: Context) {
     private fun stageFromAsset(
         asset: String,
         wanted: List<Pair<String, String>>,
-    ): List<Pair<File, String>> {
-        val out = mutableListOf<Pair<File, String>>()
-        val prefixes = wanted.filter { it.first.endsWith("/") }
-            .map { it.first.removeSuffix("/") to it.second.removeSuffix("/") }
-        val exact = wanted.filterNot { it.first.endsWith("/") }.toMap()
-
-        context.assets.open(asset).use { raw ->
-            val gz = GZIPInputStream(raw, 256 * 1024)
-            val header = ByteArray(512)
-            var pendingLongName: String? = null
-            while (readFully(gz, header)) {
-                if (header.all { it.toInt() == 0 }) break
-                val typeFlag = header[156].toInt().toChar()
-                var name = tarString(header, 0, 100)
-                val prefix = tarString(header, 345, 155)
-                if (prefix.isNotEmpty()) name = "$prefix/$name"
-                name = name.trim()
-
-                // GNU 长名约定：typeflag 'L' 的块内容是下一个条目的完整路径
-                if (typeFlag == 'L') {
-                    val size = tarOctal(header, 124, 12).toInt()
-                    val buf = ByteArray(size)
-                    if (!readFully(gz, buf)) error("资产 $asset 损坏：长名块不完整")
-                    pendingLongName = String(buf, Charsets.US_ASCII).trimEnd('\u0000')
-                    skipPadding(gz, size)
-                    continue
-                }
-                if (typeFlag == 'x' || typeFlag == 'g') {
-                    skipPadding(gz, tarOctal(header, 124, 12).toInt())
-                    continue
-                }
-                val full = pendingLongName ?: name
-                pendingLongName = null
-                if (typeFlag == '5') continue              // 目录，size 恒 0
-                if (typeFlag != '0' && typeFlag != '\u0000') {
-                    skipPadding(gz, tarOctal(header, 124, 12).toInt())
-                    continue
-                }
-
-                val size = tarOctal(header, 124, 12)
-                var rel: String? = exact[full]
-                if (rel == null) {
-                    for ((p, target) in prefixes) {
-                        if (full.startsWith("$p/")) {
-                            rel = "$target/${full.removePrefix("$p/")}"
-                            break
-                        }
-                    }
-                }
-                if (rel == null) {
-                    skipPadding(gz, size.toInt())
-                    continue
-                }
-                val dest = File(stage, rel.replace('/', File.separatorChar))
-                dest.parentFile?.mkdirs()
-                FileOutputStream(dest).use { fos ->
-                    var left = size
-                    val buf = ByteArray(64 * 1024)
-                    while (left > 0) {
-                        val want = if (left < buf.size) left.toInt() else buf.size
-                        val got = gz.read(buf, 0, want)
-                        if (got <= 0) error("资产 $asset 损坏：$full 数据不足")
-                        fos.write(buf, 0, got)
-                        left -= got
-                    }
-                }
-                skipPadding(gz, size.toInt())
-                out += dest to rel
-            }
-        }
-        if (out.isEmpty()) error("资产 $asset 里没解出任何目标文件（白名单写错了？）")
-        return out
-    }
+    ): List<Pair<File, String>> =
+        // 读取逻辑在 TarGzExtract：跳过条目必须**连数据体一起跳**，否则流错位、
+        // 白名单全不命中 —— 墨语言核心层曾因此从未部署成功（有单测钉住）。
+        TarGzExtract.extract(
+            gzStream = context.assets.open(asset),
+            assetLabel = asset,
+            wanted = wanted,
+            destRoot = stage,
+        )
 
     /**
      * 分块把本地文件推到你端路径。
@@ -708,42 +662,6 @@ class MoyuLocal(private val context: Context) {
         )
     }
 
-    // ── tar 读取小工具（与 MoyuRuntime.extractTarGz 同一套约定）──
-
-    /** 读满 buf；干净 EOF（一个字节都没读到）返回 false，读到一半 EOF 视为损坏抛异常。 */
-    private fun readFully(input: InputStream, buf: ByteArray): Boolean {
-        var off = 0
-        while (off < buf.size) {
-            val n = input.read(buf, off, buf.size - off)
-            if (n < 0) {
-                if (off == 0) return false
-                error("流意外结束：还差 ${buf.size - off} 字节")
-            }
-            off += n
-        }
-        return true
-    }
-
     private fun readUpTo(input: InputStream, buf: ByteArray, want: Int): Int =
         input.read(buf, 0, want)
-
-    private fun skipPadding(input: InputStream, size: Int) {
-        val pad = (512 - (size % 512)) % 512
-        if (pad > 0 && !readFully(input, ByteArray(pad))) {
-            error("流意外结束：跳过补齐字节失败")
-        }
-    }
-
-    private fun tarString(header: ByteArray, off: Int, len: Int): String {
-        val end = minOf(off + len, header.size)
-        var e = off
-        while (e < end && header[e].toInt() != 0) e++
-        return String(header, off, e - off, Charsets.US_ASCII).trim()
-    }
-
-    private fun tarOctal(header: ByteArray, off: Int, len: Int): Long {
-        val s = tarString(header, off, len)
-        if (s.isEmpty()) return 0
-        return runCatching { s.toLong(8) }.getOrDefault(0L)
-    }
 }
