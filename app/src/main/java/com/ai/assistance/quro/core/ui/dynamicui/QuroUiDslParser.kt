@@ -4,7 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * ZorvAI 动态 UI DSL 解析器（参照 Kai `KaiUiParser` 的三级流水线重写）。
+ * ZorvAI 动态 UI DSL 解析器（三级流水线架构，自研重写）。
  *
  * 流水线：
  *  1. **代码块提取** —— 从模型回复中定位 ```quro-ui 围栏，取出原始 body；
@@ -410,7 +410,20 @@ object QuroUiDslParser {
     fun parseBlock(rawBlock: String): QuroUiParseResult {
         val repaired = repair(rawBlock)
         if (repaired.isBlank()) {
-            return QuroUiParseResult.Failure(repaired, "空内容")
+            // 🔴 空内容**绝不报 Failure**（与 #181 / #206 同一口径）。
+            //
+            // 真机现象：消息里出现一个空的 ```quro-ui 围栏 ——
+            //   ① 流式刚吐出开围栏、正文还没到（`ChatScreen.parseTail` 会把「已开未闭合」
+            //      的围栏当 UI 块先渲染，`after` 此刻是空串）；
+            //   ② 模型多写了一个空围栏收尾。
+            // 旧实现在这里返回 `Failure("空内容")`，而 `ChatScreen.DynamicUiBlock` 的
+            // Failure 分支会渲染成「⚠️ 动态 UI 解析失败：空内容」红字 + 原始 JSON，
+            // 且一直挂在消息末尾不消失 —— 用户截图里就是这个东西，看起来像功能坏了。
+            //
+            // #206 已经把「全空数组」改成「零高度空 Column」（[fallbackForEmptyArray]），
+            // 但漏了这个更早的空白分支 —— 同一个洞，只是入口不同。这里补齐：
+            // 空 Column 无子节点时高度为 0、不留间隙，AI 真正说的话照常在 UI 块之外渲染。
+            return QuroUiParseResult.Success(QuroColumnNode(children = emptyList()), repaired)
         }
 
         // NDJSON：多行且每行都是独立对象
@@ -1434,7 +1447,7 @@ object QuroUiDslParser {
         val map = LinkedHashMap<String, String>()
         json.keys().forEach { key ->
             val v = json.opt(key)
-            // LLM 常把数字/布尔写进 data，这里统一强制转字符串（与 Kai dataAsStrings 同思路）
+            // LLM 常把数字/布尔写进 data，这里统一强制转字符串
             if (v != null && v != JSONObject.NULL) map[key] = v.toString()
         }
         return map

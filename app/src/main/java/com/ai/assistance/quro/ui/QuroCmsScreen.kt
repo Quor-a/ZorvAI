@@ -367,6 +367,7 @@ private fun ModulesSection(
             else -> "○ 未部署引擎" to MaterialTheme.colorScheme.onSurfaceVariant
         }
         var showEngineScripts by remember { mutableStateOf(false) }
+        var recheckingEngine by remember { mutableStateOf(false) }
         var editingBootstrap by remember { mutableStateOf("") }
         var editingProvisioner by remember { mutableStateOf("") }
         var isEditingBootstrap by remember { mutableStateOf(false) }
@@ -379,12 +380,35 @@ private fun ModulesSection(
                     Text(stringResource(R.string.qk_01553), style = MaterialTheme.typography.bodyLarge)
                     Text("${es.engineVersion.ifBlank { "-" }} · ${es.services.size} 个共享服务", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(eLabel, style = MaterialTheme.typography.labelSmall, color = eColor)
+                    // 健康明细：说清「到底缺什么/自愈了什么」，不再干巴巴一个「健康检查异常」
+                    if (es.ready && !es.deploying && es.healthDetail.isNotBlank())
+                        Text(
+                            es.healthDetail,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (es.health) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                            maxLines = 3,
+                        )
                     if (es.lastError.isNotBlank())
                         Text(es.lastError, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, maxLines = 2)
                 }
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
                 PrimaryButton(text = if (busyDeployEngine) stringResource(R.string.qk_01555) else stringResource(R.string.qk_01556), modifier = Modifier.fillMaxWidth(), enabled = !busyDeployEngine, onClick = onDeployEngine)
+            }
+            // 重新检测：重查就绪标记 + 工具链（标记缺但工具全 → 自动补写自愈），刷新共享服务存活
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        recheckingEngine = true
+                        scope.launch(Dispatchers.IO) {
+                            try { CmsEngineStore.probeHealth(ctx) } finally {
+                                withContext(Dispatchers.Main) { recheckingEngine = false }
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !busyDeployEngine && !recheckingEngine,
+                ) { Text(if (recheckingEngine) "检测中…" else "重新检测") }
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onImportEngine, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.qk_01557)) }

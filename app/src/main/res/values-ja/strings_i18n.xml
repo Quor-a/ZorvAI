@@ -1262,8 +1262,6 @@ If any clause of this Agreement is found invalid or unenforceable, that clause s
     <string name="qk_00962">… %1$s more events omitted from rendering</string>
     <string name="qk_00963" formatted="false">（ボードなし）</string>
     <string name="qk_00964">… %1$s more columns omitted from rendering</string>
-    <string name="qk_00965" formatted="false">100%オープンソースのAndroidデジタルヒューマン</string>
-    <string name="qk_00966" formatted="false">II. 3D fully offline (LLM+ASR+TTS+A2BS+rendering all on phone)</string>
     <string name="qk_00967" formatted="false">リンクをタップして回答を表示する必要があります</string>
     <string name="qk_00968" formatted="false">フローチャート</string>
     <string name="qk_00969" formatted="false">全画面表示</string>

@@ -54,8 +54,3 @@ for r, s, a in inconsistent:
 print("EXTRA (in apk, not in source assets):", len(extra))
 for e in sorted(extra)[:20]:
     print("   ", e)
-# specifically report lanxiu rootfs
-key = "lanxiu-aarch64-rootfs-20261017.tar.xz"
-print("LANXIU rootfs source:", src.get(key))
-print("LANXIU rootfs apk   :", apk_shas.get(key))
-print("MATCH:", src.get(key) == apk_shas.get(key))

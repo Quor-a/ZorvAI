@@ -147,7 +147,7 @@ import java.net.URL
 import kotlin.math.roundToInt
 
 /**
- * ZorvAI 动态 UI 的 Compose 原生渲染器（参照 Kai `KaiUiRenderer` 设计重写）。
+ * ZorvAI 动态 UI 的 Compose 原生渲染器（自研重写）。
  *
  * 之所以坚持原生渲染而非 WebView：
  *  - 控件可直接读写状态，用户交互能原样回传给模型（WebView 需桥接且易丢事件）；

@@ -10,7 +10,7 @@ import java.io.File
 /**
  * MCP（Model Context Protocol）双向桥。
  *
- * ToolPkg 完全没有这一层 —— 它的插件只能在 Operit 内部用。
+ * ToolPkg 完全没有这一层 —— 它的插件只能在原平台内部用。
  * Kaleido 把 MCP 做成一等公民，两个方向都能走：
  *
  *   1) [McpClient]：宿主作为 **客户端** 接入外部 MCP Server（stdio / http），

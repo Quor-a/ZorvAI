@@ -212,22 +212,36 @@ object CmsEngineDeployer {
         CmsEngineStore.registerEngineServices(pkg.sharedServices)
 
         // 健康检查：确认就绪标记 + 核心开发工具确实就绪（避免"标记写了但工具没装"的假成功）
+        var healthDetail = ""
         val (hc, _) = QuroTerminalBridge.run(context, "[ -f ${engineGuestDir()}/.engine.ready ]", timeoutMs = 10_000)
         var health = hc == 0
-        if (health) {
-            val (tc, tout) = QuroTerminalBridge.run(
+        val (toolsOk, toolsMissing) = CmsEngineStore.probeCoreTools(context)
+        if (health && !toolsOk) {
+            // 标记在但工具缺（如上次 bootstrap 半途中断、或化石状态迁移）→ 判未就绪 + 明细
+            health = false
+            healthDetail = "就绪标记存在但缺少核心工具：$toolsMissing"
+            CmsEngineStore.appendLog("⚠️ 引擎就绪标记存在但缺少核心工具($toolsMissing)，判定未就绪")
+        } else if (!health && toolsOk) {
+            // 标记缺失但工具齐全（bootstrap 在 verify 前中断 / 双 rootfs 合一化石态）→ 补写标记自愈
+            val (wc, _) = QuroTerminalBridge.run(
                 context,
-                "miss=; for t in python3 node gcc make cmake git curl; do command -v \$t >/dev/null 2>&1 || miss=\"\$miss \$t\"; done; if [ -n \"\$miss\" ]; then echo \"MISSING:\$miss\"; exit 2; fi; echo OK",
+                "mkdir -p ${engineGuestDir()} && touch ${engineGuestDir()}/.engine.ready",
                 timeoutMs = 10_000,
             )
-            if (tc != 0) {
-                health = false
-                CmsEngineStore.appendLog("⚠️ 引擎就绪标记存在但缺少核心工具(tout=${tout.take(120)})，判定未就绪")
+            if (wc == 0) {
+                health = true
+                healthDetail = "就绪标记缺失但核心工具齐全，已自动补写 .engine.ready（自愈）"
+                CmsEngineStore.appendLog("✅ 引擎核心工具齐全，补写 .engine.ready 自愈")
+            } else {
+                healthDetail = "核心工具齐全但补写就绪标记失败（rootfs 目录不可写？）"
             }
+        } else if (!health) {
+            healthDetail = "缺少核心工具：$toolsMissing（bootstrap 未能装全，详见部署日志）"
+            CmsEngineStore.appendLog("⚠️ 引擎未就绪，缺少核心工具：$toolsMissing")
         }
 
-        CmsEngineStore.markDeployed(pkg.engineVersion, launched, health)
-        sb.appendLine("🚀 CMS引擎部署完成（v${pkg.engineVersion}）${if (health) "，健康检查通过" else "，但就绪标记缺失"}。")
+        CmsEngineStore.markDeployed(pkg.engineVersion, launched, health, healthDetail)
+        sb.appendLine("🚀 CMS引擎部署完成（v${pkg.engineVersion}）${if (health) "，健康检查通过" else "，但未就绪"}${if (healthDetail.isNotBlank()) "：$healthDetail" else ""}。")
         if (launched.isNotEmpty()) sb.appendLine("已拉起共享服务：${launched.joinToString(", ")}")
         return sb.toString()
     }

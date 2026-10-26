@@ -22,7 +22,7 @@
 ## 一、终端 4.0
 
 ### 构架介绍
-终端 4.0 是 ZorvAI 内置的「开箱即用」Linux 终端引擎，直接继承并去品牌化移植自 **OperitTerminal v1.2**：把 **64MB 完整 Ubuntu rootfs** 作为 `assets` 打包进 APK，`TerminalManager.extractAssets()` 直接从 `context.assets.open` 解压，首启即拥有完整发行版，彻底取代旧方案「ubuntu-base 微镜像 + 运行时 apt-get 下载」的脆弱链路。
+终端 4.0 是 ZorvAI 内置的「开箱即用」Linux 终端引擎，直接继承并移植自开源终端实现：把 **64MB 完整 Ubuntu rootfs** 作为 `assets` 打包进 APK，`TerminalManager.extractAssets()` 直接从 `context.assets.open` 解压，首启即拥有完整发行版，彻底取代旧方案「ubuntu-base 微镜像 + 运行时 apt-get 下载」的脆弱链路。
 
 - **Native 软链而非拷贝**：proot / loader / bash / busybox / sudo 五个预编译 `.so` 经 Java NIO `Files.createSymbolicLink` 软链进 `binDir`。
 - **Provider 抽象**：本地 proot Ubuntu 与远程 SSH 终端统一在 `TerminalProvider` 接口之后。
@@ -78,7 +78,7 @@ graph TB
 | UbuntuDocumentsProvider | 系统文件管理器访问 rootfs | Manifest 注册 |
 
 ### 关键流程
-1. **首启初始化**：`initializeEnvironment()` → 建目录 → `linkNativeLibs()` 软链 native → `extractAssets()` 解压 rootfs → `generateStartScript()` 写 `common.sh` → 首条命令触发 `install_ubuntu()` 解压并写 `.operit_installed_ok`。
+1. **首启初始化**：`initializeEnvironment()` → 建目录 → `linkNativeLibs()` 软链 native → `extractAssets()` 解压 rootfs → `generateStartScript()` 写 `common.sh` → 首条命令触发 `install_ubuntu()` 解压并写安装完成标记。
 2. **命令执行（用户/AI 通用）**：输入 / `terminal_exec` → `QuroTerminalBridge` → `SessionManager` 取会话 → `LocalTerminalProvider` 拉起 proot → 经 pty 回显 → `OutputProcessor` + ANSI 模拟器渲染。
 
 ---

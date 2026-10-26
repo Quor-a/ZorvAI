@@ -71,9 +71,14 @@ class ZorvBrain(private val context: Context) {
      * 系统提示词：三层拼接，与主对话同构。
      *   ① 平台/品牌基座（QuroPlatformManifest.SYSTEM，ALWAYS-ON）
      *   ② 灵魂层（QuroSoulPromptEngine：人格卡身份 + 风格 + 标签 + 长期记忆）
-     *   ③ GenUI 表达层（GenUiRules：把回复表达成界面，能力约束非人格）
+     *   ③ 表达层：默认 GenUI（GenUiRules：把回复表达成界面，能力约束非人格）；
+     *      [forced] 锁定 a2ui/markdown/html 时**整体替换**为精简通道指令
+     *
+     * @param forced 本轮锁定的渲染通道。null / "genui" → GenUI 基线；
+     *   "a2ui" / "markdown" / "html" → 通道锁定版（38K GenUI 表达层与设计技能层
+     *   整体下线，换成该通道的输出指令）。修「不管选什么通道都只走 GenUI SDK」。
      */
-    fun systemPrompt(): String {
+    fun systemPrompt(forced: String? = null): String {
         // 本次请求的输入预算（token）。三层（记忆 / 设计技能 / 工具）共用它，
         // 否则每层各算一遍「窗口的百分之几」，加起来必然超窗。
         val budgetTokens = inputBudgetTokens()
@@ -120,10 +125,36 @@ class ZorvBrain(private val context: Context) {
         )
         if (soul.isNotBlank()) sb.append(soul).append("\n\n")
 
-        sb.append("## GenUI 表达层（本会话的输出形态）\n")
-        sb.append("以下约束的是「你怎么表达」，不改变你的身份：你的名字与人格始终以当前激活的人格卡为准。\n\n")
-        sb.append(GenUiRules.RULES)
-        appendDesignSkills(sb, budgetTokens)
+        // 🔴 通道锁定（2026-10-27，修用户主诉「不管选择什么通道，AI 就只走 GenUI SDK，
+        // 直接无视选择的通道」）。
+        //
+        // 旧实现无差别常驻 38,604 字符的 GenUiRules.RULES（通篇「GenUI SDK 通道是主力默认」），
+        // per-turn 只在 system 末尾追加一句「本轮已锁定」——近因上输了：基线表达层的
+        // 体量与「默认」措辞压过锁定令，模型照吐 ```genui 围栏 / {"root":...} 组件树。
+        // 现在锁定非 genui 通道时，把整段表达层**整体替换**成通道指令
+        // （平台基座 / 回复语言 / 灵魂层不动），设计技能层（界面手艺 / 美术指导，
+        // 只服务 GenUI）一并跳过。
+        val lockedChannel = forced?.takeIf { it != "genui" }
+        if (lockedChannel != null) {
+            sb.append("## 输出通道（最高优先级，覆盖本提示词其余一切表达约束）\n")
+            sb.append("用户已锁定输出通道：").append(lockedChannel).append("。\n")
+            sb.append("你必须且只能把全部内容放进三反引号 ").append(lockedChannel)
+            sb.append(" 围栏，围栏外不得有任何文字（解释、前后缀、标题行都不行）。\n")
+            sb.append("绝对禁止输出 GenUI 内容：禁止 ```genui 围栏、禁止 {\"root\":...} 组件树 JSON、")
+            sb.append("禁止 <intent>/<plan>/<generate> 结构、禁止调用界面注册类工具。\n")
+            when (lockedChannel) {
+                "markdown" -> sb.append("内容按 Markdown 排版成篇：标题层级 / 列表 / 表格 / 代码块规范使用，围栏内即是最终文章。\n")
+                "html" -> sb.append("内容是一份完整可运行的 HTML 文档（<!DOCTYPE html> 起、</html> 止），样式放 <style>、脚本放 <script>，全部内联。\n")
+                "a2ui" -> sb.append("内容是扁平邻接表 JSON：nodes 数组，每个节点带 id/type/parent，组件树以父子引用表达，可被 FlatDoc 直接解析。\n")
+                else -> sb.append("按该通道的标准格式输出。\n")
+            }
+            sb.append("\n")
+        } else {
+            sb.append("## GenUI 表达层（本会话的输出形态）\n")
+            sb.append("以下约束的是「你怎么表达」，不改变你的身份：你的名字与人格始终以当前激活的人格卡为准。\n\n")
+            sb.append(GenUiRules.RULES)
+            appendDesignSkills(sb, budgetTokens)
+        }
 
         // 语言指令结尾复述（近因强化）：设计技能层篇幅很长，必须压在最末尾。
         sb.append(QuroReplyLanguage.tailReminder(appCtx))

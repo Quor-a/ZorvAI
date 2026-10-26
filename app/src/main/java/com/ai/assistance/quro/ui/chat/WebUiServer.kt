@@ -750,7 +750,7 @@ class QuroWebUiServer(
         return false
     }
 
-    /* ── 发送：SSE 增量流（对齐 Operit web-chat 的 messages/stream 协议）─
+    /* ── 发送：SSE 增量流（对齐标准 messages/stream SSE 协议）──────────
      *
      * 为什么必须流式（用户 2026-10-14 反馈根因）：
      *   旧实现 POST /api/send 只回 {"ok":true}，前端靠 80ms 轮询 revision +
@@ -764,7 +764,7 @@ class QuroWebUiServer(
      *   event: assistant_done   → data = {message} 最终完整投影（含 blocks/cards/tools）
      *   event: error            → data = {error}
      *
-     * 前端读法（Operit 同款）：fetch + response.body.getReader() 逐块解析，
+     * 前端读法：fetch + response.body.getReader() 逐块解析，
      * **不用 EventSource**（POST 带 body + 需 AbortController 取消）。
      * ─────────────────────────────────────────────────────────────────── */
 

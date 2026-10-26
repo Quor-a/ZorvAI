@@ -218,38 +218,72 @@ if [ -d /usr/share/ca-certificates/mozilla ]; then
     cat /usr/share/ca-certificates/mozilla/*.crt > /etc/ssl/certs/ca-certificates.crt 2>/dev/null || true
 fi
 
-# 轮次F · apt 索引（绕过 apt-get update 超时）
+# 轮次F+ · apt 索引（绕过 apt-get update 超时）——🔴 2026-10-27 根因修复：索引获取绝不依赖 guest 内 curl
 # proot 下 apt-get update 拉清华 universe 6万+ 包超 30s 终端超时，且 ports.ubuntu.com pool 整体 404。
-# 改用 curl 手动拉清华 TUNA(HTTP) 12 组件索引直写 /var/lib/apt/lists/，文件名须严格合规，apt 才能识别。
-# 仅当 TUNA 拉齐后才清旧源（ports.ubuntu.com 已 404 必删；aliyun 仅在 TUNA 成功时替换）。
-# curl 缺失或 TUNA 全失败时回退 apt-get update（硬 25s 超时）。
-echo "[quro-engine] apt index (manual curl, bypass apt-get update timeout)..."
+# 手动拉 12 组件索引直写 /var/lib/apt/lists/，文件名严格合规 apt 才认。
+# 🔴 根因（2026-10-27 真机实证）：基础 rootfs（pd-v4.18.0）不含 curl/wget，旧版 `command -v curl`
+# 判断直接跳过手动索引 → 回退 apt-get update 25s 硬超时在 proot 下必败 → robust_install 对
+# ~20 个包全部 `|| true` 静默失败 → verify 七件套不齐 → 不写 .engine.ready → 引擎「已部署
+# （健康检查异常）」且零诊断明细（用户完全看不到缺什么）。
+# 现改为多级下载器 quro_fetch：① PATH 真 curl ② busybox curl（宿主 filesDir→guest /quro/usr/bin/curl）
+# ③ python3 urllib（基础 rootfs 必带 python3.12，镜像自带 ca-certificates.crt，http/https 均可）。
+# 索引源双镜像降级：TUNA → aliyun；全部失败才回退 apt-get update（硬 25s 超时）。
+echo "[quro-engine] apt index (multi-level fetch, no guest curl dependency)..."
+quro_fetch() {
+    local url="${'$'}1" out="${'$'}2"
+    [ -n "${'$'}url" ] && [ -n "${'$'}out" ] || return 1
+    rm -f "${'$'}out" 2>/dev/null || true
+    # ① PATH 里的真 curl（引擎装过就有）
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL --connect-timeout 10 --max-time 60 -o "${'$'}out" "${'$'}url" 2>/dev/null && [ -s "${'$'}out" ] && return 0
+    fi
+    # ② busybox curl（宿主 filesDir/usr/bin/curl → guest /quro/usr/bin/curl；仅 HTTP，参数极简防 busybox 不认）
+    if [ -x /quro/usr/bin/curl ]; then
+        timeout 60 /quro/usr/bin/curl -s -o "${'$'}out" "${'$'}url" 2>/dev/null && [ -s "${'$'}out" ] && return 0
+    fi
+    # ③ python3 urllib（基础 rootfs 必带；流式写盘，http/https 均可）
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import sys,urllib.request
+url,out=sys.argv[1],sys.argv[2]
+try:
+    req=urllib.request.Request(url,headers={"User-Agent":"quro-engine/1.0"})
+    with urllib.request.urlopen(req,timeout=60) as r,open(out,"wb") as f:
+        while True:
+            b=r.read(65536)
+            if not b: break
+            f.write(b)
+except Exception:
+    sys.exit(1)' "${'$'}url" "${'$'}out" 2>/dev/null && [ -s "${'$'}out" ] && return 0
+    fi
+    rm -f "${'$'}out" 2>/dev/null || true
+    return 1
+}
 quro_manual_apt_index() {
-    local BASE="http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/dists"
     local APTL="/var/lib/apt/lists"
     mkdir -p "${'$'}APTL" "${'$'}APTL/partial"
     rm -f "${'$'}APTL"/partial/* 2>/dev/null || true
-    local ok=0 total=0
-    if command -v curl >/dev/null 2>&1; then
-        for dist in noble noble-updates noble-security; do
-            for comp in main universe multiverse restricted; do
-                total=$((total+1))
-                local f="mirrors.tuna.tsinghua.edu.cn_ubuntu-ports_dists_${'$'}dist_${'$'}comp_binary-arm64_Packages"
-                if curl -s --max-time 40 -o "${'$'}APTL/${'$'}f.gz" "${'$'}BASE/${'$'}dist/${'$'}comp/binary-arm64/Packages.gz" \
+    local ok=0 total=0 dist comp f base got
+    for dist in noble noble-updates noble-security; do
+        for comp in main universe multiverse restricted; do
+            total=$((total+1))
+            f="mirrors.tuna.tsinghua.edu.cn_ubuntu-ports_dists_${'$'}dist_${'$'}comp_binary-arm64_Packages"
+            got=0
+            for base in "http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/dists" "http://mirrors.aliyun.com/ubuntu-ports/dists"; do
+                if quro_fetch "${'$'}base/${'$'}dist/${'$'}comp/binary-arm64/Packages.gz" "${'$'}APTL/${'$'}f.gz" \
                    && gzip -dc "${'$'}APTL/${'$'}f.gz" > "${'$'}APTL/${'$'}f" 2>/dev/null && [ -s "${'$'}APTL/${'$'}f" ]; then
-                    rm -f "${'$'}APTL/${'$'}f.gz"; ok=$((ok+1)); echo "[apt] index ok: ${'$'}f"
-                else
-                    echo "[apt] WARN: failed fetch ${'$'}dist/${'$'}comp"; rm -f "${'$'}APTL/${'$'}f.gz" "${'$'}APTL/${'$'}f" 2>/dev/null || true
+                    rm -f "${'$'}APTL/${'$'}f.gz"; ok=$((ok+1)); got=1
+                    echo "[apt] index ok: ${'$'}dist/${'$'}comp (${'$'}base)"
+                    break
                 fi
+                rm -f "${'$'}APTL/${'$'}f.gz" "${'$'}APTL/${'$'}f" 2>/dev/null || true
             done
+            if [ "${'$'}got" = 0 ]; then echo "[apt] WARN: failed fetch ${'$'}dist/${'$'}comp (tuna+aliyun, all downloaders exhausted)"; fi
         done
-        echo "[apt] manual index: ${'$'}ok/${'$'}total fetched"
-        if [ "${'$'}ok" -ge 1 ]; then
-            rm -f "${'$'}APTL"/ports.ubuntu.com_* 2>/dev/null || true
-            rm -f "${'$'}APTL"/mirrors.aliyun.com_* 2>/dev/null || true
-        fi
-    else
-        echo "[apt] curl not available, will rely on apt-get update"
+    done
+    echo "[apt] manual index: ${'$'}ok/${'$'}total fetched"
+    if [ "${'$'}ok" -ge 1 ]; then
+        rm -f "${'$'}APTL"/ports.ubuntu.com_* 2>/dev/null || true
+        rm -f "${'$'}APTL"/mirrors.aliyun.com_* 2>/dev/null || true
     fi
     if [ "${'$'}ok" -lt 1 ]; then
         echo "[apt] manual index insufficient, trying apt-get update (hard 25s timeout)..."
@@ -266,6 +300,16 @@ quro_manual_apt_index
 echo "[quro-engine] fixing dpkg database errors..."
 dpkg --configure -a 2>/dev/null || true
 apt-get install -f -y 2>/dev/null || true
+
+# Phase 2.5（根因修复）：索引一旦就绪，第一时刻装回真 curl + ca-certificates。
+# 基础 rootfs 无 curl，索引阶段已由 busybox/python3 兜住；此处解锁后续所有 HTTPS 下载
+# （Node.js 官方二进制回退、后续模块 bootstrap 等）。无索引则跳过（装了也会失败）。
+echo "[quro-engine] ensuring curl + ca-certificates (unlock HTTPS downloads)..."
+if ls /var/lib/apt/lists/*_Packages >/dev/null 2>&1; then
+    apt-get install -y --no-install-recommends curl ca-certificates 2>&1 | tail -3 || true
+else
+    echo "[quro-engine] WARN: no apt index available yet, curl install deferred to Phase 6"
+fi
 
 # Phase 3: language runtimes
 echo "[quro-engine] installing language runtimes..."
@@ -303,10 +347,11 @@ robust_install "python3-pip" "pip3" || true
 robust_install "nodejs" "node" || true
 if ! command -v node >/dev/null 2>&1; then
     echo "[quro-engine] ⚠️ apt nodejs 无效，改用 Node.js 20 官方二进制..."
-    curl -fsSL "https://npmmirror.com/mirrors/node/v20.19.0/node-v20.19.0-linux-arm64.tar.xz" -o /tmp/node.tar.xz 2>/dev/null
-    if [ -f /tmp/node.tar.xz ]; then
+    if quro_fetch "https://npmmirror.com/mirrors/node/v20.19.0/node-v20.19.0-linux-arm64.tar.xz" /tmp/node.tar.xz; then
         tar -xf /tmp/node.tar.xz -C /usr/local --strip-components=1 2>/dev/null
         rm -f /tmp/node.tar.xz
+    else
+        echo "[quro-engine] ❌ Node.js 20 官方二进制下载失败（curl/busybox/python3 均不可达）"
     fi
 fi
 robust_install "npm" "npm" || true

@@ -977,7 +977,7 @@ class TerminalEnvironment(context: Context) {
     fun startupDiagnostics(): String {
         val sb = StringBuilder()
         fun line(s: String) { sb.append(s).append("\r\n") }
-        line("==== ZorvAI 终端启动自检 B20261027-0121 ====")
+        line("==== ZorvAI 终端启动自检 B20261027-0226 ====")
         line("[1] os.arch=${System.getProperty("os.arch")} abis=${Build.SUPPORTED_ABIS.joinToString(",")} sdk=${Build.VERSION.SDK_INT}")
         val nld = File(nativeLibDir)
         line("[2] nativeLibDir=$nativeLibDir isDir=${nld.isDirectory}")

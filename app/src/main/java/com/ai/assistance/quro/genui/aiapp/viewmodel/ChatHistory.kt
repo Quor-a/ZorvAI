@@ -125,12 +125,16 @@ internal object ChatHistory {
     fun compressAssistant(content: String): String {
         val folded = foldFences(content)
         val noJson = stripJsonBlobs(folded)
-        return if (noJson.length <= MAX_ASSISTANT_CHARS) {
+        val out = if (noJson.length <= MAX_ASSISTANT_CHARS) {
             noJson
         } else {
             // 已经折叠过 JSON，剩下的通常是人话；真还超长才截断
             noJson.take(MAX_ASSISTANT_CHARS).trimEnd() + foldNote("历史回复", noJson.length)
         }
+        // 🔴 空串卫戍（2026-10-27）：整条消息全是界面 JSON 时，折叠 + 剥 JSON 之后
+        // 可能什么都不剩。空 assistant 消息进上下文，部分网关直接 400；
+        // 就算过了网关，渲染出来也是一条空白气泡。给一句中性兜底。
+        return out.ifBlank { "（界面内容已折叠）" }
     }
 
     /**
@@ -145,6 +149,22 @@ internal object ChatHistory {
     private fun foldNote(kind: String, length: Int): String =
         "[系统折叠提示：此处原有 $kind 共 $length 字符，已从上下文中移除；" +
             "不要在任何回复或界面里复述本提示]"
+
+    /**
+     * 折叠提示的机器行特征（[stripFoldNotes] 按它整条剥掉）。
+     *
+     * 这行字只服务于**进模型上下文**时的「别复述」指令（老轮次压缩那条路径）。
+     * 用户能看见的两条路径——对话气泡（`historyNote` 降级）与历史页
+     * （`stripAssistantForDisplay`）——必须剥干净：满屏「[系统折叠提示：…]」
+     * 正是用户说的「乱七八糟」之一。
+     */
+    private const val FOLD_NOTE_MARK = "系统折叠提示"
+
+    private val FOLD_NOTE_REGEX = Regex("\\[$FOLD_NOTE_MARK：[^\\]]*\\]")
+
+    /** 剥掉所有折叠提示行（display 专用）。折叠后只剩空白时返回空串，由调用方兜底。 */
+    fun stripFoldNotes(text: String): String =
+        FOLD_NOTE_REGEX.replace(text, "").replace(Regex("\\n{3,}"), "\n\n").trim()
 
     /**
      * 折叠 ```lang … ``` 代码围栏。

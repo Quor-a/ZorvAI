@@ -66,7 +66,7 @@ class KaleidoRuntime private constructor(
     )
 
     fun install(pkgSource: PackageSource, options: InstallOptions = InstallOptions()): PackageRecord {
-        // ---- 生态兼容：Operit ToolPkg 包免改造直接装 ----
+        // ---- 生态兼容：ToolPkg 插件包免改造直接装 ----
         val parsed: Pair<KaleidoManifest, ToolPkgCompat.MigrationReport?> =
             if (ToolPkgCompat.isToolPkg(pkgSource)) {
                 val pair = ToolPkgCompat.translate(pkgSource)

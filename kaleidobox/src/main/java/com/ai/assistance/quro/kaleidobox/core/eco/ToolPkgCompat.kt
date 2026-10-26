@@ -7,7 +7,7 @@ import com.ai.assistance.quro.kaleidobox.core.registry.PackageSource
 import com.ai.assistance.quro.kaleidobox.core.util.Json
 
 /**
- * Operit ToolPkg → Kaleido 迁移层。
+ * ToolPkg → Kaleido 插件迁移层。
  *
  * 这是"生态兼容"最直接的一刀：**已有的 ToolPkg 插件不用重写，直接能装**。
  *
@@ -213,7 +213,7 @@ object ToolPkgCompat {
             "sandbox" to mapOf("level" to "in-process", "memoryMb" to m.sandbox.memoryMb),
             "hooks" to m.hooks.map { mapOf("point" to it.point, "target" to it.target, "priority" to it.priority) },
             "resources" to m.resources.map { mapOf("key" to it.key, "path" to it.path, "mime" to it.mime) },
-            "_migratedFrom" to "operit-toolpkg",
+            "_migratedFrom" to "toolpkg",
         )
     )
 
@@ -294,7 +294,7 @@ object ToolPkgCompat {
 
     /**
      * 兼容 shim：在 ToolPkg 插件的 JS 上下文里预先注入这些全局符号，
-     * 让旧插件以为自己还在 Operit 里跑。
+     * 让旧插件以为自己还在原平台里跑。
      * 宿主应在加载迁移包时把它 prepend 到入口源码前面。
      */
     const val COMPAT_SHIM_JS = """

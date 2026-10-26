@@ -233,7 +233,7 @@ var emptyBox=null;
 var pollTimer=null;
 var selectedAttachments=[];   /* {id,name,type,size} */
 
-/* ── 发送流状态（Operit 同款：fetch + reader 逐块读 SSE）──────────────
+/* ── 发送流状态（fetch + reader 逐块读 SSE）────────────────────────
    active   正在流式（此时快照的 messages 被忽略，由流独占）
    ctrl     AbortController（停止按钮用）
    localUserId / localAid   乐观气泡的本地 id，真实消息到达后迁移
@@ -1081,7 +1081,7 @@ function reportDiag(msg,level){
   }catch(e){}
 }
 
-/* ── 5. 发送：SSE 增量流（Operit web-chat 同款协议）─────────────────── */
+/* ── 5. 发送：SSE 增量流（标准 SSE 增量协议）──────────────────────── */
 
 /** 解析一个 SSE 帧（`event:` + `data:` 双字段）。 */
 function parseSseBlock(block){

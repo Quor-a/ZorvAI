@@ -285,8 +285,12 @@ object StyleResolver {
                 val frac = w.fraction.coerceIn(0f, 1f)
                 // Row 下的 fillMaxWidth(fraction) 同样会超出剩余宽度（分数乘的是整行），
                 // 改成「剩余空间的一个比例」才是正确语义。
+                // 🔴 2026-10-26：连 fillMaxWidth(frac) 也不能留 —— 分数乘的是**整行**，
+                // 第一个 weight=1 的子节点就会把整行吃光，兄弟节点只剩 0 宽（竖排挤成一列字）。
+                // 真正的权重分配已由 ContainerRenderer 的 Row 分支用 RowScope.weight 完成，
+                // 这里只做「不越界」的兜底约束（未走 RowScope 的其他 Row 里退化为按内容宽度）。
                 modifier = modifier.then(
-                    if (inRowContext) Modifier.fillMaxWidth(frac.coerceAtMost(1f))
+                    if (inRowContext) Modifier.widthIn(max = GenUILayoutGuard.MAX_WIDTH_DP.dp)
                     else Modifier.fillMaxWidth(frac)
                 )
             }

@@ -21,7 +21,7 @@ import org.json.JSONArray
  * 多提供商管理工具
  * 
  * 提供多提供商配置管理、健康检查和故障转移控制功能。
- * 参考 Agora 和 Kai 的多提供商设计。
+ * 参考开源实现的多提供商设计。
  */
 class QuroMultiProviderTool(private val context: Context) : QuroTool {
     

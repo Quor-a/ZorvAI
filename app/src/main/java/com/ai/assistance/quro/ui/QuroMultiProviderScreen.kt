@@ -36,7 +36,7 @@ import kotlinx.coroutines.launch
  * 多提供商管理界面
  * 
  * 提供提供商配置管理、优先级排序、健康检查和故障转移设置。
- * 参考 Agora 和 Kai 的多提供商设计。
+ * 参考开源实现的多提供商设计。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

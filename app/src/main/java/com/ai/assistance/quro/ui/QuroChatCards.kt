@@ -1701,17 +1701,10 @@ private fun KanbanCardView(card: QuroChatCard.KanbanCard) {
 }
 
 /** 链接回答预设清单（用户逐项登记的「点击查看链接回答」链接）。
- *  卡片无可用链接时兜底展示，确保已登记的话题永远有去处。 */
-private val PRESET_YUANBAO_LINKS = listOf(
-    QuroChatCard.YuanbaoLink(
-        qstr(R.string.qk_00965),
-        "https://yb.tencent.com/s/I9x5hnu8zJqm",
-    ),
-    QuroChatCard.YuanbaoLink(
-        qstr(R.string.qk_00966),
-        "https://yb.tencent.com/s/TsfOddkjerlh",
-    ),
-)
+ *  卡片无可用链接时兜底展示，确保已登记的话题永远有去处。
+ *  2026-10-26 数字人下线：原两条数字人主题预设链接已清空，现为空表，
+ *  待用户重新登记非数字人话题链接。 */
+private val PRESET_YUANBAO_LINKS: List<QuroChatCard.YuanbaoLink> = emptyList()
 
 /** 链接回答预览卡：点击在应用内浏览器打开该回答（原生安卓点击查看体验）。
  *  v294：支持多条链接，逐行可点；无链接时兜底展示预设清单。 */
@@ -1729,7 +1722,7 @@ private fun YuanbaoCardView(card: QuroChatCard.YuanbaoCard) {
         items.forEach { link ->
             Row(
                 Modifier.fillMaxWidth()
-                    .clickable { QuroBrowserBridge.open(link.url.ifBlank { PRESET_YUANBAO_LINKS.first().url }) }
+                    .clickable { if (link.url.isNotBlank()) QuroBrowserBridge.open(link.url) }
                     .padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

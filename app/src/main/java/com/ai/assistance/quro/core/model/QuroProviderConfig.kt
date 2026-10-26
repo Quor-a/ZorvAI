@@ -10,7 +10,7 @@ import java.util.UUID
 /**
  * 多提供商配置：支持同时配置多个提供商，实现自动故障转移。
  * 
- * 参考 Agora（9个提供商）和 Kai（29个提供商+自动故障转移）的设计，
+ * 参考开源实现的多提供商 + 自动故障转移设计，
  * 为 ZorvAI 添加多提供商切换与自动故障转移能力。
  */
 data class QuroProviderConfig(
