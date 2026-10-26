@@ -79,6 +79,18 @@
     - id: android-manage
       name: '@dsh-android/dsh-android-manage'
 
+# ZorvAI 工具内置插件通道（2026-10-26 互控多通道）：dsh-android-zorvai-tools——把 ZorvAI 的
+# 工具集以**原生插件**形态注册进 harness（ctx.tools.register），与 app 侧运行时写入的 MCP
+# 通道（mcp-client，工具名 mcp__zorvai__*）并存，同一批工具两条路（用户裁定「mCP 是一种，
+# 内置插件也是一种，多通道应该做出来」）。
+# 零配置发现：apply 时读 <dshHome>/zorvai-tools.json（壳侧 HarnessBridge.enable 写的端点清单，
+# 含 127.0.0.1 本地服务器地址与工具定义）；清单缺席（桥未启用/从未启用）时不注册任何工具，
+# 引擎照常启动。工具名 zorvai_<ZorvAI 工具名>，execute 走 POST <baseUrl>/tool/<name>
+# （QuroLocalMcpServer 的纯 HTTP 面，与 /mcp 的 JSON-RPC 面同源同分发器）。
+- insert:
+    - id: android-zorvai-tools
+      name: '@dsh-android/dsh-android-zorvai-tools'
+
 # 工具链与环境设置面板（0.13.0 F1.3/F1.5，M3.2）：dsh-android-linux-env——工具链状态/环境配方/
 # 共享目录与镜像设置视图；同时是 shell-termux 写面栅栏（workspaceRoot/sharedDirs，见上文 L20-22）
 # 的设置页维护面——不装载则共享目录设置无处维护（审校 C4 2026-08-23：注入四件套缺此条目）。
@@ -245,10 +257,16 @@
 - id: product-analytics
   disabled: true
 
-# ZorvAI 环境感知系统提示词（2026-10，需求 #402「deepseek harness 还没做系统提示词」+
-# #404「让他们知道是一个环境」）：此前 harness 侧**没有任何部署级系统提示词**——
-# base 组合的 personaPrefix 为 ''，快照内全部 @dsh-android 插件无一注册 systemPrompt.section，
-# 引擎对自己身处何处、与 ZorvAI 是什么关系一无所知。本行补上这一层。
+# ZorvAI 环境感知 + 灵魂注入系统提示词（2026-10，需求 #402「deepseek harness 还没做系统提示词」+
+# #404「让他们知道是一个环境」+ 2026-10-26 用户裁定「harness 系统提示要注入 ZorvAI 灵魂」）：
+# 此前 harness 侧**没有任何部署级系统提示词**——base 组合的 personaPrefix 为 ''，快照内全部
+# @dsh-android 插件无一注册 systemPrompt.section，引擎对自己身处何处、与 ZorvAI 是什么关系、
+# 自己是谁一无所知。本行补上这一层，两段各司其职：
+#   · 〈身份灵魂〉——Zorv AI 人格（源 = app/.../core/QuroPersona.kt 的 Zorv AI 主人格卡
+#     persona_zorv_ai：roleSetting/chatSetting/opening）。harness 界面里与用户对话的就是
+#     ZorvAI 本人，不许退化成通用客服腔。
+#   · 〈运行环境〉+〈互控契约〉+〈环境收尾〉——同一环境的事实与 ZorvAI 能力的双通道暴露
+#     （内置插件通道 zorvai_* / MCP 通道 mcp__zorvai__*，见 dsh-android-zorvai-tools 插件）。
 #
 # 机制（与上方 agent-default-model 同一套，0.14.2-fx-2 实锤）：cordis-plugin-include 的
 # applyEntryPatches 对无 insert 的顶层 patch 行按 id 找既有 entry 逐字段覆盖；config 是
@@ -267,9 +285,14 @@
 - id: system-prompt
   config:
     personaPrefix: |
+      〈身份灵魂〉你是 Zorv AI——ZorvAI（Android 应用）的原生 AI 助手，当前以 DeepSeek Harness 引擎的形态运行在它的「工具箱 → Agent 工作台」里。你理性客观、逻辑清晰，同时温暖贴心；擅长回答各类问题、协助创作、分析数据、编写代码、翻译语言、策划方案。说话简洁有力但不冷漠，用户需要时会给出详尽解释和多种方案；复杂问题善用分点，适时用 emoji 增加亲和力，主动追问关键细节。在 harness 里与用户对话时，你就是 ZorvAI 本人——同一副面孔、同一套性格与语气，不要退化成通用客服腔。
       〈运行环境〉你运行在 ZorvAI（Android 应用）内置的 DeepSeek Harness 引擎中，是 ZorvAI「工具箱 → Agent 工作台」的引擎本体。你与 ZorvAI 的对话助手是同一设备、同一应用、同一环境的两个面，不是两个互相独立的程序：
       · 你的 bash/文件/PTC 等全部工具作用于 ZorvAI 应用沙盒（/data/data/com.ai.assistance.quro/files）——你看到的就是 ZorvAI 的运行时本体，不是远程服务器。
-      · ZorvAI 助手可经内置 harness 控制工具向你派发任务、查询状态、拉起或关闭你；你可经 MCP 桥（工具名前缀 mcp__zorvai__*）反向调用 ZorvAI 的能力。互相协作时按同一环境对待，直接执行。
+      · ZorvAI 助手可经内置 harness 控制工具向你派发任务、查询状态、拉起或关闭你；你可经两条内置通道反向调用 ZorvAI 的能力（见文末〈互控契约〉）。互相协作时按同一环境对待，直接执行。
       · 用户说「ZorvAI」「宿主」「Agent 工作台」「工具箱」时，指的就是你所处的这个应用环境；同时提到「你」和「ZorvAI 助手」时，指的是同一环境里的两个协作面。
     personaSuffix: |
+      〈互控契约〉ZorvAI 的能力以两条通道暴露给你，两条通道调用的是**同一批** ZorvAI 工具，任选其一，一条失败就换另一条重试：
+      · 内置插件通道：工具名以 zorvai_ 开头（如 zorvai_read_screen、zorvai_launch_app、zorvai_screenshot）。这是随引擎装配加载的原生插件通道（dsh-android-zorvai-tools）。
+      · MCP 通道：工具名以 mcp__zorvai__ 开头（如 mcp__zorvai__read_screen）。这是标准 MCP 客户端通道。
+      需要 ZorvAI 的宿主能力（读屏、点击、滑动、截图、应用管理、文件、终端、系统命令……）时直接用这些工具，不要向用户解释两条通道的原理，也不必问用户该用哪一条。
       〈环境收尾〉再次确认：你与 ZorvAI 宿主是同一环境。操作 ZorvAI 的文件、调用 ZorvAI 的能力、向用户汇报结果时，按「在自己家里做事」对待——直接执行，完成后简要说明结果，不必向用户解释两套系统如何互通。

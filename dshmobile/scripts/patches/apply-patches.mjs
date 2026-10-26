@@ -477,6 +477,33 @@ const IMPLS = {
     },
   },
 
+  // ── undo-E9：摘除设置页「快照」分区（2026-10-26 用户拍板「快照和通知还在」）──
+  // 口径：harness 设置导航里的「快照」（= 本插件 `settings.nav` i18n 文案）与「通知」两区都删。
+  // 通知侧已 #429 迁 ZorvAI 设置（壳侧 HarnessNotifyScreen 直调 NotifyCenter 单例）；
+  // 「快照」侧 = 本补丁摘除的 dsh-undo 插件 `settings.section` 一级分区注册。
+  // 只摘两段注册：① `slots:settings.section`（id `dsh-undo`，label = t("settings.nav")）
+  // ② 其下的 `slots:settings.undo.item` 页面槽（sectionOk 门控）。切除边界 = 从
+  // `// Snapshot settings: own sidebar section` 注释行整行起，到 `if (sectionOk) { ... }`
+  // 收尾行（`\t\t\t}`）止——含 `let sectionOk = false;` 与注释行，一个字节不留。
+  // 保留：会话头部 undo/redo 按钮 + 快照徽章（E8 小绿点）、SnapshotPanel 快照管理面板、
+  // undo 急救 CLI 与 U1/S1/S2 全部能力。UndoSettingsSection/UndoMainPage 组件定义与
+  // exports 留为无害死代码（无注册即无渲染入口，删除它们会牵动更多锚点、收益为零）。
+  'undo-E9': {
+    file: 'dsh-undo-savepoint/lib/client.js',
+    // 移除类：标记不存在 = 已应用
+    check: (s) => !s.includes('// Snapshot settings: own sidebar section'),
+    apply: (s) => {
+      const iStart = s.indexOf('// Snapshot settings: own sidebar section')
+      const iEnd = s.indexOf('}, UndoMainPage)));', iStart)
+      if (iStart < 0 || iEnd < 0) throw new Error('E9 锚点缺失')
+      const lineStart = s.lastIndexOf('\n', iStart) + 1
+      const after = s.indexOf('\n', iEnd) + 1
+      const tail = /^\t\t\t}\r?\n/.exec(s.slice(after))
+      if (!tail) throw new Error('E9 锚点缺失：if (sectionOk) 收尾行')
+      return s.slice(0, lineStart) + s.slice(after + tail[0].length)
+    },
+  },
+
   // ── undo-safe-align-S1：safe 生成逻辑对齐壳侧 SafeMode.kt（保留自有插件 + disable 行）──
   // 真因（2026-09-26，用户口径「undo 要确保保留我们自己的插件」）：上游 safeModeSet 把
   // cordis.patch.yml **整份覆写**成只含一条 insert 的最小文件（core.mjs 的 `const minimal = ...`），

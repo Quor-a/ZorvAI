@@ -13,13 +13,13 @@
   <dimen name="ds_radius_md">16dp</dimen>
   <dimen name="ds_radius_card">18dp</dimen>
   <dimen name="ds_radius_pill">999dp</dimen>
-  <dimen name="ds_radius_icon">18dp</dimen>
   <dimen name="ds_progress_height">5dp</dimen>
-  <dimen name="ds_logo_size">28dp</dimen>
-  <dimen name="ds_logo_shell">52dp</dimen>
+  <!-- 品牌标尺寸（#446：引导页门面化，28dp 页头小标 → 56dp 门面大标） -->
+  <dimen name="ds_logo_size">56dp</dimen>
   <dimen name="ds_btn_height">52dp</dimen>
   <dimen name="ds_btn_secondary_height">48dp</dimen>
-  <dimen name="ds_dot">8dp</dimen>
+  <!-- 状态 dot 尺寸（#446：8dp → 10dp，配 30dp 光晕环的比例） -->
+  <dimen name="ds_dot">10dp</dimen>
   <dimen name="ds_guide_gutter">24dp</dimen>
   <dimen name="ds_guide_max_width">440dp</dimen>
 </resources>

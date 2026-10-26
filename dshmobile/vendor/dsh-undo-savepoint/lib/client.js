@@ -889,28 +889,6 @@ window.__ModuleLoader__.load({
 					]
 				});
 			})));
-						// Snapshot settings: own sidebar section (rc8 设置面板改动风险点；失败只跳过整页)
-			let sectionOk = false;
-			safe("slots:settings.section", () => {
-				ctx.slots.inject("settings.section", () => ctx.slots.register({
-					name: "settings.section",
-					id: "dsh-undo",
-					order: 30,
-					label: () => t("settings.nav"),
-					locale: NS,
-					children: { "settings.undo.item": { kind: "list", scope: "root" } }
-				}, UndoSettingsSection));
-				sectionOk = true;
-			});
-			// 设置页内容仅在页面槽注册成功后注入，避免孤儿槽
-			if (sectionOk) {
-				safe("slots:settings.undo.item", () => ctx.slots.inject("settings.undo.item", () => ctx.slots.register({
-					name: "settings.undo.item",
-					id: "main",
-					order: 0,
-					locale: NS
-				}, UndoMainPage)));
-			}
 					}
 		//#endregion
 		exports.UndoHeader = UndoHeader;

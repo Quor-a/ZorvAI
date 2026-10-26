@@ -1,0 +1,32 @@
+<!--
+  可视化小卡片（qk_00170）专用图标 —— 替换此前因名字不在映射表而误落到 else -> ic_x 的「×」。
+
+  语义：一张**卡片里面放一块数据**。外框是卡片，内部是折线 + 端点，表示「单块结构化结果 /
+  指标快照」——这正是小卡片的定位（对比「动态UI组件」是网格面板 + 可操作旋钮）。
+  风格与既有 qic_* 一致：24dp viewport、纯描边 #FFFFFF（由调用点 tint 上色）、线宽 1.8、
+  圆头圆角，18dp 渲染时仍可辨。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 卡片外框 -->
+    <path android:pathData="M4 5 H20 A2 2 0 0 1 22 7 V17 A2 2 0 0 1 20 19 H4 A2 2 0 0 1 2 17 V7 A2 2 0 0 1 4 5 Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+    <!-- 卡内折线（数据走势） -->
+    <path android:pathData="M5.5 15.2 L9 11.4 L11.8 13.8 L15.6 9.2"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+    <!-- 折线端点：实心点，读作「读数」 -->
+    <path android:pathData="M17.4 8.1 m-1.3,0 a1.3,1.3 0 1,1 2.6,0 a1.3,1.3 0 1,1 -2.6,0"
+        android:fillColor="#FFFFFFFF"
+        android:strokeColor="#00000000"/>
+</vector>

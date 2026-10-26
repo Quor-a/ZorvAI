@@ -401,6 +401,29 @@ fun QuroModelConfigForm(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
             )
+            // ═══ #22：上下文双阀值（压缩 / 软精简）═══
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                QuroField(
+                    stringResource(R.string.qk_04388), cfg.contextCompressThreshold.toString(),
+                    KeyboardOptions(keyboardType = KeyboardType.Number), Modifier.weight(1f),
+                ) { vm.update { copy(contextCompressThreshold = (it.toIntOrNull() ?: 80).coerceIn(10, 100)) } }
+                QuroField(
+                    stringResource(R.string.qk_04389), cfg.contextSoftTrimThreshold.toString(),
+                    KeyboardOptions(keyboardType = KeyboardType.Number), Modifier.weight(1f),
+                ) { vm.update { copy(contextSoftTrimThreshold = (it.toIntOrNull() ?: 50).coerceIn(0, 100)) } }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(stringResource(R.string.qk_04390),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+            )
+            Text(stringResource(R.string.qk_04391),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+            )
             Spacer(Modifier.height(12.dp))
             // ═══ 云端工具调用开关（v453 补回：此前云端段缺失 enableTools / useFullTools 开关，
             //    若活跃配置被置为关闭则无任何入口可重新打开 → 模型拿不到工具、不会主动调用）═══

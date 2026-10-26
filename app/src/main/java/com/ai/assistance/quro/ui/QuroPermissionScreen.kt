@@ -93,7 +93,11 @@ private fun probingStates(): Map<PrivilegeLevel, PrivilegeState> =
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun QuroPermissionScreen(onClose: () -> Unit) {
+fun QuroPermissionScreen(
+    onClose: () -> Unit,
+    /** #476：手机操控（屏幕范围 / 虚拟屏 / Root）已并入权限页，这里只负责拉起。 */
+    onOpenPhoneControl: () -> Unit = {},
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val mgr = remember { QuroPrivilegeManager(ctx) }
@@ -458,6 +462,22 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
                 } else null,
             )
 
+            // ── 手机操控（#476 并入本页）────────────────────────────────────────
+            // 屏幕范围 / 虚拟屏 / Root 都是「**拿到授权之后**才谈得上」的实际使用设置，
+            // 所以它们归在权限页里；设置首页不再单列「手机操控」一项。
+            // 用户两次反馈「手机操控还是没有合到权限」——留在设置里就等于没合。
+            GroupCaption(stringResource(R.string.qk_04397))
+            SetGroup {
+                SetRowClickable(
+                    icon = Icons.Filled.PhoneAndroid,
+                    name = stringResource(R.string.qk_04167),
+                    sub = stringResource(R.string.qk_04302),
+                    value = "",
+                    onClick = onOpenPhoneControl,
+                    scaled = { it.sp },
+                )
+            }
+
             // ---- 标准运行时权限（保留，不回归） ----
             GroupCaption(stringResource(R.string.qk_02325))
             SetGroup {
@@ -603,7 +623,7 @@ fun QuroPermissionScreen(onClose: () -> Unit) {
 }
 
 private fun stdPerms(ctx: android.content.Context): List<QuroPermissionItem> =
-    QuroPermissionHelper.getItems(ctx).filter { it.id in setOf("storage", "location", "overlay", "battery", "set_alarm", "exact_alarm") }
+    QuroPermissionHelper.getItems(ctx).filter { it.id in setOf("storage", "location", "overlay", "battery", "set_alarm", "exact_alarm", "notification") }
 
 @Composable
 private fun PrivilegeCard(
@@ -654,7 +674,22 @@ private fun PrivilegeCard(
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (level != PrivilegeLevel.L4) {
-                    PrimaryButton(text = stringResource(R.string.qk_02337), modifier = Modifier.weight(1f), onClick = onRequest)
+                    if (state.available) {
+                        // #484：已可用时**不再挂主色实心「请求授权」**。
+                        // 用户截图里 L1/L2 明明写着「可用 / 已连接 / Shizuku 已就绪」，下面却
+                        // 各压着一个大号「请求授权」——读起来像「还没授权」，是视觉层的重复授权
+                        // 入口。改成弱化文字链（点它仍然能去系统设置查看/关闭），主色实心按钮
+                        // 只在真正未授权时出现，一屏只有一个「需要你动手」的动作。
+                        TextButton(onClick = onRequest, modifier = Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.qk_04411),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        PrimaryButton(text = stringResource(R.string.qk_02337), modifier = Modifier.weight(1f), onClick = onRequest)
+                    }
                 } else {
                     Text(stringResource(R.string.qk_02338), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                 }

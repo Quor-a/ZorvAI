@@ -1386,27 +1386,8 @@ class MainActivity : ComponentActivity() {
         onPickRequest = { callbackId -> dirPickerController.pickDirectoryWithPermissionCheck(callbackId) },
         onKeepScreen = { enable -> keepScreenOn(enable) },
         onNotify = { title, text -> NotifyCenter.notify(this, "task", title, text) },
-        // 0.14.1 批 4：通知设置页的系统深链（此前 `appSettingsIntent`/`channelSettingsIntent`
-        // 在页面侧零调用点——「系统已降级，应用无法调回」这句用户永远看不到）。
-        // 返回 boolean：该 ROM 没有对应设置页时页面必须如实提示，不能假装拉起过。
-        onOpenNotifyAppSettings = {
-          try {
-            startActivity(NotifyCenter.appSettingsIntent(this))
-            true
-          } catch (t: Throwable) {
-            Log.w("dsh-notify", "app notification settings unavailable: " + t.message)
-            false
-          }
-        },
-        onOpenNotifyChannelSettings = { channelId ->
-          try {
-            startActivity(NotifyCenter.channelSettingsIntent(this, channelId))
-            true
-          } catch (t: Throwable) {
-            Log.w("dsh-notify", "channel settings unavailable: " + t.message)
-            false
-          }
-        },
+        // #429 起通知设置的系统深链接线（onOpenNotifyAppSettings / onOpenNotifyChannelSettings）
+        // 随 WebUI 通知分区删除——设置入口在壳侧 HarnessNotifyScreen，深链由该屏自行发起。
         onAllFilesAccessRequest = { dirPickerController.openAllFilesAccessSettings() },
 
         onExportConfig = { engineManager.exportConfig() },

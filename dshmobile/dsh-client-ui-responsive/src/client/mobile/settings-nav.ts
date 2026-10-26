@@ -57,25 +57,21 @@ const ACTIVE_ROW_SELECTOR = 'nav button[aria-current="true"]'
  * 不改文案（D5）。表里少一个键 = 那一行按第三方处理（只保留上游 icon + label + 箭头），不是坏值。
  */
 const OWN_SECTION_DESCRIPTIONS: ReadonlyMap<string, string> = new Map([
-  ['开发者选项', '控制台、日志与更新'],
-  ['手机控制', '屏幕、虚拟屏与特权通道'],
-  ['通知', '任务提醒与授权请求'],
   ['模型能力', '补齐第三方模型的思考档位'],
 ])
 
 /** English descriptions for the same own sections; the keys stay the registered labels. */
 const OWN_SECTION_DESCRIPTIONS_EN: ReadonlyMap<string, string> = new Map([
-  ['开发者选项', 'Console, logs, and updates'],
-  ['手机控制', 'Screen, virtual displays, and privileged channels'],
-  ['通知', 'Task alerts and approval requests'],
   ['模型能力', 'Thinking levels for third-party models'],
 ])
 
 /**
  * 我方自有分区的图标，键同上表。
  *
- * 为什么需要它：上游 `navIcon(id)` 只认识 5 个内置 id，我方 id（`android-dev` 等）不认识 →
- * 我方分区全落到同一个通用齿轮，用户无法凭图标区分分类。
+ * 为什么需要它：上游 `navIcon(id)` 只认识 5 个内置 id，我方自有分区的 id 一律不认识 →
+ * 落到同一个通用齿轮，用户无法凭图标区分分类。（自有分区的历史 id 如 `android-notify`
+ * 已随 #429 通知迁 ZorvAI 设置删除，表内现存的「模型能力」是先于本任务存在的死键——
+ * 表键 ≠ 在场注册，机制与边界不变。）
  *
  * 为什么是内联几何而不是 import：上游图标是 React 组件
  * （`IconCodeOutlineMedium: (props) => JSX.Element`），而本模块是纯 DOM 容器——
@@ -88,39 +84,6 @@ const OWN_SECTION_DESCRIPTIONS_EN: ReadonlyMap<string, string> = new Map([
  * 的 id 继续用上游自己的齿轮降级，本表绝不按「凡是齿轮就替换」去猜。
  */
 const OWN_SECTION_ICONS: ReadonlyMap<string, SectionIcon> = new Map([
-  // IconCodeOutlineMedium：对应「控制台、日志与更新」。
-  ['开发者选项', {
-    viewBox: '0 0 16 16',
-    paths: [
-      'M6.27612 1.5L4.52612 14.5',
-      'M11.4739 1.5L9.72388 14.5',
-      'M2.39868 5.5H14.0681',
-      'M1.93188 10.5H13.6013',
-    ],
-  }],
-  // IconFullscreenOutlineMedium：对应「屏幕、虚拟屏与特权通道」。
-  ['手机控制', {
-    viewBox: '0 0 16 16',
-    paths: [
-      'M2.33154 9.40576V13.1685C2.3318 13.4444 2.55556 13.6685 2.83154 13.6685H6.49463V14.6685H2.83154C2.00328 14.6685 1.3318 13.9967 1.33154 13.1685V9.40576H2.33154ZM13.1685 1.33154C13.9964 1.33199 14.6683 2.00352 14.6685 2.83154V6.40576H13.6685V2.83154C13.6683 2.5558 13.4441 2.33199 13.1685 2.33154H9.49463V1.33154H13.1685Z',
-      'M9.4292 6.57077L13.914 2.08594',
-      'M6.57077 9.4292L2.08594 13.914',
-    ],
-    // 上游此图标首段是填充路径（`fill: currentColor`），其余为描边。
-    filledFirstPath: true,
-  }],
-  // IconAlarmClockOutlineMedium：对应「任务提醒与授权请求」。
-  ['通知', {
-    viewBox: '0 0 17 17',
-    paths: [
-      'M4.09372 11.9895L3.11865 14.0387',
-      'M12.1392 11.9895L13.1143 14.0387',
-      'M8.11646 4.78442V8.03442L10.6165 9.53442',
-      'M8.11646 13.4094C11.154 13.4094 13.6165 10.947 13.6165 7.90942C13.6165 4.87186 11.154 2.40942 8.11646 2.40942C5.07889 2.40942 2.61646 4.87186 2.61646 7.90942C2.61646 10.947 5.07889 13.4094 8.11646 13.4094Z',
-      'M1.75952 4.74323C2.30657 3.65639 3.12646 2.73047 4.12926 2.05542',
-      'M14.3345 4.74323C13.7874 3.65639 12.9675 2.73047 11.9647 2.05542',
-    ],
-  }],
   // IconSparkleMedium：对应「补齐第三方模型的思考档位」。选它而不是 IconThinkOutlineMedium，
   // 是因为本模块的 `sectionIcon` 只支持「**首段**填充、其余描边」，而 Think 图标的填充段在第三段
   // （其中心圆点 `fill: currentColor`），表达不了；Sparkle 三段全为描边，与本模块能力相符。

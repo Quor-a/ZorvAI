@@ -112,6 +112,11 @@
       "repo": "plugins/dsh-android-manage"
     },
     {
+      "id": "android-zorvai-tools",
+      "pkg": "@dsh-android/dsh-android-zorvai-tools",
+      "repo": "plugins/dsh-android-zorvai-tools"
+    },
+    {
       "id": "android-linux-env",
       "pkg": "@dsh-android/dsh-android-linux-env",
       "repo": "plugins/dsh-android-linux-env"

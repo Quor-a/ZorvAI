@@ -16,8 +16,7 @@
  * - the native "open with" wiring: a Session-header action for the workspace
  *   directory and an `extension`-band tab type for files no preview can show;
  * - the pre-existing Android fixes (composer popups, insets, keyboard boundary,
- *   Enter guard, theme bridge, developer section, export-result dialog, external
- *   file delivery).
+ *   Enter guard, theme bridge, export-result dialog, external file delivery).
  *
  * Nothing here provides `ctx.layout` any more: the upstream plugin owns it, and
  * a second provider would fail the composition.
@@ -46,10 +45,6 @@ import { ComposerPopupGuard } from './composer-popup-guard.ts'
 import { SESSION_LOG_DIALOG_HIDE_CSS } from './session-log-dialog.css.ts'
 import { SessionLogDialogObserver } from './session-log-dialog-observer.ts'
 import { openSessionForNotify, type SessionOpenFace } from './mobile/notify-landing.ts'
-import { DevSection } from './dev-section/DevSection.tsx'
-import { PhoneControlSection } from './dev-section/phone-control.tsx'
-import { NotifySettingsSection } from './dev-section/notify-settings.tsx'
-import { DEV_SECTION_CSS } from './dev-section/dev-section.css.ts'
 import { GeneralSettings } from './general-settings/GeneralSettings.tsx'
 import { GENERAL_SETTINGS_CSS } from './general-settings/general-settings.css.ts'
 import { tr } from './i18n.ts'
@@ -291,40 +286,26 @@ export function apply(ctx: ClientContext): void {
     return () => { /* the hook is global and idempotent: no teardown needed */ }
   }, 'ui-responsive: theme bridge')
 
-  // ── Developer options and Android general settings ──────────────────────
-
-  // Developer options: a settings page on the upstream official
-  // settings.section extension point — the shell projects the nav row from
-  // the registration options, so no upstream DOM injection is needed.
-  ctx.effect(() => injectStyle('dev-section', DEV_SECTION_CSS), 'ui-responsive: dev section styles')
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: 'android-dev',
-    order: 99,
-    label: () => tr('开发者选项', 'Developer options'),
-    // 开发者选项子区（2026-08-23）：ADB 授权面板等安卓调试设施挂进此槽——不开独立导航行。
-    children: { 'settings.dev.item': { kind: 'list', scope: 'root' } },
-  }, DevSection))
+  // 开发者选项分区已删除（#418 用户拍板「harness 有的迁进 ZorvAI 设置、harness 侧 UI 删除」）：
+  // 调试日志开关 / 悬浮球 / 运行时缓存清理 / 来件临时区清理 / 引擎重启与停止 / 控制台 /
+  // 配置导入导出已整体迁入 ZorvAI 设置「清理存储」页（壳侧 CleanupScreen + dshmobile
+  // 公开门面 DevTools，与壳侧共用同一真源）；WebUI 不再提供该分区，settings.dev.item
+  // 子槽（ADB 授权面板等调试设施）随之退场。
 
   // 应用更新分区已删除（#416 用户拍板「非官方的直接删除」）：ZorvAI 侧的版本分发由宿主应用
   // 自行负责，harness 不再提供 APK 自更新入口，壳侧 UpdateChecker/ApkUpdateAction 同步移除。
 
-  // 通知（0.14.1 批 3 / P3-5）：提醒方式与「关掉会怎样」是每个用户都要做的决定，
-  // 此前唯一入口埋在开发者选项里（对普通用户不可达）——提级为设置页一级分区。
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: 'android-notify',
-    order: 97,
-    label: () => tr('通知', 'Notifications'),
-  }, NotifySettingsSection))
+  // 通知分区已删除（#429 用户拍板「通知迁 ZorvAI 设置、harness 侧 UI 删除」）：任务提醒 /
+  // 授权请求的全部设置（前台抑制、分类开关、自检、测试投递、系统通知设置与渠道页）已整体
+  // 迁入 ZorvAI 设置「通知 → Harness 通知」（壳侧 HarnessNotifyScreen + NotifyCenter 单例，
+  // 与壳侧共用同一真源）；WebUI 不再提供该分区，dev-section 样式表与 6 个 notify 桥方法
+  // （getNotifySetting/setNotifySetting/notifySelfCheck/openNotifyAppSettings/
+  // openNotifyChannelSettings/notifySendTest）随之退场。通知**落点**（点通知打开对应会话）
+  // 不属设置分区，保留在 notify-landing.ts。
 
-  // 手机控制（0.14.0 用户定例）：把屏幕/Shizuku/虚拟屏/浮窗/无障碍/强制销毁收进独立设置页。
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: 'android-phone-control',
-    order: 98,
-    label: () => tr('手机控制', 'Phone control'),
-  }, PhoneControlSection))
+  // 手机控制分区已删除（#417 用户拍板「harness 有的迁进 ZorvAI 设置、harness 侧 UI 删除」）：
+  // 屏幕范围/虚拟屏/Shizuku/无障碍/Root 授权已整体迁入 ZorvAI 设置「功能 → 手机操控」
+  // （壳侧 PhoneControlScreen + dshmobile 公开门面 PhoneControl，与壳侧共用同一真源）。
 
   // Linux 环境（实验性内部插件）**不由本文件注册**：该分区的唯一注册方是 vendored 的
   // dsh-linux-bootstrap 客户端插件（plugins/dsh-linux-bootstrap 的 client 条目，id 同为

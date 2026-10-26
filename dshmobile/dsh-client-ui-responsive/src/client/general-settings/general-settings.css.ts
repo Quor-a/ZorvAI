@@ -2,8 +2,10 @@
  * Row skeleton for the Android additions in 设置 → 通用设置 (语言 / 沉浸式状态栏 /
  * 左右侧栏滑动)。
  *
- * 为什么自带一张表、不复用 dev-section.css.ts 的 `dsh-dev-*`：那一套是「开发者选项」的
- * 动作行（36px 描边按钮、16px 原生勾选框、13px 提示），与上游通用设置的行规不同。
+ * 为什么自带一张表、不复用 dev-section.css.ts 的 `dsh-dev-*`（该文件已于 #429 随通知分区
+ * 删除，此处为历史说明）：那一套是动作行
+ * （36px 描边按钮、16px 原生勾选框、13px 提示；原属「开发者选项」分区，#418 后由
+ * 通知设置分区沿用），与上游通用设置的行规不同。
  * 上游通用设置的行是「左标题 14/20 + 说明 12/18 + 右侧控件，行间 0.5px 分隔线，上下
  * 16px 内边距」（ui-settings-general 的 DeveloperToolsRow、ui-shortcuts 的
  * ShortcutReference 同规）。两种行规并排在同一张列表里，就是用户反馈的「设置页有些 UI

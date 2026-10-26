@@ -101,6 +101,9 @@ fun MoyuScreen(onBack: () -> Unit) {
     // 原生通道（/data/local/tmp + Shizuku）：与 Ubuntu 相互独立的一份复制。
     val local = remember { MoyuLocal(context) }
     var localProgress by remember { mutableStateOf("") }
+    // 核心层部署失败原因：顶到状态卡里，不再只沉在页面底部的「输出」块
+    // （真机事故：用户看到的永远是「未部署」三个字，失败文案在屏幕外）。
+    var localDeployError by remember { mutableStateOf("") }
     var confirmZig by remember { mutableStateOf(false) }
     var confirmClean by remember { mutableStateOf(false) }
 
@@ -149,7 +152,7 @@ fun MoyuScreen(onBack: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(TerminalTheme.backgroundColor)
+            .background(MoyuTheme.backgroundColor)
     ) {
         // ── 顶栏 ──
         Row(
@@ -162,7 +165,7 @@ fun MoyuScreen(onBack: () -> Unit) {
                 onClick = { if (page != null) page = null else onBack() },
                 modifier = Modifier.size(40.dp)
             ) {
-                Icon(Icons.Default.ArrowBack, "返回", tint = TerminalTheme.onSurfaceColor)
+                Icon(Icons.Default.ArrowBack, "返回", tint = MoyuTheme.onSurfaceColor)
             }
             Column(Modifier.weight(1f)) {
                 Text(
@@ -179,14 +182,16 @@ fun MoyuScreen(onBack: () -> Unit) {
                         "kernel" -> "自举内核"
                         else -> "墨语言"
                     },
-                    color = TerminalTheme.onSurfaceColor,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
+                    color = MoyuTheme.onSurfaceColor,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    // #475：页标题走衬线体（ZorvAI 的标题族），与终端里的无衬线正文区分开。
+                    fontFamily = FontFamily.Serif
                 )
                 if (page == null) {
                     Text(
                         "v" + rt.version() + " · 完整运行在 Ubuntu 内 · " + MoyuUbuntu.BUILD_STAMP,
-                        color = TerminalTheme.onSurfaceVariant,
+                        color = MoyuTheme.onSurfaceVariant,
                         fontSize = 10.5.sp
                     )
                 }
@@ -194,7 +199,7 @@ fun MoyuScreen(onBack: () -> Unit) {
             if (busy) {
                 CircularProgressIndicator(
                     Modifier.size(15.dp), strokeWidth = 2.dp,
-                    color = TerminalTheme.accentColor
+                    color = MoyuTheme.accentColor
                 )
                 Spacer(Modifier.width(8.dp))
             }
@@ -271,10 +276,12 @@ fun MoyuScreen(onBack: () -> Unit) {
                 "local" -> LocalPage(
                     local = local, tick = tick, busy = busy,
                     progress = localProgress,
+                    deployError = localDeployError,
+                    onDeployError = { localDeployError = it },
                     runSafe = { blk -> runSafe(blk) },
                     runLive = { blk -> runLive(blk) },
-                    onAskZig = { confirmZig = true },
-                    onAskClean = { confirmClean = true },
+                    onAskZig = { if (!busy) confirmZig = true },
+                    onAskClean = { if (!busy) confirmClean = true },
                 )
 
                 // 自举系统：uspace2 + ISO
@@ -296,38 +303,61 @@ fun MoyuScreen(onBack: () -> Unit) {
             if (localProgress.isNotBlank()) {
                 Block {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        SimpleText("原生通道", TerminalTheme.onSurfaceVariant)
+                        SimpleText("原生通道", MoyuTheme.onSurfaceVariant)
                         Spacer(Modifier.weight(1f))
                         if (busy) {
                             CircularProgressIndicator(
                                 Modifier.size(12.dp), strokeWidth = 2.dp,
-                                color = TerminalTheme.accentColor
+                                color = MoyuTheme.accentColor
                             )
                         }
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
                         localProgress.takeLast(2000),
-                        color = TerminalTheme.onSurfaceColor,
+                        color = MoyuTheme.onSurfaceColor,
                         fontSize = 10.5.sp,
                         fontFamily = FontFamily.Monospace
                     )
                 }
             }
             if (output.isNotBlank()) {
-                Block {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SimpleText("输出", TerminalTheme.onSurfaceVariant)
-                        Spacer(Modifier.weight(1f))
-                        Tap("清空") { output = "" }
+                // #475：输出块改成**深色控制台窗**（与引导页的控制台窗同色同形态）——
+                // 纸底上放一块深窗，一眼分清「这是机器的输出」而不是产品文案。
+                // 旧形态是纸卡里一段灰字等宽文本，读长日志时与说明文字糊在一起。
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MoyuTheme.consoleBg,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, MoyuTheme.consoleBg)
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier
+                                    .size(7.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(MoyuTheme.consoleInk.copy(alpha = 0.5f))
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "输出",
+                                color = MoyuTheme.consoleInk.copy(alpha = 0.75f),
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                            Spacer(Modifier.weight(1f))
+                            Tap("清空") { output = "" }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            output.takeLast(5000),
+                            color = MoyuTheme.consoleInk,
+                            fontSize = 10.5.sp,
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 15.sp,
+                        )
                     }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        output.takeLast(5000),
-                        color = TerminalTheme.onSurfaceColor,
-                        fontSize = 10.5.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
                 }
             }
         }
@@ -393,7 +423,7 @@ fun MoyuScreen(onBack: () -> Unit) {
                         .verticalScroll(rememberScrollState())
                 ) {
                     Text(
-                        pair.second.take(20000), color = TerminalTheme.onSurfaceColor,
+                        pair.second.take(20000), color = MoyuTheme.onSurfaceColor,
                         fontSize = 10.5.sp, fontFamily = FontFamily.Monospace
                     )
                 }
@@ -490,7 +520,7 @@ private fun HomeContent(
             Spacer(Modifier.weight(1f))
             Dot(sys.installed)
             Spacer(Modifier.width(6.dp))
-            SimpleText(if (sys.installed) "已融合" else "未就绪", TerminalTheme.onSurfaceVariant)
+            SimpleText(if (sys.installed) "已融合" else "未就绪", MoyuTheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(6.dp))
         SimpleText(
@@ -500,10 +530,10 @@ private fun HomeContent(
         Spacer(Modifier.height(4.dp))
         SimpleText(
             "编译运行一条命令在 Ubuntu 内完成：mo 文件.mo → 转译 → zig 交叉编译 → Ubuntu 内执行。",
-            TerminalTheme.onSurfaceVariant
+            MoyuTheme.onSurfaceVariant
         )
         Spacer(Modifier.height(4.dp))
-        SimpleText("构建 " + MoyuUbuntu.BUILD_STAMP + " · 增量叠加安装，不动主 rootfs", TerminalTheme.onSurfaceVariant)
+        SimpleText("构建 " + MoyuUbuntu.BUILD_STAMP + " · 增量叠加安装，不动主 rootfs", MoyuTheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         StatusLine("Ubuntu rootfs", sys.ubuntuReady)
         StatusLine("工具链 /opt/molang/bin", sys.pkgReady)
@@ -554,7 +584,7 @@ private fun HomeContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        f.name, color = TerminalTheme.onSurfaceColor, fontSize = 13.sp,
+                        f.name, color = MoyuTheme.onSurfaceColor, fontSize = 13.sp,
                         fontFamily = FontFamily.Monospace,
                         modifier = Modifier.weight(1f).clickable { onEdit(f) }
                     )
@@ -563,13 +593,13 @@ private fun HomeContent(
                     IconButton(onClick = { onRun(f) }, modifier = Modifier.size(34.dp)) {
                         Icon(
                             Icons.Default.PlayArrow, "运行",
-                            tint = TerminalTheme.accentColor, modifier = Modifier.size(20.dp)
+                            tint = MoyuTheme.accentColor, modifier = Modifier.size(20.dp)
                         )
                     }
                     IconButton(onClick = { onDelete(f) }, modifier = Modifier.size(34.dp)) {
                         Icon(
                             Icons.Default.ArrowBack, "删除",
-                            tint = TerminalTheme.onSurfaceVariant.copy(alpha = 0.45f),
+                            tint = MoyuTheme.onSurfaceVariant.copy(alpha = 0.45f),
                             modifier = Modifier.size(14.dp)
                         )
                     }
@@ -614,7 +644,7 @@ private fun HomeContent(
             Spacer(Modifier.weight(1f))
             Dot(hostOk)
             Spacer(Modifier.width(6.dp))
-            SimpleText(if (hostOk) "就绪" else "未初始化", TerminalTheme.onSurfaceVariant)
+            SimpleText(if (hostOk) "就绪" else "未初始化", MoyuTheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(6.dp))
         SimpleText(
@@ -655,7 +685,7 @@ private fun ResourcePage(
             SimpleText("墨语言尚未融合进 Ubuntu，/opt/molang/$title 不存在。回首页点「融合进 Ubuntu」。")
             return@Block
         }
-        SimpleText("$root · 共 " + files.size + " 项", TerminalTheme.onSurfaceVariant)
+        SimpleText("$root · 共 " + files.size + " 项", MoyuTheme.onSurfaceVariant)
         Spacer(Modifier.height(6.dp))
         files.forEach { f ->
             Row(
@@ -664,12 +694,12 @@ private fun ResourcePage(
             ) {
                 Column(Modifier.weight(1f).clickable { onView(f) }) {
                     Text(
-                        f.name, color = TerminalTheme.onSurfaceColor, fontSize = 12.5.sp,
+                        f.name, color = MoyuTheme.onSurfaceColor, fontSize = 12.5.sp,
                         fontFamily = FontFamily.Monospace
                     )
                     Text(
                         (f.length() / 1024).toString() + " KB",
-                        color = TerminalTheme.onSurfaceVariant, fontSize = 9.5.sp
+                        color = MoyuTheme.onSurfaceVariant, fontSize = 9.5.sp
                     )
                 }
                 if (allowCopy) {
@@ -760,11 +790,11 @@ private fun DepsPage(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            pair.first.name, color = TerminalTheme.onSurfaceColor,
+                            pair.first.name, color = MoyuTheme.onSurfaceColor,
                             fontSize = 12.5.sp, fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            pair.second, color = TerminalTheme.onSurfaceVariant,
+                            pair.second, color = MoyuTheme.onSurfaceVariant,
                             fontSize = 9.5.sp, maxLines = 1
                         )
                     }
@@ -833,8 +863,8 @@ private fun NetPage(
             "协议" to "仅 AF_INET（IPv4），无 IPv6",
         ).forEach { p ->
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Text(p.first, color = TerminalTheme.onSurfaceColor, fontSize = 12.sp, modifier = Modifier.width(80.dp))
-                Text(p.second, color = TerminalTheme.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Text(p.first, color = MoyuTheme.onSurfaceColor, fontSize = 12.sp, modifier = Modifier.width(80.dp))
+                Text(p.second, color = MoyuTheme.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.weight(1f))
             }
         }
     }
@@ -883,8 +913,8 @@ private fun NetPage(
             "TLS/HTTPS" to "无（需自实现）",
         ).forEach { p ->
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Text(p.first, color = TerminalTheme.onSurfaceColor, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                Text(p.second, color = TerminalTheme.accentColor.copy(alpha = 0.75f), fontSize = 10.sp,
+                Text(p.first, color = MoyuTheme.onSurfaceColor, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                Text(p.second, color = MoyuTheme.accentColor.copy(alpha = 0.75f), fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace)
             }
         }
@@ -923,7 +953,7 @@ private fun SystemPage(
             Spacer(Modifier.weight(1f))
             Dot(sys.systemReady)
             Spacer(Modifier.width(6.dp))
-            SimpleText(if (sys.systemReady) "就绪" else "未就绪", TerminalTheme.onSurfaceVariant)
+            SimpleText(if (sys.systemReady) "就绪" else "未就绪", MoyuTheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(6.dp))
         SimpleText(
@@ -954,8 +984,8 @@ private fun SystemPage(
             "启动盘" to "system/boot/molang-system.iso（ISO9660）",
         ).forEach { p ->
             Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-                Text(p.first, color = TerminalTheme.onSurfaceColor, fontSize = 11.5.sp, modifier = Modifier.width(96.dp))
-                Text(p.second, color = TerminalTheme.onSurfaceVariant, fontSize = 10.5.sp, modifier = Modifier.weight(1f))
+                Text(p.first, color = MoyuTheme.onSurfaceColor, fontSize = 11.5.sp, modifier = Modifier.width(96.dp))
+                Text(p.second, color = MoyuTheme.onSurfaceVariant, fontSize = 10.5.sp, modifier = Modifier.weight(1f))
             }
         }
     }
@@ -987,12 +1017,12 @@ private fun KernelPage(
             Spacer(Modifier.weight(1f))
             Dot(sys.kernelReady)
             Spacer(Modifier.width(6.dp))
-            SimpleText(if (sys.kernelReady) "就绪" else "未就绪", TerminalTheme.onSurfaceVariant)
+            SimpleText(if (sys.kernelReady) "就绪" else "未就绪", MoyuTheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(8.dp))
         Text(
             info,
-            color = TerminalTheme.onSurfaceColor,
+            color = MoyuTheme.onSurfaceColor,
             fontSize = 10.5.sp,
             fontFamily = FontFamily.Monospace
         )
@@ -1006,7 +1036,7 @@ private fun KernelPage(
             "🔴 不能在本页「运行」：proot 与 Ubuntu 都提供不了裸机环境。验证方式只有两种 ——\n" +
                 "  a) qemu-system-aarch64 -M virt -kernel kernel64.elf\n" +
                 "  b) 读 ELF 头自证（左侧即为 guest 内实读结果）",
-            TerminalTheme.onSurfaceVariant
+            MoyuTheme.onSurfaceVariant
         )
     }
 
@@ -1020,7 +1050,7 @@ private fun KernelPage(
         Spacer(Modifier.height(4.dp))
         SimpleText(
             "内置示例 examples/kernel64.mo 自带三个自检：fib(10)=55 · sum_to(100)=5050 · fib(20)=6765。",
-            TerminalTheme.onSurfaceVariant
+            MoyuTheme.onSurfaceVariant
         )
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1064,7 +1094,7 @@ private fun NativePage(
             Spacer(Modifier.weight(1f))
             Dot(ccReady)
             Spacer(Modifier.width(6.dp))
-            SimpleText(if (ccReady) "就绪" else "未就绪", TerminalTheme.onSurfaceVariant)
+            SimpleText(if (ccReady) "就绪" else "未就绪", MoyuTheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(8.dp))
         SimpleText("产物是 ARM64 静态 ELF：不链 libc、自带系统调用，在 Ubuntu 内由 proot 执行。")
@@ -1098,7 +1128,7 @@ private fun NativePage(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Title("产物")
             Spacer(Modifier.weight(1f))
-            SimpleText(arms.size.toString() + " 个", TerminalTheme.onSurfaceVariant)
+            SimpleText(arms.size.toString() + " 个", MoyuTheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(6.dp))
         if (arms.isEmpty()) {
@@ -1112,13 +1142,13 @@ private fun NativePage(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            f.name, color = TerminalTheme.onSurfaceColor, fontSize = 12.5.sp,
+                            f.name, color = MoyuTheme.onSurfaceColor, fontSize = 12.5.sp,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
                             info.machineName + " · " + info.linkKind + " · " + info.size + " 字节",
-                            color = if (info.isAarch64Static) TerminalTheme.successColor
-                            else TerminalTheme.onSurfaceVariant,
+                            color = if (info.isAarch64Static) MoyuTheme.successColor
+                            else MoyuTheme.onSurfaceVariant,
                             fontSize = 9.5.sp, maxLines = 1
                         )
                     }
@@ -1156,6 +1186,8 @@ private fun LocalPage(
     tick: Int,
     busy: Boolean,
     progress: String,
+    deployError: String,
+    onDeployError: (String) -> Unit,
     runSafe: (suspend () -> String) -> Unit,
     runLive: (suspend ((String) -> Unit) -> String) -> Unit,
     onAskZig: () -> Unit,
@@ -1164,6 +1196,28 @@ private fun LocalPage(
     // status() 是 6 次 fileSize 的 Binder 往返，很快；tick 变化时重读。
     val st = remember(tick) { local.status() }
 
+    // 与 Ubuntu 通道同构的自动部署：进页面就把核心层（约 6.4MB）落好，
+    // 用户不需要知道「要先点哪个按钮」。以前这条通道只认手动点击，
+    // 而按钮在页面中下部、失败文案更在屏幕外的输出块里 —— 真机上
+    // 表现出来的就是用户截图那样：原生通道「未部署」，没人知道为什么。
+    fun deployCoreNow() {
+        onDeployError("")
+        runLive { p ->
+            local.deployCore(p).fold(
+                onSuccess = { local.describe() },
+                onFailure = {
+                    onDeployError(it.message ?: "未知错误")
+                    "失败：" + (it.message ?: "")
+                },
+            )
+        }
+    }
+    // shellReady 翻转（授权回来 / 重新进页面）时补一次；失败不自动重试循环，
+    // 原因直接显示在状态卡里，用户可点「重新部署核心层」手动重试。
+    LaunchedEffect(st.shellReady) {
+        if (st.shellReady && !st.coreReady) deployCoreNow()
+    }
+
     // ① 通道状态
     Block {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1171,24 +1225,34 @@ private fun LocalPage(
             Spacer(Modifier.weight(1f))
             Dot(st.usable)
             Spacer(Modifier.width(6.dp))
-            SimpleText(if (st.usable) "可用" else "未部署", TerminalTheme.onSurfaceVariant)
+            SimpleText(if (st.usable) "可用" else "未部署", MoyuTheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(6.dp))
         SimpleText("独立复制的一份工具链，落在 " + MoyuLocal.REMOTE_ROOT + "，与 Ubuntu 内的墨语言互不相干。")
         Spacer(Modifier.height(4.dp))
-        SimpleText("ARM64 产物由内核直接调度，不经 proot、不经 qemu。", TerminalTheme.onSurfaceVariant)
+        SimpleText("ARM64 产物由内核直接调度，不经 proot、不经 qemu。", MoyuTheme.onSurfaceVariant)
         Spacer(Modifier.height(4.dp))
-        SimpleText(local.describe(), TerminalTheme.onSurfaceVariant)
+        SimpleText(local.describe(), MoyuTheme.onSurfaceVariant)
         Spacer(Modifier.height(10.dp))
         StatusLine("Shizuku 特权 shell", st.shellReady)
         StatusLine("核心层（qemu / mo2x / 标准库 / uspace2）", st.coreReady)
         StatusLine("基准程序 andromo", st.benchReady)
         StatusLine("编译层（zig，按需）", st.zigReady)
+        // 缺件清单：核心层「未就绪」时直接说清缺哪个部件，截图即诊断
+        if (!st.coreReady && st.coreMissing.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            SimpleText("核心层缺：${st.coreMissing.joinToString("、")}", MoyuTheme.onSurfaceVariant)
+        }
+        // 部署失败原因：以前只写进屏幕外的「输出」块，用户永远看不到
+        if (deployError.isNotBlank()) {
+            Spacer(Modifier.height(6.dp))
+            SimpleText("⚠ 核心层部署失败：$deployError", MoyuTheme.errorColor)
+        }
         Spacer(Modifier.height(6.dp))
         // 铁律：界面看不到这个戳 = 装的不是这个包（版本号被锁死，戳是唯一区分手段）。
         SimpleText(
             "构建 " + MoyuUbuntu.BUILD_STAMP + " · /data/local/tmp + Shizuku，不经 App 沙箱",
-            TerminalTheme.onSurfaceVariant
+            MoyuTheme.onSurfaceVariant
         )
     }
 
@@ -1201,7 +1265,7 @@ private fun LocalPage(
                     "唯一不依赖额外权限的办法是让特权进程代写，所以这条通道走 Shizuku。"
             )
             Spacer(Modifier.height(8.dp))
-            SimpleText("去 系统权限 → L2 Shizuku 请求授权后再回来。", TerminalTheme.onSurfaceVariant)
+            SimpleText("去 系统权限 → L2 Shizuku 请求授权后再回来。", MoyuTheme.onSurfaceVariant)
         }
         return
     }
@@ -1211,19 +1275,19 @@ private fun LocalPage(
         Title("部署")
         Spacer(Modifier.height(6.dp))
         SimpleText(
-            "核心层约 6.4MB（翻译器 + 标准库 + 自举系统 + 基准程序），自动部署即可。" +
-                "编译层是 zig，约 176MB，只在你要在设备上现场编译时才需要。"
+            "进入本页会自动部署核心层（约 6.4MB：翻译器 + 标准库 + 自举系统 + 基准程序），几秒就好；" +
+                "也可以手动重新部署。编译层是 zig，约 176MB，只在你要在设备上现场编译时才需要。"
         )
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PrimaryAction(if (st.coreReady) "重新部署核心层" else "部署核心层", busy) {
-                runLive { p -> local.deployCore(p).fold({ local.describe() }, { "失败：" + (it.message ?: "") }) }
+                deployCoreNow()
             }
             SmallAction(if (st.zigReady) "编译层已在位" else "部署编译层 (176MB)") { onAskZig() }
         }
         if (progress.isNotBlank()) {
             Spacer(Modifier.height(8.dp))
-            SimpleText(progress.takeLast(500), TerminalTheme.onSurfaceVariant)
+            SimpleText(progress.takeLast(500), MoyuTheme.onSurfaceVariant)
         }
     }
 
@@ -1270,7 +1334,7 @@ private fun LocalPage(
             SimpleText(
                 "现场编译需要编译层（zig）。先点上面「部署编译层」，" +
                     "或者直接用预编译好的 andromo 跑基准。",
-                TerminalTheme.onSurfaceVariant
+                MoyuTheme.onSurfaceVariant
             )
         }
     }
@@ -1280,13 +1344,14 @@ private fun LocalPage(
 
 @Composable
 private fun Block(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    // #475：白卡 + 暖线描边（旧的「深色面 + 白 5% 描边」是终端观感，不是 ZorvAI 的纸墨体系）。
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = TerminalTheme.surfaceColor,
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+        color = MoyuTheme.surfaceColor,
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MoyuTheme.divider)
     ) {
-        Column(Modifier.padding(14.dp)) {
+        Column(Modifier.padding(16.dp)) {
             content()
         }
     }
@@ -1294,16 +1359,23 @@ private fun Block(content: @Composable androidx.compose.foundation.layout.Column
 
 @Composable
 private fun Title(text: String) {
-    Text(text, color = TerminalTheme.onSurfaceColor, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+    // 页面标题用衬线体（与 App 里设置页/引导页的标题同一族），正文用无衬线。
+    Text(
+        text,
+        color = MoyuTheme.onSurfaceColor,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.SemiBold,
+        fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+    )
 }
 
 @Composable
 private fun SimpleText(
     text: String,
-    color: Color = TerminalTheme.onSurfaceVariant,
+    color: Color = MoyuTheme.onSurfaceVariant,
     modifier: Modifier = Modifier,
 ) {
-    Text(text, color = color, fontSize = 11.5.sp, modifier = modifier)
+    Text(text, color = color, fontSize = 12.sp, lineHeight = 17.sp, modifier = modifier)
 }
 
 @Composable
@@ -1312,7 +1384,7 @@ private fun Dot(ok: Boolean) {
         Modifier
             .size(7.dp)
             .clip(RoundedCornerShape(4.dp))
-            .background(if (ok) TerminalTheme.successColor else TerminalTheme.onSurfaceVariant.copy(alpha = 0.4f))
+            .background(if (ok) MoyuTheme.successColor else MoyuTheme.onSurfaceVariant.copy(alpha = 0.4f))
     )
 }
 
@@ -1323,41 +1395,45 @@ private fun StatusLine(label: String, ok: Boolean) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SimpleText(label, TerminalTheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        SimpleText(label, MoyuTheme.onSurfaceVariant, modifier = Modifier.weight(1f))
         Dot(ok)
         Spacer(Modifier.width(6.dp))
-        SimpleText(if (ok) "就绪" else "未就绪", TerminalTheme.onSurfaceVariant)
+        SimpleText(if (ok) "就绪" else "未就绪", MoyuTheme.onSurfaceVariant)
     }
 }
 
 @Composable
 private fun PrimaryAction(text: String, disabled: Boolean, onClick: () -> Unit) {
+    // #475：主操作 = 陶土实心**胶囊**（radius 999），与引导页主按钮同一形态；
+    // 旧形态是 11dp 圆角紫色块，那是终端按钮，不是品牌主操作。
     Surface(
         modifier = Modifier
-            .clip(RoundedCornerShape(11.dp))
+            .clip(RoundedCornerShape(999.dp))
             .clickable(enabled = !disabled) { onClick() },
-        color = if (disabled) TerminalTheme.primaryColor.copy(alpha = 0.35f) else TerminalTheme.primaryColor,
-        shape = RoundedCornerShape(11.dp)
+        color = if (disabled) MoyuTheme.primaryColor.copy(alpha = 0.35f) else MoyuTheme.primaryColor,
+        shape = RoundedCornerShape(999.dp)
     ) {
         Text(
-            text, color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)
+            text, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
         )
     }
 }
 
 @Composable
 private fun SmallAction(text: String, onClick: () -> Unit) {
+    // 次操作 = 纸面胶囊 + 暖线描边（不再用「白色 6% 蒙层」那种终端味的高光块）。
     Surface(
         modifier = Modifier
-            .clip(RoundedCornerShape(9.dp))
+            .clip(RoundedCornerShape(999.dp))
             .clickable { onClick() },
-        color = Color.White.copy(alpha = 0.06f),
-        shape = RoundedCornerShape(9.dp)
+        color = MoyuTheme.surfaceVariant,
+        shape = RoundedCornerShape(999.dp),
+        border = BorderStroke(1.dp, MoyuTheme.divider)
     ) {
         Text(
-            text, color = TerminalTheme.onSurfaceColor, fontSize = 11.sp,
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+            text, color = MoyuTheme.onSurfaceColor, fontSize = 11.5.sp,
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp)
         )
     }
 }
@@ -1365,7 +1441,7 @@ private fun SmallAction(text: String, onClick: () -> Unit) {
 @Composable
 private fun Tap(text: String, onClick: () -> Unit) {
     Text(
-        text, color = TerminalTheme.accentColor, fontSize = 11.5.sp,
+        text, color = MoyuTheme.accentColor, fontSize = 11.5.sp,
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
             .clickable { onClick() }
@@ -1383,15 +1459,44 @@ private fun NavRow(label: String, meta: String, onClick: () -> Unit) {
             .padding(vertical = 11.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, color = TerminalTheme.onSurfaceColor, fontSize = 13.sp, modifier = Modifier.weight(1f))
-        Text(meta, color = TerminalTheme.onSurfaceVariant, fontSize = 10.5.sp)
+        Text(label, color = MoyuTheme.onSurfaceColor, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        Text(meta, color = MoyuTheme.onSurfaceVariant, fontSize = 10.5.sp)
         Spacer(Modifier.width(4.dp))
         Icon(
             Icons.Default.KeyboardArrowRight, null,
-            tint = TerminalTheme.onSurfaceVariant.copy(alpha = 0.6f),
+            tint = MoyuTheme.onSurfaceVariant.copy(alpha = 0.6f),
             modifier = Modifier.size(18.dp)
         )
     }
+}
+
+
+/**
+ * 墨语言页的**品牌调色板**（#475 用户裁定「墨语言的界面还不是 ZorvAI 风格」）。
+ *
+ * 为什么另起一份而不是改 [TerminalTheme]：那个是**终端**的深色紫主题，终端画布本来就该
+ * 深底宽字距（黑底白字读代码才不刺眼）。墨语言这一页不是终端，它是 ZorvAI 里的一个
+ * 功能页，必须和引导页、设置页同一套暖纸体系（纸底 #F4F1EA / 白卡 / 墨字 / 陶土主色）。
+ * 所以这里只做**页面级**换肤：键名与 TerminalTheme 一一对应，页面内 60 处引用整体切换，
+ * 终端界面一行不动。
+ */
+private object MoyuTheme {
+    val primaryColor = Color(0xFFC25A38)        // 陶土（主操作）
+    val primaryVariant = Color(0xFFA8482B)
+    val accentColor = Color(0xFFC25A38)         // 链接 / 可点文本
+    val backgroundColor = Color(0xFFF4F1EA)     // 纸底
+    val surfaceColor = Color(0xFFFFFFFF)        // 白卡
+    val surfaceVariant = Color(0xFFECE7DC)      // 次级面
+    val elevated = Color(0xFFF4E4DB)
+    val divider = Color(0xFFE3DDD0)             // 暖线
+    val onSurfaceColor = Color(0xFF211E1A)      // 墨
+    val onSurfaceVariant = Color(0xFF544D44)    // 次墨
+    val successColor = Color(0xFF4E7A46)
+    val warningColor = Color(0xFFB08320)
+    val errorColor = Color(0xFFB23A2E)
+    /** 控制台式输出块的深底（与引导页的控制台窗同色，跨页一致）。 */
+    val consoleBg = Color(0xFF211E1A)
+    val consoleInk = Color(0xFFF4F1EA)
 }
 
 /** 新建程序用的最小示例（墨语言语法：fn main() -> i64，内置 print/print_i64/print_nl）。 */

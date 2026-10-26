@@ -16,8 +16,9 @@ import org.json.JSONObject
  * ## 同一环境（2026-10 用户拍板语义）
  *
  * harness 与 ZorvAI 不是两个产品：harness 运行时内置在 ZorvAI 里（同一应用、同一文件域），
- * ZorvAI 的 AI 经本工具起停它、派任务给它；harness 的 agent 经 MCP 桥反向调用 ZorvAI 的全部
- * 工具（`mcp__zorvai__*`）。互相称呼用「我们」，任务描述要自包含。
+ * ZorvAI 的 AI 经本工具起停它、派任务给它；harness 的 agent 经互控桥反向调用 ZorvAI 的全部
+ * 工具（两条通道：MCP `mcp__zorvai__*` / 内置插件 `zorvai_*`，见 [HarnessBridge]）。
+ * 互相称呼用「我们」，任务描述要自包含。
  *
  * ## 实现说明
  *
@@ -38,8 +39,10 @@ class HarnessTool : QuroTool {
             "用它自己的插件），然后把最终答复返回，可带 session_id 续用同一会话多轮协作；" +
             "stop/restart 停/重启；status/url/logs/diag 看状态与排障；" +
             "set_key 存它自己的模型 key（harness 是独立 agent，模型配置与 ZorvAI 互不相干）；" +
-            "bridge_on 把 ZorvAI 的全部工具经 MCP 暴露给它（它以 mcp__zorvai__<工具名> 调用，" +
-            "真正执行的是 ZorvAI 的工具）；bridge_off 撤销；bridge_status 看桥接状态；" +
+            "bridge_on 把 ZorvAI 的全部工具经**两条通道**暴露给它（同一批工具、语义等价，" +
+            "一条失败换另一条）：MCP 通道 mcp__zorvai__<工具名>（需重启 harness 生效）+" +
+            "内置插件通道 zorvai_<工具名>（随快照装配即刻生效，元工具 zorvai_bridge 可自诊断/刷新）；" +
+            "bridge_off 撤销；bridge_status 看桥接状态；" +
             "plugins 列出它已装的全部包（它的能力来源），知道它有什么才能在 task 里准确提要求。"
 
     override val parametersJson: String = """{

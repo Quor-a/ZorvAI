@@ -1266,6 +1266,190 @@ class EngineManager(private val context: Context, private val pickToken: String?
       File(dshPkgs, "dsh-session-persistence-jsonl/lib/index.js"))
     applyAssetPatch("patched/fs-local-index.js",
       File(dshPkgs, "dsh-fs-local/lib/index.js"))
+    // ═══ #478：glob / grep 的 ripgrep 换成 **Android 可执行的 PIE 构建**（原生二进制覆盖）═══
+    applyRipgrepOverlay()
+    // ═══ #481：read_image 的 sharp 补 **wasm 构建**（Android 加载不了 glibc 的 .node）═══
+    applySharpWasmOverlay()
+  }
+
+  /**
+   * read_image 的 sharp 补 wasm 构建（#481，用户实测「read_image 仍不可用」）。
+   *
+   * **故障**：`sharp` 0.35.5 在快照里只带了 `@img/sharp-linux-arm64` /
+   * `sharp-linuxmusl-arm64`（glibc / musl 的 `.node`）。而 `runtimePlatformArch()` 在
+   * Android 上返回 **`android-arm64`**，`dist/sharp.cjs` 的平台 switch 没有这个分支，
+   * 于是走到最后一个兜底 `require("@img/sharp-wasm32/sharp.node")` —— 包不存在，sharp
+   * 整体加载失败，`read_image` 就永远「不可用」（截图本身成功，只是读不回来）。
+   *
+   * **修法**：随包发 `@img/sharp-wasm32@0.35.5`（与 sharp 版本严格对应的官方 wasm 构建，
+   * 含 9.1MB libvips wasm）＋它唯一的运行期依赖 `@emnapi/runtime@1.11.3`
+   * （`tslib` 快照里已有 2.8.1，满足 `^2.4.0`）。落点就是快照的
+   * `<dsh>/node_modules/@img/sharp-wasm32` 与 `<dsh>/node_modules/@emnapi/runtime`，
+   * sharp 的 require 链路天然能找到，**不改 vendor 一行代码**（上游本来就把 wasm 当官方兜底）。
+   *
+   * 代价：包体 +约 4MB（wasm 9.1MB 原文，APK 内 deflate）；wasm 解码比原生慢，但截图这种
+   * 一千万像素以内的图仍是秒级，远小于工具 65s 预算。
+   */
+  private fun applySharpWasmOverlay() {
+    val dshModules = File(usrDir, "lib/node_modules/@deepseek-ai/dsh/node_modules")
+    if (!File(dshModules, "sharp").isDirectory) {
+      Log.i(TAG, "sharp wasm overlay skipped: sharp package absent")
+      return
+    }
+    overlayAssetTree("patched/pkg/sharp-wasm32", File(dshModules, "@img/sharp-wasm32"))
+    overlayAssetTree("patched/pkg/emnapi-runtime", File(dshModules, "@emnapi/runtime"))
+  }
+
+  /**
+   * 把资产目录树覆盖到目标目录。
+   *
+   * 逐文件走 [applyBinaryOverlay] → [applyAssetPatchCore]：内容指纹 + sha256 快路径，
+   * 幂等；资产新增/变更会在下次引擎启动自动补上（快照重解压后同样自愈）。
+   */
+  private fun overlayAssetTree(assetDir: String, targetDir: File) {
+    val children = runCatching { context.assets.list(assetDir) }.getOrNull()
+    if (children.isNullOrEmpty()) {
+      // 叶子：资产本身就是一个文件（assets.list 对文件返回空数组）。
+      if (targetDir.parentFile?.exists() == true) {
+        applyBinaryOverlay(assetDir, targetDir, executable = false)
+      }
+      return
+    }
+    targetDir.mkdirs()
+    children.forEach { name -> overlayAssetTree("$assetDir/$name", File(targetDir, name)) }
+  }
+
+  /**
+   * glob / grep 工具的 ripgrep 换成 Android 能跑的构建（#478）。
+   *
+   * **故障现场**：harness 里 `glob` / `grep` 两个工具恒报
+   * `libbusybox.so / rg: unexpected e_type: 2`（bionic 拒绝加载 ET_EXEC）。
+   * 壳侧实测 `@vscode/ripgrep-linux-arm64` 打包的 `bin/rg` 就是 **ET_EXEC、非 PIE**
+   * （`e_type=2`），而且权限是 **0644**（连可执行位都没有）——它是 Linux/aarch64 的
+   * 普通发行版二进制，不是 Android 构建。dsh 只用这两个工具做文件发现/内容检索，工具本身
+   * 没有替代路径，所以「bash 的 grep/find 可替代」只是人工绕过，agent 侧调用仍然全废。
+   *
+   * **修法**：随包发一份 **Termux 构建的 ripgrep**（`PT_INTERP=/system/bin/linker64`，
+   * `e_type=3` PIE，Android 7+ 通用）覆盖到原位置，并把它唯一的非 bionic 依赖
+   * `libpcre2-8.so` 放进 `usr/lib`——引擎 env 已把这个目录钉在 `LD_LIBRARY_PATH`，
+   * 与快照自带的 `libc++_shared.so` / `libicu*` 同一解析路径（node/bash 就是靠它跑起来的）。
+   *
+   * **为什么不动快照**：这份 overlay 落在 `applyRuntimePatches()` 里，引擎每次启动都会按
+   * 内容指纹核对一次（[applyAssetPatchCore] 的快路径 + sha256），快照重解压后自动重新覆盖；
+   * 不需要重打 130MB 的 `snapshot.tar.xz`，也不会因为快照升级而失效。
+   *
+   * **为什么能 exec**：Android 15/16 禁止 app-data ELF 直接 exec，但引擎 env 里已有
+   * Termux 的 execve 钩子（`LD_PRELOAD=libtermux-exec … MODE=force`），execve 会被改写为
+   * `/system/bin/linker64 <path>`——linker64 只接受 ET_DYN，这正是原 rg 报 `e_type: 2`
+   * 的直接原因，也是本覆盖生效的前提（PIE 进来，钩子一改就过）。
+   */
+  private fun applyRipgrepOverlay() {
+    val dshModules = File(usrDir, "lib/node_modules/@deepseek-ai/dsh/node_modules")
+    val rgBin = File(dshModules, "@vscode/ripgrep-linux-arm64/bin/rg")
+    val pcre2 = File(usrDir, "lib/libpcre2-8.so")
+    // 🔴 资产名**不要带 .gz 后缀**：aapt2 会把 `.gz` 资产自动解压并抹掉扩展名，
+    // 于是 APK 里变成 `assets/patched/bin/rg`，代码再按 `.gz` 名去 open 直接
+    // FileNotFoundException（本仓 `.pack` 后缀也是同一个教训）。这里直接放原始二进制，
+    // APK 打包时 aapt2 会照常 deflate，最终包体与 gz 方案一致，且少一层解压逻辑。
+    applyBinaryOverlay("patched/bin/rg", rgBin, executable = true)
+    applyBinaryOverlay("patched/lib/libpcre2-8.so", pcre2, executable = false)
+    linkAndroidArm64PlatformPackage(dshModules, rgBin)
+  }
+
+  /**
+   * 造出 `@vscode/ripgrep-android-arm64` 平台包（#480，用户实测点名的第二层根因）。
+   *
+   * **为什么换了二进制还不够**：`@vscode/ripgrep` 的入口是按平台拼包名去 `require.resolve` 的
+   *
+   *    const platformPkg = `@vscode/ripgrep-${process.platform}-${arch}`;
+   *    resolved = require.resolve(`${platformPkg}/bin/${binaryName}`);
+   *
+   * 而 Android 上 node 的 `process.platform` 是 **`android`**（不是 `linux`），于是它去找
+   * `@vscode/ripgrep-android-arm64`——快照里只有 `ripgrep-linux-arm64` → `require.resolve` 抛
+   * "Could not find @vscode/ripgrep-android-arm64" → `resolveRgPath()` 的 `rgPathPromise`
+   * 把这个**被拒绝的 Promise 缓存**在进程内 → 此后该进程的 glob/grep 永远 `ripgrep launch failed`。
+   * 所以：二进制换对了，解析仍然失败，必须让平台包真的存在。
+   *
+   * **做法**：造一个最小平台包（`package.json` + `bin/rg`），`bin/rg` 用**符号链接**指向
+   * 已经覆盖好的 `ripgrep-linux-arm64/bin/rg`（同一份 PIE 二进制，不重复占包体）。
+   * 符号链接在部分 FS 上会失败 → 退化为字节复制（只多占应用数据，不动 APK）。
+   *
+   * **幂等**：链接长度与目标一致时不重建；`package.json` 内容一致时不重写。
+   */
+  private fun linkAndroidArm64PlatformPackage(dshModules: File, rgBin: File) {
+    if (!rgBin.isFile) {
+      // 快照布局变了（包里没有 @vscode/ripgrep）：不臆造目录，只留日志。
+      Log.i(TAG, "ripgrep android-arm64 package skipped: ripgrep binary absent")
+      return
+    }
+    val pkgDir = File(dshModules, "@vscode/ripgrep-android-arm64")
+    val binDir = File(pkgDir, "bin")
+    try {
+      binDir.mkdirs()
+      val manifest = File(pkgDir, "package.json")
+      val json = "{\"name\":\"@vscode/ripgrep-android-arm64\",\"version\":\"1.18.0\"," +
+        "\"description\":\"Android(aarch64) ripgrep binary, shipped by ZorvAI overlay\"," +
+        "\"os\":[\"android\"],\"cpu\":[\"arm64\"],\"bin\":{\"rg\":\"bin/rg\"}}"
+      if (!manifest.isFile || manifest.readText() != json) manifest.writeText(json)
+
+      val link = File(binDir, "rg")
+      // 已指向正确目标（长度与目标一致）就不动，避免每次启动重写。
+      val alreadyOk = link.exists() && link.length() == rgBin.length()
+      if (!alreadyOk) {
+        runCatching { Files.deleteIfExists(link.toPath()) }
+        val linked = runCatching {
+          // 相对目标：<@vscode>/ripgrep-android-arm64/bin/ + ../../ = <@vscode>/，
+          // 再进 ripgrep-linux-arm64/bin/rg。
+          Files.createSymbolicLink(link.toPath(), java.nio.file.Paths.get("../../ripgrep-linux-arm64/bin/rg"))
+        }.isSuccess
+        if (!linked) {
+          // 符号链接不可用（FUSE / 老 FS）：退化为复制，功能优先。
+          rgBin.copyTo(link, overwrite = true)
+          Log.i(TAG, "ripgrep android-arm64: symlink unavailable, copied binary instead")
+        }
+      }
+      if (!link.canExecute()) link.setExecutable(true, false)
+      Log.i(TAG, "ripgrep android-arm64 platform package ready: " + link.absolutePath)
+    } catch (t: Throwable) {
+      Log.w(TAG, "ripgrep android-arm64 platform package failed", t)
+    }
+  }
+
+  /**
+   * 二进制资产覆盖：把随包的原始二进制（rg / libpcre2-8.so）按内容指纹覆盖到运行时树。
+   *
+   * 复用 [applyAssetPatchCore] 的全套机制（内容指纹记录、sha256 比对、快路径），
+   * `readAsset` 就是原样的字节流——记录里的摘要/长度与目标文件天然同口径，
+   * 不会出现「资产换了但记录命中」的漏更新。
+   *
+   * @param executable 落盘后补 0755（原生可执行文件必需；包内原 rg 是 0644，缺这一位同样跑不起来）。
+   */
+  private fun applyBinaryOverlay(asset: String, target: File, executable: Boolean) {
+    if (!target.parentFile.exists()) {
+      Log.i(TAG, "binary overlay skipped (target package absent): $asset")
+      return
+    }
+    val outcome = applyAssetPatchCore(
+      asset = asset,
+      target = target,
+      recordFile = assetPatchRecordFile(asset),
+      apkIdentity = assetPatchApkIdentity(),
+      readAsset = { context.assets.open(asset).use { it.readBytes() } },
+      log = { message -> Log.i(TAG, message) },
+    )
+    if (outcome == AssetPatchOutcome.ASSET_MISSING) {
+      Log.w(TAG, "binary overlay asset missing: $asset")
+      return
+    }
+    // 可执行位必须每次核对：快照重解压会把权限重置回包内的 0644。
+    if (executable) {
+      runCatching {
+        target.setExecutable(true, false)
+        // 部分 FS（FUSE/sdcard 代理）setExecutable 会静默失败，落盘后显式回读一次。
+        if (!target.canExecute()) Log.w(TAG, "binary overlay not executable: " + target.absolutePath)
+      }
+    }
+    Log.i(TAG, "binary overlay " + outcome.name + ": $asset -> " + target.absolutePath)
   }
 
   /** Overwrite-style patch: applies when the target differs from the bundled asset (content
@@ -1618,7 +1802,8 @@ class EngineManager(private val context: Context, private val pickToken: String?
     // Mark the generation before ProcessBuilder creates the fresh redirect target. token extraction
     // also checks creation time, so a stale file with a refreshed mtime cannot impersonate this run.
     runCatching { EngineAuth.markGenerationStart(System.currentTimeMillis()) }
-    LogCollector.markBootStart(context, engineHeapMb(deviceTotalRamMb()))
+    val cgroupMb = appCgroupLimitMb()
+    LogCollector.markBootStart(context, effectiveEngineHeapMb(deviceTotalRamMb(), cgroupMb), cgroupMb)
     watchEngineListen()
     fun build(argv: List<String>): ProcessBuilder =
       ProcessBuilder(argv).also { b ->
@@ -1643,7 +1828,88 @@ class EngineManager(private val context: Context, private val pickToken: String?
       runCatching { process.destroyForcibly() }
       throw java.io.IOException("engine spawn did not create a fresh engine.log")
     }
+    startEngineRssSampler(process)
     return process
+  }
+
+  /**
+   * boot 窗口内的引擎 RSS 采样（2026-10-26 引擎静默死亡诊断）。
+   *
+   * 背景：cgroup OOM / LMK 斩首 node 时**零遗言**——无 V8 FATAL、无未捕获异常、无 tombstone，
+   * 壳侧 heapOom 检测（只认 stderr 字样）看不到，诊断包里能留下痕迹的只有 RSS 曲线。此前任何
+   * 诊断面都不采引擎 RSS，「内存杀」与「代码崩」无法区分（本轮 0547 现场就是靠排除法才锁定的）。
+   *
+   * 口径：只读 `/proc/<pid>/status` 的 VmRSS（同 uid 可读，SIGKILL 现场也有最后读数）；
+   * daemon 线程、与冷启动预算同窗口（[LISTEN_WATCH_WINDOW_MS]）后自然退出；采样失败/pid 取不到
+   * 整体静默跳过——**绝不影响引擎生命周期**（采样器崩了引擎照跑）。
+   */
+  private fun startEngineRssSampler(process: Process) {
+    val pid = enginePidOf(process)
+    if (pid <= 0L) return
+    Thread {
+      val deadline = System.currentTimeMillis() + LISTEN_WATCH_WINDOW_MS
+      var peakKb = 0L
+      var lastKb = 0L
+      var samples = 0
+      var misses = 0
+      val status = File("/proc/$pid/status")
+      while (System.currentTimeMillis() < deadline) {
+        val rssKb = try {
+          status.takeIf { it.canRead() }?.readLines()
+            ?.firstOrNull { it.startsWith("VmRSS:") }
+            ?.removePrefix("VmRSS:")?.trim()
+            ?.removeSuffix(" kB")?.trim()
+            ?.toLongOrNull()
+        } catch (_: Throwable) {
+          null
+        }
+        if (rssKb != null && rssKb > 0) {
+          lastKb = rssKb
+          if (rssKb > peakKb) peakKb = rssKb
+          samples++
+          misses = 0
+        } else if (samples > 0) {
+          break // 读到过又消失 = 进程已退出，收口
+        } else if (++misses >= 3) {
+          return@Thread // 从未读到（pid 无效/权限）：不空转满窗口
+        }
+        try {
+          Thread.sleep(1_000)
+        } catch (_: InterruptedException) {
+          return@Thread
+        }
+      }
+      if (samples > 0) {
+        LogCollector.markEngineRss(
+          context,
+          (peakKb / 1024L).toInt(),
+          (lastKb / 1024L).toInt(),
+          samples,
+          pid.toInt()
+        )
+      }
+    }.apply { isDaemon = true; name = "dsh-engine-rss-sampler" }.start()
+  }
+
+  /**
+   * 从 Process 句柄取引擎子进程 pid（取不到返回 -1，采样整体跳过）。
+   *
+   * 为什么不用 `Process.pid()`：那是 Java 9 API，Android 直到 API 33 才在 framework 的
+   * java.lang.Process 上暴露（minSdk 26 编译不过）。`Process.toString()` 的
+   * `Process[pid=N]` 形态从 Android 初期至今稳定（ProcessImpl/UNIXProcess 同一约定），
+   * 解析失败只是丢一个世代的 RSS 采样——判据文件里少一行，引擎行为零影响。
+   */
+  private fun enginePidOf(process: Process): Long {
+    return try {
+      val text = process.toString()
+      val start = text.indexOf("pid=")
+      if (start < 0) return -1L
+      val from = start + 4
+      val end = text.indexOf(']', from).let { if (it < 0) text.length else it }
+      text.substring(from, end).trim().toLongOrNull() ?: -1L
+    } catch (_: Throwable) {
+      -1L
+    }
   }
 
   /**
@@ -2349,6 +2615,53 @@ class EngineManager(private val context: Context, private val pickToken: String?
   }
 
   /**
+   * app 进程组的 cgroup 内存上限（MB；读不到或不可信返回 0）。
+   *
+   * 为什么必须读它而不是继续只信物理内存：见 [effectiveEngineHeapMb]——物理内存的一半
+   * （大内存机 4096）远高于 app cgroup 的真实容量，V8 天花板超过墙就等于把引擎交给
+   * cgroup OOM killer 无声斩首。
+   *
+   * 读取路径（自描述、无 root）：
+   * - `/proc/self/cgroup` 列出本进程所处的全部层级（v2 统一层级 controllers 列为空、v1 按
+   *   控制器分列）；只取 **memory** 相关行（v1 的 `memory:` 控制器 / v2 的 `0::`）；
+   * - v2：`/sys/fs/cgroup<path>/memory.max`（"max" = 无限制）；
+   * - v1：`/sys/fs/cgroup/memory<path>/memory.limit_in_bytes`（2^63 对齐值 = 无限制）；
+   * - 多个候选层级取**最紧**的一个（父层级宽松、子层级严格是常态）；
+   * - 任何一步失败（SELinux 禁读 /sys、路径不存在、解析失败）都返回 0，由
+   *   [effectiveEngineHeapMb] 回退到物理内存推导——读取失败零副作用。
+   */
+  private fun appCgroupLimitMb(): Int {
+    return try {
+      val self = File("/proc/self/cgroup").takeIf { it.canRead() }?.readText() ?: return 0
+      var tightest = 0
+      for (rawLine in self.lineSequence()) {
+        val line = rawLine.trim()
+        if (line.isEmpty()) continue
+        val cols = line.split(":", limit = 3)
+        if (cols.size < 3) continue
+        val controllers = cols[1]
+        val path = cols[2]
+        if (path.isEmpty() || path == "/") continue
+        val isV2 = controllers.isEmpty()
+        val isV1Memory = controllers.split(',').any { it == "memory" }
+        if (!isV2 && !isV1Memory) continue
+        val limitFile =
+          if (isV2) File("/sys/fs/cgroup$path/memory.max")
+          else File("/sys/fs/cgroup/memory$path/memory.limit_in_bytes")
+        val raw = limitFile.takeIf { it.canRead() }?.readText()?.trim() ?: continue
+        val bytes = if (raw == "max") Long.MAX_VALUE else raw.toLongOrNull() ?: continue
+        // 无限制占位（v1 的 9223372036854771712 等）与溢出值都不可信
+        if (bytes <= 0L || bytes >= 9223372036854771L) continue
+        val mb = (bytes / (1024L * 1024L)).toInt()
+        if (mb > 0) tightest = if (tightest == 0) mb else minOf(tightest, mb)
+      }
+      tightest
+    } catch (_: Throwable) {
+      0
+    }
+  }
+
+  /**
    * Snapshot environment shared by engine/console/log processes (PATH/LD_LIBRARY_PATH/HOME/DSH_HOME/
    * TERMUX_* injected explicitly — the snapshot is self-sufficient, no Termux app needed). Idempotent:
    * safe to call repeatedly (ensurePrivateDshData and the TMPDIR mkdirs are both idempotent).
@@ -2439,15 +2752,18 @@ class EngineManager(private val context: Context, private val pickToken: String?
       // 显式取 min(8, cores)（见 uvThreadPoolSize）：零产品语义改动，引擎与所有工具子进程
       // 经 shellEnv() 一并继承。判据：子进程回读 process.env.UV_THREADPOOL_SIZE = min(8, cores)。
       "UV_THREADPOOL_SIZE" to uvThreadPoolSize(Runtime.getRuntime().availableProcessors()).toString(),
-      // 引擎 V8 老生代上限（0.14.8 堆下限）：**此前无人管理**——不设标志时 V8 只按物理内存推导，
-      // 小内存设备上推出来的上限可能小到引擎 boot 期就 OOM（社区反馈「JavaScript 堆太小导致启动失败」）。
-      // 这里显式给出自适应值（见 engineHeapMb）：设备总内存的一半、下限 512MB、上限 4096MB。
+      // 引擎 V8 老生代上限（0.14.8 堆下限 + 2026-10-26 cgroup 钳制）：**此前无人管理**——不设标志时
+      // V8 只按物理内存推导，小内存设备上推出来的上限可能小到引擎 boot 期就 OOM（社区反馈「JavaScript
+      // 堆太小导致启动失败」）。这里显式给出自适应值：设备总内存的一半、下限 512MB、上限 4096MB，
+      // 再按 app cgroup 实际容量收紧（见 [effectiveEngineHeapMb] 的 KDoc——
+      // RMX8899 16GB 实测：4096 天花板远超 cgroup 墙，V8 增长中 RSS 先撞墙，cgroup OOM killer
+      // 无声斩首 node；天花板让位后 V8 至多在墙内 FATAL，留日志、可重试）。
       // 上限取 1024 会让「一半内存」分支在所有真机上被截断（0.14.8 缺陷），见 ENGINE_HEAP_CAP_MB。
       // 用 NODE_OPTIONS 而不是 argv，是因为 argv 会**覆盖** NODE_OPTIONS，二者不能同时表达同一件事；
       // 而 NODE_OPTIONS 还顺带覆盖所有经 shellEnv() 派生的子进程（工具子进程 / 控制台 / UndoGate）。
       // 实测口径：--max-old-space-size=N ⇒ heap_size_limit = N + 96MB；引擎最小可用堆约 70MB。
-      // 读不到设备内存时退回下限，保证「任何设备都够启动」而不是编造一个值。
-      "NODE_OPTIONS" to heapOptionFrom(engineHeapMb(deviceTotalRamMb())),
+      // 读不到设备内存或 cgroup 时各自退回（下限 / 物理内存推导），保证「任何设备都够启动」。
+      "NODE_OPTIONS" to heapOptionFrom(effectiveEngineHeapMb(deviceTotalRamMb(), appCgroupLimitMb())),
     ) + certEnv
   }
 
@@ -2625,6 +2941,51 @@ internal const val ENGINE_HEAP_NATURAL_MAX_FLAG_MB: Int = 1024
 internal fun engineHeapMb(totalRamMb: Int): Int {
   if (totalRamMb <= 0) return ENGINE_HEAP_FLOOR_MB
   return (totalRamMb / 2).coerceIn(ENGINE_HEAP_FLOOR_MB, ENGINE_HEAP_CAP_MB)
+}
+
+/**
+ * V8 老生代上限向 **app cgroup 实际容量**让位的份额（55/100）。
+ *
+ * 2026-10-26 引擎静默死亡诊断（RMX8899/16GB 实锤）：[engineHeapMb] 的「一半内存」推导在大内存
+ * 设备上被 [ENGINE_HEAP_CAP_MB] 抬到 4096（V8 heap_size_limit 实为 4192MB），但 Android app
+ * 进程组的 cgroup 上限（memory.max / memory.limit_in_bytes）远低于物理内存的一半——V8 按需
+ * 增长过程中 **RSS 先撞 cgroup 硬墙**，cgroup OOM killer 专杀组内 RSS 最大的 node 子进程：
+ * 零遗言（无 V8 FATAL、无未捕获异常）、无 tombstone、壳侧 heapOom 检测不到（它只认 stderr
+ * 字样），表现为「起到 listen/compose/plugin-loaded 后随机死亡点消失」+ 恢复循环。
+ * 引擎被无声 SIGKILL 严格劣于 V8 在墙内 FATAL（后者可留日志、可重试）——故天花板必须让位。
+ *
+ * 份额依据：cgroup 容量要同时装 App 主进程（实测 Java 堆 ~500MB + native ~83MB）、node 引擎
+ * （515MB 模块图，boot 期 RSS 峰值最高）与可能的 proot 工具子进程；55% 给 node 是「不开
+ * proot」场景的安全值（V8 自然推导本就 1120MB 且长期跑稳，见
+ * [ENGINE_HEAP_NATURAL_MAX_FLAG_MB]）。读不到 cgroup 时本层整体失效、退回 [engineHeapMb]。
+ */
+internal const val ENGINE_HEAP_CGROUP_SHARE_NUM: Int = 55
+internal const val ENGINE_HEAP_CGROUP_SHARE_DEN: Int = 100
+
+/**
+ * cgroup 上限读数超过此值即视为「无限制占位」而不是真实容量。
+ *
+ * cgroup v1 的无限制写法是 9223372036854771712（2^63 对齐值），v2 是字符串 "max"；
+ * 两者折算都远超本阈值。真实 app cgroup 上限（Android 大内存机 1.5~3GB 量级）不可能达到，
+ * 故超限读数按「不可信」处理——宁可按物理内存推导，也不把占位值当成容量去压堆。
+ */
+internal const val CGROUP_LIMIT_PLAUSIBLE_MB: Int = 8192
+
+/**
+ * 最终生效的 V8 老生代上限（MB）= min([engineHeapMb], max(cgroup 容量 × 份额, 下限))。
+ *
+ * - cgroup 读数不可信（≤0 或 > [CGROUP_LIMIT_PLAUSIBLE_MB]）⇒ 原样返回 [engineHeapMb]，
+ *   读不到 cgroup 的设备行为与本函数引入前完全一致（零回归）；
+ * - 份额低于 [ENGINE_HEAP_FLOOR_MB] 时保留下限：这种设备（cgroup < ~1GB）本来就跑不下
+ *   这套栈，保「能启动」优先于「不撞墙」；
+ * - 其余（cgroup 2GB ⇒ 1120、4GB ⇒ 2240）真正生效：大内存设备的 4096 天花板被压到
+ *   V8 自然推导同量级，从根上消除「天花板远高于 cgroup 墙」的矛盾。
+ */
+internal fun effectiveEngineHeapMb(totalRamMb: Int, cgroupLimitMb: Int): Int {
+  val derived = engineHeapMb(totalRamMb)
+  if (cgroupLimitMb <= 0 || cgroupLimitMb > CGROUP_LIMIT_PLAUSIBLE_MB) return derived
+  val share = cgroupLimitMb * ENGINE_HEAP_CGROUP_SHARE_NUM / ENGINE_HEAP_CGROUP_SHARE_DEN
+  return minOf(derived, maxOf(share, ENGINE_HEAP_FLOOR_MB))
 }
 
 

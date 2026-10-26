@@ -215,6 +215,8 @@ class DefaultLlmGateway(
                 historyRounds = 0,
                 // 工具轮消息由 toLlmMessages 统一做预算裁剪与孤儿剔除
                 toolMessages = toolMessages,
+                compressThresholdPct = cfg.contextCompressThreshold,
+                softTrimThresholdPct = cfg.contextSoftTrimThreshold,
             )
             val result = client.chat(
                 baseUrl = cfg.baseUrl,
@@ -373,8 +375,9 @@ class DefaultLlmGateway(
     /**
      * #216：用主对话同一套 [QuroConversationStore.toLlmMessages] 装配消息。
      *
-     * 它负责：工具结果就地压缩、巨型消息降权、孤儿工具消息剔除、按 contextWindow
-     * 预算从最旧轮次裁剪 —— 主对话防爆上下文的全部机制在此原样生效。
+     * 它负责：工具结果就地压缩（#22 受软精简阀值控制）、巨型消息降权、孤儿工具消息剔除、
+     * 按 contextWindow 预算从最旧轮次裁剪（#22 受压缩阀值控制）——
+     * 主对话防爆上下文的全部机制在此原样生效。
      */
     private fun buildStoreMessages(
         systemPrompt: String,
@@ -383,6 +386,8 @@ class DefaultLlmGateway(
         contextWindow: Int,
         historyRounds: Int,
         toolMessages: List<QuroChatMessage>,
+        compressThresholdPct: Int = com.ai.assistance.quro.core.DEFAULT_COMPRESS_THRESHOLD_PCT,
+        softTrimThresholdPct: Int = com.ai.assistance.quro.core.DEFAULT_SOFT_TRIM_THRESHOLD_PCT,
     ): List<QuroChatMessage> {
         val store = QuroConversationStore()
         // system 不写入 store —— toLlmMessages 的 system 参数会单独加入一次，
@@ -407,7 +412,7 @@ class DefaultLlmGateway(
             )
         }
         val system = QuroMessage(role = "system", content = systemPrompt)
-        return store.toLlmMessages(system, contextWindow, historyRounds)
+        return store.toLlmMessages(system, contextWindow, historyRounds, compressThresholdPct, softTrimThresholdPct)
     }
 
     /**
@@ -503,6 +508,8 @@ class DefaultLlmGateway(
             contextWindow = cfg.contextWindow,
             historyRounds = 0,
             toolMessages = emptyList(),
+            compressThresholdPct = cfg.contextCompressThreshold,
+            softTrimThresholdPct = cfg.contextSoftTrimThreshold,
         )
 
         val client = com.ai.assistance.quro.core.network.QuroLlmClient()
@@ -553,6 +560,8 @@ class DefaultLlmGateway(
         val langTail = QuroReplyLanguage.tailReminder(context) + QuroReplyLanguage.shortThinkingDirective(context)
         val sysWithLang = if (langTail.isBlank()) systemPrompt else systemPrompt + "\n\n" + langTail
 
+        // #22：集群端侧同样遵循主对话的上下文双阀值（软精简 / 压缩）。
+        val globalCfg = com.ai.assistance.quro.core.model.QuroModelConfigRepository(context.applicationContext).load()
         val messages = buildStoreMessages(
             systemPrompt = sysWithLang,
             userPrompt = userPrompt,
@@ -560,6 +569,8 @@ class DefaultLlmGateway(
             contextWindow = model.contextWindow.takeIf { it > 0 } ?: 0,
             historyRounds = 0,
             toolMessages = emptyList(),
+            compressThresholdPct = globalCfg.contextCompressThreshold,
+            softTrimThresholdPct = globalCfg.contextSoftTrimThreshold,
         )
 
         val result = engine.run(

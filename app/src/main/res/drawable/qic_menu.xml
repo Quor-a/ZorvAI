@@ -1,0 +1,25 @@
+<!--
+  菜单图标（三横线）—— 替换此前 `LucideIcon("menu")` 误落到 else -> ic_x 的「×」。
+  风格同 qic_*：24dp viewport、描边 #FFFFFF（调用点 tint）、线宽 1.8、圆头。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:pathData="M4 7 H20"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"/>
+    <path android:pathData="M4 12 H20"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"/>
+    <path android:pathData="M4 17 H20"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"/>
+</vector>

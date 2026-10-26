@@ -56,6 +56,9 @@ export const DEVICE_TOOL_GROUPS: Readonly<Record<string, readonly string[]>> = {
   'virtual-display': [
     'android_vdisplay_create',
     'android_vdisplay_destroy',
+    // 跨屏启动应用（2026-10-26 补）：与 create/input 同属虚拟屏操控闭环，同组掩蔽。
+    // 壳侧 vdLaunchApp 早已实现，缺的只是模型面这一处登记——归组即完成判定。
+    'android_vdisplay_launch_app',
     'android_vdisplay_input',
     'android_vdisplay_status',
   ],

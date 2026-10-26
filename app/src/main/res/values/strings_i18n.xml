@@ -4092,4 +4092,308 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_04091" formatted="false">服务未启动。打开开关后 ZorvAI 会常驻后台，返回或切到别的应用都不影响这个链接。</string>
     <string name="qk_04092" formatted="false">地址暂时拿不到：先打开过一次 ZorvAI 对话框，服务才有内容可投。</string>
     <string name="qk_04100">在浏览器打开</string>
+
+    <!-- Harness 热更新（#428）：本地导入快照压缩包更新内置 harness 运行时 -->
+    <string name="qk_04116">Harness 热更新</string>
+    <string name="qk_04117" formatted="false">导入快照压缩包，直接更新内置 Harness 的整个运行时</string>
+    <string name="qk_04118" formatted="false">从系统文件管理器选择一个 harness 快照压缩包（.tar.xz），即可更新内置 DeepSeek Harness 的整个运行时——不需要重新安装应用，也不需要连接发布服务器。更新采用事务式换树：解压期间现有运行不受影响，新运行时需要通过启动与健康验证才会保留，失败会自动回退到原版本，用户数据（会话、设置、模型配置）始终保留。</string>
+    <string name="qk_04119">选择快照包（.tar.xz）</string>
+    <string name="qk_04121">随附摘要（.sha256，可选）</string>
+    <string name="qk_04122" formatted="false">如果快照包带有 .sha256 摘要文件，选上后会在解压前严格对账，不一致即拒绝更新。</string>
+    <string name="qk_04123">未选择</string>
+    <string name="qk_04124">开始更新</string>
+    <string name="qk_04125" formatted="false">更新过程中 Harness 引擎会先停止、再切换到新运行时，整个过程通常需要几分钟，请保持应用在前台并不要锁屏。</string>
+    <string name="qk_04126">请先选择快照包</string>
+    <string name="qk_04127">更新进度</string>
+    <string name="qk_04128">读取摘要文件失败</string>
+    <string name="qk_04129">再更新一次</string>
+    <string name="qk_04130" formatted="false">摘要：%1$s</string>
+
+    <!-- Harness 通知设置（#429）：通知迁入 ZorvAI 设置 + 权限融合 -->
+    <string name="qk_04131">通知</string>
+    <string name="qk_04132">Harness 通知</string>
+    <string name="qk_04133" formatted="false">总开关、提醒方式、系统权限与测试通知</string>
+    <string name="qk_04134" formatted="false">这些通知由内置 DeepSeek Harness 引擎发出：任务做完的汇报、它等你的回答、工具执行前的授权请求。设置立即生效，只影响通知的提醒方式，不影响任务本身。</string>
+    <string name="qk_04135">前台抑制通知</string>
+    <string name="qk_04136" formatted="false">应用在前台时不弹工作汇报（改为延后，回后台补投）；提问与授权请求永不受影响</string>
+    <string name="qk_04137" formatted="false">通知分类</string>
+    <string name="qk_04138">工作汇报</string>
+    <string name="qk_04139" formatted="false">关闭后不再提醒；任务本身不受影响</string>
+    <string name="qk_04140">提问</string>
+    <string name="qk_04141" formatted="false">关闭 = 不弹窗、不响铃；提问仍会出现在通知栏、可直接作答（AI 在等你的回答）</string>
+    <string name="qk_04142">授权请求</string>
+    <string name="qk_04143" formatted="false">关闭 = 不弹窗、不响铃；仍需你在通知栏或应用内批准，工具不会自动放行</string>
+    <string name="qk_04144">待办进度</string>
+    <string name="qk_04145" formatted="false">关闭后不再显示步骤进度；任务本身不受影响</string>
+    <string name="qk_04146">后台动态</string>
+    <string name="qk_04147" formatted="false">关闭后不再显示看门狗与引擎状态；只影响提示，不影响引擎</string>
+    <string name="qk_04148">通知自检</string>
+    <string name="qk_04149">系统通知设置</string>
+    <string name="qk_04150">发送测试通知</string>
+    <string name="qk_04151">自检结果</string>
+    <string name="qk_04152" formatted="false">应用通知总开关：%1$s；通知权限：%2$s</string>
+    <string name="qk_04153" formatted="false">系统已降级以下通知：%1$s。应用无法调回，需在系统设置里恢复。</string>
+    <string name="qk_04154" formatted="false">系统未降级任何通知渠道。</string>
+    <string name="qk_04155" formatted="false">已发送 %1$s 条测试通知（五类各一条）——请到通知栏看哪几条真的到了、哪几条是静默的</string>
+    <string name="qk_04156" formatted="false">一条也没发出去：通知权限未授予或渠道不可用——请先看上面的自检，并到系统设置里允许通知</string>
+    <string name="qk_04157">打开该渠道设置</string>
+    <string name="qk_04158" formatted="false">通知权限未授予：任务完成不会提醒。点「系统通知设置」去允许。</string>
+    <string name="qk_04159" formatted="false">当前：%1$s</string>
+    <string name="qk_04160" formatted="false">%1$s：%2$s</string>
+    <string name="qk_04161">已开启</string>
+    <string name="qk_04162">已关闭</string>
+    <string name="qk_04163">系统已降级</string>
+    <string name="qk_04164">渠道不存在</string>
+    <string name="qk_04165">正常</string>
+    <string name="qk_04166">查看每个渠道的系统状态与降级告警</string>
+
+    <!-- #417 手机操控屏（PhoneControlScreen） -->
+    <string name="qk_04167">Harness 权限设置</string>
+    <string name="qk_04168">屏幕范围与特权通道的授权设置；只能由你在这里修改，AI 改不了。</string>
+    <string name="qk_04169">屏幕范围</string>
+    <string name="qk_04170">虚拟屏</string>
+    <string name="qk_04171">Shizuku 特权通道</string>
+    <string name="qk_04172">无障碍通道</string>
+    <string name="qk_04173">Root 权限</string>
+    <string name="qk_04174">危险操作</string>
+    <string name="qk_04175">仅虚拟屏幕</string>
+    <string name="qk_04176">仅真实屏幕</string>
+    <string name="qk_04177">全部屏幕</string>
+    <string name="qk_04178">AI 只能操作本应用创建的虚拟屏幕；真实屏幕的截图与控制都不对它开放。</string>
+    <string name="qk_04179">AI 只能操作你的真实屏幕；不会创建或使用虚拟屏幕。</string>
+    <string name="qk_04180">AI 可以同时操作真实屏幕与虚拟屏幕。请谨慎授予。</string>
+    <string name="qk_04181">默认仅虚拟屏幕；真实屏幕的截图与控制都受此范围约束。</string>
+    <string name="qk_04182">虚拟屏分辨率</string>
+    <string name="qk_04183">按真机比例缩放虚拟屏；下一次创建时生效（默认 0.75）。</string>
+    <string name="qk_04184">退后台显示浮窗</string>
+    <string name="qk_04185">只读浮窗：退后台时把虚拟屏画面小窗浮在系统上，前台只在应用内可见。不是工具箱里的「悬浮球」。</string>
+    <string name="qk_04186">虚拟屏状态</string>
+    <string name="qk_04187">刷新状态</string>
+    <string name="qk_04188">已激活</string>
+    <string name="qk_04189">可创建</string>
+    <string name="qk_04190">需要准备</string>
+    <string name="qk_04191">状态不可读</string>
+    <string name="qk_04192">强制销毁虚拟屏</string>
+    <string name="qk_04193">销毁全部虚拟屏与其上的任务（无视会话归属）；需连续点击三次确认，点错可取消。</string>
+    <string name="qk_04194" formatted="false">再次点击确认（%1$d/3）</string>
+    <string name="qk_04195">取消</string>
+    <string name="qk_04196">虚拟屏状态读取失败</string>
+    <string name="qk_04197">已强制销毁全部虚拟屏。</string>
+    <string name="qk_04198">Shizuku 是虚拟屏与特权 shell 的通道；安装与授权都只能在应用外由你亲手完成。</string>
+    <string name="qk_04199">下载 Shizuku</string>
+    <string name="qk_04200">打开 Shizuku</string>
+    <string name="qk_04201">请求 Shizuku 授权</string>
+    <string name="qk_04202">重置链接</string>
+    <string name="qk_04203">未安装</string>
+    <string name="qk_04204">已安装，未启动</string>
+    <string name="qk_04205">已启动，尚未授权</string>
+    <string name="qk_04206">已授权，通道建立中</string>
+    <string name="qk_04207">已授权，用户服务启动失败</string>
+    <string name="qk_04208">已授权，通道未建立</string>
+    <string name="qk_04209">通道就绪</string>
+    <string name="qk_04210">查看启动失败诊断</string>
+    <string name="qk_04211" formatted="false">打开 Shizuku 发布页失败：%1$s</string>
+    <string name="qk_04212">已发起 Shizuku 授权请求——请在弹窗上点「允许」（本页会自动刷新）。</string>
+    <string name="qk_04213">已重置 Shizuku 连接，正在重新建立通道。</string>
+    <string name="qk_04214" formatted="false">请求 Shizuku 授权失败：%1$s</string>
+    <string name="qk_04215" formatted="false">重置 Shizuku 链接失败：%1$s</string>
+    <string name="qk_04216">授权框需要前台界面才会弹出，后台自动请求会静默失败。</string>
+    <string name="qk_04217">两个入口都会跳到应用外（浏览器 / Shizuku）；装好并授权后回到本页即可。</string>
+    <string name="qk_04218">去开启无障碍服务</string>
+    <string name="qk_04219">解锁受限设置</string>
+    <string name="qk_04220">已开启：AI 通过无障碍语义树读取画面并执行点击与输入。</string>
+    <string name="qk_04221">未开启：到 系统设置 → 无障碍 → 已下载的服务 里开启本应用的设备控制服务。</string>
+    <string name="qk_04222">无法打开系统设置，请手动前往 系统设置 → 无障碍</string>
+    <string name="qk_04223">已解锁受限设置（Shizuku 特权 shell）</string>
+    <string name="qk_04224" formatted="false">解锁失败：%1$s</string>
+    <string name="qk_04225">已解锁受限设置，现在可以回系统页开启无障碍服务。</string>
+    <string name="qk_04226">应用 root 授权</string>
+    <string name="qk_04227">检测 root 授权</string>
+    <string name="qk_04228">正在检测…</string>
+    <string name="qk_04229" formatted="false">Root 管理器：%1$s——在管理器中允许本应用，再回这里检测。</string>
+    <string name="qk_04230">AI root 权限</string>
+    <string name="qk_04231">授权 AI 使用 root</string>
+    <string name="qk_04232">已阅读免责声明</string>
+    <string name="qk_04233">阅读《AI root 权限免责声明》</string>
+    <string name="qk_04234">已授权（uid 0）</string>
+    <string name="qk_04235">正在检测授权…</string>
+    <string name="qk_04236">已拒绝</string>
+    <string name="qk_04237">检测超时，请在管理器确认后重试</string>
+    <string name="qk_04238">本机没有可用的 su</string>
+    <string name="qk_04239">未检测</string>
+    <string name="qk_04240">没有可用 root 通道</string>
+    <string name="qk_04241">未授权</string>
+    <string name="qk_04242">已授权（AI 可用 root）</string>
+    <string name="qk_04243">Shizuku 当前以 shell（uid 2000）身份运行——请在 Shizuku 内以 root 启动它，再回到本页开启。</string>
+    <string name="qk_04244">无法在未 root 的设备上赋予该权限</string>
+    <string name="qk_04245" formatted="false">可用通道：%1$s。应用获得授权不等于已允许 AI 使用。</string>
+    <string name="qk_04246">授权状态不可读。重新打开应用再试；读不到时不会允许 AI 使用 root。</string>
+    <string name="qk_04247">请先阅读并确认免责声明，才能开启 AI root 权限。</string>
+    <string name="qk_04248">正在检测 root 授权。若没有弹窗，请在你使用的 Root 管理器中允许本应用；授权后会继续本次开启操作。</string>
+    <string name="qk_04249">已开启 AI root 权限：特权通道按 root 身份执行，请在需要时使用、用完即关。</string>
+    <string name="qk_04250">已关闭 AI root 权限：特权通道已恢复整体拒绝。</string>
+    <string name="qk_04251" formatted="false">开启 AI root 权限失败：%1$s</string>
+    <string name="qk_04252" formatted="false">关闭 AI root 权限失败：%1$s</string>
+    <string name="qk_04253">已记录「已阅读」——与免责声明版本绑定，应用升级不需重新确认。</string>
+    <string name="qk_04254">已撤销同意，并同时关闭了 AI root 权限。</string>
+    <string name="qk_04255" formatted="false">记录「已阅读」失败：%1$s</string>
+    <string name="qk_04256" formatted="false">撤销同意失败：%1$s</string>
+    <string name="qk_04257">已发起 root 授权检测，结果会自动刷新；检测成功不代表 AI root 开关已开启。</string>
+    <string name="qk_04258" formatted="false">检测 root 授权未通过：%1$s</string>
+    <string name="qk_04259">文件属主维护</string>
+    <string name="qk_04260">root 写盘后应用无法读取文件时使用。仅修复本应用数据目录，不改变 AI 授权。</string>
+    <string name="qk_04261">修复文件属主</string>
+    <string name="qk_04262">属主维护进行中</string>
+    <string name="qk_04263" formatted="false">启动文件属主维护失败：%1$s</string>
+    <string name="qk_04264">属主维护结果不可读，不能确认修复完成；请复制诊断日志。</string>
+    <string name="qk_04265">当前没有可用 root 修复路径，未执行属主变更。</string>
+    <string name="qk_04266" formatted="false">文件属主维护完成（检查 %1$s 项 / 修复 %2$s 项 / 失败 %3$s 项）；未进行 SELinux 重标记。</string>
+    <string name="qk_04267" formatted="false">文件属主维护未完成（检查 %1$s 项 / 修复 %2$s 项 / 失败 %3$s 项）：%4$s</string>
+    <string name="qk_04268">特权工作结果仍不明，已暂停新派发和维护；不要重复操作。</string>
+    <string name="qk_04269">正在等待已有特权工作结算，尚未开始文件属主维护。</string>
+    <string name="qk_04270">属主维护进行中，正在有界检查本应用数据目录；结果会自动刷新。</string>
+    <string name="qk_04271">未知</string>
+    <string name="qk_04272" formatted="false">打开免责声明失败：%1$s</string>
+    <string name="qk_04273">已打开免责声明（APK 内置文档，离线可读）。</string>
+    <string name="qk_04274" formatted="false">50%</string>
+    <string name="qk_04275" formatted="false">75%</string>
+    <string name="qk_04276">原生</string>
+    <string name="qk_04277">Shizuku root</string>
+    <string name="qk_04278">应用 su root</string>
+    <string name="qk_04279">调用失败（原因未在本版登记）——请重试；多次失败可复制日志反馈。</string>
+    <string name="qk_04280">设备上没有能打开它的应用——请先安装浏览器。</string>
+    <string name="qk_04281">还没安装 Shizuku——请先点「下载 Shizuku」。</string>
+    <string name="qk_04282">应用内文档缺失（安装包不完整）——请重新安装应用后再试。</string>
+    <string name="qk_04283">应用界面正忙——请稍后重试；多次失败可复制日志反馈。</string>
+    <string name="qk_04284">先勾选「已阅读」并查看免责声明，才能开启 AI root 权限。</string>
+    <string name="qk_04285">Shizuku 通道不是 root 身份（无法在未 root 的设备上赋予该权限）——请让 Shizuku 以 root 启动后再来开启。</string>
+    <string name="qk_04286">尚未获得 root 授权——请在你自己使用的 Root 管理器里允许本应用使用 root（多数管理器不会自动弹授权框）。</string>
+    <string name="qk_04287">本机没有可用的 su（未 root 或未安装 Root 管理器）——请先完成 root 后再试。</string>
+    <string name="qk_04288">正在等待 root 授权结果——若管理器没有弹出授权框，请自己打开它允许本应用。</string>
+    <string name="qk_04289">这个链接没有在本版登记——请更新应用后再试。</string>
+    <string name="qk_04290">链接不是 https，出于安全已拒绝打开。</string>
+    <string name="qk_04291">已打开 Shizuku 发布页——下载 release 版 APK 装好后回到这里。</string>
+    <string name="qk_04292">已打开 Shizuku——在里面启动并授权后，回到本页状态会自动刷新。</string>
+    <string name="qk_04293">读不到 Shizuku 状态：壳侧桥未装配或解析失败。</string>
+    <string name="qk_04294">点「下载 Shizuku」到发布页装好，再回来点「打开 Shizuku」。</string>
+    <string name="qk_04295">点「打开 Shizuku」，在应用内按提示用无线调试启动它（重启设备后需要重做一次）。</string>
+    <string name="qk_04296">点「打开 Shizuku」，在里面允许本应用使用 Shizuku——授权只能由你亲手完成。</string>
+    <string name="qk_04297">用户服务连续启动失败，展开下方诊断日志查看真实原因。若使用 Shizuku 13.6.0，可降级到 13.5.4，或改用 ADB 通道。</string>
+    <string name="qk_04298">状态每 2 秒自动刷新，稍等即可；一直停在这里可以点「打开 Shizuku」重进一次。</string>
+    <string name="qk_04299">特权通道已就绪，虚拟屏与特权 shell 可以用了。</string>
+    <string name="qk_04300" formatted="false">加载中…</string>
+    <string name="qk_04301" formatted="false">打开 Shizuku 失败：%1$s</string>
+    <string name="qk_04302">屏幕范围、虚拟屏、Shizuku、无障碍与 Root 授权</string>
+    <!-- ═══ #418 Harness 开发者选项（从 WebUI 开发者选项区迁入清理存储页） ═══ -->
+    <string name="qk_04303" formatted="false">Harness 开发者选项</string>
+    <string name="qk_04304" formatted="false">调试日志</string>
+    <string name="qk_04305" formatted="false">开启后按天写入 Documents/dshdata/log/dsh-&lt;日期&gt;.log。</string>
+    <string name="qk_04306" formatted="false">未授予「所有文件访问」：日志将写入应用私有目录，授权后自动切换公共目录。</string>
+    <string name="qk_04307" formatted="false">日志包含命令与模型内容，仅用于排查，请及时清理。</string>
+    <string name="qk_04308" formatted="false">悬浮球（任务面板入口）</string>
+    <string name="qk_04309" formatted="false">点开可看工具调用并随时停止；它不是手机控制页的虚拟屏浮窗。</string>
+    <string name="qk_04310" formatted="false">悬浮球已开启：任意界面可拖拽；点开面板实时查看工具调用，可一键停止</string>
+    <string name="qk_04311" formatted="false">悬浮球已关闭</string>
+    <string name="qk_04312" formatted="false">已打开系统授权页；授予后请重新打开本开关</string>
+    <string name="qk_04313" formatted="false">应用内连接不可用（悬浮球仅安卓应用内支持）——请重新打开应用后重试</string>
+    <string name="qk_04314" formatted="false">运行时缓存</string>
+    <string name="qk_04315">可回收 %1$s（%2$d 项）</string>
+    <string name="qk_04316" formatted="false">暂无可清理项（本版白名单内没有残留）</string>
+    <string name="qk_04317" formatted="false">读不到（不是 0——读取通道不可用或返回异常）</string>
+    <string name="qk_04318" formatted="false">确认清除运行时缓存？</string>
+    <string name="qk_04319">删除以下 %1$d 项，共 %2$s，无法恢复。会话、附件、凭据、设置、已装插件与当前引擎日志不受影响；失败项会如实列出。</string>
+    <string name="qk_04320" formatted="false">白名单制：只清理本版已知安全的引擎运行时残留。当前引擎日志、会话与附件、凭据、用户设置、已装插件一律不触碰；白名单外的路径逐项跳过并如实列出。</string>
+    <string name="qk_04321">已清理 %1$d 项，释放 %2$s（扫描值 %3$s）</string>
+    <string name="qk_04322">已清理 %1$d 项，释放 %2$s（扫描值 %3$s）；%4$d 项失败</string>
+    <string name="qk_04323" formatted="false">清理中…</string>
+    <string name="qk_04324" formatted="false">清理请求失败（仅安卓应用内有此能力）——请确认在本机应用内操作</string>
+    <string name="qk_04325" formatted="false">清理结果无法解析（响应不是预期的数据）——请重试；仍失败可复制日志反馈</string>
+    <string name="qk_04326" formatted="false">来件临时区（文件直达）</string>
+    <string name="qk_04327">占用 %1$s</string>
+    <string name="qk_04328" formatted="false">占用读不到（不是 0——读取通道不可用或返回异常）</string>
+    <string name="qk_04329" formatted="false">清理临时工作区？</string>
+    <string name="qk_04330" formatted="false">将删除文件直达（分享进来）的临时文件；相关会话中的文件引用会失效，无法恢复。会话本身、附件、配置与凭据不受影响。</string>
+    <string name="qk_04331">已清理本工具临时项（%1$d 项）——相关会话中的文件引用将失效</string>
+    <string name="qk_04332" formatted="false">清理未完成——请重试；仍失败可复制日志反馈</string>
+    <string name="qk_04333" formatted="false">重启引擎</string>
+    <string name="qk_04334" formatted="false">重启 ZorvAI？</string>
+    <string name="qk_04335" formatted="false">将终止并自动重新启动本地引擎与页面（约数秒）。未发送的内容会保留在输入框。</string>
+    <string name="qk_04336" formatted="false">重启没有发起：应用与页面的连接不可用，或已在重启中——请稍等几秒；仍无效请关闭并重新打开应用</string>
+    <string name="qk_04337" formatted="false">停止引擎</string>
+    <string name="qk_04338" formatted="false">停止引擎并退出到初始化界面？</string>
+    <string name="qk_04339" formatted="false">将停止本地引擎并退出到初始化界面；引擎不会自动重启，需手动再次启动。</string>
+    <string name="qk_04340" formatted="false">控制台</string>
+    <string name="qk_04341" formatted="false">运行时内嵌命令行；引擎没起来时也能用于诊断</string>
+    <string name="qk_04342" formatted="false">导出配置</string>
+    <string name="qk_04343">已导出到 %1$s</string>
+    <string name="qk_04344">导出失败：%1$s</string>
+    <string name="qk_04345" formatted="false">导入配置</string>
+    <string name="qk_04346" formatted="false">导入配置？</string>
+    <string name="qk_04347" formatted="false">将用 exports/config/settings.yaml 覆盖当前配置，原配置备份为 settings.yaml.import-backup。</string>
+    <string name="qk_04348">已导入并生效（原配置备份为 settings.yaml.import-backup）。%1$s</string>
+    <string name="qk_04349">导入失败：%1$s</string>
+    <string name="qk_04350" formatted="false">导出到 Documents/dshdata/exports/config/settings.yaml，改完点「导入配置」生效。导出不含 API 密钥。</string>
+    <string name="qk_04351" formatted="false">未知错误</string>
+    <string name="qk_04352" formatted="false">第三方模型能力在「设置 → 模型能力」里。</string>
+    <string name="qk_04353" formatted="false">提醒方式在「设置 → 通知」里。</string>
+    <string name="qk_04354" formatted="false">处理中…</string>
+    <string name="qk_04355" formatted="false">重启</string>
+    <string name="qk_04356" formatted="false">清理</string>
+    <string name="qk_04357" formatted="false">导入</string>
+    <string name="qk_04358" formatted="false">重启中…</string>
+    <string name="qk_04359" formatted="false">停止中…</string>
+    <string name="qk_04360" formatted="false">重新扫描</string>
+    <string name="qk_04361">已删除 %1$s</string>
+    <string name="qk_04362" formatted="false">失败</string>
+    <string name="qk_04363" formatted="false">跳过</string>
+    <string name="qk_04364" formatted="false">未列入白名单（本版不清理）</string>
+    <string name="qk_04365" formatted="false">不存在</string>
+    <string name="qk_04366" formatted="false">不可读</string>
+    <string name="qk_04367" formatted="false">日志目录未注入（应用未提供日志目录）</string>
+    <string name="qk_04368" formatted="false">当前引擎日志不在场（引擎未启动）</string>
+    <string name="qk_04369" formatted="false">属保留项</string>
+    <string name="qk_04370" formatted="false">越出白名单作用域（已拒绝）</string>
+    <string name="qk_04371" formatted="false">执行前已消失</string>
+    <string name="qk_04372" formatted="false">被执行中断跳过</string>
+    <string name="qk_04373" formatted="false">删除失败（文件被占用、只读或权限不足）</string>
+    <string name="qk_04374" formatted="false">原因未记录</string>
+    <string name="qk_04375" formatted="false">原因未在本版登记（可复制日志反馈）</string>
+    <string name="qk_04376" formatted="false">清理运行时缓存</string>
+    <string name="qk_04377" formatted="false">上次清理结果（逐项）</string>
+    <string name="qk_04378" formatted="false">白名单制：仅清理已知安全的引擎运行时残留</string>
+    <string name="qk_04379" formatted="false">清理会删除临时工作区内的外部文件；相关会话中的文件引用将失效。</string>
+    <string name="qk_04380" formatted="false">清理来件临时区</string>
+    <string name="qk_04381" formatted="false">终止并重新启动本地引擎（约数秒）</string>
+    <string name="qk_04382" formatted="false">停止后不会自动重启，需手动再次启动</string>
+    <string name="qk_04383" formatted="false">从 exports/config/settings.yaml 导入并生效</string>
+    <string name="qk_04384" formatted="false">运行时缓存清理结果</string>
+    <string name="qk_04385" formatted="false">正在扫描…</string>
+    <string name="qk_04386" formatted="false">跳过 %1$d 项（未识别/保留）</string>
+    <string name="qk_04387" formatted="false">停止</string>
+    <string name="qk_04388" formatted="false">压缩阀值（%）</string>
+    <string name="qk_04389" formatted="false">软精简阀值（%）</string>
+    <string name="qk_04390" formatted="false">上下文压缩阀值：历史+系统提示的估算用量达到上下文窗口的该比例时，开始从最旧轮次裁剪（始终保留系统提示），为回复预留余量。默认 80（留 20% 给回复）；100=打满才裁剪的旧行为。</string>
+    <string name="qk_04391" formatted="false">上下文软精简阀值：估算用量达到该比例时，才就地精简历史里超长的工具输出（保留头+尾+截断说明，工具调用与结果始终成对）；低于该比例不动工具结果原文。默认 50；0=永远精简的旧行为。</string>
+    <string name="qk_04392" formatted="false">授权（无障碍 / Shizuku）</string>
+    <string name="qk_04393" formatted="false">授权与安装都在「设置 → 权限」，本页只看状态与修复动作</string>
+    <string name="qk_04394" formatted="false">去「设置 → 权限」授权</string>
+    <string name="qk_04395" formatted="false">通知总开关</string>
+    <string name="qk_04396" formatted="false">关掉后 ZorvAI 的回复通知与工作台提醒都不再弹出</string>
+    <string name="qk_04397" formatted="false">Harness 权限设置（授权后的使用设置）</string>
+    <string name="qk_04398" formatted="false">Harness 权限设置</string>
+    <string name="qk_04399" formatted="false">本页只改 harness 的使用设置；无障碍与 Shizuku 的授权只在「设置 → 权限」</string>
+    <string name="qk_04400">%1$d / %2$d 就绪</string>
+    <string name="qk_04402" formatted="false">屏幕域</string>
+    <string name="qk_04403" formatted="false">特权域</string>
+    <string name="qk_04404" formatted="false">Root 域</string>
+    <string name="qk_04405" formatted="false">无障碍域</string>
+    <string name="qk_04408" formatted="false">刷新状态</string>
+    <string name="qk_04410" formatted="false">ZorvAI 无障碍与设备控制</string>
+    <string name="qk_04411" formatted="false">已在系统中开启 · 去查看</string>
+    <string name="qk_04412" formatted="false">让 AI 助手读取界面并执行点击、输入、滚动等操作</string>
+    <string name="qk_04413" formatted="false">清单读取失败（仅影响本页展示）</string>
+    <string name="qk_04414">%1$d 个组件 · 生成于 %2$s</string>
+    <string name="qk_04415" formatted="false">正在读取许可证清单…</string>
+    <string name="qk_04416" formatted="false">许可义务</string>
+    <string name="qk_04417">本应用以 %1$s 发布</string>
 </resources>

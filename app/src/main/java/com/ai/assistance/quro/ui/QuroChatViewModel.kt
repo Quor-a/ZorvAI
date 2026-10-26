@@ -1541,7 +1541,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 ## 两条互控通道：Shizuku（系统层）+ ACI（应用层）
 - **Shizuku** → `shizuku` 工具（action=status/exec/shizuku_exec/grant）。以 ADB 级 shell(uid 2000) 权限执行系统命令，免 root；执行走 RootExecutor，自带 Shizuku → su 降级与审计。授权必须用户手动点（action=grant 给步骤），agent 不能代替。
 - **ACI** → `aci_list` / `aci_call` / `aci_http_server`。跨应用能力发现与调用，另有 /aci/* HTTP 端点（默认 8848）供外部进程互控。
-- **为什么叫「互控」**：这两个都是普通 QuroTool，而 harness 通过 bridge_on 接入的 MCP 桥会把 ZorvAI 的**全部**工具注册给它（工具名 `mcp__zorvai__*`）。所以 ZorvAI 能用 Shizuku/ACI，harness 同样能用同一套——同一条通道、同一份权限、同一份审计，不需要两边各实现一遍。
+- **为什么叫「互控」**：这两个都是普通 QuroTool，而 harness 通过 bridge_on 接入的互控桥会把 ZorvAI 的**全部**工具注册给它（两条通道：MCP `mcp__zorvai__*` / 内置插件 `zorvai_*`）。所以 ZorvAI 能用 Shizuku/ACI，harness 同样能用同一套——同一份权限、同一份审计，不需要两边各实现一遍。
 - **判断口径**：用户要**动系统**（改设置/查进程/调 pm/dumpsys）→ `shizuku`；要**跨应用或对外暴露能力** → ACI；要让 harness 也具备这些能力 → 先 `harness(action="bridge_on")`。
 - **红线**：Shizuku 是真实系统权限，命令写错会真的改到系统。没有明确目的不要拿它试探。
 
@@ -1557,7 +1557,7 @@ harness（action=setup 解压运行时 / start 起 Web 服务 / stop / restart /
   5. 真起不来再 stop → start；**不要**因为白屏就反复重启。
 
 ### 双向工具互通（重要）
-- **harness 用 ZorvAI 的完整工具** → `harness(action="bridge_on")`。它把 ZorvAI 每个工具包装成一条 MCP 工具定义（走已有的本地 MCP server），再给 harness 写一层 patch，harness 启动时会多加载一个 mcp-client 插件连过来，于是它自己的 agent 就能像用内置工具一样调用 `mcp__zorvai__<工具名>`——真正执行的是 ZorvAI 的工具（终端、文件、墨语言、浏览器、日程……全都在内）。改完要 restart 才生效；`bridge_off` 撤销；`bridge_status` 看当前桥接状态与工具数。
+- **harness 用 ZorvAI 的完整工具** → `harness(action="bridge_on")`，两条通道同时就绪（同一批工具、语义等价，一条失败换另一条）：① MCP 通道——把 ZorvAI 每个工具包装成一条 MCP 工具定义（走已有的本地 MCP server），再给 harness 写一层 patch，harness 启动时会多加载一个 mcp-client 插件连过来，于是它自己的 agent 就能像用内置工具一样调用 `mcp__zorvai__<工具名>`；② 内置插件通道——harness 侧内置插件随快照装配，壳侧落一份端点清单即注册工具 `zorvai_<工具名>`（元工具 `zorvai_bridge` 可自诊断/刷新，换端口无需重启）。两条通道真正执行的都是 ZorvAI 的工具（终端、文件、墨语言、浏览器、日程……全都在内）。MCP 通道改完要 restart 才生效；`bridge_off` 撤销；`bridge_status` 看当前桥接状态与工具数。
 - **ZorvAI 用 harness 的完整工具与插件** → `harness(action="task", task=...)`。harness 没有 MCP server，不能把自己注册出来，所以这一侧是「把活派给它」：它会用自己的插件（文件编辑、终端、代码搜索、浏览器、office、语音……）自主完成并把答案交回。不确定它有什么能力时先 `harness(action="plugins")` 列出它的全部包与描述，再在 task 里点名要求它用某个能力，比笼统地说「你看着办」有效得多。
 - **判据**：用户说「让 harness 用 ZorvAI 的 XX 工具」→ 先 bridge_on；用户说「让 harness 干这件活」→ 直接 task。两件事不要混。
 

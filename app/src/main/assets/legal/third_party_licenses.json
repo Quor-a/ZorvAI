@@ -1,0 +1,1034 @@
+{
+ "schema": 1,
+ "generatedAt": "2026-10-26",
+ "app": {
+  "name": "ZorvAI",
+  "license": "Apache-2.0",
+  "source": "https://github.com/Quor-a/ZorvAI"
+ },
+ "total": 117,
+ "distribution": [
+  {
+   "license": "Apache-2.0",
+   "count": 38
+  },
+  {
+   "license": "MIT",
+   "count": 35
+  },
+  {
+   "license": "BSD-3-Clause",
+   "count": 5
+  },
+  {
+   "license": "SIL OFL-1.1",
+   "count": 4
+  },
+  {
+   "license": "EPL-2.0",
+   "count": 3
+  },
+  {
+   "license": "ISC",
+   "count": 3
+  },
+  {
+   "license": "MPL-2.0",
+   "count": 2
+  },
+  {
+   "license": "0BSD",
+   "count": 2
+  },
+  {
+   "license": "GPL-3.0-or-later",
+   "count": 2
+  },
+  {
+   "license": "LGPL-3.0-or-later",
+   "count": 2
+  },
+  {
+   "license": "混合（各软件包各自许可）",
+   "count": 2
+  },
+  {
+   "license": "Public Domain",
+   "count": 1
+  },
+  {
+   "license": "Bouncy Castle Licence",
+   "count": 1
+  },
+  {
+   "license": "BSD-style (Zetetic)",
+   "count": 1
+  },
+  {
+   "license": "PSF-2.0",
+   "count": 1
+  },
+  {
+   "license": "GPL-2.0-only",
+   "count": 1
+  },
+  {
+   "license": "GPL-2.0-or-later",
+   "count": 1
+  },
+  {
+   "license": "GPL-2.0",
+   "count": 1
+  },
+  {
+   "license": "见上游许可",
+   "count": 1
+  },
+  {
+   "license": "Python-2.0",
+   "count": 1
+  },
+  {
+   "license": "Unlicense",
+   "count": 1
+  },
+  {
+   "license": "LGPL-2.1",
+   "count": 1
+  },
+  {
+   "license": "GreenSock Standard License",
+   "count": 1
+  },
+  {
+   "license": "BSD-style (Adobe)",
+   "count": 1
+  },
+  {
+   "license": "BSD-2-Clause",
+   "count": 1
+  },
+  {
+   "license": "GPL-3.0（Termux 快照）+ 引擎内 MPL/LGPL",
+   "count": 1
+  },
+  {
+   "license": "Apache-2.0（语言）+ 运行时含 GPL",
+   "count": 1
+  },
+  {
+   "license": "Apache-2.0（框架）+ QuickJS MIT",
+   "count": 1
+  },
+  {
+   "license": "Apache-2.0（自研）+ EPL-2.0（ECJ 编译）",
+   "count": 1
+  },
+  {
+   "license": "EPL-2.0（ECJ）+ Apache-2.0（D8/apksigner/android.jar）",
+   "count": 1
+  }
+ ],
+ "categories": [
+  {
+   "id": "app",
+   "titleZh": "本应用",
+   "titleEn": "This application",
+   "entries": [
+    {
+     "name": "ZorvAI（本应用）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "本应用自身代码。仓库内含去品牌化移植的上游组件，其原始许可保留在各自文件头。",
+     "noteEn": "First-party code. De-branded ports of upstream components keep their original notices."
+    }
+   ]
+  },
+  {
+   "id": "feature",
+   "titleZh": "功能模块与第三方代码",
+   "titleEn": "Feature modules & bundled code",
+   "entries": [
+    {
+     "name": "LSPosed / Xposed 模块（app 自身即 opt-in 模块）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "本应用经 assets/xposed_init 注册为可选 LSPosed 模块（QuroXposedModule，自有代码 Apache-2.0）；Xposed API 仅以 compileOnly 引用 xposed-stub（最小 API 桩，并非 Xposed 框架的 GPL 源码），Xposed/LSPosed 框架类由运行时的 LSPosed 注入，**不随 APK 分发**，故本模块无 GPL 再分发义务。",
+     "noteEn": "本应用经 assets/xposed_init 注册为可选 LSPosed 模块（QuroXposedModule，自有代码 Apache-2.0）；Xposed API 仅以 compileOnly 引用 xposed-stub（最小 API 桩，并非 Xposed 框架的 GPL 源码），Xposed/LSPosed 框架类由运行时的 LSPosed 注入，**不随 APK 分发**，故本模块无 GPL 再分发义务。"
+    },
+    {
+     "name": "USB / 无线调试（Shizuku + 自研 ADB-over-TCP）",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "基于 Shizuku（MIT）的 ADB 级通道 + 自研无线调试配对流程；未 fork 任何 GPL 项目（如 LADB）。无 copyleft。",
+     "noteEn": "基于 Shizuku（MIT）的 ADB 级通道 + 自研无线调试配对流程；未 fork 任何 GPL 项目（如 LADB）。无 copyleft。"
+    },
+    {
+     "name": "DeepSeek Harness（dshmobile 模块）",
+     "license": "GPL-3.0（Termux 快照）+ 引擎内 MPL/LGPL",
+     "copyleft": 2,
+     "noteZh": "fork 自 kelai141/dsh-mobile-apk；内置 Termux 衍生运行时快照（Termux 基线 0.118.3，GPL-3.0，**强 copyleft 复核项**）与 npm 引擎（LibreOfficeKit MPL-2.0、libvips LGPL-3.0）。以独立可执行/动态库形式分发，不静态链接。",
+     "noteEn": "fork 自 kelai141/dsh-mobile-apk；内置 Termux 衍生运行时快照（Termux 基线 0.118.3，GPL-3.0，**强 copyleft 复核项**）与 npm 引擎（LibreOfficeKit MPL-2.0、libvips LGPL-3.0）。以独立可执行/动态库形式分发，不静态链接。"
+    },
+    {
+     "name": "墨语言 / Molang（terminal-core，自研语言）",
+     "license": "Apache-2.0（语言）+ 运行时含 GPL",
+     "copyleft": 0,
+     "noteZh": "墨语言为自研语言（MolangIso 等自有代码）；但其运行时捆绑 proot(GPL-2.0+)/BusyBox(GPL-2.0)/GNU Bash(GPL-3.0)/QEMU(GPL-2.0)/Ubuntu rootfs(GPL-3.0)。语言本身无 GPL，运行时见『内置运行时』分类。",
+     "noteEn": "墨语言为自研语言（MolangIso 等自有代码）；但其运行时捆绑 proot(GPL-2.0+)/BusyBox(GPL-2.0)/GNU Bash(GPL-3.0)/QEMU(GPL-2.0)/Ubuntu rootfs(GPL-3.0)。语言本身无 GPL，运行时见『内置运行时』分类。"
+    },
+    {
+     "name": "GenUI Agent（genuiagent-sdk）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "去品牌化移植自 Quor-a/GenUI-Agent（sdk 模块）；纯 Kotlin/Compose，无打包第三方库，无 GPL。",
+     "noteEn": "去品牌化移植自 Quor-a/GenUI-Agent（sdk 模块）；纯 Kotlin/Compose，无打包第三方库，无 GPL。"
+    },
+    {
+     "name": "APK 插件框架（plugin-* 系列）",
+     "license": "Apache-2.0（框架）+ QuickJS MIT",
+     "copyleft": 0,
+     "noteZh": "自有插件框架（DexClassLoader 加载独立插件 APK + QuickJS MIT 运行时）；示例插件均为自研，无第三方 GPL。",
+     "noteEn": "自有插件框架（DexClassLoader 加载独立插件 APK + QuickJS MIT 运行时）；示例插件均为自研，无第三方 GPL。"
+    },
+    {
+     "name": "工具包运行时（kaleidobox）",
+     "license": "Apache-2.0（自研）+ EPL-2.0（ECJ 编译）",
+     "copyleft": 0,
+     "noteZh": "去品牌化移植自 kaleido；设备内插件编译用 Eclipse ECJ（EPL-2.0，弱 copyleft）。无 GPL 源码打包。",
+     "noteEn": "去品牌化移植自 kaleido；设备内插件编译用 Eclipse ECJ（EPL-2.0，弱 copyleft）。无 GPL 源码打包。"
+    },
+    {
+     "name": "构建台（端侧 APK 编译）",
+     "license": "EPL-2.0（ECJ）+ Apache-2.0（D8/apksigner/android.jar）",
+     "copyleft": 1,
+     "noteZh": "端侧编译链：ECJ(EPL-2.0，弱 copyleft)、D8/R8(Apache-2.0)、apksigner(Apache-2.0)、android.jar(AOSP Apache-2.0)。无 GPL。",
+     "noteEn": "端侧编译链：ECJ(EPL-2.0，弱 copyleft)、D8/R8(Apache-2.0)、apksigner(Apache-2.0)、android.jar(AOSP Apache-2.0)。无 GPL。"
+    },
+    {
+     "name": "节点编辑器（自研 + Mermaid）",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "自研 HTML/SVG 节点图编辑器；仅导出预览用 Mermaid（MIT）。未使用 rete/litegraph/drawflow 等第三方图库。",
+     "noteEn": "自研 HTML/SVG 节点图编辑器；仅导出预览用 Mermaid（MIT）。未使用 rete/litegraph/drawflow 等第三方图库。"
+    },
+    {
+     "name": "小程序（miniapp-sdk 自研 C++ JS 引擎）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "自研 WXML/WXSS JS 引擎（miniapp-sdk，零外部依赖）+ WebView 运行时；所用 JS 库来自 assets/runtimes（MIT/Apache）。无 GPL。",
+     "noteEn": "自研 WXML/WXSS JS 引擎（miniapp-sdk，零外部依赖）+ WebView 运行时；所用 JS 库来自 assets/runtimes（MIT/Apache）。无 GPL。"
+    },
+    {
+     "name": "可视化编程（GenUI DSL + 动态 UI 解释器）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "自研：GenUI JSON DSL → Compose 原生渲染、动态 UI 解释器（QuroUiNode 等）；未使用 Blockly/Node-RED。无 GPL。",
+     "noteEn": "自研：GenUI JSON DSL → Compose 原生渲染、动态 UI 解释器（QuroUiNode 等）；未使用 Blockly/Node-RED。无 GPL。"
+    }
+   ]
+  },
+  {
+   "id": "android",
+   "titleZh": "Android / Jetpack / Compose",
+   "titleEn": "Android / Jetpack / Compose",
+   "entries": [
+    {
+     "name": "AndroidX（Core / AppCompat / Activity / Lifecycle / Navigation / Room / WorkManager / WebKit / Health Connect / DocumentFile / Annotation / DynamicAnimation / Concurrent-futures / SQLite）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "Google AndroidX 全系库，逐条取自各 artifact 的 Maven 元数据。",
+     "noteEn": "Google AndroidX 全系库，逐条取自各 artifact 的 Maven 元数据。"
+    },
+    {
+     "name": "Jetpack Compose（UI / Foundation / Material3 / Animation / Runtime）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "声明式 UI 框架（BOM 2026.01.01 统一版本）。",
+     "noteEn": "声明式 UI 框架（BOM 2026.01.01 统一版本）。"
+    },
+    {
+     "name": "Material Components for Android",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "Material Design 组件与主题。",
+     "noteEn": "Material Design 组件与主题。"
+    },
+    {
+     "name": "Coil（io.coil-kt:coil-compose）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "Compose 图片加载。",
+     "noteEn": "Compose 图片加载。"
+    },
+    {
+     "name": "AndroidSVG（com.caverock:androidsvg）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "SVG 渲染（GenUI 画布兜底）。",
+     "noteEn": "SVG 渲染（GenUI 画布兜底）。"
+    },
+    {
+     "name": "Facebook Yoga（com.facebook.yoga:yoga）",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "Flexbox 布局引擎。**注意旧清单标为 Apache-2.0，实测 Maven 元数据为 MIT。**",
+     "noteEn": "Flexbox 布局引擎。**注意旧清单标为 Apache-2.0，实测 Maven 元数据为 MIT。**"
+    },
+    {
+     "name": "ZXing Core（com.google.zxing:core）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "二维码编解码。",
+     "noteEn": "二维码编解码。"
+    },
+    {
+     "name": "android-image-cropper（com.vanniktech）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "图片裁剪。",
+     "noteEn": "图片裁剪。"
+    },
+    {
+     "name": "Shizuku（dev.rikka.shizuku:api / :provider）",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "ADB 级特权通道。**注意旧清单标为 Apache-2.0，实测 Maven 元数据为 MIT。**",
+     "noteEn": "ADB 级特权通道。**注意旧清单标为 Apache-2.0，实测 Maven 元数据为 MIT。**"
+    },
+    {
+     "name": "Markwon（core / ext-tables / ext-strikethrough）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "Markdown 渲染（GenUI 频道）。",
+     "noteEn": "Markdown 渲染（GenUI 频道）。"
+    },
+    {
+     "name": "kaml（com.charleskorn.kaml）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "YAML 解析（GenUI 扁平文档）。",
+     "noteEn": "YAML 解析（GenUI 扁平文档）。"
+    },
+    {
+     "name": "GeckoView（org.mozilla.geckoview）",
+     "license": "MPL-2.0",
+     "copyleft": 1,
+     "noteZh": "Gecko 浏览器内核（包内含 libxul.so / omni.ja / libnss3 网络安全服务）。弱 copyleft：仅在修改其源码文件时要求公开该文件。其二进制还含 Mozilla 的 lgpllibs 组件（LGPL-2.1）。",
+     "noteEn": "Gecko 浏览器内核（包内含 libxul.so / omni.ja / libnss3 网络安全服务）。弱 copyleft：仅在修改其源码文件时要求公开该文件。其二进制还含 Mozilla 的 lgpllibs 组件（LGPL-2.1）。"
+    }
+   ]
+  },
+  {
+   "id": "kotlin",
+   "titleZh": "Kotlin 生态",
+   "titleEn": "Kotlin ecosystem",
+   "entries": [
+    {
+     "name": "Kotlin 标准库 / 编译器插件",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "JetBrains Kotlin。",
+     "noteEn": "JetBrains Kotlin。"
+    },
+    {
+     "name": "kotlinx.coroutines",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "协程运行时。",
+     "noteEn": "协程运行时。"
+    },
+    {
+     "name": "kotlinx.serialization",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "JSON 序列化。",
+     "noteEn": "JSON 序列化。"
+    }
+   ]
+  },
+  {
+   "id": "javalibs",
+   "titleZh": "第三方 Java / Kotlin 库",
+   "titleEn": "Third-party Java / Kotlin libraries",
+   "entries": [
+    {
+     "name": "OkHttp（com.squareup.okhttp3）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "HTTP 客户端。",
+     "noteEn": "HTTP 客户端。"
+    },
+    {
+     "name": "org.json",
+     "license": "Public Domain",
+     "copyleft": 0,
+     "noteZh": "JSON 解析（20220924 起为公有领域）。",
+     "noteEn": "JSON 解析（20220924 起为公有领域）。"
+    },
+    {
+     "name": "Apache Commons Compress",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "压缩格式读写。",
+     "noteEn": "压缩格式读写。"
+    },
+    {
+     "name": "XZ for Java（org.tukaani:xz）",
+     "license": "0BSD",
+     "copyleft": 0,
+     "noteZh": "XZ 解压（Maven 元数据实测 0BSD）。",
+     "noteEn": "XZ 解压（Maven 元数据实测 0BSD）。"
+    },
+    {
+     "name": "Apache POI（poi / poi-ooxml）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "Office 文档读写。",
+     "noteEn": "Office 文档读写。"
+    },
+    {
+     "name": "StAX API（stax:stax-api）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "XML 流式解析 API。",
+     "noteEn": "XML 流式解析 API。"
+    },
+    {
+     "name": "Bouncy Castle（bcprov / bcpkix）",
+     "license": "Bouncy Castle Licence",
+     "copyleft": 0,
+     "noteZh": "端侧签名所需的密码学库（MIT 风格）。",
+     "noteEn": "端侧签名所需的密码学库（MIT 风格）。"
+    },
+    {
+     "name": "Apache MINA SSHD",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "内置 SSH 服务端。",
+     "noteEn": "内置 SSH 服务端。"
+    },
+    {
+     "name": "SLF4J（api / nop）",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "日志门面。",
+     "noteEn": "日志门面。"
+    },
+    {
+     "name": "Apache FtpServer",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "内置 FTP 服务端。",
+     "noteEn": "内置 FTP 服务端。"
+    },
+    {
+     "name": "Eclipse JGit",
+     "license": "EPL-2.0",
+     "copyleft": 1,
+     "noteZh": "纯 Java Git 实现。弱 copyleft：修改 JGit 源文件需公开该文件。",
+     "noteEn": "纯 Java Git 实现。弱 copyleft：修改 JGit 源文件需公开该文件。"
+    },
+    {
+     "name": "SQLCipher for Android（net.zetetic）",
+     "license": "BSD-style (Zetetic)",
+     "copyleft": 0,
+     "noteZh": "加密 SQLite（集群数据库）。",
+     "noteEn": "加密 SQLite（集群数据库）。"
+    },
+    {
+     "name": "JUnit 4",
+     "license": "EPL-2.0",
+     "copyleft": 1,
+     "noteZh": "单元测试（不随发布包分发）。",
+     "noteEn": "单元测试（不随发布包分发）。"
+    }
+   ]
+  },
+  {
+   "id": "engines",
+   "titleZh": "离线模型引擎",
+   "titleEn": "On-device model engines",
+   "entries": [
+    {
+     "name": "MNN（Alibaba Mobile Neural Network）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "端侧推理引擎（源码编译，full flavor）。",
+     "noteEn": "端侧推理引擎（源码编译，full flavor）。"
+    },
+    {
+     "name": "llama.cpp",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "GGUF 推理（源码编译，full flavor）。",
+     "noteEn": "GGUF 推理（源码编译，full flavor）。"
+    },
+    {
+     "name": "ncnn（Tencent）",
+     "license": "BSD-3-Clause",
+     "copyleft": 0,
+     "noteZh": "端侧推理（libncnn.so）。",
+     "noteEn": "端侧推理（libncnn.so）。"
+    },
+    {
+     "name": "Sherpa-NCNN（k2-fsa）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "端侧语音识别/合成（Kotlin 封装源码 + 预编译 .so）。",
+     "noteEn": "端侧语音识别/合成（Kotlin 封装源码 + 预编译 .so）。"
+    },
+    {
+     "name": "语音模型权重（MeloTTS 等）",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "随包模型权重按其上游模型卡许可分发（多为 MIT，允许商用）。",
+     "noteEn": "随包模型权重按其上游模型卡许可分发（多为 MIT，允许商用）。"
+    },
+    {
+     "name": "MNN 第三方依赖（flatbuffers / protobuf / rapidjson / half / glm）",
+     "license": "Apache-2.0 / BSD-3-Clause / MIT",
+     "copyleft": 0,
+     "noteZh": "随 MNN 编译进 libMNNWrapper.so：flatbuffers=Apache-2.0、protobuf=BSD-3-Clause、rapidjson=MIT、half=MIT、glm=MIT（已逐份比对各 3rd_party LICENSE）。",
+     "noteEn": "随 MNN 编译进 libMNNWrapper.so：flatbuffers=Apache-2.0、protobuf=BSD-3-Clause、rapidjson=MIT、half=MIT、glm=MIT（已逐份比对各 3rd_party LICENSE）。"
+    },
+    {
+     "name": "Arm KleidiAI（MNN Arm 后端）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "MNN 的 Arm 指令优化后端（kleidiai），编译进 libMNNWrapper.so。",
+     "noteEn": "MNN 的 Arm 指令优化后端（kleidiai），编译进 libMNNWrapper.so。"
+    },
+    {
+     "name": "llama.cpp 第三方依赖（cpp-httplib / nlohmann-json / big-integer / nerdamer）",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "随 llama.cpp 编译进 libLlamaWrapper.so：cpp-httplib=MIT、nlohmann-json(jsonhpp)=MIT、big-integer=MIT、nerdamer=MIT。",
+     "noteEn": "随 llama.cpp 编译进 libLlamaWrapper.so：cpp-httplib=MIT、nlohmann-json(jsonhpp)=MIT、big-integer=MIT、nerdamer=MIT。"
+    },
+    {
+     "name": "Sherpa-NCNN 依赖（k2-fsa）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "端侧语音前后端，随 sherpa-ncnn 编译。",
+     "noteEn": "端侧语音前后端，随 sherpa-ncnn 编译。"
+    }
+   ]
+  },
+  {
+   "id": "runtimes",
+   "titleZh": "内置运行时与原生工具",
+   "titleEn": "Bundled runtimes & native tools",
+   "entries": [
+    {
+     "name": "Node.js（含 V8 / OpenSSL / ICU / zlib）",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "内置 agent 引擎的运行时。V8 为 BSD-3-Clause、OpenSSL 为 Apache-2.0、ICU 为 Unicode 许可。",
+     "noteEn": "内置 agent 引擎的运行时。V8 为 BSD-3-Clause、OpenSSL 为 Apache-2.0、ICU 为 Unicode 许可。"
+    },
+    {
+     "name": "Python 3.14（含 OpenSSL / SQLite / zlib）",
+     "license": "PSF-2.0",
+     "copyleft": 0,
+     "noteZh": "内置 Python 运行时（libpython3.14.so 等）。",
+     "noteEn": "内置 Python 运行时（libpython3.14.so 等）。"
+    },
+    {
+     "name": "GNU Bash",
+     "license": "GPL-3.0-or-later",
+     "copyleft": 2,
+     "noteZh": "终端 shell。强 copyleft：源码随仓库提供（源码获取见 NOTICE）。",
+     "noteEn": "终端 shell。强 copyleft：源码随仓库提供（源码获取见 NOTICE）。"
+    },
+    {
+     "name": "BusyBox",
+     "license": "GPL-2.0-only",
+     "copyleft": 2,
+     "noteZh": "常用命令集（ls/grep/find 等）。强 copyleft：源码随仓库提供。",
+     "noteEn": "常用命令集（ls/grep/find 等）。强 copyleft：源码随仓库提供。"
+    },
+    {
+     "name": "proot",
+     "license": "GPL-2.0-or-later",
+     "copyleft": 2,
+     "noteZh": "无 root 的 chroot/挂载重定向。强 copyleft：源码随仓库提供。",
+     "noteEn": "无 root 的 chroot/挂载重定向。强 copyleft：源码随仓库提供。"
+    },
+    {
+     "name": "talloc",
+     "license": "LGPL-3.0-or-later",
+     "copyleft": 1,
+     "noteZh": "proot 依赖的内存池库。弱 copyleft。",
+     "noteEn": "proot 依赖的内存池库。弱 copyleft。"
+    },
+    {
+     "name": "sudo",
+     "license": "ISC",
+     "copyleft": 0,
+     "noteZh": "特权命令包装（内置终端）。",
+     "noteEn": "特权命令包装（内置终端）。"
+    },
+    {
+     "name": "box64",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "x86_64 → arm64 指令翻译（部分内置通道）。",
+     "noteEn": "x86_64 → arm64 指令翻译（部分内置通道）。"
+    },
+    {
+     "name": "Zig（mo-cc.pack）",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "墨语言工具链的 C 编译器后端。",
+     "noteEn": "墨语言工具链的 C 编译器后端。"
+    },
+    {
+     "name": "QEMU（qemu-x86_64-static，molang-ubuntu-addon.pack）",
+     "license": "GPL-2.0",
+     "copyleft": 2,
+     "noteZh": "墨语言⇢Ubuntu 通道的用户态指令翻译器。强 copyleft。",
+     "noteEn": "墨语言⇢Ubuntu 通道的用户态指令翻译器。强 copyleft。"
+    },
+    {
+     "name": "termux-exec / libandroid-support",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "Termux 生态的 exec 钩子与兼容层（Android 15+ 走 linker64 的前提）。",
+     "noteEn": "Termux 生态的 exec 钩子与兼容层（Android 15+ 走 linker64 的前提）。"
+    },
+    {
+     "name": "ripgrep",
+     "license": "MIT OR Unlicense",
+     "copyleft": 0,
+     "noteZh": "glob / grep 工具的搜索引擎（随包替换为 Android PIE 构建）。",
+     "noteEn": "glob / grep 工具的搜索引擎（随包替换为 Android PIE 构建）。"
+    },
+    {
+     "name": "PCRE2",
+     "license": "BSD-3-Clause",
+     "copyleft": 0,
+     "noteZh": "ripgrep 的 PCRE 后端（libpcre2-8.so）。",
+     "noteEn": "ripgrep 的 PCRE 后端（libpcre2-8.so）。"
+    },
+    {
+     "name": "QuickJS（Fabrice Bellard）",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "插件运行时的 JS 引擎，源码直接编译进 libquroplugin.so（app/src/main/jni/quickjs）。",
+     "noteEn": "插件运行时的 JS 引擎，源码直接编译进 libquroplugin.so（app/src/main/jni/quickjs）。"
+    },
+    {
+     "name": "Termux terminal-emulator（termux.c + libtermux-terminal.so）",
+     "license": "GPL-3.0-or-later",
+     "copyleft": 2,
+     "noteZh": "终端仿真核心（app/src/main/jni/termux/termux.c 与 libtermux-terminal.so），与上游 termux-app 实现一致；上游 termux-app 为 GPL-3.0。**本次审计新发现，属需复核的强 copyleft 项**：若要保持整包仅 Apache-2.0，需替换/重写该桥或按 GPL 义务提供源码。注意：dshmobile/dsh-shell-termux 是**另一组件（MIT）**，与此 GPL 终端库无关。",
+     "noteEn": "终端仿真核心（app/src/main/jni/termux/termux.c 与 libtermux-terminal.so），与上游 termux-app 实现一致；上游 termux-app 为 GPL-3.0。**本次审计新发现，属需复核的强 copyleft 项**：若要保持整包仅 Apache-2.0，需替换/重写该桥或按 GPL 义务提供源码。注意：dshmobile/dsh-shell-termux 是**另一组件（MIT）**，与此 GPL 终端库无关。"
+    },
+    {
+     "name": "dsh-shell-termux（harness 终端壳）",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "DeepSeek Harness 的 termux 风格 shell 包装（dshmobile/dsh-shell-termux，MIT）。与上方 termux-app 的 GPL 终端库是不同组件，本项无 copyleft 义务。",
+     "noteEn": "DeepSeek Harness 的 termux 风格 shell 包装（dshmobile/dsh-shell-termux，MIT）。与上方 termux-app 的 GPL 终端库是不同组件，本项无 copyleft 义务。"
+    },
+    {
+     "name": "Eclipse Compiler for Java（ECJ）",
+     "license": "EPL-2.0",
+     "copyleft": 1,
+     "noteZh": "端侧 APK 构建用的 Java 编译器（assets/libs/common/ecj*.jar）。弱 copyleft。",
+     "noteEn": "端侧 APK 构建用的 Java 编译器（assets/libs/common/ecj*.jar）。弱 copyleft。"
+    },
+    {
+     "name": "D8 / R8（AOSP）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "dex 编译器与压缩器（assets/libs/common/d8*.jar）。",
+     "noteEn": "dex 编译器与压缩器（assets/libs/common/d8*.jar）。"
+    },
+    {
+     "name": "Android 平台库 android.jar（AOSP）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "端侧编译用的 Android 框架桩（assets/libs/common/android.jar）。",
+     "noteEn": "端侧编译用的 Android 框架桩（assets/libs/common/android.jar）。"
+    }
+   ]
+  },
+  {
+   "id": "engine_npm",
+   "titleZh": "内置 agent 引擎（DeepSeek Harness）",
+   "titleEn": "Bundled agent engine (DeepSeek Harness)",
+   "entries": [
+    {
+     "name": "DeepSeek Harness 引擎（@deepseek-ai/* 包）",
+     "license": "见上游许可",
+     "copyleft": 0,
+     "noteZh": "内置 agent 引擎本体与其 dsh-* 包，许可以上游仓库声明为准。",
+     "noteEn": "内置 agent 引擎本体与其 dsh-* 包，许可以上游仓库声明为准。"
+    },
+    {
+     "name": "引擎内第三方 npm 包（约 900 个）",
+     "license": "MIT / Apache-2.0 / BSD / ISC 等",
+     "copyleft": 0,
+     "noteZh": "内置 agent 引擎本体（dsh-runtime.pack 内约 556 个：MIT 468 / Apache-2.0 53 / BSD-3-Clause 15 /ISC 10 / MPL-2.0 2 / LGPL-3.0 2 / BSD-2-Clause 2 / 0BSD 1 / Public-Domain 2）与 harness 响应式前端（dsh-client-ui-responsive 内 343 个：MIT 320 / ISC 8 / Apache-2.0 4 /BSD-3-Clause 4 / BSD-2-Clause 2 / MPL-2.0 2 / MIT-0 1 / Python-2.0 1 / CC0-1.0 1）合计约 900 个。",
+     "noteEn": "内置 agent 引擎本体（dsh-runtime.pack 内约 556 个：MIT 468 / Apache-2.0 53 / BSD-3-Clause 15 /ISC 10 / MPL-2.0 2 / LGPL-3.0 2 / BSD-2-Clause 2 / 0BSD 1 / Public-Domain 2）与 harness 响应式前端（dsh-client-ui-responsive 内 343 个：MIT 320 / ISC 8 / Apache-2.0 4 /BSD-3-Clause 4 / BSD-2-Clause 2 / MPL-2.0 2 / MIT-0 1 / Python-2.0 1 / CC0-1.0 1）合计约 900 个。"
+    },
+    {
+     "name": "LibreOffice Kit（@deepseek-ai/libreoffice-kit / -wasm）",
+     "license": "MPL-2.0",
+     "copyleft": 1,
+     "noteZh": "文档转换的 LibreOffice wasm 构建。弱 copyleft：修改其源文件需公开该文件。",
+     "noteEn": "文档转换的 LibreOffice wasm 构建。弱 copyleft：修改其源文件需公开该文件。"
+    },
+    {
+     "name": "libvips（@img/sharp-libvips-*）",
+     "license": "LGPL-3.0-or-later",
+     "copyleft": 1,
+     "noteZh": "sharp 的图像处理后端。弱 copyleft：以动态链接方式使用，可替换其 .so。",
+     "noteEn": "sharp 的图像处理后端。弱 copyleft：以动态链接方式使用，可替换其 .so。"
+    },
+    {
+     "name": "sharp（@img/sharp-*）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "图像编解码（read_image 工具）。",
+     "noteEn": "图像编解码（read_image 工具）。"
+    },
+    {
+     "name": "tslib",
+     "license": "0BSD",
+     "copyleft": 0,
+     "noteZh": "TypeScript 运行时助手。",
+     "noteEn": "TypeScript 运行时助手。"
+    },
+    {
+     "name": "argparse（node）",
+     "license": "Python-2.0",
+     "copyleft": 0,
+     "noteZh": "CLI 参数解析。",
+     "noteEn": "CLI 参数解析。"
+    },
+    {
+     "name": "fast-sha256",
+     "license": "Unlicense",
+     "copyleft": 0,
+     "noteZh": "SHA-256 实现。",
+     "noteEn": "SHA-256 实现。"
+    }
+   ]
+  },
+  {
+   "id": "frontend",
+   "titleZh": "随包前端库",
+   "titleEn": "Bundled front-end libraries",
+   "entries": [
+    {
+     "name": "Three.js",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "3D 渲染。",
+     "noteEn": "3D 渲染。"
+    },
+    {
+     "name": "Draco（Google）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "3D 网格压缩解码。",
+     "noteEn": "3D 网格压缩解码。"
+    },
+    {
+     "name": "Babylon.js",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "3D 引擎（runtimes/babylon.min.js）。",
+     "noteEn": "3D 引擎（runtimes/babylon.min.js）。"
+    },
+    {
+     "name": "p5.js",
+     "license": "LGPL-2.1",
+     "copyleft": 1,
+     "noteZh": "创意编程库。弱 copyleft（以未修改的原文件分发）。",
+     "noteEn": "创意编程库。弱 copyleft（以未修改的原文件分发）。"
+    },
+    {
+     "name": "D3.js",
+     "license": "ISC",
+     "copyleft": 0,
+     "noteZh": "数据驱动可视化。**旧 NOTICE 未标许可证，实测 ISC。**",
+     "noteEn": "数据驱动可视化。**旧 NOTICE 未标许可证，实测 ISC。**"
+    },
+    {
+     "name": "ECharts（Apache）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "图表库。",
+     "noteEn": "图表库。"
+    },
+    {
+     "name": "Chart.js",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "图表库。",
+     "noteEn": "图表库。"
+    },
+    {
+     "name": "Plotly.js",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "图表库。",
+     "noteEn": "图表库。"
+    },
+    {
+     "name": "KaTeX",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "数学公式排版（JS 为 MIT；其字体 KaTeX_*.ttf 为 SIL OFL-1.1，随 dsh 前端打包）。",
+     "noteEn": "数学公式排版（JS 为 MIT；其字体 KaTeX_*.ttf 为 SIL OFL-1.1，随 dsh 前端打包）。"
+    },
+    {
+     "name": "marked.js",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "Markdown 渲染。",
+     "noteEn": "Markdown 渲染。"
+    },
+    {
+     "name": "highlight.js",
+     "license": "BSD-3-Clause",
+     "copyleft": 0,
+     "noteZh": "代码高亮。",
+     "noteEn": "代码高亮。"
+    },
+    {
+     "name": "Mermaid",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "图表与流程图。",
+     "noteEn": "图表与流程图。"
+    },
+    {
+     "name": "CodeMirror",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "代码编辑器。",
+     "noteEn": "代码编辑器。"
+    },
+    {
+     "name": "Brython",
+     "license": "BSD-3-Clause",
+     "copyleft": 0,
+     "noteZh": "浏览器内 Python。",
+     "noteEn": "浏览器内 Python。"
+    },
+    {
+     "name": "Vue 3 / Vue Router",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "前端框架。",
+     "noteEn": "前端框架。"
+    },
+    {
+     "name": "React / ReactDOM",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "前端框架（runtimes/）。",
+     "noteEn": "前端框架（runtimes/）。"
+    },
+    {
+     "name": "Element Plus",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "Vue 组件库。",
+     "noteEn": "Vue 组件库。"
+    },
+    {
+     "name": "Bootstrap",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "CSS 框架。",
+     "noteEn": "CSS 框架。"
+    },
+    {
+     "name": "Tailwind CSS（浏览器构建）",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "原子化 CSS。",
+     "noteEn": "原子化 CSS。"
+    },
+    {
+     "name": "Swiper",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "轮播组件。",
+     "noteEn": "轮播组件。"
+    },
+    {
+     "name": "Alpine.js",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "轻量响应式框架。",
+     "noteEn": "轻量响应式框架。"
+    },
+    {
+     "name": "Matter.js",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "2D 物理引擎。",
+     "noteEn": "2D 物理引擎。"
+    },
+    {
+     "name": "anime.js",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "动画引擎。",
+     "noteEn": "动画引擎。"
+    },
+    {
+     "name": "Zdog",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "伪 3D 绘制。",
+     "noteEn": "伪 3D 绘制。"
+    },
+    {
+     "name": "Obelisk.js",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "等距像素绘制。",
+     "noteEn": "等距像素绘制。"
+    },
+    {
+     "name": "CountUp.js",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "数字滚动。",
+     "noteEn": "数字滚动。"
+    },
+    {
+     "name": "htm",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "JSX 替代模板。",
+     "noteEn": "JSX 替代模板。"
+    },
+    {
+     "name": "Dexie.js",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "IndexedDB 封装。",
+     "noteEn": "IndexedDB 封装。"
+    },
+    {
+     "name": "Lucide（图标）",
+     "license": "ISC",
+     "copyleft": 0,
+     "noteZh": "界面图标集（res/drawable 内的矢量图标由其改写）。",
+     "noteEn": "界面图标集（res/drawable 内的矢量图标由其改写）。"
+    },
+    {
+     "name": "GSAP（GreenSock）",
+     "license": "GreenSock Standard License",
+     "copyleft": 0,
+     "noteZh": "动画库。**非 OSI 开源许可**：允许免费用于大多数场景，但再分发/商业插件条款独立，本项目仅以未修改的原文件随包分发。",
+     "noteEn": "动画库。**非 OSI 开源许可**：允许免费用于大多数场景，但再分发/商业插件条款独立，本项目仅以未修改的原文件随包分发。"
+    }
+   ]
+  },
+  {
+   "id": "docs",
+   "titleZh": "文档处理与字体",
+   "titleEn": "Document processing & fonts",
+   "entries": [
+    {
+     "name": "pdf.js（Mozilla）",
+     "license": "Apache-2.0",
+     "copyleft": 0,
+     "noteZh": "PDF 渲染与预览。",
+     "noteEn": "PDF 渲染与预览。"
+    },
+    {
+     "name": "Adobe CMap Resources",
+     "license": "BSD-style (Adobe)",
+     "copyleft": 0,
+     "noteZh": "CJK PDF 的 CMap 映射表。",
+     "noteEn": "CJK PDF 的 CMap 映射表。"
+    },
+    {
+     "name": "Mammoth.js",
+     "license": "BSD-2-Clause",
+     "copyleft": 0,
+     "noteZh": "docx → HTML。",
+     "noteEn": "docx → HTML。"
+    },
+    {
+     "name": "SheetJS（xlsx.js）",
+     "license": "MIT",
+     "copyleft": 0,
+     "noteZh": "电子表格读写。包内为 npm xlsx@0.18.5（MIT）；注意 SheetJS 官方 CDN ≥0.19 已转 GPLv3，须确认来源版本 ≤0.18.5（已核验包内文件无 GPL 声明，与 MIT 版一致）。",
+     "noteEn": "电子表格读写。包内为 npm xlsx@0.18.5（MIT）；注意 SheetJS 官方 CDN ≥0.19 已转 GPLv3，须确认来源版本 ≤0.18.5（已核验包内文件无 GPL 声明，与 MIT 版一致）。"
+    },
+    {
+     "name": "Liberation Sans",
+     "license": "SIL OFL-1.1",
+     "copyleft": 0,
+     "noteZh": "PDF 标准字体（可自由嵌入）。",
+     "noteEn": "PDF 标准字体（可自由嵌入）。"
+    },
+    {
+     "name": "Foxit PDF Fonts（PDFium）",
+     "license": "BSD-3-Clause",
+     "copyleft": 0,
+     "noteZh": "PDF 标准 14 字体替代。",
+     "noteEn": "PDF 标准 14 字体替代。"
+    },
+    {
+     "name": "Inter",
+     "license": "SIL OFL-1.1",
+     "copyleft": 0,
+     "noteZh": "界面字体（runtimes/fonts）。",
+     "noteEn": "界面字体（runtimes/fonts）。"
+    },
+    {
+     "name": "JetBrains Mono",
+     "license": "SIL OFL-1.1",
+     "copyleft": 0,
+     "noteZh": "等宽字体（runtimes/fonts）。",
+     "noteEn": "等宽字体（runtimes/fonts）。"
+    },
+    {
+     "name": "Space Grotesk",
+     "license": "SIL OFL-1.1",
+     "copyleft": 0,
+     "noteZh": "标题字体（runtimes/fonts）。",
+     "noteEn": "标题字体（runtimes/fonts）。"
+    }
+   ]
+  },
+  {
+   "id": "system",
+   "titleZh": "系统镜像",
+   "titleEn": "System image",
+   "entries": [
+    {
+     "name": "Ubuntu 24.04 LTS（Noble，aarch64 rootfs）",
+     "license": "混合（各软件包各自许可）",
+     "copyleft": 0,
+     "noteZh": "内置的 Ubuntu 用户空间含数百个软件包，各自按其上游许可分发（GPL/LGPL/MIT/Apache 等）；完整清单见镜像内 /usr/share/doc/*/copyright。",
+     "noteEn": "内置的 Ubuntu 用户空间含数百个软件包，各自按其上游许可分发（GPL/LGPL/MIT/Apache 等）；完整清单见镜像内 /usr/share/doc/*/copyright。"
+    },
+    {
+     "name": "Alpine Linux 环境（assets/linux_env）",
+     "license": "混合（各软件包各自许可）",
+     "copyleft": 0,
+     "noteZh": "轻量 Linux 用户空间，各包按其上游许可分发。",
+     "noteEn": "轻量 Linux 用户空间，各包按其上游许可分发。"
+    }
+   ]
+  }
+ ],
+ "notice": {
+  "zh": "本应用自身以 Apache-2.0 发布。上表标注为 GPL（强 copyleft）的组件（proot、BusyBox、GNU Bash、QEMU、Ubuntu rootfs、Termux 终端仿真、dshmobile 的 Termux 运行时快照）以**独立可执行程序 / 动态库**形式随包分发，本应用不与其静态链接、不修改其源码；对应源码可从各上游项目获取，或在仓库 NOTICE 中列出的地址获取。其中两处属**需复核项**：① Termux 终端库（GPL-3.0）编译进了应用自身的 libtermux-terminal.so；② dshmobile 的 Termux 衍生运行时快照（Termux 基线 0.118.3，GPL-3.0）随 DeepSeek Harness 分发。LGPL / MPL / EPL 组件（talloc、libvips、p5.js、LibreOffice Kit、GeckoView 及其 lgpllibs、JGit、ECJ）以**未修改**形式动态链接或原文件分发，如需替换其版本可自行重新打包。",
+  "en": "This application is licensed under Apache-2.0. Components marked GPL (strong copyleft: proot, BusyBox, GNU Bash, QEMU, Ubuntu rootfs, Termux terminal, dshmobile Termux runtime snapshot) ship as separate executables or dynamic libraries; the app neither statically links them nor modifies their sources. Two are review items: ① the Termux terminal library (GPL-3.0) is compiled into the app's own libtermux-terminal.so; ② the dshmobile Termux-derived runtime snapshot (Termux baseline 0.118.3, GPL-3.0) ships with DeepSeek Harness. LGPL / MPL / EPL components (talloc, libvips, p5.js, LibreOffice Kit, GeckoView + its lgpllibs, JGit, ECJ) are used unmodified, linked dynamically or shipped as original files."
+ }
+}

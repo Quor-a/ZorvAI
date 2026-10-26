@@ -170,7 +170,7 @@ class DeepSeekHarness(private val context: Context) {
          * dsh 壳」只能靠它。它同时进 `diagnose()` 输出与 HarnessScreen 顶栏 —— 界面上看不到戳，
          * 就等于装错包，这一条是出包自证链的一部分（同 LANXIU / Moyu 的做法）。
          */
-        const val BUILD_STAMP = "B20261025-1424"
+        const val BUILD_STAMP = "B20261026-1731"
 
         @Volatile
         private var instance: DeepSeekHarness? = null
@@ -506,10 +506,10 @@ class DeepSeekHarness(private val context: Context) {
         runCatching { applyRuntimePatches() }
             .onFailure { Log.w(TAG, "应用运行时补丁失败", it) }
 
-        // 挂上宿主的手机能力：把 ZorvAI 的全部工具经 MCP 桥注册给引擎，
+        // 挂上宿主的手机能力：把 ZorvAI 的全部工具经互控桥注册给引擎，
         // harness 的 agent 于是能直接用 read_screen / tap_screen / swipe_screen /
-        // launch_app / shizuku_exec / screenshot 等 —— 与「壳侧不直接注册工具、
-        // AI 可见能力全部来自插件」是同一个思路，只是这里走 MCP 而不是插件。
+        // launch_app / shizuku_exec / screenshot 等 —— 两条通道：MCP（patch 启动期读）
+        // + 内置插件（端点清单零配置发现）；ensureBridge 幂等，每次 spawn 前重写端点。
         runCatching {
             HarnessBridgeHook.ensureBridge?.invoke(context)?.let { msg ->
                 appendLog("[能力桥] $msg")

@@ -166,10 +166,10 @@ exportConfig返回实际path与可能含provider密钥的共享目录警告hint�
 | 方向 | 方法 | 位置 | 说明 |
 |---|---|---|---|
 | 壳 → 页面 | `window.__dshOpenSession(sessionId): boolean` | `dsh-client-ui-responsive/src/client/mobile/notify-landing.ts`（`apply` 里挂到 window） | 通知落点的**页面半**：切到目标会话。契约 = **同步返回 boolean**（true 已确认切换 / false 未切过去），壳侧 `MainActivity.deliverNotifyRoute` 依 evaluateJavascript 回执给可见提示。判据不做事后无验证的成功声明：未加载的会话先 `open()` 再回头确认 `scope()` |
-| 页面 → 壳 | `notifySelfCheck()` | AndroidBridge（默认实现读 `ShellAppContext`）→ `NotifyCenter.selfCheck` | 每渠道**系统实际状态**（enabled/importance/是否被降级）JSON。默认实现钉在真源上、不依赖 MainActivity 传参（漏接线这一失效形态从结构上消失） |
-| 页面 → 壳 | `openNotifyAppSettings()` | AndroidBridge → MainActivity → `NotifyCenter.appSettingsIntent` | 系统「本应用通知设置」深链；返回 boolean，false = 该 ROM 无此页（页面如实提示，不假装拉起过） |
-| 页面 → 壳 | `openNotifyChannelSettings(channelId)` | AndroidBridge → MainActivity → `NotifyCenter.channelSettingsIntent` | 渠道级深链；channelId 来自 `notifySelfCheck` 回执 |
-| 同上（页面消费） | — | `src/client/dev-section/notify-settings.tsx` | 「通知自检」+「系统通知设置」两枚入口 + 每渠道一行「系统实际状态 + 打开该渠道设置」；五类开关各配一句「关掉会怎样」（提问/授权两类写明「关闭 = 不弹窗，仍可作答」） |
+| 页面 → 壳 | ~~`notifySelfCheck()`~~ | 已删除（#429：AndroidBridge/MainActivity 接线 + 页面 `dev-section/notify-settings.tsx`） | 每渠道**系统实际状态**JSON。原默认实现读 `ShellAppContext` → `NotifyCenter.selfCheck`；#429 通知设置整体迁入 ZorvAI 设置（壳侧 `ui/HarnessNotifyScreen.kt` 直调 `NotifyCenter` 单例），WebUI 桥面退场 |
+| 页面 → 壳 | ~~`openNotifyAppSettings()`~~ | 已删除（#429：AndroidBridge/MainActivity 接线 + 页面 `dev-section/notify-settings.tsx`） | 系统「本应用通知设置」深链；现由壳侧 `HarnessNotifyScreen.kt` 自行 `startActivity(NotifyCenter.appSettingsIntent(context))` |
+| 页面 → 壳 | ~~`openNotifyChannelSettings(channelId)`~~ | 已删除（#429：AndroidBridge/MainActivity 接线 + 页面 `dev-section/notify-settings.tsx`） | 渠道级深链；现由壳侧 `HarnessNotifyScreen.kt` 自行 `startActivity(NotifyCenter.channelSettingsIntent(context, channelId))` |
+| 同上（页面消费） | — | ~~`src/client/dev-section/notify-settings.tsx`~~ | 已删除（#429：文件随 WebUI 通知分区整体删除）。同批退场的还有 `getNotifySetting` / `setNotifySetting` / `notifySendTest` 三个桥方法与 `dev-section.css.ts`；通知**落点**（点通知打开对应会话）不属设置分区，保留在 `mobile/notify-landing.ts` |
 | 壳侧语义变更 | — | `NotifyCenter.Face.interactive` | 交互类（question/approval）类别关闭 ⇒ **降级为静默渠道**（不弹窗不响铃、仍投递、仍可作答），不再 `return DISABLED`；非交互类（report/todo/silent）才允许丢弃 |
 | 壳侧载荷修正 | `dsh.notify.*` extras | `NotifyCenter.EXTRA_KIND / EXTRA_TARGET_SESSION / EXTRA_TARGET_AGENT` | 旧实现把 `sessionId` 与 `agentId` **依次写进同一个 key**（后写覆盖先写）。现按键语义拆开，读取者 = `MainActivity.consumeNotifyRoute` / `onNewIntent` |
 

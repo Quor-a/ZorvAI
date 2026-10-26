@@ -127,59 +127,11 @@ class AndroidBridge(
    */
   private val onRequestShizukuPermission: () -> String =
     { """{"ok":false,"code":"shizuku-not-wired"}""" },
-  /**
-   * 0.14.1 块J FIX-4：通知设置**读**面（key 为空 = 全量快照）。
-   *
-   * 默认实现与 [onGetImmersiveMode] 同款：**直接读壳侧单一真源**（`ShellAppContext` 由
-   * `EngineAuth.initContext` 绑定），因此 MainActivity 无需传参即可返回真实值。
-   *
-   * 这是 J-1「FIX-4 名义落地、实际不可达」的直接修法：旧态的 `settingsSnapshot` /
-   * `applySetting` 在 `app/src/main` 全仓**零外部调用点**（只有定义处互调），桥面 35 个
-   * `@JavascriptInterface` 无一涉及 notify/suppress，页面侧 grep 亦 0 命中——能力在、入口无。
-   * 把默认实现钉在真源上（而不是 `{ok:false}` 桩），则「漏接线」这一失效形态在结构上不可能复发：
-   * 没有 MainActivity 传参，入口依然可达。
-   */
-  private val onGetNotifySetting: (String) -> String = { key ->
-    val app = ShellAppContext.get()
-    if (app == null) """{"ok":false,"reason":"no-shell-context"}"""
-    else NotifyCenter.settingsSnapshot(app).put("key", key).toString()
-  },
-  /**
-   * 0.14.1 块J FIX-4：通知设置**写**面（key + value），返回写后读回的 JSON（含 applied/reason）。
-   * 与读面同款默认实现：未绑定壳上下文时**拒绝**而不是静默假成功（fail-closed）。
-   */
-  private val onSetNotifySetting: (String, Boolean) -> String = { key, value ->
-    val app = ShellAppContext.get()
-    if (app == null) """{"ok":false,"reason":"no-shell-context"}"""
-    else NotifyCenter.applySetting(app, key, value).toString()
-  },
-  /**
-   * 0.14.1 批 4：通知**自检**（`NotifyCenter.selfCheck` 的页面入口）。
-   *
-   * 此前 `selfCheck` / `appSettingsIntent` / `channelSettingsIntent` 三者在页面侧**零调用点**：
-   * 系统把渠道降级（用户关掉或 ROM 改了重要性）时，应用看得见、用户看不见，「系统已降级，
-   * 应用无法调回」这句提示永远到不了用户眼前。与 FIX-4 同款修法：默认实现钉在真源上，
-   * 不依赖 MainActivity 传参（漏接线这一失效形态从结构上消失）。
-   */
-  private val onNotifySelfCheck: () -> String = {
-    val app = ShellAppContext.get()
-    if (app == null) """{"ok":false,"reason":"no-shell-context"}"""
-    else NotifyCenter.selfCheck(app).toString()
-  },
-  /** 页面的「打开系统通知设置」入口（App 级）。 */
-  private val onOpenNotifyAppSettings: () -> Boolean = { false },
-  /** 页面的「打开该渠道的系统设置」入口（渠道级）。 */
-  private val onOpenNotifyChannelSettings: (String) -> Boolean = { _ -> false },
-  /**
-   * 页面的「发送测试通知」入口（0.14.1 批 8 / S3-26）。
-   *
-   * 默认实现同样钉在真源上（`NotifyCenter.sendTestAll`），不依赖 MainActivity 传参——`sendTest`
-   * 此前全仓零调用点的成因就是「能力在、没人接线」。返回实际投递条数（0 = 没发出去，页面如实提示）。
-   */
-  private val onNotifySendTest: () -> Int = {
-    val app = ShellAppContext.get()
-    if (app == null) 0 else NotifyCenter.sendTestAll(app)
-  },
+  // #429 用户拍板「通知迁 ZorvAI 设置、harness 侧 UI 删除」：通知设置的 6 个页面侧入口
+  // （getNotifySetting / setNotifySetting / notifySelfCheck / openNotifyAppSettings /
+  // openNotifyChannelSettings / notifySendTest）随 WebUI 通知分区整体退场——页面已无调用方，
+  // 设置能力由壳侧 HarnessNotifyScreen 直调 NotifyCenter 单例（同一真源）提供。
+  // 勿再加回来：新增桥方法前先确认页面侧存在真实调用点。
 ) {
 
   @JavascriptInterface
@@ -602,49 +554,10 @@ class AndroidBridge(
     return RootOwnershipJobs.request(app).toString()
   }
 
-  /**
-   * 0.14.1 块J FIX-4：通知设置读回（设置页「开发者选项」的初始态与写后读回）。
-   *
-   * 调用面 = 受信任 DSH 页面（`window.androidBridge`）；返回 `NotifyCenter.settingsSnapshot`
-   * 的 JSON（`suppressForeground` / `suppressForegroundDefault` / `categories`）。
-   * @param key 可选：只回读一个设置键（空串 = 全量快照）。回读**始终取壳侧真源**，不回显入参。
-   */
-  @JavascriptInterface
-  fun getNotifySetting(key: String?): String = onGetNotifySetting(key ?: "")
-
-  /**
-   * 0.14.1 块J FIX-4：通知设置写入（key = `suppressForeground` 或 `cat.<category>`）。
-   *
-   * 返回写后读回的快照：`applied=true` 才代表生效；未知 key / 读回不一致一律如实回 `false`
-   * （拒绝乐观置位，与 `ShellState.DevLogControl` 同纪律）。这是 FIX-4 的唯一页面上行入口。
-   */
-  @JavascriptInterface
-  fun setNotifySetting(key: String, value: Boolean): String = onSetNotifySetting(key, value)
-
-  /**
-   * 0.14.1 批 4：通知自检（每个渠道的系统实际状态 + 是否被降级 + 该走哪个设置页）。
-   *
-   * 返回 `{ok, channels:[{category,label,channelId,importance,enabled,silenced?}], degraded:[...]}`
-   * ——页面据此显示「系统已降级，应用无法调回」并给出直达系统设置的入口（此前这条信息零调用点）。
-   */
-  @JavascriptInterface
-  fun notifySelfCheck(): String = onNotifySelfCheck()
-
-  /** 打开系统的「本应用通知设置」页；返回是否真的拉起（false = 该 ROM 无此页，页面须如实提示）。 */
-  @JavascriptInterface
-  fun openNotifyAppSettings(): Boolean = onOpenNotifyAppSettings()
-
-  /** 打开某个渠道的系统设置页（channelId 由 notifySelfCheck 给出）；返回是否真的拉起。 */
-  @JavascriptInterface
-  fun openNotifyChannelSettings(channelId: String): Boolean = onOpenNotifyChannelSettings(channelId)
-
-  /**
-   * 发送五类测试通知，返回实际投递条数（0..5）。
-   * 让用户自证「关掉某类提醒 / 系统降级渠道之后，任务完成还会不会提醒我」——渠道状态由
-   * `notifySelfCheck` 给出，本方法给的是**实际到达效果**。
-   */
-  @JavascriptInterface
-  fun notifySendTest(): Int = onNotifySendTest()
+  // #429 起通知设置桥面整体退场（6 个 @JavascriptInterface：getNotifySetting /
+  // setNotifySetting / notifySelfCheck / openNotifyAppSettings / openNotifyChannelSettings /
+  // notifySendTest）——WebUI 通知分区已删除，页面无调用方；设置能力在壳侧
+  // HarnessNotifyScreen（直调 NotifyCenter 单例）。勿再加回来。
 
   companion object {
     /**

@@ -1,21 +1,21 @@
 {
-  "baseline": 18528,
+  "baseline": 17234,
   "perPlugin": {
     "dsh-android-bridge": {
       "count": 4,
-      "bytes": 1464
+      "bytes": 1467
     },
     "dsh-android-manage": {
       "count": 14,
-      "bytes": 7897
+      "bytes": 7904
     },
     "dsh-android-browser": {
       "count": 19,
-      "bytes": 4973
+      "bytes": 4985
     },
     "dsh-android-vdisplay": {
-      "count": 4,
-      "bytes": 1575
+      "count": 5,
+      "bytes": 2065
     },
     "dsh-android-file-open": {
       "count": 1,
@@ -23,10 +23,14 @@
     },
     "dsh-android-linux-env": {
       "count": 2,
-      "bytes": 340
+      "bytes": 330
+    },
+    "dsh-android-zorvai-tools": {
+      "count": 1,
+      "bytes": 324
     }
   },
-  "initialVisible": 2951,
+  "initialVisible": 1148,
   "maskedGroups": [
     "phone",
     "browser",
@@ -36,6 +40,7 @@
     "android_capabilities",
     "android_env_recipe",
     "android_file_incoming_status",
-    "android_toolchain_status"
+    "android_toolchain_status",
+    "zorvai_bridge"
   ]
 }

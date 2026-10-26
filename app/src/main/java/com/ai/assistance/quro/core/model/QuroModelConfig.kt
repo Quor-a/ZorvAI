@@ -24,6 +24,8 @@ data class QuroModelConfig(
     val contextWindow: Int = 1048576,     // 上下文窗口（输入 token 预算）：0=不限制（按模型硬输入上限 1048576 作为安全顶）；非 0 时按预算从最旧轮次裁剪历史，始终保留 system。默认放宽到 1M，支持 Gemini 等百万级上下文云模型；平时不裁你的长上下文，只在逼近上限才裁，避免「全量发送撑爆窗口 → 上游 500 context length exceeded」。本地离线模型不使用此值（n_ctx 由原生层按 prompt 自适应，与云端隔离）。
     val maxInputTokens: Int = 1048576,     // 模型硬输入上限（token）：请求总输入（system + 历史）不得超过此值，否则上游直接 500。contextWindow=0 时本值作为安全硬顶生效；contextWindow>0 时取两者较小值。属模型固有能力，不作用户配置项。
     val modelContextLength: Int = 0,       // 当前所选模型的真实上下文长度（token），来自 /models 接口的 context_length；0=未知（回落 1048576 安全顶）。这是「单次上下文总开关」的真正硬上限来源，选中模型时由接口回填，不再硬编码。
+    val contextCompressThreshold: Int = 80, // 上下文压缩阀值（%）：历史+system 估算用量达到上下文窗口的该比例时开始「压缩」——从最旧轮次裁剪、始终保留 system（issue #22 建议值 80，留 20% 给回复；100=打满才裁的旧行为）
+    val contextSoftTrimThreshold: Int = 50, // 上下文软精简阀值（%）：用量达到该比例时，就地精简历史里的超长工具输出（保留头+尾+截断说明，工具轮 call↔result 始终成对）；低于该比例不动工具结果原文（issue #22 建议值 50）
     val customProviderName: String = "",   // 自定义厂商展示名（provider=="OTHER" 时有效）
     val localModelPath: String = "",       // 本地离线模型路径（provider 为 MNN/LLAMA_CPP 时有效）
     val useFullTools: Boolean = true,      // 完整工具集开关：默认开启（全面开放）。// 🔴 实测 fullSpecs =258 个 / 129,351 字符（不是早期注释说的「~50 个」），coreSpecs = 201 个 / 86,506 字符；GenUI Agent 侧另有一套按窗口预算的收敛（ZorvPromptBudget.fitTools），丢整份工具、不裁内容。设置入口已移除，由默认全开保证工具可用
@@ -54,6 +56,8 @@ class QuroModelConfigRepository(context: Context) {
         maxToolRounds = prefs.getInt(KEY_TOOL_ROUNDS, QuroModelConfig().maxToolRounds),
         contextWindow = prefs.getInt(KEY_CONTEXT_WINDOW, QuroModelConfig().contextWindow),
         modelContextLength = prefs.getInt(KEY_MODEL_CONTEXT_LENGTH, QuroModelConfig().modelContextLength),
+        contextCompressThreshold = prefs.getInt(KEY_CONTEXT_COMPRESS_THRESHOLD, QuroModelConfig().contextCompressThreshold),
+        contextSoftTrimThreshold = prefs.getInt(KEY_CONTEXT_SOFT_TRIM_THRESHOLD, QuroModelConfig().contextSoftTrimThreshold),
         customProviderName = prefs.getString(KEY_CUSTOM_PROVIDER, "") ?: "",
         localModelPath = prefs.getString(KEY_LOCAL_PATH, "") ?: "",
         useFullTools = prefs.getBoolean(KEY_FULL_TOOLS, true),
@@ -74,6 +78,8 @@ class QuroModelConfigRepository(context: Context) {
         putInt(KEY_TOOL_ROUNDS, cfg.maxToolRounds)
         putInt(KEY_CONTEXT_WINDOW, cfg.contextWindow)
         putInt(KEY_MODEL_CONTEXT_LENGTH, cfg.modelContextLength)
+        putInt(KEY_CONTEXT_COMPRESS_THRESHOLD, cfg.contextCompressThreshold)
+        putInt(KEY_CONTEXT_SOFT_TRIM_THRESHOLD, cfg.contextSoftTrimThreshold)
         putString(KEY_CUSTOM_PROVIDER, cfg.customProviderName)
         putString(KEY_LOCAL_PATH, cfg.localModelPath)
         putBoolean(KEY_FULL_TOOLS, cfg.useFullTools)
@@ -141,6 +147,8 @@ class QuroModelConfigRepository(context: Context) {
         private const val KEY_TOOL_ROUNDS = "max_tool_rounds"
         private const val KEY_CONTEXT_WINDOW = "context_window"
         private const val KEY_MODEL_CONTEXT_LENGTH = "model_context_length"
+        private const val KEY_CONTEXT_COMPRESS_THRESHOLD = "context_compress_threshold"
+        private const val KEY_CONTEXT_SOFT_TRIM_THRESHOLD = "context_soft_trim_threshold"
         private const val KEY_CUSTOM_PROVIDER = "custom_provider_name"
         private const val KEY_LOCAL_PATH = "local_model_path"
         private const val KEY_FULL_TOOLS = "use_full_tools"

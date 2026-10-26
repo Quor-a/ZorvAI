@@ -1,0 +1,41 @@
+<!--
+  动态 UI 组件（qk_00171）专用图标 —— 替换此前误落到 else -> ic_x 的「×」。
+
+  语义：**可操作的控件面板**。面板外框里两条滑杆 + 两个错位的实心拖点，
+  一眼读作「这块能拖、能改、能收集输入」——与小卡片的「静态卡面 + 折线读数」互为对照，
+  避免了「两个都是方框、18dp 下分不清」的问题（实心点在小尺寸下比描边环稳得多）。
+  风格同 qic_*：24dp viewport、描边 #FFFFFF（调用点 tint 上色）、线宽 1.8、圆头圆角。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 面板外框 -->
+    <path android:pathData="M4 4 H20 A2 2 0 0 1 22 6 V18 A2 2 0 0 1 20 20 H4 A2 2 0 0 1 2 18 V6 A2 2 0 0 1 4 4 Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+    <!-- 上滑杆 -->
+    <path android:pathData="M5.5 10 H18.5"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"/>
+    <!-- 下滑杆 -->
+    <path android:pathData="M5.5 15 H18.5"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"/>
+    <!-- 上拖点（偏左） -->
+    <path android:pathData="M9 10 m-1.7,0 a1.7,1.7 0 1,1 3.4,0 a1.7,1.7 0 1,1 -3.4,0"
+        android:fillColor="#FFFFFFFF"
+        android:strokeColor="#00000000"/>
+    <!-- 下拖点（偏右） -->
+    <path android:pathData="M15 15 m-1.7,0 a1.7,1.7 0 1,1 3.4,0 a1.7,1.7 0 1,1 -3.4,0"
+        android:fillColor="#FFFFFFFF"
+        android:strokeColor="#00000000"/>
+</vector>

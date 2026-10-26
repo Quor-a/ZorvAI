@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.mcp
 
 import android.content.Context
 import android.util.Log
+import com.ai.assistance.quro.core.tools.HarnessBridge
 
 /**
  * 本地 MCP 部署管理器。
@@ -71,7 +72,12 @@ object QuroLocalMcpManager {
         return "已注销本地 MCP「$a」"
     }
 
-    /** 应用启动时调用：自动拉起所有已持久化的本地 MCP，使其恢复可用（界面自动拉取注册）。 */
+    /**
+     * 应用启动时调用：自动拉起所有已持久化的本地 MCP，使其恢复可用（界面自动拉取注册）。
+     *
+     * 端口每次随机刷新；对 harness 桥（alias=zorvai）会同步重写内置插件通道的端点清单，
+     * 避免清单指向死端口（插件每次 execute 前重读清单，无需重启引擎）。
+     */
     @Synchronized
     fun startAll(context: Context) {
         QuroLocalMcpDispatcher.appContext = context.applicationContext
@@ -88,6 +94,12 @@ object QuroLocalMcpManager {
                 val idx = list.indexOfFirst { it.alias == cfg.alias && it.kind == "local" }
                 if (idx >= 0) list[idx] = list[idx].copy(url = "http://127.0.0.1:$p/mcp")
                 QuroMcpClientPrefs.save(context, list)
+                // 端口变了 → harness 内置插件通道的端点清单会指向死端口：桥启用着就同步重写
+                // （插件每次 execute 前重读清单，这里改完即生效，无需重启引擎）
+                if (cfg.alias == HarnessBridge.ALIAS) {
+                    runCatching { HarnessBridge.refreshManifest(context) }
+                        .onFailure { Log.w(TAG, "刷新 harness 端点清单失败：${it.message}") }
+                }
                 Log.i(TAG, "已恢复本地 MCP: ${cfg.alias} @ $p")
             }.onFailure { Log.w(TAG, "恢复本地 MCP 失败 ${cfg.alias}: ${it.message}") }
         }

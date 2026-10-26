@@ -155,7 +155,7 @@ fun QuroToolCenterScreen(
                 val intent = Intent(context, com.ai.assistance.quro.dshmobile.MainActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 runCatching { context.startActivity(intent) }
-                    .onFailure { Toast.makeText(context, "无法打开 Agent 工作台：${it.message}", Toast.LENGTH_LONG).show() }
+                    .onFailure { Toast.makeText(context, "无法打开 DeepSeek Harness：${it.message}", Toast.LENGTH_LONG).show() }
                 selected = null
             }
             "plugins" -> PluginManagerPanel(context)
@@ -172,7 +172,10 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         Triple("toolbox", stringResource(R.string.qk_00214), stringResource(R.string.qk_02783)),
         Triple("pkgmgr", stringResource(R.string.qk_02778), stringResource(R.string.qk_02784)),
         Triple("moyu", "墨语言 Mo", "独立运行时：编译/运行 .mo、AI 可直接读写源码修 bug，不依赖 Ubuntu"),
-        Triple("harness", "Agent 工作台", "完整内置 agent 工作台：自带 Node 运行时与完整界面，AI 可让它跑整套 agent 工作流"),
+        // 「Agent 工作台」卡片已移除（#474 用户裁定）：改名 DeepSeek Harness 并移到
+        // 历史对话抽屉里（GenUI Agent 下面）。工具箱是「造东西的工具」，
+        // 它是同环境的另一个 agent 工作台，位置与历史对话并列更合适。
+        // "harness" 分支保留：AI 仍可经 ui_control(target="harness") 直接拉起它。
         Triple("sandbox", stringResource(R.string.qk_02773), stringResource(R.string.qk_02785)),
         Triple("db", stringResource(R.string.qk_02774), stringResource(R.string.qk_02786)),
         Triple("vispro", stringResource(R.string.qk_00021), stringResource(R.string.qk_02787)),

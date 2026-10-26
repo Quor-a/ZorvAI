@@ -11,6 +11,14 @@ internal const val TOOL_RESULT_CAP = 1600
  *  contextWindow=0（用户设「不限制」）时本值作为安全硬顶生效，避免「全量无界发送」撑爆模型上限。 */
 internal const val MODEL_MAX_INPUT_TOKENS = 1048576
 
+/** #22 上下文压缩阀值默认值（%）：历史+system 估算用量达到上下文窗口的该比例时开始「压缩」——
+ *  从最旧轮次裁剪、始终保留 system，给回复留出余量。100=打满才裁的旧行为。 */
+internal const val DEFAULT_COMPRESS_THRESHOLD_PCT = 80
+
+/** #22 上下文软精简阀值默认值（%）：用量达到该比例时才就地精简历史里的超长工具输出
+ *  （保留头+尾+截断说明，工具轮 call↔result 始终成对）；低于该比例不动工具结果原文。0=旧行为（永远精简）。 */
+internal const val DEFAULT_SOFT_TRIM_THRESHOLD_PCT = 50
+
 /**
  * 就地压缩超长工具结果（role=tool 的 content），防止命令类工具（terminal_exec / root_exec 等）
  * 的巨型输出在上下文裁剪时被整条丢弃，进而拆散工具轮、诱发孤儿调用与模型「跑偏 / 乱执行」。
@@ -209,8 +217,18 @@ class QuroConversationStore(
      *   始终保留 system（身份/人格/工具指引），再从**最旧**的非 system 消息起裁剪历史，
      *   只丢弃过旧的聊天轮次。这样长对话不会把上下文窗口撑爆 → 避免网关/模型静默丢弃
      *   前部上下文或整个 tools 字段（表现为「丢失上下文 / 回复变水 / 工具调用失效」）。
+     * @param compressThresholdPct #22 上下文压缩阀值（%）：有效预算 = (窗口 − system) × 该比例。
+     *   达到该用量即从最旧轮次裁剪（始终保留 system）；100=打满才裁的旧行为。
+     * @param softTrimThresholdPct #22 上下文软精简阀值（%）：估算用量达到该比例时，才就地精简
+     *   历史里的超长工具输出；低于该比例保留工具结果原文。0=永远精简的旧行为。
      */
-    fun toLlmMessages(system: QuroMessage? = null, contextWindow: Int = 0, historyRounds: Int = 0): List<QuroChatMessage> {
+    fun toLlmMessages(
+        system: QuroMessage? = null,
+        contextWindow: Int = 0,
+        historyRounds: Int = 0,
+        compressThresholdPct: Int = DEFAULT_COMPRESS_THRESHOLD_PCT,
+        softTrimThresholdPct: Int = DEFAULT_SOFT_TRIM_THRESHOLD_PCT,
+    ): List<QuroChatMessage> {
         val built = mutableListOf<QuroChatMessage>()
         system?.let { built.add(QuroChatMessage(it.role, it.content)) }
         // 🔧 #765：先取锁快照，后续遍历快照，避免与 IO 线程的 add/update 并发修改冲突。
@@ -234,14 +252,6 @@ class QuroConversationStore(
         // 「保留对话轮数」对话框级覆盖：仅保留最近 N 个 (用户+助手) 轮次，其余丢弃。
         // 仅当 historyRounds > 0 时生效；0/未设置则跳过（与历史行为完全一致）。
         var capped = if (historyRounds > 0) capRecentRounds(built, historyRounds) else built
-        // ═══ 工具结果就地压缩（防「跑偏/乱执行」）═══
-        // terminal_exec / root_exec 等命令工具输出可能极长（构建日志、ls -R、长文本）。
-        // 若整条 role=tool 结果在下方「巨型消息降权」被裁掉，而对应的 assistant tool_calls 仍被保留，
-        // 就会形成孤儿调用 → pruneOrphanToolMessages 整条删除 → 模型丢失「我跑过什么 / 结果如何」的记忆，
-        // 下一轮便重发同一条命令、或把上下文碎片当成新指令 → 表现为「跑偏 / 乱执行」。
-        // 这里在裁剪前先把超长工具结果就地截断（保留头 + 尾 + 长度说明），使其始终能留在上下文里，
-        // 工具轮 call↔result 始终成对，从根本上消除孤儿、保住模型对工具执行的历史记忆。
-        capped = compactToolResults(capped)
         // 🔧 硬输入上限安全网（toolfix7）：用户把 contextWindow 设 0（「不限制」）时，旧逻辑完全不裁剪、
         // 每轮全量发送历史；长对话 / 多工具轮后总输入超过模型硬上限（如 262144）即被上游 500
         // 「context length exceeded」。现以模型真实输入上限（262144）作为预算：平时（远小于上限）不裁
@@ -250,7 +260,34 @@ class QuroConversationStore(
         if (ceiling <= 0) return pruneOrphanToolMessages(capped)
 
         val sysTokens = system?.let { estTokens(it.content) } ?: 0
-        var budget = ceiling - sysTokens
+        // ═══ #22 双阀值：软精简（50%）+ 压缩（80%）═══
+        // 估算必须在任何精简/裁剪之前：若先裁再估，用量被自己的裁剪压低 → 下轮又涨回去 →
+        // 「裁/不裁」反复横跳（自激振荡），且工具结果在原文/截断间抖动不利于 KV 缓存命中。
+        val softTrimPct = softTrimThresholdPct.coerceIn(0, 100)
+        val compressPct = compressThresholdPct.coerceIn(10, 100)
+        val usageTokens = sysTokens + capped.filter { it.role != "system" }
+            .sumOf { estTokens(it.content) + (it.toolCalls?.sumOf { c -> estTokens(c.arguments) } ?: 0) }
+        val usagePct = if (ceiling > 0) usageTokens * 100 / ceiling else 0
+        // 软精简闸门：用量达到阀值才就地精简超长工具结果；低于阀值保留原文（0=旧行为永远精简）。
+        capped = if (softTrimPct <= 0 || usagePct >= softTrimPct) {
+            // ═══ 工具结果就地压缩（防「跑偏/乱执行」）═══
+            // terminal_exec / root_exec 等命令工具输出可能极长（构建日志、ls -R、长文本）。
+            // 若整条 role=tool 结果在下方「巨型消息降权」被裁掉，而对应的 assistant tool_calls 仍被保留，
+            // 就会形成孤儿调用 → pruneOrphanToolMessages 整条删除 → 模型丢失「我跑过什么 / 结果如何」的记忆，
+            // 下一轮便重发同一条命令、或把上下文碎片当成新指令 → 表现为「跑偏 / 乱执行」。
+            // 这里在裁剪前先把超长工具结果就地截断（保留头 + 尾 + 长度说明），使其始终能留在上下文里，
+            // 工具轮 call↔result 始终成对，从根本上消除孤儿、保住模型对工具执行的历史记忆。
+            compactToolResults(capped)
+        } else {
+            QuroDiag.log(
+                "LlmMessages",
+                "软精简跳过：用量 ${usagePct}% < 阀值 ${softTrimPct}%，保留工具输出原文"
+            )
+            capped
+        }
+        // 压缩阀值 → 有效预算：达到 compressPct 即开始从最旧轮次裁剪，给回复留 (100−compressPct)% 余量。
+        val effectiveBudget = (ceiling - sysTokens).coerceAtLeast(0) * compressPct / 100
+        var budget = effectiveBudget
         val nonSys = capped.filter { it.role != "system" }
         if (budget <= 0) {
             // 预算连 system 都不够：仅保留 system + 最后一条消息，避免空请求
@@ -295,6 +332,12 @@ class QuroConversationStore(
         // 按原始时间顺序还原（keptIdx 仅收集「保/丢」决策，顺序在此一步纠正）
         keptIdx.sort()
         val kept = keptIdx.map { nonSys[it] }
+        if (kept.size < nonSys.size) {
+            QuroDiag.log(
+                "LlmMessages",
+                "上下文裁剪：保留 ${kept.size}/${nonSys.size} 条（用量 ${usagePct}% ≥ 压缩阀值 ${compressPct}%，有效预算 $effectiveBudget token）"
+            )
+        }
         return pruneOrphanToolMessages(capped.filter { it.role == "system" } + kept)
     }
 

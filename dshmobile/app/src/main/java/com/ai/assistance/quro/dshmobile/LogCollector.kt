@@ -256,14 +256,17 @@ object LogCollector {
    *   默认 -1 = 未知/未注入，**如实显示**而不是编造一个值。它落进 boot-segments.log 的
    *   boot-start 行，回答「这次启动到底给了引擎多大堆」——此前该事实**任何诊断面都取不到**，
    *   于是堆相关问题只能靠猜（0.14.8 堆下限同批修）。
+   * @param cgroupMb app 进程组的 cgroup 内存上限（MB；0/-1 = 读不到）。与 engineHeapMb 同行落盘，
+   *   回答「V8 天花板离 cgroup 墙有多远」——2026-10-26 引擎静默死亡诊断的核心判据（4096 天花板
+   *   远超墙 ⇒ cgroup OOM killer 无声斩首；该行让「天花板/墙」比值在每份诊断包里可直接核对）。
    */
-  fun markBootStart(context: Context, engineHeapMb: Int = -1) {
+  fun markBootStart(context: Context, engineHeapMb: Int = -1, cgroupMb: Int = -1) {
     segBootStartMs = System.currentTimeMillis()
     segListenMs = 0L
     segComposeTotalMs = -1L
     segComposeSource = SOURCE_NONE
     segFirstHttpMs = 0L
-    emitBootSegments(context, "note=boot-start engineHeapMb=" + engineHeapMb)
+    emitBootSegments(context, "note=boot-start engineHeapMb=" + engineHeapMb + " cgroupMb=" + cgroupMb)
     // （乙）解析链必须与调试日志采集器**解耦**：采集器默认关闭，旧实现把探针解析只挂在 tick()
     // 里 ⇒ 默认设备上即使探针在场也永远落不出 t_compose_total（恒 -1 的第二半成因）。这里起一条
     // 有界轻量 tail，只在本次启动窗口内观察 engine.log，绝不依赖任何用户开关。
@@ -393,6 +396,18 @@ object LogCollector {
     if (segListenMs > 0L) return
     segListenMs = System.currentTimeMillis()
     emitBootSegments(context, "note=listen")
+  }
+
+  /**
+   * 引擎 RSS 采样收口（EngineManager.startEngineRssSampler，boot 窗口末）：落 `note=engine-rss` 行。
+   *
+   * 2026-10-26 引擎静默死亡诊断的坐实判据：cgroup OOM/LMK 斩首 node 零遗言（无 FATAL、无
+   * 未捕获异常、无 tombstone），peakMb 直接回答「引擎 RSS 峰值离 cgroup 墙有多近」；
+   * lastMb 是进程消失前的最后读数（samples=0 时整行不落——没有读数就不编造）。
+   */
+  fun markEngineRss(context: Context, peakMb: Int, lastMb: Int, samples: Int, pid: Int) {
+    if (samples <= 0) return
+    emitBootSegments(context, "note=engine-rss peakMb=$peakMb lastMb=$lastMb samples=$samples pid=$pid")
   }
 
   /** 探针 TOTAL 出现/更新时补落一行（真实 t_compose_total）。 */

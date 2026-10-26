@@ -4030,4 +4030,304 @@ Your configured models were kept; you can also type a model name manually.</stri
     <string name="qk_04090">Address</string>
     <string name="qk_04091" formatted="false">Service not started. Once the switch is on, ZorvAI stays resident in the background, so going back or switching apps will not break this link.</string>
     <string name="qk_04092" formatted="false">Address not available yet: open the ZorvAI dialog once so the service has something to serve.</string>
+    <string name="qk_04116">Harness Hot Update</string>
+    <string name="qk_04117" formatted="false">Import a snapshot archive to update the built-in Harness runtime in place</string>
+    <string name="qk_04118" formatted="false">Pick a harness snapshot archive (.tar.xz) from the system file picker to update the entire built-in DeepSeek Harness runtime — no app reinstall, no release server. The update is transactional: the current runtime is untouched while unpacking, the new runtime is kept only after it passes boot and health verification, and any failure rolls back to the previous version. Your data (sessions, settings, model configuration) is always preserved.</string>
+    <string name="qk_04119">Choose snapshot archive (.tar.xz)</string>
+    <string name="qk_04121">Sidecar checksum (.sha256, optional)</string>
+    <string name="qk_04122" formatted="false">If the archive ships with a .sha256 file, selecting it enforces a strict checksum match before unpacking; a mismatch refuses the update.</string>
+    <string name="qk_04123">Not selected</string>
+    <string name="qk_04124">Start update</string>
+    <string name="qk_04125" formatted="false">During the update the Harness engine is stopped first and then switched to the new runtime. The whole process usually takes a few minutes — keep the app in the foreground and the screen on.</string>
+    <string name="qk_04126">Choose a snapshot archive first</string>
+    <string name="qk_04127">Progress</string>
+    <string name="qk_04128">Could not read the checksum file</string>
+    <string name="qk_04129">Update again</string>
+    <string name="qk_04130" formatted="false">Checksum: %1$s</string>
+    <string name="qk_04131">Notifications</string>
+    <string name="qk_04132">Harness Notifications</string>
+    <string name="qk_04133" formatted="false">Master switch, alert style, system permission and test</string>
+    <string name="qk_04134" formatted="false">These notifications come from the built-in DeepSeek Harness engine: reports when a task finishes, its questions waiting for your answer, and approval requests before tool execution. Changes take effect immediately and only affect alerting, never the tasks themselves.</string>
+    <string name="qk_04135">Suppress while in front</string>
+    <string name="qk_04136" formatted="false">No report pop-ups while the app is in front; they are queued and delivered later. Questions and approvals are never suppressed.</string>
+    <string name="qk_04137" formatted="false">Categories</string>
+    <string name="qk_04138">Reports</string>
+    <string name="qk_04139" formatted="false">Off stops the alert; the task itself keeps running</string>
+    <string name="qk_04140">Questions</string>
+    <string name="qk_04141" formatted="false">Off stops pop-ups and sound; the question still appears in the shade and the model waits</string>
+    <string name="qk_04142">Approvals</string>
+    <string name="qk_04143" formatted="false">Off stops pop-ups and sound; you still have to approve, tools never auto-approve</string>
+    <string name="qk_04144">Progress</string>
+    <string name="qk_04145" formatted="false">Off hides step progress; the task keeps running</string>
+    <string name="qk_04146">Background</string>
+    <string name="qk_04147" formatted="false">Off hides watchdog and engine status; the engine is unaffected</string>
+    <string name="qk_04148">Check notifications</string>
+    <string name="qk_04149">System notification settings</string>
+    <string name="qk_04150">Send a test notification</string>
+    <string name="qk_04151">Self-check</string>
+    <string name="qk_04152" formatted="false">App notifications: %1$s; permission: %2$s</string>
+    <string name="qk_04153" formatted="false">The system muted these channels: %1$s. The app cannot undo this; restore it in system settings.</string>
+    <string name="qk_04154" formatted="false">No notification channel is muted by the system.</string>
+    <string name="qk_04155" formatted="false">Sent %1$s test notifications (one per category). Check the shade to see which arrived and which are silent.</string>
+    <string name="qk_04156" formatted="false">Nothing was sent: notification permission is missing or the channel is unavailable. Run the self-check above and allow notifications in system settings.</string>
+    <string name="qk_04157">Open channel settings</string>
+    <string name="qk_04158" formatted="false">Notification permission not granted: task completion will not alert you. Tap "System notification settings" to allow it.</string>
+    <string name="qk_04159" formatted="false">Now: %1$s</string>
+    <string name="qk_04160" formatted="false">%1$s: %2$s</string>
+    <string name="qk_04161">on</string>
+    <string name="qk_04162">off</string>
+    <string name="qk_04163">Degraded by system</string>
+    <string name="qk_04164">Channel missing</string>
+    <string name="qk_04165">OK</string>
+    <string name="qk_04166">Inspect per-channel system state and degradation warnings</string>
+
+    <!-- #417 Phone control screen (PhoneControlScreen) -->
+    <string name="qk_04167">Harness permission settings</string>
+    <string name="qk_04168">Screen and privileged channel settings; only you can change them here.</string>
+    <string name="qk_04169">Screen access</string>
+    <string name="qk_04170">Virtual screen</string>
+    <string name="qk_04171">Shizuku privileged channel</string>
+    <string name="qk_04172">Accessibility channel</string>
+    <string name="qk_04173">Root access</string>
+    <string name="qk_04174">Danger zone</string>
+    <string name="qk_04175">Virtual only</string>
+    <string name="qk_04176">Real only</string>
+    <string name="qk_04177">All screens</string>
+    <string name="qk_04178">The model may only use virtual screens created by this app; the real screen is never read or controlled.</string>
+    <string name="qk_04179">The model may only use your real screen; virtual screens are never created.</string>
+    <string name="qk_04180">The model may use both the real screen and virtual screens. Grant with care.</string>
+    <string name="qk_04181">Defaults to virtual screens only; screenshots and control follow this scope.</string>
+    <string name="qk_04182">Virtual screen resolution</string>
+    <string name="qk_04183">Scales the virtual screen with the device; applies to the next screen (default 0.75).</string>
+    <string name="qk_04184">Floating window in the background</string>
+    <string name="qk_04185">Read-only window: shows the virtual screen when the app is in the background. Not the floating ball in the toolbox.</string>
+    <string name="qk_04186">Virtual screen status</string>
+    <string name="qk_04187">Refresh status</string>
+    <string name="qk_04188">Active</string>
+    <string name="qk_04189">Ready</string>
+    <string name="qk_04190">Needs setup</string>
+    <string name="qk_04191">Status unavailable</string>
+    <string name="qk_04192">Force destroy virtual screens</string>
+    <string name="qk_04193">Destroys every virtual screen and its tasks, regardless of owner. Tap three times to confirm; you can cancel.</string>
+    <string name="qk_04194" formatted="false">Tap again to confirm (%1$d/3)</string>
+    <string name="qk_04195">Cancel</string>
+    <string name="qk_04196">Could not read virtual screen status</string>
+    <string name="qk_04197">All virtual screens were destroyed.</string>
+    <string name="qk_04198">Shizuku is the channel for virtual screens and the privileged shell; only you can install and grant it.</string>
+    <string name="qk_04199">Download Shizuku</string>
+    <string name="qk_04200">Open Shizuku</string>
+    <string name="qk_04201">Request Shizuku access</string>
+    <string name="qk_04202">Reset link</string>
+    <string name="qk_04203">Not installed</string>
+    <string name="qk_04204">Installed, not running</string>
+    <string name="qk_04205">Running, not granted</string>
+    <string name="qk_04206">Granted, connecting</string>
+    <string name="qk_04207">Granted, UserService failed to start</string>
+    <string name="qk_04208">Granted, not connected</string>
+    <string name="qk_04209">Channel ready</string>
+    <string name="qk_04210">Show startup failure log</string>
+    <string name="qk_04211" formatted="false">Could not open the Shizuku release page: %1$s</string>
+    <string name="qk_04212">Shizuku access requested; tap Allow in the dialog. This page refreshes on its own.</string>
+    <string name="qk_04213">The Shizuku link was reset; the channel is reconnecting.</string>
+    <string name="qk_04214" formatted="false">The Shizuku access request failed: %1$s</string>
+    <string name="qk_04215" formatted="false">Could not reset the Shizuku link: %1$s</string>
+    <string name="qk_04216">The grant dialog only appears with the app in front; background requests fail silently.</string>
+    <string name="qk_04217">Both buttons leave the app (browser or Shizuku); come back here after installing and granting.</string>
+    <string name="qk_04218">Open accessibility settings</string>
+    <string name="qk_04219">Unlock restricted settings</string>
+    <string name="qk_04220">On: the model reads the screen through the accessibility tree and performs taps and typing.</string>
+    <string name="qk_04221">Off: open Settings → Accessibility → Downloaded services and turn on this app\'s device control service.</string>
+    <string name="qk_04222">Cannot open system settings; go to Settings → Accessibility manually</string>
+    <string name="qk_04223">Restricted settings unlocked via the Shizuku privileged shell</string>
+    <string name="qk_04224" formatted="false">Unlock failed: %1$s</string>
+    <string name="qk_04225">Restricted settings unlocked; go back to the system page and turn on accessibility.</string>
+    <string name="qk_04226">App root access</string>
+    <string name="qk_04227">Check root access</string>
+    <string name="qk_04228">Checking…</string>
+    <string name="qk_04229" formatted="false">Root manager: %1$s — allow this app there, then check again here.</string>
+    <string name="qk_04230">Model root access</string>
+    <string name="qk_04231">Allow model root access</string>
+    <string name="qk_04232">Disclaimer read</string>
+    <string name="qk_04233">Read the root access disclaimer</string>
+    <string name="qk_04234">Granted (uid 0)</string>
+    <string name="qk_04235">Checking the grant…</string>
+    <string name="qk_04236">Denied</string>
+    <string name="qk_04237">Check timed out; confirm in your root manager and retry</string>
+    <string name="qk_04238">No usable su on this device</string>
+    <string name="qk_04239">Not checked</string>
+    <string name="qk_04240">No root channel</string>
+    <string name="qk_04241">Not granted</string>
+    <string name="qk_04242">Granted (the model can use root)</string>
+    <string name="qk_04243">Shizuku runs as shell (uid 2000). Start it as root inside Shizuku, then turn this on here.</string>
+    <string name="qk_04244">This permission needs a rooted device</string>
+    <string name="qk_04245" formatted="false">Channel: %1$s. An app grant does not by itself allow the model.</string>
+    <string name="qk_04246">The grant state cannot be read. Reopen the app; without it, the model never gets root.</string>
+    <string name="qk_04247">Read and accept the disclaimer before turning on model root access.</string>
+    <string name="qk_04248">Checking root access. If no dialog appears, allow this app in your root manager; the switch turns on once granted.</string>
+    <string name="qk_04249">Model root access is on: the privileged channel runs as root. Use it only when needed and turn it off afterwards.</string>
+    <string name="qk_04250">Model root access is off: the privileged channel refuses root again.</string>
+    <string name="qk_04251" formatted="false">Could not turn on model root access: %1$s</string>
+    <string name="qk_04252" formatted="false">Could not turn off model root access: %1$s</string>
+    <string name="qk_04253">Marked as read; this stays valid across app updates until the disclaimer text changes.</string>
+    <string name="qk_04254">Consent withdrawn; model root access was turned off too.</string>
+    <string name="qk_04255" formatted="false">Could not record the read confirmation: %1$s</string>
+    <string name="qk_04256" formatted="false">Could not withdraw consent: %1$s</string>
+    <string name="qk_04257">Root access check started; the result refreshes on its own. A pass does not turn on model root access.</string>
+    <string name="qk_04258" formatted="false">The root access check did not pass: %1$s</string>
+    <string name="qk_04259">File ownership repair</string>
+    <string name="qk_04260">Use this after root writes make files unreadable. It repairs only this app data folder.</string>
+    <string name="qk_04261">Repair ownership</string>
+    <string name="qk_04262">Repair running</string>
+    <string name="qk_04263" formatted="false">Could not start file ownership repair: %1$s</string>
+    <string name="qk_04264">The ownership result is unreadable, so the repair is unconfirmed. Copy the diagnostics.</string>
+    <string name="qk_04265">No root repair path is available, so ownership was left unchanged.</string>
+    <string name="qk_04266" formatted="false">File ownership repair finished (%1$s checked / %2$s repaired / %3$s failed); no SELinux relabel was done.</string>
+    <string name="qk_04267" formatted="false">File ownership repair did not finish (%1$s checked / %2$s repaired / %3$s failed): %4$s</string>
+    <string name="qk_04268">The privileged task result is still unknown; new work is paused. Do not repeat the operation.</string>
+    <string name="qk_04269">Waiting for another privileged task to settle before the ownership check starts.</string>
+    <string name="qk_04270">File ownership repair is running a bounded check; the result refreshes on its own.</string>
+    <string name="qk_04271">unknown</string>
+    <string name="qk_04272" formatted="false">Could not open the disclaimer: %1$s</string>
+    <string name="qk_04273">The disclaimer is open (bundled in the app, works offline).</string>
+    <string name="qk_04274" formatted="false">50%</string>
+    <string name="qk_04275" formatted="false">75%</string>
+    <string name="qk_04276">Native</string>
+    <string name="qk_04277">Shizuku root</string>
+    <string name="qk_04278">app su root</string>
+    <string name="qk_04279">Call failed (unregistered reason) — retry; copy the logs if it keeps failing.</string>
+    <string name="qk_04280">No app on this device can open it — install a browser first.</string>
+    <string name="qk_04281">Shizuku is not installed — tap Download Shizuku first.</string>
+    <string name="qk_04282">The bundled document is missing (incomplete install) — reinstall the app and retry.</string>
+    <string name="qk_04283">The app UI is busy — retry shortly; copy the logs if it keeps failing.</string>
+    <string name="qk_04284">Check Disclaimer read and open the disclaimer before turning on model root access.</string>
+    <string name="qk_04285">The Shizuku channel is not root (this permission needs a rooted device) — start Shizuku as root, then turn this on.</string>
+    <string name="qk_04286">Root access is not granted — allow this app in your root manager (most managers do not show a dialog automatically).</string>
+    <string name="qk_04287">No usable su on this device (not rooted or no root manager) — finish setting up root first.</string>
+    <string name="qk_04288">Waiting for the root grant — if no dialog appears, open your root manager and allow this app.</string>
+    <string name="qk_04289">This link is not registered in this build — update the app and retry.</string>
+    <string name="qk_04290">The link is not https; opening it was refused for safety.</string>
+    <string name="qk_04291">The Shizuku release page is open; install the release APK, then come back.</string>
+    <string name="qk_04292">Shizuku is open; start and grant it there, then come back. Status refreshes on its own.</string>
+    <string name="qk_04293">Cannot read Shizuku status: the native bridge is not assembled or parsing failed.</string>
+    <string name="qk_04294">Tap "Download Shizuku", install it from the release page, then come back and tap "Open Shizuku".</string>
+    <string name="qk_04295">Tap "Open Shizuku" and start it inside the app via wireless debugging (you need to redo this after a reboot).</string>
+    <string name="qk_04296">Tap "Open Shizuku" and allow this app to use Shizuku inside it — only you can grant that.</string>
+    <string name="qk_04297">The user service keeps failing to start. Expand the diagnostics log below for the real reason. On Shizuku 13.6.0, downgrade to 13.5.4 or switch to the ADB channel.</string>
+    <string name="qk_04298">Status refreshes every 2 seconds; just wait. Stuck here? Tap "Open Shizuku" and enter it once more.</string>
+    <string name="qk_04299">The privileged channel is ready; virtual screens and the privileged shell are available.</string>
+    <string name="qk_04300">Loading…</string>
+    <string name="qk_04301">Could not open Shizuku: %1$s</string>
+    <string name="qk_04302">Screen scope, virtual display, Shizuku, accessibility and Root grants</string>
+    <!-- ═══ #418 Harness developer options (migrated from the WebUI dev section into Cleanup storage) ═══ -->
+    <string name="qk_04303" formatted="false">Harness developer options</string>
+    <string name="qk_04304" formatted="false">Debug log</string>
+    <string name="qk_04305" formatted="false">When on, one log file per day is written to Documents/dshdata/log/dsh-&lt;date&gt;.log.</string>
+    <string name="qk_04306" formatted="false">No all-files access: logs stay in the app private folder until you grant it.</string>
+    <string name="qk_04307" formatted="false">Logs contain commands and model content; use them only for debugging and clear them soon.</string>
+    <string name="qk_04308" formatted="false">Floating ball (task panel)</string>
+    <string name="qk_04309" formatted="false">Tap it to watch tool calls and stop them. It is not the virtual screen window in Phone control.</string>
+    <string name="qk_04310" formatted="false">The floating ball is on: drag it anywhere and tap it to watch tool calls and stop them.</string>
+    <string name="qk_04311" formatted="false">The floating ball is off</string>
+    <string name="qk_04312" formatted="false">The system permission page is open; turn this switch on again after granting.</string>
+    <string name="qk_04313" formatted="false">The bridge is unavailable; the floating ball only works inside the Android app. Reopen it and try again.</string>
+    <string name="qk_04314" formatted="false">Runtime cache</string>
+    <string name="qk_04315">Reclaimable: %1$s (%2$d items)</string>
+    <string name="qk_04316" formatted="false">Nothing to clear (the allowlist found no leftovers)</string>
+    <string name="qk_04317" formatted="false">Could not be read (not zero: the channel is unavailable or returned an error)</string>
+    <string name="qk_04318" formatted="false">Clear the runtime cache?</string>
+    <string name="qk_04319">Delete these %1$d items, %2$s in total, with no undo. Sessions, attachments, credentials, settings, plugins, and the current engine log are untouched; failures are listed.</string>
+    <string name="qk_04320" formatted="false">Allowlist only: known-safe engine runtime leftovers are cleared. Current logs, sessions, attachments, credentials, user settings, and installed plugins are never touched; everything else is skipped and listed.</string>
+    <string name="qk_04321">Cleared %1$d items, freed %2$s (scanned %3$s)</string>
+    <string name="qk_04322">Cleared %1$d items, freed %2$s (scanned %3$s); %4$d failed</string>
+    <string name="qk_04323" formatted="false">Clearing…</string>
+    <string name="qk_04324" formatted="false">Clearing is only available inside the Android app.</string>
+    <string name="qk_04325" formatted="false">The result could not be read. Retry, or copy the log and report it.</string>
+    <string name="qk_04326" formatted="false">Temporary workspace (shared files)</string>
+    <string name="qk_04327">In use: %1$s</string>
+    <string name="qk_04328" formatted="false">Usage could not be read (not zero: the channel is unavailable or returned an error)</string>
+    <string name="qk_04329" formatted="false">Clear the temporary workspace?</string>
+    <string name="qk_04330" formatted="false">Temporary files received by sharing are deleted; references in sessions stop working and cannot be restored. Sessions, attachments, settings, and credentials are untouched.</string>
+    <string name="qk_04331">Cleared %1$d tool-owned temporary items; references in sessions stop working.</string>
+    <string name="qk_04332" formatted="false">Clearing did not finish; retry, or copy the log and report it.</string>
+    <string name="qk_04333" formatted="false">Restart engine</string>
+    <string name="qk_04334" formatted="false">Restart ZorvAI?</string>
+    <string name="qk_04335" formatted="false">The local engine and page restart in a few seconds. Unsent text stays in the box.</string>
+    <string name="qk_04336" formatted="false">The restart did not start: the app and page lost their connection, or one is already running. Wait a few seconds, then reopen the app.</string>
+    <string name="qk_04337" formatted="false">Stop engine</string>
+    <string name="qk_04338" formatted="false">Stop the engine and return to the start screen?</string>
+    <string name="qk_04339" formatted="false">The local engine stops and the app returns to the start screen. It will not restart by itself.</string>
+    <string name="qk_04340" formatted="false">Console</string>
+    <string name="qk_04341" formatted="false">The runtime shell; still useful for diagnostics when the engine is down.</string>
+    <string name="qk_04342" formatted="false">Export config</string>
+    <string name="qk_04343">Exported to %1$s</string>
+    <string name="qk_04344">Export failed: %1$s</string>
+    <string name="qk_04345" formatted="false">Import config</string>
+    <string name="qk_04346" formatted="false">Import config?</string>
+    <string name="qk_04347" formatted="false">The current settings are replaced with exports/config/settings.yaml; the previous file is backed up as settings.yaml.import-backup.</string>
+    <string name="qk_04348">Imported and applied (the previous file is settings.yaml.import-backup). %1$s</string>
+    <string name="qk_04349">Import failed: %1$s</string>
+    <string name="qk_04350" formatted="false">Exported to Documents/dshdata/exports/config/settings.yaml; edit it there, then tap Import config. API keys are not included.</string>
+    <string name="qk_04351" formatted="false">unknown error</string>
+    <string name="qk_04352" formatted="false">Third-party model options live in Settings &gt; Model capabilities.</string>
+    <string name="qk_04353" formatted="false">Alert options live in Settings &gt; Notifications.</string>
+    <string name="qk_04354" formatted="false">Working…</string>
+    <string name="qk_04355" formatted="false">Restart</string>
+    <string name="qk_04356" formatted="false">Clear</string>
+    <string name="qk_04357" formatted="false">Import</string>
+    <string name="qk_04358" formatted="false">Restarting…</string>
+    <string name="qk_04359" formatted="false">Stopping…</string>
+    <string name="qk_04360" formatted="false">Scan again</string>
+    <string name="qk_04361">Removed %1$s</string>
+    <string name="qk_04362" formatted="false">Failed</string>
+    <string name="qk_04363" formatted="false">Skipped</string>
+    <string name="qk_04364" formatted="false">Not on the allowlist; this version keeps it</string>
+    <string name="qk_04365" formatted="false">Not found</string>
+    <string name="qk_04366" formatted="false">Unreadable</string>
+    <string name="qk_04367" formatted="false">No log folder was provided by the app</string>
+    <string name="qk_04368" formatted="false">The current engine log is absent (engine stopped)</string>
+    <string name="qk_04369" formatted="false">Kept on purpose</string>
+    <string name="qk_04370" formatted="false">Outside the allowlist; refused</string>
+    <string name="qk_04371" formatted="false">Already gone before it ran</string>
+    <string name="qk_04372" formatted="false">Skipped because the run was interrupted</string>
+    <string name="qk_04373" formatted="false">Delete failed (in use, read-only, or not permitted)</string>
+    <string name="qk_04374" formatted="false">No reason recorded</string>
+    <string name="qk_04375" formatted="false">This reason is not listed yet; copy the log and report it</string>
+    <string name="qk_04376" formatted="false">Clear runtime cache</string>
+    <string name="qk_04377" formatted="false">Last cleanup result (per item)</string>
+    <string name="qk_04378" formatted="false">Allowlist only: known-safe engine leftovers</string>
+    <string name="qk_04379" formatted="false">Clearing deletes external files in the temporary workspace; references in sessions stop working.</string>
+    <string name="qk_04380" formatted="false">Clear temporary workspace</string>
+    <string name="qk_04381" formatted="false">Stops and restarts the local engine (a few seconds)</string>
+    <string name="qk_04382" formatted="false">It will not restart by itself; start it manually</string>
+    <string name="qk_04383" formatted="false">Import from exports/config/settings.yaml and apply</string>
+    <string name="qk_04384" formatted="false">Runtime cache cleanup result</string>
+    <string name="qk_04385" formatted="false">Scanning…</string>
+    <string name="qk_04386">Skipped %1$d items (unknown or kept)</string>
+    <string name="qk_04387" formatted="false">Stop</string>
+    <string name="qk_04388" formatted="false">Compress threshold (%)</string>
+    <string name="qk_04389" formatted="false">Soft-trim threshold (%)</string>
+    <string name="qk_04390" formatted="false">Context compress threshold: when the estimated usage of history + system prompt reaches this share of the context window, the oldest rounds are trimmed (the system prompt is always kept) to leave room for the reply. Default 80 (20% headroom for the reply); 100 = legacy behavior (trim only when full).</string>
+    <string name="qk_04391" formatted="false">Context soft-trim threshold: when the estimated usage reaches this share, over-long tool outputs in history are trimmed in place (head + tail + truncation note; tool calls and results always stay paired); below this share tool outputs are left untouched. Default 50; 0 = legacy behavior (always trim).</string>
+    <string name="qk_04392" formatted="false">Permissions (accessibility / Shizuku)</string>
+    <string name="qk_04393" formatted="false">Granting happens in Settings → Permissions; this page only shows status and repairs</string>
+    <string name="qk_04394" formatted="false">Go to Settings → Permissions</string>
+    <string name="qk_04395" formatted="false">Master switch</string>
+    <string name="qk_04396" formatted="false">Off silences both ZorvAI reply notifications and workspace alerts</string>
+    <string name="qk_04397" formatted="false">Harness permission settings (post-grant options)</string>
+    <string name="qk_04398" formatted="false">Harness permission settings</string>
+    <string name="qk_04399" formatted="false">This page only tunes what the harness may use; accessibility / Shizuku grants live in Settings → Permissions</string>
+    <string name="qk_04400">%1$d / %2$d ready</string>
+    <string name="qk_04402" formatted="false">Screen</string>
+    <string name="qk_04403" formatted="false">Privilege</string>
+    <string name="qk_04404" formatted="false">Root</string>
+    <string name="qk_04405" formatted="false">Accessibility</string>
+    <string name="qk_04408" formatted="false">Refresh status</string>
+    <string name="qk_04410" formatted="false">ZorvAI accessibility &amp; device control</string>
+    <string name="qk_04411" formatted="false">Enabled in system · review</string>
+    <string name="qk_04412" formatted="false">Lets the AI assistant read the screen and tap, type or scroll</string>
+    <string name="qk_04413" formatted="false">Failed to read the license list (this page only)</string>
+    <string name="qk_04414">%1$d components · generated %2$s</string>
+    <string name="qk_04415" formatted="false">Loading license list…</string>
+    <string name="qk_04416" formatted="false">License obligations</string>
+    <string name="qk_04417">This app is released under %1$s</string>
 </resources>

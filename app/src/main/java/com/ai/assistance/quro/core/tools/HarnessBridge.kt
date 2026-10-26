@@ -25,6 +25,23 @@ import java.io.File
  *   3. 给 harness 的**活 profile patch** 追加一个 insert 条目，让它启动时加载一个
  *      mcp-client 插件实例连过来。
  *
+ * ## 互控多通道（2026-10-26 用户裁定：MCP 是一种，内置插件也是一种，多通道应该做出来）
+ *
+ * 方向一有**两条通道**，同一批工具、同一执行面（[QuroLocalMcpServer] 的两个协议面）：
+ *
+ *   · **MCP 通道**（运行时写入）：上述 patch + `@deepseek-ai/dsh-mcp-client`，
+ *     经 `/mcp` JSON-RPC 面调用，harness 侧工具名 `mcp__zorvai__<工具名>`；
+ *     patch 是启动期读的，**需重启 harness 生效**。
+ *   · **内置插件通道**（随快照装配）：harness 侧内置插件
+ *     `@dsh-android/dsh-android-zorvai-tools`（仓内 `plugins/dsh-android-zorvai-tools`，
+ *     已登记进 inject 链与快照），经 `/tool/<工具名>` 纯 HTTP 面调用，
+ *     harness 侧工具名 `zorvai_<工具名>`（元工具 `zorvai_bridge` 常驻可见，可自诊断/刷新）。
+ *     壳侧只写一份**零配置端点清单** `<dshHome>/zorvai-tools.json`（端点 + 工具定义）：
+ *     插件 apply 时读它注册工具、每次 execute 前重读——换端口无需重启引擎；
+ *     清单缺席 = 桥未启用，插件只注册元工具，引擎照常启动（不炸 boot）。
+ *
+ * 两条通道调用同一批 ZorvAI 工具；一条失败换另一条即可，语义等价。
+ *
  * ## patch 落点（#404 修正：旧路径已失效）
  *
  * 新引擎的 patch 链只读 `filesDir/home/.dsh/profiles/{web,headless}/cordis.patch.yml`
@@ -56,6 +73,12 @@ object HarnessBridge {
     /** harness 的 mcp-client 插件包名。 */
     private const val MCP_CLIENT_PKG = "@deepseek-ai/dsh-mcp-client"
 
+    /** 内置插件通道的端点清单文件名（落在 <dshHome> 根下）。 */
+    private const val MANIFEST_FILE = "zorvai-tools.json"
+
+    /** 内置插件通道的 HTTP 工具面路径（与 QuroLocalMcpServer 的 TOOL_ROUTE_PREFIX 对应）。 */
+    private const val TOOL_PATH = "/tool"
+
     private const val BLOCK_BEGIN = "# >>> zorvai-mcp-bridge (managed by ZorvAI; do not edit)"
     private const val BLOCK_END = "# <<< zorvai-mcp-bridge"
 
@@ -68,19 +91,62 @@ object HarnessBridge {
     fun patchFile(context: Context): File =
         File(File(File(File(context.filesDir, "home"), ".dsh"), "profiles"), "web/cordis.patch.yml")
 
+    /**
+     * 内置插件通道的端点清单：`filesDir/home/.dsh/zorvai-tools.json`。
+     *
+     * 由 [enable] 写、[disable] 删；插件每次 execute 前重读它，所以端口刷新后由
+     * [refreshManifest] 重写即生效，无需重启引擎。
+     */
+    fun manifestFile(context: Context): File =
+        File(File(File(context.filesDir, "home"), ".dsh"), MANIFEST_FILE)
+
     fun isEnabled(context: Context): Boolean {
         val f = patchFile(context)
         return f.isFile && f.readText().contains(ENTRY_ID)
     }
 
     /**
-     * 把 ZorvAI 的全部工具暴露给 harness。
+     * 用户是否**显式**关闭过互控桥（设置里的 bridge_off）。
+     *
+     * 为什么需要这个标记：桥原本只在「引擎每次 spawn 前」建一次，而 spawn 是无条件
+     * `enable()` 的 —— 于是「关闭」会被下一次启动静默复活的另一面是：**引擎一次都没成功
+     * 起来过时，桥就一次都没建过**（用户实测：端点清单不存在、127.0.0.1 上没有 /tool 监听）。
+     * 现在应用启动即自愈（[ensureAuto]），但必须尊重用户显式关闭，否则关掉又自己活了。
+     */
+    private const val PREF_USER_OFF = "harness_bridge_user_off"
+
+    private fun prefs(context: Context) =
+        context.getSharedPreferences("quro_ui", Context.MODE_PRIVATE)
+
+    fun isUserDisabled(context: Context): Boolean =
+        runCatching { prefs(context).getBoolean(PREF_USER_OFF, false) }.getOrDefault(false)
+
+    /**
+     * 把 ZorvAI 的全部工具暴露给 harness（**显式**启用：用户点 bridge_on 或设置里打开）。
      *
      * 返回给人看的说明（含 endpoint 与工具数）。失败时返回以「⛔」开头的原因。
      */
     fun enable(context: Context): String {
-        val reg = buildQuroRegistry(context)
-        val tools = reg.all()
+        runCatching { prefs(context).edit().putBoolean(PREF_USER_OFF, false).apply() }
+        return enableInternal(context)
+    }
+
+    /**
+     * 自动启用（应用启动 / 引擎 spawn 前调用）：幂等；用户显式关闭过则跳过。
+     *
+     * 与 [enable] 的唯一区别就是这条「尊重关闭」判断。
+     */
+    fun ensureAuto(context: Context): String {
+        if (isUserDisabled(context)) return "用户已关闭互控桥，跳过自动启用"
+        return enableInternal(context)
+    }
+
+    private fun enableInternal(context: Context): String {
+        // 🔴 注册表构建异常必须说人话：此前是裸抛，被上层 runCatching 吞掉 → 桥静默缺失
+        val reg = runCatching { buildQuroRegistry(context) }
+            .getOrElse { return "⛔ 构建 ZorvAI 工具注册表失败：${it.message ?: it.javaClass.simpleName}" }
+        val tools = runCatching { reg.all() }
+            .getOrElse { return "⛔ 枚举 ZorvAI 工具失败：${it.message ?: it.javaClass.simpleName}" }
         if (tools.isEmpty()) return "⛔ ZorvAI 当前没有可暴露的工具"
 
         val defs = JSONArray()
@@ -115,11 +181,32 @@ object HarnessBridge {
         val url = cfg.url
         if (url.isBlank()) return "⛔ 本地 MCP 没有 endpoint"
 
-        // 写 harness 的活 profile patch（幂等标记块，不动工厂条目）
+        // ══ ② 内置插件通道：**先**写端点清单 ══
+        // 🔴 顺序是有讲究的（2026-10-26 真机事故）：清单只依赖「MCP server 已起」，
+        // 而 profile patch 要等快照解压后才存在。旧实现把清单写在 patch 之后，
+        // 首次启动时 patch 还没落盘 → 直接 ⛔ 返回 → 清单永远不写，
+        // 插件只注册元工具 zorvai_bridge，`zorvai_*` 一个都没有（用户实测：
+        // zorvai-tools.json 不存在、127.0.0.1 上也没有 /tool 监听）。
+        // 现在清单先写：引擎起来的那一刻通道②就已经可用，不必等下一次重启。
+        val manifestErr = writeManifest(context, defs.toString(), url)
+
+        // ══ ① MCP 通道：profile patch（启动期读取，需重启引擎生效）══
         val f = patchFile(context)
         if (!f.isFile) {
-            return "⛔ 找不到 harness 的 profile patch（${f.absolutePath}）。\n" +
-                "快照可能还没解压——先执行 harness(action=start) 把引擎拉起来，再 bridge_on。"
+            // 降级而不是全废：快照还没解压时 patch 不存在，这是**正常时序**，不是错误。
+            // 每次 spawn 前 ensureBridge 都会再调一次，patch 落盘后自动补写。
+            return buildString {
+                if (manifestErr == null) {
+                    appendLine("✅ 内置插件通道已就绪：${defs.length()} 个工具 → $url$TOOL_PATH")
+                    appendLine("   清单：${manifestFile(context).absolutePath}")
+                    appendLine("   harness 侧工具名：zorvai_<工具名>（元工具 zorvai_bridge 可自诊断/刷新）")
+                } else {
+                    appendLine("⚠ 端点清单写入失败：$manifestErr")
+                }
+                appendLine()
+                appendLine("⏳ MCP 通道待接：找不到 harness 的 profile patch（${f.absolutePath}）。")
+                appendLine("   快照尚未解压时这是正常时序 —— 下次启动 harness 会自动补写，无需手动操作。")
+            }
         }
         val block = buildString {
             appendLine(BLOCK_BEGIN)
@@ -152,21 +239,34 @@ object HarnessBridge {
             return "⛔ 写入 profile patch 失败：${t.message ?: t.javaClass.simpleName}"
         }
         Log.i(TAG, "已桥接 ${defs.length()} 个工具 → $url（patch=${f.absolutePath}）")
+
         return buildString {
-            appendLine("✅ 已把 ZorvAI 的 ${defs.length()} 个工具暴露给 DeepSeek Harness")
+            appendLine("✅ 已把 ZorvAI 的 ${defs.length()} 个工具暴露给 DeepSeek Harness（多通道）")
             if (skipped > 0) appendLine("   （$skipped 个名称不合法的工具已跳过）")
-            appendLine("   MCP 端点：$url")
+            appendLine()
+            appendLine("① MCP 通道（patch 启动期读取，需重启 harness 生效）")
+            appendLine("   端点：$url")
             appendLine("   桥接层：${f.absolutePath}")
+            appendLine("   harness 侧工具名：mcp__${ALIAS}__<工具名>")
             appendLine()
-            appendLine("harness 侧看到的工具名是 mcp__${ALIAS}__<工具名>，")
-            appendLine("它自己的 agent 会像用内置工具一样调用它们（真正执行的是 ZorvAI 的工具）。")
+            appendLine("② 内置插件通道（随快照装配，清单落盘即生效）")
+            if (manifestErr == null) {
+                appendLine("   清单：${manifestFile(context).absolutePath}")
+                appendLine("   harness 侧工具名：zorvai_<工具名>（元工具 zorvai_bridge 可自诊断/刷新）")
+            } else {
+                appendLine("   ⚠ 端点清单写入失败：$manifestErr")
+                appendLine("   （内置插件通道暂不可用；MCP 通道不受影响）")
+            }
             appendLine()
-            appendLine("⚠ 需要重启 harness 才生效（harness action=restart，或 stop+start）。")
+            appendLine("两条通道调用同一批 ZorvAI 工具，语义等价；一条失败换另一条重试即可。")
+            appendLine("⚠ MCP 通道需要重启 harness 才生效（harness action=restart，或 stop+start）。")
         }
     }
 
-    /** 关闭桥接：删 patch 标记块 + 注销本地 MCP。 */
+    /** 关闭桥接：删 patch 标记块 + 删端点清单 + 注销本地 MCP + 记下「用户显式关闭」。 */
     fun disable(context: Context): String {
+        // 记下显式关闭：否则应用启动自愈 / 下次 spawn 会立刻把它复活
+        runCatching { prefs(context).edit().putBoolean(PREF_USER_OFF, true).apply() }
         val f = patchFile(context)
         var existed = false
         if (f.isFile) {
@@ -189,9 +289,17 @@ object HarnessBridge {
         }
         val msg = runCatching { QuroLocalMcpManager.undeploy(context, ALIAS) }
             .getOrElse { "注销本地 MCP 失败：${it.message}" }
+        // 内置插件通道：删端点清单（缺席即插件只注册元工具 zorvai_bridge，天然回退）
+        val mf = manifestFile(context)
+        val manifestExisted = mf.isFile
+        if (manifestExisted) {
+            runCatching { mf.delete() }
+                .onFailure { Log.w(TAG, "删端点清单失败：${it.message}") }
+        }
         return buildString {
             appendLine(if (existed) "✅ 已移除 harness 桥接层" else "桥接层本就不存在")
             appendLine(msg)
+            if (manifestExisted) appendLine("已删除内置插件通道端点清单（$MANIFEST_FILE）")
             appendLine("⚠ 需重启 harness 才生效。")
         }
     }
@@ -209,10 +317,16 @@ object HarnessBridge {
         }
         val cfg = QuroMcpClientPrefs.loadLocal(context).firstOrNull { it.alias == ALIAS }
         appendLine("本地 MCP   : " + if (cfg != null) "✓ ${cfg.url}" else "✗ 未部署")
+        val mf = manifestFile(context)
+        appendLine("插件清单   : " + if (mf.isFile) "✓ ${mf.absolutePath}" else "✗ 未启用")
         val count = buildQuroRegistry(context).all().size
         appendLine("可暴露工具 : $count 个")
         appendLine()
-        appendLine("方向一（harness 用 ZorvAI 工具）：MCP，需 enable 后重启 harness")
+        appendLine("方向一（harness 用 ZorvAI 工具）—— 两条通道，同一批工具：")
+        appendLine("  ① MCP 通道：mcp__${ALIAS}__<工具名>（patch 启动期读取，enable 后需重启 harness）")
+        appendLine("  ② 内置插件通道：zorvai_<工具名>（随快照装配，清单在场即生效；")
+        appendLine("     元工具 zorvai_bridge 可自诊断桥状态、refresh=true 补注册新工具）")
+        appendLine()
         appendLine("方向二（ZorvAI 用 harness 工具/插件）：harness action=task 驱动它用自己的插件干活；")
         appendLine("                                    action=plugins 可列它的插件清单")
     }
@@ -229,6 +343,71 @@ object HarnessBridge {
         }
         // 去掉因剥块产生的尾部空行堆积，最多保留一个换尾
         return out.toString().trimEnd('\n', '\r', ' ', '\t') + "\n"
+    }
+
+    /**
+     * 写内置插件通道的端点清单（原子写；插件可能随时读它，不能留半截）。
+     *
+     * @param defsJson [enable] 里 build 出来的 MCP 工具定义数组（name/description/parameters）。
+     * @param mcpUrl   本地 MCP 端点（`http://127.0.0.1:<port>/mcp`；清单里去掉 `/mcp`
+     *                 后缀作 baseUrl——两个协议面同源不同路径）。
+     * @return null = 成功；否则为人看的失败原因。
+     */
+    private fun writeManifest(context: Context, defsJson: String, mcpUrl: String): String? {
+        val defs = runCatching { JSONArray(defsJson) }
+            .getOrElse { return "工具定义不可序列化：${it.message}" }
+        val tools = JSONArray()
+        for (i in 0 until defs.length()) {
+            val d = defs.optJSONObject(i) ?: continue
+            tools.put(JSONObject().apply {
+                put("name", d.optString("name", ""))
+                put("description", d.optString("description", ""))
+                put("parameters", d.opt("parameters") ?: JSONObject().put("type", "object"))
+            })
+        }
+        val baseUrl = mcpUrl.trim().trimEnd('/').removeSuffix("/mcp").trimEnd('/')
+        if (baseUrl.isBlank()) return "本地 MCP 端点为空"
+        val manifest = JSONObject().apply {
+            put("version", 1)
+            put("alias", ALIAS)
+            put("baseUrl", baseUrl)
+            put("toolPath", TOOL_PATH)
+            put("updatedAt", java.time.Instant.now().toString())
+            put("tools", tools)
+        }
+        val mf = manifestFile(context)
+        val tmp = File(mf.parentFile, mf.name + ".zorvai.tmp")
+        return try {
+            mf.parentFile?.mkdirs()
+            tmp.writeText(manifest.toString())
+            if (!tmp.renameTo(mf)) {
+                tmp.copyTo(mf, overwrite = true)
+                tmp.delete()
+            }
+            Log.i(TAG, "已写内置插件通道端点清单：${mf.absolutePath}（${tools.length()} 个工具 → $baseUrl$TOOL_PATH）")
+            null
+        } catch (t: Throwable) {
+            tmp.delete()
+            "写入端点清单失败：${t.message ?: t.javaClass.simpleName}"
+        }
+    }
+
+    /**
+     * 端口刷新后重写端点清单（[QuroLocalMcpManager.startAll] 应用重启恢复本地 MCP 时调用）。
+     *
+     * 本地 server 每次启动都换随机端口，manifest 里的一次性 baseUrl 会变成死端口；
+     * 插件每次 execute 前重读清单，所以这里重写即生效，无需重启引擎。
+     *
+     * 桥未启用（patch 无标记块 / prefs 无 local 配置）时是 no-op——禁用态不写清单。
+     */
+    fun refreshManifest(context: Context) {
+        // 桥未启用时是 no-op；但「patch 尚未落盘（快照没解压）、清单已存在」这一态也要刷新——
+        // 通道② 现在先于 ① 上线（见 enable 里的顺序注释），不能因为 isEnabled=false 就停更端口。
+        if (!isEnabled(context) && !manifestFile(context).isFile) return
+        val cfg = QuroMcpClientPrefs.loadLocal(context).firstOrNull { it.alias == ALIAS } ?: return
+        if (cfg.url.isBlank() || cfg.toolDefs.isBlank()) return
+        val err = writeManifest(context, cfg.toolDefs, cfg.url)
+        if (err != null) Log.w(TAG, "刷新端点清单失败：$err")
     }
 
     /**

@@ -378,7 +378,15 @@ class GuideAndConsoleBatch6Test {
       .substringBefore("val brandBlock =")
     assertTrue("单行", pill.contains("maxLines = 1"))
     assertTrue("省略号", pill.contains("ellipsize = TextUtils.TruncateAt.END"))
-    assertTrue("宽度上限（否则长版本号把标题挤成两行）", pill.contains("maxWidth = (res.displayMetrics.widthPixels * 0.34f).toInt()"))
+    // 🔴 限宽必须在「放得下完整戳」的区间：`v1.2.0 · B20261026-1245` 在 360dp 屏上约 164dp，
+    // 旧的 0.34f 只有 122dp —— 省略号恰好吃掉最有辨识度的「时间」那 4 位，
+    // 而 pill 存在的唯一理由就是「装的是哪一包」当场可验，被截断等于自证失效
+    // （用户真机截图就是这么变成 `B20261026…` 的）。上限仍要有，避免长版本号把标题挤成两行。
+    val ratio = Regex("""maxWidth = \(res\.displayMetrics\.widthPixels \* ([0-9.]+)f\)\.toInt\(\)""")
+      .find(pill)?.groupValues?.get(1)?.toFloatOrNull()
+    assertTrue("必须有宽度上限（否则长版本号把标题挤成两行）", ratio != null)
+    assertTrue("上限不能小于 0.6（否则完整戳会被截断：实际=$ratio）", (ratio ?: 0f) >= 0.6f)
+    assertTrue("上限不能超过 0.9（仍要防止挤两行：实际=$ratio）", (ratio ?: 1f) <= 0.9f)
   }
 
   @Test

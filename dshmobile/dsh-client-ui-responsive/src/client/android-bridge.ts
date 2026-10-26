@@ -1,6 +1,6 @@
 /**
  * Android shell bridge types (window.androidBridge): every method injected by MainActivity's
- * addJavascriptInterface. Single source of truth — theme-bridge and dev-section share this
+ * addJavascriptInterface. Single source of truth — every page-side consumer shares this
  * declaration; all methods optional (safe degradation on desktop/non-shell hosts).
  */
 /** How the shell should hand a path to the system chooser. */
@@ -179,20 +179,10 @@ export interface AndroidShellBridge {
   setVdisplayFloatEnabled?: (enable: boolean) => boolean
   /** 0.14.0 设置页「手机控制」：强制销毁全部虚拟屏（三连点确认后调用）。 */
   forceDestroyVdisplay?: () => string
-  /** 0.14.1 块J FIX-4：通知设置读回（JSON：suppressForeground / suppressForegroundDefault / categories）。
-   *  `key` 为空串 = 全量快照；回读始终取壳侧真源，不回显入参。 */
-  getNotifySetting?: (key?: string) => string
-  /** 0.14.1 块J FIX-4：通知设置写入（key = `suppressForeground` 或 `cat.<category>`）。
-   *  返回写后读回的 JSON；`applied=false` 即未生效（未知 key / 读回不一致）。 */
-  setNotifySetting?: (key: string, value: boolean) => string
-  /** 0.14.1 批 4：通知自检（每渠道的系统实际状态 + 是否被降级）。JSON 字符串。 */
-  notifySelfCheck?: () => string
-  /** 0.14.1 批 4：打开系统「本应用通知设置」；false = 该 ROM 无此页（页面须如实提示）。 */
-  openNotifyAppSettings?: () => boolean
-  /** 0.14.1 批 4：打开某渠道的系统设置页；false = 拉起失败。 */
-  openNotifyChannelSettings?: (channelId: string) => boolean
-  /** 发送五类测试通知，返回实际投递条数（0..5）；0 = 没发出去（权限/渠道不可用）。 */
-  notifySendTest?: () => number
+  /* 通知设置桥面已随 #429 删除（6 个方法：getNotifySetting / setNotifySetting /
+     notifySelfCheck / openNotifyAppSettings / openNotifyChannelSettings / notifySendTest）：
+     通知设置已整体迁入 ZorvAI 设置（壳侧 HarnessNotifyScreen 直调 NotifyCenter 单例），
+     WebUI 不再有调用方。勿再加回来——新增桥方法前先确认页面侧存在真实调用点。 */
 }
 
 declare global {

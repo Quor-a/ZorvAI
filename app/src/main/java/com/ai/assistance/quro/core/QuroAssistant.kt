@@ -465,7 +465,15 @@ class QuroAssistant(
                 // 未知时回落 1048576 安全顶；contextWindow 是用户在总开关上设的预算（≤ 硬上限，0=用硬上限）。
                 val hardMax = if (cfg.modelContextLength > 0) cfg.modelContextLength else MODEL_MAX_INPUT_TOKENS
                 val effContextWindow = if (cfg.contextWindow > 0) cfg.contextWindow.coerceAtMost(hardMax) else hardMax
-                val baseMessages = runCatching { store.toLlmMessages(system, effContextWindow, effHistoryRounds) }.getOrElse { emptyList() }
+                val baseMessages = runCatching {
+                    store.toLlmMessages(
+                        system,
+                        effContextWindow,
+                        effHistoryRounds,
+                        cfg.contextCompressThreshold,
+                        cfg.contextSoftTrimThreshold,
+                    )
+                }.getOrElse { emptyList() }
                 // 「AI 回复语言」最高近因注入：历史消息（尤其上一轮 AI 自己的回复）多为中文，
                 // 模型会顺着最近的历史继续说中文，system 提示词开头的语言指令会被稀释。
                 // 这里在本轮首次请求的 payload 末尾追加一条 system 提醒，使其成为生成前最近的一条指令。
@@ -1449,7 +1457,13 @@ class QuroAssistant(
         val maxRounds = 6
         var lastText = ""
         for (round in 0 until maxRounds) {
-            val msgs = subStore.toLlmMessages(system, SUBAGENT_CONTEXT_WINDOW_TOKENS, 0)
+            val msgs = subStore.toLlmMessages(
+                system,
+                SUBAGENT_CONTEXT_WINDOW_TOKENS,
+                0,
+                cfg.contextCompressThreshold,
+                cfg.contextSoftTrimThreshold,
+            )
             val res = runCatching {
                 client.chat(
                     baseUrl = cfg.baseUrl,

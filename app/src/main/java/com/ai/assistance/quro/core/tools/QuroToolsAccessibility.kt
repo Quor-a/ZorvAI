@@ -2,14 +2,19 @@ package com.ai.assistance.quro.core.tools
 import com.ai.assistance.quro.R
 import com.ai.assistance.quro.util.qstr
 
+import android.app.KeyguardManager
 import android.content.Context
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Path
 import android.graphics.Rect
+import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.util.DisplayMetrics
 import android.util.Log
+import android.view.Display
 import android.view.accessibility.AccessibilityNodeInfo
 import com.ai.assistance.quro.core.privilege.QuroLsposeBridgeReceiver
 import com.ai.assistance.quro.service.QuroAccessibilityService
@@ -141,29 +146,67 @@ class GetForegroundAppTool : QuroTool {
     }
 }
 
-/** 获取屏幕状态（是否亮屏 / 方向 / 尺寸）。 */
+/** 获取屏幕状态（是否亮屏 / 是否锁屏 / 方向 / 尺寸）。 */
 class GetScreenStateTool : QuroTool {
     override val name = "get_screen_state"
-    override val description = "获取屏幕状态（亮灭 / 方向），无需参数 {}。"
+    override val description = "获取屏幕状态：是否亮屏、是否锁屏、旋转方向、分辨率与密度。无需参数 {}。"
     override val parametersJson = """{"type":"object","properties":{}}"""
+
+    // getRealMetrics 在 API 17+ 就标注 deprecated（推荐 WindowMetrics，但后者在
+    // application Context 上同样不可用），这里的回落链是刻意保留的。
+    @Suppress("DEPRECATION")
     override fun run(context: Context, arguments: String): String {
-        val pm = context.packageManager
-        val display = context.display ?: context.getSystemService(Context.WINDOW_SERVICE)?.let {
-            @Suppress("DEPRECATION") it.javaClass.getMethod("getDefaultDisplay").invoke(it)
-        } ?: return "❌ 无法获取 Display"
-        // 使用 Display API 判断方向
-        val rotation = try {
-            val m = display.javaClass.getMethod("getRotation")
-            when (m.invoke(display) as Int) {
-                0 -> "竖直(0°)"
-                1 -> "横屏左转(90°)"
-                2 -> "倒置(180°)"
-                3 -> "横屏右转(270°)"
-                else -> qstr(R.string.qk_00472)
-            }
-        } catch (_: Exception) { qstr(R.string.qk_00472) }
-        val dm = context.resources.displayMetrics
-        return """{"screen_on":true,"rotation":"$rotation","width_px":${dm.widthPixels},"height_px":${dm.heightPixels},"density":${dm.densityDpi}}"""
+        // 🔴 Display 只能从 **DisplayManager** 取。
+        // 旧实现写的是 `context.display`，而工具拿到的永远是 application Context ——
+        // 非 visual Context 调 getDisplay() 会直接抛 UnsupportedOperationException：
+        //   "Tried to obtain display from a Context not associated with one…"
+        // 这就是两条通道（zorvai_* 与 mcp__zorvai__*）同一句报错的来源。改用
+        // `DisplayManager.getDisplay(DEFAULT_DISPLAY)` 是系统服务，不依赖 Context 关联 display。
+        // 注意 `WindowManager.getDefaultDisplay()` 救不了：application Context 拿到的
+        // WindowManager 也未关联 display，抛的是同一句。
+        val display: Display? = runCatching {
+            (context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager)
+                ?.getDisplay(Display.DEFAULT_DISPLAY)
+        }.getOrNull()
+
+        // 亮屏判据必须是 PowerManager.isInteractive。旧实现把 "screen_on" 硬编码成 true，
+        // 熄屏/合上保护盖时照样报「亮着」——工具描述里「屏幕亮着吗」因此永远答错。
+        val screenOn = runCatching {
+            (context.getSystemService(Context.POWER_SERVICE) as? PowerManager)?.isInteractive == true
+        }.getOrDefault(false)
+
+        // 锁屏是「亮着但用不了」这一类现场的关键区分（无障碍读屏在锁屏时读不到内容）。
+        val locked = runCatching {
+            (context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)?.isKeyguardLocked == true
+        }.getOrDefault(false)
+
+        val rotation = display?.let { d ->
+            runCatching {
+                when (d.rotation) {
+                    android.view.Surface.ROTATION_0 -> "竖直(0°)"
+                    android.view.Surface.ROTATION_90 -> "横屏左转(90°)"
+                    android.view.Surface.ROTATION_180 -> "倒置(180°)"
+                    android.view.Surface.ROTATION_270 -> "横屏右转(270°)"
+                    else -> qstr(R.string.qk_00472)
+                }
+            }.getOrNull()
+        } ?: qstr(R.string.qk_00472)
+
+        // 尺寸 / 密度：优先真实 Display 指标（含状态栏与手势区），Display 不可读时回落 resources。
+        val metrics: DisplayMetrics = runCatching {
+            display?.let { d -> DisplayMetrics().also { m -> d.getRealMetrics(m) } }
+        }.getOrNull() ?: runCatching { context.resources.displayMetrics }.getOrNull()
+            ?: return """{"screen_on":$screenOn,"locked":$locked,"rotation":"$rotation","error":"无法读取屏幕尺寸"}"""
+
+        val state = when {
+            !screenOn -> "off"
+            locked -> "locked"
+            else -> "on"
+        }
+        return """{"screen_on":$screenOn,"locked":$locked,"state":"$state",""" +
+            """"rotation":"$rotation","width_px":${metrics.widthPixels},""" +
+            """"height_px":${metrics.heightPixels},"density":${metrics.densityDpi},""" +
+            """"display_readable":${display != null}}"""
     }
 }
 

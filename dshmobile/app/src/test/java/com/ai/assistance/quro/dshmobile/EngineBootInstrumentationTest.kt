@@ -80,6 +80,72 @@ class EngineBootInstrumentationTest {
     assertEquals("极大值被上限压住，不得溢出成负数", 4096, engineHeapMb(Int.MAX_VALUE))
   }
 
+  // ── 2026-10-26 cgroup 钳制：V8 天花板必须让位于 app cgroup 硬墙 ─────────────────
+
+  @Test
+  fun effectiveEngineHeapIsClampedToTheCgroupShare() {
+    // RMX8899 16GB 实锤现场：engineHeapMb 给 4096（V8 heap_size_limit 4192MB），而 app cgroup
+    // 远低于物理内存的一半 ⇒ V8 增长中 RSS 先撞墙，cgroup OOM killer 无声斩首 node。
+    // 钳制口径 = min(物理推导, max(cgroup×55%, 512))。
+    assertEquals(
+      "16GB 设备 + 2GB cgroup：4096 天花板被压到 1126（2048×55%，V8 自然推导同量级，长期跑稳）",
+      1126,
+      effectiveEngineHeapMb(16384, 2048),
+    )
+    assertEquals(
+      "16GB 设备 + 4GB cgroup：压到 2252 而不是 4096",
+      2252,
+      effectiveEngineHeapMb(16384, 4096),
+    )
+    assertEquals(
+      "4GB 设备 + 2GB cgroup：物理推导 2048 与份额 1126 取紧",
+      1126,
+      effectiveEngineHeapMb(4096, 2048),
+    )
+    assertEquals(
+      "2GB 设备 + 2GB cgroup：物理推导 1024 比份额更紧，取 1024",
+      1024,
+      effectiveEngineHeapMb(2048, 2048),
+    )
+  }
+
+  @Test
+  fun effectiveEngineHeapFallsBackWhenCgroupIsUnreadableOrImplausible() {
+    // 读不到 cgroup（SELinux 禁读 /sys、路径不存在、解析失败）⇒ 整体回退物理推导，零回归。
+    assertEquals("cgroup=0（读不到）：16GB 设备仍拿 4096，与钳制层引入前一致", 4096, effectiveEngineHeapMb(16384, 0))
+    assertEquals("cgroup=-1（未知）：同样回退", 4096, effectiveEngineHeapMb(16384, -1))
+    // 无限制占位值（v1 的 9223372036854771712B ≈ 8.8PB）不得被当成真实容量去压堆
+    assertEquals(
+      "cgroup 超出可信阈值（无限制占位）：回退物理推导而不是按占位值钳制",
+      4096,
+      effectiveEngineHeapMb(16384, CGROUP_LIMIT_PLAUSIBLE_MB + 1),
+    )
+    assertEquals(
+      "cgroup 恰在阈值上仍算可信（8192×55%=4505 仍被 4096 天花板压住）",
+      4096,
+      effectiveEngineHeapMb(16384, CGROUP_LIMIT_PLAUSIBLE_MB),
+    )
+  }
+
+  @Test
+  fun effectiveEngineHeapKeepsTheFloorOnTinyCgroups() {
+    // cgroup 容量连份额都低于下限时保留下限：这种设备本来就跑不下这套栈，
+    // 「能启动」优先于「不撞墙」（低于下限引擎 boot 即 OOM，同样不可用）。
+    assertEquals(
+      "cgroup 700MB：份额 385 低于下限，保 512（不可救的设备保启动优先）",
+      512,
+      effectiveEngineHeapMb(16384, 700),
+    )
+    assertEquals(
+      "cgroup 1GB：份额 563 高于下限，取 563",
+      563,
+      effectiveEngineHeapMb(16384, 1024),
+    )
+    // 份额口径本身：55% 必须真的生效（而不是 50% 之类的漂移值）
+    assertEquals(55, ENGINE_HEAP_CGROUP_SHARE_NUM)
+    assertEquals(100, ENGINE_HEAP_CGROUP_SHARE_DEN)
+  }
+
   @Test
   fun heapOptionIsAWellFormedV8FlagAndNeverBelowTheFloor() {
     // 注入给 node 的必须是**合法可解析**的标志，且任何输入都不得产出小于下限的标志。

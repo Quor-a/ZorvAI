@@ -57,7 +57,7 @@
   <b>☕ 如果这个项目对你有帮助，欢迎到 <a href="https://afdian.com/a/zorvAI">爱发电 (afdian)</a> 支持我们，助力持续开发 ❤️</b>
 </p>
 
-> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.1.6`（`versionCode 1001006`）
+> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.2.1`（`versionCode 1002001`）
 >
 > Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **235 个内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
 >
@@ -503,7 +503,15 @@ dsh 是 Node.js 应用（`dsh web` 起 HTTP 服务 + 自带前端）。要让它
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[v1.2.0 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
+- 🟢 **[v1.2.1 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
+
+  **开源协议全量排查（11 功能模块 · 117 条第三方许可）+ 无障碍服务合并 + 设置-关于-开源许可证数据驱动页面**
+
+  - **开源协议全项目排查**：覆盖 LSPosed 模块、USB/无线调试、DeepSeek Harness、墨语言、GenUI Agent、APK 插件、工具包运行时、构建台、节点编辑器、小程序、可视化编程等 11 个功能模块，117 条第三方许可按功能归类，统一生成数据源 `app/src/main/assets/legal/third_party_licenses.json` 与根 `NOTICE`；「设置 → 关于 ZorvAI → 开源许可证」改为数据驱动、按模块展示。
+  - **无障碍服务合并**：原双服务（AI 操控 + 工具）合并为单一无障碍服务，去除重复权限声明。
+  - **GPL 义务披露**：Termux 终端库（libtermux-terminal，GPL-3.0）、dshmobile 内置 Termux 快照（GPL-3.0）、墨语言运行时（proot / Bash / QEMU / Ubuntu rootfs，GPL）按强 Copyleft 要求在本节与 [NOTICE](./NOTICE) 中如实声明。
+
+- 🟡 **[v1.2.0 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名）
 
   **内置墨语言 Mo v1.165.0 · 移除 LANXIU · 包体积 805MB → 382MB**
 
@@ -606,8 +614,12 @@ Zorv AI 本应用源码以 **Apache-2.0** 许可证发布（见 [LICENSE](./LICE
 - **主许可**：Apache-2.0（应用全部源码）。
 - **GeckoView（Mozilla）**：以 **MPL-2.0** 分发（file-level copyleft）。该依赖随构建引入（可选内置浏览器引擎，当前渲染实际走系统 `android.webkit.WebView`），对应源代码随构建提供。
 - **端侧 CPython 3.14（PyEngine / Scripting 沙箱）**：Python 解释器本体以 **PSF-2.0** 分发；随包链接的 OpenSSL（Apache-2.0）、SQLite（Public Domain）见 [NOTICE](./NOTICE)。
+- **Terminal 终端库（Termux，`libtermux-terminal`）**：以 **GPL-3.0** 分发（强 Copyleft）。本应用链接该库提供终端能力，依 GPL-3.0 第 1、3 条，完整对应源码见 [NOTICE](./NOTICE) 与本仓库源码树。
+- **dshmobile 内置 Termux 运行时快照**：以 **GPL-3.0** 分发（强 Copyleft）。该快照随包内置提供终端/Shell 运行时能力，对应源码随本仓库分发。
+- **墨语言（Moyu）运行时**：内置 proot / Bash / QEMU / Ubuntu rootfs 等组件以 **GPL** 系列许可证分发（proot、Bash、QEMU 为 GPL-2.0+/GPL-3.0，Ubuntu rootfs 为 GPL 相关）；本应用以独立进程调用其运行时，依其许可证要求如实声明，对应源码见 [NOTICE](./NOTICE)。
 - **其余第三方依赖**（AndroidX / Jetpack Compose、Kotlin、OkHttp、Shizuku、QuickJS、Sherpa-NCNN、Chart.js / D3 / ECharts / KaTeX、React / Recharts / Lucide 等）各自保留原有许可证，完整清单见 [NOTICE](./NOTICE)。
 
+> 第三方许可全量清单（按功能模块归类、共 117 条 / 11 类）由 [tools/gen_licenses.py](./tools/gen_licenses.py) 统一生成至 `app/src/main/assets/legal/third_party_licenses.json`，并同步到根 `NOTICE`；「设置 → 关于 ZorvAI → 开源许可证」页面数据驱动展示。
 > 本仓库仅就**实际随包分发**的组件声明其许可证义务；未随包分发的组件不产生额外的 Copyleft 义务。
 > 仓库根目录下的 `DesktopFriends/` 为参考研究目录，**不参与 APK 构建、不随包分发**，故其许可证不构成本应用的发布义务。
 
