@@ -140,9 +140,12 @@ fun SetupScreen(
 
     // 创建一个用于检查的会话，并在 Composable 销毁时关闭它
     DisposableEffect(terminalManager) {
+        // 本地捕获：协程里 createNewSession 成功即记录，onDispose 时即使 state 尚未回写也能关掉
+        var createdSessionId: String? = null
         val job = coroutineScope.launch {
             try {
                 val session = terminalManager.createNewSession("setup-check")
+                createdSessionId = session.id
                 checkSessionId = session.id
                 Log.d("SetupScreen", "Created check session: ${session.id}")
             } catch (e: Exception) {
@@ -152,9 +155,15 @@ fun SetupScreen(
 
         onDispose {
             job.cancel()
-            checkSessionId?.let {
-                Log.d("SetupScreen", "Closing check session $it")
-                terminalManager.closeSession(it)
+            // 🔴 2026-10-26：旧写法只读 checkSessionId——协程尚未回写时为 null，
+            // setup-check 会话泄漏成永不退出的僵尸（无 shell、零输出，界面纯黑）。
+            // invokeOnCompletion 保证协程真正结束后（含取消路径）再关，两个来源都试。
+            job.invokeOnCompletion {
+                val ids = listOfNotNull(createdSessionId, checkSessionId).distinct()
+                ids.forEach {
+                    Log.d("SetupScreen", "Closing check session $it")
+                    terminalManager.closeSession(it)
+                }
             }
         }
     }

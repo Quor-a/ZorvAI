@@ -181,7 +181,7 @@ class QuroToolRegistry {
             // 广义 IDE 集成（图形/视频/音频/3D/游戏/低代码/代码 IDE）
             "creative_studio",
             // 终端（应用沙盒内 PTY / shell，免权限，无 root/Shizuku）
-            "terminal", "quroterm_exec",   // 合并后的统一终端工具（含 LANXIU 澜岫 / Ubuntu 双系统：set_distro=lanxiu/ubuntu）
+            "terminal", "quroterm_exec",   // 合并后的统一终端工具（应用内 proot+Ubuntu / 设备 shell）
             // TTS
             "speak", "stop_speak",
             // 闹钟

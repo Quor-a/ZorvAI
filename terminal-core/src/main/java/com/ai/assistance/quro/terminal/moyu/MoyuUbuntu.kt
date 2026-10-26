@@ -36,7 +36,7 @@ import java.io.File
  *
  * 真机日志证明：宿主目录 bind 进 guest 这条路在本机 ROM 上不可靠
  * （box64 的 execve ENOENT、/quro/mo_rootfs 700、App 沙箱系统性 ENOSYS）。
- * 而 **增量解压进 rootfs** 是终端环境自己验证过的路（LANXIU addon 同一套机制）：
+ * 而 **增量解压进 rootfs** 是终端环境自己验证过的路（molang-ubuntu-addon 同一套机制）：
  * 文件就在 guest 里，路径、权限、可执行位全部真实存在，不依赖任何 bind 是否被静默跳过。
  *
  * ## 铁律
@@ -80,7 +80,7 @@ class MoyuUbuntu(
          * 「墨语言装进 Ubuntu」这套新通道 —— 界面上必须显示它，装上以后一眼可验。
          * **每次出包必改**（改包不改戳 = 用户装错包白跑一轮）。
          */
-        const val BUILD_STAMP = "B20261026-1731"
+        const val BUILD_STAMP = "B20261027-0010"
 
         /** 安装标记内容（改内置资产字节时必须 +1，否则老设备不重装）。 */
         private const val INSTALL_VERSION = "v=4"
@@ -379,7 +379,6 @@ class MoyuUbuntu(
             script = full,
             timeoutMs = timeoutMs,
             onOutput = onOutput,
-            distro = Distro.UBUNTU,
         )
     }
 

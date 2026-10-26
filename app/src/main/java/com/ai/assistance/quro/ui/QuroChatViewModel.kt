@@ -1517,7 +1517,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
   - ✅ 有记忆库（可自动沉淀用户偏好和长期信息）
   - ✅ 有人格卡系统（每张卡是独立的真实身份，可切换；启用后你的身份 = 该卡）
   - ✅ 有 CMS v2 能力模块系统（可扩展的能力插件）
-  - ✅ 有端侧 Linux 终端（proot 承载 Ubuntu 与澜岫 LANXIU 双系统，可在里面执行真实 Linux 命令）
+  - ✅ 有端侧 Linux 终端（proot 承载完整 Ubuntu，可在里面执行真实 Linux 命令）
   - ⚠️ 无直接联网能力（但可通过 open_web 在内置浏览器打开网址）
   - ❌ 不能访问其他设备或云端服务
   - ✅ 完全开源（源码与协议公开，欢迎参与共建）
@@ -1536,7 +1536,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 - **记忆库**：memory_save/list/search/delete（自动沉淀长期记忆）
 - **工作区工具**：workspace_write（写文件）、workspace_read（读文件）、workspace_list（列目录）、workspace_render（渲染预览）、workspace_doc（创建文档）、workspace_media（播放媒体）、workspace_doc_view（打开文档）
 - **文档工具**：enhanced_doc_create（增强版文档创建，支持20+格式）、aiwps_create（基础文档创建）、aiwps_read（读取文档）、aiwps_edit（编辑文档）
-- **终端（双系统）**：terminal（统一终端工具：status 查双系统状态、set_distro 在 Ubuntu 与 LANXIU(澜岫) 间切换、exec 在当前发行版执行命令、run 在应用沙盒内一次性执行；Ubuntu 用 apt 包管理）
+- **终端**：terminal（统一终端工具：status 查 Linux 环境与会话状态、exec 在 Ubuntu 里执行命令、run 在应用沙盒内一次性执行；Ubuntu 用 apt 包管理）
 
 ## 两条互控通道：Shizuku（系统层）+ ACI（应用层）
 - **Shizuku** → `shizuku` 工具（action=status/exec/shizuku_exec/grant）。以 ADB 级 shell(uid 2000) 权限执行系统命令，免 root；执行走 RootExecutor，自带 Shizuku → su 降级与审计。授权必须用户手动点（action=grant 给步骤），agent 不能代替。
@@ -3015,15 +3015,14 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         sb.append("- 用户可在「设置 → CMS v2 模块」页的「部署 CMS引擎」卡进行：部署官方 CMS 引擎、导入/导出 CMS 引擎包（.cmsengine，可分享/本地留存）。引擎部署依赖终端 Linux 环境（proot/Ubuntu），未就绪时 cms_engine_status 会给出引导。\n")
         sb.append("- 当你要判断「某个需要 Python/Node 的模块能不能跑」「引擎是否就绪」「引擎拉起了哪些共享服务」时，调用 **cms_engine_status** 回查，而不是凭空回答。\n")
 
-        // ══════════════ 双系统 Linux 环境（Ubuntu + LANXIU）：AI 必须感知并可控制 ══════════════
-        // 2026-10-23：LANXIU 已按用户要求整体移除（内置的两套 LANXIU 资产约 400MB，体积过大），
-        // 终端只保留完整 Ubuntu；同时新增墨语言（Mo）独立运行时——不依赖 Ubuntu 也能编译运行。
+        // ══════════════ 内置 Linux 环境（Ubuntu）与墨语言独立运行时 ══════════════
+        // 2026-10-23：历史上的第二发行版已整体移除（内置资产约 400MB，体积过大），
+        // 终端只保留完整 Ubuntu；另有墨语言（Mo）独立运行时——不依赖 Ubuntu 也能编译运行。
         sb.append("\n### 内置 Linux 环境（Ubuntu）与墨语言独立运行时\n")
         sb.append(
-            "**终端 = 单系统 Ubuntu**：应用内终端是一个 proot 沙盒（免 root，运行在 App 私有目录、由 terminal-core 管理，不是模拟器也不是虚拟机），只装一套完整 Ubuntu（Debian 系），AI 与用户看到的是同一个环境。\n" +
+            "**终端 = Ubuntu（proot 沙盒）**：应用内终端是一个 proot 沙盒（免 root，运行在 App 私有目录、由 terminal-core 管理，不是模拟器也不是虚拟机），只装一套完整 Ubuntu（Debian 系），AI 与用户看到的是同一个环境。\n" +
             "- 包管理用 apt / pip / npm；rootfs 在 installed-rootfs/ubuntu。\n" +
             "- 查状态 `terminal(action=\"status\")`；执行命令 `terminal(action=\"exec\", command=\"...\")`。\n" +
-            "- **LANXIU（澜岫）已整体移除**：不要再用 lanxiu / qypkg / set_distro=\"lanxiu\" 之类的说法与操作，那套 rootfs 与 qypkg 都已不存在。\n\n" +
             "**墨语言 Mo = 独立运行时，完全不依赖 Ubuntu**：`moyu` 工具自带整套工具链（moc 编译器 / molink 链接器 / mols / modb / dwmo / mo2c / mo2x / seed）与 qemu，全部随 APK 内置。\n" +
             "- 原理：工具链是 x86_64 **静态链接**可执行（零动态依赖），内置的 qemu-x86_64-static 是 aarch64 **静态**可执行，两者组合可直接在 App 私有目录进程调用——**不经 proot、不经 Ubuntu、不需联网装任何东西**。\n" +
             "- 首次使用先 `moyu(action=\"setup\")` 解压运行时（约 10-20 秒）；之后 `build_run` 编译并运行、`compile` 只编译、`run` 运行已编译的 .elf、`exec` 调任意工具链程序、`list`/`diagnose` 查状态。\n" +
