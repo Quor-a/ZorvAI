@@ -745,7 +745,7 @@
 调用时机：首次开启「悬浮语音球」开关时申请。
 是否必需：否。
 涉及数据：仅绘制界面浮层，不读取被覆盖界面的任何内容。
-撤销后果：悬浮语音球不可用；聊天、工具、数字人等其余功能完全不受影响。</string>
+撤销后果：悬浮语音球不可用；聊天、工具等其余功能完全不受影响。</string>
     <string name="qk_00605" formatted="false">八、系统与特殊权限</string>
     <string name="qk_00606" formatted="false">1. 精确闹钟（SCHEDULE_EXACT_ALARM）
 用途：「设置闹钟 / 定时提醒」工具精确触发定时任务。
@@ -1172,7 +1172,6 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_00874" formatted="false">⚠ 暂不支持该脚本（系统 WebView 不开放网页内 JS 求值接口，当前自动化走原生「眼+手」）。</string>
     <string name="qk_00875" formatted="false">开源地址（Iceraven 浏览器）</string>
     <string name="qk_00876" formatted="false">链接回答·开源浏览器清单</string>
-    <string name="qk_00877" formatted="false">链接回答·百分百开源安卓数字人</string>
     <string name="qk_00878" formatted="false">链接回答·3D 全离线（LLM+ASR+TTS+A2BS+渲染都在手机）</string>
     <string name="qk_00879" formatted="false">开源地址（点击查看链接回答）</string>
     <string name="qk_00880" formatted="false">链接·开源浏览器参考</string>
@@ -1262,8 +1261,6 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_00962">… 还有 %1$s 个事件已省略渲染</string>
     <string name="qk_00963" formatted="false">（无看板）</string>
     <string name="qk_00964">… 还有 %1$s 列已省略渲染</string>
-    <string name="qk_00965" formatted="false">百分百开源安卓数字人</string>
-    <string name="qk_00966" formatted="false">二、3D 全离线（LLM+ASR+TTS+A2BS+渲染都在手机）</string>
     <string name="qk_00967" formatted="false">需要点击查看链接回答</string>
     <string name="qk_00968" formatted="false">流程图</string>
     <string name="qk_00969" formatted="false">全屏查看</string>
@@ -1696,7 +1693,6 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_01748" formatted="false">查看命令</string>
     <string name="qk_01749" formatted="false">安装命令</string>
     <string name="qk_01750" formatted="false">检查命令</string>
-    <string name="qk_01751" formatted="false">点击话筒说话，或在下方输入文字与数字人对话</string>
     <string name="qk_01752" formatted="false">已选择自定义 3D 模型，点击话筒即可对话</string>
     <string name="qk_01753" formatted="false">GLB 文件拷贝失败，请换一个文件重试</string>
     <string name="qk_01754" formatted="false">没听清，请重试</string>
@@ -1704,7 +1700,6 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_01756" formatted="false">当前 STT 引擎为「AI 模型」转写，需先在「设置→语音→STT」部署端侧模型，或改用原生/离线引擎</string>
     <string name="qk_01757" formatted="false">聆听中…</string>
     <string name="qk_01758" formatted="false">已停止，点击话筒继续</string>
-    <string name="qk_01759" formatted="false">数字人</string>
     <string name="qk_01760" formatted="false">设置</string>
     <string name="qk_01761" formatted="false">🔊 离线 ASR</string>
     <string name="qk_01762" formatted="false">🔊 离线 TTS</string>
@@ -1712,7 +1707,6 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_01764" formatted="false">☁ 云端口 LLM</string>
     <string name="qk_01765" formatted="false">离线模式未配置本地端点：点右上「设置」填写 baseUrl / model</string>
     <string name="qk_01766" formatted="false">你</string>
-    <string name="qk_01767" formatted="false">输入文字与数字人对话…</string>
     <string name="qk_01768" formatted="false">聆听中</string>
     <string name="qk_01769" formatted="false">识别中</string>
     <string name="qk_01770" formatted="false">回复中</string>
@@ -1732,8 +1726,6 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_01784">读取 assets/%1$s 失败：%2$s</string>
     <string name="qk_01785">Draco 资源提取失败：%1$s</string>
     <string name="qk_01786" formatted="false">点击话筒继续</string>
-    <string name="qk_01787" formatted="false">数字人正在说…</string>
-    <string name="qk_01788" formatted="false">数字人思考中…</string>
     <string name="qk_01789" formatted="false">⚠️ 出错了，请检查模型配置（离线模式请确认本地端点可用）</string>
     <string name="qk_01790" formatted="false">端侧模型加载中…</string>
     <string name="qk_01791" formatted="false">端侧模型加载失败，请到 STT 设置重试</string>
@@ -3041,7 +3033,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_03069" formatted="false">自动朗读</string>
     <string name="qk_03070" formatted="false">自动朗读 AI 回复</string>
     <string name="qk_03071" formatted="false">收到 AI 文字回复时，自动用 TTS 朗读出来。</string>
-    <string name="qk_03072" formatted="false">朗读使用「语音合成 (TTS)」页所选的模型与服务商，可在「语音服务 → 语音合成」中更改；语音球对话、数字人也使用同一全局设置。</string>
+    <string name="qk_03072" formatted="false">朗读使用「语音合成 (TTS)」页所选的模型与服务商，可在「语音服务 → 语音合成」中更改；语音球对话也使用同一全局设置。</string>
     <string name="qk_03073" formatted="false">对话框语音按钮</string>
     <string name="qk_03074" formatted="false">输入框旁显示语音输入按钮，长按说话、放开结束，识别文本填入输入框。</string>
     <string name="qk_03075" formatted="false">本地识别（设备原生 SpeechRecognizer）</string>
@@ -3061,7 +3053,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_03089" formatted="false">开启后 AI 回复自然穿插情绪 / 语气，让语音更有温度。情绪来源自动跟随「语音合成」所选服务商。</string>
     <string name="qk_03090" formatted="false">当前语音来源为本地系统 TTS，不解析情绪标记，AI 会以自然语言（措辞 / 语气词）体现情绪，朗读无额外情感起伏。</string>
     <string name="qk_03091" formatted="false">当前播放服务商：$providerLabel。${if (isMimo) </string>
-    <string name="qk_03092" formatted="false">更换情绪效果，请到「语音服务 → 语音合成 (TTS)」切换云服务商（如选小米 MiMo 可获得最佳情感合成）。自动朗读、数字人均使用同一全局设置，无需分别配置。</string>
+    <string name="qk_03092" formatted="false">更换情绪效果，请到「语音服务 → 语音合成 (TTS)」切换云服务商（如选小米 MiMo 可获得最佳情感合成）。自动朗读均使用同一全局设置，无需分别配置。</string>
     <string name="qk_03093" formatted="false">语色路由（AI 自动选角）</string>
     <string name="qk_03094" formatted="false">开启后 AI 按内容自动为不同段落分配不同音色（如旁白 / 角色音），并可「边播边合成」无缝衔接。</string>
     <string name="qk_03095">✅ 当前播放服务商：%1$s。语色路由已可生效——下方为该服务商真实音色清单，AI 会从中自动选角（不再写死单一服务商）。</string>

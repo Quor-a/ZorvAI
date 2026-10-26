@@ -401,12 +401,16 @@ fun QuroBrowserScreen(
         val wanted = listOf(
             "开源地址（Iceraven 浏览器）" to "https://github.com/fork-maintainers/iceraven-browser",
             "链接回答·开源浏览器清单" to "https://yb.tencent.com/s/NFdWa3f1zpSk",
-            "链接回答·百分百开源安卓数字人" to "https://yb.tencent.com/s/I9x5hnu8zJqm",
-            "链接回答·3D 全离线（LLM+ASR+TTS+A2BS+渲染都在手机）" to "https://yb.tencent.com/s/TsfOddkjerlh",
         )
         val oldSeedTitles = setOf(qstr(R.string.qk_00879), qstr(R.string.qk_00880))
+        // 数字人主题书签（2026-10-26 随数字人功能移除而下线）：按 URL 过滤，
+        // 老用户设备上已种下的这两条也一并清掉。
+        val removedUrls = setOf(
+            "https://yb.tencent.com/s/I9x5hnu8zJqm",
+            "https://yb.tencent.com/s/TsfOddkjerlh",
+        )
         var next = bookmarks.filterNot { (t, u) ->
-            t in oldSeedTitles || u == "https://yb.tencent.com/s/oRnfpcJJ7fic"
+            t in oldSeedTitles || u in removedUrls
         }
         wanted.forEach { w -> if (next.none { it.second == w.second }) next = next + w }
         if (next != bookmarks) {

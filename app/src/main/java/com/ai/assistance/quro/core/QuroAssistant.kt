@@ -1140,7 +1140,20 @@ class QuroAssistant(
                             val q = step.arguments ?: userBrief()
                             val bundle = runCatching { freeSearch?.searchSmart(q) }.getOrNull()
                             if (bundle != null && bundle.context.isNotBlank()) {
-                                store.add(QuroMessage(role = "assistant", content = "🔍 联网查询：$q\n${bundle.context.take(2000)}"))
+                                // 🔴 2026-10-26「个别模型开头乱回复」真元：旧实现把
+                                //   `🔍 联网查询：<查询词>\n<2000 字原始检索结果>` 当成一条
+                                //   **可见的 assistant 消息** add 进 store，于是用户在正式答复之前
+                                //   先看到一整屏「以下是联网检索到的实时资料…[1] DeepSeek · GitHub >
+                                //   Pinned deepseek-harness…」的网页标题垃圾。
+                                //   检索证据只该给模型看，绝不能当气泡念给用户听 —— 改成隐藏 system
+                                //   （与折叠的「任务方案」同款通道：模型看得见、界面看不见）。
+                                store.add(
+                                    QuroMessage(
+                                        role = "system",
+                                        content = "【联网检索资料】查询：$q\n${bundle.context.take(2000)}",
+                                        hidden = true
+                                    )
+                                )
                                 emit()
                                 OrchestrationTrace.execute("web_search", "自由编排·联网查证", q.take(80))
                                 ToolOutcome.Success(bundle.context)

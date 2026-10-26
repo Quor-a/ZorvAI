@@ -7009,15 +7009,18 @@ internal fun parseBlocks(text: String, selfCard: Boolean = true): List<MsgBlock>
             lang.equals("aip", true) || lang.equals("aip+json", true) || lang.equals("canvas", true) ->
                 blocks.add(MsgBlock.Aip(code))
             // A2UI JSONL 信封（application/a2ui+json）：流式声明式数据，由原生 A2UI 解释器增量渲染
+            // 空围栏（```a2ui 后什么都没有）不产出 UI 块：否则空串进解释器就是一次空白渲染。
             lang.equals("a2ui", true) || lang.equals("a2ui+json", true) ->
-                blocks.add(MsgBlock.DynamicUi(code))
+                if (code.isNotBlank()) blocks.add(MsgBlock.DynamicUi(code))
             // Web 应用：```miniapp 围栏直接渲染为可交互 Web 应用页面（bridge.js 运行时）
             lang.equals("miniapp", true) || lang.equals("mini", true) ->
                 blocks.add(MsgBlock.MiniApp(code))
             // 动态 UI（quro-ui 固定 DSL）：AI 写的 UI DSL 渲染为原生可交互控件（可回传表单值给模型）
             // 内容兜底：语言标签写错/没写时，只要内容是合法动态 UI 节点树也照样渲染。
+            // 🔴 空围栏不产出 UI 块：` ```quro-ui ` 紧跟 ` ``` ` 是模型高频产出的空壳，
+            // 空串交给解释器只会得到一次「无内容」渲染，并在消息末尾留下一个空块。
             isDynamicUiLang(lang) || looksLikeQuroUiDsl(code) ->
-                blocks.add(MsgBlock.DynamicUi(code))
+                if (code.isNotBlank()) blocks.add(MsgBlock.DynamicUi(code))
             // 兜底：AI 把 Web 应用 HTML 写成 ```html 围栏却带了 bridge 运行时标记，也按 Web 应用渲染
             isMiniAppHtml(lang, code) ->
                 blocks.add(MsgBlock.MiniApp(code))
@@ -7184,14 +7187,23 @@ private fun parseTail(seg: String): List<MsgBlock> {
                 lang.equals("mermaid", true) || lang.equals("mmd", true) ->
                     out.add(MsgBlock.Mermaid(after))
                 // 流式输出中 a2ui 信封围栏还没闭合时，也实时渲染（边写边出界面）
+                // 🔴 正文还是空串时不产出块（见下方 quro-ui 同款说明）。
                 lang.equals("a2ui", true) || lang.equals("a2ui+json", true) ->
-                    out.add(MsgBlock.DynamicUi(after))
+                    if (after.isNotBlank()) out.add(MsgBlock.DynamicUi(after))
                 // 流式输出中 miniapp 围栏还没闭合时，也实时渲染（边写边出 Web 应用）
                 lang.equals("miniapp", true) || lang.equals("mini", true) ->
                     out.add(MsgBlock.MiniApp(after))
                 // 流式输出中 quro-ui 围栏还没闭合时，也实时渲染（边写边出界面）
+                //
+                // 🔴 正文仍是空串时**不产出块**（「一直出现 ⚠️ 动态 UI 解析失败：空内容」的真凶）。
+                // 流式时序：模型先吐 ` ```quro-ui `，下一个 token 才到 JSON。这一帧
+                // RE_FENCE 匹配不到闭合围栏 → 走到这里，`after` 为空串；而上面第 7173 行
+                // 的准入条件是「lang 非空 **或** after 非空」，lang="quro-ui" 已经足够放行 →
+                // 产出 DynamicUi("") → 解释器把空串判成「空内容」→ 消息末尾挂一条红字。
+                // 每轮流式动态 UI 都会闪一次，用户看到的就是「一直出现」。
+                // 空串没有任何内容可渲染，直接跳过即可，下一帧内容到达后自然会产出块。
                 isDynamicUiLang(lang) || looksLikeQuroUiDsl(after) ->
-                    out.add(MsgBlock.DynamicUi(after))
+                    if (after.isNotBlank()) out.add(MsgBlock.DynamicUi(after))
                 else ->
                     out.add(MsgBlock.Code(lang.ifBlank { "text" }, after))
             }
@@ -7347,6 +7359,13 @@ private fun DynamicUiBlock(
     onCommand: (String) -> Unit,
     onOpenLink: (String) -> Unit,
 ) {
+    // 🔴 最后一道闸：内容为空就什么都不渲染（不发红字、不留空块）。
+    //
+    // 「⚠️ 动态 UI 解析失败：空内容」在真机上就是这段代码下面的 Failure 分支画出来的。
+    // 上游已经在三处堵住了空块（QuroUiDslParser 空→零高度空 Column、
+    // parseBlocks/parseTail 空围栏不产出 DynamicUi 块），这里再兜一层：
+    // 只要 source 是空白，就绝不进入任何渲染分支，避免任何遗漏路径又把红字画出来。
+    if (source.isBlank()) return
     // 动态 UI 交互要真调用 ZorvAI 内部功能（复制/打开应用/调用工具/执行技能），
     // 需要应用 Context 与协程作用域，从可组合作用域直接取。
     val ctx = LocalContext.current

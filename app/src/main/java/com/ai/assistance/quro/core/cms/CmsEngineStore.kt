@@ -21,6 +21,8 @@ object CmsEngineStore {
         val engineVersion: String = "",
         val ready: Boolean = false,
         val health: Boolean = false,
+        /** 健康明细（缺失工具清单 / 自愈记录）；UI 展示，避免「健康检查异常」零诊断。 */
+        val healthDetail: String = "",
         val services: List<String> = emptyList(),
         val lastDeployAt: Long = 0L,
         val lastError: String = "",
@@ -72,6 +74,7 @@ object CmsEngineStore {
                     engineVersion = o.optString("engineVersion", ""),
                     ready = o.optBoolean("ready", false),
                     health = o.optBoolean("health", false),
+                    healthDetail = o.optString("healthDetail", ""),
                     services = svcs,
                     lastDeployAt = o.optLong("lastDeployAt", 0L),
                     lastError = o.optString("lastError", ""),
@@ -106,12 +109,12 @@ object CmsEngineStore {
         pushLog("• $step")
     }
 
-    fun markDeployed(version: String, services: List<String>, health: Boolean) {
+    fun markDeployed(version: String, services: List<String>, health: Boolean, healthDetail: String = "") {
         _snapshot.value = _snapshot.value.copy(
-            engineVersion = version, ready = true, health = health, services = services,
+            engineVersion = version, ready = true, health = health, healthDetail = healthDetail, services = services,
             lastDeployAt = System.currentTimeMillis(), deploying = false, deployStep = "部署完成",
         )
-        pushLog("✅ CMS引擎部署完成 v$version（健康=$health）")
+        pushLog("✅ CMS引擎部署完成 v$version（健康=$health${if (healthDetail.isNotBlank()) "，$healthDetail" else ""}）")
         persist()
     }
 
@@ -121,8 +124,8 @@ object CmsEngineStore {
         persist()
     }
 
-    fun markHealth(ok: Boolean) {
-        _snapshot.value = _snapshot.value.copy(health = ok)
+    fun markHealth(ok: Boolean, detail: String = "") {
+        _snapshot.value = _snapshot.value.copy(health = ok, healthDetail = detail)
         persist()
     }
 
@@ -150,6 +153,7 @@ object CmsEngineStore {
                 put("engineVersion", s.engineVersion)
                 put("ready", s.ready)
                 put("health", s.health)
+                put("healthDetail", s.healthDetail)
                 put("services", s.services.joinToString(","))
                 put("servicePorts", JSONObject().apply { enginePorts.forEach { (k, v) -> put(k, v) } })
                 put("lastDeployAt", s.lastDeployAt)
@@ -160,18 +164,56 @@ object CmsEngineStore {
     }
 
     /**
+     * 重查引擎七件套（与 bootstrap verify 同判据）。返回 (是否齐全, 缺失清单字符串)。
+     * 供 [probeHealth] 自愈判定与部署器健康检查共用，避免两处判据漂移。
+     */
+    fun probeCoreTools(context: Context): Pair<Boolean, String> {
+        val (_, tout) = QuroTerminalBridge.run(
+            context,
+            "miss=; for t in python3 node gcc make cmake git curl; do command -v \$t >/dev/null 2>&1 || miss=\"\$miss \$t\"; done; echo \"MISSING:\$miss\"",
+            timeoutMs = 15_000,
+        )
+        val missing = tout.substringAfter("MISSING:", "").trim()
+        return (missing.isEmpty()) to missing
+    }
+
+    /**
      * 主动探测引擎是否在线（供 UI 进入时刷新健康态 + 服务列表）。
      * 除检查 .engine.ready 标记外，还按 [enginePorts] 做运行时端口探测，
      * 把 services 刷新为真实仍在监听的服务 id 列表（服务可能随 proot 退出/重启而挂）。
+     *
+     * 标记缺失时不再直接判死：重查工具链，全就绪则**补写 .engine.ready 自愈**
+     * （修复双 rootfs 合一前部署失败遗留的化石状态），否则 health=false + 缺失清单明细，
+     * 让 UI 能说清「到底缺什么」，而不是干巴巴一个「健康检查异常」。
      */
     fun probeHealth(context: Context) {
         init(context)
         val st = QuroLinuxEnv.probeLenient(context)
-        if (!st.available) { markHealth(false); return }
+        if (!st.available) { markHealth(false, "终端环境(proot/Ubuntu)未就绪：${st.reason}"); return }
         val (c, _) = QuroTerminalBridge.run(context, "[ -f ${CmsEngineDeployer.engineGuestDir()}/.engine.ready ]", timeoutMs = 10_000)
-        val healthy = c == 0
+        var healthy = c == 0
+        var detail = ""
+        if (!healthy) {
+            val (ok, missing) = probeCoreTools(context)
+            if (ok) {
+                val (wc, _) = QuroTerminalBridge.run(
+                    context,
+                    "mkdir -p ${CmsEngineDeployer.engineGuestDir()} && touch ${CmsEngineDeployer.engineGuestDir()}/.engine.ready",
+                    timeoutMs = 10_000,
+                )
+                if (wc == 0) {
+                    healthy = true
+                    detail = "就绪标记缺失但核心工具齐全，已自动补写 .engine.ready（自愈）"
+                    QuroDiag.log("CMS", "probeHealth 自愈：核心工具齐全，补写 .engine.ready")
+                } else {
+                    detail = "核心工具齐全但补写就绪标记失败（rootfs 目录不可写？）"
+                }
+            } else {
+                detail = "缺少核心工具：$missing"
+            }
+        }
         val alive = probePorts(context)
-        _snapshot.value = _snapshot.value.copy(health = healthy, services = alive)
+        _snapshot.value = _snapshot.value.copy(health = healthy, healthDetail = detail, services = alive)
         persist()
     }
 

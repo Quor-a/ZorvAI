@@ -1,13 +1,13 @@
 package com.ai.assistance.quro.core.ui.dynamicui
 
 /**
- * ZorvAI 动态 UI 节点模型（参照 Kai `ui/dynamicui` 设计重写）。
+ * ZorvAI 动态 UI 节点模型（自研重写）。
  *
- * 与 Kai 一致采用「AI 输出 UI DSL → 解析 → 原生渲染」三段式：
+ * 采用「AI 输出 UI DSL → 解析 → 原生渲染」三段式：
  * AI 在回复里写 ```quro-ui 代码块，解析器转成节点树，Compose 直接渲染成真实原生控件，
  * 而不是内嵌 HTML/WebView —— 因此可交互、可回传状态给模型。
  *
- * 设计约束（与 Kai 保持一致的容错哲学）：
+ * 设计约束（容错哲学）：
  *  - 每个字段都允许缺失，解析时回落默认值，单个节点坏掉不影响整棵树；
  *  - id 用于状态绑定与 collectFrom 取值，交互节点必须有 id；
  *  - 颜色统一 #RRGGBB / #AARRGGBB 字符串，由 [QuroUiColor.parse] 兜底解析。
@@ -592,7 +592,7 @@ data class QuroUnknownNode(
 // =============================================================================================
 
 /**
- * 节点动作。参照 Kai `UiAction`，并扩展 ZorvAI 特有的工具/技能调用能力，
+ * 节点动作，并扩展 ZorvAI 特有的工具/技能调用能力，
  * 让动态 UI 不只是「展示」，而能驱动 Agent 真正做事。
  */
 /**

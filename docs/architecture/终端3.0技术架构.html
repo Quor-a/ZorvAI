@@ -45,7 +45,7 @@
 
   <h2>一、构架介绍</h2>
   <div class="card">
-    <p><b>终端 3.0</b> 是 ZorvAI 在引入 <code>terminal-core</code>（OperitTerminal v1.2 移植，即<b>终端 4.0</b>）之前的原生终端实现。它在 UI 侧复用 Termux 式 <b>VT 终端模拟器</b>（<code>QuroTerminalPane</code> / <code>QuroTerminalInputView</code>），环境侧依赖「<b>ubuntu-base 微镜像 + 运行时 apt-get 下载</b>」的 proot 方案，并通过 <code>QuroTerminalController</code> / <code>QuroTerminalBridge</code> 打通 AI 的 <code>terminal_exec</code>。</p>
+    <p><b>终端 3.0</b> 是 ZorvAI 在引入 <code>terminal-core</code>（开源终端实现移植，即<b>终端 4.0</b>）之前的原生终端实现。它在 UI 侧复用 Termux 式 <b>VT 终端模拟器</b>（<code>QuroTerminalPane</code> / <code>QuroTerminalInputView</code>），环境侧依赖「<b>ubuntu-base 微镜像 + 运行时 apt-get 下载</b>」的 proot 方案，并通过 <code>QuroTerminalController</code> / <code>QuroTerminalBridge</code> 打通 AI 的 <code>terminal_exec</code>。</p>
     <p>该方案「能用但脆弱」：首启需联网从 apt 源下载补全工具链，受源可用性、网络、架构兼容影响，易失败、启动慢。这正是终端 4.0 用「完整 rootfs 作为 assets 打包进 APK、开箱即用」取代它的根本原因。</p>
     <p>设计要点：</p>
     <ul>

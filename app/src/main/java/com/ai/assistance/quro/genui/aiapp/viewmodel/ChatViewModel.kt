@@ -92,8 +92,26 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         restoreSession()
     }
 
-    /** 系统提示词：宿主平台基座 + 宿主人格/灵魂层 + GenUI 表达规则层（见 [ZorvBrain.systemPrompt]）。 */
-    private fun buildSystemContent(): String = brain.systemPrompt()
+    /**
+     * 系统提示词缓存：按 forced 通道各存一份。
+     *
+     * genui 基线 38K+，每轮重拼既贵又会让 budgetToolSpecs 的长度基准抖动；
+     * 通道锁定版很小，但同样没有每轮重拼的道理。
+     */
+    private var systemContentCache: Pair<String?, String>? = null
+
+    /**
+     * 系统提示词：宿主平台基座 + 宿主人格/灵魂层 + 表达层（见 [ZorvBrain.systemPrompt]）。
+     *
+     * @param forced 本轮锁定通道：null/genui → GenUI 基线；a2ui/markdown/html →
+     *   通道锁定版（38K GenUI 表达层整体下线，换成该通道的输出指令）。
+     */
+    private fun buildSystemContent(forced: String? = null): String {
+        systemContentCache?.let { (f, cached) -> if (f == forced) return cached }
+        val built = brain.systemPrompt(forced)
+        systemContentCache = forced to built
+        return built
+    }
 
     /** 用宿主当前人格/模型重建 system 消息 */
     private fun rebuildSystemMessage() {
@@ -253,6 +271,16 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private var forcedChannel: String? = null
 
     /**
+     * 本轮提问的起始时间戳（[startTurn] 里刷新）。
+     *
+     * 用途：works（历史作品）只保留「本轮之前」的条目，本轮内多次
+     * [handleTextResult]（返修 / 续写）产生的作品互相覆盖 —— 这才是
+     * 「一次生成两份界面」的正确修法，只靠 `distinctBy { json }` 挡不住
+     * 返修前后字节不同的两份 JSON。
+     */
+    private var turnWorkAnchor: Long = 0L
+
+    /**
      * 从用户话里认通道。
      *
      * 顺序即优先级：先认 a2ui 再认 genui，这样「别用 genui，改用 a2ui」不会反过来。
@@ -301,7 +329,46 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 k == forced || (forced == "markdown" && k == "md")
             }
         } else fences
-        if (considered.isEmpty()) return null
+        if (considered.isEmpty()) {
+            // 🔴 用户锁了通道，模型却没写对应围栏（主诉：无视选择的通道）。
+            //
+            // 旧行为：静默 return null → 整篇掉进 GenUI 提取管线 → 画布上出来的是
+            // GenUI 界面或一屏源码，用户选的道路径等于没选。现在：
+            // ① 先试裸文档兜底，但只接受**通道一致**的页面（forced=html 而模型直接吐
+            //    HTML 文档是合理输出，不算违规；裸 JSON 带 "root" 是 GenUI DSL 泄漏，不算）；
+            // ② 否则只要文本像界面内容（GenUI DSL 泄漏）或已成篇 → 原文开进画布，
+            //    标题注明「模型未遵守通道锁定」，内容可见、可诊断；
+            // ③ 短人话回复（"好的，马上改"）维持旧行为 → 走对话兜底，不拿原文页打扰用户。
+            if (forced != null && forced != "genui") {
+                bareDocumentPage(text)?.let { (page, raw) ->
+                    val match = when {
+                        raw.startsWith("```json") -> false // 裸 GenUI JSON，算泄漏
+                        page is ChannelPage.HtmlPage -> forced == "html"
+                        page is ChannelPage.MarkdownPage -> forced == "markdown"
+                        else -> false
+                    }
+                    if (match) return page to raw
+                }
+                val leaksGenUi = text.contains("```genui", ignoreCase = true) ||
+                    text.contains("\"root\"") || text.contains("\"properties\"") ||
+                    Regex("<\\s*(intent|plan|generate)\\s*>", RegexOption.IGNORE_CASE)
+                        .containsMatchIn(text)
+                if (leaksGenUi || text.trim().length >= 120) {
+                    android.util.Log.w(
+                        "GenUIChannel",
+                        "锁定通道 $forced 但模型未输出对应围栏（GenUI泄漏=$leaksGenUi，" +
+                            "长度=${text.trim().length}）→ 原文开画布，不再掉进 GenUI 管线"
+                    )
+                    val body = text.trim()
+                    val title = channelTitle(text, 2) ?: channelTitle(text, 1) ?: "原文"
+                    return ChannelPage.MarkdownPage(
+                        "$title（模型未遵守 ${forced.uppercase()} 通道锁定，输出原文）",
+                        body
+                    ) to ("```markdown\n$body\n```")
+                }
+            }
+            return null
+        }
         // 完整性优先：长的在前
         var a2uiUnparsed: Pair<String, String>? = null
         for (m in considered.sortedByDescending { it.groupValues[2].length }) {
@@ -668,6 +735,13 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         // a2ui/markdown/html → 只认该通道的围栏（防模型黏住旧通道）。
         forcedChannel = channel?.key
 
+        // 🔴 2026-10-26「一次生成两份界面」真元：一次用户提问内，handleTextResult 会被调用
+        // **多次**（自校验返修 scheduleVerifyFixPass 会 continue 再跑一轮，还有续写拼接）。
+        // 每调一次就往 works 里 prepend 一条 WorkItem，而 `distinctBy { json }` 挡不住它们
+        // —— 返修后的 JSON 与返修前字节不同，于是历史记录里出现两条一模一样标题的「今日天气」。
+        // 这里给本轮打一个时间锚，works 只保留「本轮之前」的，本轮内的重建永远覆盖上一条。
+        turnWorkAnchor = System.currentTimeMillis()
+
         val newHistory = _state.value.conversationHistory + GenUIChatMessage(
             role = "user",
             content = text
@@ -697,7 +771,14 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(thoughtChain = thinkingProcessor.getCurrentChain()) }
 
         // 执行工具调用循环
-        runToolCallingLoop(config)
+        try {
+            runToolCallingLoop(config)
+        } finally {
+            // 🔴 锁定只对本轮有效：正常结束、用户点停止、异常抛错都必须复位。
+            // 少了 finally，上一轮选了 markdown、下一轮不选通道时会被残留锁定
+            // 继续牵着走（表现为「从此以后只会出文章/网页」）。
+            forcedChannel = null
+        }
 
         // 完成思考链
         thinkingProcessor.completeChain()
@@ -735,6 +816,21 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         val extra = StringBuilder()
         extra.append(renderRulesMessage(forced).content)
         replyLanguageMessage()?.let { extra.append("\n\n").append(it.content) }
+        // 🔴 锁定非 genui 通道时，把历史里那条 GenUI 基线 system **整体替换**为通道锁定版。
+        //
+        // 旧实现只在基线 system 末尾追加「本轮已锁定」——基线通篇「GenUI SDK 是主力默认」
+        // （38K 表达层 + 设计技能层），模型遵循的是基线，追加句被压成耳旁风，
+        // 这就是「不管选什么通道都只走 GenUI SDK」的提示词侧根因。
+        // 整体替换后：平台基座 / 回复语言 / 灵魂层仍在（ZorvBrain 内部按 forced 裁剪），
+        // 38K GenUI 表达层与设计技能层不再出现在本轮 payload 里。
+        if (forced != null && forced != "genui") {
+            val locked = buildSystemContent(forced)
+            val head = GenUIChatMessage(
+                role = "system",
+                content = locked + "\n\n" + extra.toString().trim()
+            )
+            return listOf(head) + messages.filter { it.role != "system" }
+        }
         return ChatHistory.mergeIntoSingleSystem(messages, extra.toString())
     }
 
@@ -769,9 +865,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
      */
     private suspend fun runToolCallingLoop(config: QuroModelConfig) {
         // 工具集 = 宿主完整工具集（ZorvAI ~全部内置工具）+ aiapp 本地 GenUI 专属工具（register_component）
+        // 🔴 锁定非 genui 通道时**不挂** register_component：模型看着工具列表就会想调，
+        // 一调就跑回 GenUI 管线（用户选了 markdown/html/a2ui 却被无视的一半现场）。
+        val genuiAllowed = forcedChannel == null || forcedChannel == "genui"
         val tools = brain.toolSpecs(config).map {
             GenUIToolSpec(name = it.name, description = it.description, parametersJson = it.parametersJson)
-        } + GenUIToolRegistry.getAllSpecs()
+        } + if (genuiAllowed) GenUIToolRegistry.getAllSpecs() else emptyList()
         // 给自校验返修预留轮次额度，避免修到一半被轮次上限掐断
         val maxRounds = getMaxToolCallRounds() + MAX_VERIFY_ITERATIONS
         var round = 0
@@ -817,10 +916,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
                     _state.update {
                         val newText = it.streamingText + token
-                        // 尝试流式提取 GenUI JSON（流式模式，禁用文本包装）
-                        val newGenUI = extractGenUIDsl(newText, isStreaming = true)
+                        // 🔴 通道锁定轮不跑 GenUI 流式提取：用户选了 markdown/html/a2ui，
+                        // 模型输出里顺手带的 GenUI 片段会先把画布抢占成界面（闪一下再被
+                        // 通道页换掉）——这就是「锁定轮画布先闪 GenUI」的机制。
+                        val newGenUI = if (genuiAllowed) extractGenUIDsl(newText, isStreaming = true) else null
                         // 只进不退：新的提取失败但之前有有效 UI 时，保留旧的
-                        val finalGenUI = newGenUI ?: it.currentGenUI
+                        val finalGenUI = if (genuiAllowed) newGenUI ?: it.currentGenUI else null
                         it.copy(
                             streamingText = newText,
                             currentGenUI = finalGenUI,
@@ -1275,13 +1376,16 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                         ),
                         reasoning = result.reasoning
                     ),
+                    // 🔴 本轮内的重建覆盖上一条（见 turnWorkAnchor 注释）：否则返修/续写
+                    // 每多跑一轮就在历史里多一条同名作品（用户截图里的两条「今日天气」）。
                     works = (listOf(com.ai.assistance.quro.genui.aiapp.data.GenUISessionStore.WorkItem(
                         title = "[通道] " + page.title.ifBlank { "内容页" },
                         request = currentState.currentRequest.ifBlank { page.title },
                         json = raw, // 存原始围栏，回放时重新路由
                         time = System.currentTimeMillis(),
                         renderType = pageChannel.key
-                    )) + it.works).distinctBy { w -> w.json }.take(20)
+                    )) + it.works.filter { w -> turnWorkAnchor <= 0L || w.time < turnWorkAnchor })
+                        .distinctBy { w -> w.json }.take(20)
                 )
             }
             persistSession()
@@ -1353,21 +1457,28 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         var usedFallbackCard = false
         if (genuiJson == null) {
             usedFallbackCard = true
-            // 最后尝试：用 fullText 生成一个简单的文本卡片
-            // 展示前剥离思考标签与代码块围栏，避免原始标签泄露到画布
-            val cleanedDisplay = stripThinkingTags(fullText)
-                .replace("```genui", "")
-                .replace("```json", "")
-                .replace("```", "")
-                .trim()
-            val displayText = cleanedDisplay.ifBlank { "（AI 未返回有效 UI，请重试）" }
-            val escaped = displayText.take(500)
+            // 与 autoWrapTextToGenUI 同一套剥离：思考标签 → 成对围栏 → 未闭合围栏。
+            // 旧实现只 replace 掉 ```genui/```json/``` 三个标记，围栏里的 JSON 源码
+            // 照样留在 displayText 里 → 未闭合围栏轮用户看到一屏源码（裸奔）。
+            val incomplete = hasUnclosedGenuiFence(fullText)
+            var displayText = Regex("```[\\s\\S]*?```")
+                .replace(stripThinkingTags(fullText), "")
+            val openFence = displayText.indexOf("```")
+            if (openFence >= 0) displayText = displayText.substring(0, openFence)
+            displayText = displayText.trim()
+            if (incomplete) {
+                displayText = "（这一轮界面生成不完整：回复在输出中途被截断。" +
+                    "可以发「继续」让我补全，或把需求拆小一点再试。）\n\n" + displayText
+            }
+            val finalDisplay = displayText.ifBlank { "（AI 未返回有效 UI，请重试）" }
+            val escaped = finalDisplay.take(500)
                 .replace("\\", "\\\\")
                 .replace("\"", "\\\"")
                 .replace("\n", "\\n")
                 .replace("\r", "")
                 .replace("\t", "\\t")
-            genuiJson = """{"id":"fallback","title":"AI 回复","root":{"type":"card","style":{"padding":{"all":16},"cornerRadius":12,"elevation":2},"children":[{"type":"text","properties":{"text":"$escaped"},"style":{"textSize":14}}]}}"""
+            val cardTitle = if (incomplete) "AI 回复（界面生成不完整）" else "AI 回复"
+            genuiJson = """{"id":"fallback","title":"$cardTitle","root":{"type":"card","style":{"padding":{"all":16},"cornerRadius":12,"elevation":2},"children":[{"type":"text","properties":{"text":"$escaped"},"style":{"textSize":14}}]}}"""
         }
 
         // 画布实际渲染前完整预处理（归一化+动作纠正），保证 safeParse 不降级为错误卡
@@ -1391,7 +1502,14 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 time = System.currentTimeMillis(),
                 renderType = RenderChannel.GENUI.key
             )
-            _state.update { it.copy(works = (listOf(newWork) + it.works).distinctBy { w -> w.json }.take(20)) }
+            _state.update {
+                it.copy(
+                    works = (listOf(newWork) + it.works.filter { w ->
+                        // 🔴 本轮内已入集的作品不再累积：一次回答只该在历史里留一条。
+                        turnWorkAnchor <= 0L || w.time < turnWorkAnchor
+                    }).distinctBy { w -> w.json }.take(20)
+                )
+            }
         }
         _state.update {
             it.copy(
@@ -2146,7 +2264,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
      * 历史 assistant 消息里往往是整套界面 JSON（上万字符），原样贴出来就是一堵墙。
      */
     fun stripAssistantForDisplay(text: String): String =
-        ChatHistory.compressAssistant(stripThinkingTags(text))
+        ChatHistory.stripFoldNotes(ChatHistory.compressAssistant(stripThinkingTags(text)))
+            .ifBlank { "（界面内容已折叠）" }
 
     /**
      * 写进对话历史时用的 assistant 内容。
@@ -2189,16 +2308,17 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
      * 上一轮一旦出现混杂/残缺（实测：A2UI 与自造的 `<row>/<spacer>` 标签糊在一起、
      * `type` 里塞进颜色值），这个坏格式就会被继承并放大，越滚越乱。
      *
-     * 措辞要① 不像正文（方括号 +「系统提示」）② 明确叫它不要复述 ——
-     * 早先用「〔genui 内容 96 字符已省略〕」这种中性描述，模型会把它当上一轮的界面内容
-     * 原样复述到画布上（用户截图里画布孤零零一行就是这么来的）。
+     * 🔴 折叠提示（"[系统折叠提示：…]"）只属于**进模型上下文**的老轮次压缩路径。
+     * 本函数写进的是 conversationHistory —— 它同时是**对话气泡里用户看得见的内容**，
+     * 机器行原样落在这里就是「乱七八糟」之一。所以剥干净，只剩人话；
+     * 连人话都不剩时用中性占位（〔已生成：label〕）。
      */
     private fun historyNote(fullText: String, label: String): String {
-        val prose = ChatHistory.stripJsonBlobs(ChatHistory.foldFences(stripThinkingTags(fullText)))
-            .replace(Regex("\\n{3,}"), "\n\n")
-            .trim()
+        val prose = ChatHistory.stripFoldNotes(
+            ChatHistory.stripJsonBlobs(ChatHistory.foldFences(stripThinkingTags(fullText)))
+        )
         return if (prose.length >= 8) prose.take(400)
-        else "〔已生成：$label〕"
+        else GenUiPromptProbe.fallbackNote(label)
     }
 
     private fun stripThinkingTags(text: String): String {
@@ -2464,9 +2584,22 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         // 如果剥离后没有有意义的文本，返回 null
         if (plainText.isBlank()) return null
 
-        // 移除代码块（代码块不是可显示的文本内容）
-        val codeBlockRegex = Regex("```[\\s\\S]*?```")
-        plainText = codeBlockRegex.replace(plainText, "").trim()
+        // 🔴 未闭合围栏整体剥掉（2026-10-27 修「未闭合 genui 围栏裸奔」）。
+        //
+        // 模型被 max_tokens 截断时，输出停在 ```genui 围栏中间（没有收尾 ```）。
+        // 旧实现只用要求成对的 codeBlockRegex，匹配不到 → 围栏里的整段 JSON 源码
+        // 原样留在 plainText → 包成文本卡片 → 用户看到一屏 JSON 源码。
+        // 围栏未闭合 = 围栏之后全是界面载荷、没有可读人话，从围栏起点整段丢弃。
+        val unclosedFence = hasUnclosedGenuiFence(plainText)
+        if (unclosedFence) {
+            plainText = plainText.substring(0, plainText.lastIndexOf("```genui")).trim()
+        } else {
+            // 成对围栏先整段移除；移除后仍剩下 ``` 起头的，就是未闭合围栏
+            // （```json / 裸 ```），同样从起点丢到尾。
+            plainText = Regex("```[\\s\\S]*?```").replace(plainText, "")
+            val open = plainText.indexOf("```")
+            if (open >= 0) plainText = plainText.substring(0, open).trim()
+        }
 
         // 移除工具调用结果标记
         val toolResultRegex = Regex("(?i)tool\\s*result\\s*:?[\\s\\S]*?(?=\\n\\n|$)")
@@ -2480,6 +2613,14 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             plainText = plainText.take(500) + "..."
         }
 
+        // 🔴 截断提示：围栏未闭合 = 这一轮界面没写完（续写额度用尽也没救回来）。
+        // 标题与人话都点明，别让用户以为「AI 就给了这么个玩意儿」。
+        val title = if (unclosedFence) "AI 回复（界面生成不完整）" else "AI 回复"
+        if (unclosedFence) {
+            plainText = "（这一轮界面生成不完整：回复在输出中途被截断。" +
+                "可以发「继续」让我补全，或把需求拆小一点再试。）\n\n" + plainText
+        }
+
         val escaped = plainText
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
@@ -2487,7 +2628,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             .replace("\r", "")
             .replace("\t", "\\t")
 
-        return """{"id":"auto_wrap","title":"AI 回复","root":{"type":"card","style":{"padding":{"all":16},"cornerRadius":12,"elevation":2},"children":[{"type":"text","properties":{"text":"$escaped"},"style":{"textSize":14}}]}}"""
+        return """{"id":"auto_wrap","title":"$title","root":{"type":"card","style":{"padding":{"all":16},"cornerRadius":12,"elevation":2},"children":[{"type":"text","properties":{"text":"$escaped"},"style":{"textSize":14}}]}}"""
     }
 
     private fun extractLargestJson(text: String): String? {

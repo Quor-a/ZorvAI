@@ -13,7 +13,7 @@ private const val TAG = "QuroLocalModel"
 /**
  * 本地模型管理器
  * 
- * 参考 Agora（llama.cpp）和 Kai（LiteRT）的设计，支持：
+ * 参考开源本地推理方案（llama.cpp / LiteRT 等）的设计，支持：
  * 1. 本地模型管理（下载、加载、卸载）
  * 2. 多引擎支持（MNN、llama.cpp、LiteRT）
  * 3. 模型推理接口

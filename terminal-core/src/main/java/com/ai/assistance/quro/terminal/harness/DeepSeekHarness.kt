@@ -170,7 +170,7 @@ class DeepSeekHarness(private val context: Context) {
          * dsh 壳」只能靠它。它同时进 `diagnose()` 输出与 HarnessScreen 顶栏 —— 界面上看不到戳，
          * 就等于装错包，这一条是出包自证链的一部分（同 Moyu 的做法）。
          */
-        const val BUILD_STAMP = "B20261027-0121"
+        const val BUILD_STAMP = "B20261027-0226"
 
         @Volatile
         private var instance: DeepSeekHarness? = null

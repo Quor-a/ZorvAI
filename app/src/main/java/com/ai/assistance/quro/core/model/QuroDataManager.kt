@@ -24,7 +24,7 @@ private const val TAG = "QuroDataManager"
 /**
  * 数据管理器
  * 
- * 参考 Agora（.agora ZIP归档）和 Kai（加密存储）的设计，支持：
+ * 参考开源实现的 ZIP 归档 + 加密存储设计，支持：
  * 1. 数据导出功能（对话、设置、模型等）
  * 2. 数据导入功能
  * 3. 加密存储

@@ -12,7 +12,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * 动态 UI 配套工具（参照 Kai 的 `kai-ui` 能力重写）。
+ * 动态 UI 配套工具（自研重写）。
  *
  * 为什么需要工具而不只是「让 AI 自己写代码块」：
  *  - [UiDslSpecTool] 让模型**按需**拉取完整 DSL 规范，避免把冗长 schema 常驻系统提示词白白烧 token；
@@ -122,7 +122,7 @@ class UiDslSpecTool : QuroTool {
 
 ■ 数据可视化 / 业务卡（v1.0.88，原生渲染，可呈现依赖/框架/引擎/语言/代码库/外部依赖等各类技术信息）
 这些节点都「原生可渲染」——只要写了对应 type 就不会再降级为普通容器；内部结构（列表/事件/轴/单元格…）
-一律用 JSON 字符串数组承载，例如 {"name":"Kai","value":12}。技术类内容（依赖清单、版本对比、架构图、
+一律用 JSON 字符串数组承载，例如 {"name":"Alex","value":12}。技术类内容（依赖清单、版本对比、架构图、
 指标看板）优先用下面这些节点，比纯文字或 markdown 更易读。
 - stat：统计数字。label, value, unit(单位), delta(同比/环比文字), trend(up|down|flat 决定涨跌色)
 - table：表格。headers[]（表头）, rows[][]（每行是字符串数组）, caption(可选标题)
