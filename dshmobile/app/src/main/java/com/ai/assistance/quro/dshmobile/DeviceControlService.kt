@@ -464,13 +464,28 @@ open class DeviceControlService : AccessibilityService() {
   override fun onServiceConnected() {
     super.onServiceConnected()
     instance = this
-    setEnabledFlag(this, true)
-    token(this)
-    invalidated = true
-    // 0.14.0 承载拆离：轮询由 ControlCarrier 持有（随前台引擎服务起停）；本服务只登记为
-    // 语义/输入类 op 的处理器。a11y 关闭时队列照跑，browser*/vd* 不再随之不可达。
+    // #499：本回调跑在**系统主线程**，任何未捕获异常都会直接崩掉整个 App 进程。
+    // 无障碍服务与 Shizuku user service 同进程共存，主进程一崩两条通道全掉
+    // （用户感知「用一下无障碍/Shizuku 就崩，整个服务挂了」）。
+    //
+    // 先完成「本服务登记」——这是后续语义/输入类 op 的路由前提（纯字段赋值，不会抛），
+    // 绝不能被后面任何步骤的失败挡掉；其余初始化全部 runCatching 包裹，失败只留痕不外抛。
     ControlCarrier.a11y = this
-    ControlCarrier.ensureStarted(this)
+    runCatching {
+      setEnabledFlag(this, true)
+      token(this)
+      invalidated = true
+      // 0.14.0 承载拆离：轮询由 ControlCarrier 持有（随前台引擎服务起停）；本服务只登记为
+      // 语义/输入类 op 的处理器。a11y 关闭时队列照跑，browser*/vd* 不再随之不可达。
+      ControlCarrier.ensureStarted(this)
+    }.onFailure { t ->
+      // 登记失败不致命：a11y 字段已赋值，语义/输入类 op 照常可用；
+      // 轮询承载由 EngineService 的启动路径另行补起（ensureStarted 幂等）。
+      LogCollector.log(
+        TAG,
+        "onServiceConnected setup degraded (a11y registered): " + (t.message ?: t.javaClass.simpleName),
+      )
+    }
     LogCollector.log(TAG, "accessibility service connected; a11y handler registered")
   }
 

@@ -96,6 +96,29 @@ object DshmobileControl {
   /** 引擎 HTTP 端点（仅端点；带 token 的完整 URL 由工作台 UI 自己交换 cookie）。 */
   fun engineUrl(): String = runCatching { EngineProbe.ENGINE_URL }.getOrElse { "http://127.0.0.1:4145" }
 
+  /**
+   * #493：带启动令牌的完整 Web URL（可直接粘贴到浏览器打开）。
+   *
+   * 引擎每个启动代次都会在 engine.log 印一行 `dsh web: http://127.0.0.1:4145/?token=<…>`。
+   * 直接 GET 裸端点会被 401 鉴权栅栏挡回（此前 action=url 只回裸端点，
+   * 用户侧就是「http://127.0.0.1:4145 无法打开」）；带上 `?token=` 后由服务端
+   * 303 Set-Cookie 完成首次鉴权，浏览器后续即可正常访问。
+   *
+   * 提取不到本代令牌（日志被清/引擎刚重启还没印）时**绝不编造 token**，
+   * 回裸端点并说明改用 action=open。
+   */
+  fun engineWebUrl(context: Context): String {
+    val app = context.applicationContext
+    val token = runCatching { EngineAuth.tokenFromLog(app) }.getOrNull()
+    return if (token.isNullOrBlank()) {
+      engineUrl() +
+        "\n（未提取到本代启动令牌，直接打开会被 401 挡回；请改用 action=open 打开工作台，鉴权由它自己处理）"
+    } else {
+      engineUrl() + "/?token=" + token +
+        "\n（以上链接含一次性启动令牌，可直接粘贴到浏览器打开；界面入口也可用 action=open）"
+    }
+  }
+
   // ── 状态 ────────────────────────────────────────────────────────────────────
 
   /** 一行式状态总览（探活 + 端口 + 运行时树 + 凭据 + 服务 + patch 层）。 */
@@ -295,18 +318,23 @@ object DshmobileControl {
    *
    * @param sessionId 续用既有会话（多轮上下文）；null = 新建。
    * @param timeoutMs 整个回合的预算（agent 干活可能很慢，默认 10 分钟）。
+   * @param onProgress 进度回调（#498：harness 派活是分钟级长跑，调用方需要知道
+   *   「已到哪一步」才能在 AI 行动追踪面板上呈现，否则用户只看到空白等待）。
+   *   回调在轮询线程上同步调用，实现方必须**非阻塞**（只做轻量 UI 状态上报）。
    */
   fun dispatchTask(
     context: Context,
     task: String,
     sessionId: String? = null,
     timeoutMs: Long = 600_000L,
+    onProgress: (String) -> Unit = {},
   ): DshResult {
     val app = context.applicationContext
     val body = task.trim()
     if (body.isEmpty()) return DshResult(false, "任务文本为空")
     val up = start(app, 120_000L)
     if (!up.ok) return DshResult(false, "引擎未就绪，无法派任务\n" + up.text)
+    onProgress("引擎已就绪，正在校验 harness 模型配置…")
 
     val catalog = rpc(app, "session/modelCatalog", JSONObject())
     val defaultModel = catalog?.optJSONObject("result")?.optJSONObject("value")?.optJSONObject("default")
@@ -321,6 +349,7 @@ object DshmobileControl {
 
     val sid = sessionId?.takeIf { it.isNotBlank() } ?: createSession(app)
       ?: return DshResult(false, "创建 harness 会话失败（session/create 无回执）")
+    onProgress("会话 $sid 已就绪，任务已下发，等待 harness 执行…")
 
     val requestId = "zorvai-" + System.currentTimeMillis() + "-" + (0..9999).random()
     val promptArgs = JSONObject().put("request", JSONObject()
@@ -332,7 +361,9 @@ object DshmobileControl {
     if (promptResp == null) return DshResult(false, "任务下发失败（session/prompt 无回执；引擎可能正忙）")
 
     val deadline = System.currentTimeMillis() + timeoutMs
+    val startedAt = System.currentTimeMillis()
     var lastText = ""
+    var lastReportAt = 0L
     while (System.currentTimeMillis() < deadline) {
       val texts = assistantTexts(app, sid)
       if (texts.isNotEmpty()) lastText = texts.last().second
@@ -346,6 +377,13 @@ object DshmobileControl {
           appendLine()
           append(lastText.ifBlank { "（agent 未产出文本答复）" })
         })
+      }
+      // #498：节流上报进度（每 10s 一条），让长跑过程对用户可见。
+      val now = System.currentTimeMillis()
+      if (now - lastReportAt >= 10_000L) {
+        lastReportAt = now
+        val secs = (now - startedAt) / 1000
+        onProgress("harness 执行中（已 ${secs}s / 预算 ${timeoutMs / 1000}s，会话 $sid）…")
       }
       try { Thread.sleep(2_000) } catch (_: InterruptedException) { Thread.currentThread().interrupt(); break }
     }

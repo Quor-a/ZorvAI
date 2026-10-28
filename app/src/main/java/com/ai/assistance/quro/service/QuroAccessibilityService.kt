@@ -93,13 +93,17 @@ class QuroAccessibilityService : DeviceControlService() {
         super.onServiceConnected()
         Log.i(TAG, "无障碍服务已连接（含设备控制通道）")
         instance = this
-        onServiceStatusChanged?.invoke(true)
-
-        // 启动前台通知
-        startForegroundNotification()
-
-        // 启动定时自检
-        startSelfCheck()
+        // #499：本回调在系统主线程执行，未捕获异常会崩整个 App 进程（无障碍与 Shizuku
+        // 两条通道同进程共存，一崩全掉）。super 已做防崩加固，这里的后续步骤同样只裹不外抛。
+        runCatching {
+            onServiceStatusChanged?.invoke(true)
+            // 启动前台通知
+            startForegroundNotification()
+            // 启动定时自检
+            startSelfCheck()
+        }.onFailure { t ->
+            Log.w(TAG, "onServiceConnected 后续初始化降级: " + (t.message ?: t.javaClass.simpleName))
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

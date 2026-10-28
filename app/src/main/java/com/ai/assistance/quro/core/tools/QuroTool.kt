@@ -8,8 +8,12 @@ import com.ai.assistance.quro.core.QuroToolCall
 import com.ai.assistance.quro.core.QuroToolResult
 import com.ai.assistance.quro.core.QuroToolSpec
 import com.ai.assistance.quro.core.agent.loop.ClosedLoopExecutor
+import com.ai.assistance.quro.core.agent.loop.DEFAULT_TABLE
 import com.ai.assistance.quro.core.agent.loop.ExecResult
+import com.ai.assistance.quro.core.agent.loop.FailurePolicyRegistry
 import com.ai.assistance.quro.core.agent.loop.FailureType
+import com.ai.assistance.quro.core.agent.loop.RecoveryAction
+import com.ai.assistance.quro.core.agent.loop.ScenarioFailurePolicy
 import com.ai.assistance.quro.core.agent.loop.ToolOutcome
 import com.ai.assistance.quro.core.mcp.DroidMcp
 import com.ai.assistance.quro.core.mcp.McpTool
@@ -33,6 +37,22 @@ interface QuroTool {
     val description: String
     val parametersJson: String
     fun run(context: Context, arguments: String): String
+
+    /**
+     * 本次调用的执行预算（毫秒），默认 [TOOL_EXEC_TIMEOUT_MS]（60s）。
+     *
+     * ## 为什么按参数算而不是固定值（#496）
+     * 有些工具**天然长跑**，其自身 API 就带超时参数（如 `harness` 的
+     * `timeout_seconds`，默认 600s、上限 3600s）。此前所有工具共用 60s 硬超时，
+     * harness 派活每次都在 60s 被强杀（连同 QuroToolProcesses 杀掉引擎会话），
+     * 闭环的 TIMEOUT 策略又按默认表原样重跑两次 —— 用户侧就是
+     * 「活已经干了但看不到过程和结果，答复一片空白」。
+     *
+     * 长跑工具 override 本函数，按同一个超时参数返回预算。
+     * 实现约定：预算 ≥ 工具自身超时，绝不小于 —— 否则外层先杀、任务还在跑，
+     * 结果永远回不来。
+     */
+    fun execTimeoutMs(arguments: String): Long = TOOL_EXEC_TIMEOUT_MS
 
     /** 该工具运行前需确保已授予的危险权限（运行时申请）。默认无。 */
     val requiredPermissions: List<String> get() = emptyList()
@@ -421,6 +441,23 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
     /** 统一闭环执行器：把"感知-判断-执行-反馈-校验-修正"闭环推广到所有工具调用。 */
     private val closedLoop = ClosedLoopExecutor()
 
+    init {
+        // #496：harness（DeepSeek Harness 派活）专属失败策略。
+        // 默认表 TIMEOUT=[RETRY, RETRY, ESCALATE] 会把超时任务**原样重跑两次**——
+        // 每次重跑都新建一个引擎会话重复派同一个任务，用户侧看到「活被干了多遍、
+        // 过程和结果却回不来」。harness 场景下 TIMEOUT / TRANSPORT 一律直接升级
+        // （交还模型如实转告），不自动重派；其余失败类型仍沿用默认表。
+        FailurePolicyRegistry.register(
+            ScenarioFailurePolicy(
+                scenario = "harness",
+                table = DEFAULT_TABLE + mapOf(
+                    FailureType.TIMEOUT to listOf(RecoveryAction.ESCALATE),
+                    FailureType.TRANSPORT to listOf(RecoveryAction.ESCALATE),
+                ),
+            ),
+        )
+    }
+
     /**
      * 按 LLM 返回的 tool_calls 逐一执行（经闭环执行器派发）。
      *
@@ -561,6 +598,10 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
     private fun scenarioFor(call: QuroToolCall): String = when {
         call.name.startsWith("skill__") -> "skill"
         call.name.startsWith("plugin__") -> "plugin"
+        // #496：harness 派活是长跑任务（默认 600s 预算），超时/传输失败时
+        // 绝不能被默认策略原样重跑（每次重跑都会新建引擎会话重复派同一任务，
+        // 表现为「活被干了好几遍」）。专属策略见 QuroToolEngine 的 init 块。
+        call.name == "harness" -> "harness"
         else -> "tool"
     }
 
@@ -664,8 +705,11 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
         // **本 withTimeout 超时**）在取消方线程上强杀在册进程。
         // 此前取消与超时都只能干等 `Process.waitFor` 自己返回 —— proot 里跑个
         // apt install 一等就是一分多钟，用户点停止毫无反应，根因就在这里。
+        // #496：执行预算由工具自己按参数声明（长跑工具如 harness 可到 3600s）。
+        // 60s 默认值保持不变，未 override 的工具行为与此前完全一致。
+        val execBudgetMs = tool.execTimeoutMs(call.arguments)
         val execResult = runCatching {
-            withTimeout(TOOL_EXEC_TIMEOUT_MS) {
+            withTimeout(execBudgetMs) {
                 val run = QuroToolProcesses.beginRun(coroutineContext[Job])
                 try {
                     droidMcp.callTool(call.name, argsMap)
@@ -675,10 +719,10 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
             }
         }.getOrElse { e ->
             if (e is kotlinx.coroutines.TimeoutCancellationException) {
-                android.util.Log.e("QuroToolEngine", "工具「${call.name}」执行超时（${TOOL_EXEC_TIMEOUT_MS}ms），已强杀派生进程")
+                android.util.Log.e("QuroToolEngine", "工具「${call.name}」执行超时（${execBudgetMs}ms），已强杀派生进程")
                 return ExecResult.Failed(
                     FailureType.TIMEOUT,
-                    "工具执行超时（超过60秒），已自动终止。如需执行长时间任务，请分步操作。",
+                    "工具执行超时（超过${execBudgetMs / 1000}秒），已自动终止。如需执行长时间任务，请分步操作或调大该工具的超时参数。",
                 )
             }
             // 🔴 用户停止（父 job 取消）不是「工具失败」：绝不当成错误结果回灌给模型

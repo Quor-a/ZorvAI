@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.tools
 
 import android.content.Context
+import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import com.ai.assistance.quro.dshmobile.DshmobileControl
 import org.json.JSONObject
 
@@ -58,6 +59,18 @@ class HarnessTool : QuroTool {
    "required":["action"]
 }"""
 
+    /**
+     * #496：harness 派活是分钟级长跑，执行预算必须按 `timeout_seconds` 放大，
+     * 不能走默认 60s（否则任务每次都在 60s 被强杀，闭环又按默认策略重跑，
+     * 表现为「活干了多遍、过程与结果都回不来」）。
+     *
+     * 与 [run] 里 task 动作解析同一字段、同一 coerce 区间，保证预算 ≥ 工具自身超时。
+     */
+    override fun execTimeoutMs(arguments: String): Long {
+        val args = runCatching { JSONObject(arguments) }.getOrElse { JSONObject() }
+        return (args.optDouble("timeout_seconds", 600.0).toLong()).coerceIn(30, 3600) * 1000L
+    }
+
     override fun run(context: Context, arguments: String): String {
         val args = runCatching { JSONObject(arguments) }.getOrElse { JSONObject() }
         val action = args.optString("action", "").trim().lowercase()
@@ -79,7 +92,8 @@ class HarnessTool : QuroTool {
             "status" -> DshmobileControl.status(context).text
 
             "url" -> if (DshmobileControl.status(context).ok) {
-                DshmobileControl.engineUrl() + "\n（给人看请用 action=open 打开工作台，界面与鉴权由它自己处理）"
+                // #493：回带启动令牌的完整 URL（裸端点会被 401 挡回，即「4145 打不开」）。
+                DshmobileControl.engineWebUrl(context)
             } else {
                 "引擎未运行。先 action=start（或 action=task 直接派任务，不需要手动起服务）。"
             }
@@ -106,7 +120,17 @@ class HarnessTool : QuroTool {
                 val task = args.optString("task", "").trim()
                 if (task.isBlank()) return "缺少 task（要交给 harness 执行的任务文本）"
                 val sid = args.optString("session_id", "").trim().ifBlank { null }
-                DshmobileControl.dispatchTask(context, task, sid, timeoutMs).text
+                // #498：把 harness 的执行进度上报到 AI 行动追踪面板，
+                // 让「派了任务但什么都没发生」的空白等待变为可见的过程。
+                DshmobileControl.dispatchTask(
+                    context,
+                    task,
+                    sid,
+                    timeoutMs,
+                    onProgress = { msg ->
+                        QuroAgentTrace.status("harness", "⏳ 执行中·harness", msg)
+                    },
+                ).text
             }
 
             "bridge_on" -> HarnessBridge.enable(context)
