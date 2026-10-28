@@ -55,6 +55,38 @@
     - id: dshmarketplace
       name: dshmarketplace-plugin
 
+# AI 插件管理工具（2026-10-29 用户诉状「插件没有做」）：tool-plugin-manager 行翻禁用。
+# 现象：设置→插件页能看到全部插件条目（后端与 UI 一直在跑），但 AI 工具面里没有
+# plugin_manager——模型的「装/卸/启/停插件」能力缺位，用户误判为「插件没做」。
+# 机制（root 行可翻的三条实证）：
+#   1) cordis-plugin-include/lib/index.js:86-102 applyEntryPatches 对无 insert 的顶层
+#      patch 行按 id 逐字段覆盖既有 entry——本行把 base 里 disabled:true 覆盖为 false；
+#   2) cordis-plugin-loader/lib/index.js:350 isJsExpr ? Boolean(evaluate(...)) : Boolean(disabled)
+#      ⇒ disabled:false 是显式启用的合法写法（与整行缺席同效，loader 判定为挂载）；
+#   3) dsh-scope/lib/index.js ScopedLayers.merge 以 global 为基底叠 scope 链 +
+#      dsh-tools/lib/index.js view() 的 inherited = global.tools + chainLayers
+#      ⇒ root 级（host plane）注册的工具对所有 agent scope 可见，经
+#      ctx.systemPrompt.tools(...wireSchemas) 进模型面（tool-surface-budget 门禁计量为证）。
+# 依赖四行已实证在位且启用：tools→dsh-tools / approval→dsh-user-approval /
+# permission→dsh-permission-presets / sandbox-policy→dsh-sandbox-policy；pluginManager
+# 服务由 plugin-manager 行条件启用（!!js !ctx.get('profileContext')，设备上恒真——
+# 设置→插件页打得开即活证）。
+# 审批面：plugin_manager 的每个动作（list_plugins/list_bundles/set_plugin/set_bundle/
+# install_bundle/remove_bundle/list_version_exemptions/set_version_exemption）都走
+# approveEscalation——danger-full-access 档自动批，否则逐次审批（dsh-plugin-manager/
+# lib/types/tools.js:92-98），开启不等于放开。
+# 为何只翻 root 行、不动 preset 行：buildMap 只索引 root 行与 group===true 的组内行，
+# 对象 config（preset-standard）内部的 plugins 不进 entryMap ⇒ preset 内副本不可被覆盖；
+# 整行重述 22 插件（备胎路线 A）会屏蔽上游 preset 更新，且 listPlugins 无从寻址。
+# root 副本启用后 preset 内副本保持禁用 ⇒ 不双注册。
+# 为何不启用 tool-plugin-market：其依赖的 pluginMarket 服务提供行
+# （@deepseek-ai/dsh-plugin-market lib/index.js:375 super(ctx,"pluginMarket")）在任何层
+# 都没有挂载，且 Config.indexes 默认空数组（无内置索引，须手动加索引 URL）⇒ 单独启用
+# 是静默 no-op。AI 市集需求已由 vendored dshmarketplace-plugin 双工具覆盖
+# （dshmarketplace_search/dshmarketplace_install，硬编码目录 + 移动可用徽章）。
+- id: tool-plugin-manager
+  disabled: false
+
 # 在外部应用打开（0.1.5 新增，桌面编排）：上游 host/client 探查 Finder/Terminal/编辑器目录，
 # Android 上没有等价候选。两条 row 关闭，改由注入层的会话头部入口 + 壳侧系统选择器（PathOpen）承担。
 - id: open-in-app
