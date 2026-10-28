@@ -439,11 +439,55 @@ object DshmobileControl {
     return null
   }
 
+  /**
+   * 发现会话日志的真实游标（最后一条事件的 seq）。
+   *
+   * 为什么需要：[assistantTexts] 的 throughSeq 是含端游标，只有拿到「最后一条事件的
+   * seq」才能把整页收全。`session/follow` 的 opening frame 才带游标，但那是 WebSocket
+   * 专有通道，ZorvAI 的 POST RPC 用不了；`session/list`/`session/summary` 均无游标字段。
+   *
+   * 发现手法：利用服务端的越界报错反推。传 Number.MAX_SAFE_INTEGER（safe integer
+   * 校验上限，必过 validatePageRequest），服务端必然回
+   * `session page through seq X is past cursor N`（HTTP 200，错误在 result.error.message），
+   * 正则取 N 即真实游标。
+   *
+   * @return 游标值；探查失败（网络中断、会话未注册、报文形态变化）返回 null，
+   *   调用方回退 throughSeq=0 的旧行为。
+   */
+  private fun sessionCursor(app: Context, sid: String): Long? {
+    val probe = JSONObject().put("request", JSONObject()
+      .put("address", JSONObject().put("kind", "session").put("sessionId", sid))
+      .put("throughSeq", MAX_THROUGH_SEQ)
+      .put("maxMessages", 1))
+    val resp = rpc(app, "session/page", probe, 10_000) ?: return null
+    val message = resp.optJSONObject("result")?.optJSONObject("error")?.optString("message").orEmpty()
+    return parseCursorFromError(message)
+  }
+
+  /**
+   * 从 `session/page` 的越界报错里解析真实游标（纯函数，直测）。
+   *
+   * 服务端原文（`dsh-api-session-controller` page()）：
+   * `session page through seq ${throughSeq} is past cursor ${sourceCursor}`。
+   * 主正则钉死这句话；上游改文案时兜底正则争取还能取到值；两者都失配返回 null
+   * （调用方回退旧行为，绝不猜）。
+   */
+  internal fun parseCursorFromError(message: String): Long? {
+    if (message.isBlank()) return null
+    return CURSOR_RE.find(message)?.groupValues?.get(1)?.toLongOrNull()
+      ?: CURSOR_RE_FALLBACK.find(message)?.groupValues?.get(1)?.toLongOrNull()
+  }
+
   /** 取会话页里全部 assistant 文本（seq, text），按 seq 升序。 */
   private fun assistantTexts(app: Context, sid: String): List<Pair<Long, String>> {
+    // throughSeq 是**含端游标**（官方 schema：「Inclusive log cut obtained from the
+    // corresponding follow opening frame」），paginate 从 throughSeq 倒序收集。写死 0
+    // 只会拿到 events[0] 一条，assistant/message 永远缺席——派活「执行完成但无文本
+    // 答复」的根因。先探真实游标，探查失败才回退旧值。
+    val cursor = sessionCursor(app, sid)
     val args = JSONObject().put("request", JSONObject()
       .put("address", JSONObject().put("kind", "session").put("sessionId", sid))
-      .put("throughSeq", 0)
+      .put("throughSeq", cursor ?: 0L)
       .put("maxMessages", 400))
     val resp = rpc(app, "session/page", args, 10_000) ?: return emptyList()
     val records = resp.optJSONObject("result")?.opt("value")?.let { value ->
@@ -478,6 +522,32 @@ object DshmobileControl {
     }
     return out
   }
+
+  // ── Harness API 面（#506：ZorvAI 任意调用 harness 的工具与技能）─────────────
+
+  /**
+   * 列举 harness 已装配的全部可见工具（插件工具 zorvai_*、各内置插件工具、
+   * bash/web 等引擎原生工具）。实现 = [HarnessApi.toolsList]（HTTP JSON 面，
+   * 鉴权重试与 [rpc] 同纪律）。
+   */
+  fun harnessToolsList(context: Context): DshResult = HarnessApi.toolsList(context)
+
+  /**
+   * 让 ZorvAI 的 AI **任意调用** harness 的任一工具（引擎全管线执行：visibility、
+   * UNKNOWN_TOOL、审批门全部保留，与 harness 里模型发起调用语义一致）。
+   *
+   * @param name 工具名（从 [harnessToolsList] 拿）。
+   * @param toolArgs 工具实参 JSON；null = 空对象。
+   * @param timeoutSeconds 引擎侧执行超时秒数；null = 120s。夹取 [1, 600]。
+   */
+  fun harnessToolCall(context: Context, name: String, toolArgs: JSONObject?, timeoutSeconds: Int?): DshResult =
+    HarnessApi.toolCall(context, name, toolArgs, timeoutSeconds)
+
+  /** 列举 harness 技能库（dsh-skill 注册表，含商城技能 dsh-plugin-store 等）。 */
+  fun harnessSkillsList(context: Context): DshResult = HarnessApi.skillsList(context)
+
+  /** 加载一个技能的完整定义（markdown 正文）。 */
+  fun harnessSkillLoad(context: Context, name: String): DshResult = HarnessApi.skillLoad(context, name)
 
   // ── RPC 信封 ────────────────────────────────────────────────────────────────
 
@@ -539,4 +609,13 @@ object DshmobileControl {
       DshResult(false, "写入 key 失败：" + (t.message ?: t.javaClass.simpleName))
     }
   }
+
+  /** Number.MAX_SAFE_INTEGER：session/page 的 throughSeq 必须是非负 safe integer，这是上限。 */
+  private const val MAX_THROUGH_SEQ = 9_007_199_254_740_991L
+
+  /** 主正则：服务端越界报错 `session page through seq X is past cursor N`。 */
+  private val CURSOR_RE = Regex("""past cursor (-?\d+)""")
+
+  /** 兜底正则：上游改文案时只要还带 `cursor N` 形态就能取到值。 */
+  private val CURSOR_RE_FALLBACK = Regex("""cursor[:\s]+(-?\d+)""")
 }

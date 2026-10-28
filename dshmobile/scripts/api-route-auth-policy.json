@@ -45,6 +45,10 @@
     {
       "source": "plugins/dsh-session-delete/src/index.js",
       "expected": 3
+    },
+    {
+      "source": "plugins/dsh-android-harness-api/src/index.ts",
+      "expected": 4
     }
   ],
   "dynamicPathExpressions": [
@@ -108,6 +112,42 @@
       ],
       "literalEvidence": "rt=`${O}/install`",
       "reason": "同 et（0.1.7 重命名：原 V）：base 常量 O 拼接的 install 路由；变更拼接形态或路径都会直接判红。"
+    },
+    {
+      "source": "plugins/dsh-android-harness-api/src/index.ts",
+      "expression": "ROUTE_TOOLS",
+      "resolvesTo": [
+        "/api/harness/tools"
+      ],
+      "literalEvidence": "const ROUTE_TOOLS = '/api/harness/tools'",
+      "reason": "harness API 面路由常量集中在 src/index.ts 顶部定义（壳侧 HarnessApi.kt 同名常量一一对应）；常量声明行的字面量在场即证明解析目标，改路径必踩本门禁。"
+    },
+    {
+      "source": "plugins/dsh-android-harness-api/src/index.ts",
+      "expression": "ROUTE_TOOLS_CALL",
+      "resolvesTo": [
+        "/api/harness/tools/call"
+      ],
+      "literalEvidence": "const ROUTE_TOOLS_CALL = '/api/harness/tools/call'",
+      "reason": "harness API 面路由常量集中在 src/index.ts 顶部定义（壳侧 HarnessApi.kt 同名常量一一对应）；常量声明行的字面量在场即证明解析目标，改路径必踩本门禁。"
+    },
+    {
+      "source": "plugins/dsh-android-harness-api/src/index.ts",
+      "expression": "ROUTE_SKILLS",
+      "resolvesTo": [
+        "/api/harness/skills"
+      ],
+      "literalEvidence": "const ROUTE_SKILLS = '/api/harness/skills'",
+      "reason": "harness API 面路由常量集中在 src/index.ts 顶部定义（壳侧 HarnessApi.kt 同名常量一一对应）；常量声明行的字面量在场即证明解析目标，改路径必踩本门禁。"
+    },
+    {
+      "source": "plugins/dsh-android-harness-api/src/index.ts",
+      "expression": "ROUTE_SKILLS_LOAD",
+      "resolvesTo": [
+        "/api/harness/skills/load"
+      ],
+      "literalEvidence": "const ROUTE_SKILLS_LOAD = '/api/harness/skills/load'",
+      "reason": "harness API 面路由常量集中在 src/index.ts 顶部定义（壳侧 HarnessApi.kt 同名常量一一对应）；常量声明行的字面量在场即证明解析目标，改路径必踩本门禁。"
     }
   ],
   "routes": [
@@ -440,6 +480,50 @@
       "access": "protected",
       "authMarker": "connection.requestRejection(req)",
       "authCallMarker": "authorize(req, res, ctx)"
+    },
+    {
+      "id": "harness-api-tools",
+      "path": "/api/harness/tools",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-harness-api/src/index.ts",
+      "registration": "path: ROUTE_TOOLS",
+      "endpointSource": "plugins/dsh-android-harness-api/src/index.ts",
+      "access": "protected",
+      "authMarker": "connection.requestRejection(req)",
+      "authCallMarker": "rejected(ctx, req, res)"
+    },
+    {
+      "id": "harness-api-tools-call",
+      "path": "/api/harness/tools/call",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-harness-api/src/index.ts",
+      "registration": "path: ROUTE_TOOLS_CALL",
+      "endpointSource": "plugins/dsh-android-harness-api/src/index.ts",
+      "access": "protected",
+      "authMarker": "connection.requestRejection(req)",
+      "authCallMarker": "rejected(ctx, req, res)"
+    },
+    {
+      "id": "harness-api-skills",
+      "path": "/api/harness/skills",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-harness-api/src/index.ts",
+      "registration": "path: ROUTE_SKILLS",
+      "endpointSource": "plugins/dsh-android-harness-api/src/index.ts",
+      "access": "protected",
+      "authMarker": "connection.requestRejection(req)",
+      "authCallMarker": "rejected(ctx, req, res)"
+    },
+    {
+      "id": "harness-api-skills-load",
+      "path": "/api/harness/skills/load",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-android-harness-api/src/index.ts",
+      "registration": "path: ROUTE_SKILLS_LOAD",
+      "endpointSource": "plugins/dsh-android-harness-api/src/index.ts",
+      "access": "protected",
+      "authMarker": "connection.requestRejection(req)",
+      "authCallMarker": "rejected(ctx, req, res)"
     }
   ],
   "upstreamRoutes": [
