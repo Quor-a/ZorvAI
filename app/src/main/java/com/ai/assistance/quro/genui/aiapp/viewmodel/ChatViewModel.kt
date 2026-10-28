@@ -1103,7 +1103,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 判断文本中的 genui 代码块是否未闭合（输出被截断） */
     private fun hasUnclosedGenuiFence(text: String): Boolean {
-        val start = text.lastIndexOf("```genui")
+        // 大小写不敏感：模型写 ```GenUI 时旧实现判不出未闭合（诊断行同源修正）。
+        val start = text.lastIndexOf("```genui", ignoreCase = true)
         if (start < 0) return false
         if (text.indexOf("```", start + 8) >= 0) return false
         // 围栏虽未闭合，但若文本中已存在完整可解析的 JSON（模型重新输出了完整版），无需再续写
@@ -1392,36 +1393,37 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
 
-        // ── #501：锁定非 genui 通道，模型只回了短人话（没写对应围栏）──
+        // ── #501/#508：模型只回了短人话（没写任何围栏）→ 只落对话气泡 ──
         //
-        // 真机症状（2026-10-29 截图）：用户在弹窗里选了 markdown / a2ui / html，
-        // 模型回一句短人话（"好的，马上写" / 复述压缩历史残句）→ 旧代码整篇掉进
-        // GenUI 提取管线 → 五个策略全败 → 画布弹「（AI 未返回有效 UI，请重试）」，
-        // 模型的真实回复被吞个干净。用户侧就是「选了通道反而更坏」。
-        // 够长（≥120）/ 带围栏 / 带 JSON 根键的都不算短人话，继续走下面的通道逻辑。
-        if (forcedChannel != null && forcedChannel != "genui" &&
-            GenUiPromptProbe.isPlainChatReply(fullText)
-        ) {
+        // 真机症状（2026-10-29 截图×2）：用户在弹窗里选了 markdown / a2ui / html
+        // （或没锁通道、或锁了 genui），模型回一句短人话（"好的，马上写" / 复述压缩
+        // 历史残句）→ 旧代码整篇掉进 GenUI 提取管线 → 五个策略全败 → 画布弹
+        // 「（AI 未返回有效 UI，请重试）」，模型的真实回复被吞个干净。
+        // #501 只覆盖了 forced 非 genui 的态；本轮截图实证 forced=null/genui 同样中招，
+        // 故去掉通道条件——isPlainChatReply 自身已保证 <120 字符、无围栏、无 JSON
+        // 根键，这种文本不可能画出任何界面，气泡是唯一诚实的呈现面。
+        if (GenUiPromptProbe.isPlainChatReply(fullText)) {
+            // 剥折叠提示后再判空：整条都是机器行时给一句中性气泡，
+            // 不再用画布兜底卡冒充「AI 未返回有效 UI」。
             val reply = ChatHistory.stripFoldNotes(fullText).trim()
-            if (reply.isNotEmpty()) {
-                _state.update {
-                    it.copy(
-                        isStreaming = false,
-                        streamingText = "",
-                        streamingReasoning = "",
-                        error = null,
-                        // 只落对话气泡：这一轮没有可渲染的通道内容，
-                        // 不拿画布兜底卡打扰用户，也不动上一轮的画布。
-                        conversationHistory = it.conversationHistory + GenUIChatMessage(
-                            role = "assistant",
-                            content = reply,
-                            reasoning = result.reasoning
-                        )
+                .ifBlank { "（这一轮没有可显示的文字回复）" }
+            _state.update {
+                it.copy(
+                    isStreaming = false,
+                    streamingText = "",
+                    streamingReasoning = "",
+                    error = null,
+                    // 只落对话气泡：这一轮没有可渲染的通道内容，
+                    // 不拿画布兜底卡打扰用户，也不动上一轮的画布。
+                    conversationHistory = it.conversationHistory + GenUIChatMessage(
+                        role = "assistant",
+                        content = reply,
+                        reasoning = result.reasoning
                     )
-                }
-                persistSession()
-                return
+                )
             }
+            persistSession()
+            return
         }
 
         // 策略 1：标准提取（strict：流式已结束，截断 JSON 绝不能进画布）
@@ -1459,7 +1461,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         val debugInfo = buildString {
             append("【画布诊断】")
             append("fullText=").append(fullText.length).append("字符")
-            append(" | 含genui围栏=").append(fullText.contains("```genui"))
+            append(" | 含genui围栏=").append(fullText.contains("```genui", ignoreCase = true))
+            append(" | 围栏未闭合=").append(runCatching { hasUnclosedGenuiFence(fullText) }.getOrDefault(false))
             append(" | 含root键=").append(containsRootKey(fullText))
             append(" | root值已开始=").append(hasRootValueStarted(fullText))
             val cleanedLen = runCatching { stripThinkingTags(fullText).length }.getOrDefault(-1)
@@ -2148,8 +2151,20 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private fun extractFromGenuiFences(source: String, strict: Boolean): String? {
         val genuiRegex = Regex("```(?:genui|gen-ui)\\s*\\n?([\\s\\S]*?)```", RegexOption.IGNORE_CASE)
         val candidates = genuiRegex.findAll(source).map { it.groupValues[1].trim() }
-            .filter { it.startsWith("{") }.sortedByDescending { it.length }.toList()
-        if (candidates.isEmpty()) return null
+            // #508：围栏体不以 { 开头也放行。模型常在围栏首行写语言提示（json）或一句
+            // 引导语，旧实现 filter startsWith("{") 把整块候选丢掉 —— 真机 7088 字符
+            // 那次「有围栏有 root 却无完整候选」的一条实路径。从体内首个 { 切片，
+            // 没有 { 的才淘汰。
+            .map { body -> body.indexOf('{').takeIf { it >= 0 }?.let { body.substring(it) } }
+            .filterNotNull()
+            .sortedByDescending { it.length }.toList()
+        if (candidates.isEmpty()) {
+            // #508：围栏未闭合（输出被 max_tokens 砍断）时闭合正则零匹配。
+            // strict 不抢救（截断 JSON 绝不作为最终结果上画布，交由兜底卡的
+            // 「生成不完整」文案处理）；非 strict 走截断抢救。
+            if (strict) return null
+            return salvageUnclosedGenuiFence(source)
+        }
         // 第一轮：完整候选，最长优先（避免被截断残段抢先）
         candidates.filter { it.endsWith("}") }.forEach { json ->
             acceptCandidate(json, strict)?.let { return it }
@@ -2159,9 +2174,22 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             candidates.filter { !it.endsWith("}") }.forEach { json ->
                 if (StreamingParser.tryParsePartial(wrapBareNodeTree(json)) != null) return wrapBareNodeTree(json)
             }
+            // #508：闭合围栏全部落选（残缺/校验失败）时，再试未闭合围栏的截断抢救。
+            salvageUnclosedGenuiFence(source)?.let { return it }
         }
         return null
     }
+
+    /**
+     * #508：未闭合 ```genui 围栏的截断抢救（输出被砍断时的最后一捞）。
+     *
+     * 真机实证（2026-10-29 截图）：fullText=7088 字符、围栏与 root 键都在，但围栏
+     * 未闭合 ⇒ 闭合围栏正则零匹配 ⇒ 候选为空 ⇒ 兜底卡「提取全部失败」。
+     * 纯逻辑在 [GenUiPromptProbe.salvageUnclosedGenuiFence]（单测直测它），
+     * strict 调用方（最终结果）不抢救：截断 JSON 绝不作为最终结果上画布。
+     */
+    private fun salvageUnclosedGenuiFence(source: String): String? =
+        GenUiPromptProbe.salvageUnclosedGenuiFence(source)
 
     /** ```json 代码块提取（多轮择优） */
     private fun extractFromJsonFences(source: String, strict: Boolean): String? {
@@ -2703,25 +2731,19 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
      *
      * 匹配 "root"\s*:  即 root 键后面跟着冒号（可能有空白）。
      * 用于快速过滤掉明显不完整的 JSON（只有 id/title，没有 root）。
+     * 唯一实现在 [GenUiPromptProbe.containsRootKey]（单测直测）。
      */
-    private fun containsRootKey(json: String): Boolean {
-        return Regex(""""root"\s*:""").containsMatchIn(json)
-    }
+    private fun containsRootKey(json: String): Boolean =
+        GenUiPromptProbe.containsRootKey(json)
 
     /**
      * 检查 JSON 中 root 键后面是否已开始有值（至少有 { ）
      *
      * 防止返回 "root": 后面截断的 JSON 给渲染器导致崩溃。
+     * 唯一实现在 [GenUiPromptProbe.hasRootValueStarted]（单测直测）。
      */
-    private fun hasRootValueStarted(json: String): Boolean {
-        val match = Regex(""""root"\s*:""").find(json) ?: return false
-        val afterColon = match.range.last + 1
-        for (i in afterColon until json.length) {
-            val c = json[i]
-            if (!c.isWhitespace()) return c == '{'
-        }
-        return false
-    }
+    private fun hasRootValueStarted(json: String): Boolean =
+        GenUiPromptProbe.hasRootValueStarted(json)
 
     /**
      * 修复 "root": 后无值（直接跟 } 或 EOF）的非法 JSON

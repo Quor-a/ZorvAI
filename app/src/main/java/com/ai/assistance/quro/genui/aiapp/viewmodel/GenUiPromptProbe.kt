@@ -221,4 +221,60 @@ internal object GenUiPromptProbe {
         return head.contains("```") ||
             head.contains("\"root\"") || head.contains("\"properties\"")
     }
+
+    // ═══════════════ root 键判据（生产侧唯一实现，ChatViewModel 委托）═══════════════
+
+    /**
+     * 快速检查 JSON 字符串中是否包含 "root" 键（而非字符串值中的 root）。
+     *
+     * 匹配 `"root"\s*:` 即 root 键后面跟着冒号（可能有空白）。
+     * 用于快速过滤掉明显不完整的 JSON（只有 id/title，没有 root）。
+     */
+    fun containsRootKey(json: String): Boolean =
+        Regex(""""root"\s*:""").containsMatchIn(json)
+
+    /**
+     * 检查 JSON 中 root 键后面是否已开始有值（至少有 {）。
+     *
+     * 防止返回 `"root":` 后面截断的 JSON 给渲染器导致崩溃。
+     */
+    fun hasRootValueStarted(json: String): Boolean {
+        val match = Regex(""""root"\s*:""").find(json) ?: return false
+        val afterColon = match.range.last + 1
+        for (i in afterColon until json.length) {
+            val c = json[i]
+            if (!c.isWhitespace()) return c == '{'
+        }
+        return false
+    }
+
+    // ═══════════════ #508：未闭合 genui 围栏的截断抢救 ═══════════════
+
+    /**
+     * 未闭合 ```genui 围栏的截断抢救（生产侧 `ChatViewModel.salvageUnclosedGenuiFence`
+     * 委托本函数；单测直测它）。
+     *
+     * 真机实证（2026-10-29 截图）：fullText=7088 字符、围栏与 root 键都在，但围栏
+     * **未闭合**（输出被 max_tokens 砍断）⇒ 闭合围栏正则零匹配 ⇒ 候选为空 ⇒
+     * 兜底卡「提取全部失败/无完整候选」。
+     *
+     * 手法：取最后一个 ```genui 标记之后的文本，从首个 `{` 起做部分解析。
+     * 与既有策略 4/5 同口径：必须带 root 键且 root 值已开始，防半截 JSON 进画布。
+     *
+     * @return 抢救出的部分 JSON；没有未闭合围栏 / 无 `{` / 无 root 键 / 解析失败时 null。
+     */
+    fun salvageUnclosedGenuiFence(source: String): String? {
+        val markerEnd = Regex("```(?:genui|gen-ui)", RegexOption.IGNORE_CASE)
+            .findAll(source).map { it.range.last }.maxOrNull() ?: return null
+        val tail = source.substring(markerEnd + 1)
+        // 围栏若已闭合（``` 在后），body 到闭合符为止——否则闭合符会混进 JSON 尾部
+        // 让直接解析必败（抢救只在闭合候选全部落选后才跑，此处按更宽的部分解析口径收）。
+        val fenceEnd = tail.indexOf("```")
+        val body = if (fenceEnd >= 0) tail.substring(0, fenceEnd) else tail
+        val jsonStart = body.indexOf('{')
+        if (jsonStart < 0) return null
+        val partial = body.substring(jsonStart).trim()
+        if (!containsRootKey(partial) || !hasRootValueStarted(partial)) return null
+        return if (com.ai.assistance.quro.genui.sdk.dsl.StreamingParser.tryParsePartial(partial) != null) partial else null
+    }
 }

@@ -47,6 +47,13 @@
       "marker": "dsh-mobile marketplace route auth (U2)"
     },
     {
+      "id": "market-skill-source-S1",
+      "target": "dshmarketplace-plugin/lib/index.js",
+      "summary": "dsh-plugin-store 技能注册补 source 字段，修 loaded skill source must be a string 加载失败",
+      "provenance": "2026-10-29 真机派障：dsh-skill register/get 双层校验不对称（validateRuntimeSkill 不查 source、validateDefinition 强查），上游 0.1.7 I() 返回对象缺 source",
+      "marker": "content:e.trim(),source:\"plugin:dshmarketplace-plugin\""
+    },
+    {
       "id": "market-D-client",
       "target": "dshmarketplace-plugin/lib/client.js",
       "summary": "卡片兼容徽章（dshm-compat 四色）+ 搜索框「仅移动端可用」复选框",

@@ -25,6 +25,7 @@ vendored 的原因有两类：一是上游未修而我们已止血的缺陷，�
 | C（0.13.1） | `lib/client.js` | **已退役（0.1.7）** | 不可安装条目置灰。**上游 0.1.7 在服务端与工具面都新增 `installCheck:"passed"` 过滤**，客户端拿不到 `installable:false` 的行，置灰无对象。实测 1200 条分页：passed 800 条中 `installable===false`=0、`install` 为空=0；未通过的 400 条里 =85（已被上游滤掉） |
 | D（0.13.2 W1） | `lib/index.js` + `lib/client.js` | 必须保留，已重锚 | **移动兼容性徽章 + mobile: 前缀过滤**。server 侧 0.1.7 的搜索 handler 已改用 `c(...installCheck:"passed")` + `p(a)`，插入锚点由 `function qt(` 改为 `function Dt(`（apply 函数），过滤/富化逻辑不变；client 侧三个锚点（helpers / 徽章 / 搜索框）在 0.1.7 逐字未变，原位命中 |
 | U2（0.14.0） | `lib/index.js` | 必须保留，已重锚 | `/api/dshmarketplace/{search,install}` 是 exact 路由，handler 首行复用 `connection.requestRejection()`（browser-session-only 面）；403 空体、401 JSON、成功响应均 `no-store`。0.1.7 重新 minify 后标识符变为 `I()/et/rt/N()`，锚点按新字节重写并保留 0.1.5 旧形态兜底 |
+| S1（2026-10-29） | `lib/index.js` | 必须保留 | `dsh-plugin-store` 技能补 `source:"plugin:dshmarketplace-plugin"`。真机派障：`loaded skill "dsh-plugin-store" source must be a string`——上游 `@deepseek-ai/dsh-skill` 双层校验不对称（`register()` 只过 `validateRuntimeSkill` 不查 source，`get()` 回来的定义要过 `validateDefinition` 强查 source），而 0.1.7 的 `I()` 返回对象 `{name,description,content,invocation}` 缺 source，技能加载即抛。一行补齐，不动上游核心 |
 
 其余文件（`package.json`、`cordis.patch.yml`、`skills/dsh-plugin-store/SKILL.md`、
 README/LICENSE）与 0.1.7 上游逐字节一致。

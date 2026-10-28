@@ -123,6 +123,22 @@
     - id: android-zorvai-tools
       name: '@dsh-android/dsh-android-zorvai-tools'
 
+# ZorvAI ⇄ Harness 互控 API 面（2026-10-29 用户诉状「开发个插件给 zorvAI 一个 api 接口让
+# zorvAI 任意调用他的插件、技能 skills」）：dsh-android-harness-api——把引擎的 ToolRuntime
+# 与 SkillRegistry 以 HTTP JSON 暴露在引擎自己的 webServer 上（127.0.0.1，不出设备）：
+#   GET  /api/harness/tools       列举可见工具（ctx.tools.schemas() 投影）
+#   POST /api/harness/tools/call  全管线执行任一工具（ctx.tools.execute()，visibility/
+#                                 UNKNOWN_TOOL/PTC collapse/审批门全部保留）
+#   GET  /api/harness/skills      列举技能目录（ctx.skills.list()）
+#   POST /api/harness/skills/load 加载技能完整定义（ctx.skills.get()，validateDefinition
+#                                 抛错转 500，是 market-skill-source-S1 修复的自诊断面）
+# 鉴权与 open-in-app/商城 U2 同款：每请求先问 connection.requestRejection（Host/Origin
+# 栅栏 + 登录 cookie），拒绝空体结束；请求体 1MiB 上限；execute 绝不抛错转错误 JSON。
+# 插件管理面（列举/装卸引擎侧插件）由 HarnessBridge.capabilities 覆盖，不做重复路由。
+- insert:
+    - id: android-harness-api
+      name: '@dsh-android/dsh-android-harness-api'
+
 # 工具链与环境设置面板（0.13.0 F1.3/F1.5，M3.2）：dsh-android-linux-env——工具链状态/环境配方/
 # 共享目录与镜像设置视图；同时是 shell-termux 写面栅栏（workspaceRoot/sharedDirs，见上文 L20-22）
 # 的设置页维护面——不装载则共享目录设置无处维护（审校 C4 2026-08-23：注入四件套缺此条目）。

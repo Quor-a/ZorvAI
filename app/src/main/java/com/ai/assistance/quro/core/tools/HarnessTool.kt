@@ -46,16 +46,23 @@ class HarnessTool : QuroTool {
             "一条失败换另一条）：MCP 通道 mcp__zorvai__<工具名>（需重启 harness 生效）+" +
             "内置插件通道 zorvai_<工具名>（随快照装配即刻生效，元工具 zorvai_bridge 可自诊断/刷新）；" +
             "bridge_off 撤销；bridge_status 看桥接状态；" +
-            "plugins 列出它已装的全部包（它的能力来源），知道它有什么才能在 task 里准确提要求。"
+            "plugins 列出它已装的全部包（它的能力来源），知道它有什么才能在 task 里准确提要求；" +
+            "tools_list 列出它已装配的全部工具（含它自己的插件工具与 zorvai_* 通道）；" +
+            "tool_call **任意调用它的任一工具**（引擎全管线执行，与它里面的模型调用同一 registry；" +
+            "先用 tools_list 看有哪些，name 填工具名、tool_args 传实参）；" +
+            "skills_list 列出它的技能库；skill_load 加载某个技能的完整说明。"
 
     override val parametersJson: String = """{
    "type":"object",
    "properties":{
-      "action":{"type":"string","description":"操作","enum":["open","start","stop","restart","status","logs","url","task","set_key","diag","bridge_on","bridge_off","bridge_status","plugins"]},
+      "action":{"type":"string","description":"操作","enum":["open","start","stop","restart","status","logs","url","task","set_key","diag","bridge_on","bridge_off","bridge_status","plugins","tools_list","tool_call","skills_list","skill_load"]},
       "task":{"type":"string","description":"task 动作要交给 harness 执行的任务文本（一句话描述它要做什么，它会自己规划并执行；描述要自包含，它看不到我们的对话上下文）"},
       "session_id":{"type":"string","description":"task 时可选：续用某个会话 id（上一轮 task 的回执里会带），让多轮任务有上下文"},
       "key":{"type":"string","description":"set_key 时要保存的 API key（harness 自己的模型 key）"},
-      "timeout_seconds":{"type":"number","description":"task 的超时秒数，默认 600；agent 干活可能很慢，别设太小"},
+      "tool_name":{"type":"string","description":"tool_call 时要调用的 harness 工具名（先用 action=tools_list 看有哪些，如 zorvai_read_screen、bash）"},
+      "tool_args":{"type":"object","description":"tool_call 时该工具的实参 JSON（按 tools_list 里给出的 parameters 传；没有实参就空对象或不传）"},
+      "skill_name":{"type":"string","description":"skill_load 时要加载的技能名（先用 action=skills_list 看有哪些）"},
+      "timeout_seconds":{"type":"number","description":"task 的超时秒数，默认 600；agent 干活可能很慢，别设太小。tool_call 时是引擎侧执行超时，默认 120、上限 600"},
       "tail":{"type":"number","description":"logs 返回的尾部行数，默认 80"}
    },
    "required":["action"]
@@ -67,9 +74,16 @@ class HarnessTool : QuroTool {
      * 表现为「活干了多遍、过程与结果都回不来」）。
      *
      * 与 [run] 里 task 动作解析同一字段、同一 coerce 区间，保证预算 ≥ 工具自身超时。
+     * #506：tool_call 走 harness API 面（引擎侧超时 + HTTP 读超时余量），
+     * 预算按 `引擎超时 + 20s 余量` 给——否则 HTTP 回执还在路上就被执行器强杀。
      */
     override fun execTimeoutMs(arguments: String): Long {
         val args = runCatching { JSONObject(arguments) }.getOrElse { JSONObject() }
+        val action = args.optString("action", "").trim().lowercase()
+        if (action == "tool_call") {
+            val engineS = (args.optDouble("timeout_seconds", 120.0).toLong()).coerceIn(1, 600)
+            return engineS * 1000L + 20_000L
+        }
         return (args.optDouble("timeout_seconds", 600.0).toLong()).coerceIn(30, 3600) * 1000L
     }
 
@@ -78,7 +92,7 @@ class HarnessTool : QuroTool {
         val action = args.optString("action", "").trim().lowercase()
         if (action.isBlank()) {
             return "缺少 action。可用：open/start/stop/restart/status/logs/url/task/set_key/diag/" +
-                "bridge_on/bridge_off/bridge_status/plugins"
+                "bridge_on/bridge_off/bridge_status/plugins/tools_list/tool_call/skills_list/skill_load"
         }
         val timeoutMs = (args.optDouble("timeout_seconds", 600.0).toLong()).coerceIn(30, 3600) * 1000L
 
@@ -142,6 +156,33 @@ class HarnessTool : QuroTool {
             "bridge_status" -> HarnessBridge.status(context)
 
             "plugins" -> HarnessBridge.capabilities(context)
+
+            "tools_list" -> DshmobileControl.harnessToolsList(context).text
+
+            "tool_call" -> {
+                val toolName = args.optString("tool_name", "").trim()
+                if (toolName.isBlank()) {
+                    return "缺少 tool_name（要调用的 harness 工具名）。先用 action=tools_list 看它有哪些工具。"
+                }
+                val toolArgs = args.optJSONObject("tool_args")
+                // 引擎侧超时与 HTTP 读超时联动：timeout_seconds 缺省 120、上限 600（插件 clamp）。
+                val toolTimeoutS = if (args.has("timeout_seconds")) {
+                    args.optDouble("timeout_seconds", 120.0).toInt()
+                } else {
+                    null
+                }
+                DshmobileControl.harnessToolCall(context, toolName, toolArgs, toolTimeoutS).text
+            }
+
+            "skills_list" -> DshmobileControl.harnessSkillsList(context).text
+
+            "skill_load" -> {
+                val skillName = args.optString("skill_name", "").trim()
+                if (skillName.isBlank()) {
+                    return "缺少 skill_name（要加载的技能名）。先用 action=skills_list 看它有哪些技能。"
+                }
+                DshmobileControl.harnessSkillLoad(context, skillName).text
+            }
 
             else -> "未知 action：$action"
         }

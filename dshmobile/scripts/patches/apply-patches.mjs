@@ -365,6 +365,31 @@ const IMPLS = {
     },
   },
 
+  // ── market-skill-source-S1：dsh-plugin-store 技能补 source 字段 ──
+  // 真机症状：插件市场报「loaded skill "dsh-plugin-store" source must be a string」。
+  // 根因：@deepseek-ai/dsh-skill 双层校验不对称——register() 只过 validateRuntimeSkill
+  //   （查 name/description/invocation，不查 source），而 get() 回来的定义要过
+  //   validateDefinition（typeof source !== "string" 即抛）。上游 0.1.7 的 I() 返回
+  //   {name,description,content,invocation}，source 缺席 ⇒ 技能加载即失败。
+  // 修法：在返回对象里补 source 字符串（对照 dsh-android-bridge 的 source:'bundled' 范式，
+  //   这里用 'plugin:dshmarketplace-plugin' 标明来源）。不动上游核心、不改校验。
+  'market-skill-source-S1': {
+    file: 'dshmarketplace-plugin/lib/index.js',
+    check: (s) => s.includes('content:e.trim(),source:"plugin:dshmarketplace-plugin"'),
+    apply: (s) => {
+      const OLD = 'return a?{name:s,description:a,content:e.trim(),invocation:{modelInvocable:!0,userInvocable:!0}}:null'
+      const NEW = 'return a?{name:s,description:a,content:e.trim(),source:"plugin:dshmarketplace-plugin",invocation:{modelInvocable:!0,userInvocable:!0}}:null'
+      if (s.includes(NEW)) return s
+      if (!s.includes(OLD)) {
+        const i = s.indexOf('content:e.trim()')
+        throw new Error('S1 锚点未命中——I() 返回对象形态已变：' + (i >= 0 ? s.slice(i, i + 120) : '（找不到 content:e.trim() 段）'))
+      }
+      s = s.replace(OLD, NEW)
+      if (!s.includes('content:e.trim(),source:"plugin:dshmarketplace-plugin"')) throw new Error('S1 复核失败——不写回')
+      return s
+    },
+  },
+
   // ── dsh-undo-savepoint E1-E7（0.3.8 移动端裁剪，字节级锚点）──
   'undo-E1': {    file: 'dsh-undo-savepoint/lib/client.js',
     // 移除类：标记不存在 = 已应用
