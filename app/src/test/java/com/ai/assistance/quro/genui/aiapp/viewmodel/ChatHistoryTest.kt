@@ -174,6 +174,37 @@ class ChatHistoryTest {
         assertEquals(s, ChatHistory.stripJsonBlobs(s))
     }
 
+    // ═══════════════ #501：折叠提示复述泄漏（2026-10-29 真机截图实锤） ═══════════════
+
+    /**
+     * 真机形态：老轮次被 compressAssistant 折叠后，模型把机器行连同样板用户消息
+     * 一起复述回来 ——「[有人回复我]幽: …」+「[系统折叠提示：此处原有 genui 共
+     * 6490 字符…]」。这行字只属于**模型上下文**，任何用户可见路径都不许出现。
+     */
+    @Test
+    fun `模型复述折叠提示时剥掉机器行只留人话`() {
+        val echo = "[有人回复我]幽: 实际上没有这一个也能解决大部分的事\n\n" +
+            "[系统折叠提示：此处原有 genui 共 6490 字符，已从上下文中移除；" +
+            "不要在任何回复或界面里复述本提示]"
+        val out = ChatHistory.stripFoldNotes(echo)
+        assertTrue("人话要留着：$out", out.contains("实际上没有这一个也能解决大部分的事"))
+        assertFalse("机器行必须剥干净：$out", out.contains("系统折叠提示"))
+        assertFalse("连方括号残骸都不许留：$out", out.contains("[系统"))
+    }
+
+    @Test
+    fun `整条都是折叠提示时剥成空串交给调用方兜底`() {
+        val only = "[系统折叠提示：此处原有 genui 共 96 字符，已从上下文中移除；" +
+            "不要在任何回复或界面里复述本提示]"
+        assertEquals("", ChatHistory.stripFoldNotes(only))
+    }
+
+    @Test
+    fun `普通回复不受剥离影响`() {
+        val s = "好的，这就给你写一个天气界面。"
+        assertEquals(s, ChatHistory.stripFoldNotes(s))
+    }
+
     @Test
     fun `说明用的花括号不会被当成 JSON`() {
         val s = "下面是「{说明}」这段文字，里面没有键值对，请朗读。"

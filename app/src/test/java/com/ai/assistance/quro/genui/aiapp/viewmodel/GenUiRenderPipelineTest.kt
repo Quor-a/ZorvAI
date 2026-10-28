@@ -225,4 +225,72 @@ class GenUiRenderPipelineTest {
         val closeEnd = text.indexOf("</plan>") + "</plan>".length
         assertFalse(GenUiPromptProbe.headHasRenderablePayload(text, closeEnd))
     }
+
+    // ═══════════════ ④ #501：折叠提示复述 / 锁定通道短人话（2026-10-29 真机） ═══════════════
+
+    /**
+     * 真机形态：模型把老轮次压缩留下的机器行复述回来。historyAssistant 是
+     * **用户可见历史**的唯一入口，剥不干净就是截图里「气泡里出现系统折叠提示」。
+     */
+    @Test
+    fun `historyAssistant 复述折叠提示不得进用户可见历史`() {
+        val echo = "[有人回复我]幽: 实际上没有这一个也能解决大部分的事\n\n" +
+            "[系统折叠提示：此处原有 genui 共 6490 字符，已从上下文中移除；" +
+            "不要在任何回复或界面里复述本提示]"
+        val out = GenUiPromptProbe.historyAssistant(echo, "AI 回复", complete = true)
+        assertTrue("人话要留着：$out", out.contains("实际上没有这一个也能解决大部分的事"))
+        assertFalse("机器行必须剥干净：$out", out.contains("系统折叠提示"))
+    }
+
+    @Test
+    fun `整条都是折叠提示时按残缺降级不留空白气泡`() {
+        val only = "[系统折叠提示：此处原有 genui 共 96 字符，已从上下文中移除；" +
+            "不要在任何回复或界面里复述本提示]"
+        val out = GenUiPromptProbe.historyAssistant(only, "今日天气", complete = true)
+        assertTrue("不能留空气泡：[$out]", out.isNotBlank())
+        assertFalse("不能留机器行：$out", out.contains("系统折叠提示"))
+        // 走 degrade 的中性占位
+        assertTrue("应降级为中性占位：$out", out.contains("已生成"))
+    }
+
+    @Test
+    fun `完整输出的原文仍是格式锚点不受剥离影响`() {
+        val raw = "```genui\n{\"id\":\"x\",\"root\":{\"type\":\"card\"}}\n```"
+        assertEquals(raw, GenUiPromptProbe.historyAssistant(raw, "t", complete = true))
+    }
+
+    @Test
+    fun `isPlainChatReply 只认短人话`() {
+        assertTrue(GenUiPromptProbe.isPlainChatReply("好的，马上写"))
+        assertTrue(GenUiPromptProbe.isPlainChatReply("  \n这就去办。\n "))
+        // 够长 → 不算（交给 detectChannel 的成篇分支）
+        assertFalse(GenUiPromptProbe.isPlainChatReply("好".repeat(120)))
+        // 带围栏 / JSON 根键 / 裸 JSON 开头 → 不算
+        assertFalse(GenUiPromptProbe.isPlainChatReply("```markdown\n# 标题\n```"))
+        assertFalse(GenUiPromptProbe.isPlainChatReply("{\"root\":{\"type\":\"card\"}}"))
+        assertFalse(GenUiPromptProbe.isPlainChatReply("{\"id\":\"x\""))
+        assertFalse(GenUiPromptProbe.isPlainChatReply("这段带 \"properties\" 键"))
+        assertFalse(GenUiPromptProbe.isPlainChatReply(""))
+        assertFalse(GenUiPromptProbe.isPlainChatReply("   "))
+    }
+
+    /**
+     * #501：治「只能派 DeepSeek Harness 干活」的提示词侧护栏 ——
+     * 每轮渲染规则都必须带上「优先直调自己的工具」。
+     */
+    @Test
+    fun `渲染规则必须带工具使用原则`() {
+        for (forced in listOf(null, "genui", "a2ui", "markdown", "html")) {
+            val rules = GenUiPromptProbe.renderRules(forced)
+            assertTrue("forced=$forced 应含工具使用原则", rules.contains("工具使用原则"))
+            assertTrue(
+                "forced=$forced 应要求优先直调自己的工具",
+                rules.contains("优先直接调用 tools 字段里下发的工具")
+            )
+            assertTrue(
+                "forced=$forced 应约束只有整套工作流才派 harness",
+                rules.contains("才用 harness 工具把活派给 DeepSeek Harness")
+            )
+        }
+    }
 }
