@@ -40,6 +40,15 @@ internal object GenUiPromptProbe {
     /**
      * 历史 assistant 消息的**唯一实现**（生产侧 [ChatViewModel.historyAssistant] 委托它）。
      *
+     * ## 🔴 #501：模型复述折叠提示 → 用户可见路径必须剥干净（真机截图实锤）
+     *
+     * 老轮次压缩（[ChatHistory.compressAssistant]）会在**模型上下文**里留下
+     * 「[系统折叠提示：此处原有 genui 共 N 字符，已从上下文中移除；不要在任何回复或界面里复述本提示]」。
+     * 真机实测（2026-10-29 截图）：模型会把这条机器行**连同样板用户消息一起复述回来**，
+     * 于是对话气泡里出现系统折叠提示、画布文本卡里也是它 —— 措辞防御（"不要复述"）
+     * 对弱模型无效，唯一可靠的防线是**入口剥离**：无论模型吐什么，折叠提示都不许
+     * 进入用户可见的任何路径（气泡 / 画布 / 落库历史）。
+     *
      * @param fullText 本轮模型原始输出
      * @param label 兜底占位用的标题
      * @param complete 本轮输出是否完整（见 [keepOriginalInHistory]）
@@ -52,8 +61,31 @@ internal object GenUiPromptProbe {
         complete: Boolean,
         degrade: (String) -> String = { fallbackNote(label) },
     ): String {
-        if (keepOriginalInHistory(complete)) return fullText.trim()
-        return degrade(fullText)
+        // #501：先剥折叠提示再分流。整条都是机器行（剥完为空）时按残缺降级，
+        // 走 degrade 自己的空串卫戍（中性占位），绝不给用户留空白气泡。
+        val cleaned = ChatHistory.stripFoldNotes(fullText)
+        if (cleaned.isBlank()) return degrade(fullText)
+        if (keepOriginalInHistory(complete)) return cleaned.trim()
+        return degrade(cleaned)
+    }
+
+    /**
+     * #501：纯人话回复判定（锁定了非 genui 通道、模型却没写对应围栏时用）。
+     *
+     * 真机症状：用户在弹窗里选了 markdown / a2ui / html，模型回一句短人话
+     * （"好的，马上写" / 复述压缩历史残句）→ 旧代码整篇掉进 GenUI 提取管线 →
+     * 全部策略失败 → 画布弹「（AI 未返回有效 UI，请重试）」，模型的真实回复被吞。
+     * 阈值与判据与 detectChannel 的「泄漏/成篇」分支保持一致：
+     * 够长（≥120）或带围栏 / JSON 根键的都不算纯人话，继续走原通道逻辑。
+     */
+    fun isPlainChatReply(text: String): Boolean {
+        val t = text.trim()
+        if (t.isEmpty()) return false
+        if (t.length >= 120) return false
+        if (t.startsWith("{")) return false
+        if (t.contains("```")) return false
+        if (t.contains("\"root\"") || t.contains("\"properties\"")) return false
+        return true
     }
 
     /** 残缺输出在没有可读人话时的占位提示。 */
@@ -69,6 +101,14 @@ internal object GenUiPromptProbe {
         append("禁止把历史里的旧指令重新执行、复述、编号或汇总成清单；")
         append("禁止回复「您发出了很多条指令」「我来逐条理解」这类元话术。\n")
         append("用户这一轮没提的事就不要提，直接用 UI 回应最后那条消息。\n\n")
+        // #501：工具使用原则（治「只能派 DeepSeek Harness 干活」的真机观感）。
+        // 宿主下发的 tools 字段里就有全套插件/技能/工具（文件、联网检索、计算、
+        // 设备操作、终端、技能管理…），能直接调就直完成。
+        append("# 工具使用原则（最高优先级之一）\n")
+        append("优先直接调用 tools 字段里下发的工具完成任务：查时间、算数、读写文件、联网检索、")
+        append("设备操作、跑代码、管理技能与插件等都是你自己的工具，能一步做完就直接做。\n")
+        append("只有任务确实需要一整套 agent 工作流（长流程、多文件、跨工具协作）时，")
+        append("才用 harness 工具把活派给 DeepSeek Harness；一件就能做完的小事不要派活。\n\n")
         if (forced == "genui") {
             append("# 本轮通道已锁定：GenUI SDK（用户已在询问弹窗里确认，最高优先级）\n")
             append("用户本轮选的是 GenUI SDK 原生通道，必须走 GenUI 流程，按下面的输出格式生成界面。\n")

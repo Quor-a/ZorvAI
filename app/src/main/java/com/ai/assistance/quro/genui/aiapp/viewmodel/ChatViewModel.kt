@@ -1392,6 +1392,38 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
 
+        // ── #501：锁定非 genui 通道，模型只回了短人话（没写对应围栏）──
+        //
+        // 真机症状（2026-10-29 截图）：用户在弹窗里选了 markdown / a2ui / html，
+        // 模型回一句短人话（"好的，马上写" / 复述压缩历史残句）→ 旧代码整篇掉进
+        // GenUI 提取管线 → 五个策略全败 → 画布弹「（AI 未返回有效 UI，请重试）」，
+        // 模型的真实回复被吞个干净。用户侧就是「选了通道反而更坏」。
+        // 够长（≥120）/ 带围栏 / 带 JSON 根键的都不算短人话，继续走下面的通道逻辑。
+        if (forcedChannel != null && forcedChannel != "genui" &&
+            GenUiPromptProbe.isPlainChatReply(fullText)
+        ) {
+            val reply = ChatHistory.stripFoldNotes(fullText).trim()
+            if (reply.isNotEmpty()) {
+                _state.update {
+                    it.copy(
+                        isStreaming = false,
+                        streamingText = "",
+                        streamingReasoning = "",
+                        error = null,
+                        // 只落对话气泡：这一轮没有可渲染的通道内容，
+                        // 不拿画布兜底卡打扰用户，也不动上一轮的画布。
+                        conversationHistory = it.conversationHistory + GenUIChatMessage(
+                            role = "assistant",
+                            content = reply,
+                            reasoning = result.reasoning
+                        )
+                    )
+                }
+                persistSession()
+                return
+            }
+        }
+
         // 策略 1：标准提取（strict：流式已结束，截断 JSON 绝不能进画布）
         var genuiJson = extractGenUIDsl(fullText, strict = true)
 
@@ -1465,6 +1497,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 .replace(stripThinkingTags(fullText), "")
             val openFence = displayText.indexOf("```")
             if (openFence >= 0) displayText = displayText.substring(0, openFence)
+            // #501：折叠提示是机器行，模型复述它也不许上文案卡（真机截图实锤：
+            // 兜底卡的 text 里整条是「[系统折叠提示：…]」）。剥完只剩空白时
+            // 走下面的 ifBlank 占位，不留机器字样。
+            displayText = ChatHistory.stripFoldNotes(displayText)
             displayText = displayText.trim()
             if (incomplete) {
                 displayText = "（这一轮界面生成不完整：回复在输出中途被截断。" +
@@ -2580,6 +2616,11 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
         // 先剥离思考标签
         plainText = stripThinkingTags(plainText)
+
+        // #501：折叠提示是机器行，剥完若什么都不剩 → 返回 null（不包卡）。
+        // 真机截图：模型复述「[系统折叠提示：…]」，包成 auto_wrap 文本卡后
+        // 画布上孤零零一行机器字样。
+        plainText = ChatHistory.stripFoldNotes(plainText)
 
         // 如果剥离后没有有意义的文本，返回 null
         if (plainText.isBlank()) return null
