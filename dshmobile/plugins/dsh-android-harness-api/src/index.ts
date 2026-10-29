@@ -25,6 +25,16 @@
  * 全部执行发生在引擎进程内（与模型走同一 ToolRuntime，语义完全一致）。
  * 技能加载面的 500（validateDefinition 抛错）同时是 #505 market-skill-source
  * 修复效果的自诊断探针。
+ *
+ * 🔴 装配纪律（2026-10-30 真机事故，引擎启动即失败）：
+ * 引擎启动要求**全部插件激活成功**——插件 fiber 的静态 inject 里任一服务不到位，
+ * fiber 永久 pending，整台引擎被拖死（用户现场形态：「插件加载不了 + 起不来」）。
+ * 因此静态 inject 只允许保留 apply 期**必须**的服务（webServer = 路由载体）；
+ * tools / skills / connection 全部请求期 `ctx.get(name)` 懒读——cordis 对缺席
+ * 服务返回 undefined 不抛错，且 strict 模式只认激活态实现，比静态 inject 安全。
+ * 兄弟插件（session-delete / bridge / browser / undo / marketplace）无一静态
+ * inject connection，即此纪律的设备实证。connection 缺席时本插件 fail-closed
+ * （401，商城 U2 同语义）；tools/skills 缺席转可读 500，路由照常注册。
  */
 import { Context } from '@deepseek-ai/cordis'
 import type { ToolExecutionInput, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
@@ -33,10 +43,10 @@ import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 export const name = 'dsh-android-harness-api'
-// tools/skills = 两个注册表面；webServer = 路由载体；connection = 信任栅栏。
-// connection 经 Reflect.get 读取（其包是浏览器侧，本地最小类型声明即可），
-// 但必须出现在 inject 里——cordis 代理对未 inject 的非注册属性读取会抛错。
-export const inject = ['tools', 'skills', 'webServer', 'connection'] as const
+// 🔴 只 inject webServer——apply 期唯一必须的服务（路由载体）。
+// tools/skills/connection 一律请求期 ctx.get() 懒读：静态 inject 任一请求期
+// 服务 = 给整台引擎的启动埋永久 pending 的雷（2026-10-30 真机事故）。
+export const inject = ['webServer'] as const
 
 // ── 常量 ────────────────────────────────────────────────────────────────────
 /** 工具列举路由（GET）。 */
@@ -135,21 +145,72 @@ async function readBoundedBody(req: IncomingMessage): Promise<string | null> {
   return Buffer.concat(chunks, size).toString('utf8')
 }
 
-/** connection 服务（经 Reflect.get：cordis 代理直读非注入属性会抛错）。 */
-function connectionOf(ctx: Context): ConnectionService {
-  return Reflect.get(ctx, 'connection') as ConnectionService
+/**
+ * 请求期懒读服务（cordis ctx.get，strict 语义）：缺席/未激活返回 undefined，
+ * 绝不抛错、绝不给 fiber 制造依赖。这是本插件不静态 inject 任何请求期服务
+ * 的落地机制——见文件头「装配纪律」。
+ */
+function serviceOf<T>(ctx: Context, name: string): T | undefined {
+  try {
+    const get = Reflect.get(ctx, 'get') as ((n: string, strict?: boolean) => unknown) | undefined
+    if (typeof get !== 'function') return undefined
+    return get.call(ctx, name) as T | undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** connection 服务（懒读；其包是浏览器侧，本地最小类型声明即可）。 */
+function connectionOf(ctx: Context): ConnectionService | undefined {
+  return serviceOf<ConnectionService>(ctx, 'connection')
+}
+
+/** tools 服务（ToolRuntime）的最小本地形态（懒读取用）。 */
+interface ToolsService {
+  schemas(): Array<{
+    name: string
+    description: string
+    parameters: Record<string, unknown>
+    deferLoading?: boolean
+  }>
+  execute(input: {
+    callId: unknown
+    name: string
+    arguments: unknown
+    signal: AbortSignal
+  }): Promise<ToolExecutionResult>
+}
+
+/** tools 服务（ToolRuntime，懒读）。 */
+function toolsOf(ctx: Context): ToolsService | undefined {
+  return serviceOf<ToolsService>(ctx, 'tools')
+}
+
+/** skills 服务（SkillRegistry）的最小本地形态（懒读取用）。 */
+interface SkillsService {
+  list(): Promise<SkillSummary[]>
+  get(name: string): Promise<SkillDefinition | undefined>
+}
+
+/** skills 服务（SkillRegistry，懒读）。 */
+function skillsOf(ctx: Context): SkillsService | undefined {
+  return serviceOf<SkillsService>(ctx, 'skills')
 }
 
 /**
  * 信任栅栏：请求被拒时已结束响应并返回 true，调用方须立即 return。
  * 403 = Host/Origin 不合（含 DNS rebinding / 跨站）；401 = 未认证。
+ * 栅栏服务缺席 = fail-closed 401（商城 U2 同语义）；只有栅栏在场且
+ * requestRejection 可用时才由它裁决。
  */
 function rejected(ctx: Context, req: IncomingMessage, res: ServerResponse): boolean {
-  let rejection: number | undefined
+  let rejection: number | undefined = 401
   try {
-    rejection = connectionOf(ctx).requestRejection(req)
+    const connection = connectionOf(ctx)
+    if (connection && typeof connection.requestRejection === 'function') {
+      rejection = connection.requestRejection(req)
+    }
   } catch {
-    // 栅栏服务缺席（异常装配）时失败关闭：当作未认证处理，不放行。
     rejection = 401
   }
   if (rejection === undefined) return false
@@ -188,8 +249,13 @@ async function handleToolsList(ctx: Context, req: IncomingMessage, res: ServerRe
   }
   let tools: ToolExecutionResponse['tools']
   try {
+    const runtime = toolsOf(ctx)
+    if (!runtime) {
+      sendJson(res, 500, { ok: false, error: 'tools 服务未激活：引擎内无 ToolRuntime（装配异常）' })
+      return
+    }
     // schemas() 已做可见性投影 + 深拷贝，直接透传模型面字段。
-    tools = ctx.tools.schemas().map((s) => ({
+    tools = runtime.schemas().map((s) => ({
       name: s.name,
       description: s.description,
       parameters: s.parameters,
@@ -238,9 +304,14 @@ async function handleToolCall(ctx: Context, req: IncomingMessage, res: ServerRes
   const callId = newCallId()
   let result: ToolExecutionResult
   try {
+    const runtime = toolsOf(ctx)
+    if (!runtime) {
+      sendJson(res, 500, { ok: false, error: 'tools 服务未激活：引擎内无 ToolRuntime（装配异常）' })
+      return
+    }
     // 全管线：visibility 判定、UNKNOWN_TOOL、PTC collapse、审批门（无 agent 时
     // fail-closed deny，不挂起）全部保留——与模型发起的调用走同一条路。
-    result = await ctx.tools.execute({
+    result = await runtime.execute({
       callId,
       name: body.name,
       arguments: body.arguments ?? {},
@@ -279,7 +350,12 @@ async function handleSkillsList(ctx: Context, req: IncomingMessage, res: ServerR
   }
   let skills: SkillSummary[]
   try {
-    skills = await ctx.skills.list()
+    const registry = skillsOf(ctx)
+    if (!registry) {
+      sendJson(res, 500, { ok: false, error: 'skills 服务未激活：引擎内无 SkillRegistry（装配异常）' })
+      return
+    }
+    skills = await registry.list()
   } catch (e) {
     sendJson(res, 500, { ok: false, error: '技能目录读取失败：' + errorText(e) })
     return
@@ -314,9 +390,14 @@ async function handleSkillLoad(ctx: Context, req: IncomingMessage, res: ServerRe
   }
   let skill: SkillDefinition | undefined
   try {
+    const registry = skillsOf(ctx)
+    if (!registry) {
+      sendJson(res, 500, { ok: false, error: 'skills 服务未激活：引擎内无 SkillRegistry（装配异常）' })
+      return
+    }
     // get() 的 validateDefinition 对坏定义会抛错（#505 的 source 缺失即此路径）；
     // 抛错转 500 带原文——同时是该修复效果的自诊断面。
-    skill = await ctx.skills.get(body.name)
+    skill = await registry.get(body.name)
   } catch (e) {
     sendJson(res, 500, { ok: false, error: '技能定义校验失败：' + errorText(e), name: body.name })
     return

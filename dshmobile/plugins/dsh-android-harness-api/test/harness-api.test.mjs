@@ -14,7 +14,10 @@
 //   ⑦ skills 列举/加载：成功 200；get() 返回 undefined→404；validateDefinition
 //      抛错→500（#505 修复效果的自诊断面）；
 //   ⑧ 所有 JSON 响应带 no-store + content-type；拒绝响应空体；
-//   ⑨ 源码契约：inject 四项、四路由常量、effect 包装、requestRejection 在场。
+//   ⑨ 源码契约：inject 只含 webServer、懒读助手在场、无 ctx.tools/skills 直读、
+//      四路由常量、effect 包装、requestRejection 在场；
+//   ⑩ 服务缺席回归（2026-10-30 真机事故）：tools/skills 缺席 → 500 可读、
+//      connection 缺席 → fail-closed 401，路由注册不受影响。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -63,18 +66,29 @@ function makeRes() {
 }
 
 /**
- * 桩 ctx：tools/skills/webServer/connection 四面 + effect 真语义
- * （调 fn 收 disposer，打 tag 留痕）。
+ * 桩 ctx：复刻 cordis 懒读面——服务不直挂属性，一律经 ctx.get(name) 查找
+ * （对齐 2026-10-30 修复：插件只静态 inject webServer，其余请求期懒读）。
+ * omit 可模拟服务缺席（get 返回 undefined = 引擎里该服务未激活）。
  */
-function makeCtx({ tools, skills, rejection } = {}) {
+function makeCtx({ tools, skills, rejection, omit = [] } = {}) {
   const routes = []
   const effects = []
   const executeCalls = []
   const getCalls = []
   const listCalls = []
-  const ctx = {
-    logger: () => ({ warn: () => {}, debug: () => {}, info: () => {}, error: () => {} }),
-    tools: {
+  const services = {
+    webServer: {
+      register: (route) => {
+        routes.push(route)
+        return () => {
+          const i = routes.indexOf(route)
+          if (i >= 0) routes.splice(i, 1)
+        }
+      },
+    },
+  }
+  if (!omit.includes('tools')) {
+    services.tools = {
       schemas: tools?.schemas ?? (() => []),
       execute: tools?.execute
         ? async (exec) => {
@@ -85,8 +99,10 @@ function makeCtx({ tools, skills, rejection } = {}) {
             executeCalls.push(exec)
             return { isError: false, value: {}, content: [] }
           },
-    },
-    skills: {
+    }
+  }
+  if (!omit.includes('skills')) {
+    services.skills = {
       list: skills?.list
         ? async () => {
             listCalls.push(1)
@@ -105,26 +121,26 @@ function makeCtx({ tools, skills, rejection } = {}) {
             getCalls.push(n)
             return undefined
           },
-    },
-    webServer: {
-      register: (route) => {
-        routes.push(route)
-        return () => {
-          const i = routes.indexOf(route)
-          if (i >= 0) routes.splice(i, 1)
-        }
-      },
-    },
-    connection: {
+    }
+  }
+  if (!omit.includes('connection')) {
+    services.connection = {
       requestRejection: rejection ?? (() => undefined),
-    },
+    }
+  }
+  const ctx = {
+    logger: () => ({ warn: () => {}, debug: () => {}, info: () => {}, error: () => {} }),
+    // webServer 是静态 inject 的：cordis 代理上直读可用（apply 期正途）；
+    // 同时入 get() 查找表（懒读面一致性）。
+    webServer: services.webServer,
+    get: (n) => services[n],
     effect: (fn, tag) => {
       const disposer = fn()
       effects.push({ tag, disposer })
       return disposer
     },
   }
-  return { ctx, routes, effects, executeCalls, getCalls, listCalls, byPath: (p) => routes.find((r) => r.path === p) }
+  return { ctx, routes, effects, executeCalls, getCalls, listCalls, services, byPath: (p) => routes.find((r) => r.path === p) }
 }
 
 /** 走一遍路由处理并回收响应。 */
@@ -167,9 +183,13 @@ test('路由经 ctx.effect 注册，disposer 摘除后路由表清空', () => {
   assert.equal(c.routes.length, 0)
 })
 
-test('导出面：name 与 inject 四项', () => {
+test('导出面：name 与 inject 只含 webServer（2026-10-30 真机事故修复）', () => {
   assert.equal(name, 'dsh-android-harness-api')
-  assert.deepEqual([...inject].sort(), ['connection', 'skills', 'tools', 'webServer'])
+  // 🔴 只允许 webServer：静态 inject 任一请求期服务 = 引擎启动埋永久 pending 雷。
+  assert.deepEqual([...inject], ['webServer'])
+  for (const forbidden of ['tools', 'skills', 'connection']) {
+    assert.ok(!inject.includes(forbidden), 'inject 绝不允许含请求期服务：' + forbidden)
+  }
 })
 
 // ── ② 鉴权 ──────────────────────────────────────────────────────────────────
@@ -229,6 +249,24 @@ test('栅栏服务抛错 → 失败关闭 401（绝不放行）', async () => {
   const res = await call(c, ROUTE_TOOLS, makeReq())
   assert.equal(res.statusCode, 401)
   assert.equal(res.body, '')
+})
+
+test('connection 服务缺席（引擎未激活）→ fail-closed 401，不进业务', async () => {
+  let schemasCalled = false
+  const c = makeCtx({
+    omit: ['connection'],
+    tools: {
+      schemas: () => {
+        schemasCalled = true
+        return []
+      },
+    },
+  })
+  apply(c.ctx)
+  const res = await call(c, ROUTE_TOOLS, makeReq())
+  assert.equal(res.statusCode, 401)
+  assert.equal(res.body, '')
+  assert.equal(schemasCalled, false)
 })
 
 // ── ③ 方法 ──────────────────────────────────────────────────────────────────
@@ -317,6 +355,23 @@ test('tools 列举：schemas() 抛错 → 500 带原文', async () => {
   const res = await call(c, ROUTE_TOOLS, makeReq())
   assert.equal(res.statusCode, 500)
   assert.match(json(res).error, /registry 损坏/)
+})
+
+test('tools 服务缺席（引擎未激活）→ 500 带"未激活"，路由照常注册', async () => {
+  const c = makeCtx({ omit: ['tools'] })
+  apply(c.ctx)
+  assert.equal(c.routes.length, 4, '服务缺席不影响路由注册')
+  const res = await call(c, ROUTE_TOOLS, makeReq())
+  assert.equal(res.statusCode, 500)
+  assert.match(json(res).error, /未激活/)
+})
+
+test('tools/call：tools 服务缺席 → 500 不挂请求', async () => {
+  const c = makeCtx({ omit: ['tools'] })
+  apply(c.ctx)
+  const res = await call(c, ROUTE_TOOLS_CALL, makeReq({ method: 'POST', body: JSON.stringify({ name: 'x' }) }))
+  assert.equal(res.statusCode, 500)
+  assert.match(json(res).error, /未激活/)
 })
 
 // ── ⑥ tools/call ────────────────────────────────────────────────────────────
@@ -451,6 +506,17 @@ test('skills 列举：list() 抛错 → 500', async () => {
   assert.match(json(res).error, /catalog 损坏/)
 })
 
+test('skills 服务缺席（引擎未激活）→ 列举/加载均 500 带"未激活"', async () => {
+  const c = makeCtx({ omit: ['skills'] })
+  apply(c.ctx)
+  const list = await call(c, ROUTE_SKILLS, makeReq())
+  assert.equal(list.statusCode, 500)
+  assert.match(json(list).error, /未激活/)
+  const load = await call(c, ROUTE_SKILLS_LOAD, makeReq({ method: 'POST', body: JSON.stringify({ name: 'x' }) }))
+  assert.equal(load.statusCode, 500)
+  assert.match(json(load).error, /未激活/)
+})
+
 test('skills/load 成功：200 带完整定义（含 content）', async () => {
   const def = {
     name: 'dsh-plugin-store',
@@ -493,19 +559,24 @@ test('skills/load validateDefinition 抛错 → 500 带原文（#505 自诊断�
 })
 
 // ── ⑧⑨ 源码契约 ────────────────────────────────────────────────────────────
-test('源码契约：inject 四项 + 四路由常量 + effect 包装 + 鉴权在场', () => {
+test('源码契约：inject 收窄 + 懒读助手 + 四路由常量 + effect 包装 + 鉴权在场', () => {
   const src = readFileSync(join(HERE, '..', 'src', 'index.ts'), 'utf8')
-  assert.match(src, /export const inject = \['tools', 'skills', 'webServer', 'connection'\] as const/)
+  // 🔴 装配纪律：inject 只留 webServer，其余一律 ctx.get 懒读。
+  assert.match(src, /export const inject = \['webServer'\] as const/)
+  assert.match(src, /function serviceOf<T>\(ctx: Context, name: string\): T \| undefined/)
+  assert.match(src, /function toolsOf\(ctx: Context\)/)
+  assert.match(src, /function skillsOf\(ctx: Context\)/)
+  assert.match(src, /function connectionOf\(ctx: Context\)/)
+  // 绝不允许再出现直读（直读 = 静态依赖 = 启动雷）。
+  assert.doesNotMatch(src, /ctx\.tools\./)
+  assert.doesNotMatch(src, /ctx\.skills\./)
+  assert.doesNotMatch(src, /Reflect\.get\(ctx, 'connection'\)/)
   for (const p of [ROUTE_TOOLS, ROUTE_TOOLS_CALL, ROUTE_SKILLS, ROUTE_SKILLS_LOAD]) {
     assert.ok(src.includes("'" + p + "'"), '源码缺路由常量：' + p)
   }
   assert.equal((src.match(/kind: 'exact'/g) ?? []).length, 4, 'exact 路由数漂移')
   assert.equal((src.match(/ctx\.effect\(/g) ?? []).length, 4, 'effect 包装数漂移')
   assert.match(src, /requestRejection\(req\)/)
-  assert.match(src, /ctx\.tools\.execute\(/)
-  assert.match(src, /ctx\.tools\.schemas\(\)/)
-  assert.match(src, /ctx\.skills\.list\(\)/)
-  assert.match(src, /ctx\.skills\.get\(/)
   assert.match(src, /MAX_BODY_BYTES = 1024 \* 1024/)
   assert.match(src, /MAX_TIMEOUT_MS = 600_000/)
   // api-route-auth 门禁要求 guard 调用落在每个注册块内（不是只藏在 handler 函数里）。
