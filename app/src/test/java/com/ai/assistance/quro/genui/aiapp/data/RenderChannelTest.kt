@@ -82,6 +82,65 @@ class RenderChannelTest {
     }
 
     @Test
+    fun `nodes 反引用格式必须判 A2UI 不能串到 GenUI`() {
+        // 用户报的「乱串通道」实锤形状（真机截图2）：提示词教模型的 nodes 数组 +
+        // parent 反引用，每个节点都带 properties 键 —— 旧判据见 properties 就认 GenUI，
+        // 回放时 A2UI 作品被塞进 GenUI 管线，画布上是一屏源码。
+        val nodesPayload = """
+            {"nodes":[
+              {"id":"root","type":"scroll","parent":null,
+               "properties":{"direction":"vertical"},
+               "style":{"padding":{"all":16},"backgroundColor":"background"}},
+              {"id":"header","type":"header_bar","parent":"root",
+               "properties":{"title":"北京"},"style":{"padding":{"all":16}}},
+              {"id":"spacer1","type":"spacer","parent":"root","style":{"height":16}},
+              {"id":"main_card","type":"card","parent":"root",
+               "properties":{"title":"实时天气"},"style":{"padding":{"all":20},"cornerRadius":20,"backgroundColor":"surface"}},
+              {"id":"temp","type":"text","parent":"main_card",
+               "properties":{"text":"24°C 晴"},"style":{"textSize":28}}
+            ]}
+        """.trimIndent()
+        assertEquals(RenderChannel.A2UI, RenderChannel.infer(nodesPayload))
+        // 围栏包着的同形状也一样（a2ui 围栏头优先，双保险）
+        assertEquals(RenderChannel.A2UI, RenderChannel.infer("```a2ui\n$nodesPayload\n```"))
+        // 没有 nodes 键、只有 parent 反引用的变体也不能误伤
+        assertEquals(
+            RenderChannel.A2UI,
+            RenderChannel.infer("""{"id":"root","type":"scroll","parent":null,"properties":{"direction":"vertical"}}""")
+        )
+    }
+
+    @Test
+    fun `A2UI 本家扁平表 root 是字符串值也不能串到 GenUI`() {
+        // {"title":"今日状态","root":"col","components":{"col":{"t":"column",…}}}
+        // root 是键但值是节点 id（反引用），与 GenUI 的 "root":{…} 只差一个字符。
+        val ownFormat = """
+            {"title":"今日状态","root":"col","components":{
+              "col":{"t":"column","children":["h","d"],"padding":16},
+              "h":{"t":"heading","text":"今日状态"},
+              "d":{"t":"card","children":["t1"],"bg":"#FFF6F1EC","radius":16},
+              "t1":{"t":"text","text":"生命 72 / 金币 120","size":15}}}
+        """.trimIndent()
+        assertEquals(RenderChannel.A2UI, RenderChannel.infer(ownFormat))
+    }
+
+    @Test
+    fun `真 GenUI DSL 仍判 GenUI 不被 A2UI 判据误伤`() {
+        // root 对象值（GenUI 主流形状）
+        assertEquals(
+            RenderChannel.GENUI,
+            RenderChannel.infer("""{"root":{"type":"column","properties":{"spacing":8}},"components":[]}""")
+        )
+        // root 字符串值 + component 键（id 引用形状，cardui/GenUI 都用这个）
+        assertEquals(
+            RenderChannel.GENUI,
+            RenderChannel.infer("""{"root":"root","components":{"root":{"component":"Column","children":["a"]},"a":{"component":"Text","text":"A"}}}""")
+        )
+        // json 围栏 + properties 特征
+        assertEquals(RenderChannel.GENUI, RenderChannel.infer("```json\n{\"root\":{\"type\":\"card\"}}\n```"))
+    }
+
+    @Test
     fun `空 payload 兜底到默认通道而不是崩`() {
         assertEquals(RenderChannel.DEFAULT, RenderChannel.infer(""))
         assertEquals(RenderChannel.DEFAULT, RenderChannel.infer(null))

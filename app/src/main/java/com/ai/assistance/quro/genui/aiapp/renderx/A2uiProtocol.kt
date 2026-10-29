@@ -41,8 +41,8 @@ object A2uiProtocol {
         "display", "display1", "display2", "display3"
     )
 
-    /** 官方目录组件名 → A2UI 通道白名单类型 */
-    private val TYPE_MAP = mapOf(
+    /** 官方目录组件名 → A2UI 通道白名单类型（internal：FlatDoc.normType 复用同一张表，避免两处维护） */
+    internal val TYPE_MAP = mapOf(
         // 文本
         "text" to "text", "label" to "text", "caption" to "text", "body" to "text",
         "paragraph" to "text", "markdown" to "text", "richtext" to "text", "copy" to "text",
@@ -62,6 +62,11 @@ object A2uiProtocol {
         // 分隔 / 占位
         "divider" to "divider", "separator" to "divider", "hr" to "divider", "rule" to "divider",
         "horizontaldivider" to "divider", "spacer" to "spacer", "gap" to "spacer",
+        // 头栏 / 脚栏：ZorvBrain 提示词教模型直写 header_bar / top_bar（截图2 实锤），
+        // 不映射的话 normType 一路掉到 text 兜底 —— 头栏退化成一行普通文字，标题样式全丢。
+        // SDK 侧 HeaderBarPattern / FooterRenderer 专门承接这两位（读 title/subtitle）。
+        "appbar" to "header_bar", "topbar" to "header_bar", "headerbar" to "header_bar",
+        "toolbar" to "header_bar", "footerbar" to "footer",
         // 媒体
         "image" to "image", "img" to "image", "picture" to "image", "avatar" to "image",
         "imageurl" to "image", "photo" to "image", "icon" to "chip",

@@ -108,8 +108,27 @@ enum class RenderChannel(
          * ⚠️ 不能简单 `contains("\"root\"")`：A2UI 的扁平邻接表里 root 是**值**
          * （`"id":"root"`），GenUI DSL 里 root 才是**键**（`"root":{…}`）。
          * 只判字符串会把每一条 A2UI 都认成 GenUI —— 回放就走错管线了。
+         *
+         * 🔴 也不能简单 `contains("\"properties\"")`：A2UI 的 nodes 反引用格式
+         * （提示词教给模型的那套，真机截图实锤）每个节点都带 properties 键
+         * （`{"nodes":[{"id":"root","type":"scroll","parent":null,"properties":{…}}]}`）。
+         * 旧判断把它认成 GenUI → 回放时 A2UI 作品被塞进 GenUI 管线，
+         * 画布上又是一屏源码（用户报的「乱串通道」就是这一条）。
+         * nodes 格式硬特征是顶层 `"nodes":[` 数组或 `"parent":` 反引用键，
+         * GenUI DSL（StreamingParser 同款判据）只认 `"root":`，三者互斥不会误伤。
+         *
+         * 🔴 A2UI 本家扁平表（`{"title":"今日状态","root":"col","components":{"col":{"t":"column",…}}}`）
+         * 的 root 也是键但值是**字符串**（节点 id 反引用），与 GenUI 的 `"root":{…}`
+         * 只差一个字符。判据补刀：root 是字符串值且全文没有 `"component":` 键
+         * （GenUI/cardui 的 id 引用形状必带 component 键，A2UI 只用 `t` 键）→ A2UI。
          */
-        private fun looksLikeGenUiDsl(t: String): Boolean =
-            t.contains("\"properties\"") || Regex("\"root\"\\s*:").containsMatchIn(t)
+        private fun looksLikeGenUiDsl(t: String): Boolean {
+            if (Regex("\"nodes\"\\s*:\\s*\\[").containsMatchIn(t)) return false
+            if (Regex("\"parent\"\\s*:").containsMatchIn(t)) return false
+            if (Regex("\"root\"\\s*:\\s*\"").containsMatchIn(t) &&
+                !Regex("\"component\"\\s*:").containsMatchIn(t)
+            ) return false
+            return t.contains("\"properties\"") || Regex("\"root\"\\s*:").containsMatchIn(t)
+        }
     }
 }

@@ -303,7 +303,13 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         // 用户点名 a2ui，但模型没写 ```a2ui 围栏（写成 ```json 或裸 JSON）→ 仍按 A2UI 渲染。
         // 不做这层兜底时 detectChannel 会直接返回 null，整篇 JSON 掉进 GenUI 提取管线，
         // 画布上就又是一屏源码（用户报的「A2UI 还是老样子」有一半是这种情况）。
-        if (forced == "a2ui") a2uiFallback(text)?.let { return it }
+        // 用户没点名、模型却按提示词直接吐 nodes 反引用格式（截图2 实锤形态）时同样兜底：
+        // 它的硬特征是 "nodes":[ 或 "parent":，GenUI DSL 顶层是 root 键，不会误抢。
+        if (forced == "a2ui" || (forced == null &&
+                Regex("\"nodes\"\\s*:\\s*\\[|\"parent\"\\s*:").containsMatchIn(text))
+        ) {
+            a2uiFallback(text)?.let { return it }
+        }
         // 🔴 围栏收集必须容忍「未闭合」（修所有通道一律显示源码）。
         //
         // 旧正则要求结尾也有 ```：模型一旦被 max_tokens 截断、或末尾多打一个反引号，
@@ -465,23 +471,72 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * 用户点名 a2ui 时的兜底：```json 围栏或裸 JSON，只要 FlatDoc 认得出就按 A2UI 渲染。
-     * GenUI DSL（带 "properties" 的组件树）不在此列，留给 GenUI 提取管线，避免被误抢。
+     * GenUI DSL（顶层带 "root" 键的组件树）不在此列，留给 GenUI 提取管线，避免被误抢。
      */
     private fun a2uiFallback(text: String): Pair<ChannelPage, String>? {
         val bodies = ArrayList<String>()
         Regex("```(?:json|a2ui|a2ui-json)\\s*\\n?([\\s\\S]*?)```", RegexOption.IGNORE_CASE)
             .findAll(text).forEach { bodies.add(it.groupValues[1].trim()) }
         if (bodies.isEmpty()) {
+            // 模型不写围栏、直接吐裸 JSON（可能带前导废话）：从第一个 { 起截。
+            // 提示词教的 nodes 格式正是这种最常见的形态（截图2 实锤：无围栏裸输出）。
             val s = text.trim()
-            if (s.startsWith("{") || s.startsWith("[")) bodies.add(s)
+            val start = s.indexOfFirst { it == '{' || it == '[' }
+            if (start >= 0) extractBalancedJson(s, start)?.let { bodies.add(it) }
         }
-        for (body in bodies.filter { it.isNotBlank() }.sortedByDescending { it.length }) {
-            if (body.contains("\"properties\"")) continue // GenUI DSL，别抢
+        for (rawBody in bodies.filter { it.isNotBlank() }.sortedByDescending { it.length }) {
+            // 🔴 GenUI DSL 的硬特征是**顶层 root 键**（{root:{...},components:[...]}）。
+            // 旧判断用 contains("properties") 判 GenUI —— 但 nodes 格式每个节点都带
+            // properties 键（{"nodes":[{"id":..,"properties":{...}}]}），于是整份
+            // A2UI 被判成 GenUI 直接跳过 → 用户点名 a2ui 也渲染不出来（主诉根因之一）。
+            if (Regex("\"root\"\\s*:").containsMatchIn(rawBody)) continue // GenUI DSL，别抢
+            // 围栏内可能混了尾附说明、正文里可能带前导废话：定位到第一个 {/[ 再抽配对 JSON
+            val start = rawBody.indexOfFirst { it == '{' || it == '[' }
+            val body = if (start >= 0) (extractBalancedJson(rawBody, start) ?: rawBody) else rawBody
             val doc = FlatDocParser(body, false) ?: continue
             val raw = "```a2ui\n" + body + "\n```"
             return ChannelPage.FlatPage(channelTitle(text, 1) ?: qstr(R.string.qk_00476), doc) to raw
         }
         return null
+    }
+
+    /**
+     * 从 [s] 的 [from] 起抽取一个配对的 JSON 值（对象或数组），容忍前后废话。
+     * 字符串字面量里的括号不计数（转义正确跳过）；被 max_tokens 截断、永远不配对时，
+     * 把剩余部分返回给解析器（FlatDoc 对半截 JSON 有流式容错），截不出东西才返回 null。
+     */
+    private fun extractBalancedJson(s: String, from: Int): String? {
+        if (from >= s.length) return null
+        val open = s[from]
+        val close = when (open) {
+            '{' -> '}'
+            '[' -> ']'
+            else -> return null
+        }
+        var depth = 0
+        var inStr = false
+        var esc = false
+        for (i in from until s.length) {
+            val c = s[i]
+            if (inStr) {
+                if (esc) esc = false
+                else when (c) {
+                    '\\' -> esc = true
+                    '"' -> inStr = false
+                }
+                continue
+            }
+            when (c) {
+                '"' -> inStr = true
+                open, close -> {
+                    if (c == open) depth++ else {
+                        depth--
+                        if (depth == 0) return s.substring(from, i + 1)
+                    }
+                }
+            }
+        }
+        return s.substring(from).trimEnd().ifEmpty { null }
     }
 
     /** 0=html<title> 1=json"title" 2=markdown#标题 */

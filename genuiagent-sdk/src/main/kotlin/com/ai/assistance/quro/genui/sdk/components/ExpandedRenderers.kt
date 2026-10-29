@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ai.assistance.quro.genui.sdk.dsl.Dimension
 import com.ai.assistance.quro.genui.sdk.dsl.UIComponent
 import com.ai.assistance.quro.genui.sdk.render.RenderChildren
 import com.ai.assistance.quro.genui.sdk.render.RenderContext
@@ -158,7 +159,11 @@ fun DonutChartRenderer(c: UIComponent, ctx: RenderContext) {
     val value = c.properties.flt("value", 0f).coerceIn(0f, 100f)
     val ringColor = c.properties.color("color", MaterialTheme.colorScheme.primary)
     val label = c.properties.str("label")
-    val sizeDp = (c.style.height?.let { 160f } ?: 140f).coerceIn(80f, 300f)
+    // 🔴 旧写法 `c.style.height?.let { 160f } ?: 140f` 是个 bug：只要 style 里出现过
+    // height 键（不管值是 60 还是 300），尺寸一律取 160 —— 模型写 `height: 60`
+    // 想要个小环，渲染出来还是 160dp（用户报的「尺寸多大围栏都大大」同源）。
+    // 改成真的读 Fixed 值，越界仍由 coerceIn 收敛。
+    val sizeDp = ((c.style.height as? Dimension.Fixed)?.dp ?: 140f).coerceIn(80f, 300f)
     Box(Modifier.size(sizeDp.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val stroke = size.minDimension * 0.12f

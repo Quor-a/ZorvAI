@@ -37,12 +37,47 @@ private fun colorOf(s: String?, fallback: Color): Color {
     }.getOrDefault(fallback)
 }
 
+/**
+ * 边距串 → [PaddingValues]，与 FlatDocToGenUI.edge 同套段数语义：
+ * `"16"` 四边 / `"16,8"` 水平16垂直8（Android 方言）/ 三段 `"上,左右,下"` /
+ * 四段 `"上,右,下,左"`（FlatDoc.edgeString 的产出）。解析不了一律 0。
+ */
+private fun edgePadding(raw: String?): PaddingValues {
+    if (raw.isNullOrBlank()) return PaddingValues(0.dp)
+    val parts = raw.split(",").map { it.trim() }
+    fun num(i: Int) = parts.getOrNull(i)?.toFloatOrNull()
+    val a = num(0) ?: 0f
+    return when (parts.size) {
+        0, 1 -> PaddingValues(a.dp)
+        2 -> {
+            // 水平,垂直（Android 方言）：parts[0] 走左右、parts[1] 走上下
+            val b = num(1) ?: a
+            PaddingValues(horizontal = a.dp, vertical = b.dp)
+        }
+        3 -> {
+            val b = num(1) ?: a
+            val c = num(2) ?: a
+            PaddingValues(start = b.dp, top = a.dp, end = b.dp, bottom = c.dp)
+        }
+        else -> {
+            val b = num(1) ?: a
+            val c = num(2) ?: a
+            val d = num(3) ?: a
+            PaddingValues(start = d.dp, top = a.dp, end = b.dp, bottom = c.dp)
+        }
+    }
+}
+
 @Composable
 private fun renderNode(doc: FlatDoc, id: String, onAction: (String) -> Unit, modifier: Modifier = Modifier) {
     val n = doc.nodes[id] ?: return
     val text = n.text.ifBlank { n.props["text"] ?: n.props["title"] ?: n.props["content"] ?: "" }
-    val pad = (n.props["padding"]?.toFloatOrNull() ?: 0f).dp
-    val outer = Modifier.padding(pad)
+    // 🔴 padding 可能是多段值：FlatDoc.edgeString 把 style 里的边距对象拍成
+    // CSS 四段串（"上,右,下,左"），模型也常写 "16,8"（水平,垂直）。
+    // 旧代码 `toFloatOrNull()` 对多段串直接返回 null → 0f → **所有内边距静默丢失**
+    // （卡片内容贴边、元素挤成一团，用户报的「没间距」一半是这里）。
+    val padVals = edgePadding(n.props["padding"])
+    val outer = Modifier.padding(padVals)
     // 纯文字类叶子没有内容 → 不渲染（防垃圾空块）
     if (text.isBlank() && n.kids.isEmpty() && n.type !in setOf("column", "row", "scroll", "card", "divider", "spacer", "image", "progress", "input", "button")) return
 
