@@ -98,6 +98,122 @@ class A2uiPipelineTest {
             text: 一切正常
     """.trimIndent()
 
+    // ⑥ nodes 反引用格式 —— 提示词教给模型的那套，真机截图2 实锤形状
+    // （顶层只有 nodes 数组；父子靠 parent 反引用；属性分居 properties / style 两个嵌套对象）
+    private val nodesShape = """
+        {"nodes":[
+          {"id":"root","type":"scroll","parent":null,
+           "properties":{"direction":"vertical"},
+           "style":{"padding":{"all":16},"backgroundColor":"background"}},
+          {"id":"header","type":"header_bar","parent":"root",
+           "properties":{"title":"北京"},"style":{"padding":{"all":16}}},
+          {"id":"spacer1","type":"spacer","parent":"root","style":{"height":16}},
+          {"id":"main_card","type":"card","parent":"root",
+           "properties":{"title":"实时天气"},"style":{"padding":{"all":20},"cornerRadius":20,"backgroundColor":"surface"}},
+          {"id":"temp","type":"text","parent":"main_card",
+           "properties":{"text":"24°C 晴"},"style":{"textSize":28}}
+        ]}
+    """.trimIndent()
+
+    @Test
+    fun `⑥ nodes 反引用格式 全链路 截图2 实锤形状`() {
+        // 断点史：FlatDoc.parse 过去只认官方协议 / root+components / 裸树三种，
+        // nodes 格式三路全落空 → 通道退化成「（结构未识别，原文）」JSON 源码页
+        // （用户报的「A2UI 通道仍然没有恢复」）。这条用例钉死第④条解析路径。
+        val spec = convert(nodesShape)
+        assertNotNull("nodes 反引用格式必须能解析并桥接", spec)
+        assertEquals("scroll", spec!!.root.type)
+        val all = texts(spec.root)
+        assertTrue("标题要进 properties.text：$all", all.contains("北京"))
+        assertTrue("卡片标题要进 properties.text：$all", all.contains("实时天气"))
+        assertTrue("正文要进 properties.text：$all", all.contains("24°C 晴"))
+        // parent 反引用建树：header/spacer/card 都必须是 root 的子节点
+        val rootKids = spec.root.children.map { it.type }.toSet()
+        assertTrue("root 的直接子节点要靠 parent 反引用建出来：$rootKids",
+            rootKids.containsAll(setOf("header_bar", "spacer", "card")))
+        // header_bar 必须映射成 SDK 的 HeaderBarPattern（读 title），且标题要落到 properties
+        val header = nodeById(spec.root) { it.type == "header_bar" }!!
+        assertEquals("北京", (header.properties["title"] as? JsonPrimitive)?.content)
+        assertEquals("北京", (header.properties["text"] as? JsonPrimitive)?.content)
+        // style 嵌套对象要落进 UIStyle
+        val card = nodeById(spec.root) { it.type == "card" }!!
+        assertEquals(20f, card.style.cornerRadius!!, 0.01f)
+        assertEquals(20f, card.style.padding.top, 0.01f)
+        assertEquals(20f, card.style.padding.start, 0.01f)
+        val spacer = nodeById(spec.root) { it.type == "spacer" }!!
+        assertEquals(
+            16f,
+            (spacer.style.height as? com.ai.assistance.quro.genui.sdk.dsl.Dimension.Fixed)?.dp ?: -1f,
+            0.01f
+        )
+    }
+
+    @Test
+    fun `⑥b nodes 格式 style 里的 CSS 四段边距串不能拧边`() {
+        // FlatDoc.edgeString 把边距对象拍成 CSS 四段（上,右,下,左）；
+        // 旧 edge() 只读 1~2 段 → 四段串被读成「水平=上 / 垂直=右」，上下不分。
+        val spec = convert(
+            """{"nodes":[
+              {"id":"r","type":"column","parent":null,"style":{"padding":"8,4,12,16"}},
+              {"id":"t","type":"text","parent":"r","properties":{"text":"x"}}
+            ]}""".trimIndent()
+        )!!
+        val col = nodeById(spec.root) { it.type == "column" }!!
+        assertEquals("上=8", 8f, col.style.padding.top, 0.01f)
+        assertEquals("右=4", 4f, col.style.padding.end, 0.01f)
+        assertEquals("下=12", 12f, col.style.padding.bottom, 0.01f)
+        assertEquals("左=16", 16f, col.style.padding.start, 0.01f)
+    }
+
+    @Test
+    fun `⑥b2 nodes 格式两段边距是 Android 方言 水平在垂直前`() {
+        // "16,8" = 左右 16 / 上下 8（旧实现的语义，必须保）。
+        // 🔴 2026-10-29：改写 edge() 时一度写成 EdgeInsets(b,a,b,a) 把两轴对调，
+        // "16,8" 变成「左右 8 / 上下 16」——这条用例钉死别再拧回去。
+        val spec = convert(
+            """{"nodes":[
+              {"id":"r","type":"column","parent":null,"style":{"padding":"16,8"}},
+              {"id":"t","type":"text","parent":"r","properties":{"text":"x"}}
+            ]}""".trimIndent()
+        )!!
+        val col = nodeById(spec.root) { it.type == "column" }!!
+        assertEquals("左=16", 16f, col.style.padding.start, 0.01f)
+        assertEquals("右=16", 16f, col.style.padding.end, 0.01f)
+        assertEquals("上=8", 8f, col.style.padding.top, 0.01f)
+        assertEquals("下=8", 8f, col.style.padding.bottom, 0.01f)
+    }
+
+    @Test
+    fun `⑥c nodes 格式 style 里分写的边距别名要收`() {
+        // paddingHorizontal / paddingTop 分写（CSS 方言）旧实现整份丢 → 间距全没。
+        val spec = convert(
+            """{"nodes":[
+              {"id":"r","type":"column","parent":null,
+               "style":{"paddingHorizontal":12,"paddingTop":8}},
+              {"id":"t","type":"text","parent":"r","properties":{"text":"x"}}
+            ]}""".trimIndent()
+        )!!
+        val col = nodeById(spec.root) { it.type == "column" }!!
+        assertEquals(12f, col.style.padding.start, 0.01f)
+        assertEquals(12f, col.style.padding.end, 0.01f)
+        assertEquals(8f, col.style.padding.top, 0.01f)
+        assertEquals(0f, col.style.padding.bottom, 0.01f)
+    }
+
+    @Test
+    fun `⑥d nodes 格式多根要合成 column 而不是把树扔了`() {
+        val spec = convert(
+            """{"nodes":[
+              {"id":"a","type":"text","parent":null,"properties":{"text":"第一段"}},
+              {"id":"b","type":"text","parent":null,"properties":{"text":"第二段"}}
+            ]}""".trimIndent()
+        )
+        assertNotNull("两个父空根的 nodes 必须能合成一个根渲染", spec)
+        val all = texts(spec!!.root)
+        assertTrue(all.contains("第一段"))
+        assertTrue(all.contains("第二段"))
+    }
+
     @Test
     fun `① 邻接表 全链路`() {
         val spec = convert(adjacent)

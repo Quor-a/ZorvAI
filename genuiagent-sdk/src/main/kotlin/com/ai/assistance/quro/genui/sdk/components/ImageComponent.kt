@@ -1,7 +1,9 @@
 package com.ai.assistance.quro.genui.sdk.components
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -15,6 +17,7 @@ import coil.compose.rememberAsyncImagePainter
 import com.ai.assistance.quro.genui.sdk.dsl.ComponentTypes
 import com.ai.assistance.quro.genui.sdk.dsl.Dimension
 import com.ai.assistance.quro.genui.sdk.dsl.UIComponent
+import com.ai.assistance.quro.genui.sdk.render.GenUIParentAxis
 import com.ai.assistance.quro.genui.sdk.render.RenderContext
 
 /**
@@ -67,7 +70,22 @@ fun ImageRenderer(
             component.style.height is Dimension.Fixed -> {
                 Modifier.height((component.style.height as Dimension.Fixed).dp.dp)
             }
-            else -> Modifier.fillMaxSize()
+            // 🔴 2026-10-28「尺寸多大围栏就大大」真元（用户截图的天气卡）：
+            //    旧实现这里是无条件 fillMaxSize() —— 模型没写 width/height 时，
+            //    图片把**父容器剩余空间整块吃走**：
+            //    · 有界父容器（Row / 定高卡 / height:match 的卡）里 → 图片框被撑成
+            //      parent 的满高满宽，ContentScale.Fit 再把图缩中间留 letterbox 空白
+            //      → 用户看到的就是「卡片内容在顶部、下方巨大空白」；
+            //    · Row 里连宽度一起吃掉 → 兄弟节点被压扁，图标被按剩余宽度等比放大。
+            //    正确默认：竖排页面里只吃满**宽度**（高度按图片宽高比随内容），
+            //    Row 里连宽度都不吃（按图片固有尺寸），把空间留给兄弟节点。
+            component.style.width is Dimension.Match ||
+                component.style.width is Dimension.Weight ->
+                if (GenUIParentAxis.inRow) Modifier else Modifier.fillMaxWidth()
+            component.style.height is Dimension.Match ||
+                component.style.height is Dimension.Weight ->
+                if (GenUIParentAxis.inRow) Modifier else Modifier.fillMaxHeight()
+            else -> if (GenUIParentAxis.inRow) Modifier else Modifier.fillMaxWidth()
         }
     )
 

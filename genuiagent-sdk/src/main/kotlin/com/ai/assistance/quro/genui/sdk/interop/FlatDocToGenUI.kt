@@ -60,6 +60,16 @@ object FlatDocToGenUI {
                 "text_field" -> put("placeholder", JsonPrimitive(node.props["hint"] ?: text))
                 "image" -> put("url", JsonPrimitive(node.props["url"] ?: node.text))
                 "progress" -> put("value", JsonPrimitive(progressValue(node.props["value"])))
+                // header_bar（HeaderBarPattern）读的是 **title**，不是 text：
+                // FlatDoc 已把 properties.title 并进 text，这里回填一份 title，
+                // 否则整条头栏只有默认空标题、「北京」这种城市名整块消失。
+                // subtitle 一并透传（模型写 properties.subtitle 时）。
+                "header_bar" -> {
+                    put("text", JsonPrimitive(text))
+                    if (text.isNotBlank()) put("title", JsonPrimitive(text))
+                    node.props["subtitle"]?.takeIf { it.isNotBlank() }
+                        ?.let { put("subtitle", JsonPrimitive(it)) }
+                }
                 else -> if (text.isNotBlank()) put("text", JsonPrimitive(text))
             }
             // 容器子间距：SDK 读的是**组件属性** spacing（默认 8dp），不是样式。
@@ -186,9 +196,31 @@ object FlatDocToGenUI {
         }
         f("borderwidth", "strokewidth")?.let { out = out.copy(borderWidth = it) }
         s("bordercolor", "strokecolor")?.let { out = out.copy(borderColor = it) }
-        // 内/外边距：数字，或 "水平,垂直"
-        s("padding")?.let { out = out.copy(padding = edge(it)) }
-        s("margin")?.let { out = out.copy(margin = edge(it)) }
+        // 内/外边距：整串（"16" / "16,8" / CSS 四段 "上,右,下,左"）或分写别名
+        // （paddingTop/paddingStart/…/paddingHorizontal/paddingVertical）都收。
+        fun edgeOf(key: String): EdgeInsets? {
+            val base = s(key)?.let { edge(it) }
+            val top = f("${key}top", "padtop")
+            val bottom = f("${key}bottom", "padbottom")
+            val start = f("${key}start", "${key}left", "padstart", "padleft")
+            val end = f("${key}end", "${key}right", "padend", "padright")
+            val horizontal = f("${key}horizontal", "${key}x", "padx")
+            val vertical = f("${key}vertical", "${key}y", "pady")
+            if (top == null && bottom == null && start == null && end == null &&
+                horizontal == null && vertical == null
+            ) {
+                return base
+            }
+            val b = base ?: EdgeInsets(0f, 0f, 0f, 0f)
+            return EdgeInsets(
+                start = start ?: horizontal ?: b.start,
+                top = top ?: vertical ?: b.top,
+                end = end ?: horizontal ?: b.end,
+                bottom = bottom ?: vertical ?: b.bottom
+            )
+        }
+        edgeOf("padding")?.let { out = out.copy(padding = it) }
+        edgeOf("margin")?.let { out = out.copy(margin = it) }
         // 尺寸：`h`/`w` 是上游 flat 方言的写法（image 高度、spacer 高度），别名一并收
         f("width", "w")?.let { out = out.copy(width = com.ai.assistance.quro.genui.sdk.dsl.Dimension.Fixed(it)) }
         f("height", "h")?.let { out = out.copy(height = com.ai.assistance.quro.genui.sdk.dsl.Dimension.Fixed(it)) }
@@ -202,11 +234,57 @@ object FlatDocToGenUI {
         return out
     }
 
-    /** "16" → 四边 16；"16,8" → 水平 16 / 垂直 8 */
+    /**
+     * 边距串 → [EdgeInsets]（参数序 start=左, top=上, end=右, bottom=底）。
+     *
+     * 段数语义（兼容两种方言，避免"16,8"被拧反）：
+     *  - `"16"` → 四边 16；
+     *  - `"16,8"` → **水平 16 / 垂直 8**（Android padding(h,v) 方言，旧行为，勿改）；
+     *  - `"8,16,8"` → CSS 三段：上 8 / 左右 16 / 下 8；
+     *  - `"8,4,12,16"` → CSS 四段：上 8 / 右 4 / 下 12 / 左 16。
+     *
+     * 🔴 四段是给 [com.ai.assistance.quro.genui.aiapp.renderx.FlatDoc] 的
+     * `edgeString` 兜底的：它把 style 里的边距对象（`{"top":8,"right":4,…}` /
+     * `{"horizontal":16,"vertical":8}` / `{"all":16}`）一律拍成 CSS 四段串。
+     * 旧 [edge] 只解析 1~2 段，四段串会被读成「水平=上 / 垂直=右」——
+     * 上右下左全拧一遍，卡片内边距上下不分（用户截图里内容贴顶就是它）。
+     */
     private fun edge(raw: String): EdgeInsets {
         val parts = raw.split(",").map { it.trim() }
-        val a = parts.getOrNull(0)?.toFloatOrNull() ?: 0f
-        val b = parts.getOrNull(1)?.toFloatOrNull() ?: a
-        return if (parts.size >= 2) EdgeInsets(a, b, a, b) else EdgeInsets(a, a, a, a)
+        fun num(i: Int) = parts.getOrNull(i)?.toFloatOrNull()
+        val a = num(0) ?: 0f
+        return when (parts.size) {
+            0, 1 -> EdgeInsets(a, a, a, a)
+            2 -> {
+                // 水平,垂直（Android 方言）：parts[0] 走左右、parts[1] 走上下。
+                // 🔴 别写成 EdgeInsets(b, a, b, a) —— 那等于把两个轴对调，
+                // "16,8" 会变成「左右 8 / 上下 16」（2026-10-29 自查抓到的拧反 bug）。
+                val b = num(1) ?: a
+                EdgeInsets(a, b, a, b)
+            }
+            3 -> {
+                // CSS 三段：上,左右,下
+                val b = num(1) ?: a
+                val c = num(2) ?: a
+                EdgeInsets(b, a, b, c)
+            }
+            else -> {
+                // CSS 四段：上,右,下,左
+                val b = num(1) ?: a
+                val c = num(2) ?: a
+                val d = num(3) ?: a
+                EdgeInsets(d, a, b, c)
+            }
+        }
     }
+
+    /**
+     * 边距全量解析：整串 + 分写别名合并（分写优先，逐边覆盖）。
+     *
+     * 模型写边距的写法至少有四种：`padding:16`、`padding:"16,8"`、
+     * `padding:{all:16}`（FlatDoc 已拍成串）、以及 CSS 分写
+     * `paddingTop:8 / paddingStart:16 / paddingHorizontal:12 …`。
+     * 旧实现只认整串 —— 分写的那一份被静默丢掉，元素该有的间距全没啦。
+     * （以局部函数形式定义在 [styleOf] 内，直接复用它的别名查表 `f`/`s`。）
+     */
 }
