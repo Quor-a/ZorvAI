@@ -7,6 +7,8 @@ import android.os.Environment
 import android.util.Log
 import java.io.File
 import java.nio.file.Files
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.compressors.xz.XZCompressorInputStream
 
 /**
  * Owns the embedded Termux environment snapshot: first-launch extraction into
@@ -1289,6 +1291,132 @@ class EngineManager(private val context: Context, private val pickToken: String?
   }
 
   /**
+   * #DSH-BASH（2026-10-30 真机事故）：自愈 `usr/bin/bash` 被覆盖成 ET_EXEC 的事故。
+   *
+   * **故障链**（设备实证 `"...libbash.so" has unexpected e_type: 2` + exit 1）：
+   * shell-termux 的 bashPath = `<files>/usr/bin/bash`（快照内 profile patch 钉的），
+   * 快照在这里铺的是一份 PIE bash（e_type=3）；`TerminalEnvironment.linkNativeLibs`
+   * 却无条件把 `libbash.so`（e_type=2 ET_EXEC）链到**同一路径**。引擎 env 钉了
+   * `TERMUX_EXEC__SYSTEM_LINKER_EXEC__MODE=force`（execve 一律改写走 linker64），
+   * linker64 拒收 ET_EXEC ⇒ bash 工具恒坏 ⇒「能启动但是不能用，问题在插件上」。
+   *
+   * **为什么在引擎侧自愈**：终端侧建链在 app 进程初始化里跑，时序上可能晚于快照解压
+   * （每次 app 进程起来都可能再覆盖一次）；且已中招的设备快照指纹仍 fresh、
+   * 不会重解压（`if (snapshotFresh()) return true` 早退）。本函数每次引擎启动前跑
+   * 一次（幂等），与 [applyRuntimePatches] 同一模式：树健康时纯 no-op。
+   *
+   * **修法**：`usr/bin/bash` 不是「实体 PIE ELF」时，从随包 `snapshot.tar.xz` 流式
+   * 提取同名成员（tar 第 3 个成员，解压代价近乎为零）原子覆盖；顺带清掉 busybox
+   * applet 链（指向 libbusybox.so / busybox 的符号链接）——引擎 PATH 是 usr/bin 在前，
+   * 这些链会把 /system/bin 的 toybox（PIE）阴影成 ET_EXEC，glob/grep/ls/sed 与 bash
+   * 同族全废。终端侧同源修复（不再铺这些链）见 TerminalEnvironment 两处跳过逻辑。
+   */
+  private fun healSnapshotShell() {
+    try {
+      val bash = File(usrDir, "bin/bash")
+      if (!isPieExecutableFile(bash)) {
+        val restored = restoreSnapshotMember("usr/bin/bash", bash)
+        if (restored) {
+          LogCollector.log(TAG, "heal-snapshot-shell: usr/bin/bash 非 PIE 形态（被原生库链接覆盖），已从随包快照恢复 PIE bash")
+        } else {
+          LogCollector.log(TAG, "heal-snapshot-shell: usr/bin/bash 非 PIE 形态且恢复失败，bash 工具可能不可用")
+        }
+      }
+      // busybox applet 链清理：快照 usr/bin 只发 bash/node/pnpm 三个实体文件，
+      // 任何 applet 符号链接都是终端侧铺的；清掉让 PATH 落回 /system/bin toybox（PIE）。
+      var cleaned = 0
+      for (name in BUSYBOX_APPLET_NAMES) {
+        val f = File(usrDir, "bin/$name")
+        if (!Files.isSymbolicLink(f.toPath())) continue
+        val target = runCatching {
+          Files.readSymbolicLink(f.toPath()).fileName?.toString()
+        }.getOrNull() ?: continue
+        if (target == "busybox" || target.endsWith("libbusybox.so")) {
+          if (runCatching { Files.deleteIfExists(f.toPath()) }.isSuccess) cleaned++
+        }
+      }
+      if (cleaned > 0) {
+        LogCollector.log(TAG, "heal-snapshot-shell: 清理 $cleaned 个 busybox applet 链（PATH 落回 /system/bin toybox）")
+      }
+    } catch (t: Throwable) {
+      Log.w(TAG, "heal-snapshot-shell failed (non-fatal)", t)
+    }
+  }
+
+  /**
+   * 实体 PIE ELF（e_type=3 ET_DYN）判定：符号链接 / 缺失 / 非 ELF / ET_EXEC 一律 false。
+   * 与 dlopen 无关——这是 execve 语义下的判据（linker64 只收 ET_DYN）。
+   */
+  private fun isPieExecutableFile(f: File): Boolean {
+    if (Files.isSymbolicLink(f.toPath())) return false
+    if (!f.isFile) return false
+    return try {
+      f.inputStream().use { inp ->
+        val head = ByteArray(20)
+        var read = 0
+        while (read < head.size) {
+          val n = inp.read(head, read, head.size - read)
+          if (n < 0) break
+          read += n
+        }
+        read >= 20 &&
+          head[0] == 0x7f.toByte() && head[1] == 'E'.code.toByte() &&
+          head[2] == 'L'.code.toByte() && head[3] == 'F'.code.toByte() &&
+          head[4] == 2.toByte() && // EI_CLASS = ELFCLASS64
+          (head[16].toInt() and 0xff) == 3 && (head[17].toInt() and 0xff) == 0 // e_type = ET_DYN
+      }
+    } catch (_: Throwable) {
+      false
+    }
+  }
+
+  /**
+   * 从随包 snapshot.tar.xz 流式提取单个成员到 [target]（原子写：先 .heal.tmp 再 rename）。
+   * 成员不存在 / 解压失败返回 false。调用方负责判据（本函数不校验内容形态）。
+   */
+  private fun restoreSnapshotMember(member: String, target: File): Boolean {
+    return try {
+      context.assets.open(BUNDLED_SNAPSHOT_ASSET).use { input ->
+        XZCompressorInputStream(input).use { xz ->
+          TarArchiveInputStream(xz).use { tar ->
+            var entry = tar.nextEntry
+            while (entry != null) {
+              if (entry.name == member && !entry.isDirectory) {
+                target.parentFile?.mkdirs()
+                val tmp = File(target.parentFile, target.name + ".heal.tmp")
+                tmp.outputStream().use { out ->
+                  val buf = ByteArray(64 * 1024)
+                  var n = tar.read(buf)
+                  while (n >= 0) {
+                    out.write(buf, 0, n)
+                    n = tar.read(buf)
+                  }
+                }
+                tmp.setReadable(true, true)
+                tmp.setWritable(true, true)
+                tmp.setExecutable(true, true)
+                if (!tmp.renameTo(target)) {
+                  Files.deleteIfExists(target.toPath())
+                  if (!tmp.renameTo(target)) {
+                    target.writeBytes(tmp.readBytes())
+                    SnapshotFs.deletePath(tmp)
+                  }
+                }
+                return true
+              }
+              entry = tar.nextEntry
+            }
+          }
+        }
+      }
+      false
+    } catch (t: Throwable) {
+      Log.w(TAG, "restoreSnapshotMember($member) failed", t)
+      false
+    }
+  }
+
+  /**
    * read_image 的 sharp 补 wasm 构建（#481，用户实测「read_image 仍不可用」）。
    *
    * **故障**：`sharp` 0.35.5 在快照里只带了 `@img/sharp-linux-arm64` /
@@ -1694,6 +1822,10 @@ class EngineManager(private val context: Context, private val pickToken: String?
       }
       // 0.14.0 #214：退役行 disabled 残留自愈（前置于引擎读 profile；幂等一次性，见函数注释）。
       preludeProbe.step("repair-profile-patch") { repairProfilePatch() }
+      // #DSH-BASH：快照 PIE bash 自愈。终端侧原生库链接会把 usr/bin/bash 覆盖成
+      // ET_EXEC 符号链接（libbash.so），引擎 TERMUX_EXEC force 下 linker64 拒收
+      // ⇒ bash 工具恒报 "unexpected e_type: 2"。幂等，每次启动前跑；异常内部消化。
+      preludeProbe.step("heal-snapshot-shell") { healSnapshotShell() }
       // 0.13.1 W3/W4：共享目录 README 每次启动刷新（此前只在迁移路径调用，正常启动不落盘）。
       // 注意：本行**只覆盖「引擎真的启动」这一条路径**——startEngine 有两个早退会整段跳过它
       // （快照刷新中 / 引擎已在跑）。故 provisionPublicRepo 另由 MainActivity 的 onCreate/onResume
@@ -2865,6 +2997,15 @@ description: 手机操控纪律：无障碍语义树优先、ref 语义点击/�
 
     /** 内嵌快照资产文件名（唯一出处）——摘要预检与解压必须指向**同一份**资产。 */
     private const val BUNDLED_SNAPSHOT_ASSET = "snapshot.tar.xz"
+
+    /** 终端侧 busybox applet 链名单（与 TerminalEnvironment.createBusyboxSymlinks 同源）。
+     *  #DSH-BASH：引擎 PATH 是 usr/bin 在前，这些链会把 /system/bin toybox（PIE）阴影成
+     *  libbusybox.so（ET_EXEC），force hook 下 linker64 拒收 ⇒ 与 bash 同族全废。 */
+    private val BUSYBOX_APPLET_NAMES = listOf(
+      "awk", "ash", "basename", "bzip2", "curl", "cp", "chmod", "cut", "cat", "du", "dd",
+      "find", "grep", "gzip", "hexdump", "head", "id", "lscpu", "mkdir", "realpath", "rm",
+      "sed", "stat", "sh", "tr", "tar", "uname", "xargs", "xz", "xxd"
+    )
 
     /**
      * 解压支的失败码（D-1）：解压本身抛异常时由 [extractSnapshotTo] 记真因与栈；
