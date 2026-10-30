@@ -726,7 +726,7 @@ class SnapshotTransactionTest {
   }
 
   /**
-   * 回归护栏（2026-10-30 真机事故「终端环境坏了」）：`usr` 是整棵替换，而终端 LANXIU rootfs
+   * 回归护栏（2026-10-30 真机事故「终端环境坏了」）：`usr` 是整棵替换，而内置 Ubuntu rootfs
    * 住在 `usr/var/lib/proot-distro/installed-rootfs/ubuntu`（`QuroLinuxEnv.rootfsPath`），
    * 随包快照的 usr 只发 bin/etc/lib/libexec。修前每次快照刷新都会把 `usr/var` 连同 rootfs
    * 搬进 `.snapshot-previous`，而 `finish()` 会删掉 previous ⇒ 设备上终端环境凭空消失
