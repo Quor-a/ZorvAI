@@ -45,7 +45,7 @@ fun parseCardSpec(json: String): CardSpec? {
         val a11y = parseA11y(obj.optJSONObject("a11y"))
         val renderHint = obj.optString("renderHint", "canvas").ifBlank { "canvas" }
         val layout = parseLayoutNode(obj.optJSONObject("layout"))
-        CardSpec(id, type, version, layout, data, actions, style, a11y, renderHint)
+        CardSpec(id, type, version, layout, data, actions, style, a11y, renderHint, rawJson = json)
     } catch (_: Exception) {
         null
     }

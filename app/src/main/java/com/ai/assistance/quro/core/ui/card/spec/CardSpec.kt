@@ -151,6 +151,9 @@ data class CardSpec(
     val style: StyleToken = StyleToken(),
     val a11y: A11y = A11y(),
     val renderHint: String = "canvas",
+    /** 围栏 JSON 原文：白名单外类型（AI 把组件库名册类型误写进 quro-card）路由到
+     *  富卡片渲染层（parseComponentSpec → CardSdk.parseObj）时要用，见 ChatScreen.SelfCardMount。 */
+    val rawJson: String = "",
 )
 
 /** 协议版本迁移器：旧会话里的老卡片也能渲染。 */
