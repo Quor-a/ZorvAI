@@ -44,10 +44,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -104,6 +106,46 @@ fun TerminalHome(
         env.sessions.find { it.id == env.currentSessionId }?.pty
     }
 
+    // ── 会话失败态封套（2026-10-30，范式取自 Breeno 的 SealedResult + terminal_disconnect）──
+    // 旧形态：shell 一死，界面就只剩黑屏一个光标，用户拿不到任何线索。
+    // 新形态：进程不再存活 → 立起一张错误卡（稳定错误码 + 真因 + 退出码 + 重连/关闭两个动作）。
+    var failure by remember { mutableStateOf<TerminalFailure?>(null) }
+    val reconnect: () -> Unit = {
+        failure = null
+        env.onNewSession()
+    }
+    val closeSession: () -> Unit = {
+        failure = null
+        env.currentSessionId?.let { id -> env.onCloseSession(id) }
+    }
+    LaunchedEffect(currentPty) {
+        val pty = currentPty ?: return@LaunchedEffect
+        val process = pty.process
+        while (true) {
+            if (!process.isAlive) {
+                val code = runCatching { process.exitValue() }.getOrNull()
+                // 稳定码同时进 logcat（诊断包会带 logcat.txt），设备侧可直接 grep 归因
+                android.util.Log.e(
+                    "terminal",
+                    "session-failed code=" + TerminalFailureCode.PROCESS_EXITED.wire +
+                        " exit=" + (code?.toString() ?: "?") +
+                        " session=" + env.currentSessionId,
+                )
+                failure = TerminalFailure(
+                    code = TerminalFailureCode.PROCESS_EXITED,
+                    title = if (code == 0) "会话已结束" else "会话异常退出",
+                    detail = "进程已退出" + (code?.let { "（exit=$it）" } ?: "") +
+                        "。上方保留的是它最后的输出。",
+                    hint = "点「重连」开一个新会话即可继续；若每次都秒退，" +
+                        "多半是环境里的 shell 起不来（可在「包管理」页确认环境状态）。",
+                    exitCode = code,
+                )
+                break
+            }
+            delay(700)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -134,14 +176,24 @@ fun TerminalHome(
                     .fillMaxSize()
                     .imePadding()
             ) {
-                // 全屏终端输出
-                CanvasTerminalScreen(
-                    emulator = env.terminalEmulator,
-                    modifier = Modifier.weight(1f),
-                    config = terminalConfig,
-                    pty = currentPty,
-                    onInput = { env.onSendInput(it, false) }
-                )
+                // 全屏终端输出（失败时在其上覆盖错误卡，画布保留最后输出）
+                Box(Modifier.weight(1f)) {
+                    CanvasTerminalScreen(
+                        emulator = env.terminalEmulator,
+                        modifier = Modifier.fillMaxSize(),
+                        config = terminalConfig,
+                        pty = currentPty,
+                        onInput = { env.onSendInput(it, false) }
+                    )
+                    failure?.let { f ->
+                        TerminalFailureOverlay(
+                            failure = f,
+                            onReconnect = reconnect,
+                            onCloseSession = closeSession,
+                            onOpenSetup = onNavigateToSetup,
+                        )
+                    }
+                }
 
                 // 虚拟键盘
                 VirtualKeyboard(
@@ -156,13 +208,23 @@ fun TerminalHome(
                     .fillMaxSize()
                     .imePadding()
             ) {
-                // 终端输出区域
-                CanvasTerminalOutput(
-                    emulator = env.terminalEmulator,
-                    modifier = Modifier.weight(1f),
-                    config = terminalConfig,
-                    pty = currentPty
-                )
+                // 终端输出区域（失败时在其上覆盖错误卡）
+                Box(Modifier.weight(1f)) {
+                    CanvasTerminalOutput(
+                        emulator = env.terminalEmulator,
+                        modifier = Modifier.fillMaxSize(),
+                        config = terminalConfig,
+                        pty = currentPty
+                    )
+                    failure?.let { f ->
+                        TerminalFailureOverlay(
+                            failure = f,
+                            onReconnect = reconnect,
+                            onCloseSession = closeSession,
+                            onOpenSetup = onNavigateToSetup,
+                        )
+                    }
+                }
 
                 // 底部输入卡（中断 + 输入框 + 发送）
                 InputBar(
