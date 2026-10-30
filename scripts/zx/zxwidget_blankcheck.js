@@ -1,4 +1,9 @@
 /* zxwidget 敏感空白检测器：编译每个契约 sample，用最小 DOM stub 跑真实渲染，
+   ð´ 2026-10-30：stub 必须**忠实于真实 WebView DOM**——textContent 按真实语义
+   （innerHTML 剥标签 + 全部子孙文本）推导，节点上不得出现运行时根本不存在的字段。
+   曾经的假绿：旧 stub 的 textContent 只回 _t，而 el(tag,cls,html) 走的是 innerHTML，
+   于是「有 HTML 文本的节点」在桩里 textContent 为空——renderHasContent 若按真实 DOM
+   写就会误判；反过来若实现按桩的私有字段写，真机上又全判空。两边必须同时忠于 DOM。
    统计 SVG 几何图形（rect/circle/line/path/polygon/ellipse/polyline）与可见文本，
    判定「真空白」：err-box 或（无几何图形 且 可见文本 < 2 字符）。
    CSS 纯装饰布局（rule）单独标记 CSSVISUAL，不判空白。仅本地回归用。 */
@@ -15,7 +20,7 @@ let script = html.slice(sTag + "<script>".length, eTag);
 const cut = script.indexOf("var state={component");
 if (cut >= 0) script = script.slice(0, cut);
 
-function mk(t){const n={tag:t,children:[],className:"",_a:{},_t:"",_h:"",setAttribute(k,v){this._a[k]=v},getAttribute(k){return this._a[k]},appendChild(c){this.children.push(c);return c},addEventListener(){},classList:{add(){},remove(){},toggle(){}},style:{}};Object.defineProperty(n,"innerHTML",{get(){return this._h},set(v){this._h=String(v)}});Object.defineProperty(n,"textContent",{get(){return this._t},set(v){this._t=String(v)}});return n;}
+function mk(t){const n={tag:t,tagName:String(t).toUpperCase(),children:[],className:"",_a:{},_t:"",_h:"",setAttribute(k,v){this._a[k]=v},getAttribute(k){return this._a[k]},appendChild(c){this.children.push(c);return c},addEventListener(){},classList:{add(){},remove(){},toggle(){}},style:{}};Object.defineProperty(n,"innerHTML",{get(){return this._h},set(v){this._h=String(v)}});Object.defineProperty(n,"textContent",{get(){let s=this._t;if(this._h)s+=" "+this._h.replace(/<[^>]*>/g," ");const cs=this.children||[];for(let i=0;i<cs.length;i++)s+=" "+(cs[i].textContent||"");return s;},set(v){this._t=String(v);this._h="";this.children.length=0;}});return n;}
 global.document={createElement:mk,createElementNS:(_n,t)=>mk(t),getElementById:()=>mk("div"),documentElement:{classList:{toggle(){}}}};
 const api=new Function(script+"\n;return {compile:compile,resolveLayout:resolveLayout,mainArr:mainArr,txt:txt,LAYOUTS:LAYOUTS,get ZX_CONTRACTS(){return ZX_CONTRACTS},set ZX_CONTRACTS(v){ZX_CONTRACTS=v}};")();
 const json=JSON.parse(fs.readFileSync(CONTRACTS,"utf8"));

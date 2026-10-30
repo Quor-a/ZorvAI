@@ -215,6 +215,8 @@ table.t td:last-child,table.t th:last-child{white-space:normal}
 .note.warn{background:var(--warn-soft);border-color:transparent}
 .note.err{background:var(--err-soft);border-color:transparent}
 .note-i{flex-shrink:0;font-size:15px}
+.note-c{flex:1;min-width:0}
+.note-d{font-size:11.5px;color:var(--fg-3);margin-top:3px;line-height:1.5}
 
 /* ── 终端 ── */
 .term{
@@ -1887,7 +1889,10 @@ function compile(comp, dsl, ctx){
   if(!_keys.length){
     var _ph = el("div","note");
     _ph.appendChild(el("div","note-i","!"));
-    _ph.appendChild(el("div",null,esc("（该组件暂无可显示内容）")));
+    var _c1 = el("div","note-c");
+    _c1.appendChild(el("div",null,esc("（该组件暂无可显示内容）")));
+    _c1.appendChild(el("div","note-d",esc(comp+"：只收到 type 字段，没有任何数据字段。")));
+    _ph.appendChild(_c1);
     return _ph;
   }
   var layout = resolveLayout(comp, dsl);
@@ -1905,18 +1910,36 @@ function compile(comp, dsl, ctx){
   if(!renderHasContent(node)){
     var _ph = el("div","note");
     _ph.appendChild(el("div","note-i","!"));
-    _ph.appendChild(el("div",null,esc("（该组件暂无可显示内容）")));
+    var _c2 = el("div","note-c");
+    _c2.appendChild(el("div",null,esc("（该组件暂无可显示内容）")));
+    _c2.appendChild(el("div","note-d",esc(comp+" · 布局 "+layout+" · 字段 "+_keys.join("/"))));
+    _ph.appendChild(_c2);
+    try{ if(window.console&&console.log) console.log("[zxwidget] 空白产物:",comp,"layout="+layout,"keys="+_keys.join(",")); }catch(e2){}
     return _ph;
   }
   return node;
 }
 /* 判断渲染产物是否真有可见内容（文本 / 几何图形 / 非空子节点） */
+/* ð´ 2026-10-30 根因修复：旧版只读 n._html / n._text，而这两个字段在本文件里
+   从来没有任何地方赋值（全库 grep 只有本函数引用）——布局产物全是 el()/svg() 造出来的
+   **真实 DOM 节点**，于是文本判据恒空、SVG 判据恒空、递归到底恒 false，compile() 的
+   编译后兜底把**每一次**渲染都替换成「（该组件暂无可显示内容）」：477 个组件全军覆没，
+   与 DSL 内容无关（用户实机截图即此症状：每张卡都是占位符）。
+   本地 blankcheck 一直没抓到，是因为它的 DOM stub 恰好伪造了 _h/_t 字段——实现跟着桩走
+   而不是跟着真实 WebView DOM 走（假绿）。现在按真实 DOM 判定，虚拟节点判据保留兜底。 */
 function renderHasContent(n){
   if(!n) return false;
-  var h = n._html||"", t = n._text||"";
-  if((h.replace(/<[^>]+>/g," ")).trim().length || t.trim().length) return true;
-  if((h.match(/<(rect|circle|line|path|polygon|polyline|ellipse|svg)\b/gi)||[]).length) return true;
-  var kids = n.children||[];
+  /* â  文本：真实 DOM 的 textContent（自身+全部子孙文本）；虚拟节点退回 _text */
+  var t=(n.textContent!=null?n.textContent:n._text)||"";
+  if(String(t).trim().length) return true;
+  /* â¡ 自身就是可见图形/控件：SVG 几何、图片、表单控件（无文本也是内容） */
+  var tag=String(n.tagName||n.tag||"").toLowerCase();
+  if(/^(svg|rect|circle|line|path|polygon|polyline|ellipse|image|img|input|select|textarea|button|canvas|hr|iframe|video|audio|progress|meter)$/.test(tag)) return true;
+  /* â¢ 内联 HTML 里的图形/文本（虚拟节点或读过 innerHTML 的节点） */
+  var h=n._html||"";
+  if(h && ((h.replace(/<[^>]+>/g," ")).trim().length || (h.match(/<(rect|circle|line|path|polygon|polyline|ellipse|svg)\b/gi)||[]).length)) return true;
+  /* â£ 递归元素子节点 */
+  var kids=n.children||[];
   for(var i=0;i<kids.length;i++){ if(renderHasContent(kids[i])) return true; }
   return false;
 }
