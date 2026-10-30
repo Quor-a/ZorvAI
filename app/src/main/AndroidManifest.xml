@@ -422,6 +422,34 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+            <!-- 系统分享面板（小布 sharereceive.AIChatShareReceiveActivity 的另两种入口）。
+                 🔴 必须是 Activity：分享面板与文本选择菜单都只枚举 Activity，
+                    Receiver 两边都不会出现（我之前错在这里）。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
         </activity>
 
         <!-- 快捷方式落地页（透明）：小布/系统助手执行我们的 shortcut 时落到这里，
@@ -442,9 +470,21 @@
              不对外导出：设置页只能自己点开，避免被第三方拉起来诱导改配置。 -->
         <activity
             android:name=".activity.AssistantSettingsActivity"
-            android:exported="false"
+            android:exported="true"
             android:label="助手设置"
-            android:theme="@style/Theme.Quro" />
+            android:theme="@style/Theme.Quro">
+            <!-- 磁贴长按「设置」入口（小布 SettingsActivity 同时挂了 QS_TILE_PREFERENCES）。
+                 不给这个 filter，「快捷磁贴」那一项就只能开不能配。 -->
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- 显式设置入口（对应小布 heytap.intent.action.SPEECH_ASSIST_SETTINGS） -->
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.action.ASSISTANT_SETTINGS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
         <!-- 耳机按键唤醒（小布「线控耳机唤醒 / 蓝牙耳机唤醒」）。
              🔴 MEDIA_BUTTON 是 Android 8.0 隐式广播限制的**例外**，静态注册仍能收到；
@@ -535,9 +575,132 @@
             </intent-filter>
         </provider>
 
-        <!-- 外部文本指令入口（Breeno TEXT_DIRECTIVE 范式）：显式广播 / 系统分享 / 深链三面合一。
-             清单层不挂 android:permission（否则 SEND/VIEW 会被第三方应用挡掉），
-             改为在接收器里对 DIRECTIVE 动作做 checkCallingPermission 校验。 -->
+        <!-- ══════════════════════════════════════════════════════════════
+             助手唤起与外部入口 —— 组件形态、action 名、category 全部照抄小布清单原件
+             （com.heytap.speechassist v13.3.5），不再自造形态。
+
+             小布的真实注册面（清单实证）：
+               [service] core.SpeechService       ← ASSIST / VOICE_COMMAND / VOICE_SEARCH_HANDS_FREE
+                                                    / WEB_SEARCH / THIRD_PARTY_MESSAGE  (cats: DEFAULT+INFO)
+               [service] agent.MessengerService   ← TEXT_DIRECTIVE
+               [activity] ...BackgroundTaskRelayActivity ← SUBMIT_BACKGROUND_TASK_RELAY
+               [activity] FindPhoneActivity       ← FIND_PHONE
+               [activity] sharereceive.AIChatShareReceiveActivity
+                                                  ← SEND / SEND_MULTIPLE / PROCESS_TEXT
+               [service] service.SpeechTileService ← QS_TILE
+               [activity] SettingsActivity        ← QS_TILE_PREFERENCES + 设置入口
+             ══════════════════════════════════════════════════════════════ -->
+
+        <!-- ① 语音唤醒 / 长按电源键 / 耳机键 —— **在 Service 上注册，与小布一致**。
+             🔴 为什么必须是 Service：系统把 ASSIST 投给"默认数字助理应用"里注册了该 action 的
+                组件；注册成 Activity 会变成"拉起一整个界面"，而 VOICE_COMMAND（耳机键长按系统发的
+                就是它）与 VOICE_SEARCH_HANDS_FREE（蓝牙耳机免手）如果没人注册，耳机键永远唤不醒。
+             🔴 要真正生效还需用户把本应用设为「默认数字助理」（设置页已提供一键入口）。 -->
+        <service
+            android:name=".service.AssistantAssistService"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.INFO" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VOICE_COMMAND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.INFO" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.speech.action.VOICE_SEARCH_HANDS_FREE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.INFO" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.speech.action.WEB_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.INFO" />
+            </intent-filter>
+            <!-- 主动唤醒（对应小布 heytap.intent.action.ACTIVATE_SPEECH_ASSIST） -->
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.action.ACTIVATE_ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- 第三方喂文本：**照抄小布的 action 名**。已经写死这个名字的调用方不必改代码，
+                 用户把小布换成我们做默认助手时这条链路也不会断。 -->
+            <intent-filter>
+                <action android:name="coloros.speech.action.THIRD_PARTY_MESSAGE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
+        <!-- ② 外部文本指令 —— 小布用 agent.MessengerService（Messenger 双向），我们也用 Service。
+             广播入口仍然保留（见下方 DirectReceiver），两条路并存：广播简单、Messenger 能拿回执。 -->
+        <service
+            android:name=".service.AssistantDirectiveService"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.action.TEXT_DIRECTIVE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
+        <!-- 语音唤醒常驻监听 —— 驱动从小布包里搬入的唤醒引擎（libbwvsdkjni + libwakeup + free_wakeup.jet）。
+             🔴 必须独立进程：唤醒引擎的 nInitInstance 两个路径参数语义是静态分析猜的，
+                native 内部出错是 SIGSEGV（捕获不到）；放 :wakeup 后崩的只是这个进程，
+                主程序与对话完全不受影响。 -->
+        <service
+            android:name=".service.AssistantWakeupService"
+            android:enabled="true"
+            android:exported="false"
+            android:process=":wakeup"
+            android:foregroundServiceType="microphone"
+            android:label="@string/app_name" />
+
+        <!-- 唤醒命中 → 主进程唤起语音球（跨进程用同包定向广播） -->
+        <receiver
+            android:name=".receiver.AssistantWakeupHitReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.action.WAKEUP_HIT" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ③ 后台任务中转 —— 小布是 Activity（可用 startActivityForResult 拿返回），不是广播 -->
+        <activity
+            android:name=".activity.AssistantBackgroundRelayActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:label="@string/app_name"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.action.SUBMIT_BACKGROUND_TASK_RELAY" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- ④ 查手机 —— 小布 FindPhoneActivity（别的设备/App 让手机响的标准入口） -->
+        <activity
+            android:name=".activity.AssistantFindPhoneActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:label="@string/app_name"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.action.FIND_PHONE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- ⑤ 显式广播指令 / 深链。🔴 SEND 已从 receiver 挪到 Activity（分享面板只列 Activity，
+             receiver 既不会出现在分享面板，也不会出现在文本选择菜单里）。 -->
         <receiver
             android:name=".core.directive.AssistantDirectiveReceiver"
             android:enabled="true"
@@ -546,17 +709,13 @@
                 <action android:name="com.ai.assistance.quro.action.DIRECTIVE" />
             </intent-filter>
             <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
-            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="quro" android:host="assistant" />
             </intent-filter>
         </receiver>
+
 
         <!-- 终端广播接收器：接收广播执行终端命令、获取终端状态等 -->
         <receiver

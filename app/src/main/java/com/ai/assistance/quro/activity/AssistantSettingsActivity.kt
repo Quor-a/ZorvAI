@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.activity
 
+import com.ai.assistance.quro.core.assistant.AssistantSelfCheck.FixAction
 import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -98,6 +99,10 @@ private fun SettingsScreen(ctx: Context) {
     ) {
         item { Spacer(Modifier.height(14.dp)); Title("助手设置") }
 
+        // ── 〇、真实可用性自检（放最前，它决定下面所有开关能不能真生效）──
+        item { SectionHeader("现在能用吗（逐项自检）") }
+        item { SelfCheckBlock() }
+
         // ── 一、助手服务 ─────────────────────────────────────
         item { SectionHeader("助手服务") }
         item {
@@ -119,6 +124,11 @@ private fun SettingsScreen(ctx: Context) {
 
         // ── 二、唤醒设置 ─────────────────────────────────────
         item { SectionHeader("唤醒设置") }
+
+        // 🔴 这一行放在最前面，因为它是下面所有"被唤起"的总前提：
+        // 长按电源键 / 长按耳机键 是**系统**把 intent 投给"默认数字助理应用"。
+        // 不设成默认助手，下面那些开关全部打开了也不会被唤起 —— 这正是"有个开关但不工作"的根因。
+        item { AssistantRoleRow() }
 
         item {
             ChannelRow(
@@ -352,8 +362,46 @@ private fun ChannelRow(
             onChange = {
                 on = it
                 AssistantServiceState.setChannelEnabled(ctx, channel, it)
+                // 语音唤醒不只是一个开关：开就要真的去听、关就要真的停下。
+                // 旧行为只存了个偏好值，根本没有人喂音频——所以这个开关之前是空的。
+                if (channel == AssistantChannel.VOICE_WAKEWORD) {
+                    toggleWakeupService(ctx, it)
+                }
             },
         )
+    }
+}
+
+/**
+ * 启停常驻唤醒监听。
+ *
+ * 两种失败都必须留痕：权限不够（麦克风）会直接抛异常；
+ * 引擎初始化失败会写进 `:wakeup` 进程日志并把结果显示在通知里。
+ */
+private fun toggleWakeupService(ctx: Context, enable: Boolean) {
+    val tag = "assistant-wakeup-toggle"
+    if (enable) {
+        if (ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            com.ai.assistance.quro.util.QuroDiag.log(tag, "未授予麦克风权限，不启动监听")
+            return
+        }
+        val ok = runCatching {
+            ctx.startForegroundService(
+                android.content.Intent(ctx, com.ai.assistance.quro.service.AssistantWakeupService::class.java)
+                    .setAction(com.ai.assistance.quro.service.AssistantWakeupService.ACTION_START)
+            )
+        }.isSuccess
+        com.ai.assistance.quro.util.QuroDiag.log(tag, "start wakeup service ok=" + ok)
+    } else {
+        runCatching {
+            ctx.startService(
+                android.content.Intent(ctx, com.ai.assistance.quro.service.AssistantWakeupService::class.java)
+                    .setAction(com.ai.assistance.quro.service.AssistantWakeupService.ACTION_STOP)
+            )
+        }
+        com.ai.assistance.quro.util.QuroDiag.log(tag, "stop wakeup service requested")
     }
 }
 
@@ -589,5 +637,216 @@ private fun BreenoBridgeBlock(ctx: android.content.Context) {
                 color = MaterialTheme.colorScheme.primary,
             )
         }
+    }
+}
+
+/**
+ * 「默认数字助理」状态 + 一键申请。
+ *
+ * ## 为什么这一行决定上面所有开关有没有用
+ * 长按电源键（ASSIST）、长按耳机播放键（VOICE_COMMAND）、蓝牙耳机语音键
+ * （VOICE_SEARCH_HANDS_FREE）——这几条 intent 是**系统**发给"默认数字助理应用"的。
+ * 我们的 [com.ai.assistance.quro.service.AssistantAssistService] 已经把这四个 action
+ * 注册齐了，但**系统只投给默认助手**。不设成默认助手，开关全开也不会响 ——
+ * 这就是"设置页有开关但唤不醒"的真正原因。
+ *
+ * 状态每 1.5 秒轮询一次：用户从这里跳到系统弹窗/设置页再返回，状态必须立刻变，
+ * 否则用户会以为"点了没反应"。
+ */
+@Composable
+private fun AssistantRoleRow() {
+    val act = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+    var held by remember { mutableStateOf(false) }
+    var canRequest by remember { mutableStateOf(true) }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            act?.let {
+                held = com.ai.assistance.quro.core.assistant.AssistantRole.isAssistant(it)
+                canRequest = com.ai.assistance.quro.core.assistant.AssistantRole.available(it)
+            }
+            kotlinx.coroutines.delay(1500)
+        }
+    }
+
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "默认数字助理",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = "长按电源键 / 长按耳机键由系统投递给默认助手；不设为默认助手，下面这几项开关不会生效",
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
+                    lineHeight = 16.sp,
+                )
+            }
+            Text(
+                text = if (held) "已启用" else "未启用",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (held) Color(0xFF2E9E6B) else Color(0xFFD9534F),
+            )
+        }
+        if (!held) {
+            Row {
+                TextButton(onClick = {
+                    act?.let { a ->
+                        if (!com.ai.assistance.quro.core.assistant.AssistantRole.request(a)) {
+                            // 申请弹不出来时已经自动跳到系统设置页，这里只落日志
+                            com.ai.assistance.quro.util.QuroDiag.log(
+                                "assistant-role",
+                                "ROLE_ASSISTANT 申请未弹出（canRequest=" + canRequest + "），已跳系统设置",
+                            )
+                        }
+                    }
+                }) { Text(if (canRequest) "设为默认数字助理" else "去系统设置选助手") }
+            }
+        } else {
+            Row {
+                TextButton(onClick = {
+                    act?.let { com.ai.assistance.quro.core.assistant.AssistantRole.openSystemSettings(it) }
+                }) { Text("查看系统助手设置") }
+            }
+        }
+    }
+}
+
+/**
+ * 逐项自检面板 —— 把“为什么用不了”直接摆出来。
+ *
+ * 每一项三行：状态（可用/需处理/被挡住）→ 实测判据 → 修复入口。
+ * 很大一部分“这些功能都是乱写”的感受，实际是**权限 / 默认助手身份没给**，
+ * 而不是代码没写；这种情况必须能在界面上自己看出来，不能让用户去猜。
+ */
+@Composable
+private fun SelfCheckBlock() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val act = ctx as? android.app.Activity
+    var items by remember {
+        mutableStateOf<List<com.ai.assistance.quro.core.assistant.AssistantSelfCheck.Item>>(emptyList())
+    }
+    var tick by remember { mutableStateOf(0) }
+
+    // 权限弹窗必须在 Activity 上下文里发起
+    val micLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { tick++ }
+    val notifLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { tick++ }
+
+    androidx.compose.runtime.LaunchedEffect(tick) {
+        items = com.ai.assistance.quro.core.assistant.AssistantSelfCheck.run(ctx)
+    }
+
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        items.forEach { item ->
+            val lv = item.level
+            val color = when (lv) {
+                com.ai.assistance.quro.core.assistant.AssistantSelfCheck.Level.OK -> Color(0xFF2E9E6B)
+                com.ai.assistance.quro.core.assistant.AssistantSelfCheck.Level.WARN -> Color(0xFFD9A100)
+                else -> Color(0xFFD9534F)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Text(
+                    text = when (lv) {
+                        com.ai.assistance.quro.core.assistant.AssistantSelfCheck.Level.OK -> "\u25CF"
+                        com.ai.assistance.quro.core.assistant.AssistantSelfCheck.Level.WARN -> "\u25B2"
+                        else -> "\u25A0"
+                    },
+                    fontSize = 11.sp,
+                    color = color,
+                )
+                Spacer(Modifier.width(6.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = item.title,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    if (item.detail.isNotBlank()) {
+                        Text(
+                            text = item.detail,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
+                            lineHeight = 15.sp,
+                        )
+                    }
+                    if (item.fixHint.isNotBlank()) {
+                        Text(
+                            text = item.fixHint,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                            lineHeight = 15.sp,
+                        )
+                    }
+                }
+                if (item.fixAction != com.ai.assistance.quro.core.assistant.AssistantSelfCheck.FixAction.NONE) {
+                    TextButton(onClick = {
+                        handleFix(
+                            ctx = ctx,
+                            act = act,
+                            action = item.fixAction,
+                            reqMic = { micLauncher.launch(android.Manifest.permission.RECORD_AUDIO) },
+                            reqNotif = {
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                    notifLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            },
+                            refresh = { tick++ },
+                        )
+                    }) { Text("去修", fontSize = 12.sp) }
+                }
+            }
+        }
+        Row {
+            TextButton(onClick = { tick++ }) { Text("重新自检", fontSize = 12.sp) }
+        }
+    }
+}
+
+/** 自检行上“去修”的分派。 */
+private fun handleFix(
+    ctx: android.content.Context,
+    act: android.app.Activity?,
+    action: com.ai.assistance.quro.core.assistant.AssistantSelfCheck.FixAction,
+    reqMic: () -> Unit,
+    reqNotif: () -> Unit,
+    refresh: () -> Unit,
+) {
+    when (action) {
+        FixAction.REQUEST_ASSISTANT_ROLE -> act?.let { com.ai.assistance.quro.core.assistant.AssistantRole.request(it) }
+        FixAction.OPEN_ASSISTANT_SETTINGS -> com.ai.assistance.quro.core.assistant.AssistantRole.openSystemSettings(ctx)
+        FixAction.REQUEST_MIC -> reqMic()
+        FixAction.REQUEST_NOTIFICATION -> reqNotif()
+        FixAction.REQUEST_OVERLAY -> runCatching {
+            ctx.startActivity(
+                android.content.Intent(
+                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:" + ctx.packageName),
+                ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
+        FixAction.OPEN_QS_PANEL -> runCatching {
+            // Android 没有"快捷设置面板"的公共 action（各 ROM 私有），只能把用户带到系统设置首页，
+            // 由用户自己进「快捷设置 / 下拉面板编辑」。这里如实做，不假装能一步到位。
+            val i = android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
+            i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(i)
+        }
+        FixAction.PUBLISH_SHORTCUTS -> kotlinx.coroutines.MainScope().launch {
+            com.ai.assistance.quro.core.assistant.BreenoBridge.publishShortcuts(ctx)
+            refresh()
+        }
+        FixAction.NONE -> Unit
     }
 }
