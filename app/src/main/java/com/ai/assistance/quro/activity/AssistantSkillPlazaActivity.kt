@@ -53,7 +53,7 @@ import kotlinx.coroutines.launch
 /**
  * 技能广场。
  *
- * 对标小布的四个组件：`SkillPlazaActivity`（首页）+ `SearchActivity`（搜索）+
+ * 小布的四个组件：`SkillPlazaActivity`（首页）+ `SearchActivity`（搜索）+
  * `MySkillsActivity`（我的/启停）+ `SkillDetailActivity`（详情）。
  *
  * 为什么要它：ZorvAI 已有 171 个工具和十几项助手能力，但**用户看不见**——只能靠 AI 自己想起来调。
@@ -100,7 +100,7 @@ private fun PlazaScreen() {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "能力广场",
+                    text = "ZorvAI 技能",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onBackground,

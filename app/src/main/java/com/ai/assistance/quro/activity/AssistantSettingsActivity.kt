@@ -52,7 +52,7 @@ import com.ai.assistance.quro.core.assistant.AssistantSpeakPolicy
 /**
  * 助手设置。
  *
- * 对标小布设置页的**逐项对等**（用户把小布那一整页贴了出来，这里一项不少）：
+ * 小布设置页的**逐项一致**（用户把小布那一整页贴了出来，这里一项不少）：
  *
  * | 小布 | 本页 |
  * |---|---|
@@ -240,7 +240,7 @@ private fun SettingsScreen(ctx: Context) {
         item {
             InfoRow(
                 title = "通话场景",
-                desc = "对标小布「小布通话」（AI 接电话、通话中语音转写）",
+                desc = "小布「小布通话」（AI 接电话、通话中语音转写）",
                 value = "不支持：需系统级通话特权（BIND_CALL_SERVICE / CALL_PRIVILEGED），普通应用拿不到",
                 warn = true,
             )
@@ -252,7 +252,7 @@ private fun SettingsScreen(ctx: Context) {
                         android.content.Intent(ctx, AssistantSkillPlazaActivity::class.java)
                             .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                     )
-                }) { Text("打开能力广场") }
+                }) { Text("ZorvAI 技能清单") }
             }
         }
 
@@ -405,7 +405,7 @@ private fun LockSkillsBlock(ctx: Context) {
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Text("锁屏技能管理", fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
         Text(
-            "勾选后展示在锁屏快捷区（对标小布锁屏技能）；不可执行的能力不会出现在这里",
+            "勾选后展示在锁屏快捷区（小布锁屏技能）；不可执行的能力不会出现在这里",
             fontSize = 11.5.sp,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
         )

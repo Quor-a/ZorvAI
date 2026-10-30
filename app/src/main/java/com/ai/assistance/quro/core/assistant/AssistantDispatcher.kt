@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 /**
  * 助手统一入口（单点路由）。
  *
- * 对标小布的 `PantanalRouterActivity`：**所有**外部/内部触发（文本指令、分享、选中文本、
+ * 小布的 `PantanalRouterActivity`：**所有**外部/内部触发（文本指令、分享、选中文本、
  * 快捷磁贴、语音、广场点按、AI 工具调用、后台任务中转）都先进这里，由它决定：
  *
  * 1. 命中某个已注册技能 → 直接执行（快、确定、不烧模型 token）；

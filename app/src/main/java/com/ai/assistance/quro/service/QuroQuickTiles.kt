@@ -64,7 +64,7 @@ class QuroVoiceTileService : TileService() {
     }
 }
 /**
- * 能力广场磁贴（对标小布 `SettingsActivity` 的 `QS_TILE_PREFERENCES` 入口）。
+ * 能力广场磁贴（小布 `SettingsActivity` 的 `QS_TILE_PREFERENCES` 入口）。
  *
  * 为什么值得单独做个磁贴：小布把「我会什么」做成一级入口，用户随时能看见能力清单；
  * 我们此前所有能力都藏在 AI 的背后，用户不知道能问什么。这个磁贴把能力广场变成
@@ -100,7 +100,7 @@ class QuroSkillsTileService : TileService() {
 }
 
 /**
- * 我手机呢磁贴（对标小布 `FindPhoneActivity` / `heytap.speechassist.action.FIND_PHONE`）。
+ * 我手机呢磁贴（小布 `FindPhoneActivity` / `heytap.speechassist.action.FIND_PHONE`）。
  *
  * 手机静音/找不到时，最可靠的动作是**从下拉面板直接点**——不用解锁进去找 App。
  * 点一下立即最大声闹铃 + 震动；再点一下停。

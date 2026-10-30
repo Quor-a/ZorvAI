@@ -4,7 +4,7 @@ import android.content.Context
 import com.ai.assistance.quro.activity.QuroApplication
 import com.ai.assistance.quro.util.QuroDiag
 
-/** 技能分类（对标小布技能广场的类目，也是广场 UI 的 tab）。 */
+/** 技能分类（小布技能广场的类目，也是广场 UI 的 tab）。 */
 enum class AssistantCategory(val wire: String, val label: String) {
     CHAT("chat", "对话"),
     TERMINAL("terminal", "终端"),

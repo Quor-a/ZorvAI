@@ -13,7 +13,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * 后台任务中转（external background task relay）。
  *
- * 对标小布的 `BackgroundTaskRelayActivity`
+ * 小布的 `BackgroundTaskRelayActivity`
  * （`heytap.speech.intent.action.SUBMIT_BACKGROUND_TASK_RELAY`）：
  * 外部应用把一件「可能跑很久」的活交给助手宿主，宿主在后台跑完再**回执**，
  * 调用方不必自己保活、也不必等在前台。

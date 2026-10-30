@@ -40,7 +40,7 @@ class AssistantDirectiveReceiver : BroadcastReceiver() {
         const val ACTION_DIRECTIVE = "com.ai.assistance.quro.action.DIRECTIVE"
 
         /**
-         * 后台任务中转（对标小布 `SUBMIT_BACKGROUND_TASK_RELAY`）：
+         * 后台任务中转（小布 `SUBMIT_BACKGROUND_TASK_RELAY`）：
          * 外部应用提交一个会长跑的能力，宿主在后台跑完通过
          * [com.ai.assistance.quro.core.assistant.BackgroundTaskRelay.RELAY_RESULT_ACTION] 回执。
          */

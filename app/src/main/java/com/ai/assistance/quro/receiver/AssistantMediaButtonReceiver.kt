@@ -16,7 +16,7 @@ import com.ai.assistance.quro.util.QuroDiag
 /**
  * 耳机按键唤醒。
  *
- * 对标小布设置页的两项：
+ * 小布设置页的两项：
  * > **线控耳机唤醒**「长按线控耳机播放键唤醒」
  * > **蓝牙耳机唤醒**「触碰或长按蓝牙耳机唤醒」
  *
@@ -87,7 +87,7 @@ class AssistantMediaButtonReceiver : BroadcastReceiver() {
 
         QuroDiag.log(TAG, "wake key=$keyCode held=${heldMs}ms channel=${channel.wire}")
 
-        // 首选取把语音球叫起来（对标小布"长按耳机键直接说话"）；
+        // 首选取把语音球叫起来（小布"长按耳机键直接说话"）；
         // 语音球起不来（没给悬浮窗权限 / 服务被系统限制）就退一步打开对话，绝不静默无反应。
         val started = runCatching {
             ctx.startForegroundService(
