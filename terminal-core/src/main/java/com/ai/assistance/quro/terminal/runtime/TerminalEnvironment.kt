@@ -177,35 +177,23 @@ class TerminalEnvironment(context: Context) {
             }.onFailure { Log.e(TAG, "busybox 实体拷贝也失败", it) }
         }
 
-        // 🔴 2026-10-30 DSH「能启动但是不能用」根因修复：libbash.so 是 e_type=2（ET_EXEC）
-        // 静态二进制，而 DSH 快照（dshmobile）把一份 PIE bash（e_type=3）铺在**同一路径**
-        // ${binDir}/bash —— shell-termux 的 bashPath 正指向它。本函数无条件建链会把快照的
-        // PIE bash 覆盖成 libbash.so 符号链接；DSH 引擎 env 钉了 TERMUX_EXEC force
-        // （execve 一律改写走 /system/bin/linker64），linker64 拒收 ET_EXEC
-        // ⇒ bash 工具恒报 "libbash.so has unexpected e_type: 2"。
-        // 判据：目标已是实体文件（快照 PIE bash）⇒ 原样保留。终端侧同样可用：
-        // PIE 可执行文件 execve 直接跑，且终端 PATH 里 /system/bin 在前，行为无差异。
-        val bashLinkFile = File(binDir, "bash")
-        val snapshotBashInPlace = bashLinkFile.isFile &&
-            !Files.isSymbolicLink(bashLinkFile.toPath())
-        if (snapshotBashInPlace) {
-            Log.i(
-                TAG,
-                "linkNativeLibs: ${bashLinkFile.absolutePath} 已是实体文件（快照 PIE bash），跳过 libbash.so 建链"
-            )
-        }
+        // 🔴 2026-10-30 两子系统抢 `usr/bin/bash` 的事故已用**分名**根治（见 map 里 quro-bash 的注释）：
+        // 本函数不再碰 `usr/bin/bash`（那是 DSH 引擎的 PIE bash），终端只建 `usr/bin/quro-bash`。
 
         val libraries = mapOf(
             "libproot.so" to "proot",
             "libloader.so" to "loader",
             "liblibtalloc.so.2.so" to "libtalloc.so.2",
-            "libbash.so" to "bash",
+            // 🔴 2026-10-30 两子系统抢同一文件事故（用户诉状「环境已经好终端会话不能用」）：
+            // `usr/bin/bash` 现在是 **DSH 引擎**的（快照发的 Termux PIE bash，引擎 TERMUX_EXEC
+            // force 下 linker64 只收 ET_DYN），终端会话再 exec 它必死 —— 现场就是纯黑屏 + 一个光标。
+            // 因此终端自己的 bash 单独占一个名字 `quro-bash`（→ jniLibs/libbash.so，ET_EXEC，
+            // 终端 env 不设 TERMUX_EXEC force，execve 直跑无碍），两个子系统各用各的。
+            "libbash.so" to "quro-bash",
             "libsudo.so" to "sudo"
         )
 
         libraries.forEach { (libName, linkName) ->
-            // 快照 PIE bash 在位时不覆盖（见上方注释）；其余库快照不发这些名字，照旧建链。
-            if (linkName == "bash" && snapshotBashInPlace) return@forEach
             val libFile = File(nativeLibDir, libName)
             val linkFile = File(binDir, linkName)
             if (!libFile.exists()) {
@@ -230,6 +218,22 @@ class TerminalEnvironment(context: Context) {
                     linkFile.exists() && linkFile.canExecute()
                 }.onFailure { Log.e(TAG, "$linkName 实体拷贝也失败", it) }
             }
+        }
+
+        // 历史兼容：老设备上 `usr/bin/bash` 曾是终端 bash 的链接。现在这个路径归 DSH 引擎所有，
+        // **只在它完全不存在时**补一个终端链接（纯终端用户不至于没 bash 用）；已存在则一律不动——
+        // 否则又变成抢文件（引擎的 PIE bash 被覆盖 → e_type:2；终端的链接被覆盖 → 黑屏）。
+        val legacyBash = File(binDir, "bash")
+        if (!legacyBash.exists()) {
+            runCatching {
+                val libFile = File(nativeLibDir, "libbash.so")
+                if (libFile.exists()) {
+                    libFile.setExecutable(true, false)
+                    runCatching { Files.createSymbolicLink(legacyBash.toPath(), libFile.toPath()) }
+                        .getOrElse { libFile.copyTo(legacyBash, overwrite = true) }
+                    legacyBash.setExecutable(true, false)
+                }
+            }.onFailure { Log.w(TAG, "补 usr/bin/bash 兼容链接失败（非致命，终端用 quro-bash）", it) }
         }
     }
 
@@ -721,7 +725,7 @@ class TerminalEnvironment(context: Context) {
      * 它与终端会话走同一条 install_ubuntu 链路（2026-10-27 回归 v1.1.7 函数名），目标固定为 Ubuntu。
      */
     fun prepareGuestRootfs(distro: Distro = Distro.UBUNTU): Boolean {
-        val bash = File(binDir, "bash")
+        val bash = terminalBash()
         if (!bash.exists()) {
             Log.e(TAG, "prepareGuestRootfs: 缺少宿主 bash（原生库未链接）")
             return false
@@ -990,7 +994,7 @@ class TerminalEnvironment(context: Context) {
         ensureHostBackendReady()
         return if (isRootfsReady()) {
             arrayOf(
-                File(binDir, "bash").absolutePath, "-c",
+                terminalBash().absolutePath, "-c",
                 "source \$HOME/common.sh && install_ubuntu && configure_sources && login_ubuntu"
             )
         } else {
@@ -1023,9 +1027,11 @@ class TerminalEnvironment(context: Context) {
             val libs = (nld.listFiles() ?: emptyArray()).sortedBy { it.name }
             line("[2] jniLibs(${libs.size}): " + libs.joinToString(" ") { "${it.name}=${it.length()}" })
         }
-        val bashFile = File(binDir, "bash")
+        // 自检要测**终端实际会用的那个 bash**（2026-10-30：usr/bin/bash 已归 DSH 引擎所有，
+        // 终端用 quro-bash；继续测 usr/bin/bash 只会测到引擎的 PIE bash，判据全是假信息）。
+        val bashFile = terminalBash()
         val linkTarget = runCatching { Files.readSymbolicLink(bashFile.toPath()) }.getOrNull()
-        line("[3] bash exists=${bashFile.exists()} 符号链接目标=$linkTarget canExec=${bashFile.canExecute()}")
+        line("[3] bash=${bashFile.absolutePath} exists=${bashFile.exists()} 符号链接目标=$linkTarget canExec=${bashFile.canExecute()}")
         val busyboxFile = File(binDir, "busybox")
         line("[3] busybox exists=${busyboxFile.exists()} canExec=${busyboxFile.canExecute()}")
         val execTest = runCatching {
@@ -1066,12 +1072,49 @@ class TerminalEnvironment(context: Context) {
         return sb.toString()
     }
 
+    /**
+     * 终端会话用的 bash（**终端自有**，与 DSH 引擎的 `usr/bin/bash` 分开）。
+     *
+     * 事故背景（2026-10-30「环境已经好终端会话不能用」）：`usr/bin/bash` 历史上被两方抢用——
+     * 终端会话把它指向 `jniLibs/libbash.so`，DSH 快照则在这里铺一份 Termux PIE bash（引擎
+     * TERMUX_EXEC force 下 linker64 只收 ET_DYN，必须用 PIE 那份）。谁后写谁生效，于是
+     * 一边修好另一边就坏：引擎侧表现为 `e_type: 2`，终端侧表现为**纯黑屏一个光标**。
+     *
+     * 现约定：引擎独占 `usr/bin/bash`；终端独占 `usr/bin/quro-bash`（→ libbash.so）。
+     * 缺失时即时补链；连 libbash.so 都拿不到才退回 `/system/bin/sh`（宁可功能降级也不黑屏）。
+     */
+    private fun terminalBash(): File {
+        val own = File(binDir, "quro-bash")
+        if (!own.exists()) runCatching { linkNativeLibs() }
+        if (own.exists()) return own
+        val legacy = File(binDir, "bash")
+        if (legacy.exists() && Files.isSymbolicLink(legacy.toPath())) return legacy
+        Log.e(TAG, "terminalBash: quro-bash 与 libbash.so 均不可用，回落 /system/bin/sh")
+        return File("/system/bin/sh")
+    }
+
+    /**
+     * 终端 shell 起不来时的可见降级：把真因打到屏幕上，再给一个能用的系统 shell。
+     * 单引号全部剔除——命令走 `sh -c`，引号会把整条命令拆坏。
+     */
+    private fun fallbackShellCommand(bash: String, reason: String): Array<String> {
+        val why = reason.replace("'", "").replace("\n", " ").take(160)
+        return arrayOf(
+            "/system/bin/sh", "-c",
+            "echo \"[ZorvAI] 终端 bash 启动失败：$why\"; " +
+                "echo \"[ZorvAI] bash=$bash\"; " +
+                "echo \"[ZorvAI] 已回落系统 shell（功能受限）。可重开终端或重装环境后重试。\"; " +
+                "exec /system/bin/sh"
+        )
+    }
+
     fun startTerminalSession(sessionId: String): Pair<TerminalSession, Pty> {
-        val bash = File(binDir, "bash").absolutePath
-        // 🔴 启动前硬校验（2026-10-26）：bash 链接缺失时进程会瞬间死亡且界面无任何提示，
+        val bashFile = terminalBash()
+        val bash = bashFile.absolutePath
+        // 🔴 启动前硬校验（2026-10-26）：bash 缺失时进程会瞬间死亡且界面无任何提示，
         // 这里显式报错并把链接补上，让「终端没反应」有据可查。
-        if (!File(bash).exists()) {
-            Log.e(TAG, "startTerminalSession: binDir/bash 不存在（原生库未链接？），尝试补链")
+        if (!bashFile.exists()) {
+            Log.e(TAG, "startTerminalSession: $bash 不存在（原生库未链接？），尝试补链")
             runCatching { linkNativeLibs() }
         }
         val startScript = "source \$HOME/common.sh && start_shell"
@@ -1083,7 +1126,38 @@ class TerminalEnvironment(context: Context) {
         Log.d(TAG, "Starting terminal session with command: ${command.joinToString(" ")}")
         Log.d(TAG, "Environment: $env")
 
-        val pty = Pty.start(command, env, filesDir)
+        // 🔴 绝不黑屏（2026-10-30）：静默黑屏是最差的失败形态——用户只看到光标，零线索。
+        // 两条兜底：① Pty.start 直接抛错 → 换系统 shell 并把异常打屏；② fork 成功但子进程
+        // 秒死（exec 失败/脚本首行就挂，最常见）→ 600ms 验活，死了同样换系统 shell 并报退出码。
+        val pty = try {
+            Pty.start(command, env, filesDir)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Pty.start 失败（$bash），回落 /system/bin/sh", t)
+            Pty.start(fallbackShellCommand(bash, (t.message ?: t.javaClass.simpleName)), env, filesDir)
+        }
+        try {
+            Thread.sleep(600)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+        if (!pty.process.isAlive) {
+            val code = runCatching { pty.process.exitValue() }.getOrDefault(-1)
+            Log.e(TAG, "终端 shell 立即退出 exit=$code（$bash），回落 /system/bin/sh")
+            runCatching { pty.stdout.close() }
+            runCatching { pty.stdin.close() }
+            runCatching { pty.process.destroy() }
+            val retry = Pty.start(
+                fallbackShellCommand(bash, "shell 立即退出，exit=$code"),
+                env, filesDir,
+            )
+            val session = TerminalSession(
+                process = retry.process,
+                stdout = retry.stdout,
+                stdin = retry.stdin
+            )
+            activeSessions[sessionId] = session
+            return Pair(session, retry)
+        }
         val session = TerminalSession(
             process = pty.process,
             stdout = pty.stdout,
