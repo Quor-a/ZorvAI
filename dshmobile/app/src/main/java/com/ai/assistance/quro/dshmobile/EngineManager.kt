@@ -366,6 +366,20 @@ class EngineManager(private val context: Context, private val pickToken: String?
       // issue #271 ④：把**失败归类**（错误码）挂出来，供 boot 侧给「可直接照做」的文案，
       // 而不是让用户看到一句无指向的「运行时更新失败」+ 90s 超时。
       lastRefreshFailureCode = (t as? SnapshotFsException)?.code ?: "snapshot-refresh-failed"
+      // 🔴 2026-10-30 真机复盘（设备日志实证：一整天 0 次 `snapshot refreshed`、5 次
+      // `snapshot-refresh-failed`，而 boot-fail.log 按 BOOT_FAIL_MAX_BYTES 有界轮转后
+      // **真因那几行已被挤出**，只剩后来的 deferred 行）——排障者拿到诊断包却看不到失败原因。
+      // 因此真因必须同时进 **dsh-day.log**（LogCollector，诊断包完整携带、不做紧轮转）：
+      // 一行带错误码 + 异常类 + 消息 + 前三帧，`grep snapshot refresh FAILED` 直接定因。
+      // 注意：这行是**诊断**，任何异常都不得影响回滚路径本身。
+      runCatching {
+        LogCollector.log(
+          TAG,
+          "snapshot refresh FAILED code=" + lastRefreshFailureCode +
+            " cause=" + t.javaClass.name + ": " + (t.message ?: "无消息") +
+            " frames=" + t.stackTrace.take(3).joinToString(" <- ") { it.toString() },
+        )
+      }
       try {
         val marker = SnapshotTransaction.readMarker(filesDir)
         if (marker != null) {
@@ -1311,6 +1325,22 @@ class EngineManager(private val context: Context, private val pickToken: String?
    * 这些链会把 /system/bin 的 toybox（PIE）阴影成 ET_EXEC，glob/grep/ls/sed 与 bash
    * 同族全废。终端侧同源修复（不再铺这些链）见 TerminalEnvironment 两处跳过逻辑。
    */
+  /**
+   * 前台自愈入口（2026-10-30 用户诉状「每次使用到插件，运行时又会复现 bug」）。
+   *
+   * 引擎启动 prelude 已经调过 [healSnapshotShell]，但**运行时**还有两条路会重新把它弄坏：
+   *   · 终端侧 `TerminalEnvironment.linkNativeLibs / createBusyboxSymlinks` 在 app 进程里跑，
+   *     时序可能晚于引擎启动（打开终端、插件触发 shell、工具拉起进程都会走到）；
+   *   · 插件侧任何一次重新装配运行时树（撤销保存点、插件装/卸）都可能把 usr/bin 写回旧形态。
+   *
+   * 因此把同一套幂等自愈再挂到**回前台**：树健康时是纯 no-op（一次 bash 头 20 字节读 + 30 个
+   * applet 链接判定），中招时无需重启引擎即可自愈。调用方必须放在后台线程（有文件 IO，
+   * bash 真坏时要流式解 xz）。
+   */
+  fun healShellEnvironmentOnForeground() {
+    healSnapshotShell()
+  }
+
   private fun healSnapshotShell() {
     try {
       val bash = File(usrDir, "bin/bash")
