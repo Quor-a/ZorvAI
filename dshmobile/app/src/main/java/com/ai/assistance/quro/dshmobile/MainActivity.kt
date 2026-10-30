@@ -768,6 +768,13 @@ class MainActivity : ComponentActivity() {
   override fun onResume() {
     super.onResume()
     pageRecovery.resume()
+    // 🔴 2026-10-30 用户诉状「每次使用到插件，运行时又会复现 bug」：引擎启动 prelude 只自愈
+    // **一次**，而运行时还有两条路会把 usr/bin 写坏——① 终端侧 linkNativeLibs /
+    // createBusyboxSymlinks 在 app 进程里跑（开终端、插件触发 shell、工具拉进程都会走到），
+    // 时序可晚于引擎启动；② 插件侧重组运行时树（撤销保存点 / 装卸载插件）。引擎 env 钉了
+    // TERMUX_EXEC force ⇒ linker64 拒收 ET_EXEC ⇒ bash 与 grep/ls/sed 同族全废，
+    // 表现为「引擎能起、一用插件就坏」。回前台再自愈一次：幂等，健康树纯 no-op。
+    healShellEnvironmentOffMainThread()
     if (!RepairState.active && RepairState.required(this)) {
       showGuide()
       applyRepairRequiredGuide()
@@ -895,8 +902,24 @@ class MainActivity : ComponentActivity() {
    * 半死引擎下为秒级下限），主线程调用会直接冻结 onResume/首帧；失败态以结构化原因落盘
    * （reason/latencyMs，不含任何令牌）。
    */
-  private fun probeEngineOffMainThread(onResult: (Boolean) -> Unit) {
-    if (userClosedEngine || EngineService.userShutdown || isFinishing || isDestroyed) return
+  /**
+   * 前台 shell 环境自愈（幂等；健康树纯 no-op）。
+   *
+   * 独立线程的硬要求：里面有文件 IO——bash 真被覆盖成 ET_EXEC 符号链接时，要从随包
+   * `snapshot.tar.xz` 流式解出 `usr/bin/bash` 覆盖回去（xz 解压不能压主线程）。
+   * 任何异常都只记一条 warn，绝不影响前台流程（自愈失败最多是「维持现状」）。
+   */
+  private fun healShellEnvironmentOffMainThread() {
+    Thread {
+      try {
+        engineManager.healShellEnvironmentOnForeground()
+      } catch (t: Throwable) {
+        android.util.Log.w("dsh-engine", "foreground shell heal failed (non-fatal)", t)
+      }
+    }.apply { isDaemon = true; name = "shell-heal" }.start()
+  }
+
+  private fun probeEngineOffMainThread(onResult: (Boolean) -> Unit) {    if (userClosedEngine || EngineService.userShutdown || isFinishing || isDestroyed) return
     val generation = pageRecovery.generation
     Thread {
       val probe = try {
