@@ -1,0 +1,9 @@
+# 从小布（OPPO Breeno, com.heytap.speechassist）包内**字节级**搬进来的原件。
+# 这些不是"我们写的代码"，而是协议契约与动效资源，必须与原件逐字节一致：
+# 任何行尾转换（CRLF/LF）都会让"直接引用"变成"改过的副本"。
+# 校验：python scripts/verify_ported_assets.py
+app/src/main/assets/proto/**  -text
+app/src/main/assets/lottie/** -text
+
+# 原件清单（记录原件 SHA-256，自身也按字节保存）
+app/src/main/assets/PORTED.sha256 -text

@@ -1,0 +1,18 @@
+# 由 Breeno.apk (com.heytap.speechassist v13.3.5) 字节级搬入的原件清单
+# 格式: <sha256>  <本地路径>  <-  <apk内路径>
+# 校验: python scripts/verify_ported_assets.py   （失败=有人改过原件）
+
+1a29b3b5a2cfd8d238b11c43a04a4c587ea42cef656ea69c089b7d07199b6bc3  proto/agents.proto  <-  agents.proto
+f810009a88d394dbf3970c0c2880484aa396743be0dec8973e316cafc9578b4d  proto/channel.proto  <-  channel.proto
+7722ce94e4bf2e077cfe6f7a87a47506f9139e6c0379d20d9e91f36d2856f22d  proto/deviceconnections.proto  <-  deviceconnections.proto
+e6c8539abc36c140d767d8dcf241a355300b9d47637701164e7032c225395281  proto/devicemanager.proto  <-  devicemanager.proto
+dd7ddf5b5c7b6197fad3193cc150cf89a6e0e3a4a64d26e61704fcf1f4812d87  proto/discoveries.proto  <-  discoveries.proto
+e6cf3dd67793b5adcc2d4537e377e2d486a932f3ef2c956f89cd5459afdf613a  proto/results.proto  <-  results.proto
+4ab175da54dee0a81f06a25249059ad8c63c561474125821989c7234ea25f828  proto/super_channel_data.proto  <-  super_channel_data.proto
+9a4f832a0abbc9747a55ff95fd517cac55b4ae0dad64f078673f70afa5f2a9e3  proto/pantanal_card_action.proto  <-  pantanal_card_action.proto
+6318af93ef2015230ae2b5bc6a354df4f7dcb5e0bced049a0d44837fdf130a42  proto/pantanal_card_ui_data.proto  <-  pantanal_card_ui_data.proto
+e7937c69fbfef446398d6961028e0057f49786c2ff047352d125bb91bad7d792  proto/card_config_info_content.proto  <-  card_config_info_content.proto
+05960ecfab7ef078daf242ddfc09069b545915a2b6ce0bf044cb2d958a5b00a9  lottie/breeno_listen.json  <-  assets/listen/listen_anim.json
+8019dc4a5bbaec5852ec94bb915f8b011a27d32d541fc956c6e5054b64abd29e  lottie/breeno_shake.json  <-  assets/lottie/ca_ui_common_shake.json
+67c9e0859e814cf4657d7e2dd5235cb612f7ffacdf39ba04babd0effe4439901  lottie/breeno_loading.json  <-  assets/loading.json
+447a17a8257fc299d8f78e1f37f5d9538a46264348e4aee6616d4a3e82bbf131  lottie/breeno_empty_dark.json  <-  assets/ai_ask_empty_content_dark.json
