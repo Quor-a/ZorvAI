@@ -136,6 +136,76 @@ class NoTransactionStartRetryTest {
     )
   }
 
+  // ── ⑥bis 刷新在飞（journal 未落的解压段）⇒ 同样交棒，不烧秒级预算 ──────────────
+
+  /**
+   * 2026-10-30 诊断包修复（dsh-diag-20261030-025158.zip）：`beginSnapshotTransaction()`
+   * 只置 companion CAS、**不写 journal**，marker 要到解压完成后的 STAGED 相位才落盘——
+   * 那 45-60s 里 `readMarker()` 恒为 null，而所有权正被刷新流占着。旧实现把这整段误判成
+   * 「上一次流收尾，毫秒级」，秒级预算烧穿后落一条误导的 timeout；诊断包 boot-fail.log
+   * 实证 4 条 `engine-start-deferred-no-transaction-timeout`（transaction=absent），
+   * 每一次对应一次被静默丢弃的启动按压。
+   *
+   * 本条守住：**无 journal 但刷新在飞必须交棒**——不得 RESUME、不得 RETRY 到超时。
+   */
+  @Test
+  fun anInFlightRefreshWithoutJournalHandsOverInsteadOfBurningTheShortBudget() {
+    // 主场景：无事务、所有权被占（刷新流持有）、刷新在飞 ⇒ 必须交棒给 16 分钟等待者。
+    assertEquals(
+      DeferredStartRetryDecision.HAND_OVER_TO_TRANSACTION_WAIT,
+      decideNoTransactionRetry(
+        canRun = true, transactionPresent = false, ownershipRunning = true,
+        attempts = 0, refreshInFlight = true,
+      ),
+    )
+    // 反证：即便所有权看起来空着（另一条控制面在刷新、没持所有权），也不得 RESUME ——
+    // 此刻续跑只会撞上 beginSnapshotTransaction 让行，把「别人正在做」记成一次失败。
+    assertEquals(
+      DeferredStartRetryDecision.HAND_OVER_TO_TRANSACTION_WAIT,
+      decideNoTransactionRetry(
+        canRun = true, transactionPresent = false, ownershipRunning = false,
+        attempts = 0, refreshInFlight = true,
+      ),
+    )
+    // 反证：到了超时拍同样交棒（不得先落一条误导的 no-transaction-timeout）。
+    assertEquals(
+      DeferredStartRetryDecision.HAND_OVER_TO_TRANSACTION_WAIT,
+      decideNoTransactionRetry(
+        canRun = true, transactionPresent = false, ownershipRunning = true,
+        attempts = Int.MAX_VALUE, refreshInFlight = true,
+      ),
+    )
+    // 生命周期闸门仍然最先：destroyed / 用户关引擎时一律 STOP，刷新在飞也不例外。
+    assertEquals(
+      DeferredStartRetryDecision.STOP,
+      decideNoTransactionRetry(
+        canRun = false, transactionPresent = false, ownershipRunning = true,
+        attempts = 0, refreshInFlight = true,
+      ),
+    )
+  }
+
+  /** 默认口径不变：不传 refreshInFlight（刷新不在飞）时，行为与本修复前完全一致。 */
+  @Test
+  fun theRefreshCriterionDefaultsToAbsentAndKeepsTheOldBehaviour() {
+    assertEquals(
+      DeferredStartRetryDecision.RESUME,
+      decideNoTransactionRetry(canRun = true, transactionPresent = false, ownershipRunning = false, attempts = 0),
+    )
+    assertEquals(
+      DeferredStartRetryDecision.RETRY,
+      decideNoTransactionRetry(
+        canRun = true, transactionPresent = false, ownershipRunning = true, attempts = 0, refreshInFlight = false,
+      ),
+    )
+    assertEquals(
+      DeferredStartRetryDecision.TIMEOUT,
+      decideNoTransactionRetry(
+        canRun = true, transactionPresent = false, ownershipRunning = true, attempts = 15, refreshInFlight = false,
+      ),
+    )
+  }
+
   // ── ⑤ 预算口径：秒级、且**不得**与 16 分钟那条混用 ───────────────────────────
 
   /**
@@ -230,5 +300,55 @@ class NoTransactionStartRetryTest {
     assertTrue("长等待者的续跑条件不得被改写", long.contains("!transactionBusy && !flowOwnership.running"))
     assertTrue("长等待者仍用 16 分钟预算", long.contains("SNAPSHOT_TRANSACTION_WAIT_BUDGET_MS"))
     assertFalse("长等待者不得改用秒级预算", long.contains("NO_TRANSACTION_RETRY_BUDGET_MS"))
+  }
+
+  // ── ⑦ 接线层：刷新在飞判据必须接进两条等待者（2026-10-30 诊断包修复） ──────────
+
+  /**
+   * **本修复的核心反证**：无事务分支必须**先判刷新在飞**再落秒级重试，且判据要真的接到
+   * companion CAS（`EngineManager.snapshotRefreshInFlight()`）上——写成本地字段或常量即红。
+   *
+   * 判据顺序同样必须是反证点：刷新判据排在秒级重试**之后**，等于解压段整段没判上。
+   */
+  @Test
+  fun theRefreshInFlightCriterionIsWiredIntoBothWaiters() {
+    val flow = codeOnly(source("EngineStartFlow.kt"))
+    val defer = flow.substringAfter("private fun deferEngineStartWhileSnapshotTransactionBusy()")
+      .substringBefore("private val deferredStartRunnable")
+
+    assertTrue(
+      "无事务分支必须先判刷新在飞（判据缺失 = 解压段 45-60s 整段误判）",
+      defer.contains("activity.engineManager.snapshotRefreshInFlight()"),
+    )
+    assertTrue(
+      "刷新判据必须排在秒级重试**之前**（排在后面等于没判）",
+      defer.indexOf("snapshotRefreshInFlight()") < defer.indexOf("postDelayed(noTransactionRetry"),
+    )
+    assertTrue("刷新在飞必须落专属 boot-fail stage", defer.contains("\"engine-start-deferred-refresh-in-flight\""))
+    assertTrue(
+      "刷新在飞必须挂 16 分钟那条等待者（而不是秒级重试）",
+      defer.contains("engineMonitorHandler.postDelayed(deferredStartRunnable, SNAPSHOT_TRANSACTION_WAIT_POLL_STEP_MS)"),
+    )
+
+    val runnable = flow.substringAfter("private val noTransactionRetry")
+      .substringBefore("private fun canRunEngineWork")
+    assertTrue(
+      "秒级重试者也必须把刷新在飞接进 decideNoTransactionRetry",
+      runnable.contains("refreshInFlight = activity.engineManager.snapshotRefreshInFlight()"),
+    )
+
+    val long = flow.substringAfter("private val deferredStartRunnable")
+      .substringBefore("private val noTransactionRetry")
+    assertTrue(
+      "16 分钟等待者的续跑条件也必须排除刷新在飞（否则所有权瞬间空出就续跑，必撞让行）",
+      long.contains("!refreshInFlight"),
+    )
+
+    // 判据出口必须在 EngineManager 侧真实存在（companion CAS 的只读出口）。
+    val manager = codeOnly(source("EngineManager.kt"))
+    assertTrue(
+      "EngineManager 必须暴露 snapshotRefreshInFlight()（读 companion snapshotRefreshing）",
+      manager.contains("fun snapshotRefreshInFlight(): Boolean = snapshotRefreshing.get()"),
+    )
   }
 }

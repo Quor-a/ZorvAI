@@ -51,6 +51,16 @@ class ControlPoller(
     private const val READ_TIMEOUT_MS = 9000
     private const val IDLE_BACKOFF_MS = 1000L
     private const val MAX_BACKOFF_MS = 10_000L
+    /**
+     * 端点未确认（port=0）时的等待步进（2026-10-30 诊断包修复）。
+     *
+     * 2 秒：引擎从 spawn 到上报端口远慢于它，而这段里发任何请求都是
+     * `Invalid URL: INVALID_PORT` 白刷（诊断包 dsh-day.log 实证 45 分钟上千行）。
+     * 刻意**不**复用 HEARTBEAT_INTERVAL_MS：那是心跳线程的 5 秒节拍
+     * （A11yHeartbeatCadenceTest 守着「不得出现硬编码 sleep(2_000)」的源码契约），
+     * 两者语义不同，合并会让降频判据失效。
+     */
+    private const val ENDPOINT_WAIT_STEP_MS = 2_000L
     /** 已执行 reqId 去重集合容量（有界 LRU；4s 内的 in-flight 窗口远用不满 64 条）。 */
     private const val EXECUTED_LRU_CAPACITY = 64
 
@@ -133,7 +143,25 @@ class ControlPoller(
   private fun loop() {
     var backoff = IDLE_BACKOFF_MS
     val token = DeviceControlService.token(context)
+    // 🔴 2026-10-30 诊断包修复（「zorvAI 操控不了 DSH」的噪声侧根因）：端点未确认
+    // （port=0）时**不发请求、不记 error**。EngineEndpoint.port 在 binding 或
+    // generation<=0 时返回 0，于是 url=http://127.0.0.1:0，URL(...) 构造即抛
+    // MalformedURLException: Invalid URL: INVALID_PORT。旧实现从 app onCreate 后
+    // 每 2 秒刷一条 poll loop error（诊断包 dsh-day.log 实证：00:55:27→01:40:57 刷了
+    // 45 分钟、上千行），把真正的失败原因整段埋掉。端点未确认 = 引擎还没上报端口
+    // （本进程没 spawn 过它 / 刚 invalidate），安静等它发布即可——这正是
+    // EngineEndpoint 类注释「未确认的监听器不得发请求」的壳侧自律。
+    var endpointWaitLogged = false
     while (running.get()) {
+      if (EngineEndpoint.port == 0) {
+        if (!endpointWaitLogged) {
+          endpointWaitLogged = true
+          LogCollector.log(TAG, "control poll idle: engine endpoint not confirmed yet (port=0), waiting for the engine to report its port")
+        }
+        sleep(ENDPOINT_WAIT_STEP_MS)
+        continue
+      }
+      endpointWaitLogged = false
       try {
         val poll = post(
           "/api/android/ui/pending",

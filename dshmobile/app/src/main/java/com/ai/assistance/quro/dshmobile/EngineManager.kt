@@ -589,6 +589,22 @@ class EngineManager(private val context: Context, private val pickToken: String?
     }
   }
 
+  /**
+   * 快照刷新是否在飞（companion 级 CAS 的只读出口）。
+   *
+   * 为什么需要这个出口：`beginSnapshotTransaction()` 在**解压的整整一段**里都不落 journal
+   * （marker 直到解压完成后的 STAGED 相位才写盘，见 [refreshSnapshotInternal]）。于是
+   * 「刷新在飞」有约 45-60s 的窗口期，其间 `SnapshotTransaction.readMarker() == null`，
+   * 但世代所有权已被刷新流占着。启动流的让行判据若只看 journal，会把这整段误判成
+   * 「所有权被上一次流的收尾占用，毫秒级」，3 秒预算必然烧穿——2026-10-30 诊断包
+   * （dsh-diag-20261030-025158.zip）boot-fail.log 实证 4 条
+   * `engine-start-deferred-no-transaction-timeout`（transaction=absent），每一次都是
+   * 一次被静默丢弃的启动按压。本函数让「刷新在飞」成为可直读判据，消费方见
+   * [EngineStartFlow.deferEngineStartWhileSnapshotTransactionBusy] 与
+   * [decideNoTransactionRetry] 的 refreshInFlight 参数。
+   */
+  fun snapshotRefreshInFlight(): Boolean = snapshotRefreshing.get()
+
   private fun beginSnapshotTransaction(): Boolean = synchronized(EngineManager.transactionStateLock) {
     SnapshotTransaction.canBeginFactoryTransaction(snapshotRefreshing.get(), onlineUpdateActive.get()) &&
       snapshotRefreshing.compareAndSet(false, true)
