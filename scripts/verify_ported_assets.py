@@ -26,8 +26,19 @@ import sys
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ASSETS = os.path.join(ROOT, "app", "src", "main", "assets")
-MANIFEST = os.path.join(ASSETS, "PORTED.sha256")
+MANIFEST = os.path.join(ROOT, "app", "src", "main", "assets", "PORTED.sha256")
+
+
+def apk_entry_of(rel):
+    """仓库相对路径 → APK 内路径。
+
+    assets/... 原样；jniLibs/arm64-v8a/x.so → lib/arm64-v8a/x.so
+    """
+    marker = "app/src/main/"
+    inner = rel[len(marker):] if rel.startswith(marker) else rel
+    if inner.startswith("jniLibs/"):
+        return "lib/" + inner[len("jniLibs/"):]
+    return inner
 
 
 def parse_manifest():
@@ -64,7 +75,7 @@ def sha256_of(path):
 def verify_workspace(entries):
     ok = fail = 0
     for sha, local, inner in entries:
-        p = os.path.join(ASSETS, local.replace("/", os.sep))
+        p = os.path.join(ROOT, local.replace("/", os.sep))
         if not os.path.isfile(p):
             print("MISSING  %-38s  (源: %s)" % (local, inner))
             fail += 1
@@ -87,7 +98,7 @@ def verify_apk(entries, apk_path):
     with zipfile.ZipFile(apk_path) as z:
         names = set(z.namelist())
         for sha, local, _ in entries:
-            entry = "assets/" + local
+            entry = apk_entry_of(local)
             if entry not in names:
                 print("APK-MISSING %-34s" % entry)
                 fail += 1

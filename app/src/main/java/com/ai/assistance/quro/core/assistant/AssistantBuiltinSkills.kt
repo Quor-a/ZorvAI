@@ -188,6 +188,40 @@ object AssistantBuiltinSkills {
         },
 
         AssistantSkill(
+            id = "voice.wakeup-probe",
+            title = "语音唤醒引擎探测",
+            summary = "分层探测搬进来的小布语音引擎（库加载 / 前端处理 / 实例 / 版本）+ 唤醒模型在位情况",
+            category = AssistantCategory.DEVICE,
+            keywords = listOf("唤醒探测", "语音引擎", "唤醒词", "wakeup", "语音唤醒"),
+            external = true,
+        ) { req ->
+            val ctx = requireCtx()
+            val p = BreenoWakeup.probe(ctx)
+            val data = linkedMapOf<String, Any?>(
+                "level" to p.level.code,
+                "levelDesc" to p.level.desc,
+                "amplitude" to p.amplitude,
+                "handle" to p.handle,
+                "version" to p.version,
+                "missingModels" to p.missingModels.joinToString(","),
+                "usable" to p.usable,
+            )
+            if (p.usable) {
+                AssistantResult.ok(
+                    "voice.wakeup-probe",
+                    "引擎就绪：${p.version ?: "（无版本号）"}",
+                    data = data,
+                )
+            } else {
+                AssistantResult.fail(
+                    if (p.level == BreenoWakeup.Level.NOT_LOADED) AssistantCodes.UNSUPPORTED else AssistantCodes.SKILL_FAILED,
+                    p.error ?: p.level.desc,
+                    data = data,
+                )
+            }
+        },
+
+        AssistantSkill(
             id = "device.driving-mode",
             title = "驾驶模式",
             summary = "大字 + 语音优先的免手操作形态（对标小布 DrivingMainActivity / OCar）",
