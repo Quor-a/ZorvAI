@@ -113,7 +113,7 @@ class TerminalEnvironment(context: Context) {
         }
         File(filesDir, "tmp").mkdirs()
         // 终端用户空间目录（app 拥有）：登录时 bind 进 guest 的 /root/shared（2026-10-26 起，
-        // /root 归还 rootfs 内自带家；这里是 LANXIU 时代共享遗产的容身之处）。
+        // /root 归还 rootfs 内自带家；这里是宿主侧共享目录的容身之处）。
         File(filesDir, "proot_home").mkdirs()
         // 🔴 CA 证书 bundle：初始化阶段就生成（幂等）。v1.1.7 回归后 common.sh 无 patch_rootfs，
         // 但内置 rootfs 自带 ca-certificates.crt（tarball 实证 219KB），HTTPS 开箱即用；

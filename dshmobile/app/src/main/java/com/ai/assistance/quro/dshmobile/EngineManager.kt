@@ -1343,7 +1343,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
   }
 
   /**
-   * 终端 LANXIU rootfs 抢救（2026-10-30「终端环境坏了」）。
+   * 内置 Ubuntu rootfs 抢救（2026-10-30「终端环境坏了」）。
    *
    * 历史版本的 `SnapshotTransaction.swap` 对 `usr` 做整棵替换，会把终端 rootfs 所在的
    * `usr/var` 连同旧 usr 一起搬进 `.snapshot-previous/usr`，而 `finish()` 随后**删掉** previous

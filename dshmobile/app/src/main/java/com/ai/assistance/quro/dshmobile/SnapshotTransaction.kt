@@ -596,7 +596,7 @@ internal object SnapshotTransaction {
     // 🔴 2026-10-30 真机事故「zorvAI 终端环境坏了」根因修复。
     //
     // `usr` 在这条链上是**整棵替换**（move(live→previous) + move(staged→live)），而终端
-    // LANXIU rootfs 就住在 `usr/var/lib/proot-distro/installed-rootfs/ubuntu`
+    // 内置 Ubuntu rootfs 就住在 `usr/var/lib/proot-distro/installed-rootfs/ubuntu`
     // （`QuroLinuxEnv.rootfsPath`，2026-10-27 双 rootfs 合一后指到这里）；随包快照的 usr
     // 只发 `bin/etc/lib/libexec`，**没有 var**。不做保护的话，每次快照刷新都会把 `usr/var`
     // 连同整份 rootfs 搬进 `.snapshot-previous/usr`，而 `finish()` 会清掉 previous ⇒
@@ -1419,7 +1419,7 @@ internal object SnapshotTransaction {
    * 把 [from] 顶层里 [into] **没有**的条目搬进 [into]（同文件系统 rename：代价与条目数有关，
    * 与体积无关——终端 rootfs 那棵树几百 MB 也只是搬一个目录项）。
    *
-   * 唯一用途：`usr` 整棵替换（[swap]）之前，保住本机独有条目——终端 LANXIU rootfs 所在的
+   * 唯一用途：`usr` 整棵替换（[swap]）之前，保住本机独有条目——内置 Ubuntu rootfs 所在的
    * `var/`（`usr/var/lib/proot-distro/installed-rootfs/ubuntu`），历史装机可能还有 `local/`
    * `share/` 之类。快照自己发的 `bin/etc/lib/libexec` 一律以快照为准（同名条目直接跳过）。
    *
