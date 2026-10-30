@@ -1338,7 +1338,54 @@ class EngineManager(private val context: Context, private val pickToken: String?
    * bash 真坏时要流式解 xz）。
    */
   fun healShellEnvironmentOnForeground() {
+    rescueTerminalRootfs()
     healSnapshotShell()
+  }
+
+  /**
+   * 终端 LANXIU rootfs 抢救（2026-10-30「终端环境坏了」）。
+   *
+   * 历史版本的 `SnapshotTransaction.swap` 对 `usr` 做整棵替换，会把终端 rootfs 所在的
+   * `usr/var` 连同旧 usr 一起搬进 `.snapshot-previous/usr`，而 `finish()` 随后**删掉** previous
+   * ——已中招设备上 rootfs 就没了（包管理页「未就绪 / 未知发行版」）。
+   *
+   * 本函数覆盖**还来得及救**的两种残局（事务失败留下 previous/stage、或 finish 尚未清场）：
+   * 若 live 缺 rootfs 而残渣里有，原样搬回。搬不动只记日志，绝不阻塞启动。
+   * 已彻底删除的设备救不回来，只能走终端页重装——所以同一版本里 [SnapshotTransaction.swap]
+   * 的保留逻辑（`carryLiveOnlyTopLevel`）才是根治。
+   */
+  private fun rescueTerminalRootfs() {
+    try {
+      val rel = "lib/proot-distro/installed-rootfs/ubuntu"
+      val liveVar = File(usrDir, "var")
+      if (File(liveVar, rel).isDirectory) return
+      val candidates = listOf(
+        File(SnapshotTransaction.previousRoot(context.filesDir), "usr/var"),
+        File(SnapshotTransaction.stageRoot(context.filesDir), "usr/var"),
+      )
+      for (candidate in candidates) {
+        if (!File(candidate, rel).isDirectory) continue
+        val moved = runCatching {
+          if (!liveVar.exists()) {
+            SnapshotFs.move(candidate, liveVar)
+          } else {
+            val target = File(liveVar, "lib/proot-distro")
+            target.parentFile?.mkdirs()
+            SnapshotFs.move(File(candidate, "lib/proot-distro"), target)
+          }
+          File(liveVar, rel).isDirectory
+        }.getOrElse { e ->
+          Log.w(TAG, "rescue-terminal-rootfs: 从 ${candidate.absolutePath} 搬回失败", e)
+          false
+        }
+        if (moved) {
+          LogCollector.log(TAG, "rescue-terminal-rootfs: 终端 rootfs 已从 " + candidate.absolutePath + " 救回")
+          return
+        }
+      }
+    } catch (t: Throwable) {
+      Log.w(TAG, "rescue-terminal-rootfs failed (non-fatal)", t)
+    }
   }
 
   private fun healSnapshotShell() {
@@ -1856,6 +1903,9 @@ class EngineManager(private val context: Context, private val pickToken: String?
       // ET_EXEC 符号链接（libbash.so），引擎 TERMUX_EXEC force 下 linker64 拒收
       // ⇒ bash 工具恒报 "unexpected e_type: 2"。幂等，每次启动前跑；异常内部消化。
       preludeProbe.step("heal-snapshot-shell") { healSnapshotShell() }
+      // 2026-10-30「终端环境坏了」：历史版本换树时把 `usr/var`（终端 rootfs）搬进 previous。
+      // 残渣还在就搬回来（省掉用户重下 200MB + 已装包全丢）；根治在 swap 的保留逻辑。
+      preludeProbe.step("rescue-terminal-rootfs") { rescueTerminalRootfs() }
       // 0.13.1 W3/W4：共享目录 README 每次启动刷新（此前只在迁移路径调用，正常启动不落盘）。
       // 注意：本行**只覆盖「引擎真的启动」这一条路径**——startEngine 有两个早退会整段跳过它
       // （快照刷新中 / 引擎已在跑）。故 provisionPublicRepo 另由 MainActivity 的 onCreate/onResume
