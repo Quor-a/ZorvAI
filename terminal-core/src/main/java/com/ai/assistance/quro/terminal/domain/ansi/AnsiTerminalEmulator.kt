@@ -460,8 +460,48 @@ class AnsiTerminalEmulator(
                     25 -> cursorVisible = enable // DECTCEM - 光标可见性
                     1049 -> toggleAltScreen(enable) // 备用屏幕缓冲区
                     2004 -> {} // Bracketed paste mode
+                    // 🔴 2026-10-30（对照 AOSP Terminal 的 touch→mouse 实现补齐）：xterm 鼠标上报模式。
+                    // 没有任何一个移动端终端能靠硬件鼠标，所以这些模式原本没人关心；但 vim/htop/less
+                    // 打开鼠标后，**两指滑动要变成滚轮、长按拖动要变成鼠标拖拽**，全依赖这里记住
+                    // 应用到底要不要鼠标事件、以及要哪种编码。
+                    //   1000 = 只上报按下/抬起；1002 = 再加上拖动；1003 = 连纯移动也上报
+                    1000, 1002, 1003 -> mouseTracking = if (enable) param else 0
+                    // 1006 = SGR 编码（现代默认）；1005 = UTF-8 编码，这里同样按 SGR 发（应用都认）
+                    1005, 1006 -> mouseSgr = enable
                 }
             }
+        }
+    }
+
+    /** 应用是否要鼠标事件：0=不要，1000/1002/1003=对应上报模式。 */
+    var mouseTracking: Int = 0
+        private set
+
+    /** 鼠标坐标编码是否用 SGR（`ESC [ < b ; x ; y M`）；否则用经典 `ESC [ M` + 三字节。 */
+    var mouseSgr: Boolean = false
+        private set
+
+    /** 当前是否处于备用屏幕（全屏 TUI 运行中）。滚轮/鼠标只在真正需要时才抢手势。 */
+    fun isAlternateScreen(): Boolean = isAltScreenActive
+
+    /**
+     * 编码一次鼠标事件（含滚轮）。
+     *
+     * @param button 0=左键；32=拖动中的左键移动；64/65=滚轮上/下（xterm 约定）
+     * @param col 列（0 基）
+     * @param row 行（0 基）
+     * @param press 按下/滚轮=M，抬起（释放）=m（仅 SGR 有区分）
+     */
+    fun encodeMouse(button: Int, col: Int, row: Int, press: Boolean = true): String {
+        val x = col.coerceAtLeast(0) + 1
+        val y = row.coerceAtLeast(0) + 1
+        return if (mouseSgr) {
+            "\u001b[<" + button + ";" + x + ";" + y + (if (press) "M" else "m")
+        } else {
+            val b = (32 + button).coerceIn(32, 255).toChar()
+            val cx = (32 + x).coerceIn(32, 255).toChar()
+            val cy = (32 + y).coerceIn(32, 255).toChar()
+            "\u001b[M" + b + cx + cy
         }
     }
     
