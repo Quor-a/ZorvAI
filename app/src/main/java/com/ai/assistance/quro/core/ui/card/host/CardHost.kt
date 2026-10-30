@@ -180,12 +180,18 @@ fun CardSurface(
     }
 }
 
-/** 未注册类型的降级渲染（Markdown 气泡）。 */
+/**
+ * 未注册类型的降级渲染。
+ * 注意：对话框路径已在 ChatScreen.SelfCardMount 预过滤（白名单→CardSurface，
+ * 组件库类型→富卡片渲染层），能走到这里说明两边都不认识。用中性小灰字提示，
+ * 绝不把「[不支持的卡片类型：X]」这种协议报错样式吐进对话框（2026-10-30 用户截图实证）。
+ */
 @Composable
 private fun MarkdownFallback(spec: CardSpec, modifier: Modifier) {
     androidx.compose.material3.Text(
-        text = "[不支持的卡片类型：${spec.type}]",
+        text = "该卡片类型暂不支持（${spec.type}）",
         modifier = modifier,
         color = Color.Gray,
+        style = MaterialTheme.typography.bodySmall,
     )
 }

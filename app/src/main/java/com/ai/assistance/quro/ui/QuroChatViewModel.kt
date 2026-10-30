@@ -2920,6 +2920,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
                 "  · `button_group` 按钮组 → data.kind=\"form\"、formType=\"button_group\"、buttons:[{label:\"按钮文字\",action:{type:\"callback\",name:\"回传命令\"}}]（用户点按钮会把 name 回传给你）\n" +
                 "  · `status` 状态卡 → data.kind=\"status\"、statusType=\"progress\"|\"error\"、text、progress(0~1)、retryable\n" +
                 "  · `skeleton` 骨架占位 → 一般不用（流式内部状态）\n" +
+                "  · 🔴 围栏 type 只能用上述 7 种白名单；weather/keyvalue/todo/kanban/timeline/pie 等组件库卡片属于 `ui_card`/`ui_widget` 富卡片通道，**严禁写进 quro-card 围栏**（端上认不出，卡片直接不渲染）\n" +
                 "- **custom 卡设计规范（AI 自由设计，无内置模板）**：`{\"type\":\"custom\",\"layout\":<节点树>}`，客户端递归渲染布局树并带入场动效（数字滚动/环形扫角/进度条生长）。节点类型：\n" +
                 "  · `card`/`box` 容器：props={bg:\"#hex\" 或 gradient:[\"#hex\",...]、angle:135、radius:22、padding:18、gap:10}，children 竖排\n" +
                 "  · `column` 竖排 / `row` 横排（子节点 \"weight\":1 按比例分宽）\n" +

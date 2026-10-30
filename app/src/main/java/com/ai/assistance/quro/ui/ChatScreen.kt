@@ -57,6 +57,7 @@ import com.ai.assistance.quro.ui.QuroShareBridge
 import com.ai.assistance.quro.core.ui.card.CardModule
 import com.ai.assistance.quro.core.ui.card.host.ActionBus
 import com.ai.assistance.quro.core.ui.card.host.CardSurface
+import com.ai.assistance.quro.core.ui.card.registry.CardRegistry
 import com.ai.assistance.quro.core.ui.card.spec.CardSpec
 import com.ai.assistance.quro.core.ui.card.spec.parseCardSpec
 // ZorvAI 生成式 UI（:genui 模块）：AI 自写 JSX/HTML → 对话框内 WebView 渲染
@@ -3470,7 +3471,7 @@ private fun MessageRow(
                     if (selfCardBlocks.isNotEmpty()) {
                         selfCardBlocks.forEach { spec ->
                             Spacer(Modifier.height(6.dp))
-                            CardSurface(spec = spec, modifier = Modifier.fillMaxWidth())
+                            SelfCardMount(spec = spec, onCommand = onCommand, modifier = Modifier.fillMaxWidth())
                         }
                     }
                     // 操作按钮（复制/追问/分享/删除/重试）—— 与气泡消息一致的动作栏
@@ -4236,7 +4237,7 @@ private fun MessageRow(
             for (s in selfCardBlocks) {
                 key(s.hashCode()) {
                     Spacer(Modifier.height(6.dp))
-                    CardSurface(spec = s, modifier = Modifier.fillMaxWidth())
+                    SelfCardMount(spec = s, onCommand = onCommand, modifier = Modifier.fillMaxWidth())
                 }
             }
         }
@@ -7113,6 +7114,31 @@ private fun extractSelfCardSpecs(text: String): List<CardSpec> {
         out.add(spec)
     }
     return out
+}
+
+/**
+ * 自研卡片挂载点（feat_self_card 唯一渲染入口，两处 selfCardBlocks 渲染都走这里）：
+ *
+ *  1) type 命中 [CardRegistry] 白名单（7 种）→ [CardSurface]（Canvas 自绘）；
+ *  2) 白名单外但组件库认识（weather/keyvalue/todo/pie…）→ 路由到富卡片渲染层
+ *     （parseComponentSpec → CardSdk.parseObj → QuroChatCardView）。
+ *     修复 2026-10-30 实测 bug：AI 把 ui_card 名册里的类型误写进 ```quro-card 围栏，
+ *     旧路径直接撞 CardRegistry 未注册，MarkdownFallback 把
+ *     「[不支持的卡片类型： weather]」协议原文吐进对话框（用户截图实证「可视化小卡完全坏」）；
+ *  3) 两边都认不出 → 静默跳过（围栏已从正文剔除，绝不吐协议原文/报错样式进对话框）。
+ */
+@Composable
+private fun SelfCardMount(spec: CardSpec, onCommand: (String) -> Unit, modifier: Modifier = Modifier) {
+    if (CardRegistry.isWhitelisted(spec.type)) {
+        CardSurface(spec = spec, modifier = modifier)
+        return
+    }
+    val card = remember(spec.id) {
+        runCatching { parseComponentSpec(spec.rawJson) }.getOrNull()
+    }
+    if (card != null) {
+        QuroChatCardView(card, onCommand = onCommand, modifier = modifier)
+    }
 }
 
 /**
