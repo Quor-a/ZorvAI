@@ -1,0 +1,10 @@
+syntax = "proto3";
+package com.oplus.pantaconnect.connection;
+
+option java_multiple_files = true;
+
+message DeviceConnectionResult {
+  string address = 1;
+  string ip = 2;
+  int64 connectionId = 3;
+}

@@ -1,0 +1,179 @@
+syntax = "proto2";
+
+package pantanal.content;
+
+option java_multiple_files = true;
+
+message CardConfigInfoListProto{
+
+  repeated CardConfigInfoProto list = 1;
+
+  optional int32 cardConfigResultStatus = 2[default = 0];
+
+  message CardConfigInfoProto {
+    // 卡片组Id
+    required int32     groupId       = 1;
+    // 卡片组标题
+    required string    groupTitle    = 2;
+    // 卡片组图标uri。
+    /**
+     * 如果是应用内部图标资源的id，以前缀@进行区分，如@drawable_widget。使用方法：
+     * val remoteContext = context.createPackageContext(packageName, Context.CONTEXT_INCLUDE_CODE or Context.CONTEXT_IGNORE_SECURITY)
+     * val id = remoteContext.resources.getIdentifier(name.replace("@", ""), "drawable", packageName)
+     * remoteContext.getDrawable(id)
+     */
+    required string    groupIcon     = 3;
+    // 卡片类型。每种卡片具有唯一的一个type
+    required int32     type          = 4;
+    // 卡片名称
+    required string    name          = 5;
+    // 卡片描述
+    required string    desc          = 6;
+    // 卡片预览图uri。如果是应用内部图片资源的id，以前缀@进行区分，如@drawable_review。使用方法同groupIcon。
+    required string    preview       = 7;
+    // 卡片尺寸。
+    /**
+     * TWO_PLUS_TWO = 1
+     * TWO_PLUS_FOUR = 2
+     * FOUR_PLUS_FOUR = 3
+     * N_PLUS_FOUR = 4
+     */
+    required SIZE      size          = 8;
+    // 该卡片在卡片组里的顺序
+    optional int32     orderInGroup  = 9 [default = 0];
+    // 卡片所在业务方包名
+    required string    packageName   = 10;
+    // 卡片用于和卡片服务进行通信的ContentProvider name
+    required string    componentName = 11;
+    // 卡片种类
+    /**
+     * INSTANT = 1 快应用卡片
+     * APP = 2 普通应用卡片
+     * CONTENT_OPERATION = 3 内容运营卡片
+     * SERVICE = 4 动态建议卡片
+     */
+    required int32     category      = 12;
+    // 卡片是否支持拉伸。
+    required bool      resizable     = 13;
+    // 卡片运营图标
+    /**
+     * NONE = 1 无
+     * NEW = 2  新卡片
+     * HOT = 3  热门卡片
+     */
+    required OPERATION operatingIcon = 14;
+    // 卡片的设置页action
+    required string    settingUrl    = 15;
+    // 卡片可显示的区域
+    /**
+     * ASSISTANT_LAUNCHER = 0 在负一屏和桌面显示
+     * ASSISTANT_ONLY = 1     只在负一屏显示
+     * LAUNCHER_ONLY = 2      只在桌面显示
+     */
+    optional int32     displayArea   = 16 [default = 0];
+    // 卡片的最小宽度
+    optional int32     minWidth      = 17 [default = 0];
+    // 卡片的最小高度
+    optional int32     minHeight     = 18 [default = 0];
+    // 添加卡片时的加载前景图。业务方本地配置，以@作为前缀。
+    optional string    loadingIcon   = 19 [default = ""];
+    // 添加卡片时的加载背景图。业务方本地配置，以@作为前缀。
+    optional string    loadingBgIcon   = 20 [default = ""];
+    // 预留Flag
+    /**
+      卡片不在负一屏卡片商店显示
+      FLAG_DISABLE_ASSISTANT_CARD_SHOP = 0x00000001
+
+      卡片不在桌面卡片商店显示
+      FLAG_DISABLE_LAUNCHER_CARD_SHOP = 0x00000002
+
+      卡片不允许在负一屏拖拽和换位
+      FLAG_DISABLE_ASSISTANT_DRAG = 0x00000004
+
+      卡片不允许在负一屏编辑，包括删除和进入编辑状态
+      FLAG_DISABLE_ASSISTANT_EDIT = 0x00000008
+     */
+    optional int32     reservedFlag  = 21 [default = 0];
+    // 卡片是否默认订阅
+    optional int32     defaultSubscribed  = 22 [default = 0];
+    // 卡片组在卡片商店的顺序
+    optional int32     groupOrder = 23 [default = -1];
+    // 宽屏项目上卡片的预览图
+    optional string    previewSw480 = 24 [default = ""];
+    // 可被泛在卡片推荐的id
+    required string    serviceId    = 25 [default = ""];
+    // 蜻蜓外屏卡片类型
+    optional int32 dragonFlyType = 51 [default = 0];
+    // 是否为蜻蜓外屏隐私卡
+    optional bool dragonFlySecure = 52 [default = false];
+    // 蜻蜓卡对应的Service
+    optional string dragonFlyService = 53 [default = ""];
+    // 骨架图亮色
+    optional string skeletonPicPath = 54 [default = ""];
+    // 骨架图暗色
+    optional string skeletonDarkPicPath = 55 [default = ""];
+    // 加载失败兜底图
+    optional string loadFailPicPath = 56 [default = ""];
+    // 加载失败deepLink
+    optional string loadFailDp = 57 [default = ""];
+    // 加载过程中左上角是否展示标题和图标
+    optional int32 showTitle = 58 [default = 0];
+    // 副屏使用字段，迷你app使用的Icon
+    optional string miniAppIcon = 59 [default = ""];
+    // 副屏使用字段，表示是否是暗色
+    optional bool isDarkStyle = 60 [default = false];
+    // 副屏使用字段，是否在锁屏情况下显示
+    required bool showWhenLocked = 61 [default = false];
+    // 快应用卡加载需要用到的uri
+    optional string instantCardUrl = 62 [default = ""];
+    // 是否支持高速通道，必须与卡片服务那边字段数字对应，不能顺延加1
+    optional bool  supportSuperChannel   = 63 [default = false];
+    // 卡片标识字段，主题商店使用，表示主题速览卡,必须与卡片服务那边字段数字对应，不能顺延加1
+    optional string  identification  = 64 [default = ""];
+    // 卡片异常状态数据对象，可空（正常上架状态，此对象为空）
+    optional CardMaintainProto cardMaintain = 65;
+    // 材质预览图
+    optional string  materialPreview = 66 [default = ""];
+    // 订阅卡还是推荐卡,或者都支持。("1"推荐："2"：订阅，"1,2" 都支持:中间用英文逗号分隔)
+    optional string  distributeType = 67 [default = ""];
+    // 卡片关联apk的包名，入口根据此字段以及原有的groupId对卡片进行分组，在卡片中心展示
+    optional string  bizPkgName = 68 [default = ""];
+    // 扩展信息，入口自行解析使用
+    optional string  extras = 69 [default = ""];
+    enum               SIZE {
+      TWO_PLUS_TWO   = 1;
+      TWO_PLUS_FOUR  = 2;
+      FOUR_PLUS_FOUR = 3;
+      N_PLUS_FOUR = 4;
+      ONE_PLUS_TWO = 5;
+      WIDGET_ONE_PLUS_ONE = 6;
+      NOTIFICATION_SM = 7;
+      NOTIFICATION_MD = 8;
+      NOTIFICATION_LG = 9;
+      ONE_PLUS_ONE = 10;
+    }
+
+    enum               CATEGORY {
+      INSTANT   = 1;
+      APP  = 2;
+      CONTENT_OPERATION = 3;
+      SERVICE = 4;
+      SEEDING = 100;
+    }
+
+    enum               OPERATION {
+      NONE = 1;
+      NEW  = 2;
+      HOT  = 3;
+      UNAVAILABLE = 4;
+    }
+
+  }
+     message CardMaintainProto {
+        // 交互样式，1-蒙层；2-弹框
+        optional string style = 1 [default = ""];
+        // 交互描述文案
+        optional string description = 2 [default = ""];
+     }
+
+}

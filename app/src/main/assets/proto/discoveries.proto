@@ -1,0 +1,117 @@
+syntax = "proto3";
+package com.oplus.pantaconnect.discovery;
+
+option java_multiple_files = true;
+
+message DiscoveryEvent {
+  EventType type = 1;
+  bytes data = 2;
+
+  enum EventType {
+    DEVICE_FOUND = 0;
+  }
+}
+
+enum InternalScanMode {
+  SCAN_MODE_LOW_POWER = 0;
+  SCAN_MODE_BALANCED = 1;
+  SCAN_MODE_LOW_LATENCY = 2;
+}
+
+enum InternalAdvertiseMode {
+  LOW_POWER = 0;
+  BALANCED = 1;
+  LOW_LATENCY = 2;
+}
+
+enum InternalDiscoveryStrategy {
+  BLE = 0;
+  NSD = 1;
+  BASED_CONNECT = 2;
+  RTC = 3;
+  AUTO = 4;
+}
+
+enum InternalAdvertiseType {
+  DISCOVERY_MODEL_ID = 0;
+  FAST_PAIR_MODEL_ID = 1;
+  FAST_PAIR_ACCOUNT = 2;
+  FAST_PAIR_DEVICE_ID = 3;
+}
+
+enum InternalReconnectType {
+  DIALOG_ALL = 0;
+  DIALOG_RECENT = 1;
+  SILENT_ALL = 2;
+  SILENT_RECENT = 3;
+  DIALOG_CUSTOM = 4;
+  SILENT_CUSTOM = 5;
+}
+
+message DeviceAdvertisingParams {
+  string clientId = 1;
+  int64 durationMillis = 2;
+  string modelId = 3;
+  int32 deviceType = 4;
+  int32 connectType = 5;
+  InternalAdvertiseType advertiseType = 6;
+  bool isHide = 7;
+  bool isGattSlow = 8;
+  InternalReconnectType reconnectType = 9;
+  InternalAdvertiseMode advertiseMode = 10;
+  InternalDiscoveryStrategy discoveryStrategy = 11;
+  bool isOnlyPairConnect = 12;
+  repeated string reconnectDeviceId = 13;
+  string pid = 14;
+}
+
+message DeviceDiscoveryParams {
+  string clientId = 1;
+  InternalDiscoveryStrategy discoveryStrategy = 2;
+  repeated int32 deviceType = 3;
+  InternalScanMode scanMode = 4;
+  int64 durationMillis = 5;
+}
+
+message DiscoveredDeviceItem {
+  int32 deviceType = 1;
+  string protocolDeviceId = 2;
+  string displayName = 3;
+  string tempId = 4;
+  string modelId = 5;
+}
+
+enum InternalDiscoverableDeviceType {
+  SAME_ACCOUNT_DEVICE = 0;
+  ALL_DEVICE = 1;
+}
+
+enum InternalDiscoverableServiceUserType {
+  PRIVATE = 0;
+  PUBLIC = 1;
+}
+
+message ServiceAdvertisingParams {
+  string serviceName = 1;
+  InternalDiscoveryStrategy discoveryStrategy = 2;
+  InternalDiscoverableDeviceType discoverableDeviceType = 3;
+  InternalDiscoverableServiceUserType discoverableServiceUserType = 4;
+}
+
+enum InternalServiceFilter {
+  SAME_SERVICE = 0;
+  ANY_SERVICE = 1;
+}
+
+message ServiceDiscoveryParams {
+  string serviceName = 1;
+  InternalDiscoveryStrategy discoveryStrategy = 2;
+  InternalServiceFilter serviceFilter = 3;
+}
+
+message DiscoveredServiceItem {
+  string tempId = 1;
+  string hostAddress = 2;
+  string displayName = 3;
+  string hostName = 4;
+}

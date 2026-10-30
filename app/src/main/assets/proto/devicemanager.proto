@@ -1,0 +1,62 @@
+syntax = "proto3";
+package com.oplus.pantaconnect.devicemgr;
+
+option java_multiple_files = true;
+
+message LocalDeviceInfo {
+  string deviceType = 1;
+  MetaData metaData = 2;
+  Spec spec = 3;
+  Status status = 4;
+}
+
+message MetaData {
+  string deviceId = 1;
+  string protocolDeviceId = 2;
+  string deviceModel = 3;
+}
+
+message Spec {
+  string deviceName = 1;
+  string resolution = 2;
+  string screenDpi = 3;
+  string cpuName = 4;
+  string ramSpec = 5;
+  string romSpec = 6;
+  string batteryCapacity = 7;
+  string btMac = 8;
+  string androidVersion = 9;
+  string osVersion = 10;
+  string brand = 11;
+  string region = 12;
+  string oaid = 13;
+  string marketName = 14;
+}
+
+message Status {
+  string connectionToMajor = 1;
+  string btStatus = 2;
+  string networkType = 3;
+  string locationStatus = 4;
+  string memAvail = 5;
+  string memTotal = 6;
+  string storageAvail = 7;
+  string darkMode = 8;
+  string earPhone = 9;
+  string longitude = 10;
+  string latitude = 11;
+  string locationCoordinateType = 12;
+}
+
+message LocalResourceList {
+  repeated LocalResourceInfo resourceInfos = 1;
+}
+
+message LocalResourceInfo {
+  string deviceId = 1;
+  string version = 2;
+  string kind = 3;
+  map<string, string> metaData = 4;
+  map<string, string> spec = 5;
+  map<string, string> status = 6;
+}

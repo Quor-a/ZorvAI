@@ -1,0 +1,148 @@
+syntax = "proto3";
+package com.oplus.pantaconnect.agents;
+
+option java_multiple_files = true;
+
+message InternalAgentClient {
+  string agentId = 1;
+  string pkg = 2;
+  int32 pid = 3;
+  string appName = 4;
+  string channelName = 5;
+  Role role = 6;
+  int64 connectionId = 7;
+}
+
+enum Role {
+  Provider = 0;
+  Seeker = 1;
+}
+
+message AgentEvent {
+  EventType type = 1;
+  InternalAgentClient client = 2;
+  string displayName = 3;
+  ExtensionArgs extension = 4;
+  InternalPayloadBuffer payload = 5;
+  int32 errorCode = 6;
+
+  enum EventType {
+    AGENT_FOUND = 0;
+    AGENT_CONNECTED = 1;
+    AGENT_DISCONNECTED = 2;
+    PAYLOAD_RECEIVE = 3;
+    PAYLOAD_UPDATE = 4;
+    PAYLOAD_REQUEST = 5;
+    EXTENSION_EVENT = 6;
+    AGENT_LOST = 7;
+    DISPLAY_DEVICES_CHANGE = 8;
+  }
+}
+
+enum StrategyType {
+  BLE = 0;
+  NSD = 1;
+  BASED_CONNECT = 2;
+  RTC = 3;
+  AUTO = 4;
+}
+
+enum ConnectScheduleStrategyType {
+    PREEMPT = 0;
+    FIFO = 1;
+    PRIORITY = 2;
+}
+
+enum ConnectType {
+  GATT = 0;
+  SPP = 1;
+  SPP_INSECURE = 2;
+  P2P = 3;
+  WLAN = 4;
+  USB = 5;
+  RTC_CONNECT = 6;
+  NONE = 7;
+  NETWORK_SETUP = 8;
+  TV_WLAN_P2P = 9;
+}
+
+enum InternalPayloadType {
+  BYTES = 0;
+  STREAM = 1;
+  FILE = 2;
+}
+
+enum InternalDiscoverableDeviceLevel {
+  SAME_ACCOUNT_DEVICE = 0;
+  ALL_DEVICE = 1;
+}
+
+enum OpenConnectionMode {
+  CONNECT_AGENT = 0;
+  PAIR_ONLY = 1;
+  CONNECT_CHANNEL_ONLY = 2;
+}
+
+enum InternalPairAction {
+    ACCEPT = 0;
+    REJECT = 1;
+    PIN_AUTH = 2;
+    CUSTOMIZE_AUTH = 3;
+}
+
+message WakeupParams {
+  int32 componentType = 1;
+  string pkg = 2;
+  string action = 3;
+}
+
+message ExtensionArgs {
+  string type = 1;
+  bytes args = 2;
+}
+
+message AdvertisingParams {
+  InternalAgentClient client = 1;
+  StrategyType strategy = 2;
+  ExtensionArgs extension = 3;
+  InternalDiscoverableDeviceLevel discoverableDeviceLevel = 4;
+}
+
+message DiscoveryParams {
+  InternalAgentClient client = 1;
+  StrategyType strategy = 2;
+  ExtensionArgs extension = 3;
+}
+
+message ConnectParams {
+  OpenConnectionMode openConnectionMode = 1;
+  InternalPairAction pairAction = 2;
+  InternalAgentClient client = 3;
+  ConnectType connectType = 4;
+  ConnectScheduleStrategyType scheduleType = 5;
+  WakeupParams wakeup = 6;
+  bytes extras = 7;
+  ExtensionArgs extension = 8;
+}
+
+message AuthenticationParams {
+  InternalAgentClient client = 1;
+  bool isAgree = 2;
+}
+
+message InternalPayloadBuffer {
+  InternalAgentClient client = 1;
+  InternalPayloadType type = 2;
+  bytes data = 3;
+  int32 id = 4;
+  int64 totalLength = 5;
+  int64 transferredLength = 6;
+  TransferStatus status = 7;
+
+  enum TransferStatus {
+    SUCCESS = 0;
+    FAILURE = 1;
+    CANCELED = 2;
+    IN_PROGRESS = 3;
+  }
+}

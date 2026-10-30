@@ -1,0 +1,12 @@
+syntax = "proto2";
+
+package com.oplus.seedling.datachannelserver.proto;
+
+option java_multiple_files = true;
+
+message SuperChannelDataProto {
+  required int32 cardId = 1;
+  required bytes data = 2;
+  optional int32 compress = 3;
+  required bool forceUpdate = 8;
+}

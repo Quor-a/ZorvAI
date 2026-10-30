@@ -38,6 +38,12 @@ object BackgroundTaskRelay {
     const val EXTRA_MESSAGE = "message"
     const val EXTRA_SKILL_ID = "skill_id"
     const val EXTRA_RESULT = "result"
+
+    /**
+     * 严格按 proto `SealedResult{resultCode,data,errorCode,message}` 序列化的回执。
+     * 字段名与 `assets/proto/results.proto` 一致，外部调用方可直接按协议解析。
+     */
+    const val EXTRA_SEALED_RESULT = "sealed_result"
     const val EXTRA_TARGET_PACKAGE = "target_package"
 
     private const val DEDUP_WINDOW_MS = 60_000L
@@ -133,6 +139,7 @@ object BackgroundTaskRelay {
                 putExtra(EXTRA_MESSAGE, r.message)
                 putExtra(EXTRA_SKILL_ID, r.skillId)
                 putExtra(EXTRA_RESULT, r.wire())
+                putExtra(EXTRA_SEALED_RESULT, r.sealedResultJson())
             }
             app.sendBroadcast(i)
             QuroDiag.log(TAG, "receipt rid=$rid ${r.wire()}")

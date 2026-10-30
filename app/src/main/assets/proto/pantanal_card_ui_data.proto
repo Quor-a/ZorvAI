@@ -1,0 +1,18 @@
+syntax = "proto2";
+
+package pantanal.app;
+
+option java_multiple_files = true;
+
+message UIDataProto {
+  required int32 cardId   = 1;
+  required bytes data = 2;
+  map<string, int32> idMaps = 3;
+  optional string name = 4;
+  optional int64 version = 5;
+  optional int32 themeId = 6;
+  optional bytes value = 7;
+  optional bool forceChangeCardUI = 8;
+  optional string layoutName = 10;
+  optional string extraMsg = 11;
+}

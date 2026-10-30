@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -90,12 +92,17 @@ fun TerminalFailureOverlay(
                 .border(1.dp, Color(0xFF2A3444), RoundedCornerShape(16.dp))
                 .padding(18.dp),
         ) {
-            Text(
-                text = failure.title,
-                color = Color(0xFFF2F5F9),
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // 出错抖动动效：字节级搬自小布 assets/lottie/ca_ui_common_shake.json
+                TerminalErrorShake(Modifier.size(40.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = failure.title,
+                    color = Color(0xFFF2F5F9),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
             Spacer(Modifier.height(8.dp))
             // 稳定错误码：排障时用户截图即可定位（与 boot-fail 的 stage= 同思路）
             Text(
@@ -178,4 +185,31 @@ private fun TerminalActionButton(
             fontWeight = if (primary) FontWeight.SemiBold else FontWeight.Normal,
         )
     }
+}
+
+/**
+ * 出错抖动动效 —— 直接引用 OPPO 小布包内的 `assets/lottie/ca_ui_common_shake.json`
+ * （字节级搬到本仓 `app/src/main/assets/lottie/breeno_shake.json`，8,123 B）。
+ *
+ * 只播一次（不循环）：抖动是"刚刚出事了"的一次性提示，循环抖会让人焦虑。
+ * 资源缺失 / 解析失败时 LottieAnimation 不画任何东西，失败卡本身照常显示 —— 不允许因为一个动效白屏。
+ */
+@androidx.compose.runtime.Composable
+private fun TerminalErrorShake(modifier: Modifier = Modifier) {
+    // 不用 `by` 委托：本文件没有 androidx.compose.runtime.getValue 导入，
+    // 显式取 .value 少一个隐式依赖，也不会和其他文件的重载打架。
+    val comp = com.airbnb.lottie.compose
+        .rememberLottieComposition(com.airbnb.lottie.compose.LottieCompositionSpec.Asset("lottie/breeno_shake.json"))
+        .value
+    val state = com.airbnb.lottie.compose.animateLottieCompositionAsState(
+        composition = comp,
+        isPlaying = comp != null,
+        iterations = 1,
+    )
+    com.airbnb.lottie.compose.LottieAnimation(
+        composition = comp,
+        progress = { state.value },
+        modifier = modifier,
+        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+    )
 }
