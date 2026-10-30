@@ -44,9 +44,15 @@ object AssistantDispatcher {
     /**
      * 同步语义的分发（协程内调用）。
      *
-     * 路由顺序：显式技能调用 → 关键词命中 → 交给 AI。
+     * 🔴 第一步永远是**闸门**：助手服务关了 / 该来源对应的通道关了，直接返回拒绝结果，
+     * 绝不往下走到技能执行或 AI 投递。这是「关闭后任何情况下不允许启动」的唯一落点。
+     *
+     * 路由顺序：闸门 → 显式技能调用 → 关键词命中 → 交给 AI。
      */
     suspend fun dispatch(ctx: Context, req: AssistantRequest): AssistantResult {
+        val denied = gateFor(ctx, req.source)
+        if (denied != null) return denied
+
         val text = req.text.trim()
         if (text.isEmpty() && req.raw.isBlank()) {
             return AssistantResult.fail(AssistantCodes.NO_TEXT, "没有收到任何文本")
@@ -130,5 +136,21 @@ object AssistantDispatcher {
         val m = LinkedHashMap(base)
         pairs.forEach { (k, v) -> if (v.isNotBlank() && !m.containsKey(k)) m[k] = v }
         return m
+    }
+
+    /**
+     * 来源 → 需要检查的通道。
+     *
+     * `PLAZA` 不属于任何唤醒通道（是用户在本应用里自己点），只受总开关约束；
+     * 其余来源一一对应设置页里的开关，关掉哪个就只有哪个失效。
+     */
+    private fun gateFor(ctx: Context, source: AssistantSource): AssistantResult? = when (source) {
+        AssistantSource.PLAZA -> AssistantServiceState.gateServiceOnly(ctx)
+        AssistantSource.DIRECTIVE -> AssistantServiceState.gate(ctx, AssistantChannel.DIRECTIVE)
+        AssistantSource.SHARE -> AssistantServiceState.gate(ctx, AssistantChannel.SHARE)
+        AssistantSource.TILE -> AssistantServiceState.gate(ctx, AssistantChannel.TILE)
+        AssistantSource.VOICE -> AssistantServiceState.gate(ctx, AssistantChannel.VOICE_WAKEWORD)
+        AssistantSource.AI -> AssistantServiceState.gate(ctx, AssistantChannel.AI_TOOL)
+        AssistantSource.RELAY -> AssistantServiceState.gate(ctx, AssistantChannel.RELAY)
     }
 }

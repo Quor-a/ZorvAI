@@ -127,6 +127,7 @@ fun QuroToolCenterScreen(
                     "harness" -> "Agent 工作台"
                     "plugins" -> stringResource(R.string.qk_02779)
                     "assistant_skills" -> "能力广场"
+                    "assistant_settings" -> "助手设置"
                     else -> stringResource(R.string.qk_02772)
                 },
                 style = MaterialTheme.typography.titleLarge,
@@ -169,6 +170,13 @@ fun QuroToolCenterScreen(
                     .onFailure { Toast.makeText(context, "无法打开能力广场：${it.message}", Toast.LENGTH_LONG).show() }
                 selected = null
             }
+            "assistant_settings" -> {
+                val intent = Intent(context, com.ai.assistance.quro.activity.AssistantSettingsActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { context.startActivity(intent) }
+                    .onFailure { Toast.makeText(context, "无法打开助手设置：${it.message}", Toast.LENGTH_LONG).show() }
+                selected = null
+            }
         }
     }
 }
@@ -196,6 +204,8 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         Triple("plugins", stringResource(R.string.qk_02779), stringResource(R.string.qk_02794)),
         // 「能力广场」：对标小布的一级技能入口。此前所有能力都藏在 AI 背后，用户不知道能问什么。
         Triple("assistant_skills", "能力广场", "看 ZorvAI 会什么：可搜、可跑、可停"),
+        // 助手设置：对标小布设置页（服务总开关 / 唤醒设置 / 播报设置 / 个性化）
+        Triple("assistant_settings", "助手设置", "服务总开关 · 唤醒通道 · 播报场景 · 锁屏技能"),
     )
     LazyColumn(
         Modifier.fillMaxSize().padding(16.dp),

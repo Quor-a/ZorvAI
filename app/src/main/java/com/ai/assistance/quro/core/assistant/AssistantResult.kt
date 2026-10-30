@@ -28,6 +28,10 @@ object AssistantCodes {
     const val UNSUPPORTED = "unsupported"
     const val RATE_LIMITED = "rate-limited"
 
+    // 服务面开关（对标小布「小布助手服务」总开关）
+    const val SERVICE_DISABLED = "assistant-service-disabled"
+    const val CHANNEL_DISABLED = "assistant-channel-disabled"
+
     // 外部任务中转
     const val RELAY_REJECTED = "relay-rejected"
     const val RELAY_DUPLICATE = "relay-duplicate"

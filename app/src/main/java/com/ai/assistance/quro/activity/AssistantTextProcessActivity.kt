@@ -41,6 +41,18 @@ class AssistantTextProcessActivity : AppCompatActivity() {
             return
         }
 
+        // 闸门：助手服务关了 / 「分享与选中文本」通道关了 → 一个字符都不接，
+        // 原样回传原文（不能让用户点一下菜单就把选中内容弄丢）。
+        val denied = com.ai.assistance.quro.core.assistant.AssistantServiceState
+            .gate(this, com.ai.assistance.quro.core.assistant.AssistantChannel.SHARE)
+        if (denied != null) {
+            QuroDiag.log(TAG, "process-text denied: ${denied.wire()}")
+            runCatching { Toast.makeText(this, denied.message, Toast.LENGTH_SHORT).show() }
+            setResult(RESULT_OK, Intent().putExtra(Intent.EXTRA_PROCESS_TEXT, trimmed))
+            finish()
+            return
+        }
+
         val posted = AssistantDirectiveBus.post(trimmed, "process-text")
         QuroDiag.log(TAG, "process-text chars=${trimmed.length} posted=$posted")
 

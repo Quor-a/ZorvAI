@@ -84,6 +84,14 @@ class QuroSkillsTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
+        // 闸门：助手服务关了 / 磁贴通道关了 → 不启动（小布那条「任何情况下不允许启动」）
+        val denied = com.ai.assistance.quro.core.assistant.AssistantServiceState
+            .gate(this, com.ai.assistance.quro.core.assistant.AssistantChannel.TILE)
+        if (denied != null) {
+            com.ai.assistance.quro.util.QuroDiag.log("assistant-tile", "skills tile denied: ${'$'}{denied.wire()}")
+            qsTile?.apply { state = Tile.STATE_UNAVAILABLE; updateTile() }
+            return
+        }
         val i = Intent(this, com.ai.assistance.quro.activity.AssistantSkillPlazaActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
@@ -112,6 +120,13 @@ class QuroFindPhoneTileService : TileService() {
     override fun onClick() {
         super.onClick()
         val app = applicationContext
+        val denied = com.ai.assistance.quro.core.assistant.AssistantServiceState
+            .gate(app, com.ai.assistance.quro.core.assistant.AssistantChannel.TILE)
+        if (denied != null) {
+            com.ai.assistance.quro.util.QuroDiag.log("assistant-tile", "find-phone tile denied: ${'$'}{denied.wire()}")
+            qsTile?.apply { state = Tile.STATE_UNAVAILABLE; updateTile() }
+            return
+        }
         if (com.ai.assistance.quro.core.assistant.FindMyPhone.ringing) {
             com.ai.assistance.quro.core.assistant.FindMyPhone.stop("tile")
         } else {

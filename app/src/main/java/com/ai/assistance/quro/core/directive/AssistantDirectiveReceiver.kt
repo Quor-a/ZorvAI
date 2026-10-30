@@ -99,6 +99,20 @@ class AssistantDirectiveReceiver : BroadcastReceiver() {
         // ── 后台任务中转 ─────────────────────────────────────────
         if (intent.action == ACTION_RELAY_SUBMIT) {
             val app = context.applicationContext
+            // 闸门：中转是独立入口（不经过 Dispatcher），必须自己查
+            val denied = com.ai.assistance.quro.core.assistant.AssistantServiceState
+                .gate(app, com.ai.assistance.quro.core.assistant.AssistantChannel.RELAY)
+            if (denied != null) {
+                Log.w(TAG, "relay 被拒：${denied.wire()}")
+                val pending = goAsync()
+                runCatching {
+                    pending?.setResultCode(1)
+                    pending?.setResultData(denied.wire())
+                    pending?.setResultExtras(android.os.Bundle().apply { putString(RESULT_REASON, denied.code) })
+                }
+                pending?.finish()
+                return
+            }
             val skillId = intent.getStringExtra(EXTRA_SKILL_ID).orEmpty()
             val rid = intent.getStringExtra(EXTRA_REQUEST_ID).orEmpty()
             val args = LinkedHashMap<String, String>()

@@ -418,6 +418,27 @@
             </intent-filter>
         </activity>
 
+        <!-- 助手设置（对标小布设置页：助手服务总开关 / 唤醒设置 / 播报设置 / 个性化设置）。
+             不对外导出：设置页只能自己点开，避免被第三方拉起来诱导改配置。 -->
+        <activity
+            android:name=".activity.AssistantSettingsActivity"
+            android:exported="false"
+            android:label="助手设置"
+            android:theme="@style/Theme.Quro" />
+
+        <!-- 耳机按键唤醒（对标小布「线控耳机唤醒 / 蓝牙耳机唤醒」）。
+             🔴 MEDIA_BUTTON 是 Android 8.0 隐式广播限制的**例外**，静态注册仍能收到；
+             但系统会优先把按键给活跃的 MediaSession（正在放音乐的 App），所以真实命中率取决于场景。
+             priority 抬高以尽量先于普通应用拿到事件。 -->
+        <receiver
+            android:name=".receiver.AssistantMediaButtonReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter android:priority="100">
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+
         <service
             android:name=".service.QuroVoiceBallService"
             android:exported="false"
