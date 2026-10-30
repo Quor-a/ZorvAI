@@ -725,6 +725,48 @@ class SnapshotTransactionTest {
     }
   }
 
+  /**
+   * 回归护栏（2026-10-30 真机事故「终端环境坏了」）：`usr` 是整棵替换，而终端 LANXIU rootfs
+   * 住在 `usr/var/lib/proot-distro/installed-rootfs/ubuntu`（`QuroLinuxEnv.rootfsPath`），
+   * 随包快照的 usr 只发 bin/etc/lib/libexec。修前每次快照刷新都会把 `usr/var` 连同 rootfs
+   * 搬进 `.snapshot-previous`，而 `finish()` 会删掉 previous ⇒ 设备上终端环境凭空消失
+   * （包管理页「未就绪（请先在终端页安装 rootfs）／未知发行版」）。
+   *
+   * 判据：交换完成后 rootfs 仍在原位，且快照自己的 usr 内容照样以快照为准。
+   */
+  @Test
+  fun keepsLiveOnlyUsrEntriesSoTerminalRootfsSurvivesSwap() {
+    val filesDir = tempDir()
+    try {
+      val live = File(filesDir, "live").apply { mkdirs() }
+      val stage = SnapshotTransaction.stageRoot(filesDir)
+      writeRuntime(live, "old-node", "old-profile")
+      writeRuntime(stage, "new-node", "new-profile")
+      val rootfsShell = File(live, "usr/var/lib/proot-distro/installed-rootfs/ubuntu/usr/bin/bash")
+      rootfsShell.parentFile?.mkdirs()
+      rootfsShell.writeText("pie-bash")
+      // 同名的快照条目必须以快照为准（不能因为本机存在就留下旧的）。
+      File(live, "usr/bin/node").writeText("old-node")
+
+      SnapshotTransaction.swap(
+        filesDir = filesDir,
+        stagedRoot = stage,
+        usrDir = File(live, "usr"),
+        homeDir = File(live, "home"),
+        preservedNames = preserved,
+        fingerprint = "fp-rootfs",
+        startedAt = 1L,
+      )
+      SnapshotTransaction.finish(filesDir)
+
+      assertEquals("new-node", File(live, "usr/bin/node").readText())
+      assertEquals("pie-bash", rootfsShell.readText())
+      assertFalse(SnapshotFs.exists(File(live, "usr/var/lib/proot-distro/installed-rootfs/ubuntu/usr/bin/node")))
+    } finally {
+      SnapshotFs.deletePath(filesDir)
+    }
+  }
+
   private fun writeRuntime(root: File, nodeMarker: String, profileMarker: String) {
     File(root, "usr/bin").mkdirs()
     File(root, "usr/bin/node").writeText(nodeMarker)

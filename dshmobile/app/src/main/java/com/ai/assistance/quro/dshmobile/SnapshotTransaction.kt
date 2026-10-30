@@ -593,6 +593,20 @@ internal object SnapshotTransaction {
     // #214：profiles 合并期间的工厂语义纠正说明（返回给调用方写日志/诊断）。
     val notes = mutableListOf<String>()
 
+    // 🔴 2026-10-30 真机事故「zorvAI 终端环境坏了」根因修复。
+    //
+    // `usr` 在这条链上是**整棵替换**（move(live→previous) + move(staged→live)），而终端
+    // LANXIU rootfs 就住在 `usr/var/lib/proot-distro/installed-rootfs/ubuntu`
+    // （`QuroLinuxEnv.rootfsPath`，2026-10-27 双 rootfs 合一后指到这里）；随包快照的 usr
+    // 只发 `bin/etc/lib/libexec`，**没有 var**。不做保护的话，每次快照刷新都会把 `usr/var`
+    // 连同整份 rootfs 搬进 `.snapshot-previous/usr`，而 `finish()` 会清掉 previous ⇒
+    // 设备上终端环境凭空消失，包管理页显示「未就绪（请先在终端页安装 rootfs）／未知发行版」。
+    //
+    // 判据与 home 的 `preservedNames` 同一哲学：**快照不发的顶层条目 = 本机数据，随交换带走**。
+    // 实现选择「先并进 staged 再整棵换」而不是「换完再搬回来」，是因为成功路径天然保留、
+    // 且不需要第二处收尾；回滚路径由 [rollbackEntry] 的对称搬运兜住（否则回滚会把它丢掉）。
+    // 失败语义是**抛错让本次刷新干净失败**（live 未动、rootfs 仍在原位），绝不静默丢用户环境。
+    carryLiveOnlyTopLevel(usrDir, stagedUsr, move, notes)
     replaceEntry(filesDir, moved, fingerprint, startedAt, "usr", stagedUsr, usrDir, File(previous, "usr"), onEntry, move, purpose, priorFingerprint, baseFingerprint)
 
     val stagedHome = File(stagedRoot, "home")
@@ -1401,6 +1415,41 @@ internal object SnapshotTransaction {
     return rollback(filesDir, stagedRoot, usrDir, homeDir, marker)
   }
 
+  /**
+   * 把 [from] 顶层里 [into] **没有**的条目搬进 [into]（同文件系统 rename：代价与条目数有关，
+   * 与体积无关——终端 rootfs 那棵树几百 MB 也只是搬一个目录项）。
+   *
+   * 唯一用途：`usr` 整棵替换（[swap]）之前，保住本机独有条目——终端 LANXIU rootfs 所在的
+   * `var/`（`usr/var/lib/proot-distro/installed-rootfs/ubuntu`），历史装机可能还有 `local/`
+   * `share/` 之类。快照自己发的 `bin/etc/lib/libexec` 一律以快照为准（同名条目直接跳过）。
+   *
+   * 失败语义刻意选**抛错**而不是吞掉：搬不动就意味着本次交换会把这棵本机数据连同旧 usr
+   * 送进 `.snapshot-previous` 并被 `finish()` 清掉 = 用户环境实质丢失。宁可本次刷新干净失败
+   * （live 未动、条目原样在位、下次可重试），也不用「静默降级」换一次看着成功的更新。
+   *
+   * @param from live 树（交换前）或 displaced 备份（回滚前）
+   * @param into 目标树（staged 或 live）
+   * @param move rename 原语（生产用 [SnapshotFs.move]；[swap] 的注入版同签名）
+   * @param notes 逐条留档（调用方写进日志）
+   */
+  private fun carryLiveOnlyTopLevel(
+    from: File,
+    into: File,
+    move: (File, File) -> Unit,
+    notes: MutableList<String>,
+  ) {
+    val fromChildren = from.listFiles() ?: return
+    if (fromChildren.isEmpty()) return
+    val intoNames = (into.list() ?: emptyArray()).toSet()
+    for (child in fromChildren) {
+      if (child.name in intoNames) continue
+      val target = File(into, child.name)
+      if (SnapshotFs.exists(target)) continue
+      move(child, target)
+      notes += "usr/" + child.name + " 已随交换保留（快照不发的本机数据，如终端 rootfs 的 var/）"
+    }
+  }
+
   private fun replaceEntry(
     filesDir: File,
     moved: MutableList<String>,
@@ -1462,6 +1511,17 @@ internal object SnapshotTransaction {
     val live = livePath(name, usrDir, homeDir)
     val displaced = File(previous, name)
     if (SnapshotFs.exists(displaced)) {
+      // 🔴 与 swap 的 carryLiveOnlyTopLevel **对称**：回滚是 move(displaced → live)，
+      // 若 live 现在带着「备份里没有的本机条目」（终端 rootfs 的 usr/var 就是 swap 期搬进去的），
+      // 不先并回 displaced 就会随 deletePathStrict(live) 一起被删 = 回滚反而毁了用户环境。
+      // 回滚路径**不允许因此抛错**（回滚本身已经是失败收场），失败只留档。
+      if (name == "usr") {
+        runCatching {
+          carryLiveOnlyTopLevel(live, displaced, { a, b -> SnapshotFs.move(a, b) }, notes)
+        }.onFailure {
+          notes += "usr: 回滚前的本机条目并入失败（" + it.javaClass.simpleName + ": " + (it.message ?: "无消息") + "）"
+        }
+      }
       // 【0.14.1 升级路径 P0，与 mergeProfiles 补偿同源】容错版 `SnapshotFs.deletePath` 是**逐项容错**的：
       // 它可能正常返回而 `live` **仍非空**（删不掉的子项只记 onFailure 后继续）。随后
       // `move(displaced, live)` 就会抛 `FileSystemException: … Directory not empty`。
