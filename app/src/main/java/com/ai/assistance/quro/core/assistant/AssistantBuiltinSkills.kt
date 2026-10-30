@@ -338,6 +338,87 @@ object AssistantBuiltinSkills {
             }
         },
 
+        // ── 小布协作（双向）────────────────────────────────────
+        AssistantSkill(
+            id = "breeno.status",
+            title = "小布桥状态",
+            summary = "看这台机器有没有小布、哪个入口能调（包名/版本/各 action 是否可解析）",
+            category = AssistantCategory.BRIDGE,
+            keywords = listOf("小布状态", "breeno", "小布桥", "breeno status"),
+            external = true,
+        ) { req ->
+            val st = BreenoBridge.status(requireCtx())
+            if (st.installed) {
+                val okCount = st.resolvable.count { it.value }
+                AssistantResult.ok(
+                    "breeno.status",
+                    "已找到小布：${st.pkg} ${st.versionName}（${okCount}/${st.resolvable.size} 个入口可用）",
+                    data = linkedMapOf<String, Any?>(
+                        "installed" to true,
+                        "pkg" to st.pkg,
+                        "versionName" to st.versionName,
+                        "versionCode" to st.versionCode,
+                        "entries" to st.resolvable.entries.joinToString(", ") { "${it.key}=${it.value}" },
+                    ),
+                )
+            } else {
+                AssistantResult.fail(
+                    AssistantCodes.UNSUPPORTED,
+                    "没找到小布（试过 ${BreenoBridge.CANDIDATE_PKGS.joinToString("/")}）。" +
+                        "若是 Android 11+，还要确认清单 queries 里声明了它的包名。",
+                    data = mapOf("installed" to false),
+                )
+            }
+        },
+
+        AssistantSkill(
+            id = "breeno.open-settings",
+            title = "打开小布设置",
+            summary = "跳到小布那一页（服务总开关 / 唤醒设置 / 播报设置都在那）",
+            category = AssistantCategory.BRIDGE,
+            keywords = listOf("小布设置", "打开小布", "breeno settings"),
+            external = true,
+        ) { BreenoBridge.openSettings(requireCtx()) },
+
+        AssistantSkill(
+            id = "breeno.send-text",
+            title = "把话交给小布",
+            summary = "把一段文本投给小布处理（先试 THIRD_PARTY_MESSAGE，失败回落它的 AI 对话）",
+            category = AssistantCategory.BRIDGE,
+            keywords = listOf("交给小布", "让小布", "问小布", "breeno send"),
+            external = true,
+        ) { req ->
+            val text = req.arg("text") ?: req.text
+            BreenoBridge.sendText(requireCtx(), text)
+        },
+
+        AssistantSkill(
+            id = "breeno.find-phone",
+            title = "让小布找手机",
+            summary = "调小布自己的 FIND_PHONE（我们也有同能力，两套都在）",
+            category = AssistantCategory.BRIDGE,
+            keywords = listOf("小布找手机", "breeno find phone"),
+            external = true,
+        ) { BreenoBridge.findPhone(requireCtx()) },
+
+        AssistantSkill(
+            id = "breeno.skill-plaza",
+            title = "打开小布技能广场",
+            summary = "看小布有哪些技能、管理它的技能（也能顺便对小布里的 ZorvAI 做授权）",
+            category = AssistantCategory.BRIDGE,
+            keywords = listOf("小布技能", "技能广场", "breeno skills"),
+            external = true,
+        ) { BreenoBridge.openSkillPlaza(requireCtx()) },
+
+        AssistantSkill(
+            id = "breeno.publish-shortcuts",
+            title = "让小布能用 ZorvAI",
+            summary = "发布带 capability binding 的应用快捷方式，小布/系统助手可发现并直接执行 ZorvAI 能力",
+            category = AssistantCategory.BRIDGE,
+            keywords = listOf("发布快捷方式", "让小布调用", "breeno publish"),
+            external = true,
+        ) { BreenoBridge.publishShortcuts(requireCtx()) },
+
         // ── 自省 ────────────────────────────────────────────────
         AssistantSkill(
             id = "skill.catalog",

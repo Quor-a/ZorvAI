@@ -9,6 +9,15 @@
     <string name="sc_voice_short">语音球</string>
     <string name="sc_voice_long">唤起悬浮语音球</string>
     <string name="sc_voice_disabled">语音球已禁用</string>
+    <!-- 能力型快捷方式（可被小布/系统助手通过 ShortcutManager 发现并执行） -->
+    <string name="sc_ai_short">问 ZorvAI</string>
+    <string name="sc_ai_long">把一句话交给 ZorvAI</string>
+    <string name="sc_skills_short">能力广场</string>
+    <string name="sc_skills_long">看 ZorvAI 会什么</string>
+    <string name="sc_find_short">我手机呢</string>
+    <string name="sc_find_long">最大声闹铃找手机</string>
+    <string name="sc_env_short">终端环境</string>
+    <string name="sc_env_long">检查终端环境是否就绪</string>
     <string name="sc_chat_short">小窗对话</string>
     <string name="sc_chat_long">直接进入对话</string>
     <string name="sc_chat_disabled">对话已禁用</string>

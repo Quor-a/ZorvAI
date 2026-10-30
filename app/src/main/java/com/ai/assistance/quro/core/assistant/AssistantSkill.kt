@@ -14,6 +14,9 @@ enum class AssistantCategory(val wire: String, val label: String) {
     SYSTEM("system", "系统"),
     LINK("link", "跨设备"),
     PERMISSION("permission", "权限"),
+
+    /** 与小布（OPPO Breeno）互操作：我们用它，或让它用我们 */
+    BRIDGE("bridge", "小布协作"),
 }
 
 /**
