@@ -7,3 +7,15 @@ app/src/main/assets/lottie/** -text
 
 # 原件清单（记录原件 SHA-256，自身也按字节保存）
 app/src/main/assets/PORTED.sha256 -text
+
+# 从小布搬入的语音引擎 .so（二进制，禁止任何转换）
+app/src/main/jniLibs/arm64-v8a/libbwvsdkjni.so -text
+app/src/main/jniLibs/arm64-v8a/libBreenoWakeupVprint.so -text
+app/src/main/jniLibs/arm64-v8a/libnnaec.so -text
+app/src/main/jniLibs/arm64-v8a/libMNN.so -text
+app/src/main/jniLibs/arm64-v8a/libMNN_Express.so -text
+app/src/main/jniLibs/arm64-v8a/libopenblas.so -text
+app/src/main/jniLibs/arm64-v8a/libkws.so -text
+app/src/main/jniLibs/arm64-v8a/libwakeup.so -text
+app/src/main/jniLibs/arm64-v8a/libc++_shared.so -text
+app/src/main/assets/wakeup/** -text

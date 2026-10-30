@@ -37,6 +37,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.ai.assistance.quro.core.assistant.AssistantBuiltinSkills
 import com.ai.assistance.quro.core.assistant.AssistantChannel
 import com.ai.assistance.quro.core.assistant.AssistantLockSkills
@@ -122,10 +125,11 @@ private fun SettingsScreen(ctx: Context) {
                 ctx = ctx,
                 channel = AssistantChannel.VOICE_WAKEWORD,
                 title = "语音唤醒",
-                desc = "说出唤醒词直接唤起（需端侧唤醒词引擎，本仓尚未接入）",
-                unsupportedNote = "未接入端侧唤醒词模型，开关默认关闭——不给你一个叫不醒的假开关",
+                desc = "说出唤醒词直接唤起",
+                unsupportedNote = "引擎与唤醒模型已从小布包内搬入，点下方「探测」验证是否可用",
             )
         }
+        item { WakeupProbeRow(ctx) }
         item {
             InfoRow(
                 title = "连续对话",
@@ -433,6 +437,65 @@ private fun LockSkillsBlock(ctx: Context) {
                 )
             }
             Spacer(Modifier.height(4.dp))
+        }
+    }
+}
+
+/**
+ * 语音引擎探测行。
+ *
+ * 引擎 `.so` 与唤醒模型是从 `Breeno.apk` 字节级搬进来的（8.7MB + 1.4MB），
+ * 但**能不能真跑只能靠真机验证**——JNI 绑定错一个 descriptor 就会 UnsatisfiedLinkError，
+ * native 内部错就会 SIGSEGV。所以这里给一个显式探测入口，把结果摊开给用户看，
+ * 而不是让"语音唤醒"变成一个默默不工作的开关。
+ */
+@Composable
+private fun WakeupProbeRow(ctx: android.content.Context) {
+    var probing by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<com.ai.assistance.quro.core.assistant.BreenoWakeup.Probe?>(null) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(
+                enabled = !probing,
+                onClick = {
+                    probing = true
+                    scope.launch(Dispatchers.IO) {
+                        val r = com.ai.assistance.quro.core.assistant.BreenoWakeup.probe(ctx)
+                        withContext(Dispatchers.Main) {
+                            result = r
+                            probing = false
+                        }
+                    }
+                },
+            ) { Text(if (probing) "探测中…" else "探测语音引擎") }
+
+            result?.let { p ->
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = if (p.usable) "可用" else "不可用",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (p.usable) Color(0xFF2E9E6B) else Color(0xFFD9534F),
+                )
+            }
+        }
+        result?.let { p ->
+            val detail = buildString {
+                append(p.level.desc)
+                p.version?.let { append("\n" + "版本: ").append(it) }
+                p.amplitude?.let { append("\n" + "前端处理返回: ").append(String.format("%.3f", it)) }
+                if (p.handle != 0L) append("\n" + "引擎句柄: ").append(p.handle)
+                if (p.missingModels.isNotEmpty()) append("\n" + "缺模型: ").append(p.missingModels.joinToString(","))
+                p.error?.let { append("\n" + "失败原因: ").append(it) }
+            }
+            Text(
+                text = detail,
+                fontSize = 11.5.sp,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                lineHeight = 16.sp,
+            )
         }
     }
 }
