@@ -14,7 +14,7 @@ import com.ai.assistance.quro.util.QuroDiag
 /**
  * 长按桌面图标弹出的快捷方式。
  *
- * 对标小布的 `BootstrapShortCutMetaDataActivity`（`com.android.settings.MANUFACTURER_APPLICATION_SETTING`）
+ * 小布的 `BootstrapShortCutMetaDataActivity`（`com.android.settings.MANUFACTURER_APPLICATION_SETTING`）
  * 与 `FlamingoMainActivity` 的 `MINI_LAUNCHER_MAIN` / `WIDGET_ENTRY`：都是"把核心动作
  * 提到桌面一按直达"，而不是让用户先开 App 再找入口。
  *

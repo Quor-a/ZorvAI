@@ -7,7 +7,7 @@ import java.util.Calendar
 /**
  * 播报场景。
  *
- * 对标小布设置页「播报设置 → 播报场景设置」：小布不是"一律念"或"一律不念"，
+ * 小布设置页「播报设置 → 播报场景设置」：小布不是"一律念"或"一律不念"，
  * 而是**按场景分别开关**（回复内容 / 提醒 / 通知各有独立开关）。
  */
 enum class SpeakScene(val wire: String, val label: String, val defaultOn: Boolean) {
@@ -17,7 +17,7 @@ enum class SpeakScene(val wire: String, val label: String, val defaultOn: Boolea
     /** 技能执行结果（查手机、诊断等） */
     SKILL_RESULT("skill-result", "技能执行结果", true),
 
-    /** 提醒与日程（对标小布的提醒播报） */
+    /** 提醒与日程（小布的提醒播报） */
     REMINDER("reminder", "提醒与日程", true),
 
     /** 失败与错误提示（"没装环境""连不上"这类必须让人听到） */
@@ -30,7 +30,7 @@ enum class SpeakScene(val wire: String, val label: String, val defaultOn: Boolea
 /**
  * 播报策略：音量 / 音色 / 场景 / 静默时段。
  *
- * 对标小布「播报设置：音量与音色、播报场景设置」。
+ * 小布「播报设置：音量与音色、播报场景设置」。
  *
  * ## 为什么要有静默时段
  * 语音助手最招人烦的不是声音难听，是**半夜说话**。小布的播报设置里有场景开关，

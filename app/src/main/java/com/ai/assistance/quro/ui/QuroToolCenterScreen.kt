@@ -126,8 +126,9 @@ fun QuroToolCenterScreen(
                     "moyu" -> "墨语言 Mo"
                     "harness" -> "Agent 工作台"
                     "plugins" -> stringResource(R.string.qk_02779)
-                    "assistant_skills" -> "能力广场"
-                    "assistant_settings" -> "助手设置"
+                    "breeno_skills" -> "技能广场"
+                    "breeno_settings" -> "小布设置"
+                    "assistant_home" -> "ZorvAI 助手"
                     else -> stringResource(R.string.qk_02772)
                 },
                 style = MaterialTheme.typography.titleLarge,
@@ -161,20 +162,25 @@ fun QuroToolCenterScreen(
                 selected = null
             }
             "plugins" -> PluginManagerPanel(context)
-            // 能力广场（对标小布 SkillPlazaActivity）：把「ZorvAI 会什么」变成可搜可跑的清单。
+            // 能力广场（小布 SkillPlazaActivity）：把「ZorvAI 会什么」变成可搜可跑的清单。
             // 独立 Activity（自带返回），拉起后回到工具列表。
-            "assistant_skills" -> {
-                val intent = Intent(context, com.ai.assistance.quro.activity.AssistantSkillPlazaActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                runCatching { context.startActivity(intent) }
-                    .onFailure { Toast.makeText(context, "无法打开能力广场：${it.message}", Toast.LENGTH_LONG).show() }
+            // 直接用小布的技能广场：那里既能看它的技能，也能把 ZorvAI 加进去
+            "breeno_skills" -> {
+                val r = com.ai.assistance.quro.core.assistant.BreenoBridge.openSkillPlaza(context)
+                Toast.makeText(context, if (r.ok) r.message else r.message, Toast.LENGTH_LONG).show()
                 selected = null
             }
-            "assistant_settings" -> {
+            // 直接用小布的设置页：服务开关 / 唤醒 / 播报 都是它自己的真实开关
+            "breeno_settings" -> {
+                val r = com.ai.assistance.quro.core.assistant.BreenoBridge.openSettings(context)
+                Toast.makeText(context, if (r.ok) r.message else r.message, Toast.LENGTH_LONG).show()
+                selected = null
+            }
+            "assistant_home" -> {
                 val intent = Intent(context, com.ai.assistance.quro.activity.AssistantSettingsActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 runCatching { context.startActivity(intent) }
-                    .onFailure { Toast.makeText(context, "无法打开助手设置：${it.message}", Toast.LENGTH_LONG).show() }
+                    .onFailure { Toast.makeText(context, "无法打开 ZorvAI 助手设置：${it.message}", Toast.LENGTH_LONG).show() }
                 selected = null
             }
         }
@@ -202,10 +208,14 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         Triple("build", stringResource(R.string.qk_02791), stringResource(R.string.qk_02792)),
         Triple("kaleidobox", stringResource(R.string.qk_02777), stringResource(R.string.qk_02793)),
         Triple("plugins", stringResource(R.string.qk_02779), stringResource(R.string.qk_02794)),
-        // 「能力广场」：对标小布的一级技能入口。此前所有能力都藏在 AI 背后，用户不知道能问什么。
-        Triple("assistant_skills", "能力广场", "看 ZorvAI 会什么：可搜、可跑、可停"),
-        // 助手设置：对标小布设置页（服务总开关 / 唤醒设置 / 播报设置 / 个性化）
-        Triple("assistant_settings", "助手设置", "服务总开关 · 唤醒通道 · 播报场景 · 锁屏技能"),
+        // 「能力广场」：小布的一级技能入口。此前所有能力都藏在 AI 背后，用户不知道能问什么。
+        // 🔴 下面两张是**小布自己的界面**，点了直接进小布，不是我们再画一个：
+        // 技能广场（它管技能的地方，也是把 ZorvAI 加进去的地方）
+        Triple("breeno_skills", "技能广场", "小布技能广场 · 管理技能 · 添加 ZorvAI"),
+        // 小布设置（服务开关 / 唤醒 / 播报 都在它自己那页）
+        Triple("breeno_settings", "小布设置", "服务开关 · 唤醒设置 · 播报设置"),
+        // ZorvAI 自己的助手配置（能力表 + 我们这边的开关），只留一个入口
+        Triple("assistant_home", "ZorvAI 助手", "自己的能力清单 · 服务开关 · 播报策略"),
     )
     LazyColumn(
         Modifier.fillMaxSize().padding(16.dp),

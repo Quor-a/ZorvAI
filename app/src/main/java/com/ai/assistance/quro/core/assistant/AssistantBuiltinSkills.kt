@@ -9,15 +9,15 @@ import com.ai.assistance.quro.util.QuroDiag
 import java.io.File
 
 /**
- * 内置能力表 —— ZorvAI 对「小布功能面」的完整对等清单。
+ * 内置能力表 —— ZorvAI 对「小布功能面」的完整对应清单。
  *
  * ## 这份表就是"所有功能"的账本
  *
  * 小布（`com.heytap.speechassist` v13.3.5）对外暴露 49 个 Activity / 36 个 Service / 197 个
- * Intent Action。其中**在 ZorvAI 里成立**的能力在这里逐条落地，并在注释里标注对标组件，
+ * Intent Action。其中**在 ZorvAI 里成立**的能力在这里逐条落地，并在注释里标注组件，
  * 这样"搬全了没有"是可查的，不靠记忆。
  *
- * ## 已对等（ZorvAI 本来就有，本表只做统一收口）
+ * ## 已一致（ZorvAI 本来就有，本表只做统一收口）
  * | 小布 | ZorvAI |
  * |---|---|
  * | `TEXT_DIRECTIVE` | `AssistantDirectiveReceiver` + [AssistantDirectiveBus] |
@@ -93,7 +93,7 @@ object AssistantBuiltinSkills {
         AssistantSkill(
             id = "chat.explain-selection",
             title = "解释这段文字",
-            summary = "对选中/分享进来的文本做解释（对标小布 AIChatShareReceiveActivity 的 PROCESS_TEXT）",
+            summary = "对选中/分享进来的文本做解释（小布 AIChatShareReceiveActivity 的 PROCESS_TEXT）",
             category = AssistantCategory.CHAT,
             keywords = listOf("解释这段", "explain selection", "这段什么意思"),
             external = true,
@@ -107,7 +107,7 @@ object AssistantBuiltinSkills {
             }
         },
 
-        // ── 终端（对标小布无直接对应，属我们自己的强项）────────────
+        // ── 终端（小布无直接对应，属我们自己的强项）────────────
         AssistantSkill(
             id = "terminal.env-check",
             title = "检查终端环境",
@@ -144,7 +144,7 @@ object AssistantBuiltinSkills {
         AssistantSkill(
             id = "device.find-phone",
             title = "我手机呢",
-            summary = "最大声闹铃 + 持续震动 + 亮屏（对标小布 FIND_PHONE）",
+            summary = "最大声闹铃 + 持续震动 + 亮屏（小布 FIND_PHONE）",
             category = AssistantCategory.DEVICE,
             keywords = listOf("找手机", "我手机呢", "find my phone", "手机在哪", "查手机"),
             external = true,
@@ -224,7 +224,7 @@ object AssistantBuiltinSkills {
         AssistantSkill(
             id = "device.driving-mode",
             title = "驾驶模式",
-            summary = "大字 + 语音优先的免手操作形态（对标小布 DrivingMainActivity / OCar）",
+            summary = "大字 + 语音优先的免手操作形态（小布 DrivingMainActivity / OCar）",
             category = AssistantCategory.DEVICE,
             keywords = listOf("驾驶模式", "开车模式", "driving"),
             external = true,
@@ -248,7 +248,7 @@ object AssistantBuiltinSkills {
         AssistantSkill(
             id = "sys.relay-submit",
             title = "提交后台任务",
-            summary = "外部把长任务交给宿主在后台跑，跑完回执广播（对标 SUBMIT_BACKGROUND_TASK_RELAY）",
+            summary = "外部把长任务交给宿主在后台跑，跑完回执广播（SUBMIT_BACKGROUND_TASK_RELAY）",
             category = AssistantCategory.SYSTEM,
             keywords = listOf("后台任务", "relay", "提交任务"),
             external = false,
@@ -270,7 +270,7 @@ object AssistantBuiltinSkills {
         AssistantSkill(
             id = "sys.diagnostics",
             title = "导出诊断目录",
-            summary = "拿到可发出来的诊断路径（对标小布 hlog 的对外面）",
+            summary = "拿到可发出来的诊断路径（小布 hlog 的对外面）",
             category = AssistantCategory.SYSTEM,
             keywords = listOf("诊断", "日志", "diagnostics", "log"),
             external = true,
@@ -290,7 +290,7 @@ object AssistantBuiltinSkills {
         AssistantSkill(
             id = "link.peers",
             title = "看附近的 Agent",
-            summary = "列出已发现可互联的 Agent（对标 agents.proto 的发现结果）",
+            summary = "列出已发现可互联的 Agent（agents.proto 的发现结果）",
             category = AssistantCategory.LINK,
             keywords = listOf("附近设备", "peers", "agent 列表", "互联设备"),
             external = true,
@@ -423,7 +423,7 @@ object AssistantBuiltinSkills {
         AssistantSkill(
             id = "skill.catalog",
             title = "能力清单",
-            summary = "列出 ZorvAI 当前全部能力（对标技能广场的数据源）",
+            summary = "列出 ZorvAI 当前全部能力（技能广场的数据源）",
             category = AssistantCategory.KNOWLEDGE,
             keywords = listOf("能力清单", "会什么", "skills", "能做什么"),
             external = true,

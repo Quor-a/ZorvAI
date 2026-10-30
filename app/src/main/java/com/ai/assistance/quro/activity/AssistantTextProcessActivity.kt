@@ -11,7 +11,7 @@ import com.ai.assistance.quro.util.QuroDiag
 /**
  * 选中文本 → 交给 ZorvAI。
  *
- * 对标小布的 `AIChatShareReceiveActivity`（注册了 `android.intent.action.PROCESS_TEXT`）。
+ * 小布的 `AIChatShareReceiveActivity`（注册了 `android.intent.action.PROCESS_TEXT`）。
  *
  * 为什么必须是 **Activity** 而不是 Receiver：系统的文本选择浮动菜单（复制/粘贴那一排）
  * 只枚举 **Activity**，任何 Receiver 都不会出现在那个菜单里。用小布同款做法：

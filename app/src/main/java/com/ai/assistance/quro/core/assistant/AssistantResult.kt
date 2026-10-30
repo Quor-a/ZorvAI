@@ -28,7 +28,7 @@ object AssistantCodes {
     const val UNSUPPORTED = "unsupported"
     const val RATE_LIMITED = "rate-limited"
 
-    // 服务面开关（对标小布「小布助手服务」总开关）
+    // 服务面开关（小布「小布助手服务」总开关）
     const val SERVICE_DISABLED = "assistant-service-disabled"
     const val CHANNEL_DISABLED = "assistant-channel-disabled"
 
@@ -39,7 +39,7 @@ object AssistantCodes {
     const val INTERNAL = "internal"
 }
 
-/** 结果里可以点的动作（对标小布卡片 `pantanal_card_action`：结果自带后续动作）。 */
+/** 结果里可以点的动作（小布卡片 `pantanal_card_action`：结果自带后续动作）。 */
 data class AssistantAction(
     val id: String,
     val label: String,

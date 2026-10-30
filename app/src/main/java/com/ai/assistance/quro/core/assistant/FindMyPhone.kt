@@ -16,7 +16,7 @@ import com.ai.assistance.quro.util.QuroDiag
 /**
  * 查手机 / 找手机。
  *
- * 对标小布的 `FindPhoneActivity`（`heytap.speechassist.action.FIND_PHONE`）：
+ * 小布的 `FindPhoneActivity`（`heytap.speechassist.action.FIND_PHONE`）：
  * 语音说一句「我手机呢」→ 手机最大声闹铃 + 持续震动 + 点亮屏幕，即使静音/勿扰也尽量出声。
  *
  * 与纯「播放通知音」的区别（这几条是查手机能不能真被听到的关键）：
