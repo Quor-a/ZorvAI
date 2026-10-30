@@ -383,6 +383,41 @@
             android:showOnLockScreen="true"
             android:turnScreenOn="true" />
 
+        <!-- 能力广场（对标小布 SkillPlazaActivity / SearchActivity / MySkillsActivity）：
+             小布把「我会什么」做成一级界面，我们此前只有 AI 自己能想起来调，用户看不见。
+             本页把 AssistantSkillRegistry 渲染成可搜、可筛、可跑、可停的列表。 -->
+        <activity
+            android:name=".activity.AssistantSkillPlazaActivity"
+            android:exported="true"
+            android:label="能力广场"
+            android:theme="@style/Theme.Quro">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="quro" android:host="skills" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.action.SKILLS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- 选中文本 → 交给 ZorvAI（对标小布 AIChatShareReceiveActivity 的 PROCESS_TEXT）。
+             🔴 必须是 Activity：系统的文本选择浮动菜单只枚举 Activity，Receiver 不会出现在那里。 -->
+        <activity
+            android:name=".activity.AssistantTextProcessActivity"
+            android:exported="true"
+            android:label="发给 ZorvAI"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".service.QuroVoiceBallService"
             android:exported="false"
@@ -723,6 +758,30 @@
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
             android:label="Zorv 视频通话"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- 状态栏快捷开关：能力广场（对标小布 QS_TILE 入口；把「我会什么」变成一键可达） -->
+        <service
+            android:name=".service.QuroSkillsTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Zorv 能力"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- 状态栏快捷开关：我手机呢（对标小布 FIND_PHONE；点一下最大声闹铃+震动，再点停止） -->
+        <service
+            android:name=".service.QuroFindPhoneTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Zorv 我手机呢"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />

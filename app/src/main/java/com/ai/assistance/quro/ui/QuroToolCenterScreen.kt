@@ -126,6 +126,7 @@ fun QuroToolCenterScreen(
                     "moyu" -> "墨语言 Mo"
                     "harness" -> "Agent 工作台"
                     "plugins" -> stringResource(R.string.qk_02779)
+                    "assistant_skills" -> "能力广场"
                     else -> stringResource(R.string.qk_02772)
                 },
                 style = MaterialTheme.typography.titleLarge,
@@ -159,6 +160,15 @@ fun QuroToolCenterScreen(
                 selected = null
             }
             "plugins" -> PluginManagerPanel(context)
+            // 能力广场（对标小布 SkillPlazaActivity）：把「ZorvAI 会什么」变成可搜可跑的清单。
+            // 独立 Activity（自带返回），拉起后回到工具列表。
+            "assistant_skills" -> {
+                val intent = Intent(context, com.ai.assistance.quro.activity.AssistantSkillPlazaActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { context.startActivity(intent) }
+                    .onFailure { Toast.makeText(context, "无法打开能力广场：${it.message}", Toast.LENGTH_LONG).show() }
+                selected = null
+            }
         }
     }
 }
@@ -184,6 +194,8 @@ private fun ToolGrid(onLaunch: (target: String) -> Unit, onSelect: (String) -> U
         Triple("build", stringResource(R.string.qk_02791), stringResource(R.string.qk_02792)),
         Triple("kaleidobox", stringResource(R.string.qk_02777), stringResource(R.string.qk_02793)),
         Triple("plugins", stringResource(R.string.qk_02779), stringResource(R.string.qk_02794)),
+        // 「能力广场」：对标小布的一级技能入口。此前所有能力都藏在 AI 背后，用户不知道能问什么。
+        Triple("assistant_skills", "能力广场", "看 ZorvAI 会什么：可搜、可跑、可停"),
     )
     LazyColumn(
         Modifier.fillMaxSize().padding(16.dp),

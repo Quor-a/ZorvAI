@@ -581,6 +581,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // 也让「实测工具体积」这类无 Android 依赖的回归测试根本写不出来。
     // 改成与其余工具一致的 `?.let`：无 Context 时跳过该工具（而不是整份注册表崩掉）。
     context?.let { r.register(FluidCloudTool(it)) }
+    // 助手能力表工具：让 AI 能 list/run 与「能力广场」同一张表里的内置能力
+    // （查手机 / 终端环境检查 / 设备信息 / 驾驶模式 / 跨设备 Agent / 诊断…）。
+    // 与外部指令面、用户点按面共用一份事实，避免出现"用户能点但 AI 不知道"的能力。
+    context?.let { r.register(AssistantSkillTool(it)) }
     // 对话框文档工具：AI在对话框内直接写文档并渲染显示
     r.register(ChatDocTool())          // 对话框文档（Markdown/HTML/代码/文本）
     // 并入「导入工具」（AI 自写 / 用户粘贴 JSON 导入），使其可被 AI 调用

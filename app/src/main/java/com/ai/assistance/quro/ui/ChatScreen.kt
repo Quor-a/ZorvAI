@@ -441,7 +441,13 @@ fun ChatScreen(
                 }
         }
     }
-    val fontTiers = listOf(0.92f, 1f, 1.14f)
+    // 驾驶模式（对标小布 DrivingMainActivity / OCar）：整屏字号上浮一档、减少精细点击。
+    // 由「能力广场 → 驾驶模式」或外部指令 `driving 开` 打开，重启后仍生效。
+    val drivingCtx = androidx.compose.ui.platform.LocalContext.current
+    val drivingMode = remember(drivingCtx) {
+        com.ai.assistance.quro.core.assistant.AssistantBuiltinSkills.drivingModeOn(drivingCtx)
+    }
+    val fontTiers = if (drivingMode) listOf(1.14f, 1.32f, 1.5f) else listOf(0.92f, 1f, 1.14f)
     val fontNames = listOf(stringResource(R.string.qk_00012), stringResource(R.string.qk_00013), stringResource(R.string.qk_00014))
 
     // ---- Zorv AI 后端状态（单一真相源） ----

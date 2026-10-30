@@ -63,3 +63,61 @@ class QuroVoiceTileService : TileService() {
         startForegroundService(i)
     }
 }
+/**
+ * 能力广场磁贴（对标小布 `SettingsActivity` 的 `QS_TILE_PREFERENCES` 入口）。
+ *
+ * 为什么值得单独做个磁贴：小布把「我会什么」做成一级入口，用户随时能看见能力清单；
+ * 我们此前所有能力都藏在 AI 的背后，用户不知道能问什么。这个磁贴把能力广场变成
+ * 下拉面板里一次点击可达，是"可发现性"最便宜的一次补齐。
+ */
+class QuroSkillsTileService : TileService() {
+
+    override fun onStartListening() {
+        super.onStartListening()
+        qsTile?.apply {
+            state = Tile.STATE_ACTIVE
+            label = "Zorv 能力"
+            icon = Icon.createWithResource(this@QuroSkillsTileService, R.mipmap.ic_launcher)
+            updateTile()
+        }
+    }
+
+    override fun onClick() {
+        super.onClick()
+        val i = Intent(this, com.ai.assistance.quro.activity.AssistantSkillPlazaActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        startActivityAndCollapse(i)
+    }
+}
+
+/**
+ * 我手机呢磁贴（对标小布 `FindPhoneActivity` / `heytap.speechassist.action.FIND_PHONE`）。
+ *
+ * 手机静音/找不到时，最可靠的动作是**从下拉面板直接点**——不用解锁进去找 App。
+ * 点一下立即最大声闹铃 + 震动；再点一下停。
+ */
+class QuroFindPhoneTileService : TileService() {
+
+    override fun onStartListening() {
+        super.onStartListening()
+        qsTile?.apply {
+            state = if (com.ai.assistance.quro.core.assistant.FindMyPhone.ringing) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+            label = if (com.ai.assistance.quro.core.assistant.FindMyPhone.ringing) "Zorv 停止响铃" else "Zorv 我手机呢"
+            icon = Icon.createWithResource(this@QuroFindPhoneTileService, R.mipmap.ic_launcher)
+            updateTile()
+        }
+    }
+
+    override fun onClick() {
+        super.onClick()
+        val app = applicationContext
+        if (com.ai.assistance.quro.core.assistant.FindMyPhone.ringing) {
+            com.ai.assistance.quro.core.assistant.FindMyPhone.stop("tile")
+        } else {
+            // 磁贴上下文不能弹窗，直接调执行体；失败只落日志（返回码在 qsTile 状态上看）
+            com.ai.assistance.quro.core.assistant.FindMyPhone.start(app, 30)
+        }
+        onStartListening()
+    }
+}
