@@ -286,8 +286,27 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
     }
 
     private fun onBallClick() {
-        try { if (conversationActive) stopConversation() else startConversation() }
-        catch (e: Throwable) { updateStatus("操作失败：${e.message}") }
+        try {
+            when {
+                // 打断（对标小布「连续对话…并支持随时打断发起新对话」）：
+                // 播报中点一下 = 闭嘴 + 立刻进入聆听，而**不是**把整个对话关掉。
+                // 旧行为 conversationActive → stopConversation() 会让用户以为"点一下就把助手退了"。
+                conversationActive && (speaking || ttsBusy) -> interruptSpeaking()
+                conversationActive -> stopConversation()
+                else -> startConversation()
+            }
+        } catch (e: Throwable) { updateStatus("操作失败：${e.message}") }
+    }
+
+    /** 打断当前播报并立刻开始新一轮聆听。 */
+    private fun interruptSpeaking() {
+        Log.i(TAG, "barge-in: 停止播报，直接进入聆听")
+        try { QuroTtsHolder.stop() } catch (_: Throwable) {}
+        // stop() 不保证触发 utterance done 回调，这里手动复位，否则 ttsBusy 会一直卡住
+        ttsBusy = false
+        QuroTtsHolder.voiceBallOwnsSpeech = false
+        speaking = false
+        mainHandler.post { if (conversationActive) startListening() }
     }
 
     /** 显隐悬浮语音球（与服务的生命周期、通知栏常驻完全解耦）。 */
@@ -822,6 +841,16 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         // 新增 ttsBusy 重入守卫：正在播报时忽略新的 speak 请求，避免「识别回调重复 / 续听时序重叠」
         // 导致同一段或多段语音被重复/并发播报。
         if (ttsBusy) { Log.w(TAG, "speak: 正在播报中，忽略重复请求，避免重复/并发播报"); return }
+        // 播报策略（对标小布「播报设置」）：总开关 / REPLY 场景 / 静默时段。
+        // 被拦下时**直接回调 onDone**——否则调用方会卡在"等播完再续听"上，连续对话就断了。
+        if (!com.ai.assistance.quro.core.assistant.AssistantSpeakPolicy
+                .shouldSpeak(this, com.ai.assistance.quro.core.assistant.SpeakScene.REPLY)
+        ) {
+            Log.i(TAG, "speak 被播报策略拦下（REPLY 场景 / 静默时段），跳过播报")
+            ttsBusy = false
+            mainHandler.post(onDone)
+            return
+        }
         ttsBusy = true
         QuroTtsHolder.voiceBallOwnsSpeech = true
         val fired = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -835,8 +864,14 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         launch {
             try {
                 QuroTtsHolder.ensureReady(this@QuroVoiceBallService)
-                val r = QuroTtsHolder.speak(text, doneOnce)
-                if (r != 0) QuroTtsHolder.speakMinimal(text, doneOnce)
+                // 音量：<100% 才覆盖（=100% 时置 null 交回系统媒体音量）
+                val vol = com.ai.assistance.quro.core.assistant.AssistantSpeakPolicy.volumeScale(this@QuroVoiceBallService)
+                QuroTtsHolder.assistantVolumeOverride = vol.takeIf { it < 0.99f }
+                // 音色：设置页填了就用，留空跟随默认
+                val voice = com.ai.assistance.quro.core.assistant.AssistantSpeakPolicy
+                    .voiceId(this@QuroVoiceBallService).ifBlank { null }
+                val r = QuroTtsHolder.speak(text, doneOnce, voice)
+                if (r != 0) QuroTtsHolder.speakMinimal(text, doneOnce, voice)
             } catch (e: Throwable) {
                 Log.e(TAG, "speak 异常: ${e.message}")
                 doneOnce()

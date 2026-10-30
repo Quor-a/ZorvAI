@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -79,6 +80,7 @@ class AssistantSkillPlazaActivity : ComponentActivity() {
 
 @Composable
 private fun PlazaScreen() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     var query by remember { mutableStateOf("") }
     var category by remember { mutableStateOf<AssistantCategory?>(null) }
     var last by remember { mutableStateOf<AssistantResult?>(null) }
@@ -93,17 +95,28 @@ private fun PlazaScreen() {
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
         Spacer(Modifier.height(12.dp))
-        Text(
-            text = "能力广场",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Text(
-            text = "共 $total 项能力 · 搜索、点一下就执行",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "能力广场",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = "共 $total 项能力 · 搜索、点一下就执行",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                )
+            }
+            // 助手设置就在这里：能力表和它的开关应该挨着，用户不用回工具箱找
+            TextButton(onClick = {
+                ctx.startActivity(
+                    android.content.Intent(ctx, com.ai.assistance.quro.activity.AssistantSettingsActivity::class.java)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }) { Text("设置", fontSize = 13.sp) }
+        }
         Spacer(Modifier.height(10.dp))
 
         OutlinedTextField(
@@ -133,7 +146,10 @@ private fun PlazaScreen() {
                     skill = s,
                     onRun = {
                         scope.launch {
-                            last = AssistantSkillRegistry.run(
+                            // 广场是应用内自己点，不属于任何唤醒通道，但服务总开关照样管住
+                            val denied = com.ai.assistance.quro.core.assistant.AssistantServiceState
+                                .gateServiceOnly(ctx)
+                            last = denied ?: AssistantSkillRegistry.run(
                                 s.id,
                                 AssistantRequest(
                                     text = if (query.isNotBlank()) query else s.title,

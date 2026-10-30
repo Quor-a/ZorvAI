@@ -280,6 +280,16 @@ object QuroTtsHolder {
      * 串行队列：若当前已有语音在播，新请求进入 pending 队列，等当前播完再播（"一个播完再播一个"），
      * 不再用 abortAll/tts.stop 打断上一段，杜绝「两次语音有一个不播」。
      */
+    /**
+     * 助手播报音量覆盖（0..1）；null = 跟随系统媒体音量。
+     *
+     * 只由语音球（[com.ai.assistance.quro.service.QuroVoiceBallService]）按用户设置写入，
+     * **不影响** AI 的 `speak` 工具——那个是通用朗读通道，改它的音量会误伤。
+     * 用 @Volatile 而非参数透传：enqueueChunks 的调用链很深，加参数会波及全部调用点。
+     */
+    @Volatile
+    var assistantVolumeOverride: Float? = null
+
     suspend fun speak(text: String, onDone: (() -> Unit)? = null, voice: String? = null): Int = enqueueOrPlay(text, onDone, false, voice)
 
     /** 安全模式 speak（不设参数）。同样走串行队列。 */
@@ -425,7 +435,10 @@ object QuroTtsHolder {
         var ok = true
         chunks.forEachIndexed { i, chunk ->
             val mode = if (i == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
-            val r = t.speak(chunk, mode, null, ids[i])
+            val params = assistantVolumeOverride?.let { v ->
+                android.os.Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, v.coerceIn(0f, 1f)) }
+            }
+            val r = t.speak(chunk, mode, params, ids[i])
             if (r != TextToSpeech.SUCCESS) ok = false
         }
         if (!ok) {
