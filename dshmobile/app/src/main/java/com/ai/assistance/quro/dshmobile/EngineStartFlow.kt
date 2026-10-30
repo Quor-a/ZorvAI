@@ -1041,9 +1041,16 @@ internal class EngineStartFlow(private val activity: MainActivity) {
    * ② 有快照事务在场时起一个**有界等待者**（[deferredStartRunnable]），等事务收口**且**所有权
    * 空出来再自动续跑一次 [start]。
    *
-   * 判据用**跨进程真源** journal 文件而不是 `flowOwnership.running`：后者只是本 Activity 实例的
-   * 内存态（MainActivity 未声明 launchMode，新实例会绕过它），journal 才是「刷新真的在跑」的事实。
-   */
+ * 判据用**跨进程真源** journal 文件而不是 `flowOwnership.running`：后者只是本 Activity 实例的
+ * 内存态（MainActivity 未声明 launchMode，新实例会绕过它），journal 才是「刷新真的在跑」的事实。
+ *
+ * 🔴 2026-10-30 诊断包补丁：journal 不是刷新在飞的**完备**判据。`beginSnapshotTransaction()`
+ * 只置 companion CAS、不写 journal，marker 要到解压完成后的 STAGED 相位才落盘——解压段约
+ * 45-60s 里 `readMarker()==null` 而所有权被刷新流占着。因此 marker==null 分支必须先判
+ * [EngineManager.snapshotRefreshInFlight]（companion CAS 直读）：在飞即直接挂 16 分钟等待者，
+ * 不得落到秒级无事务重试（那正是诊断包里 4 条 `engine-start-deferred-no-transaction-timeout`
+ * 的来路：3 秒预算对 45-60s 解压段必烧穿，用户的启动按压被静默丢弃）。
+ */
   private fun deferEngineStartWhileSnapshotTransactionBusy() {
     if (flowOwnership.destroyed) return // 生命周期终结：保持不启动，不等待、不留痕。
     if (!canRunEngineWork()) return
@@ -1051,6 +1058,23 @@ internal class EngineStartFlow(private val activity: MainActivity) {
     val marker = SnapshotTransaction.readMarker(activity.filesDir)
     LogCollector.log("dsh-shell", "engine start deferred: another start flow or a snapshot refresh owns the generation")
     if (marker == null) {
+      // 🔴 2026-10-30 诊断包修复（用户主诉「起一次就死、死了再也起不来」的让行侧根因）：
+      // 刷新在飞、但事务 journal 还没落盘的**解压段**（实测 45-60s）。beginSnapshotTransaction()
+      // 只置 companion CAS、不写 journal；marker 要到解压完成后的 STAGED 相位才落盘。这段里
+      // readMarker()==null，旧实现据此把「所有权被刷新流占着」误判成「上一次流的收尾，
+      // 毫秒级」，排 3 秒无事务重试，预算必然烧穿——诊断包 boot-fail.log 里 4 条
+      // engine-start-deferred-no-transaction-timeout（transaction=absent）就是它，
+      // 每一次对应一次被静默丢弃的启动按压。现在先判刷新在飞，直接挂 16 分钟那条等待者
+      // （等刷新收口且所有权空出后自动续跑），与「有事务在场」分支同一结局、同一预算。
+      if (activity.engineManager.snapshotRefreshInFlight()) {
+        LogCollector.writeBootFail(
+          activity, "engine-start-deferred-refresh-in-flight",
+          "启动请求撞上正在进行的快照刷新（解压段，事务 journal 尚未落盘）：已转为有界等待"
+            + "（**非**静默丢弃），刷新收口且世代所有权空出后自动续跑一次启动。",
+        )
+        engineMonitorHandler.postDelayed(deferredStartRunnable, SNAPSHOT_TRANSACTION_WAIT_POLL_STEP_MS)
+        return
+      }
       // 所有权被占、但没有任何快照事务在场（典型是同一实例里上一次启动流的收尾还没跑完）。
       //
       // **0.14.10 缺陷修复（审计 §6.1）**：旧实现在这里只写一行 boot-fail 就 return，文案还宣称
@@ -1102,7 +1126,12 @@ internal class EngineStartFlow(private val activity: MainActivity) {
     override fun run() {
       if (!canRunEngineWork()) { waitedMs = 0L; return }
       val transactionBusy = SnapshotTransaction.readMarker(activity.filesDir) != null
-      if (!transactionBusy && !flowOwnership.running) {
+      // 刷新在飞（含 journal 未落的解压段）也要继续等：此时所有权可能只是瞬间空出，
+      // 而刷新随时会换掉整棵运行时——此刻续跑只会撞上 beginSnapshotTransaction 让行，
+      // 把「别人正在做」记成一次失败。判据与 deferEngineStartWhileSnapshotTransactionBusy()
+      // 的刷新分支同源（companion CAS 直读，跨 EngineManager 实例可见）。
+      val refreshInFlight = activity.engineManager.snapshotRefreshInFlight()
+      if (!transactionBusy && !flowOwnership.running && !refreshInFlight) {
         waitedMs = 0L
         LogCollector.log("dsh-shell", "deferred engine start resuming: snapshot transaction settled and ownership is free")
         start()
@@ -1142,10 +1171,12 @@ internal class EngineStartFlow(private val activity: MainActivity) {
     /** 已走过的拍数（累计等待 = 拍数 × 步进）。 */
     internal var attempts = 0
     override fun run() {
-      // 事务在期间出现时也要能转交给 16 分钟那条等待者，所以先读 journal（跨进程真源）。
+      // 事务在期间出现时也要能转交给 16 分钟那条等待者，所以先读 journal（跨进程真源）；
+      // 刷新在飞（journal 未落的解压段）同理——它同样该由 16 分钟等待者接手。
       val decision = decideNoTransactionRetry(
         canRun = canRunEngineWork(),
         transactionPresent = SnapshotTransaction.readMarker(activity.filesDir) != null,
+        refreshInFlight = activity.engineManager.snapshotRefreshInFlight(),
         ownershipRunning = flowOwnership.running,
         attempts = attempts,
       )
@@ -2121,12 +2152,18 @@ internal enum class DeferredStartRetryDecision {
  * 判据顺序即语义，**不可重排**：
  *  ① 生命周期闸门最先 —— destroyed / 用户关引擎 / 维修态一律 STOP，绝不因为「快超时了」而漏判；
  *  ② 事务在场优先于所有权空出 —— 事务在跑说明上一次流已推进到解压，该由 16 分钟等待者接手；
- *  ③ 所有权空出即 RESUME（**不等满预算**：等待本身没有意义，抢到就是抢到了）；
- *  ④ 预算用尽 TIMEOUT（如实收手，不静默）；
- *  ⑤ 其余 RETRY。
+ *  ③ 刷新在飞（**即便 journal 还没落盘**）同样交棒 16 分钟等待者 —— 见 [refreshInFlight]；
+ *  ④ 所有权空出即 RESUME（**不等满预算**：等待本身没有意义，抢到就是抢到了）；
+ *  ⑤ 预算用尽 TIMEOUT（如实收手，不静默）；
+ *  ⑥ 其余 RETRY。
  *
  * @param canRun 生命周期闸门（生产传 [EngineStartFlow] 的 canRunEngineWork）
  * @param transactionPresent 跨进程真源：快照事务 journal 是否在场
+ * @param refreshInFlight 快照刷新是否在飞（companion CAS 直读，[EngineManager.snapshotRefreshInFlight]）。
+ *   **journal 未落的解压段唯一可见判据**：`beginSnapshotTransaction()` 只置 CAS、不写 journal，
+ *   marker 要到解压完成后的 STAGED 相位才落盘——那 45-60s 里 `readMarker()` 恒为 null，
+ *   而所有权正被刷新流占着。不判它就会把「刷新在跑」误判成「上次流收尾，毫秒级」，
+ *   秒级预算烧穿后落一条误导的 timeout（2026-10-30 诊断包 boot-fail.log 实证 4 条）。
  * @param ownershipRunning 本次启动流是否仍持有世代所有权
  * @param attempts 已经走过的拍数（0 = 第一次决策）
  * @param budgetMs 预算（毫秒）
@@ -2137,11 +2174,13 @@ internal fun decideNoTransactionRetry(
   transactionPresent: Boolean,
   ownershipRunning: Boolean,
   attempts: Int,
+  refreshInFlight: Boolean = false,
   budgetMs: Long = NO_TRANSACTION_RETRY_BUDGET_MS,
   stepMs: Long = NO_TRANSACTION_RETRY_STEP_MS,
 ): DeferredStartRetryDecision {
   if (!canRun) return DeferredStartRetryDecision.STOP
   if (transactionPresent) return DeferredStartRetryDecision.HAND_OVER_TO_TRANSACTION_WAIT
+  if (refreshInFlight) return DeferredStartRetryDecision.HAND_OVER_TO_TRANSACTION_WAIT
   if (!ownershipRunning) return DeferredStartRetryDecision.RESUME
   val waitedMs = attempts.coerceAtLeast(0).toLong() * stepMs
   if (waitedMs >= budgetMs) return DeferredStartRetryDecision.TIMEOUT

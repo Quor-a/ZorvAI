@@ -234,6 +234,7 @@ class DeferredEngineStartTest {
     val flow = codeOnly(source("EngineStartFlow.kt"))
     for (stage in listOf(
       "engine-start-deferred",              // 撞上刷新：转为有界等待
+      "engine-start-deferred-refresh-in-flight", // 刷新在飞但 journal 未落（解压段）：转 16 分钟等待
       "engine-start-deferred-no-transaction", // 所有权被占但无事务：如实记账（不空等）
       "engine-start-deferred-timeout",      // 等待预算用尽：如实收手
       "snapshot-transaction-wait",          // 安全模式重启的事务等待（进入面）
