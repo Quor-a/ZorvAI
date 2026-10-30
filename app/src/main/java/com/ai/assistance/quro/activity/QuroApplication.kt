@@ -202,6 +202,11 @@ class QuroApplication : Application(), Configuration.Provider {
         try {
             // 载入持久化的「导入工具」（AI 自写 / 用户粘贴 JSON 导入），使其在所有会话默认可用
             QuroImportedToolRegistry.load(applicationContext)
+            // 注册「助手能力表」：外部指令面 / 快捷磁贴 / 分享 / 选中文本 / 能力广场 共用同一份事实。
+            // 幂等，重复调用只会覆盖同 id 项，不会重复插入。
+            com.ai.assistance.quro.core.assistant.AssistantBuiltinSkills.registerAll()
+            // 长按图标的快捷方式（能力广场 / 新对话）；失败只记日志，绝不影响启动
+            com.ai.assistance.quro.core.assistant.AssistantShortcuts.install(applicationContext)
             // 自动拉起 AI 部署的本地 MCP 服务器，使其随应用启动即恢复可用（界面自动拉取注册）
             QuroLocalMcpManager.startAll(applicationContext)
             // 🔴 互控桥自愈（2026-10-26 真机事故）：桥原先**只在「引擎每次 spawn 前」**建一次，

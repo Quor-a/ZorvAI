@@ -39,6 +39,18 @@ class AssistantDirectiveReceiver : BroadcastReceiver() {
         /** 显式文本指令。 */
         const val ACTION_DIRECTIVE = "com.ai.assistance.quro.action.DIRECTIVE"
 
+        /**
+         * 后台任务中转（对标小布 `SUBMIT_BACKGROUND_TASK_RELAY`）：
+         * 外部应用提交一个会长跑的能力，宿主在后台跑完通过
+         * [com.ai.assistance.quro.core.assistant.BackgroundTaskRelay.RELAY_RESULT_ACTION] 回执。
+         */
+        const val ACTION_RELAY_SUBMIT = "com.ai.assistance.quro.action.RELAY_SUBMIT"
+
+        /** relay 用到的 extra 键。 */
+        const val EXTRA_SKILL_ID = "skill_id"
+        const val EXTRA_REQUEST_ID = "request_id"
+        const val EXTRA_TARGET_PACKAGE = "target_package"
+
         /** 发送方需要持有的权限（与清单声明一致）。 */
         const val PERMISSION_SEND = "ai.aci.permission.SEND_ASSISTANT_DIRECTIVE"
 
@@ -73,50 +85,62 @@ class AssistantDirectiveReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        // 显式 DIRECTIVE 广播：要求发送方持有自定义权限（清单层不能挂，否则 SEND/VIEW 会被挡）。
+        // 显式 DIRECTIVE / RELAY 广播：要求发送方持有自定义权限（清单层不能挂，否则 SEND/VIEW 会被挡）。
         // 本应用自身（同 uid）恒放行——自测与内部调用不受影响。
-        if (intent.action == ACTION_DIRECTIVE) {
+        if (intent.action == ACTION_DIRECTIVE || intent.action == ACTION_RELAY_SUBMIT) {
             val granted = context.checkCallingOrSelfPermission(PERMISSION_SEND) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED
             if (!granted) {
-                Log.w(TAG, "拒绝未授权的 DIRECTIVE 广播（发送方缺少 $PERMISSION_SEND）")
+                Log.w(TAG, "拒绝未授权的广播（发送方缺少 $PERMISSION_SEND）action=${intent.action}")
                 return
             }
         }
-        val source = when {
-            intent.action == ACTION_DIRECTIVE -> "receiver"
-            intent.action == Intent.ACTION_SEND -> "share"
-            intent.action == Intent.ACTION_VIEW -> "deeplink"
-            else -> intent.action ?: "unknown"
+
+        // ── 后台任务中转 ─────────────────────────────────────────
+        if (intent.action == ACTION_RELAY_SUBMIT) {
+            val app = context.applicationContext
+            val skillId = intent.getStringExtra(EXTRA_SKILL_ID).orEmpty()
+            val rid = intent.getStringExtra(EXTRA_REQUEST_ID).orEmpty()
+            val args = LinkedHashMap<String, String>()
+            intent.extras?.keySet()?.forEach { k ->
+                val v = intent.extras?.get(k)
+                if (v is String && v.isNotBlank()) args[k] = v
+            }
+            val r = com.ai.assistance.quro.core.assistant.BackgroundTaskRelay.submit(
+                app, skillId, args, rid, intent.getStringExtra(EXTRA_TARGET_PACKAGE),
+            )
+            Log.i(TAG, "relay submit skill=$skillId rid=$rid → ${r.code}")
+            val pending = goAsync()
+            runCatching {
+                pending?.setResultCode(if (r.ok) 0 else 1)
+                pending?.setResultData(r.wire())
+                pending?.setResultExtras(android.os.Bundle().apply { putString(RESULT_REASON, r.code) })
+            }
+            pending?.finish()
+            return
         }
+
         val text = textOf(intent)
         if (text.isNullOrBlank()) {
             Log.w(TAG, "忽略无文本指令: action=${intent.action}")
-            goAsync()?.let { it.finish() }
             return
         }
-        AssistantDirectiveBus.post(text, source)
-        Log.i(TAG, "收到外部指令 source=$source len=${text.length}")
 
-        // 把 UI 带到前台，让 ChatScreen 挂载后消费这条指令（进程冷启动也不丢）。
-        val open = Intent(context, com.ai.assistance.quro.activity.QuroMainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            putExtra(EXTRA_TEXT, text)
+        // 交给统一分发器：先看有没有能直接执行的能力（快、确定、不烧 token），
+        // 没命中再把原文投进对话信箱由 AI 编排。六种入口共用这一条路。
+        val src = when {
+            intent.action == Intent.ACTION_SEND -> com.ai.assistance.quro.core.assistant.AssistantSource.SHARE
+            else -> com.ai.assistance.quro.core.assistant.AssistantSource.DIRECTIVE
         }
-        runCatching { context.startActivity(open) }
-            .onFailure { Log.w(TAG, "拉起主界面失败（指令已入信箱，下次打开生效）", it) }
-
-        // 排序广播时回执：调用方可据此知道"收到没"
-        if (intent.action == ACTION_DIRECTIVE) {
-            val pending = goAsync()
+        val req = com.ai.assistance.quro.core.assistant.AssistantDispatcher
+            .requestOf(intent, src).copy(text = text, raw = text)
+        Log.i(TAG, "收到外部指令 source=${src.wire} len=${text.length}")
+        val pending = goAsync()
+        com.ai.assistance.quro.core.assistant.AssistantDispatcher.submit(context.applicationContext, req) { r ->
             runCatching {
-                val b = android.os.Bundle().apply {
-                    putBoolean(RESULT_ACCEPTED, true)
-                    putString(RESULT_REASON, "queued")
-                }
-                pending?.setResultCode(0)
-                pending?.setResultData(text)
-                pending?.setResultExtras(b)
+                pending?.setResultCode(if (r.ok) 0 else 1)
+                pending?.setResultData(r.wire())
+                pending?.setResultExtras(android.os.Bundle().apply { putString(RESULT_REASON, r.code) })
             }
             pending?.finish()
         }
