@@ -389,7 +389,7 @@
             android:showOnLockScreen="true"
             android:turnScreenOn="true" />
 
-        <!-- 能力广场（对标小布 SkillPlazaActivity / SearchActivity / MySkillsActivity）：
+        <!-- 能力广场（小布 SkillPlazaActivity / SearchActivity / MySkillsActivity）：
              小布把「我会什么」做成一级界面，我们此前只有 AI 自己能想起来调，用户看不见。
              本页把 AssistantSkillRegistry 渲染成可搜、可筛、可跑、可停的列表。 -->
         <activity
@@ -408,7 +408,7 @@
             </intent-filter>
         </activity>
 
-        <!-- 选中文本 → 交给 ZorvAI（对标小布 AIChatShareReceiveActivity 的 PROCESS_TEXT）。
+        <!-- 选中文本 → 交给 ZorvAI（小布 AIChatShareReceiveActivity 的 PROCESS_TEXT）。
              🔴 必须是 Activity：系统的文本选择浮动菜单只枚举 Activity，Receiver 不会出现在那里。 -->
         <activity
             android:name=".activity.AssistantTextProcessActivity"
@@ -438,7 +438,7 @@
             </intent-filter>
         </activity>
 
-        <!-- 助手设置（对标小布设置页：助手服务总开关 / 唤醒设置 / 播报设置 / 个性化设置）。
+        <!-- 助手设置（小布设置页：助手服务总开关 / 唤醒设置 / 播报设置 / 个性化设置）。
              不对外导出：设置页只能自己点开，避免被第三方拉起来诱导改配置。 -->
         <activity
             android:name=".activity.AssistantSettingsActivity"
@@ -446,7 +446,7 @@
             android:label="助手设置"
             android:theme="@style/Theme.Quro" />
 
-        <!-- 耳机按键唤醒（对标小布「线控耳机唤醒 / 蓝牙耳机唤醒」）。
+        <!-- 耳机按键唤醒（小布「线控耳机唤醒 / 蓝牙耳机唤醒」）。
              🔴 MEDIA_BUTTON 是 Android 8.0 隐式广播限制的**例外**，静态注册仍能收到；
              但系统会优先把按键给活跃的 MediaSession（正在放音乐的 App），所以真实命中率取决于场景。
              priority 抬高以尽量先于普通应用拿到事件。 -->
@@ -805,7 +805,7 @@
             </intent-filter>
         </service>
 
-        <!-- 状态栏快捷开关：能力广场（对标小布 QS_TILE 入口；把「我会什么」变成一键可达） -->
+        <!-- 状态栏快捷开关：能力广场（小布 QS_TILE 入口；把「我会什么」变成一键可达） -->
         <service
             android:name=".service.QuroSkillsTileService"
             android:exported="true"
@@ -817,7 +817,7 @@
             </intent-filter>
         </service>
 
-        <!-- 状态栏快捷开关：我手机呢（对标小布 FIND_PHONE；点一下最大声闹铃+震动，再点停止） -->
+        <!-- 状态栏快捷开关：我手机呢（小布 FIND_PHONE；点一下最大声闹铃+震动，再点停止） -->
         <service
             android:name=".service.QuroFindPhoneTileService"
             android:exported="true"
