@@ -1,0 +1,29 @@
+syntax = "proto3";
+package com.oplus.pantaconnect.sdk;
+
+option java_multiple_files = true;
+
+enum ResultCode {
+  UNKNOWN = 0;
+  SUCCESS = 1;
+  ERROR = 2;
+  CANCELLED = 3;
+}
+
+enum ErrorCode {
+  ERROR_CODE_UNKNOWN = 0;
+  ERROR_CODE_FOR_DISCOVERY = 1;
+  ERROR_CODE_FOR_CONNECTION = 2;
+  ERROR_CODE_FOR_TRANSPORT = 3;
+  ERROR_CODE_FOR_DATA_BUS = 4;
+  ERROR_CODE_FOR_DEVICE_MANAGER = 5;
+  ERROR_CODE_FOR_NETWORK_MANAGER = 6;
+}
+
+message SealedResult {
+  ResultCode resultCode = 1;
+  bytes data = 2;
+  ErrorCode errorCode = 3;
+  string message = 4;
+}
+

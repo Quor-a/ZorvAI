@@ -151,3 +151,90 @@ data class AssistantRequest(
 ) {
     fun arg(key: String): String? = args[key]?.takeIf { it.isNotBlank() }
 }
+
+// ════════════════════════════════════════════════════════════════
+// 以下直接引用 `Breeno.apk` 里的 `results.proto` 原件
+// （本仓契约文件：app/src/main/assets/proto/results.proto，
+//   包 com.oplus.pantaconnect.sdk，proto3）
+//
+// 🔴 枚举名与编号**照抄**，不许重排：这些值走 wire，顺序错了等于协议版本错。
+// ════════════════════════════════════════════════════════════════
+
+/** proto: `ResultCode`（UNKNOWN=0, SUCCESS=1, ERROR=2, CANCELLED=3）。 */
+enum class ProtoResultCode(val wire: String, val number: Int) {
+    UNKNOWN("UNKNOWN", 0),
+    SUCCESS("SUCCESS", 1),
+    ERROR("ERROR", 2),
+    CANCELLED("CANCELLED", 3),
+}
+
+/**
+ * proto: `ErrorCode` —— 它的错误码是**按子系统分类**的（发现/连接/传输/数据总线/设备管理/网络管理）。
+ * 这正是它排障时最有价值的地方：拿到码就知道该去哪个子系统查，而不是只有一句"失败了"。
+ */
+enum class ProtoErrorCode(val wire: String, val number: Int) {
+    UNKNOWN("ERROR_CODE_UNKNOWN", 0),
+    FOR_DISCOVERY("ERROR_CODE_FOR_DISCOVERY", 1),
+    FOR_CONNECTION("ERROR_CODE_FOR_CONNECTION", 2),
+    FOR_TRANSPORT("ERROR_CODE_FOR_TRANSPORT", 3),
+    FOR_DATA_BUS("ERROR_CODE_FOR_DATA_BUS", 4),
+    FOR_DEVICE_MANAGER("ERROR_CODE_FOR_DEVICE_MANAGER", 5),
+    FOR_NETWORK_MANAGER("ERROR_CODE_FOR_NETWORK_MANAGER", 6),
+}
+
+/** 把本仓细码归到 proto 的子系统错误码上（细码本身保留在 message 里，不丢）。 */
+fun protoErrorCodeOf(code: String): ProtoErrorCode = when (code) {
+    AssistantCodes.OK -> ProtoErrorCode.UNKNOWN
+    // 连接类
+    "agent-connect-failed", "agent-send-failed",
+    AssistantCodes.SKILL_NOT_FOUND, AssistantCodes.SKILL_DISABLED,
+    -> ProtoErrorCode.FOR_CONNECTION
+    // 传输类
+    AssistantCodes.TIMEOUT, AssistantCodes.BUSY, AssistantCodes.RATE_LIMITED,
+    -> ProtoErrorCode.FOR_TRANSPORT
+    // 数据总线（中转）
+    AssistantCodes.RELAY_REJECTED, AssistantCodes.RELAY_DUPLICATE,
+    -> ProtoErrorCode.FOR_DATA_BUS
+    // 环境/权限属于设备管理
+    AssistantCodes.ENV_NOT_READY, AssistantCodes.PERMISSION_DENIED,
+    -> ProtoErrorCode.FOR_DEVICE_MANAGER
+    else -> ProtoErrorCode.UNKNOWN
+}
+
+/** 本仓结果 → proto 的 `ResultCode`。超时/忙归 CANCELLED（对方等了但没等到，不算硬错）。 */
+fun AssistantResult.protoResultCode(): ProtoResultCode = when {
+    ok -> ProtoResultCode.SUCCESS
+    code == AssistantCodes.TIMEOUT || code == AssistantCodes.BUSY -> ProtoResultCode.CANCELLED
+    else -> ProtoResultCode.ERROR
+}
+
+/**
+ * 严格按 proto `SealedResult{ resultCode, data, errorCode, message }` 序列化成 JSON。
+ *
+ * `data` 在 proto 里是 `bytes`，这里用 Base64(UTF-8) 承载本仓的 data JSON ——
+ * 不破坏"bytes"的语义，也让调用方能原样解出内容。
+ * 本仓的细码、耗时、技能 id 全部写进 `message` 前缀，**不额外加顶层字段**：
+ * 顶层字段名必须与 proto 一致，否则又变成"字段名差不多"的假引用。
+ */
+fun AssistantResult.sealedResultJson(): String {
+    val rc = protoResultCode()
+    val ec = if (ok) ProtoErrorCode.UNKNOWN else protoErrorCodeOf(code)
+    val detail = buildString {
+        append(code)
+        if (skillId.isNotEmpty()) append(" skill=").append(skillId)
+        if (elapsedMs > 0) append(" ms=").append(elapsedMs)
+        if (message.isNotEmpty()) append(" | ").append(message.replace('\n', ' '))
+    }
+    val dataJson = runCatching {
+        org.json.JSONObject().apply { data.forEach { (k, v) -> put(k, v ?: org.json.JSONObject.NULL) } }.toString()
+    }.getOrDefault("{}")
+    val dataB64 = java.util.Base64.getEncoder().encodeToString(dataJson.toByteArray(Charsets.UTF_8))
+    return org.json.JSONObject().apply {
+        put("resultCode", rc.wire)
+        put("resultCodeNumber", rc.number)
+        put("data", dataB64)
+        put("errorCode", ec.wire)
+        put("errorCodeNumber", ec.number)
+        put("message", detail)
+    }.toString()
+}

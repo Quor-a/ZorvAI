@@ -356,6 +356,10 @@ dependencies {
     implementation("org.apache.poi:poi:5.2.5")
     implementation("org.apache.poi:poi-ooxml:5.2.5")
     implementation("stax:stax-api:1.0.1")
+    // Lottie：直接用 OPPO 小布（com.heytap.speechassist）里的动效资产（assets/lottie/*.json）。
+    // 为什么直接搬而不是自己画：这些动效是它对「聆听中 / 出错 / 加载」三个高频态的成熟表达，
+    // 我们的语音球此前只有静态圆点，失败态只有一行文字。Lottie 是纯矢量资源，无代码耦合。
+    implementation("com.airbnb.android:lottie-compose:6.6.6")
 
     // 微信 iLink Bot：纯 OkHttp + org.json 实现，零第三方 SDK 依赖
 

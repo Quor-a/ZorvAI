@@ -269,7 +269,7 @@ object AssistantBuiltinSkills {
                 "已知 ${peers.size} 个 Agent",
                 data = mapOf(
                     "count" to peers.size,
-                    "agents" to peers.joinToString(" | ") { "${it.displayName}(${it.transport.wire}, caps=${it.capabilities.size})" },
+                    "agents" to peers.joinToString(" | ") { "${it.displayName}(${it.strategy.wire}, caps=${it.capabilities.size})" },
                 ),
             )
         },
@@ -283,8 +283,25 @@ object AssistantBuiltinSkills {
             external = true,
         ) { req ->
             val ctx = requireCtx()
-            AgentLink.startDiscovery(ctx)
-            AssistantResult.ok("link.discover", "已请求发现；无传输实现时日志会给出 agent-discovery-failed")
+            val started = AgentLink.startDiscovery(ctx)
+            if (started.isEmpty()) {
+                // 不假装在扫描：没有任何 adapter 就是没有，明确说清楚，并列出已注册的
+                AssistantResult.fail(
+                    AssistantCodes.UNSUPPORTED,
+                    "没有任何已注册的传输实现（已注册：${AgentLink.availableStrategies().map { it.wire }}）。" +
+                        "协议与总线已就绪，真发现需要接 AgentTransportAdapter。",
+                    data = mapOf(
+                        "strategies" to AgentLink.availableStrategies().joinToString(",") { it.wire },
+                        "agents" to AgentLink.peers().size,
+                    ),
+                )
+            } else {
+                AssistantResult.ok(
+                    "link.discover",
+                    "已启动发现：${started.joinToString("+") { it.wire }}",
+                    data = mapOf("strategies" to started.joinToString(",") { it.wire }),
+                )
+            }
         },
 
         // ── 自省 ────────────────────────────────────────────────

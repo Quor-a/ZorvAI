@@ -41,6 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ai.assistance.quro.core.assistant.AssistantCategory
+import com.ai.assistance.quro.core.assistant.AssistantLottie
+import com.ai.assistance.quro.core.assistant.AssistantLottie as LottieAssets
 import com.ai.assistance.quro.core.assistant.AssistantRequest
 import com.ai.assistance.quro.core.assistant.AssistantResult
 import com.ai.assistance.quro.core.assistant.AssistantSkill
@@ -167,8 +169,19 @@ private fun PlazaScreen() {
             }
             if (skills.isEmpty()) {
                 item {
-                    Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        Text("没有匹配的能力", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                    // 空态用直接搬来的小布动效（assets/lottie/breeno_empty_dark.json），
+                    // 比一行「没有匹配的能力」更像个正常产品
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        AssistantLottie(LottieAssets.EMPTY_DARK, Modifier.size(120.dp))
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "没有匹配的能力",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                        )
                     }
                 }
             }

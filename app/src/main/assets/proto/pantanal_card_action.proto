@@ -1,0 +1,21 @@
+syntax = "proto2";
+
+package pantanal.app;
+
+option java_multiple_files = true;
+
+message CardActionProto {
+  required int32 cardType = 1;
+  required int32 cardId = 2;
+  required int32 hostId = 3;
+  required int32 action   = 4;
+  map<string, string> param = 5;
+
+  enum ACTION {
+
+    CLICK = 1;
+    LIFE_CIRCLE = 2;
+    EXPOSED_STATE = 3;
+    INVALIDATE = 4;
+  }
+}

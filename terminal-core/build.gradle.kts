@@ -86,6 +86,9 @@ dependencies {
     implementation(libs.compose.animation)
     implementation(libs.compose.animation.core)
     implementation(libs.navigation.compose)
+    // Lottie：失败卡直接用搬来的小布出错抖动动效（app 的 assets/lottie/breeno_shake.json，
+    // 运行时由宿主 APK 提供 assets，library 模块只需解析能力）
+    implementation("com.airbnb.android:lottie-compose:6.6.6")
     implementation(libs.androidx.ui.graphics.android)
     implementation(libs.androidx.runtime.android)
     implementation(libs.androidx.ui.text.android)
