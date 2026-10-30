@@ -94,6 +94,16 @@ class CanvasTerminalView @JvmOverloads constructor(
     
     // 输入回调
     private var inputCallback: ((String) -> Unit)? = null
+
+    // ── 鼠标/滚轮手势状态（2026-10-30 对照 AOSP Terminal 补齐）──
+    /** 两指滑动的上一次中点 Y（NaN = 当前没有两指手势）。 */
+    private var twoFingerLastY = Float.NaN
+    /** 滚轮步进累计（凑够一行高才发一次，避免高频小抖动刷屏）。 */
+    private var wheelAccum = 0f
+    /** 长按进入的鼠标拖拽是否进行中。 */
+    private var mouseDragActive = false
+    private var mouseLastRow = -1
+    private var mouseLastCol = -1
     
     // 缓存终端尺寸，避免重复调用
     private var cachedRows = 0
@@ -145,7 +155,19 @@ class CanvasTerminalView @JvmOverloads constructor(
                 }
             },
             onLongPress = { x, y ->
-                startTextSelection(x, y)
+                // 应用开了 1002+（要拖动事件）时，长按是「进入鼠标拖拽」而不是选文本——
+                // 与 AOSP Terminal 的 contextmenu→mousedown 映射同义：vim/htop 里要能按住拖。
+                val emu = emulator
+                if (emu != null && emu.mouseTracking >= 1002) {
+                    val (row, col) = screenToTerminalCoords(x, y)
+                    mouseLastRow = row
+                    mouseLastCol = col
+                    mouseDragActive = true
+                    inputCallback?.invoke(emu.encodeMouse(0, col, row, press = true))
+                    requestRender()
+                } else {
+                    startTextSelection(x, y)
+                }
             }
         )
     }
@@ -232,7 +254,19 @@ class CanvasTerminalView @JvmOverloads constructor(
                 // 双击选择单词（可选实现）
             },
             onLongPress = { x, y ->
-                startTextSelection(x, y)
+                // 应用开了 1002+（要拖动事件）时，长按是「进入鼠标拖拽」而不是选文本——
+                // 与 AOSP Terminal 的 contextmenu→mousedown 映射同义：vim/htop 里要能按住拖。
+                val emu = emulator
+                if (emu != null && emu.mouseTracking >= 1002) {
+                    val (row, col) = screenToTerminalCoords(x, y)
+                    mouseLastRow = row
+                    mouseLastCol = col
+                    mouseDragActive = true
+                    inputCallback?.invoke(emu.encodeMouse(0, col, row, press = true))
+                    requestRender()
+                } else {
+                    startTextSelection(x, y)
+                }
             }
         )
     }
@@ -616,6 +650,69 @@ class CanvasTerminalView @JvmOverloads constructor(
     // === 触摸事件处理 ===
     
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        // ── 应用开了鼠标上报时（vim / htop / less 等 TUI），两指滑动必须变成滚轮 ──
+        // 2026-10-30 对照 AOSP Terminal 的 touch_to_mouse_handler 补齐：
+        // 它把「两指滑动」合成 WheelEvent，把「长按后的拖动」合成 mousedown/mousemove/mouseup。
+        // 我们原来的手势只滚本地 scrollback，TUI 里毫无反应（用户会以为终端坏了）。
+        val emu = emulator
+        if (emu != null && emu.mouseTracking != 0 && event.pointerCount >= 2) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_MOVE -> {
+                    val y = (event.getY(0) + event.getY(1)) / 2f
+                    if (twoFingerLastY.isNaN()) {
+                        twoFingerLastY = y
+                    } else {
+                        // 手指上滑 ⇒ delta>0 ⇒ 滚轮向下（与 AOSP 的 deltaY 口径一致）
+                        wheelAccum += twoFingerLastY - y
+                        twoFingerLastY = y
+                        val step = textMetrics.charHeight.coerceAtLeast(1f)
+                        var guard = 0
+                        while (wheelAccum >= step && guard++ < 8) {
+                            sendWheel(down = true, x = event.getX(0), y = y)
+                            wheelAccum -= step
+                        }
+                        while (wheelAccum <= -step && guard++ < 8) {
+                            sendWheel(down = false, x = event.getX(0), y = y)
+                            wheelAccum += step
+                        }
+                    }
+                    return true
+                }
+                MotionEvent.ACTION_POINTER_UP -> {
+                    if (event.pointerCount <= 2) {
+                        twoFingerLastY = Float.NaN
+                        wheelAccum = 0f
+                    }
+                    return true
+                }
+                else -> {}
+            }
+        }
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            twoFingerLastY = Float.NaN
+            wheelAccum = 0f
+        }
+
+        // ── 长按进入的鼠标拖拽（app 请求了 1002+ 才走这条，否则仍是文本选择）──
+        if (mouseDragActive) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    val (row, col) = screenToTerminalCoords(event.x, event.y)
+                    if (row != mouseLastRow || col != mouseLastCol) {
+                        mouseLastRow = row
+                        mouseLastCol = col
+                        emu?.let { inputCallback?.invoke(it.encodeMouse(32, col, row, true)) }
+                    }
+                    if (event.actionMasked != MotionEvent.ACTION_MOVE) {
+                        emu?.let { inputCallback?.invoke(it.encodeMouse(0, col, row, false)) }
+                        mouseDragActive = false
+                    }
+                    requestRender()
+                    return true
+                }
+            }
+        }
+
         val handled = gestureHandler.onTouchEvent(event)
         
         // 单击时请求焦点并显示输入法（全屏模式下）
@@ -643,6 +740,13 @@ class CanvasTerminalView @JvmOverloads constructor(
         }
         
         return handled || super.onTouchEvent(event)
+    }
+
+    /** 发一次滚轮事件（xterm 约定：64=上滚，65=下滚）。 */
+    private fun sendWheel(down: Boolean, x: Float, y: Float) {
+        val emu = emulator ?: return
+        val (row, col) = screenToTerminalCoords(x, y)
+        inputCallback?.invoke(emu.encodeMouse(if (down) 65 else 64, col, row, press = true))
     }
     
     /**
