@@ -177,6 +177,24 @@ class TerminalEnvironment(context: Context) {
             }.onFailure { Log.e(TAG, "busybox 实体拷贝也失败", it) }
         }
 
+        // 🔴 2026-10-30 DSH「能启动但是不能用」根因修复：libbash.so 是 e_type=2（ET_EXEC）
+        // 静态二进制，而 DSH 快照（dshmobile）把一份 PIE bash（e_type=3）铺在**同一路径**
+        // ${binDir}/bash —— shell-termux 的 bashPath 正指向它。本函数无条件建链会把快照的
+        // PIE bash 覆盖成 libbash.so 符号链接；DSH 引擎 env 钉了 TERMUX_EXEC force
+        // （execve 一律改写走 /system/bin/linker64），linker64 拒收 ET_EXEC
+        // ⇒ bash 工具恒报 "libbash.so has unexpected e_type: 2"。
+        // 判据：目标已是实体文件（快照 PIE bash）⇒ 原样保留。终端侧同样可用：
+        // PIE 可执行文件 execve 直接跑，且终端 PATH 里 /system/bin 在前，行为无差异。
+        val bashLinkFile = File(binDir, "bash")
+        val snapshotBashInPlace = bashLinkFile.isFile &&
+            !Files.isSymbolicLink(bashLinkFile.toPath())
+        if (snapshotBashInPlace) {
+            Log.i(
+                TAG,
+                "linkNativeLibs: ${bashLinkFile.absolutePath} 已是实体文件（快照 PIE bash），跳过 libbash.so 建链"
+            )
+        }
+
         val libraries = mapOf(
             "libproot.so" to "proot",
             "libloader.so" to "loader",
@@ -186,6 +204,8 @@ class TerminalEnvironment(context: Context) {
         )
 
         libraries.forEach { (libName, linkName) ->
+            // 快照 PIE bash 在位时不覆盖（见上方注释）；其余库快照不发这些名字，照旧建链。
+            if (linkName == "bash" && snapshotBashInPlace) return@forEach
             val libFile = File(nativeLibDir, libName)
             val linkFile = File(binDir, linkName)
             if (!libFile.exists()) {
@@ -220,7 +240,25 @@ class TerminalEnvironment(context: Context) {
             "sed", "stat", "sh", "tr", "tar", "uname", "xargs", "xz", "xxd"
         )
         val busybox = File(binDir, "busybox")
+        // 🔴 2026-10-30 与 linkNativeLibs 的 bash 跳过同源：DSH 快照在位时
+        // （bin/bash 是实体文件 = 快照 PIE bash），不再往 usr/bin 铺 busybox applet 链。
+        // DSH 引擎 PATH 是 usr/bin 在前，这些链会把 /system/bin 的 toybox（PIE）
+        // 阴影成 libbusybox.so（ET_EXEC）；引擎 env 的 TERMUX_EXEC force 下
+        // linker64 拒收 ET_EXEC ⇒ glob/grep/ls/sed 与 bash 同族全废。
+        // 终端自身 PATH 是 /system/bin 在前，toybox 覆盖全部基础命令，不受影响；
+        // `busybox` 名字本身的链保留（common.sh 的 `busybox tar` 依赖它）。
+        // 同时清掉旧版已铺下的 applet 链（只删符号链接；实体文件一律不碰）。
+        val snapshotBashInPlace = File(binDir, "bash").isFile &&
+            !Files.isSymbolicLink(File(binDir, "bash").toPath())
         for (linkName in links) {
+            val linkFile = File(binDir, linkName)
+            if (snapshotBashInPlace) {
+                if (Files.isSymbolicLink(linkFile.toPath())) {
+                    runCatching { Files.deleteIfExists(linkFile.toPath()) }
+                        .onFailure { Log.w(TAG, "清理 busybox applet 链失败: $linkName", it) }
+                }
+                continue
+            }
             try {
                 createSymbolicLink(busybox, linkName, binDir, true)
             } catch (e: Exception) {
