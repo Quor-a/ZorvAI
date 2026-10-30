@@ -202,6 +202,12 @@
     <!-- 包可见性：Android 11+ 默认隐藏大部分已装应用，必须显式声明才能查询/反查包名、启动应用。
          否则 getInstalledApplications / getPackageInfo 只能看到自身，导致「查看软件包名」「启动应用」失效。 -->
     <queries>
+        <!-- 小布（OPPO Breeno）：ZorvAI ↔ 小布双向桥需要能探测它的包与组件。
+             🔴 Android 11+ 包可见性：不在这里显式声明，getPackageInfo / resolveActivity
+                会直接返回 null，表现为"小布永远显示未安装"。 -->
+        <package android:name="com.heytap.speechassist" />
+        <package android:name="com.coloros.speechassist" />
+        <package android:name="com.oplus.speechassist" />
         <!-- 暴露所有带桌面入口（LAUNCHER）的应用，覆盖「查包名 / 打开应用」场景 -->
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -415,6 +421,20 @@
                 <action android:name="android.intent.action.PROCESS_TEXT" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!-- 快捷方式落地页（透明）：小布/系统助手执行我们的 shortcut 时落到这里，
+             按 skill extra 路由到具体能力。🔴 必须 exported：外部助手要能发过来。 -->
+        <activity
+            android:name=".activity.AssistantShortcutActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.action.SHORTCUT" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 

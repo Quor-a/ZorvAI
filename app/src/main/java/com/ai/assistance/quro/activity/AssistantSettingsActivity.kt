@@ -255,6 +255,10 @@ private fun SettingsScreen(ctx: Context) {
                 }) { Text("打开能力广场") }
             }
         }
+
+        // ── 五、小布协作（双向）──────────────────────────────
+        item { SectionHeader("小布协作") }
+        item { BreenoBridgeBlock(ctx) }
         item { Spacer(Modifier.height(28.dp)) }
     }
 }
@@ -495,6 +499,94 @@ private fun WakeupProbeRow(ctx: android.content.Context) {
                 fontSize = 11.5.sp,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                 lineHeight = 16.sp,
+            )
+        }
+    }
+}
+
+/**
+ * 小布协作区：两个方向都要能看见、能操作。
+ *
+ * 方向一（我们用小布）：打开它的设置 / 技能广场 / 让它找手机——
+ * 这些都是它 manifest 里确定的导出入口，成功率高。
+ *
+ * 方向二（小布用我们）：我们要把自己的能力发布成 App Shortcuts——
+ * 因为小布在 dex 里就是用 `ShortcutManager.execShortcutAsync(shortcutId)` 调第三方 App 的。
+ */
+@Composable
+private fun BreenoBridgeBlock(ctx: android.content.Context) {
+    var status by remember { mutableStateOf<com.ai.assistance.quro.core.assistant.BreenoBridge.Status?>(null) }
+    var lastMsg by remember { mutableStateOf("") }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+    fun run(label: String, block: () -> com.ai.assistance.quro.core.assistant.AssistantResult) {
+        scope.launch(Dispatchers.IO) {
+            val r = runCatching(block).getOrElse {
+                com.ai.assistance.quro.core.assistant.AssistantResult.internalError("breeno", it)
+            }
+            withContext(Dispatchers.Main) {
+                lastMsg = label + " → " + (if (r.ok) "OK " else "失败 ") + r.code + " " + r.message
+            }
+        }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        scope.launch(Dispatchers.IO) {
+            val st = com.ai.assistance.quro.core.assistant.BreenoBridge.status(ctx)
+            withContext(Dispatchers.Main) { status = st }
+        }
+    }
+
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        val st = status
+        Text(
+            text = when {
+                st == null -> "正在探测小布…"
+                st.installed -> "已找到小布：" + st.pkg + " " + st.versionName
+                else -> "这台机器上没有小布（或未在清单 queries 里声明包名）"
+            },
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        if (st != null && st.installed) {
+            Text(
+                text = st.resolvable.entries.joinToString("   ") { it.key + "=" + if (it.value) "可用" else "不可用" },
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "小布用 ZorvAI：把能力发布成应用快捷方式，小布按 ShortcutManager 就能发现并执行",
+            fontSize = 11.5.sp,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
+        )
+        Row {
+            TextButton(onClick = {
+                run("发布快捷方式") { com.ai.assistance.quro.core.assistant.BreenoBridge.publishShortcuts(ctx) }
+            }) { Text("让小布能用 ZorvAI") }
+        }
+        Text(
+            text = "ZorvAI 用小布：调它的设置 / 技能广场 / 找手机（都是它导出的入口）",
+            fontSize = 11.5.sp,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
+        )
+        Row {
+            TextButton(onClick = {
+                run("打开小布设置") { com.ai.assistance.quro.core.assistant.BreenoBridge.openSettings(ctx) }
+            }) { Text("小布设置") }
+            TextButton(onClick = {
+                run("技能广场") { com.ai.assistance.quro.core.assistant.BreenoBridge.openSkillPlaza(ctx) }
+            }) { Text("技能广场") }
+            TextButton(onClick = {
+                run("让小布找手机") { com.ai.assistance.quro.core.assistant.BreenoBridge.findPhone(ctx) }
+            }) { Text("让它找手机") }
+        }
+        if (lastMsg.isNotBlank()) {
+            Text(
+                text = lastMsg,
+                fontSize = 11.5.sp,
+                color = MaterialTheme.colorScheme.primary,
             )
         }
     }

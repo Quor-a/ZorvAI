@@ -42,5 +42,64 @@
             android:targetPackage="com.ai.assistance.quro"
             android:targetClass="com.ai.assistance.quro.activity.QuroMainActivity" />
     </shortcut>
+    <!-- ④~⑦ 能力型快捷方式：全部落到 AssistantShortcutActivity，按 skill 路由。
+         小布在 dex 里用 ShortcutManager.execShortcutAsync(shortcutId) 调第三方 App，
+         所以这里发布的每一条它都能看到并执行（见 BreenoBridge.publishShortcuts）。 -->
+    <shortcut
+        android:shortcutId="quro_ask"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/sc_ai_short"
+        android:shortcutLongLabel="@string/sc_ai_long">
+        <intent
+            android:action="com.ai.assistance.quro.action.SHORTCUT"
+            android:targetPackage="com.ai.assistance.quro"
+            android:targetClass="com.ai.assistance.quro.activity.AssistantShortcutActivity">
+            <extra android:name="skill" android:value="chat.ask" />
+        </intent>
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="quro_skills"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/sc_skills_short"
+        android:shortcutLongLabel="@string/sc_skills_long">
+        <intent
+            android:action="com.ai.assistance.quro.action.SHORTCUT"
+            android:targetPackage="com.ai.assistance.quro"
+            android:targetClass="com.ai.assistance.quro.activity.AssistantShortcutActivity">
+            <extra android:name="skill" android:value="plaza" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="quro_findphone"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/sc_find_short"
+        android:shortcutLongLabel="@string/sc_find_long">
+        <intent
+            android:action="com.ai.assistance.quro.action.SHORTCUT"
+            android:targetPackage="com.ai.assistance.quro"
+            android:targetClass="com.ai.assistance.quro.activity.AssistantShortcutActivity">
+            <extra android:name="skill" android:value="device.find-phone" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="quro_terminal"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/sc_env_short"
+        android:shortcutLongLabel="@string/sc_env_long">
+        <intent
+            android:action="com.ai.assistance.quro.action.SHORTCUT"
+            android:targetPackage="com.ai.assistance.quro"
+            android:targetClass="com.ai.assistance.quro.activity.AssistantShortcutActivity">
+            <extra android:name="skill" android:value="terminal.env-check" />
+        </intent>
+    </shortcut>
 
 </shortcuts>
