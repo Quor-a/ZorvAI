@@ -41,28 +41,6 @@ class QuroChatTileService : TileService() {
     }
 }
 
-/** 语音球磁贴：点击切换悬浮语音球（语音球服务内部 toggleBall）。 */
-class QuroVoiceTileService : TileService() {
-
-    override fun onStartListening() {
-        super.onStartListening()
-        qsTile?.apply {
-            state = Tile.STATE_INACTIVE
-            label = qstr(R.string.qk_03572)
-            icon = Icon.createWithResource(this@QuroVoiceTileService, R.mipmap.ic_launcher)
-            updateTile()
-        }
-    }
-
-    override fun onClick() {
-        super.onClick()
-        val i = Intent(this, QuroVoiceBallService::class.java).apply {
-            action = QuroVoiceBallService.ACTION_VOICE_TALK
-        }
-        // TileService 上下文可启动前台服务
-        startForegroundService(i)
-    }
-}
 /**
  * 能力广场磁贴（小布 `SettingsActivity` 的 `QS_TILE_PREFERENCES` 入口）。
  *
@@ -134,5 +112,51 @@ class QuroFindPhoneTileService : TileService() {
             com.ai.assistance.quro.core.assistant.FindMyPhone.start(app, 30)
         }
         onStartListening()
+    }
+}
+
+/**
+ * 语音唤起磁贴 —— 点一下直接进入聆听（小布 `service.SpeechTileService` 的同款入口）。
+ *
+ * 为什么磁贴值得单独做一个"语音"：下拉面板是所有唤起方式里**最快**的一条
+ * （不用解锁进 App、不用长按电源键）。小布把它做成磁贴而不是只放在设置里，
+ * 就是因为这是最高频的一次点击。
+ */
+class QuroVoiceTileService : TileService() {
+
+    override fun onStartListening() {
+        super.onStartListening()
+        qsTile?.apply {
+            state = Tile.STATE_ACTIVE
+            label = "Zorv 语音"
+            icon = Icon.createWithResource(this@QuroVoiceTileService, R.mipmap.ic_launcher)
+            updateTile()
+        }
+    }
+
+    override fun onClick() {
+        super.onClick()
+        val denied = com.ai.assistance.quro.core.assistant.AssistantServiceState
+            .gate(this, com.ai.assistance.quro.core.assistant.AssistantChannel.TILE)
+        if (denied != null) {
+            com.ai.assistance.quro.util.QuroDiag.log("assistant-tile", "voice tile denied: ${denied.wire()}")
+            qsTile?.apply { state = Tile.STATE_UNAVAILABLE; updateTile() }
+            return
+        }
+        val started = runCatching {
+            startForegroundService(
+                Intent(this, QuroVoiceBallService::class.java).apply {
+                    action = QuroVoiceBallService.ACTION_VOICE_TALK
+                }
+            )
+        }.isSuccess
+        if (!started) {
+            com.ai.assistance.quro.util.QuroDiag.log("assistant-tile", "voice ball 起不来，回落打开对话")
+            startActivityAndCollapse(
+                Intent(this, com.ai.assistance.quro.activity.QuroMainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }
+            )
+        }
     }
 }
