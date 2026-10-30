@@ -423,6 +423,24 @@ fun ChatScreen(
     onToggleDark: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
+    // ── 外部指令落地（Breeno TEXT_DIRECTIVE 范式，2026-10-30）──
+    // 第三方 App 经广播 / 系统分享 / quro://assistant 深链把一句话交进来 → 这里取走并直接发送。
+    // 冷启动也覆盖：指令先进 AssistantDirectiveBus 的信箱，ChatScreen 挂载后再消费。
+    LaunchedEffect(Unit) {
+        com.ai.assistance.quro.core.directive.AssistantDirectiveBus.pending.collect { d ->
+            if (d == null) return@collect
+            com.ai.assistance.quro.core.directive.AssistantDirectiveBus.consume()
+            runCatching { vm.send(d.text) }
+                .onSuccess {
+                    QuroDiag.log(
+                        "DIRECTIVE", "已发送 source=" + d.source + " len=" + d.text.length,
+                    )
+                }
+                .onFailure {
+                    QuroDiag.log("DIRECTIVE", "send 失败: " + it)
+                }
+        }
+    }
     val fontTiers = listOf(0.92f, 1f, 1.14f)
     val fontNames = listOf(stringResource(R.string.qk_00012), stringResource(R.string.qk_00013), stringResource(R.string.qk_00014))
 

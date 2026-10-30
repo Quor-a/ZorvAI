@@ -33,6 +33,11 @@
         android:name="ai.aci.permission.RECEIVE_TERMINAL_BROADCAST"
         android:label="Receive Terminal Broadcast Results"
         android:protectionLevel="normal" />
+    <!-- 外部应用把一句话交给 ZorvAI 助手（范式取自 Breeno 的 TEXT_DIRECTIVE） -->
+    <permission
+        android:name="ai.aci.permission.SEND_ASSISTANT_DIRECTIVE"
+        android:label="Send Directive To ZorvAI Assistant"
+        android:protectionLevel="normal" />
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -453,6 +458,29 @@
                 <data android:mimeType="vnd.android.cursor.dir/vnd.com.ai.assistance.quro.terminal.sessions" />
             </intent-filter>
         </provider>
+
+        <!-- 外部文本指令入口（Breeno TEXT_DIRECTIVE 范式）：显式广播 / 系统分享 / 深链三面合一。
+             清单层不挂 android:permission（否则 SEND/VIEW 会被第三方应用挡掉），
+             改为在接收器里对 DIRECTIVE 动作做 checkCallingPermission 校验。 -->
+        <receiver
+            android:name=".core.directive.AssistantDirectiveReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.action.DIRECTIVE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="quro" android:host="assistant" />
+            </intent-filter>
+        </receiver>
 
         <!-- 终端广播接收器：接收广播执行终端命令、获取终端状态等 -->
         <receiver
