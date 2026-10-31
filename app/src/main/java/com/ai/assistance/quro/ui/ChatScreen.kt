@@ -5949,6 +5949,9 @@ private fun SettingsSheetContent(
             // 后台虚拟屏（移植 Mika）：AI 在不打扰用户主屏的独立虚拟屏上操作 App，这里给可视化入口
             SetRowClickable(Icons.Filled.Apps, "后台虚拟屏", "看 AI 在后台屏上操作什么，可手动接管", "", onOpenBgScreen, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            // 系统级悬浮窗：跨 App 漂浮 + 可收成球 + 自由缩放 + 直接操控（对照 Extendroid）
+            BgOverlayRow(scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             // 桌面模式（libtaskbar）：官方唯一「当库引入」的 Android 10 桌面模式实现
             SetRowClickable(
                 Icons.Filled.DesktopWindows, "桌面模式（Taskbar）",
@@ -10613,6 +10616,51 @@ private fun DshAutoStartRow(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) 
                     com.ai.assistance.quro.core.harness.QuroDshKeepAlive.stop(ctx)
                     status = com.ai.assistance.quro.core.harness.QuroDshKeepAlive.statusText(ctx)
                 }
+            }
+        },
+        scaled = scaled,
+    )
+}
+
+/**
+ * 设置里的「后台屏悬浮窗」开关（系统级 overlay，跨 App 可见）。
+ *
+ * 与 App 内画中画的区别：这个浮在**任何 App 之上**，可收成一颗小球、可自由拉大小、
+ * 点画面直接操控虚拟屏 —— 对应 Extendroid 的 PopupWindow/OverlayMenu。
+ * 需要「显示在其他应用上层」权限，未授予时点开关直接跳授权页而不是静默失败。
+ */
+@Composable
+private fun BgOverlayRow(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
+    val ctx = LocalContext.current
+    var on by remember { mutableStateOf(com.ai.assistance.quro.service.QuroBgScreenOverlayService.running) }
+    var allowed by remember { mutableStateOf(com.ai.assistance.quro.service.QuroBgScreenOverlayService.isOverlayAllowed(ctx)) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1500)
+            on = com.ai.assistance.quro.service.QuroBgScreenOverlayService.running
+            allowed = com.ai.assistance.quro.service.QuroBgScreenOverlayService.isOverlayAllowed(ctx)
+        }
+    }
+
+    SetRow(
+        icon = Icons.Filled.Apps,
+        name = "后台屏悬浮窗（跨 App）",
+        sub = when {
+            !allowed -> "缺「显示在其他应用上层」权限 · 点它去授权"
+            on -> "已浮在屏幕上 · 点画面直接操作，右上「—」收成小球，右下角可拉大小"
+            else -> "让 AI 的后台屏浮在任何 App 之上，随时插手"
+        },
+        checked = on && allowed,
+        onToggle = {
+            if (!allowed) {
+                com.ai.assistance.quro.service.QuroBgScreenOverlayService.requestOverlayPermission(ctx)
+            } else if (on) {
+                com.ai.assistance.quro.service.QuroBgScreenOverlayService.stop(ctx)
+                on = false
+            } else {
+                com.ai.assistance.quro.service.QuroBgScreenOverlayService.start(ctx)
+                on = true
             }
         },
         scaled = scaled,

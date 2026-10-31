@@ -58,6 +58,16 @@ object QuroVirtualScreen {
     /** 后台屏的实时画面（缩略到宽 ≤360，供管理页/画中画显示）。 */
     val frames: StateFlow<Bitmap?> = _frames.asStateFlow()
 
+    /**
+     * 虚拟屏的像素宽高（用于把浮窗内的触摸坐标换算成屏内坐标）。
+     *
+     * 优先用当前帧的实际尺寸 —— 那是真实渲染出来的宽高；没有帧时退回屏对象记录的值，
+     * 都没有就返回 0，调用方据此跳过这次点击（而不是按错误比例点到别处）。
+     */
+    fun frameWidth(): Int = _frames.value?.width ?: display?.width ?: 0
+
+    fun frameHeight(): Int = _frames.value?.height ?: display?.height ?: 0
+
     private val _state = MutableStateFlow(UiState())
 
     /** 屏状态（是否就绪、屏号、当前 Activity、错误）。 */

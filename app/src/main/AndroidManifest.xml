@@ -495,6 +495,18 @@
 
         <!-- 终端默认会话保活服务：前台常驻，每 15s 保活默认终端会话（installIfMissing=false）。
              进程内 fork 的 shell 子进程属于本服务进程，前台服务存活 → 子进程存活 → 息屏/切 App 不被杀。 -->
+        <!-- 后台虚拟屏的**系统级悬浮窗**（跨 App 漂浮 + 可收成球 + 自由缩放 + 直接操控）。
+             对照 Extendroid 的 PopupWindow / OverlayMenu；需要 SYSTEM_ALERT_WINDOW（已声明），
+             实际还要用户授予「显示在其他应用上层」。 -->
+        <service
+            android:name=".service.QuroBgScreenOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="后台虚拟屏悬浮窗：把 AI 操作的虚拟屏浮在屏幕上，支持直接点按与自由缩放" />
+        </service>
+
         <service
             android:name=".service.QuroTerminalKeepAliveService"
             android:exported="false"
