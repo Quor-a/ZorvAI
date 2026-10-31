@@ -9,37 +9,16 @@ import com.ai.assistance.quro.util.QuroDiag
 import java.io.File
 
 /**
- * 内置能力表 —— ZorvAI 对「小布功能面」的完整对应清单。
+ * 内置能力表 —— ZorvAI 助手能力账本。
  *
- * ## 这份表就是"所有功能"的账本
- *
- * 小布（`com.heytap.speechassist` v13.3.5）对外暴露 49 个 Activity / 36 个 Service / 197 个
- * Intent Action。其中**在 ZorvAI 里成立**的能力在这里逐条落地，并在注释里标注组件，
- * 这样"搬全了没有"是可查的，不靠记忆。
- *
- * ## 已一致（ZorvAI 本来就有，本表只做统一收口）
- * | 小布 | ZorvAI |
- * |---|---|
- * | `TEXT_DIRECTIVE` | `AssistantDirectiveReceiver` + [AssistantDirectiveBus] |
- * | `results.proto` SealedResult | [AssistantResult] + [AssistantCodes] |
- * | `super_channel_data.proto` 卡片增量 | `core.cards.CardPatch`（A2UI JSON Pointer） |
- * | `SKILL_PLAZA_*` 技能广场 | [AssistantSkillRegistry] + `AssistantSkillPlazaActivity` |
- * | `FIND_PHONE` 查手机 | [FindMyPhone] |
- * | `SUBMIT_BACKGROUND_TASK_RELAY` | [BackgroundTaskRelay] |
- * | `agents.proto` 跨设备 Agent | [AgentLink] |
- * | `AIChatShareReceiveActivity`（PROCESS_TEXT/SEND） | `AssistantShareReceiver` |
- * | `ReminderActivity` 提醒 | `QuroReminderActivity` + `QuroScheduledTask` |
- * | `ASSIST` / `VOICE_COMMAND` 语音唤起 | 语音球 + `QuroAsrService` |
- * | `QS_TILE` 快捷磁贴 | 已有 3 个 TileService |
- * | `DeepLinkActivity` 深链 | `quro://assistant` |
- * | `DragReceive` 拖拽接收 | `AssistantShareReceiver`（EXTRA 同样收） |
+ * 这份表就是"所有功能"的清单：语音 / 文本指令 / 分享 / 工具中心 / AI 工具等入口
+ * 全部经 [AssistantSkillRegistry] 路由到同一张表，新增能力只注册一处。
  *
  * ## 明确不搬（诚实标注，不假装做了）
  * - **AI 接电话**（`BIND_CALL_SERVICE` / `CALL_PRIVILEGED`）：要系统签名级特权，普通应用拿不到。
  * - **OCar 车机通道**（`com.oplus.intent.action.OCAR`）：依赖 OPPO 车机协议栈。
- * - **支付结果页**（`OplusPayWebContainerActivity` 等）：与本应用价值无关。
- * - **端侧唤醒词 / 声纹**（`free_wakeup.jet` / `call_wakeup.umdl` / `libBreenoWakeupVprint`）：
- *   需要模型权重与常驻音频前处理，属独立工程（接口位留在 `VOICE` 来源上）。
+ * - **支付结果页**：与本应用价值无关。
+ * - **端侧唤醒词 / 声纹**：需要模型权重与常驻音频前处理，属独立工程。
  */
 object AssistantBuiltinSkills {
     private const val TAG = "assistant-builtin"
@@ -93,7 +72,7 @@ object AssistantBuiltinSkills {
         AssistantSkill(
             id = "chat.explain-selection",
             title = "解释这段文字",
-            summary = "对选中/分享进来的文本做解释（小布 AIChatShareReceiveActivity 的 PROCESS_TEXT）",
+            summary = "对选中/分享进来的文本做解释（PROCESS_TEXT）",
             category = AssistantCategory.CHAT,
             keywords = listOf("解释这段", "explain selection", "这段什么意思"),
             external = true,
@@ -107,7 +86,7 @@ object AssistantBuiltinSkills {
             }
         },
 
-        // ── 终端（小布无直接对应，属我们自己的强项）────────────
+        // ── 终端（ZorvAI 自研强项）────────────
         AssistantSkill(
             id = "terminal.env-check",
             title = "检查终端环境",
@@ -144,7 +123,7 @@ object AssistantBuiltinSkills {
         AssistantSkill(
             id = "device.find-phone",
             title = "我手机呢",
-            summary = "最大声闹铃 + 持续震动 + 亮屏（小布 FIND_PHONE）",
+            summary = "最大声闹铃 + 持续震动 + 亮屏",
             category = AssistantCategory.DEVICE,
             keywords = listOf("找手机", "我手机呢", "find my phone", "手机在哪", "查手机"),
             external = true,
@@ -188,43 +167,9 @@ object AssistantBuiltinSkills {
         },
 
         AssistantSkill(
-            id = "voice.wakeup-probe",
-            title = "语音唤醒引擎探测",
-            summary = "分层探测搬进来的小布语音引擎（库加载 / 前端处理 / 实例 / 版本）+ 唤醒模型在位情况",
-            category = AssistantCategory.DEVICE,
-            keywords = listOf("唤醒探测", "语音引擎", "唤醒词", "wakeup", "语音唤醒"),
-            external = true,
-        ) { req ->
-            val ctx = requireCtx()
-            val p = BreenoWakeup.probe(ctx)
-            val data = linkedMapOf<String, Any?>(
-                "level" to p.level.code,
-                "levelDesc" to p.level.desc,
-                "amplitude" to p.amplitude,
-                "handle" to p.handle,
-                "version" to p.version,
-                "missingModels" to p.missingModels.joinToString(","),
-                "usable" to p.usable,
-            )
-            if (p.usable) {
-                AssistantResult.ok(
-                    "voice.wakeup-probe",
-                    "引擎就绪：${p.version ?: "（无版本号）"}",
-                    data = data,
-                )
-            } else {
-                AssistantResult.fail(
-                    if (p.level == BreenoWakeup.Level.NOT_LOADED) AssistantCodes.UNSUPPORTED else AssistantCodes.SKILL_FAILED,
-                    p.error ?: p.level.desc,
-                    data = data,
-                )
-            }
-        },
-
-        AssistantSkill(
             id = "device.driving-mode",
             title = "驾驶模式",
-            summary = "大字 + 语音优先的免手操作形态（小布 DrivingMainActivity / OCar）",
+            summary = "大字 + 语音优先的免手操作形态",
             category = AssistantCategory.DEVICE,
             keywords = listOf("驾驶模式", "开车模式", "driving"),
             external = true,
@@ -270,7 +215,7 @@ object AssistantBuiltinSkills {
         AssistantSkill(
             id = "sys.diagnostics",
             title = "导出诊断目录",
-            summary = "拿到可发出来的诊断路径（小布 hlog 的对外面）",
+            summary = "拿到可发出来的诊断路径",
             category = AssistantCategory.SYSTEM,
             keywords = listOf("诊断", "日志", "diagnostics", "log"),
             external = true,
@@ -338,92 +283,11 @@ object AssistantBuiltinSkills {
             }
         },
 
-        // ── 小布协作（双向）────────────────────────────────────
-        AssistantSkill(
-            id = "breeno.status",
-            title = "小布桥状态",
-            summary = "看这台机器有没有小布、哪个入口能调（包名/版本/各 action 是否可解析）",
-            category = AssistantCategory.BRIDGE,
-            keywords = listOf("小布状态", "breeno", "小布桥", "breeno status"),
-            external = true,
-        ) { req ->
-            val st = BreenoBridge.status(requireCtx())
-            if (st.installed) {
-                val okCount = st.resolvable.count { it.value }
-                AssistantResult.ok(
-                    "breeno.status",
-                    "已找到小布：${st.pkg} ${st.versionName}（${okCount}/${st.resolvable.size} 个入口可用）",
-                    data = linkedMapOf<String, Any?>(
-                        "installed" to true,
-                        "pkg" to st.pkg,
-                        "versionName" to st.versionName,
-                        "versionCode" to st.versionCode,
-                        "entries" to st.resolvable.entries.joinToString(", ") { "${it.key}=${it.value}" },
-                    ),
-                )
-            } else {
-                AssistantResult.fail(
-                    AssistantCodes.UNSUPPORTED,
-                    "没找到小布（试过 ${BreenoBridge.CANDIDATE_PKGS.joinToString("/")}）。" +
-                        "若是 Android 11+，还要确认清单 queries 里声明了它的包名。",
-                    data = mapOf("installed" to false),
-                )
-            }
-        },
-
-        AssistantSkill(
-            id = "breeno.open-settings",
-            title = "打开小布设置",
-            summary = "跳到小布那一页（服务总开关 / 唤醒设置 / 播报设置都在那）",
-            category = AssistantCategory.BRIDGE,
-            keywords = listOf("小布设置", "打开小布", "breeno settings"),
-            external = true,
-        ) { BreenoBridge.openSettings(requireCtx()) },
-
-        AssistantSkill(
-            id = "breeno.send-text",
-            title = "把话交给小布",
-            summary = "把一段文本投给小布处理（先试 THIRD_PARTY_MESSAGE，失败回落它的 AI 对话）",
-            category = AssistantCategory.BRIDGE,
-            keywords = listOf("交给小布", "让小布", "问小布", "breeno send"),
-            external = true,
-        ) { req ->
-            val text = req.arg("text") ?: req.text
-            BreenoBridge.sendText(requireCtx(), text)
-        },
-
-        AssistantSkill(
-            id = "breeno.find-phone",
-            title = "让小布找手机",
-            summary = "调小布自己的 FIND_PHONE（我们也有同能力，两套都在）",
-            category = AssistantCategory.BRIDGE,
-            keywords = listOf("小布找手机", "breeno find phone"),
-            external = true,
-        ) { BreenoBridge.findPhone(requireCtx()) },
-
-        AssistantSkill(
-            id = "breeno.skill-plaza",
-            title = "打开小布技能广场",
-            summary = "看小布有哪些技能、管理它的技能（也能顺便对小布里的 ZorvAI 做授权）",
-            category = AssistantCategory.BRIDGE,
-            keywords = listOf("小布技能", "技能广场", "breeno skills"),
-            external = true,
-        ) { BreenoBridge.openSkillPlaza(requireCtx()) },
-
-        AssistantSkill(
-            id = "breeno.publish-shortcuts",
-            title = "让小布能用 ZorvAI",
-            summary = "发布带 capability binding 的应用快捷方式，小布/系统助手可发现并直接执行 ZorvAI 能力",
-            category = AssistantCategory.BRIDGE,
-            keywords = listOf("发布快捷方式", "让小布调用", "breeno publish"),
-            external = true,
-        ) { BreenoBridge.publishShortcuts(requireCtx()) },
-
         // ── 自省 ────────────────────────────────────────────────
         AssistantSkill(
             id = "skill.catalog",
             title = "能力清单",
-            summary = "列出 ZorvAI 当前全部能力（技能广场的数据源）",
+            summary = "列出 ZorvAI 当前全部能力",
             category = AssistantCategory.KNOWLEDGE,
             keywords = listOf("能力清单", "会什么", "skills", "能做什么"),
             external = true,

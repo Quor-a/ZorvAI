@@ -46,12 +46,10 @@ object AssistantSelfCheck {
     enum class FixAction {
         NONE,
         REQUEST_ASSISTANT_ROLE,
-        OPEN_ASSISTANT_SETTINGS,
         REQUEST_MIC,
         REQUEST_OVERLAY,
         REQUEST_NOTIFICATION,
         OPEN_QS_PANEL,
-        PUBLISH_SHORTCUTS,
     }
 
     /** 全量自检。 */
@@ -63,7 +61,6 @@ object AssistantSelfCheck {
         add(overlay(ctx))
         add(notification(ctx))
         add(foregroundService(ctx))
-        add(tile(ctx))
         add(shortcuts(ctx))
     }.also { items ->
         val bad = items.filter { it.level != Level.OK }
@@ -83,7 +80,7 @@ object AssistantSelfCheck {
                 "assistant-role", "默认数字助理", Level.BLOCKED,
                 "本机系统不允许申请 ROLE_ASSISTANT（ROM 关闭了该角色）",
                 "只能去系统设置里手动挑助手；部分 ROM 完全不给第三方",
-                FixAction.OPEN_ASSISTANT_SETTINGS,
+                FixAction.NONE,
             )
 
             else -> Item(
@@ -184,41 +181,18 @@ object AssistantSelfCheck {
         )
     }
 
-    /** 快捷磁贴是否已被用户加到下拉面板。 */
-    private fun tile(ctx: Context): Item {
-        val svc = "com.ai.assistance.quro.service.QuroSkillsTileService"
-        val added = runCatching {
-            val st = ctx.getSystemService(android.app.StatusBarManager::class.java)
-            st?.requestAddTileService(
-                android.content.ComponentName(ctx, svc),
-                "Zorv 能力",
-                android.graphics.drawable.Icon.createWithResource(ctx, android.R.mipmap.sym_def_app_icon),
-                java.util.concurrent.Executor { it.run() },
-                {},
-            )
-            // requestAddTileService 只是"请求"，无法同步知道结果 —— 这里返回 null 表示"未知"
-            null
-        }.getOrNull()
-        return Item(
-            "tile", "快捷磁贴", Level.WARN,
-            if (added == null) "磁贴已注册，是否已加到下拉面板要你自己看一眼（系统不提供查询接口）" else "",
-            "下拉快捷面板 → 编辑 → 找「Zorv 能力」「Zorv 我手机呢」",
-            FixAction.OPEN_QS_PANEL,
-        )
-    }
-
-    /** 快捷方式是否已发布（小布/系统助手靠它调我们）。 */
+    /** 快捷方式是否已发布。 */
     private fun shortcuts(ctx: Context): Item {
         val n = runCatching {
             ctx.getSystemService(android.content.pm.ShortcutManager::class.java)
                 ?.let { it.dynamicShortcuts.size + it.manifestShortcuts.size } ?: 0
         }.getOrDefault(0)
-        return if (n > 0) Item("shortcuts", "应用快捷方式", Level.OK, "已有 $n 条快捷方式可被小布/系统助手发现")
+        return if (n > 0) Item("shortcuts", "应用快捷方式", Level.OK, "已有 $n 条快捷方式")
         else Item(
             "shortcuts", "应用快捷方式", Level.WARN,
-            "0 条 —— 小布无法通过 ShortcutManager 调用本应用",
-            "点右侧发布能力快捷方式",
-            FixAction.PUBLISH_SHORTCUTS,
+            "0 条快捷方式",
+            "",
+            FixAction.NONE,
         )
     }
 
