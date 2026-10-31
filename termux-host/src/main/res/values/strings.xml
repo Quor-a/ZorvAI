@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="termux_app_name">ZorvAI 增强终端</string>
+    <string name="shared_user_label">ZorvAI 终端用户</string>
+
+    <!-- 会话侧栏 / 快捷键 -->
+    <string name="action_new_session">新建会话</string>
+    <string name="action_new_session_failsafe">安全模式</string>
+    <string name="title_max_terminals_reached">已达最大终端数</string>
+    <string name="msg_max_terminals_reached">请先关闭已有会话再新建。</string>
+    <string name="title_rename_session">设置会话名称</string>
+    <string name="action_rename_session_confirm">设置</string>
+    <string name="title_create_named_session">新建命名会话</string>
+    <string name="action_create_named_session_confirm">创建</string>
+    <string name="action_toggle_soft_keyboard">键盘</string>
+    <string name="msg_enabling_terminal_toolbar">正在启用终端工具栏</string>
+    <string name="msg_disabling_terminal_toolbar">正在禁用终端工具栏</string>
+
+    <!-- 终端弹窗 -->
+    <string name="action_select_url">选择 URL</string>
+    <string name="title_select_url_dialog">点击 URL 复制，长按打开</string>
+    <string name="title_select_url_none_found">终端中未找到 URL。</string>
+    <string name="msg_select_url_copied_to_clipboard">URL 已复制到剪贴板</string>
+    <string name="action_share_transcript">分享记录</string>
+    <string name="title_share_transcript">终端记录</string>
+    <string name="title_share_transcript_with">发送记录到：</string>
+    <string name="action_share_selected_text">分享选中文本</string>
+    <string name="title_share_selected_text">终端文本</string>
+    <string name="title_share_selected_text_with">发送选中文本到：</string>
+    <string name="action_autofill_username">自动填充用户名</string>
+    <string name="action_autofill_password">自动填充密码</string>
+    <string name="action_reset_terminal">重置</string>
+    <string name="msg_terminal_reset">终端已重置</string>
+    <string name="action_kill_process">结束进程 (%d)</string>
+    <string name="title_confirm_kill_process">确定要结束这个会话吗？</string>
+    <string name="msg_kill_process">确定要结束当前会话的进程吗？</string>
+    <string name="action_style_terminal">样式</string>
+    <string name="action_toggle_keep_screen_on">保持屏幕常亮</string>
+    <string name="title_keep_screen_on">保持屏幕常亮</string>
+    <string name="action_open_help">帮助</string>
+    <string name="action_open_settings">设置</string>
+    <string name="action_report_issue">报告问题</string>
+    <string name="msg_generating_report">正在生成报告</string>
+
+    <!-- 上下文菜单 -->
+    <string name="title_context_menu">终端操作</string>
+    <string name="title_select_url">选择 URL</string>
+    <string name="title_reset_terminal">重置终端</string>
+    <string name="title_kill_process">结束进程</string>
+    <string name="title_toggle_toolbar">切换工具栏</string>
+    <string name="title_toggle_keyboard">切换键盘</string>
+
+    <!-- 通知 -->
+    <string name="notification_action_exit">退出</string>
+    <string name="notification_action_wake_lock">获取唤醒锁</string>
+    <string name="notification_action_wake_unlock">释放唤醒锁</string>
+    <string name="notification_channel_name">终端会话</string>
+    <string name="notification_channel_description">增强终端会话在后台运行通知</string>
+    <string name="notification_title_terminal_sessions">ZorvAI 终端会话</string>
+    <string name="notification_text_terminal_sessions">%1$d 个会话正在运行</string>
+
+    <!-- 服务错误 -->
+    <string name="error_termux_service_invalid_execution_command_runner">无效的执行命令运行器: `%1$s`</string>
+    <string name="error_termux_service_unsupported_execution_command_runner">不支持的执行命令运行器: `%1$s`</string>
+    <string name="error_termux_service_unsupported_execution_command_shell_create_mode">不支持的 shell 创建模式: `%1$s`</string>
+    <string name="error_termux_service_execution_command_shell_name_unset">未设置 Shell 名称但传入了 `%1$s` 创建模式</string>
+    <string name="error_termux_service_start_failed_general">启动终端服务失败，请重试</string>
+    <string name="error_termux_service_start_failed_bg">应用处于后台，无法启动终端服务</string>
+
+    <!-- RUN_COMMAND -->
+    <string name="error_run_command_service_invalid_intent_action">无效的 Intent action: `%1$s`</string>
+    <string name="error_run_command_service_invalid_execution_command_runner">无效的执行命令运行器: `%1$s`</string>
+    <string name="error_run_command_service_mandatory_extra_missing">缺少必填 extra: \"%1$s\"</string>
+
+    <!-- 设置 -->
+    <string name="title_activity_termux_settings">终端设置</string>
+    <string name="title_settings">终端设置</string>
+
+    <!-- 根偏好 -->
+    <string name="title_terminal_preferences">终端首选项</string>
+    <string name="title_terminal_view_preferences">终端视图</string>
+    <string name="title_terminal_io_preferences">终端输入输出</string>
+    <string name="title_debugging_preferences">调试</string>
+
+</resources>
