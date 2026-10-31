@@ -590,8 +590,10 @@ class AnsiTerminalEmulator(
     
     private fun scrollUp(lines: Int = 1) {
         for (i in 0 until lines) {
+            // 🔴 必须 copyOf() 逐行拷贝，不能引用赋值：否则多行共享同一 Array，
+            // 后续任何一行被改写，其它行会「镜像」同样内容（终端滚动后文本错乱）。
             for (y in scrollTop until scrollBottom) {
-                screenBuffer[y] = screenBuffer[y + 1]
+                screenBuffer[y] = screenBuffer[y + 1].copyOf()
             }
             // BCE：滚动产生的空行继承当前背景色（TUI 应用依赖此行为绘制连续色块）
             screenBuffer[scrollBottom] = Array(screenWidth) { TerminalChar(' ', currentAttributes) }
@@ -601,7 +603,7 @@ class AnsiTerminalEmulator(
     private fun scrollDown(lines: Int = 1) {
         for (i in 0 until lines) {
             for (y in scrollBottom downTo scrollTop + 1) {
-                screenBuffer[y] = screenBuffer[y - 1]
+                screenBuffer[y] = screenBuffer[y - 1].copyOf()
             }
             screenBuffer[scrollTop] = Array(screenWidth) { TerminalChar() }
         }
@@ -669,7 +671,7 @@ class AnsiTerminalEmulator(
     private fun insertLines(n: Int) {
         for (i in 0 until n) {
             for (y in scrollBottom downTo cursorY + 1) {
-                screenBuffer[y] = screenBuffer[y - 1]
+                screenBuffer[y] = screenBuffer[y - 1].copyOf()
             }
             screenBuffer[cursorY] = Array(screenWidth) { TerminalChar() }
         }
@@ -678,7 +680,7 @@ class AnsiTerminalEmulator(
     private fun deleteLines(n: Int) {
         for (i in 0 until n) {
             for (y in cursorY until scrollBottom) {
-                screenBuffer[y] = screenBuffer[y + 1]
+                screenBuffer[y] = screenBuffer[y + 1].copyOf()
             }
             screenBuffer[scrollBottom] = Array(screenWidth) { TerminalChar() }
         }
