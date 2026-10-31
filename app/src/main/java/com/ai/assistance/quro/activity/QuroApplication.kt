@@ -192,6 +192,20 @@ class QuroApplication : Application(), Configuration.Provider {
         try {
             TerminalPrivilegeBridgeHolder.set(QuroTerminalPrivilegeBridge(applicationContext))
         } catch (_: Throwable) {}
+        // 增强终端 = 完整移植的 Termux 官方宿主。由于 app 的 Application 类是 QuroApplication
+        // （library manifest 里的 TermuxApplication 不会生效），此处手动执行 TermuxApplication
+        // 的初始化序列（SharedProperties/ShellManager/主题/ShellEnvironment/AM socket/崩溃处理），
+        // 否则 TermuxService.onCreate() 里 getProperties() 会拿到 null 而崩溃。
+        try {
+            com.ai.assistance.quro.termux.shared.termux.crash.TermuxCrashUtils.setDefaultCrashHandler(applicationContext)
+            com.ai.assistance.quro.termux.shared.termux.settings.properties.TermuxAppSharedProperties.init(applicationContext)
+            com.ai.assistance.quro.termux.shared.termux.shell.TermuxShellManager.init(applicationContext)
+            com.ai.assistance.quro.termux.shared.termux.theme.TermuxThemeUtils.setAppNightMode(applicationContext)
+            com.ai.assistance.quro.termux.shared.termux.shell.command.environment.TermuxShellEnvironment.init(applicationContext)
+            runCatching {
+                com.ai.assistance.quro.termux.shared.termux.shell.am.TermuxAmSocketServer.setupTermuxAmSocketServer(applicationContext)
+            }
+        } catch (_: Throwable) {}
         // 以下四项均为「启动期增强初始化」，任一失败都不应让用户进不去 App：
         //  - 导入工具加载
         //  - 本地 MCP 服务器拉起

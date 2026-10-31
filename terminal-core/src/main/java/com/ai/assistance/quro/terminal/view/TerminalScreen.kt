@@ -83,8 +83,8 @@ fun TerminalScreen(
         }
 
         // 增强终端（vtlib 完整 VT 模拟器 + 额外按键栏）
-        // 当宿主注入了 onLaunchEnhancedTerminal（app 壳层启动完整 TermuxHostActivity）时，
-        // 此路由不再使用轻量实现，直接由回调拉起完整移植的 Termux 宿主。
+        // 当宿主注入了 onLaunchEnhancedTerminal（app 壳层启动完整移植的 TermuxActivity）时，
+        // 此路由不再使用轻量实现，直接由回调拉起完整移植的 Termux 官方宿主。
         composable(TerminalRoutes.ENHANCED_TERMINAL_ROUTE) {
             val launch = onLaunchEnhancedTerminal
             if (launch != null) {

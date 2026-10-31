@@ -1,86 +1,374 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!DOCTYPE resources [
+    <!ENTITY TERMUX_PACKAGE_NAME "com.termux">
+    <!ENTITY TERMUX_APP_NAME "Termux">
+    <!ENTITY TERMUX_API_APP_NAME "Termux:API">
+    <!ENTITY TERMUX_BOOT_APP_NAME "Termux:Boot">
+    <!ENTITY TERMUX_FLOAT_APP_NAME "Termux:Float">
+    <!ENTITY TERMUX_STYLING_APP_NAME "Termux:Styling">
+    <!ENTITY TERMUX_TASKER_APP_NAME "Termux:Tasker">
+    <!ENTITY TERMUX_WIDGET_APP_NAME "Termux:Widget">
+    ]>
+
 <resources>
 
-    <string name="termux_app_name">ZorvAI 增强终端</string>
-    <string name="shared_user_label">ZorvAI 终端用户</string>
+    <string name="application_name">ZorvAI 增强终端</string>
+    <string name="shared_user_label">ZorvAI 增强终端 user</string>
 
-    <!-- 会话侧栏 / 快捷键 -->
-    <string name="action_new_session">新建会话</string>
-    <string name="action_new_session_failsafe">安全模式</string>
-    <string name="title_max_terminals_reached">已达最大终端数</string>
-    <string name="msg_max_terminals_reached">请先关闭已有会话再新建。</string>
-    <string name="title_rename_session">设置会话名称</string>
-    <string name="action_rename_session_confirm">设置</string>
-    <string name="title_create_named_session">新建命名会话</string>
-    <string name="action_create_named_session_confirm">创建</string>
-    <string name="action_toggle_soft_keyboard">键盘</string>
-    <string name="msg_enabling_terminal_toolbar">正在启用终端工具栏</string>
-    <string name="msg_disabling_terminal_toolbar">正在禁用终端工具栏</string>
 
-    <!-- 终端弹窗 -->
-    <string name="action_select_url">选择 URL</string>
-    <string name="title_select_url_dialog">点击 URL 复制，长按打开</string>
-    <string name="title_select_url_none_found">终端中未找到 URL。</string>
-    <string name="msg_select_url_copied_to_clipboard">URL 已复制到剪贴板</string>
-    <string name="action_share_transcript">分享记录</string>
-    <string name="title_share_transcript">终端记录</string>
-    <string name="title_share_transcript_with">发送记录到：</string>
-    <string name="action_share_selected_text">分享选中文本</string>
-    <string name="title_share_selected_text">终端文本</string>
-    <string name="title_share_selected_text_with">发送选中文本到：</string>
-    <string name="action_autofill_username">自动填充用户名</string>
-    <string name="action_autofill_password">自动填充密码</string>
-    <string name="action_reset_terminal">重置</string>
-    <string name="msg_terminal_reset">终端已重置</string>
-    <string name="action_kill_process">结束进程 (%d)</string>
-    <string name="title_confirm_kill_process">确定要结束这个会话吗？</string>
-    <string name="msg_kill_process">确定要结束当前会话的进程吗？</string>
-    <string name="action_style_terminal">样式</string>
-    <string name="action_toggle_keep_screen_on">保持屏幕常亮</string>
-    <string name="title_keep_screen_on">保持屏幕常亮</string>
-    <string name="action_open_help">帮助</string>
-    <string name="action_open_settings">设置</string>
-    <string name="action_report_issue">报告问题</string>
-    <string name="msg_generating_report">正在生成报告</string>
 
-    <!-- 上下文菜单 -->
-    <string name="title_context_menu">终端操作</string>
-    <string name="title_select_url">选择 URL</string>
-    <string name="title_reset_terminal">重置终端</string>
-    <string name="title_kill_process">结束进程</string>
-    <string name="title_toggle_toolbar">切换工具栏</string>
-    <string name="title_toggle_keyboard">切换键盘</string>
+    <!-- Termux RUN_COMMAND permission -->
+    <string name="permission_run_command_label">Run commands in ZorvAI 增强终端 environment</string>
+    <string name="permission_run_command_description">execute arbitrary commands within ZorvAI 增强终端
+        environment and access files</string>
 
-    <!-- 通知 -->
-    <string name="notification_action_exit">退出</string>
-    <string name="notification_action_wake_lock">获取唤醒锁</string>
-    <string name="notification_action_wake_unlock">释放唤醒锁</string>
-    <string name="notification_channel_name">终端会话</string>
-    <string name="notification_channel_description">增强终端会话在后台运行通知</string>
-    <string name="notification_title_terminal_sessions">ZorvAI 终端会话</string>
-    <string name="notification_text_terminal_sessions">%1$d 个会话正在运行</string>
 
-    <!-- 服务错误 -->
-    <string name="error_termux_service_invalid_execution_command_runner">无效的执行命令运行器: `%1$s`</string>
-    <string name="error_termux_service_unsupported_execution_command_runner">不支持的执行命令运行器: `%1$s`</string>
-    <string name="error_termux_service_unsupported_execution_command_shell_create_mode">不支持的 shell 创建模式: `%1$s`</string>
-    <string name="error_termux_service_execution_command_shell_name_unset">未设置 Shell 名称但传入了 `%1$s` 创建模式</string>
-    <string name="error_termux_service_start_failed_general">启动终端服务失败，请重试</string>
-    <string name="error_termux_service_start_failed_bg">应用处于后台，无法启动终端服务</string>
 
-    <!-- RUN_COMMAND -->
-    <string name="error_run_command_service_invalid_intent_action">无效的 Intent action: `%1$s`</string>
-    <string name="error_run_command_service_invalid_execution_command_runner">无效的执行命令运行器: `%1$s`</string>
-    <string name="error_run_command_service_mandatory_extra_missing">缺少必填 extra: \"%1$s\"</string>
+    <!-- Termux Bootstrap Packages Installation -->
+    <string name="bootstrap_installer_body">Installing bootstrap packages…</string>
+    <string name="bootstrap_error_title">Unable to install bootstrap</string>
+    <string name="bootstrap_error_body">ZorvAI 增强终端 was unable to install the bootstrap packages.</string>
+    <string name="bootstrap_error_abort">Abort</string>
+    <string name="bootstrap_error_try_again">Try again</string>
+    <string name="bootstrap_error_not_primary_user_message">ZorvAI 增强终端 can only be run as the primary user.
+        \nBootstrap binaries compiled for ZorvAI 增强终端 have hardcoded $PREFIX path and cannot be installed
+        under any path other than:\n%1$s.</string>
+    <string name="bootstrap_error_installed_on_portable_sd">ZorvAI 增强终端 cannot be installed on
+        portable/external/removable sd card on your device.
+        \nBootstrap binaries compiled for ZorvAI 增强终端 have hardcoded $PREFIX path and cannot be installed
+        under any path other than:\n%1$s.</string>
 
-    <!-- 设置 -->
-    <string name="title_activity_termux_settings">终端设置</string>
-    <string name="title_settings">终端设置</string>
 
-    <!-- 根偏好 -->
-    <string name="title_terminal_preferences">终端首选项</string>
-    <string name="title_terminal_view_preferences">终端视图</string>
-    <string name="title_terminal_io_preferences">终端输入输出</string>
-    <string name="title_debugging_preferences">调试</string>
 
+    <!-- Terminal Sidebar and Shortcuts -->
+    <string name="action_new_session">New session</string>
+    <string name="action_new_session_failsafe">Failsafe</string>
+    <string name="title_max_terminals_reached">Max terminals reached</string>
+    <string name="msg_max_terminals_reached">Close down existing ones before creating new.</string>
+
+    <string name="title_rename_session">Set session name</string>
+    <string name="action_rename_session_confirm">Set</string>
+    <string name="title_create_named_session">New named session</string>
+    <string name="action_create_named_session_confirm">Create</string>
+
+    <string name="action_toggle_soft_keyboard">Keyboard</string>
+
+    <string name="msg_enabling_terminal_toolbar">Enabling Terminal Toolbar</string>
+    <string name="msg_disabling_terminal_toolbar">Disabling Terminal Toolbar</string>
+
+
+
+    <!-- Terminal Popup -->
+    <string name="action_select_url">Select URL</string>
+    <string name="title_select_url_dialog">Click URL to copy or long press to open</string>
+    <string name="title_select_url_none_found">No URL found in the terminal.</string>
+    <string name="msg_select_url_copied_to_clipboard">URL copied to clipboard</string>
+
+    <string name="action_share_transcript">Share transcript</string>
+    <string name="title_share_transcript">Terminal transcript</string>
+    <string name="title_share_transcript_with">Send transcript to:</string>
+
+    <string name="action_share_selected_text">Share selected text</string>
+    <string name="title_share_selected_text">Terminal Text</string>
+    <string name="title_share_selected_text_with">Send selected text to:</string>
+
+    <string name="action_autofill_username">Autofill username</string>
+    <string name="action_autofill_password">Autofill password</string>
+
+    <string name="action_reset_terminal">Reset</string>
+    <string name="msg_terminal_reset">Terminal reset</string>
+
+    <string name="action_kill_process">Kill process (%d)</string>
+    <string name="title_confirm_kill_process">Really kill this session?</string>
+
+    <string name="action_style_terminal">Style</string>
+    <string name="action_toggle_keep_screen_on">Keep screen on</string>
+    <string name="action_open_help">Help</string>
+    <string name="action_open_settings">Settings</string>
+
+    <string name="action_report_issue">Report Issue</string>
+    <string name="msg_generating_report">Generating Report</string>
+    <string name="msg_add_termux_debug_info">Add termux debug info to report?</string>
+
+    <string name="error_styling_not_installed">The Termux:Styling Plugin App is not installed.</string>
+    <string name="action_styling_install">Install</string>
+
+
+
+    <!-- Termux Notifications -->
+    <string name="notification_action_exit">Exit</string>
+    <string name="notification_action_wake_lock">Acquire wakelock</string>
+    <string name="notification_action_wake_unlock">Release wakelock</string>
+
+
+
+    <!-- TermuxService -->
+    <string name="error_display_over_other_apps_permission_not_granted_to_start_terminal">ZorvAI 增强终端 requires
+        \"Display over other apps\" permission to start terminal sessions from background on Android >= 10.
+        Grants it from Settings -> Apps -> ZorvAI 增强终端 -> Advanced</string>
+    <string name="error_termux_service_invalid_execution_command_runner">Invalid execution command runner to TermuxService: `%1$s`</string>
+    <string name="error_termux_service_unsupported_execution_command_runner">Unsupported execution command runner to TermuxService: `%1$s`</string>
+    <string name="error_termux_service_unsupported_execution_command_shell_create_mode">Unsupported execution command shell create mode to TermuxService: `%1$s`</string>
+    <string name="error_termux_service_execution_command_shell_name_unset">Shell name not set but `%1$s` shell create mode passed</string>
+
+
+
+    <!-- Termux RunCommandService -->
+    <string name="error_run_command_service_invalid_intent_action">Invalid intent action to RunCommandService: `%1$s`</string>
+    <string name="error_run_command_service_invalid_execution_command_runner">Invalid execution command runner to RunCommandService: `%1$s`</string>
+    <string name="error_run_command_service_mandatory_extra_missing">Mandatory extra missing to RunCommandService: \"%1$s\"</string>
+    <string name="error_run_command_service_api_help">Visit %1$s for more info on RUN_COMMAND Intent usage.</string>
+
+
+
+    <!-- Termux File Receiver -->
+    <string name="title_file_received">Save file in ~/downloads/</string>
+    <string name="action_file_received_edit">Edit</string>
+    <string name="action_file_received_open_directory">Open directory</string>
+
+
+
+    <!-- Miscellaneous -->
+    <string name="error_termux_service_start_failed_general">Failed to start TermuxService. Check logcat for exception message.</string>
+    <string name="error_termux_service_start_failed_bg">Failed to start TermuxService while app is in background due to android bg restrictions.</string>
+
+
+
+    <!-- Termux Settings -->
+    <string name="title_activity_termux_settings">ZorvAI 增强终端 Settings</string>
+
+    <!-- Termux App Preferences -->
+    <string name="termux_preferences_title">ZorvAI 增强终端</string>
+    <string name="termux_preferences_summary">Preferences for ZorvAI 增强终端 app</string>
+
+        <!-- Debugging Preferences -->
+        <string name="termux_debugging_preferences_title">Debugging</string>
+        <string name="termux_debugging_preferences_summary">Preferences for debugging</string>
+
+            <!-- Logging Category -->
+            <string name="termux_logging_header">Logging</string>
+
+                <!-- Log Level -->
+                <string name="termux_log_level_title">Log Level</string>
+
+                <!-- Terminal View Key Logging -->
+                <string name="termux_terminal_view_key_logging_enabled_title">Terminal View Key Logging</string>
+                <string name="termux_terminal_view_key_logging_enabled_off">Logs will not have entries for terminal view keys. (Default)</string>
+                <string name="termux_terminal_view_key_logging_enabled_on">Logcat logs will have entries for terminal view keys.
+                    These are very verbose and should be disabled under normal circumstances or will cause performance issues.</string>
+
+                <!-- Plugin Error Notifications -->
+                <string name="termux_plugin_error_notifications_enabled_title">Plugin Error Notifications</string>
+                <string name="termux_plugin_error_notifications_enabled_off">Disable flashes and notifications for plugin errors.</string>
+                <string name="termux_plugin_error_notifications_enabled_on">Show flashes and notifications for plugin errors. (Default)</string>
+
+                <!-- Crash Report Notifications -->
+                <string name="termux_crash_report_notifications_enabled_title">Crash Report Notifications</string>
+                <string name="termux_crash_report_notifications_enabled_off">Disable notifications for crash reports.</string>
+                <string name="termux_crash_report_notifications_enabled_on">Show notifications for crash reports. (Default)</string>
+
+
+        <!-- Terminal IO Preferences -->
+        <string name="termux_terminal_io_preferences_title">Terminal I/O</string>
+        <string name="termux_terminal_io_preferences_summary">Preferences for terminal I/O</string>
+
+            <!-- Keyboard Category -->
+            <string name="termux_keyboard_header">Keyboard</string>
+
+                <!-- Soft Keyboard -->
+                <string name="termux_soft_keyboard_enabled_title">Soft Keyboard Enabled</string>
+                <string name="termux_soft_keyboard_enabled_off">Soft keyboard will be disabled.</string>
+                <string name="termux_soft_keyboard_enabled_on">Soft keyboard will be enabled. (Default)</string>
+
+                <!-- Soft Keyboard Only If No Hardware-->
+                <string name="termux_soft_keyboard_enabled_only_if_no_hardware_title">Soft Keyboard Only If No Hardware</string>
+                <string name="termux_soft_keyboard_enabled_only_if_no_hardware_off">Soft keyboard will be enabled even if
+                    hardware keyboard is connected. (Default)</string>
+                <string name="termux_soft_keyboard_enabled_only_if_no_hardware_on">Soft keyboard will be enabled only if
+                    no hardware keyboard is connected.</string>
+
+
+        <!-- Terminal View Preferences -->
+        <string name="termux_terminal_view_preferences_title">Terminal View</string>
+        <string name="termux_terminal_view_preferences_summary">Preferences for terminal view</string>
+
+            <!-- View Category -->
+            <string name="termux_terminal_view_view_header">View</string>
+
+                <!-- Terminal View Margin Adjustment -->
+                <string name="termux_terminal_view_terminal_margin_adjustment_title">Terminal Margin Adjustment</string>
+                <string name="termux_terminal_view_terminal_margin_adjustment_off">Terminal margin adjustment will be disabled.</string>
+                <string name="termux_terminal_view_terminal_margin_adjustment_on">Terminal margin adjustment will be enabled.
+                    It should be enabled to try to fix the issue where soft keyboard covers part of extra keys/terminal view.
+                    If it causes screen flickering on your devices, then disable it. (Default)</string>
+
+
+
+    <!-- Termux:API App Preferences -->
+    <string name="termux_api_preferences_title">Termux:API</string>
+    <string name="termux_api_preferences_summary">Preferences for Termux:API app</string>
+
+
+
+    <!-- Termux:Float App Preferences -->
+    <string name="termux_float_preferences_title">Termux:Float</string>
+    <string name="termux_float_preferences_summary">Preferences for Termux:Float app</string>
+
+
+
+    <!-- Termux:Tasker App Preferences -->
+    <string name="termux_tasker_preferences_title">Termux:Tasker</string>
+    <string name="termux_tasker_preferences_summary">Preferences for Termux:Tasker app</string>
+
+
+
+    <!-- Termux:Widget App Preferences -->
+    <string name="termux_widget_preferences_title">Termux:Widget</string>
+    <string name="termux_widget_preferences_summary">Preferences for Termux:Widget app</string>
+
+
+
+    <!-- About Preference -->
+    <string name="about_preference_title">About</string>
+
+    <!-- Donate Preference -->
+    <string name="donate_preference_title">Donate</string>
+
+
+
+    <string name="msg_directory_absolute_path">%1$s Directory Absolute Path: \"%2$s\"</string>
+
+    <string name="error_app_not_installed_or_disabled_warning">The %1$s (%2$s) app is not installed or is disabled.</string>
+
+    <string name="error_get_package_context_failed_title">Failed To Get Package Context</string>
+
+    <string name="error_get_package_context_failed_message">Failed to get package context for the \"%1$s\" package.
+        This may be because the app package is not installed or it has different APK signature from the current app.</string>
+
+    <string name="error_get_package_context_failed_help_url_message">Check %1$s for more details.</string>
+
+    <string name="error_get_component_state_failed">Failed to get %1$s/%2$s component state</string>
+
+    <string name="error_enable_component_failed">Failed to enable %1$s/%2$s component</string>
+
+    <string name="error_disable_component_failed">Failed to enable %1$s/%2$s component</string>
+
+    <string name="message_sudo_please_grant_permissions">Please grant requested permission(s)</string>
+
+    <string name="error_failed_to_request_permissions">Failed to request permissions with request code %1$d: %2$s</string>
+
+    <string name="error_attempted_to_check_for_permissions_not_requested">Attempted to check for permissions that have not been requested in app manifest: %1$s</string>
+
+    <string name="error_attempted_to_ask_for_permissions_not_requested">Attempted to ask for permissions that have not been requested in app manifest: %1$s</string>
+
+    <string name="error_has_not_requested_legacy_external_storage">The \"%1$s\" package is targeting targetSdkVersion %2$d and is running on android sdk %3$d but has not set requestLegacyExternalStorage to true in app manifest</string>
+
+    <string name="msg_requires_dump_and_package_usage_stats_permissions">Requires `DUMP` and `PACKAGE_USAGE_STATS` permission</string>
+
+    <string name="error_display_over_other_apps_permission_not_granted">%1$s requires
+        \"Display over other apps\" permission to start activities and services from background on Android >= 10.
+        Grants it from Android Settings -> Apps -> %1$s -> Advanced -> Draw over other apps.
+        The permission name may be different on different devices, like on Xiaomi, its called
+        \"Display pop-up windows while running in the background\", check https://dontkillmyapp.com
+        for device specific issues.</string>
+
+    <string name="error_allow_external_apps_ungranted">%1$s requires `allow-external-apps`
+        property to be set to `true` in `%2$s` file.</string>
+
+    <string name="title_report_text">Report Text</string>
+
+    <string name="msg_report_truncated">**Report Truncated**\n\nReport is too large to view here.
+        Use `Save To File` option from options menu (3-dots on top right) and view it in an external text editor app.\n\n##\n\n</string>
+
+    <string name="title_share_with">Share With</string>
+
+    <string name="title_open_url_with">Open URL With</string>
+
+    <string name="msg_storage_permission_not_granted">The storage permission not granted.</string>
+
+    <string name="msg_file_saved_successfully">The %1$s file saved successfully at \"%2$s\"</string>
+
+    <string name="error_sending_sigkill_to_process">Sending SIGKILL to process on user request or because android is killing the execution service</string>
+
+    <string name="error_executable_unset">Executable not set \"%1$s\" for shell command</string>
+
+    <string name="error_execution_cancelled">Execution has been cancelled since execution service is being killed</string>
+
+    <string name="error_failed_to_execute_termux_session_command">Failed to execute \"%1$s\" termux session command</string>
+
+    <string name="error_failed_to_execute_app_shell_command">Failed to execute \"%1$s\" app shell command</string>
+
+    <string name="error_exception_received_while_executing_termux_session_command">Exception received while to executing \"%1$s\" termux session command.\nException: %2$s</string>
+
+    <string name="error_exception_received_while_executing_app_shell_command">Exception received while to executing \"%1$s\" app shell command.\nException: %2$s</string>
+
+    <string name="msg_report_issue">
+        If you want to report this issue, then copy its text from the options menu (3-dots on top right) and post
+        an issue on one of the following links.
+        \n\nIf you are posting a Termux app crash report, then please provide details on what you were doing that
+        caused the crash and how to reproduce it, if possible.
+        \n\nIf you are posting an issue on GitHub, then post it in the repository at which the report belongs at.
+        Issues opened or emails sent with **(partial) screenshots** instead of copied text or a file of this report
+        **will likely be automatically closed/deleted**. You may optionally remove any device specific info that
+        you consider private or don\'t want to share or that is not relevant to the issue.
+        \n\nWe do not provide support for any hacking related tools/scripts. Any questions asked about them over email,
+        on GitHub or other official termux community forums **will likely be automatically closed/deleted** and may
+        even result in **temporary or permanent** ban. Check %1$s/wiki/Hacking for details.</string>
+
+
+    <string name="msg_termux_app_required_by_app">The ZorvAI 增强终端 is required by the %1$s app to run termux commands.</string>
+
+    <string name="error_termux_app_package_context_not_accessible">The ZorvAI 增强终端 app (package context) is not accessible.</string>
+
+    <string name="error_termux_prefix_dir_path_not_accessible">The ZorvAI 增强终端 app $PREFIX directory is not accessible by the %1$s app.
+        This may be because you have not installed or setup ZorvAI 增强终端 app or
+        ZorvAI 增强终端 app and %1$s app both have different APK signatures because you have managed to install both apps from different sources.
+        It may also be because ZorvAI 增强终端 $PREFIX directory \"$PREFIX\" does not exist or does not have read,
+        write and execute permissions.</string>
+
+    <string name="action_yes">Yes</string>
+
+    <string name="action_no">No</string>
+
+    <string name="action_copy">Copy</string>
+
+    <string name="action_share">Share</string>
+
+    <string name="action_cancel">Cancel</string>
+
+    <string name="action_save_to_file">Save To File</string>
+
+
+    <string name="msg_storage_permission_granted_on_request">The storage permission granted by user on request</string>
+
+    <string name="msg_storage_permission_not_granted_on_request">The storage permission not granted by user on request</string>
+
+    <string name="action_enable_launcher_icon">Enable Launcher Icon</string>
+
+    <string name="action_disable_launcher_icon">Disable Launcher Icon</string>
+
+    <string name="msg_enabling_launcher_icon">Enabling %1$s app launcher icon</string>
+
+    <string name="msg_disabling_launcher_icon">Disabling %1$s app launcher icon</string>
+
+    <string name="setting_launcher_icon_title">Launcher Icon Enabled</string>
+
+    <string name="setting_launcher_icon_enabled_off">Launcher Icon will be disabled.</string>
+
+    <string name="setting_launcher_icon_enabled_on">Launcher Icon will be enabled. (Default)</string>
+
+    <string name="log_level_title">Log Level</string>
+
+    <string name="log_level_off">Off</string>
+
+    <string name="log_level_normal">Normal</string>
+
+    <string name="log_level_debug">Debug</string>
+
+    <string name="log_level_verbose">Verbose</string>
+
+    <string name="log_level_unknown">*Unknown*</string>
+
+    <string name="log_level_value">Logcat log level set to \"%1$s\"</string>
 </resources>

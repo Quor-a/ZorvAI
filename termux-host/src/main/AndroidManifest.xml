@@ -1,36 +1,168 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
+    <permission
+        android:name="${TERMUX_PACKAGE_NAME}.permission.RUN_COMMAND"
+        android:description="@string/permission_run_command_description"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/permission_run_command_label"
+        android:protectionLevel="dangerous" />
+
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- 库模块不声明 application 级属性（name/icon/theme 等），避免与宿主 app manifest 合并冲突 -->
     <application>
+
         <activity
-            android:name=".app.TermuxHostActivity"
+            android:name=".app.TermuxActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|density|screenLayout|keyboard|keyboardHidden|navigation"
-            android:label="@string/termux_app_name"
+            android:label="@string/application_name"
             android:launchMode="singleTask"
             android:resizeableActivity="true"
-            android:theme="@style/Theme.TermuxHostActivity.DayNight.NoActionBar">
-            <!-- 非桌面入口：由增强终端路由以 Intent 拉起，避免生成第二个图标 -->
+            android:theme="@style/Theme.TermuxActivity.DayNight.NoActionBar"
+            tools:targetApi="n">
+            <!-- 非桌面入口：由增强终端路由以显式 Intent 拉起，不注册 LAUNCHER -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <activity
-            android:name=".app.SettingsActivity"
+            android:name=".app.activities.HelpActivity"
             android:exported="false"
-            android:theme="@style/Theme.TermuxHost.DayNight.NoActionBar" />
+            android:label="@string/application_name"
+            android:parentActivityName=".app.TermuxActivity"
+            android:resizeableActivity="true"
+            tools:targetApi="n" />
+
+        <activity
+            android:name=".app.activities.SettingsActivity"
+            android:exported="false"
+            android:label="@string/title_activity_termux_settings"
+            android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".shared.activities.ReportActivity"
+            android:theme="@style/Theme.MarkdownViewActivity.DayNight"
+            android:documentLaunchMode="intoExisting" />
+
+        <activity
+            android:name=".app.api.file.FileReceiverActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:resizeableActivity="true"
+            android:taskAffinity="${TERMUX_PACKAGE_NAME}.filereceiver"
+            tools:targetApi="n" />
+
+        <activity-alias
+            android:name=".app.api.file.FileShareReceiverActivity"
+            android:exported="true"
+            android:targetActivity=".app.api.file.FileReceiverActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/*" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="message/*" />
+                <data android:mimeType="multipart/*" />
+                <data android:mimeType="text/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".app.api.file.FileViewReceiverActivity"
+            android:exported="true"
+            android:targetActivity=".app.api.file.FileReceiverActivity">
+            <intent-filter tools:ignore="AppLinkUrlError">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/*" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="text/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity-alias>
+
+        <provider
+            android:name=".filepicker.TermuxDocumentsProvider"
+            android:authorities="${TERMUX_PACKAGE_NAME}.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+
+        <provider
+            android:name=".app.TermuxOpenReceiver$ContentProvider"
+            android:authorities="${TERMUX_PACKAGE_NAME}.files"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="${TERMUX_PACKAGE_NAME}.permission.RUN_COMMAND" />
+
+        <receiver
+            android:name=".app.TermuxOpenReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".app.event.SystemEventReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".shared.activities.ReportActivity$ReportActivityBroadcastReceiver"
+            android:exported="false" />
 
         <service
-            android:name=".app.TermuxHostService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Terminal sessions must survive in background for user workflows" />
+            android:name=".app.TermuxService"
+            android:exported="false" />
+
+        <service
+            android:name=".app.RunCommandService"
+            android:exported="true"
+            android:permission="${TERMUX_PACKAGE_NAME}.permission.RUN_COMMAND">
+            <intent-filter>
+                <action android:name="${TERMUX_PACKAGE_NAME}.RUN_COMMAND" />
+            </intent-filter>
         </service>
+
+        <meta-data
+            android:name="android.max_aspect"
+            android:value="10.0" />
+
+        <meta-data
+            android:name="com.samsung.android.keepalive.density"
+            android:value="true" />
+
+        <meta-data
+            android:name="com.samsung.android.multidisplay.keep_process_alive"
+            android:value="true" />
+
+        <meta-data
+            android:name="com.sec.android.support.multiwindow"
+            android:value="true" />
+
     </application>
+
 </manifest>
