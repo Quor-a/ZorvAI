@@ -1,5 +1,7 @@
 package com.ai.assistance.quro;
 
+import android.view.Surface;
+
 /**
  * Shizuku UserService AIDL 接口。
  *
@@ -16,6 +18,13 @@ package com.ai.assistance.quro;
  * 于是只能让特权进程代为落盘。[exec] 只收 String，而 Binder 单次事务约 1MB 上限，
  * 所以 byte[] 分块追加（[writeChunk]）是唯一不依赖任何额外权限的传输通道。
  * 分块大小由调用方定，这里只负责「追加 + 建父目录」。
+ *
+ * ## 虚拟屏（后台屏）通道（6–14）
+ *
+ * 参照 Mika（github.com/wangzan101/Mika，Apache-2.0）的后台虚拟屏实现移植：
+ * 在 shell 身份进程里用 DisplayManager.createVirtualDisplay 建一块**用户看不见的屏**，
+ * 画面输出到 App 进程传进来的 Surface（ImageReader），因此截图完全不走无障碍。
+ * 所有注入/启动都只作用于本服务自己建的屏（白名单校验），绝不会打扰用户的主屏。
  *
  * ShellService 架构：通过 AIDL UserService 在 Shizuku 特权进程内执行命令。
  */
@@ -48,4 +57,46 @@ interface IQuroShellService {
 
     /** 删除远端文件/目录（rm -f / rm -rf），返回是否成功。 */
     boolean remove(String path) = 5;
+
+    // ═══════════════ 后台虚拟屏（6–14）═══════════════
+
+    /**
+     * 建一块后台虚拟屏，画面输出到 surface。
+     *
+     * @return 新的 displayId；失败返回 -1
+     */
+    int createDisplay(in Surface surface, int width, int height, int dpi) = 6;
+
+    /** 释放指定虚拟屏（只释放本服务创建的）。 */
+    void releaseDisplay(int displayId) = 7;
+
+    /**
+     * 把 App 启动到本服务的虚拟屏上。
+     *
+     * @return 0=已启动 1=用户正在主屏使用该 App（不启动，不打扰主屏）
+     *         2=没有可启动的入口 3=出错 4=该 App 正在本服务另一块屏上使用
+     */
+    int startApp(int displayId, String packageName) = 8;
+
+    /** 在这块屏上点一下 (x, y)。 */
+    boolean injectTap(int displayId, int x, int y) = 9;
+
+    /** 在这块屏上按一个键（只放行白名单按键，绝不发电源/音量/Home 之类整机键）。 */
+    boolean injectKey(int displayId, int keyCode) = 10;
+
+    /**
+     * 在这块屏上按一根手指的一笔：times[i] 毫秒（相对按下）时手指在 (xs[i], ys[i])。
+     * 第一个点按下，最后一个点抬起；按时间逐个注入，注完才返回。
+     */
+    boolean injectStroke(int displayId, in int[] xs, in int[] ys, in long[] times) = 11;
+
+    /** 这块屏最上面任务的 taskId；没有任务返回 -1。 */
+    int topTaskId(int displayId) = 12;
+
+    /** 这块屏最上面 Activity 的完整类名；没有任务返回 null。 */
+    String topActivity(int displayId) = 13;
+
+    /** 该 taskId 所在的屏；任务不存在返回 -1。 */
+    int displayOfTask(int taskId) = 14;
 }
+

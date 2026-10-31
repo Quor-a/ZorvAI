@@ -13,14 +13,14 @@
 
 <resources>
 
-    <string name="application_name">ZorvAI 增强终端</string>
-    <string name="shared_user_label">ZorvAI 增强终端 user</string>
+    <string name="application_name">Termux</string>
+    <string name="shared_user_label">Termux user</string>
 
 
 
     <!-- Termux RUN_COMMAND permission -->
-    <string name="permission_run_command_label">Run commands in ZorvAI 增强终端 environment</string>
-    <string name="permission_run_command_description">execute arbitrary commands within ZorvAI 增强终端
+    <string name="permission_run_command_label">Run commands in Termux environment</string>
+    <string name="permission_run_command_description">execute arbitrary commands within Termux
         environment and access files</string>
 
 
@@ -28,15 +28,15 @@
     <!-- Termux Bootstrap Packages Installation -->
     <string name="bootstrap_installer_body">Installing bootstrap packages…</string>
     <string name="bootstrap_error_title">Unable to install bootstrap</string>
-    <string name="bootstrap_error_body">ZorvAI 增强终端 was unable to install the bootstrap packages.</string>
+    <string name="bootstrap_error_body">Termux was unable to install the bootstrap packages.</string>
     <string name="bootstrap_error_abort">Abort</string>
     <string name="bootstrap_error_try_again">Try again</string>
-    <string name="bootstrap_error_not_primary_user_message">ZorvAI 增强终端 can only be run as the primary user.
-        \nBootstrap binaries compiled for ZorvAI 增强终端 have hardcoded $PREFIX path and cannot be installed
+    <string name="bootstrap_error_not_primary_user_message">Termux can only be run as the primary user.
+        \nBootstrap binaries compiled for Termux have hardcoded $PREFIX path and cannot be installed
         under any path other than:\n%1$s.</string>
-    <string name="bootstrap_error_installed_on_portable_sd">ZorvAI 增强终端 cannot be installed on
+    <string name="bootstrap_error_installed_on_portable_sd">Termux cannot be installed on
         portable/external/removable sd card on your device.
-        \nBootstrap binaries compiled for ZorvAI 增强终端 have hardcoded $PREFIX path and cannot be installed
+        \nBootstrap binaries compiled for Termux have hardcoded $PREFIX path and cannot be installed
         under any path other than:\n%1$s.</string>
 
 
@@ -104,9 +104,9 @@
 
 
     <!-- TermuxService -->
-    <string name="error_display_over_other_apps_permission_not_granted_to_start_terminal">ZorvAI 增强终端 requires
+    <string name="error_display_over_other_apps_permission_not_granted_to_start_terminal">Termux requires
         \"Display over other apps\" permission to start terminal sessions from background on Android >= 10.
-        Grants it from Settings -> Apps -> ZorvAI 增强终端 -> Advanced</string>
+        Grants it from Settings -> Apps -> Termux -> Advanced</string>
     <string name="error_termux_service_invalid_execution_command_runner">Invalid execution command runner to TermuxService: `%1$s`</string>
     <string name="error_termux_service_unsupported_execution_command_runner">Unsupported execution command runner to TermuxService: `%1$s`</string>
     <string name="error_termux_service_unsupported_execution_command_shell_create_mode">Unsupported execution command shell create mode to TermuxService: `%1$s`</string>
@@ -136,11 +136,11 @@
 
 
     <!-- Termux Settings -->
-    <string name="title_activity_termux_settings">ZorvAI 增强终端 Settings</string>
+    <string name="title_activity_termux_settings">Termux Settings</string>
 
     <!-- Termux App Preferences -->
-    <string name="termux_preferences_title">ZorvAI 增强终端</string>
-    <string name="termux_preferences_summary">Preferences for ZorvAI 增强终端 app</string>
+    <string name="termux_preferences_title">Termux</string>
+    <string name="termux_preferences_summary">Preferences for Termux app</string>
 
         <!-- Debugging Preferences -->
         <string name="termux_debugging_preferences_title">Debugging</string>
@@ -317,14 +317,14 @@
         even result in **temporary or permanent** ban. Check %1$s/wiki/Hacking for details.</string>
 
 
-    <string name="msg_termux_app_required_by_app">The ZorvAI 增强终端 is required by the %1$s app to run termux commands.</string>
+    <string name="msg_termux_app_required_by_app">The Termux is required by the %1$s app to run termux commands.</string>
 
-    <string name="error_termux_app_package_context_not_accessible">The ZorvAI 增强终端 app (package context) is not accessible.</string>
+    <string name="error_termux_app_package_context_not_accessible">The Termux app (package context) is not accessible.</string>
 
-    <string name="error_termux_prefix_dir_path_not_accessible">The ZorvAI 增强终端 app $PREFIX directory is not accessible by the %1$s app.
-        This may be because you have not installed or setup ZorvAI 增强终端 app or
-        ZorvAI 增强终端 app and %1$s app both have different APK signatures because you have managed to install both apps from different sources.
-        It may also be because ZorvAI 增强终端 $PREFIX directory \"$PREFIX\" does not exist or does not have read,
+    <string name="error_termux_prefix_dir_path_not_accessible">The Termux app $PREFIX directory is not accessible by the %1$s app.
+        This may be because you have not installed or setup Termux app or
+        Termux app and %1$s app both have different APK signatures because you have managed to install both apps from different sources.
+        It may also be because Termux $PREFIX directory \"$PREFIX\" does not exist or does not have read,
         write and execute permissions.</string>
 
     <string name="action_yes">Yes</string>

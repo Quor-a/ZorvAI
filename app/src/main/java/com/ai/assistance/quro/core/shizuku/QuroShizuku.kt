@@ -52,7 +52,10 @@ object QuroShizuku {
             .daemon(false)
             .processNameSuffix("quro_shell")
             .debuggable(false)
-            .version(1)
+            // 🔴 AIDL 一改就必须 +1：Shizuku 按 (component, version) 判断要不要重新部署 user service。
+            // 保持旧版本号会让已在跑的特权进程继续用旧接口，调用新方法直接 TransactionException。
+            // v2：新增后台虚拟屏通道（createDisplay/releaseDisplay/startApp/injectTap/injectKey/injectStroke/topTaskId/topActivity/displayOfTask）。
+            .version(2)
     }
 
     private val serviceConnection = object : ServiceConnection {
@@ -95,6 +98,15 @@ object QuroShizuku {
 
     /** AIDL 路径是否可用。 */
     val isAidlAvailable: Boolean get() = aidlBound && shellService != null
+
+    /**
+     * 取 AIDL 服务实例；未绑定返回 null。
+     *
+     * 供**后台虚拟屏**等需要多次调用同一特权进程的场景直接持有接口
+     * （虚拟屏的 displays 表、注入、任务查询都要求是同一个服务进程）。
+     * 调用方拿不到时应先 [bindAidlService] 再重试。
+     */
+    fun acquireShellService(): IQuroShellService? = shellService
 
     // ════════════════════════════════════════
     // 备选路径：反射 newProcess（v427 方案）

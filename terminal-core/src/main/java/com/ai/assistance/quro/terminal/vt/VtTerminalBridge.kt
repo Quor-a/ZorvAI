@@ -19,7 +19,7 @@ import com.ai.assistance.quro.vt.TerminalViewClient
 import com.ai.assistance.quro.vt.QuroTerminalProperties
 
 /**
- * vtlib 增强终端桥接层。
+ * vtlib Termux桥接层。
  *
  * 组装 Termux 完整能力栈：
  * - [TerminalSession]（vtlib）：JNI PTY + 完整 VT 模拟器（双缓冲/备用屏幕/滚动/sixel/括号粘贴/OSC52）
@@ -80,7 +80,7 @@ class VtTerminalBridge(
      * 由 TerminalView 的 onSizeChanged → updateSize 重设真实尺寸。
      *
      * 🔴 启动前必须先确保 rootfs 解压就绪：buildProotLaunch() 只构造参数，
-     * 不负责解压。首次进入增强终端时 rootfs 可能尚未解压，proot 以不存在的
+     * 不负责解压。首次进入Termux时 rootfs 可能尚未解压，proot 以不存在的
      * --rootfs 启动会立即失败退出 → 黑屏 + 等一会「闪退」（实为会话结束页）。
      * 这里显式调用 prepareGuestRootfs()（幂等，首次 3-8 分钟，后续秒级）。
      *
@@ -91,7 +91,7 @@ class VtTerminalBridge(
         return runCatching {
             // 1) 宿主侧确保 rootfs 解压 + usrmerge 链接就绪（幂等；首次启动会解压内置 tarball）
             if (!environment.prepareGuestRootfs()) {
-                Log.e(tag, "启动增强终端失败：rootfs 未就绪（prepareGuestRootfs 返回 false）")
+                Log.e(tag, "启动Termux失败：rootfs 未就绪（prepareGuestRootfs 返回 false）")
                 return@runCatching false
             }
 
@@ -116,7 +116,7 @@ class VtTerminalBridge(
                 alive = session.isRunning()
             }
             if (!alive) {
-                Log.e(tag, "启动增强终端失败：proot 子进程未存活（isRunning=false）")
+                Log.e(tag, "启动Termux失败：proot 子进程未存活（isRunning=false）")
                 return@runCatching false
             }
             terminalSession = session

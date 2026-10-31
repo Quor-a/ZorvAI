@@ -2439,7 +2439,7 @@ fun ChatScreen(
                 TerminalScreen(
                     env = terminalEnv,
                     onLaunchEnhancedTerminal = {
-                        // 🔴 增强终端 = 完整移植的 Termux 官方宿主（TermuxActivity），
+                        // 🔴 Termux = 完整移植的 Termux 官方宿主（TermuxActivity），
                         // 而非轻量 vtlib 实现。直接以 Intent 拉起，不产生独立桌面图标。
                         ctx.startActivity(
                             Intent(ctx, com.ai.assistance.quro.termux.app.TermuxActivity::class.java)

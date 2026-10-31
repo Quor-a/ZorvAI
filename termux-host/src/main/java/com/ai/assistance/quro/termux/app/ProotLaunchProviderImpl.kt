@@ -8,7 +8,7 @@ import com.ai.assistance.quro.terminal.runtime.TerminalEnvironment
  * 把官方 TermuxSession 的 shell 启动替换为 proot Ubuntu 启动。
  *
  * 官方 `TermuxSession.execute()` 默认查找 `$PREFIX/bin/login`（bootstrap 路径），
- * 在 ZorvAI 增强终端中该路径不存在。通过 [TermuxSession.setProotLaunchProvider]
+ * 在 Termux中该路径不存在。通过 [TermuxSession.setProotLaunchProvider]
  * 注入本实现，让会话直接使用 [TerminalEnvironment.buildProotLaunch] 生成的
  * proot 命令（`--rootfs=... --bind=... -0 -w /root /bin/bash -lc ...`）。
  */

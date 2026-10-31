@@ -1,6 +1,21 @@
 package com.ai.assistance.quro.core.shizuku
 
+import android.annotation.SuppressLint
+import android.app.ActivityOptions
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.hardware.display.DisplayManager
+import android.hardware.display.VirtualDisplay
+import android.os.Build
+import android.os.SystemClock
 import android.util.Log
+import android.view.Display
+import android.view.InputDevice
+import android.view.InputEvent
+import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.Surface
 import com.ai.assistance.quro.IQuroShellService
 import java.io.BufferedReader
 import java.io.File
@@ -28,6 +43,61 @@ class QuroShellService : IQuroShellService.Stub() {
 
         /** Binder 单次事务有 ~1MB 上限，留足头部余量。 */
         private const val MAX_CHUNK = 512 * 1024
+
+        // ─────────── 后台虚拟屏常量 ───────────
+        private const val MAIN_DISPLAY = 0
+        private const val MAX_TASKS = 200
+        private const val TAP_MS = 60L
+        private const val STROKE_MAX_POINTS = 400
+        private const val STROKE_MAX_MS = 10_000L
+
+        private const val START_OK = 0
+        private const val START_IN_USE_ON_MAIN = 1
+        private const val START_NOT_FOUND = 2
+        private const val START_ERROR = 3
+        private const val START_IN_USE_BY_OTHER = 4
+
+        private const val USER_CURRENT = -2
+        private const val INJECT_MODE_ASYNC = 0
+        private const val VIRTUAL_KEYBOARD = -1
+
+        // DisplayManager.VIRTUAL_DISPLAY_FLAG_*（部分为隐藏常量）
+        private const val FLAG_PUBLIC = 1 shl 0
+        private const val FLAG_OWN_CONTENT_ONLY = 1 shl 3
+        private const val FLAG_SUPPORTS_TOUCH = 1 shl 6
+        private const val FLAG_ROTATES_WITH_CONTENT = 1 shl 7
+        private const val FLAG_DESTROY_CONTENT_ON_REMOVAL = 1 shl 8
+        private const val FLAG_TRUSTED = 1 shl 10
+        private const val FLAG_OWN_DISPLAY_GROUP = 1 shl 11
+        private const val FLAG_ALWAYS_UNLOCKED = 1 shl 12
+        private const val FLAG_TOUCH_FEEDBACK_DISABLED = 1 shl 13
+        private const val FLAG_OWN_FOCUS = 1 shl 14
+        private const val FLAG_STEAL_TOP_FOCUS_DISABLED = 1 shl 16
+
+        /** WindowManager.DISPLAY_IME_POLICY_LOCAL = 0：输入法出现在虚拟屏上，主屏焦点不变。 */
+        private const val IME_POLICY = 0
+
+        private val TASK_INFO: Class<*> by lazy { Class.forName("android.app.TaskInfo") }
+
+        /** 按键白名单：绝不从这里发出电源/音量/Home/最近任务这类整机按键。 */
+        private val ALLOWED_KEYS: Set<Int> = setOf(
+            KeyEvent.KEYCODE_BACK,
+            KeyEvent.KEYCODE_DEL,
+            KeyEvent.KEYCODE_FORWARD_DEL,
+            KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_TAB,
+            KeyEvent.KEYCODE_ESCAPE,
+            KeyEvent.KEYCODE_SPACE,
+            KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN,
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_MOVE_HOME,
+            KeyEvent.KEYCODE_MOVE_END,
+            KeyEvent.KEYCODE_PAGE_UP,
+            KeyEvent.KEYCODE_PAGE_DOWN,
+        )
     }
 
     override fun destroy() {
@@ -152,4 +222,306 @@ class QuroShellService : IQuroShellService.Stub() {
             false
         }
     }
+
+    // ═══════════════════ 后台虚拟屏（移植自 Mika，去品牌化；只作用于本服务自建的屏）═══════════════════
+
+    /** 伪装成 com.android.shell 的系统 Context：DisplayManager / InputManager 都要求包名与 uid 对得上。 */
+    private val privilegedContext: Context by lazy { QuroShellContext.create() }
+
+    /**
+     * 不能用 getSystemService：那样拿到的 DisplayManager 绑的是宿主 App 的上下文，
+     * 包名与 shell uid 对不上，createVirtualDisplay 会被拒。
+     */
+    @get:SuppressLint("PrivateApi")
+    private val displayManager: DisplayManager by lazy {
+        DisplayManager::class.java.getDeclaredConstructor(Context::class.java)
+            .apply { isAccessible = true }.newInstance(privilegedContext) as DisplayManager
+    }
+
+    @get:SuppressLint("PrivateApi")
+    private val taskManager: Any by lazy {
+        Class.forName("android.app.ActivityTaskManager").getMethod("getService").invoke(null)!!
+    }
+
+    /** displayId → VirtualDisplay。注入与启动都只认这里的 key（白名单），绝不碰主屏。 */
+    private val displays = HashMap<Int, VirtualDisplay>()
+
+    /** 查占用和启动之间不能插进另一个启动，否则两个任务同时开同一个 App 只有一个能成。 */
+    private val launchLock = Any()
+
+    override fun createDisplay(surface: Surface, width: Int, height: Int, dpi: Int): Int = try {
+        val vd = displayManager.createVirtualDisplay(
+            "quro-agent", width, height, dpi, surface, displayFlags(),
+        )
+        val id = vd.display.displayId
+        synchronized(displays) { displays[id] = vd }
+        setImePolicy(id)
+        Log.d(TAG, "createDisplay -> id=$id ${width}x$height @${dpi}dpi")
+        id
+    } catch (t: Throwable) {
+        Log.e(TAG, "createDisplay failed", t)
+        -1
+    }
+
+    override fun releaseDisplay(displayId: Int) {
+        val vd = synchronized(displays) { displays.remove(displayId) }
+        runCatching { vd?.release() }
+        Log.d(TAG, "releaseDisplay id=$displayId released=${vd != null}")
+    }
+
+    /** 只认本服务自建的屏；调用方传主屏号也不会误伤用户。 */
+    private fun ownDisplay(displayId: Int): Boolean = synchronized(displays) { displayId in displays }
+
+    override fun startApp(displayId: Int, packageName: String): Int {
+        if (packageName.isBlank()) return START_ERROR
+        synchronized(launchLock) {
+            if (!ownDisplay(displayId)) {
+                Log.w(TAG, "startApp refused: display $displayId is not ours")
+                return START_ERROR
+            }
+            if (inUseOnMainScreen(packageName)) return START_IN_USE_ON_MAIN
+            if (onOtherOwnDisplay(packageName, displayId)) return START_IN_USE_BY_OTHER
+
+            val intent = launchIntent(packageName) ?: return START_NOT_FOUND
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val options = ActivityOptions.makeBasic().setLaunchDisplayId(displayId).toBundle()
+
+            val ok = try {
+                val start = taskManager.javaClass.methods.first {
+                    it.name == "startActivityAsUser" && it.parameterTypes.size == 12
+                }
+                // (caller, callingPackage, callingFeatureId, intent, resolvedType, resultTo,
+                //  resultWho, requestCode, flags, profilerInfo, options, userId)
+                val result = start.invoke(
+                    taskManager, null, QuroShellContext.SHELL_PACKAGE, null, intent, null, null, null,
+                    0, 0, null, options, USER_CURRENT,
+                ) as Int
+                if (result < 0) Log.w(TAG, "startActivityAsUser($packageName) -> $result")
+                result >= 0
+            } catch (t: Throwable) {
+                Log.w(TAG, "startActivityAsUser unavailable, fallback to am start", t)
+                val component = intent.component?.flattenToShortString() ?: return START_NOT_FOUND
+                val out = exec("am start --display $displayId -n $component")
+                !out.contains("Error") && !out.contains("Exception")
+            }
+            Log.d(TAG, "startApp($packageName) on $displayId -> ${if (ok) "OK" else "ERROR"}")
+            return if (ok) START_OK else START_ERROR
+        }
+    }
+
+    private fun launchIntent(packageName: String): Intent? = try {
+        privilegedContext.packageManager.getLaunchIntentForPackage(packageName)
+    } catch (t: Throwable) {
+        Log.w(TAG, "getLaunchIntentForPackage failed: $packageName", t)
+        null
+    }
+
+    /** 该包在主屏（display 0）有任务 → 用户正在用，不要动它。 */
+    private fun inUseOnMainScreen(packageName: String): Boolean = try {
+        allTasks().any { t -> displayOfTask0(t) == MAIN_DISPLAY && packagesOf(t).contains(packageName) }
+    } catch (t: Throwable) {
+        Log.w(TAG, "inspect main-screen tasks failed", t)
+        false
+    }
+
+    /** 该包在本服务另一块屏上有任务 → 别的任务正在用，不抢。 */
+    private fun onOtherOwnDisplay(packageName: String, displayId: Int): Boolean = try {
+        val others = synchronized(displays) { displays.keys.toSet() } - displayId
+        if (others.isEmpty()) false
+        else allTasks().any { t -> displayOfTask0(t) in others && packagesOf(t).contains(packageName) }
+    } catch (t: Throwable) {
+        false
+    }
+
+    override fun injectTap(displayId: Int, x: Int, y: Int): Boolean {
+        if (!ownDisplay(displayId)) return false
+        val now = SystemClock.uptimeMillis()
+        val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x.toFloat(), y.toFloat(), 0)
+        val up = MotionEvent.obtain(now, now + TAP_MS, MotionEvent.ACTION_UP, x.toFloat(), y.toFloat(), 0)
+        return try {
+            down.source = InputDevice.SOURCE_TOUCHSCREEN
+            up.source = InputDevice.SOURCE_TOUCHSCREEN
+            injectPair(down, up, displayId) {
+                !exec("input -d $displayId tap $x $y").contains("Exception")
+            }
+        } finally {
+            down.recycle()
+            up.recycle()
+        }
+    }
+
+    override fun injectKey(displayId: Int, keyCode: Int): Boolean {
+        if (!ownDisplay(displayId)) return false
+        if (!keyAllowed(keyCode)) {
+            Log.w(TAG, "refused key $keyCode")
+            return false
+        }
+        val now = SystemClock.uptimeMillis()
+        val down = KeyEvent(
+            now, now, KeyEvent.ACTION_DOWN, keyCode, 0, 0,
+            VIRTUAL_KEYBOARD, 0, 0, InputDevice.SOURCE_KEYBOARD,
+        )
+        val up = KeyEvent.changeAction(down, KeyEvent.ACTION_UP)
+        return injectPair(down, up, displayId) {
+            !exec("input -d $displayId keyevent $keyCode").contains("Exception")
+        }
+    }
+
+    override fun injectStroke(displayId: Int, xs: IntArray, ys: IntArray, times: LongArray): Boolean {
+        if (!ownDisplay(displayId)) return false
+        val n = times.size
+        if (n < 2 || n > STROKE_MAX_POINTS || xs.size != n || ys.size != n) return false
+        if (times[0] != 0L || times.last() > STROKE_MAX_MS) return false
+        if ((1 until n).any { times[it] < times[it - 1] }) return false
+
+        val base = SystemClock.uptimeMillis()
+        fun eventAt(i: Int, action: Int): MotionEvent {
+            val props = MotionEvent.PointerProperties().apply {
+                id = 0
+                toolType = MotionEvent.TOOL_TYPE_FINGER
+            }
+            val coords = MotionEvent.PointerCoords().apply {
+                x = xs[i].toFloat()
+                y = ys[i].toFloat()
+                pressure = 1f
+                size = 1f
+            }
+            return MotionEvent.obtain(
+                base, base + times[i], action, 1,
+                arrayOf(props), arrayOf(coords),
+                0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0,
+            )
+        }
+        fun send(i: Int, action: Int): Boolean {
+            val wait = base + times[i] - SystemClock.uptimeMillis()
+            if (wait > 0) SystemClock.sleep(wait)
+            val e = eventAt(i, action)
+            return try {
+                inject(e, displayId)
+            } finally {
+                e.recycle()
+            }
+        }
+
+        if (!send(0, MotionEvent.ACTION_DOWN)) return false
+        for (i in 1 until n) send(i, MotionEvent.ACTION_MOVE)
+        // 最后一定补发抬起，绝不让"手指"一直按着
+        return send(n - 1, MotionEvent.ACTION_UP) || send(n - 1, MotionEvent.ACTION_UP)
+    }
+
+    override fun topTaskId(displayId: Int): Int = try {
+        tasksOn(displayId).firstOrNull()?.let { TASK_INFO.getField("taskId").getInt(it) } ?: -1
+    } catch (t: Throwable) {
+        Log.e(TAG, "topTaskId failed", t)
+        -1
+    }
+
+    override fun topActivity(displayId: Int): String? = try {
+        if (!ownDisplay(displayId)) null
+        else tasksOn(displayId).firstOrNull()?.let {
+            (TASK_INFO.getField("topActivity").get(it) as? ComponentName)?.className
+        }
+    } catch (t: Throwable) {
+        Log.e(TAG, "topActivity failed", t)
+        null
+    }
+
+    override fun displayOfTask(taskId: Int): Int = try {
+        val idField = TASK_INFO.getField("taskId")
+        allTasks().firstOrNull { idField.getInt(it) == taskId }
+            ?.let { TASK_INFO.getField("displayId").getInt(it) } ?: -1
+    } catch (t: Throwable) {
+        -1
+    }
+
+    // ─────────────── 内部辅助 ───────────────
+
+    private fun displayOfTask0(task: Any): Int = TASK_INFO.getField("displayId").getInt(task)
+
+    private fun packagesOf(task: Any): List<String> = listOf("topActivity", "baseActivity")
+        .mapNotNull {
+            runCatching { TASK_INFO.getField(it).get(task) as? ComponentName }.getOrNull()?.packageName
+        }
+
+    /**
+     * IActivityTaskManager.getTasks：按最近使用排序，shell 持有 REAL_GET_TASKS 能看到所有 App 的任务。
+     * API 33+ 有带 displayId 的重载，优先用它；更早版本取全部再按 TaskInfo.displayId 过滤。
+     */
+    private fun tasksOn(displayId: Int): List<Any> {
+        val methods = taskManager.javaClass.methods.filter { it.name == "getTasks" }
+        val withDisplay = methods.firstOrNull { it.parameterTypes.size == 4 }
+        val tasks = if (withDisplay != null) {
+            withDisplay.invoke(taskManager, MAX_TASKS, false, false, displayId)
+        } else {
+            methods.first { it.parameterTypes.size == 3 }.invoke(taskManager, MAX_TASKS, false, false)
+        } as List<*>
+        val displayField = TASK_INFO.getField("displayId")
+        return tasks.filterNotNull().filter { displayField.getInt(it) == displayId }
+    }
+
+    private fun allTasks(): List<Any> {
+        val methods = taskManager.javaClass.methods.filter { it.name == "getTasks" }
+        val withDisplay = methods.firstOrNull { it.parameterTypes.size == 4 }
+        val tasks = if (withDisplay != null) {
+            withDisplay.invoke(taskManager, MAX_TASKS, false, false, Display.INVALID_DISPLAY)
+        } else {
+            methods.first { it.parameterTypes.size == 3 }.invoke(taskManager, MAX_TASKS, false, false)
+        } as List<*>
+        return tasks.filterNotNull()
+    }
+
+    private fun displayFlags(): Int {
+        var flags = FLAG_PUBLIC or FLAG_OWN_CONTENT_ONLY or FLAG_SUPPORTS_TOUCH or
+            FLAG_ROTATES_WITH_CONTENT or FLAG_DESTROY_CONTENT_ON_REMOVAL
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            flags = flags or FLAG_TRUSTED or FLAG_OWN_DISPLAY_GROUP or
+                FLAG_ALWAYS_UNLOCKED or FLAG_TOUCH_FEEDBACK_DISABLED
+        }
+        // 只有 OWN_FOCUS 时虚拟屏会抢「最上层焦点」，主屏焦点窗口随之清空；
+        // STEAL_TOP_FOCUS_DISABLED（需同时有 OWN_FOCUS、TRUSTED）让它不抢用户主屏的焦点。
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            flags = flags or FLAG_OWN_FOCUS or FLAG_STEAL_TOP_FOCUS_DISABLED
+        }
+        return flags
+    }
+
+    /** IWindowManager.setDisplayImePolicy：输入法不弹到用户主屏上。 */
+    @SuppressLint("PrivateApi")
+    private fun setImePolicy(displayId: Int) {
+        runCatching {
+            val wm = Class.forName("android.view.WindowManagerGlobal")
+                .getMethod("getWindowManagerService").invoke(null)!!
+            wm.javaClass.getMethod("setDisplayImePolicy", Int::class.java, Int::class.java)
+                .invoke(wm, displayId, IME_POLICY)
+        }.onFailure { Log.w(TAG, "setDisplayImePolicy failed", it) }
+    }
+
+    @SuppressLint("PrivateApi")
+    private fun inject(event: InputEvent, displayId: Int): Boolean = try {
+        event.javaClass.getMethod("setDisplayId", Int::class.java).invoke(event, displayId)
+        val manager = inputManager()
+        manager.javaClass.getMethod("injectInputEvent", InputEvent::class.java, Int::class.java)
+            .invoke(manager, event, INJECT_MODE_ASYNC) as Boolean
+    } catch (t: Throwable) {
+        Log.w(TAG, "injectInputEvent failed", t)
+        false
+    }
+
+    private inline fun injectPair(
+        down: InputEvent,
+        up: InputEvent,
+        displayId: Int,
+        fallback: () -> Boolean,
+    ): Boolean {
+        if (!inject(down, displayId)) return fallback()
+        return inject(up, displayId) || inject(up, displayId)
+    }
+
+    private fun inputManager(): Any = runCatching {
+        Class.forName("android.hardware.input.InputManagerGlobal").getMethod("getInstance").invoke(null)
+    }.getOrNull() ?: Class.forName("android.hardware.input.InputManager")
+        .getMethod("getInstance").invoke(null)!!
+
+    /** 按键白名单：绝不从这里发出电源/音量/Home/最近任务这类整机按键。 */
+    private fun keyAllowed(keyCode: Int): Boolean = keyCode in ALLOWED_KEYS
 }

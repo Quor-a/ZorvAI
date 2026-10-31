@@ -499,11 +499,11 @@ private fun TopBar(
                 )
             }
 
-            // 增强终端（完整 VT 模拟器 + 额外按键栏）
+            // Termux（完整 VT 模拟器 + 额外按键栏）
             IconButton(onClick = onNavigateToEnhanced) {
                 Icon(
                     imageVector = Icons.Default.Computer,
-                    contentDescription = "增强终端",
+                    contentDescription = "Termux",
                     tint = TerminalTheme.primaryColor
                 )
             }

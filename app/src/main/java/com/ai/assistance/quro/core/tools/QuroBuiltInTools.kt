@@ -382,6 +382,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(AiKeyboardSendTool())
     r.register(ScrollScreenTool())
     r.register(GlobalActionTool())
+    // ═════════════ 后台虚拟屏（移植 Mika：Shizuku 建独立虚拟屏，不打扰用户主屏）══════════════
+    // 与上面 L1 无障碍控屏的分工：L1 操作「用户正在看的屏」，本工具操作「用户看不见的屏」。
+    // 截图经 Surface→ImageReader，不依赖无障碍；主屏焦点与输入法不受影响。
+    r.register(BackgroundScreenTool())
     // ═════════════ 屏幕视觉双模感知（截图+视觉分析）══════════════
     r.register(ScreenshotTool())           // 截图并保存文件
     r.register(ScreenshotBase64Tool())     // 截图返回Base64（用于视觉模型）
@@ -456,6 +460,9 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(LinuxStatusTool())
     r.register(LinuxPackageTool())   // 统一包管理：自动适配 apt/apk/dnf/pacman
     r.register(LinuxProcessTool())   // 查看/终止 Linux 环境残留后台进程（issue #11 问题 9 入口）
+    // Termux（完整移植的官方宿主）：AI 直接在这套发行版里执行命令/装包/查状态/拉起界面。
+    // 与 terminal 的分工：terminal 管交互式会话，termux 管「在 Termux 发行版里干活」。
+    r.register(TermuxTool())
     // ═════════════ 墨语言（Mo）独立运行时 ═════════════
     // 工具链是 x86_64 静态可执行、qemu 是 aarch64 静态，两者零依赖 → 直接在 App 私有目录进程调用，
     // **不依赖 Ubuntu/proot**。用于编译/运行 .mo、读写源码修 bug、调 mols/modb 等工具链。
