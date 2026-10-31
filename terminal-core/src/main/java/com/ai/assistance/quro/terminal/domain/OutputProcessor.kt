@@ -589,23 +589,18 @@ class OutputProcessor(
         // \u001B[H - 移动光标到左上角
         // 使用 \r\n 确保正确换行（\r 回车到行首，\n 换到下一行）
         //
-        // 🔴 2026-10-31 第2版：真机截图确认旧横幅无论松散版还是 . 镂空版，
-        // 在等宽终端里都会渲染成「方块拼字 / 麻点」。
-        // 改用 U+2588 FULL BLOCK（█）实心方块点阵：字母轮廓饱满连续、
-        // 无麻点、无间距问题，任何字号下都清晰可辨。
+        // 🔴 2026-10-31 第3版：ASCII art 大字横幅（无论 . 镂空还是 █ 实心点阵）在真机
+        // 等宽终端小字号下都会渲染成「方块拼字 / 平滑字母轮廓」，用户持续反馈异常。
+        // 彻底弃用 ASCII art 大字，改为纯 ASCII 文本横幅 + ANSI 颜色：
+        // 不依赖任何特殊 Unicode 字符，任何字体/字号/终端宽度都清晰、无乱码、无麻点。
         val welcomeMessage = "\u001B[2J\u001B[H" +
-            "  █████  ███  ████  █   █  ███  █████\r\n" +
-            "     █  █   █ █   █ █   █ █   █   █\r\n" +
-            "    █   █   █ ████  █   █ █████   █\r\n" +
-            "   █    █   █ █  █   █ █  █   █   █\r\n" +
-            "  █████  ███  █   █   █   █   █ █████\r\n" +
-            "\r\n" +
-            "  ZorvAI Terminal v1.0 - Ubuntu (proot)\r\n" +
+            "\u001B[1;36m=== ZorvAI Terminal v1.2.1 ===\u001B[0m\r\n" +
+            "\u001B[2mUbuntu 24.04 (proot) - type 'help' for commands\u001B[0m\r\n" +
             "\r\n"
-        
+
         // 直接发送到 ANSI 解析器（Canvas 渲染）
         session.ansiParser.parse(welcomeMessage)
-        
+
         Log.d(TAG, "Welcome message sent to Canvas for session $sessionId")
     }
 
