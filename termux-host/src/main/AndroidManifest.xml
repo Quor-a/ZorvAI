@@ -16,10 +16,7 @@
             android:launchMode="singleTask"
             android:resizeableActivity="true"
             android:theme="@style/Theme.TermuxHostActivity.DayNight.NoActionBar">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+            <!-- 非桌面入口：由增强终端路由以 Intent 拉起，避免生成第二个图标 -->
         </activity>
 
         <activity

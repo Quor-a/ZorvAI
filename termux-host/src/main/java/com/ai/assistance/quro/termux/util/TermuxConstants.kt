@@ -20,11 +20,11 @@ object TermuxConstants {
     /** 崩溃通知广播。 */
     const val BROADCAST_APP_CRASH = "com.ai.assistance.quro.termux.APP_CRASH"
 
-    /** 属性快捷键 action 常量。 */
-    const val ACTION_SHORTCUT_CREATE_SESSION = "create-session"
-    const val ACTION_SHORTCUT_NEXT_SESSION = "next-session"
-    const val ACTION_SHORTCUT_PREVIOUS_SESSION = "previous-session"
-    const val ACTION_SHORTCUT_RENAME_SESSION = "rename-session"
+    // 属性快捷键 action 常量（对齐官方 TermuxPropertyConstants，Int 值）
+    const val ACTION_SHORTCUT_CREATE_SESSION = 1
+    const val ACTION_SHORTCUT_NEXT_SESSION = 2
+    const val ACTION_SHORTCUT_PREVIOUS_SESSION = 3
+    const val ACTION_SHORTCUT_RENAME_SESSION = 4
 
     object TERMUX_ACTIVITY {
         const val TERMUX_ACTIVITY_NAME = "com.ai.assistance.quro.termux.app.TermuxHostActivity"
@@ -85,8 +85,8 @@ object TermuxConstants {
         const val VALUE_CURSOR_STYLE_UNDERLINE = "underline"
         const val VALUE_CURSOR_STYLE_BAR = "bar"
 
-        // 快捷键映射：属性键 → action
-        val MAP_SESSION_SHORTCUTS: Map<String, String> = mapOf(
+        // 快捷键映射：属性键 → action（Int，对齐官方 MAP_SESSION_SHORTCUTS）
+        val MAP_SESSION_SHORTCUTS: Map<String, Int> = mapOf(
             "shortcut.create-session" to ACTION_SHORTCUT_CREATE_SESSION,
             "shortcut.next-session" to ACTION_SHORTCUT_NEXT_SESSION,
             "shortcut.previous-session" to ACTION_SHORTCUT_PREVIOUS_SESSION,

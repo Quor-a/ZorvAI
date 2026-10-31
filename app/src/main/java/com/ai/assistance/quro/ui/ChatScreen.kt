@@ -39,6 +39,7 @@ import com.ai.assistance.quro.terminal.rememberTerminalEnv
 import com.ai.assistance.quro.terminal.utils.CacheManager
 import com.ai.assistance.quro.terminal.utils.FtpServerManager
 import com.ai.assistance.quro.terminal.view.TerminalScreen
+import com.ai.assistance.quro.termux.app.TermuxHostActivity
 import com.ai.assistance.quro.ui.QuroChatCardTray
 import com.ai.assistance.quro.ui.QuroChatCardView
 import com.ai.assistance.quro.ui.VisualDialogs
@@ -2435,7 +2436,17 @@ fun ChatScreen(
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
                 val terminalManager = remember { TerminalManager.getInstance(ctx) }
                 val terminalEnv = rememberTerminalEnv(terminalManager)
-                TerminalScreen(env = terminalEnv)
+                TerminalScreen(
+                    env = terminalEnv,
+                    onLaunchEnhancedTerminal = {
+                        // 🔴 增强终端 = 完整移植的 Termux 宿主（TermuxHostActivity），
+                        // 而非轻量 vtlib 实现。直接以 Intent 拉起，不产生独立桌面图标。
+                        ctx.startActivity(
+                            Intent(ctx, TermuxHostActivity::class.java)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                        )
+                    }
+                )
             }
         }
 

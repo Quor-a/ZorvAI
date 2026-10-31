@@ -25,7 +25,8 @@ import kotlinx.coroutines.launch
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun TerminalScreen(
-    env: TerminalEnv
+    env: TerminalEnv,
+    onLaunchEnhancedTerminal: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val navController = rememberNavController()
@@ -67,7 +68,11 @@ fun TerminalScreen(
                     navController.navigate(TerminalRoutes.MOYU_ROUTE)
                 },
                 onNavigateToEnhanced = {
-                    navController.navigate(TerminalRoutes.ENHANCED_TERMINAL_ROUTE)
+                    if (onLaunchEnhancedTerminal != null) {
+                        onLaunchEnhancedTerminal()
+                    } else {
+                        navController.navigate(TerminalRoutes.ENHANCED_TERMINAL_ROUTE)
+                    }
                 }
             )
         }
@@ -78,11 +83,21 @@ fun TerminalScreen(
         }
 
         // 增强终端（vtlib 完整 VT 模拟器 + 额外按键栏）
+        // 当宿主注入了 onLaunchEnhancedTerminal（app 壳层启动完整 TermuxHostActivity）时，
+        // 此路由不再使用轻量实现，直接由回调拉起完整移植的 Termux 宿主。
         composable(TerminalRoutes.ENHANCED_TERMINAL_ROUTE) {
-            EnhancedTerminalScreen(
-                environment = manager.terminalEnvironment,
-                onBack = { navController.popBackStack() }
-            )
+            val launch = onLaunchEnhancedTerminal
+            if (launch != null) {
+                LaunchedEffect(Unit) {
+                    launch()
+                    navController.popBackStack()
+                }
+            } else {
+                EnhancedTerminalScreen(
+                    environment = manager.terminalEnvironment,
+                    onBack = { navController.popBackStack() }
+                )
+            }
         }
         
         composable(TerminalRoutes.SETUP_ROUTE) {
