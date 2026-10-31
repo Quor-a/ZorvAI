@@ -12,13 +12,25 @@ import java.io.OutputStream
 class Pty(
     val process: Process,
     val masterFd: FileDescriptor,
-    private val ptyMaster: Int
+    private val ptyMaster: Int,
+    private val childPid: Int
 ) {
     val stdout: InputStream = FileInputStream(masterFd)
     val stdin: OutputStream = FileOutputStream(masterFd)
 
     fun waitFor(): Int {
         return process.waitFor()
+    }
+
+    /**
+     * 获取真实退出码（仅限进程已确认退出后调用）。
+     *
+     * 底层 waitFor(pid) 是阻塞的 waitpid：进程仍存活时会一直挂起，因此调用方
+     * **必须先确认 [process.isAlive] == false**（例如在 readJob 读到 EOF 之后），
+     * 且应放在后台线程（Dispatchers.IO）执行。失败返回 null。
+     */
+    fun tryGetExitCode(): Int? {
+        return runCatching { Companion.waitFor(childPid) }.getOrNull()
     }
 
     fun destroy() {
@@ -85,20 +97,25 @@ class Pty(
                 }
 
                 override fun exitValue(): Int {
-                    // We can't get the actual exit value without a blocking waitpid call,
-                    // which we do in waitFor(). The contract of exitValue() is to throw
-                    // an exception if the process is still running.
+                    // sendSignal(pid, 0) 是「探活」：进程存在则正常返回（不抛异常）。
+                    // Process.isAlive() 依赖 exitValue() 抛 IllegalThreadStateException 来判断存活，
+                    // 所以这里必须严格遵守该契约。
                     try {
-                        // sendSignal(pid, 0) checks if the process exists.
-                        // If it doesn't throw, the process is still alive.
                         android.os.Process.sendSignal(pid, 0)
+                        // 进程仍活着 → 抛 IllegalThreadStateException（契约要求）
                         throw IllegalThreadStateException("Process hasn't exited")
+                    } catch (e: IllegalThreadStateException) {
+                        throw e
+                    } catch (e: IllegalArgumentException) {
+                        // pid 不存在 = 进程已退出。
+                        // 🔴 2026-10-31：旧实现把所有异常都当成「进程已死」并返回 0，
+                        // 导致终端错误卡永远显示「exit=0 会话已结束」，掩盖真实的异常退出码。
+                        // 这里不能阻塞调用 waitFor（可能在主线程），因此返回 -1 表示
+                        // 「已退出但退出码未知」，让 UI 如实展示而不是误导成正常退出。
+                        return -1
                     } catch (e: Exception) {
-                        // The process is dead. We don't have the exit code without waiting,
-                        // so we can't fulfill the contract perfectly. Returning 0 is a
-                        // reasonable fallback for a terminated process where the specific
-                        // exit code isn't available.
-                        return 0
+                        // 其他异常（探活本身失败）：保守处理，当作仍存活由调用方继续等待
+                        throw IllegalThreadStateException("Process state unknown")
                     }
                 }
 
@@ -111,7 +128,7 @@ class Pty(
                 }
             }
             
-            return Pty(dummyProcess, fileDescriptor, masterFdInt)
+            return Pty(dummyProcess, fileDescriptor, masterFdInt, pid)
         }
 
         private external fun createSubprocess(cmdArray: Array<String>, envArray: Array<String>, workingDir: String): IntArray
