@@ -281,6 +281,121 @@ class DeepSeekHarness(private val context: Context) {
     private var cachedCookie: String? = null
 
     /**
+     * 引擎认领文件：`filesDir/dsh/.engine-claim`，内容 `pid\nport\nstartedAtEpochMs`。
+     *
+     * **为什么必须有它**：引擎是由保活前台服务（Application 进程）spawn 的，而用户打开界面
+     * 时走的可能是同一进程、也可能进程被重建过。此时 `proc` 字段为 null，[start] 会当成
+     * 「没在跑」再起一个：
+     *  - 旧引擎占着端口 → 新引擎换端口 → 两个引擎并存，内存翻倍、日志互相覆盖；
+     *  - 更糟的是 [killStaleEngines] 按 uid 扫 /proc 杀 node，**会把还活着的那台引擎杀掉**，
+     *    于是「回到前台又要重新启动」——这正是用户反馈的现象。
+     *
+     * 有了认领文件，跨进程/跨重启也能认出「已有一台在服务」，直接复用端口；
+     * 清理残留时也会跳过被认领的 pid。
+     */
+    private val claimFile: File get() = File(root, ".engine-claim")
+
+    /** 被认领的引擎 pid（无认领返回 -1）。 */
+    private fun claimedPid(): Int =
+        runCatching {
+            claimFile.readLines().firstOrNull()?.trim()?.toIntOrNull() ?: -1
+        }.getOrDefault(-1)
+
+    /** 记录「这台引擎是我的」。 */
+    private fun writeClaim(pid: Int, port: Int) {
+        runCatching {
+            root.mkdirs()
+            claimFile.writeText("$pid\n$port\n${System.currentTimeMillis()}\n")
+        }.onFailure { Log.w(TAG, "写引擎认领失败", it) }
+    }
+
+    private fun clearClaim() {
+        runCatching { claimFile.delete() }
+    }
+
+    /**
+     * 取引擎进程 pid。
+     *
+     * `Process.pid()` 是 Java 9 的 API（Android 上 API 26+ 才有），本模块按 Java 8 编译时
+     * 解析不到，所以走反射；反射失败再扫 /proc 兜底（找 PPid 为自己、cmdline 像 node 的那个）。
+     * 拿不到返回 -1 —— 此时认领文件不写，行为退化成「每次 start 都探端口」，
+     * 也就是没有复用，但**不会**误杀引擎（[killStaleEngines] 那边 claimed=-1 只是不跳过任何人）。
+     */
+    private fun pidOf(p: Process): Int {
+        runCatching {
+            val m = Process::class.java.getMethod("pid")
+            val v = m.invoke(p)
+            if (v is Int && v > 0) return v
+        }
+        // 兜底：扫 /proc 找自己直接 spawn 出来的引擎进程
+        val self = android.os.Process.myPid()
+        File("/proc").listFiles()?.forEach { dir ->
+            val pid = dir.name.toIntOrNull() ?: return@forEach
+            if (pid == self) return@forEach
+            val status = runCatching { File(dir, "status").readLines() }.getOrNull() ?: return@forEach
+            val ppid = status.firstOrNull { it.startsWith("PPid:") }
+                ?.removePrefix("PPid:")?.trim()?.toIntOrNull() ?: return@forEach
+            if (ppid != self) return@forEach
+            val cmdline = runCatching {
+                File(dir, "cmdline").readBytes().toString(Charsets.UTF_8)
+            }.getOrDefault("")
+            if (cmdline.contains("libnode.so") || cmdline.contains("bin/node") ||
+                cmdline.contains("dsh/node_modules")
+            ) {
+                return pid
+            }
+        }
+        return -1
+    }
+
+    /** pid 是否还是一个活着的引擎进程（同一 uid 且 cmdline 像 node）。 */
+    private fun pidLooksLikeEngine(pid: Int): Boolean {
+        if (pid <= 0) return false
+        val dir = File("/proc/$pid")
+        if (!dir.isDirectory) return false
+        val cmdline = runCatching {
+            File(dir, "cmdline").readBytes().toString(Charsets.UTF_8).trimEnd('\u0000')
+        }.getOrDefault("")
+        if (cmdline.isEmpty()) return false
+        if (!cmdline.contains("libnode.so") && !cmdline.contains("bin/node") &&
+            !cmdline.contains("dsh/node_modules")
+        ) {
+            return false
+        }
+        val uid = runCatching {
+            File(dir, "status").readLines()
+                .firstOrNull { it.startsWith("Uid:") }
+                ?.removePrefix("Uid:")?.trim()?.split('\t', ' ')?.firstOrNull()?.toIntOrNull()
+        }.getOrNull()
+        return uid == android.os.Process.myUid()
+    }
+
+    /**
+     * 若已有一台引擎在服务（可能是别的进程/上一代 App 起的），接管它并返回端口。
+     *
+     * 判据是**双重的**：认领 pid 还活着 + 该端口 HTTP 层真的在应答。
+     * 只看 pid 会误判（pid 复用），只看端口会接管别人的进程。
+     */
+    fun attachIfAlive(): Int? {
+        if (isRunning()) return activePort
+        val pid = claimedPid()
+        if (!pidLooksLikeEngine(pid)) {
+            clearClaim()
+            return null
+        }
+        val port = runCatching {
+            claimFile.readLines().getOrNull(1)?.trim()?.toIntOrNull()
+        }.getOrNull() ?: return null
+        if (port <= 0) return null
+        val probe = probeEngine(port)
+        if (!probe.serving) return null
+        activePort = port
+        appendLog("[复用] 接管已有引擎 pid=$pid port=$port（未重复 spawn）")
+        Log.i(TAG, "接管已有引擎 pid=$pid port=$port")
+        return port
+    }
+
+    /**
      * dir-pick 端点的鉴权 token（上游 `DSH_PICK_TOKEN`）。
      *
      * 上游壳**每次启动引擎都重新生成**一个，写进引擎 env；页面侧经
@@ -485,6 +600,9 @@ class DeepSeekHarness(private val context: Context) {
         if (isRunning()) {
             return@withContext Result.success(activePort)
         }
+        // 跨进程/跨重启复用：保活服务起的引擎还在服务时直接接管，绝不再 spawn 一台。
+        // 这一步必须发生在 killStaleEngines 之前 —— 否则会把自己那台引擎当残留杀掉。
+        attachIfAlive()?.let { return@withContext Result.success(it) }
         lastExit = null
         // 上一轮若在超时/异常路径上退出，引擎进程可能还活着并占着端口 —— 先清干净，
         // 否则这次必然 listen EADDRINUSE（实测就是这个）。
@@ -609,6 +727,7 @@ class DeepSeekHarness(private val context: Context) {
                     lastExit = "进程退出，退出码 $code"
                     appendLog("[进程退出] code=$code")
                     proc = null
+                    clearClaim()
                 } catch (_: Exception) {
                 }
             }, "dsh-wait").apply { isDaemon = true }.start()
@@ -642,6 +761,7 @@ class DeepSeekHarness(private val context: Context) {
                         val idxNote = awaitIndexReady(usePort, deadline) { p.isAlive }
                         if (idxNote == null) {
                             appendLog("[就绪] $lastProbe；index 已带 bootstrap 脚本 ✓")
+                            runCatching { writeClaim(pidOf(p), usePort) }
                             return@withContext Result.success(usePort)
                         }
                         lastIndex = idxNote
@@ -659,6 +779,7 @@ class DeepSeekHarness(private val context: Context) {
                                 activePort = reported
                                 appendLog("[端口] 引擎实际监听 $reported")
                                 appendLog("[就绪] $lastProbe；index 已带 bootstrap 脚本 ✓")
+                                runCatching { writeClaim(pidOf(p), reported) }
                                 return@withContext Result.success(reported)
                             }
                             lastIndex = idxNote
@@ -673,6 +794,7 @@ class DeepSeekHarness(private val context: Context) {
                                 activePort = cand
                                 appendLog("[端口] 引擎实际监听 $cand（兜底匹配）")
                                 appendLog("[就绪] index 已带 bootstrap 脚本 ✓")
+                                runCatching { writeClaim(pidOf(p), cand) }
                                 return@withContext Result.success(cand)
                             }
                             lastIndex = idxNote
@@ -1400,10 +1522,12 @@ class DeepSeekHarness(private val context: Context) {
         var killed = 0
         val selfPid = android.os.Process.myPid()
         val myUid = android.os.Process.myUid()
+        // 被认领的那台是**正在服务**的引擎（可能是保活服务起的），绝不能当残留杀掉
+        val claimed = claimedPid()
         val procRoot = File("/proc")
         procRoot.listFiles()?.forEach { dir ->
             val pid = dir.name.toIntOrNull() ?: return@forEach
-            if (pid == selfPid) return@forEach
+            if (pid == selfPid || pid == claimed) return@forEach
             val cmdline = runCatching {
                 File(dir, "cmdline").readBytes().toString(Charsets.UTF_8).trimEnd('\u0000')
             }.getOrNull() ?: return@forEach
@@ -1519,6 +1643,7 @@ class DeepSeekHarness(private val context: Context) {
             Log.w(TAG, "停止失败", e)
         } finally {
             proc = null
+            clearClaim()
         }
     }
 

@@ -109,6 +109,11 @@ fun HarnessScreen(onBack: () -> Unit) {
 
     fun refresh() {
         installed = harness.isInstalled()
+        // 引擎可能是保活的 Application 进程 spawn 的（开机自启 / 后台保活），
+        // 此时本进程的 proc 字段为 null，但 127.0.0.1 上确实有引擎在服务。
+        // 先尝试接管（pid 校验 + 一次本地 HTTP 探活，几十毫秒），别把「在跑」误判成「已退出」，
+        // 否则用户一进界面就被拦下说要重新启动。
+        if (!harness.isRunning()) harness.attachIfAlive()
         running = harness.isRunning()
         port = harness.activePort()
         logs = harness.logs()
@@ -1013,6 +1018,7 @@ private fun HarnessWebView(
                 // #381：引擎进程状态与日志尾部。白屏最难判的一种是引擎自己退了（23:26 实锤
                 // code=0）：页面请求挂在半空，WebView 一个回调都不给，只有日志尾部能一眼定案。
                 val harness = DeepSeekHarness.get(context)
+                if (!harness.isRunning()) harness.attachIfAlive()
                 append("\n\n── 引擎进程 ──\n")
                 append("存活: ").append(
                     if (harness.isRunning()) "是（127.0.0.1:${harness.activePort()}）" else "否（已退出）",
@@ -1080,6 +1086,7 @@ private fun HarnessWebView(
         }
         // #root 空：先看引擎还在不在 —— 引擎退了，页面请求挂在半空，等再久也不会动
         val harness = DeepSeekHarness.get(context)
+        if (!harness.isRunning()) harness.attachIfAlive()
         if (!harness.isRunning()) {
             autoOpenPanel(
                 "引擎进程已退出 —— 页面请求挂在半空，永远不会返回。诊断里已附引擎日志尾部。",

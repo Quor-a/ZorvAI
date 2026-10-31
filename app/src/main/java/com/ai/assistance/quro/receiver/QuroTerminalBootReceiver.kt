@@ -18,7 +18,8 @@ class QuroTerminalBootReceiver : BroadcastReceiver() {
         if (action == Intent.ACTION_BOOT_COMPLETED ||
             action == Intent.ACTION_MY_PACKAGE_REPLACED
         ) {
-            QuroTerminalKeepAliveService.ensureStarted(context)
+            // 开机/更新后拉起：Harness 引擎延后自启，避开开机负载高峰
+            QuroTerminalKeepAliveService.ensureStarted(context, fromBoot = true)
         }
     }
 }

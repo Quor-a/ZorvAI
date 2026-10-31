@@ -8,6 +8,7 @@ import android.content.Intent
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.os.Build
+import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import android.view.Display
@@ -17,6 +18,8 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.Surface
 import com.ai.assistance.quro.IQuroShellService
+import com.ai.assistance.quro.core.display.MainScreenLog
+import com.ai.assistance.quro.core.display.MainScreenWatch
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
@@ -432,6 +435,75 @@ class QuroShellService : IQuroShellService.Stub() {
             ?.let { TASK_INFO.getField("displayId").getInt(it) } ?: -1
     } catch (t: Throwable) {
         -1
+    }
+
+    // ─────────────── 主屏监视（移植自 Mika：App 跑到用户主屏时认出来并挪回）───────────────
+
+    /**
+     * 主屏任务的记录。第一次用到才建（会起一个 HandlerThread 并登记任务栈监听）。
+     *
+     * 为什么要它：AI 的动作不一定把 App 开进后台屏 —— 启动某个 App 时对方若从通知、
+     * 服务、系统选择器里二次 launch，系统会按默认放到**主屏**，后台屏上看不出任何变化，
+     * 模型于是以为没点到、一遍遍重试。盯住主屏最上面换的是谁，就能识别并 `moveTask` 挪回来。
+     */
+    private val mainWatch by lazy { MainScreenWatch({ taskManager }, ::taskRows) }
+
+    override fun watchMainScreen(windowMs: Int): Int = try {
+        mainWatch.watch(windowMs)
+    } catch (t: Throwable) {
+        Log.e(TAG, "watchMainScreen failed", t)
+        -1
+    }
+
+    override fun mainArrivals(sinceUptimeMs: Long): Bundle? = try {
+        mainWatch.arrivals(sinceUptimeMs)
+    } catch (t: Throwable) {
+        Log.e(TAG, "mainArrivals failed", t)
+        null
+    }
+
+    override fun moveTask(taskId: Int, displayId: Int): Boolean {
+        // 安全边界：只允许挪到/挪回自己建的屏或主屏，不接受任意屏号
+        if (displayId != MAIN_DISPLAY && !ownDisplay(displayId)) return false
+        return try {
+            taskManager.javaClass
+                .getMethod(
+                    "moveRootTaskToDisplay",
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                )
+                .invoke(taskManager, taskId, displayId)
+            true
+        } catch (t: Throwable) {
+            Log.w(TAG, "moveRootTaskToDisplay 不可用，退回 am display move-stack", t)
+            // 兜底：命令行同样走 IActivityTaskManager，只是多一次进程开销
+            runCatching { exec("am display move-stack $taskId $displayId") }
+            runCatching {
+                Thread.sleep(300)
+                displayOfTask(taskId) == displayId
+            }.getOrDefault(false)
+        }
+    }
+
+    /** 把系统 TaskInfo 列表压成纯逻辑层要的形状（字段名是本机反射出来的，各版本可能有缺）。 */
+    private fun taskRows(): List<MainScreenLog.Task> {
+        val id = TASK_INFO.getField("taskId")
+        val display = TASK_INFO.getField("displayId")
+        val user = runCatching { TASK_INFO.getField("userId") }.getOrNull()
+        val type = runCatching { TASK_INFO.getField("topActivityType") }.getOrNull()
+        return allTasks().map { t ->
+            val top = runCatching { TASK_INFO.getField("topActivity").get(t) as? ComponentName }.getOrNull()
+            val base = runCatching { TASK_INFO.getField("baseActivity").get(t) as? ComponentName }.getOrNull()
+            MainScreenLog.Task(
+                taskId = id.getInt(t),
+                displayId = display.getInt(t),
+                packageName = top?.packageName ?: base?.packageName,
+                userId = user?.getInt(t) ?: -1,
+                topActivity = top?.className,
+                // TaskInfo.TOP_ACTIVITY_TYPE_*：0=UNDEFINED 1=STANDARD，其余（HOME/RECENTS/ASSISTANT）不算普通 App
+                standard = type?.getInt(t)?.let { it == 0 || it == 1 } ?: true,
+            )
+        }
     }
 
     // ─────────────── 内部辅助 ───────────────
