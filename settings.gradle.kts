@@ -38,7 +38,10 @@ include(":app", ":aidl-aci-browser", ":aidl-aci-core", ":mnn", ":llama", ":lib_a
     // vtlib — 完整 VT 终端模拟器/视图（移植自 Termux terminal-emulator + terminal-view，Apache-2.0）
     // 已去品牌化：com.termux.terminal / com.termux.view → com.ai.assistance.quro.vt
     // 提供双缓冲/备用屏幕/滚动/sixel/24 位真彩/鼠标协议/括号粘贴/OSC52/文本选择等能力
-    ":vtlib")
+    ":vtlib",
+    // termux-host — Termux app 宿主层完整移植（TermuxActivity/Service/会话管理/设置/通知/快捷键/工具栏）
+    // 去品牌化为 com.ai.assistance.quro.termux；依赖 :vtlib 终端核心 + :terminal-core proot 启动
+    ":termux-host")
 project(":mnn").projectDir = file("llm/mnn")
 project(":llama").projectDir = file("llm/llama")
 // CodeCanvas 子模块实际位于 codecanvas/<模块名>/，模块名与目录名不同名，必须显式指路

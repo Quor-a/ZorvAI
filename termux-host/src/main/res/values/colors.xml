@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <color name="red_400">#FF0000</color>
+    <color name="red_800">#C4001D</color>
+
+    <color name="grey_200">#EEEEEE</color>
+    <color name="grey_400">#BDBDBD</color>
+    <color name="grey_500">#9E9E9E</color>
+    <color name="grey_800">#424242</color>
+    <color name="grey_900">#212121</color>
+
+    <color name="red_error">#DC143C</color>
+    <color name="blue_link_light">#0969DA</color>
+    <color name="blue_link_dark">#58A6FF</color>
+
+    <!-- ZorvAI 品牌主色（陶土/纸/墨） -->
+    <color name="zorv_terracotta">#C4503A</color>
+    <color name="zorv_terracotta_dark">#9A3B2A</color>
+    <color name="zorv_paper">#F5F0E8</color>
+    <color name="zorv_ink">#1C1B1A</color>
+</resources>

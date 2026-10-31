@@ -246,6 +246,10 @@ dependencies {
     // 提供双缓冲/备用屏幕/滚动/sixel/24 位真彩/鼠标协议/括号粘贴/OSC52/文本选择。
     implementation(project(":vtlib"))
 
+    // termux-host — Termux app 宿主层完整移植（TermuxActivity/Service/会话管理/设置/通知/快捷键/工具栏）
+    // 去品牌化后包名 com.ai.assistance.quro.termux，接入 proot Ubuntu 终端。
+    implementation(project(":termux-host"))
+
     // 小程序引擎（WebView + native.* 桥，MiniAppEngine，com.ai.assistance.quro.core.miniapp）：
     // 自研 WebView 运行时，AI 用 miniapp 工具写入的 HTML 工程在此渲染，可调用真实 Android 能力。
     // miniapp-sdk（com.yuanbao.miniapp）：从上游 Quor-a/GenUI 移植进来的**原生 WXML/WXSS 引擎**
