@@ -141,6 +141,7 @@ class TermuxHostActivity : AppCompatActivity(),
         mTermuxTerminalSessionActivityClient = TermuxTerminalSessionActivityClient(this)
         mTermuxTerminalViewClient = TermuxTerminalViewClient(this, mTermuxTerminalSessionActivityClient)
         mTermuxTerminalExtraKeys = TermuxTerminalExtraKeys(this, mTerminalView, mTermuxTerminalViewClient, mTermuxTerminalSessionActivityClient)
+        mTermuxTerminalExtraKeys.setExtraKeys()
 
         mTerminalView.setTerminalViewClient(mTermuxTerminalViewClient)
 
