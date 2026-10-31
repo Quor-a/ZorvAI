@@ -287,6 +287,29 @@ class QuroShellService : IQuroShellService.Stub() {
         -1
     }
 
+    /**
+     * 把虚拟屏显示面切到外部 Surface（零拷贝直出）+ 顺手改分辨率。
+     *
+     * Extendroid 的做法（`VirtualDisplay.surface = surface` + `resize`）：
+     * 显示面跟窗口走，窗口多大画面多大；AI 截图把面切回 ImageReader 即可。
+     * displayId 必须是本服务自建的屏（ownDisplay 校验），不接外部屏。
+     */
+    override fun displaySetSurface(displayId: Int, surface: Surface?, width: Int, height: Int, dpi: Int): Boolean {
+        if (surface == null || !surface.isValid) return false
+        val vd = synchronized(displays) { displays[displayId] } ?: return false
+        return try {
+            vd.surface = surface
+            if (width > 0 && height > 0) {
+                runCatching { vd.resize(width, height, if (dpi > 0) dpi else 160) }
+            }
+            Log.d(TAG, "displaySetSurface id=$displayId -> ${width}x${height}@$dpi")
+            true
+        } catch (t: Throwable) {
+            Log.e(TAG, "displaySetSurface failed id=$displayId", t)
+            false
+        }
+    }
+
     override fun releaseDisplay(displayId: Int) {
         val vd = synchronized(displays) { displays.remove(displayId) }
         runCatching { vd?.release() }

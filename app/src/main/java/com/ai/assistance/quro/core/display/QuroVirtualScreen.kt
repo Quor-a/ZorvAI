@@ -210,10 +210,25 @@ object QuroVirtualScreen {
         }
     }
 
-    /** 后台屏最新画面（PNG）。 */
+    /** 后台屏最新画面（PNG）。UI 正直出显示面时，先切回 ImageReader 拍帧再切回。 */
     fun screenshotPng(context: Context): ByteArray? {
         val d = ensureDisplay(context) ?: return null
-        return runCatching { d.latestFramePng() }.getOrNull()
+        synchronized(surfaceSwitchLock) {
+            val restored = uiSurfaceAttached && runCatching {
+                QuroShizuku.acquireShellService()?.displaySetSurface(
+                    d.displayId, d.inputSurface, d.width, d.height, 0,
+                ) ?: false
+            }.getOrDefault(false)
+            try {
+                Thread.sleep(80) // 等系统把画面投回 reader（一帧时间）
+                return runCatching { d.latestFramePng() }.getOrNull()
+            } finally {
+                if (restored) runCatching {
+                    // 拍完立刻把面还给 UI（SurfaceView 由调用方重新 attach）
+                    setUiSurfaceAttached(false)
+                }
+            }
+        }
     }
 
     /** 后台屏当前最上层 Activity 的完整类名；无任务返回 null。 */
@@ -407,6 +422,46 @@ object QuroVirtualScreen {
                     "\n启动分身里的 App：open 时传 userId（上面列出的编号）。"
             }
         }.getOrElse { "查询分身失败：${it.message}" }
+    }
+
+    // ─────────── 显示面切换（移植 Extendroid 的零拷贝直出）───────────
+
+    /** 同步锁：截图与显示面切换互斥，防止把截图的面切走拍到黑帧。 */
+    private val surfaceSwitchLock = Any()
+
+    /** 悬浮窗/桌面是否正把画面直出到自己的 SurfaceView（此时截图要临时切面）。 */
+    @Volatile
+    var uiSurfaceAttached: Boolean = false
+        private set
+
+    /** 标记 UI 显示面状态（由悬浮窗/桌面在 attach/detach 时调用）。 */
+    fun setUiSurfaceAttached(attached: Boolean) {
+        uiSurfaceAttached = attached
+    }
+
+    /**
+     * 把虚拟屏画面**零拷贝**切到调用方的 Surface（SurfaceView.holder.surface）。
+     *
+     * 这是 Extendroid 全屏漂浮的核心机制：显示面跟窗口走，窗口多大画面多大、
+     * GPU 直接合成，不经过「ImageReader → Bitmap → Compose」的位图中转，
+     * 全屏也不掉帧。AI 截图前会先切回 ImageReader（见 [screenshotPng]）。
+     */
+    fun attachSurface(displayId: Int, surface: android.view.Surface, w: Int, h: Int, dpi: Int): Boolean {
+        val shell = QuroShizuku.acquireShellService() ?: return false
+        synchronized(surfaceSwitchLock) {
+            return runCatching { shell.displaySetSurface(displayId, surface, w, h, dpi) }.getOrDefault(false)
+        }
+    }
+
+    /** 把显示面切回 ImageReader（AI 截图通道）。UI 关闭/收起时调用。 */
+    fun detachSurfaceToReader(): Boolean {
+        val d = display ?: return false
+        val shell = QuroShizuku.acquireShellService() ?: return false
+        synchronized(surfaceSwitchLock) {
+            return runCatching {
+                shell.displaySetSurface(d.displayId, d.inputSurface, d.width, d.height, 0)
+            }.getOrDefault(false)
+        }
     }
 
     // ─────────── 界面结构读取（移植 Mika 的读树能力）───────────
