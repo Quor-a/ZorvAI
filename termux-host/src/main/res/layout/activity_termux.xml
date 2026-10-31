@@ -1,4 +1,4 @@
-<com.termux.app.terminal.TermuxActivityRootView xmlns:android="http://schemas.android.com/apk/res/android"
+<com.ai.assistance.quro.termux.app.terminal.TermuxActivityRootView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/activity_termux_root_view"
@@ -23,7 +23,7 @@
             android:layout_above="@+id/terminal_toolbar_view_pager"
             android:layout_height="match_parent">
 
-            <com.termux.view.TerminalView
+            <com.ai.assistance.quro.vt.TerminalView
                 android:id="@+id/terminal_view"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
@@ -110,4 +110,4 @@
         android:layout_height="1dp"
         android:background="@android:color/transparent" />
 
-</com.termux.app.terminal.TermuxActivityRootView>
+</com.ai.assistance.quro.termux.app.terminal.TermuxActivityRootView>

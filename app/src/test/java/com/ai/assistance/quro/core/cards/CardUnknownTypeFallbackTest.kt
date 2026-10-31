@@ -107,6 +107,28 @@ class CardUnknownTypeFallbackTest {
     }
 
     @Test
+    fun `模型误写 type=card 容器时不再落未识别组件`() {
+        // 动态 UI 的根节点习惯写 {"type":"card","children":[...]}，模型在 ui_widget/围栏
+        // 里误写同名 type 时，必须解析成容器卡而不是「未识别组件：card」。
+        val c = parse("""{"type":"card","title":"系统概览","children":[{"type":"stat","label":"内存","value":"6G"}]}""")
+        assertTrue(
+            "应解析成 CompositeCard，实际 ${c?.javaClass?.simpleName}",
+            c is QuroChatCard.CompositeCard,
+        )
+        val cc = c as QuroChatCard.CompositeCard
+        assertEquals("系统概览", cc.title)
+        assertEquals(1, cc.children.size)
+        assertTrue("子卡应为 StatCard", cc.children[0] is QuroChatCard.StatCard)
+    }
+
+    @Test
+    fun `围栏里 type=card 也走容器卡不落未识别`() {
+        val cards = CardFence.toCards("card", """{"type":"card","title":"组","children":[{"type":"button","label":"确定","command":"ai:确定"}]}""")
+        assertTrue("应产出 1 张卡，实际 ${cards.size}", cards.size == 1)
+        assertTrue("实际 ${cards[0]::class.simpleName}", cards[0] is QuroChatCard.CompositeCard)
+    }
+
+    @Test
     fun `后缀 type 但只有 path 没有 name 时不认`() {
         // 只有 path 没有任何名称 —— 判据①要求 name 或 path 至少一个，这里有 path，
         // 所以应该认。改测真正没有文件特征的：type=md 但整个对象是业务报文

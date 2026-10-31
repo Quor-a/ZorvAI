@@ -383,6 +383,18 @@ object CardSdk {
                 s.strOrNull("description"),
             )
         })
+        // `card` 通用容器卡：模型受动态 UI（quro-ui 根节点就是 {"type":"card","children":[...]}）
+        // 影响，在 ui_widget / 正文围栏里也会写 {"type":"card"}。若不注册，会落
+        // CustomCard(kind="card") 显示「未识别组件：card」。这里与 composite 同 builder，
+        // 让 card 成为 composite 的别名容器，子卡照常递归解析渲染。
+        add(CardSpec("card", "layout", "通用卡片容器：多子卡聚合展示（等价 composite 的 stack 布局；与动态 UI 的 card 节点同名兼容，避免误写时落「未识别组件」）", """{"type":"card","title":"系统概览","children":[{"type":"stat","label":"内存","value":"6G"},{"type":"progress","label":"下载","value":60}]}""") { s ->
+            val kids = (0 until s.arrLen("children")).mapNotNull { s.objOrNull("children", it) }
+                .mapNotNull { parseObj(it) }
+            if (kids.isEmpty()) null else QuroChatCard.CompositeCard(
+                s.id(), s.title(), s.optString("layout", "stack"), kids,
+                s.strOrNull("description"),
+            )
+        })
 
         // ═══════════════════════════════════════════════════════════
         // ═══════════ v1400 新增：34 种增强组件 ═══════════════════
