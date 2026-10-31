@@ -242,6 +242,10 @@ dependencies {
     // 替换旧 Termux 可见终端。原 AI 工具链（QuroShellSession / QuroLinuxEnv）不动。
     implementation(project(":terminal-core"))
 
+    // vtlib — 完整 VT 终端模拟器/视图（移植自 Termux terminal-emulator + terminal-view，Apache-2.0）
+    // 提供双缓冲/备用屏幕/滚动/sixel/24 位真彩/鼠标协议/括号粘贴/OSC52/文本选择。
+    implementation(project(":vtlib"))
+
     // 小程序引擎（WebView + native.* 桥，MiniAppEngine，com.ai.assistance.quro.core.miniapp）：
     // 自研 WebView 运行时，AI 用 miniapp 工具写入的 HTML 工程在此渲染，可调用真实 Android 能力。
     // miniapp-sdk（com.yuanbao.miniapp）：从上游 Quor-a/GenUI 移植进来的**原生 WXML/WXSS 引擎**

@@ -1123,22 +1123,12 @@ class TerminalEnvironment(context: Context) {
      * rootfs 解压仍走 `prepareGuestRootfs()`（宿主侧跑 common.sh 的 install_ubuntu，纯文件操作，
      * 不开 proot，不存在 PEEKDATA 问题），幂等，已就绪时秒回。
      */
-    fun startTerminalSession(sessionId: String): Pair<TerminalSession, Pty> {
+    /**
+     * 构造 proot 直接启动命令（参照 QuroLinuxEnv.shellLaunch 的成功参数）。
+     * 供 [startTerminalSession] 与 vtlib 增强终端（TerminalSession）共用。
+     */
+    fun buildProotLaunch(): ProotLaunchSpec {
         // 1) 宿主侧确保 rootfs 解压 + 就绪（幂等；首次启动会解压内置 tarball，3-8 分钟）
-        if (!prepareGuestRootfs()) {
-            val reason = lastInitError ?: "rootfs 解压/就绪失败（见日志）"
-            Log.e(TAG, "startTerminalSession: prepareGuestRootfs 失败: $reason")
-            val fallback = fallbackShellCommand(
-                terminalBash().absolutePath,
-                "rootfs 就绪失败：$reason（可到「包管理」页查看环境状态）",
-            )
-            val pty = Pty.start(fallback, baseEnv(), filesDir)
-            val session = TerminalSession(pty.process, pty.stdout, pty.stdin)
-            activeSessions[sessionId] = session
-            return Pair(session, pty)
-        }
-
-        // 2) 构造 proot 直接启动命令（参照 QuroLinuxEnv.shellLaunch 的成功参数）
         val rootfs = rootfsDir()
         val prootBin = File(nativeLibDir, "libproot.so").absolutePath
         val tmpDir = File(filesDir, "tmp").absolutePath
@@ -1202,6 +1192,36 @@ class TerminalEnvironment(context: Context) {
             "SSL_CERT_FILE" to "/etc/ssl/certs/ca-certificates.crt",
             "CURL_CA_BUNDLE" to "/etc/ssl/certs/ca-certificates.crt",
         )
+
+        return ProotLaunchSpec(
+            prootBin = prootBin,
+            command = command,
+            env = env,
+            cwd = "/root",
+            hostCwd = filesDir
+        )
+    }
+
+    fun startTerminalSession(sessionId: String): Pair<TerminalSession, Pty> {
+        // 1) 宿主侧确保 rootfs 解压 + 就绪（幂等；首次启动会解压内置 tarball，3-8 分钟）
+        if (!prepareGuestRootfs()) {
+            val reason = lastInitError ?: "rootfs 解压/就绪失败（见日志）"
+            Log.e(TAG, "startTerminalSession: prepareGuestRootfs 失败: $reason")
+            val fallback = fallbackShellCommand(
+                terminalBash().absolutePath,
+                "rootfs 就绪失败：$reason（可到「包管理」页查看环境状态）",
+            )
+            val pty = Pty.start(fallback, baseEnv(), filesDir)
+            val session = TerminalSession(pty.process, pty.stdout, pty.stdin)
+            activeSessions[sessionId] = session
+            return Pair(session, pty)
+        }
+
+        // 2) 复用 buildProotLaunch()：构造 proot 直接启动命令（参照 QuroLinuxEnv.shellLaunch 的成功参数）
+        val spec = buildProotLaunch()
+        val command = spec.command
+        val env = spec.env
+        val prootBin = spec.prootBin
 
         Log.d(TAG, "startTerminalSession: 直接拉起 proot（Pty 直挂）")
         Log.d(TAG, "startTerminalSession: ${command.joinToString(" ")}")

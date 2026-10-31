@@ -18,6 +18,7 @@ import com.ai.assistance.quro.terminal.navigation.TerminalRoutes
 import com.ai.assistance.quro.terminal.ui.SetupScreen
 import com.ai.assistance.quro.terminal.ui.TerminalHome
 import com.ai.assistance.quro.terminal.ui.MoyuScreen
+import com.ai.assistance.quro.terminal.ui.EnhancedTerminalScreen
 import com.ai.assistance.quro.terminal.utils.UpdateChecker
 import kotlinx.coroutines.launch
 
@@ -64,6 +65,9 @@ fun TerminalScreen(
                 },
                 onNavigateToMoyu = {
                     navController.navigate(TerminalRoutes.MOYU_ROUTE)
+                },
+                onNavigateToEnhanced = {
+                    navController.navigate(TerminalRoutes.ENHANCED_TERMINAL_ROUTE)
                 }
             )
         }
@@ -71,6 +75,14 @@ fun TerminalScreen(
         // 墨语言（Mo）管理页：独立运行时（qemu + x86_64 静态工具链），不经 Ubuntu。
         composable(TerminalRoutes.MOYU_ROUTE) {
             MoyuScreen(onBack = { navController.popBackStack() })
+        }
+
+        // 增强终端（vtlib 完整 VT 模拟器 + 额外按键栏）
+        composable(TerminalRoutes.ENHANCED_TERMINAL_ROUTE) {
+            EnhancedTerminalScreen(
+                environment = manager.terminalEnvironment,
+                onBack = { navController.popBackStack() }
+            )
         }
         
         composable(TerminalRoutes.SETUP_ROUTE) {
