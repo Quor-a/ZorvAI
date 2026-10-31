@@ -1108,32 +1108,114 @@ class TerminalEnvironment(context: Context) {
         )
     }
 
+    /**
+     * 🔴🔴🔴 终端会话启动：**Pty 直接挂 proot**（2026-10-31 重构）。
+     *
+     * 历史链路（v1.1.7 回归）：`Pty.start([bash, -c, "source common.sh && start_shell"])`，
+     * 由宿主 bash 在 PTY 子进程里再 `exec proot`。真机实证该链路下 proot 注入 loader 时
+     * PEEKDATA 失败（native createSubprocess 的 ptrace 上下文与 App 主进程不同），
+     * 表现就是「环境已就绪、终端却纯黑屏/立即退出」——用户诉状「环境是正常的，不正常的是终端根本用不了」。
+     *
+     * 现改为与 [execGuest]/QuroLinuxEnv.shellLaunch 完全一致的范式：**proot 作为 PTY 的直接子进程**，
+     * 由 libpty 的 execvpe 直接执行（不再经过宿主 bash 中转）。PTY 挂在 proot 上，登录 shell 由
+     * guest 内 `/bin/bash -il` 提供，提示符/回显/信号全部由 guest shell 完成。
+     *
+     * rootfs 解压仍走 `prepareGuestRootfs()`（宿主侧跑 common.sh 的 install_ubuntu，纯文件操作，
+     * 不开 proot，不存在 PEEKDATA 问题），幂等，已就绪时秒回。
+     */
     fun startTerminalSession(sessionId: String): Pair<TerminalSession, Pty> {
-        val bashFile = terminalBash()
-        val bash = bashFile.absolutePath
-        // 🔴 启动前硬校验（2026-10-26）：bash 缺失时进程会瞬间死亡且界面无任何提示，
-        // 这里显式报错并把链接补上，让「终端没反应」有据可查。
-        if (!bashFile.exists()) {
-            Log.e(TAG, "startTerminalSession: $bash 不存在（原生库未链接？），尝试补链")
-            runCatching { linkNativeLibs() }
+        // 1) 宿主侧确保 rootfs 解压 + 就绪（幂等；首次启动会解压内置 tarball，3-8 分钟）
+        if (!prepareGuestRootfs()) {
+            val reason = lastInitError ?: "rootfs 解压/就绪失败（见日志）"
+            Log.e(TAG, "startTerminalSession: prepareGuestRootfs 失败: $reason")
+            val fallback = fallbackShellCommand(
+                terminalBash().absolutePath,
+                "rootfs 就绪失败：$reason（可到「包管理」页查看环境状态）",
+            )
+            val pty = Pty.start(fallback, baseEnv(), filesDir)
+            val session = TerminalSession(pty.process, pty.stdout, pty.stdin)
+            activeSessions[sessionId] = session
+            return Pair(session, pty)
         }
-        val startScript = "source \$HOME/common.sh && start_shell"
 
-        val command = arrayOf(bash, "-c", startScript)
+        // 2) 构造 proot 直接启动命令（参照 QuroLinuxEnv.shellLaunch 的成功参数）
+        val rootfs = rootfsDir()
+        val prootBin = File(nativeLibDir, "libproot.so").absolutePath
+        val tmpDir = File(filesDir, "tmp").absolutePath
+        val sharedHome = File(filesDir, "proot_home").apply { mkdirs() }.absolutePath
+        val loader = File(nativeLibDir, "libproot-loader.so").absolutePath
 
-        val env = baseEnv()
+        // guest 侧挂载点必须真实存在，否则 proot --bind 静默跳过（→ -w /root 落空 → getcwd 失败）
+        runCatching {
+            File(rootfs, "root").let { it.mkdirs(); it.setReadable(true, false); it.setExecutable(true, false) }
+            File(rootfs, "tmp").mkdirs()
+            File(rootfs, "mnt").mkdirs()
+            File(rootfs, "mnt/shared").mkdirs()
+            File(rootfs, "root/shared").mkdirs()
+            File(rootfs, "dev").mkdirs()
+            File(rootfs, "dev/pts").mkdirs()
+            File(rootfs, "proc").mkdirs()
+            File(rootfs, "sys").mkdirs()
+            File(rootfs, "storage/emulated").mkdirs() // 存储权限未授予时也要有挂载点
+        }
 
-        Log.d(TAG, "Starting terminal session with command: ${command.joinToString(" ")}")
-        Log.d(TAG, "Environment: $env")
+        val command = mutableListOf(
+            prootBin,
+            "--rootfs=${rootfs.absolutePath}",
+            "--link2symlink",
+            "--bind=/dev",
+            "--bind=/dev/pts",
+            "--bind=/dev/urandom:/dev/random",
+            "--bind=/proc",
+            "--bind=/proc/net:/proc/net",
+            "--bind=/sys",
+            "--bind=$tmpDir:/tmp",
+            "--bind=$tmpDir:/dev/shm",
+            "--bind=$sharedHome:/mnt/shared",
+            "--bind=$sharedHome:/root/shared",
+            "--bind=${filesDir.absolutePath}:/quro",
+        )
+        if (sharedStorageAccessible()) {
+            val ext = android.os.Environment.getExternalStorageDirectory()
+            if (ext != null) {
+                command.add("--bind=${ext.absolutePath}:/sdcard")
+                command.add("--bind=${ext.absolutePath}:/storage/emulated/0")
+            }
+        }
+        command.add("-0")
+        command.add("-w"); command.add("/root")
+        // 直接进 guest 登录 shell，并输出状态机需要的 LOGIN_SUCCESSFUL / TERMINAL_READY 标记
+        // （proot 是 PTY 直接子进程，PEEKDATA 上下文正确；guest 内命令与原 login_ubuntu 一致）
+        command.add("/bin/bash")
+        command.add("-lc")
+        command.add("echo LOGIN_SUCCESSFUL; echo TERMINAL_READY; exec /bin/bash -il")
 
-        // 🔴 绝不黑屏（2026-10-30）：静默黑屏是最差的失败形态——用户只看到光标，零线索。
-        // 两条兜底：① Pty.start 直接抛错 → 换系统 shell 并把异常打屏；② fork 成功但子进程
-        // 秒死（exec 失败/脚本首行就挂，最常见）→ 600ms 验活，死了同样换系统 shell 并报退出码。
+        val env = mutableMapOf(
+            "HOME" to "/root",
+            "TERM" to "xterm-256color",
+            "LANG" to "C.UTF-8",
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/cargo/bin:/usr/local/go/bin:/root/.cargo/bin:/root/.local/bin",
+            "LD_LIBRARY_PATH" to "$nativeLibDir:${binDir.absolutePath}:/usr/lib:/usr/lib/aarch64-linux-gnu:/usr/lib/fcitx5-libs:/lib:/lib/aarch64-linux-gnu:/usr/local/lib",
+            "TMPDIR" to "/tmp",
+            "PROOT_TMP_DIR" to tmpDir,
+            "PROOT_LOADER" to loader,
+            "SSL_CERT_FILE" to "/etc/ssl/certs/ca-certificates.crt",
+            "CURL_CA_BUNDLE" to "/etc/ssl/certs/ca-certificates.crt",
+        )
+
+        Log.d(TAG, "startTerminalSession: 直接拉起 proot（Pty 直挂）")
+        Log.d(TAG, "startTerminalSession: ${command.joinToString(" ")}")
+
+        // 3) 绝不黑屏：Pty.start 抛错 → 系统 shell + 真因打屏；fork 成功但 600ms 内子进程已死
+        //    （exec 失败/架构不符/权限受限）→ 同样回落并报退出码。
         val pty = try {
-            Pty.start(command, env, filesDir)
+            Pty.start(command.toTypedArray(), env, filesDir)
         } catch (t: Throwable) {
-            Log.e(TAG, "Pty.start 失败（$bash），回落 /system/bin/sh", t)
-            Pty.start(fallbackShellCommand(bash, (t.message ?: t.javaClass.simpleName)), env, filesDir)
+            Log.e(TAG, "startTerminalSession: Pty.start 失败，回落 /system/bin/sh", t)
+            Pty.start(
+                fallbackShellCommand(prootBin, (t.message ?: t.javaClass.simpleName)),
+                env, filesDir,
+            )
         }
         try {
             Thread.sleep(600)
@@ -1142,27 +1224,19 @@ class TerminalEnvironment(context: Context) {
         }
         if (!pty.process.isAlive) {
             val code = runCatching { pty.process.exitValue() }.getOrDefault(-1)
-            Log.e(TAG, "终端 shell 立即退出 exit=$code（$bash），回落 /system/bin/sh")
+            Log.e(TAG, "终端 shell 立即退出 exit=$code，回落 /system/bin/sh")
             runCatching { pty.stdout.close() }
             runCatching { pty.stdin.close() }
             runCatching { pty.process.destroy() }
             val retry = Pty.start(
-                fallbackShellCommand(bash, "shell 立即退出，exit=$code"),
+                fallbackShellCommand(prootBin, "proot 立即退出，exit=$code"),
                 env, filesDir,
             )
-            val session = TerminalSession(
-                process = retry.process,
-                stdout = retry.stdout,
-                stdin = retry.stdin
-            )
+            val session = TerminalSession(retry.process, retry.stdout, retry.stdin)
             activeSessions[sessionId] = session
             return Pair(session, retry)
         }
-        val session = TerminalSession(
-            process = pty.process,
-            stdout = pty.stdout,
-            stdin = pty.stdin
-        )
+        val session = TerminalSession(pty.process, pty.stdout, pty.stdin)
         activeSessions[sessionId] = session
         return Pair(session, pty)
     }
