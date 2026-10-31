@@ -33,6 +33,7 @@ class BackgroundScreenTool : QuroTool {
 action：
 - open：把某个 App 启动到后台屏（需 packageName）
 - read：**读界面结构**（控件树：ref / 类型 / 文字 / 中心坐标 / 是否可点可输）—— 优先用它，别靠截图猜坐标
+- input_text：在当前输入框里写入文字（走无障碍 ACTION_SET_TEXT，**不弹系统输入法**，主屏不会冒键盘）
 - tap_element：按 read 返回的 ref 精确点击（如 ref="@e3"）
 - screenshot：截取后台屏当前画面，返回图片文件路径（read 读不到结构时再用）
 - tap：盲点一个坐标（需 x / y）
@@ -50,8 +51,11 @@ action：
 {
   "type": "object",
   "properties": {
-    "action": {"type": "string", "description": "open / read / tap_element / screenshot / tap / swipe / back / top / status / release"},
+    "action": {"type": "string", "description": "open / read / tap_element / input_text / screenshot / tap / swipe / back / top / status / release"},
     "ref": {"type": "string", "description": "tap_element 用的元素引用，如 @e3（来自 read 的返回）"},
+    "text": {"type": "string", "description": "input_text 要输入的文字"},
+    "hint": {"type": "string", "description": "input_text 选目标输入框时的提示语/占位文字（可选，多个输入框时用它区分）"},
+    "append": {"type": "boolean", "description": "input_text 是否在原内容后追加，默认 false（覆盖）"},
     "packageName": {"type": "string", "description": "open 用的包名，如 com.tencent.mm"},
     "x": {"type": "integer", "description": "tap 的横坐标"},
     "y": {"type": "integer", "description": "tap 的纵坐标"},
@@ -91,6 +95,22 @@ action：
                     "已点击 $ref"
                 } else {
                     "点击 $ref 失败：该 ref 不在最近一次 read 的结果里（界面可能已变，请重新 read）"
+                }
+            }
+
+            "input_text" -> {
+                val text = obj.optString("text", "")
+                if (text.isEmpty()) return "缺少 text（要输入的文字）"
+                val r = QuroVirtualScreen.inputText(
+                    context,
+                    text,
+                    hint = obj.optString("hint", "").takeIf { it.isNotBlank() },
+                    append = obj.optBoolean("append", false),
+                )
+                if (r == null) {
+                    "输入失败：这块屏上没有可编辑的输入框。先用 read 找到输入框并 tap_element 点一下，再 input_text。"
+                } else {
+                    "已输入（${r} 个字符，未经过系统输入法，主屏不会弹键盘）"
                 }
             }
 

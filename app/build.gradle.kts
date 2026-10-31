@@ -249,6 +249,11 @@ dependencies {
     // 后台虚拟屏完整移植（Mika 的 cap/phone/a11y + display → :mika-phone，其内核为 :mika-core）。
     // 依赖闭包证明这两块不可再切分，详见两个模块的 build.gradle.kts 说明。
     implementation(project(":mika-phone"))
+    // libtaskbar（farmerbb）—— **唯一官方支持「当库引入」**的 Android 10 桌面模式实现。
+    // 它是预编译 AAR（上游仓库 Taskbar/ 目录为空，只发布到 JitPack），所以只能依赖引入，
+    // 没有源码可 vendor。要求宿主 App 是默认 launcher 且用户开了
+    // 「Enable freeform windows」+「Force desktop mode」两个开发者选项。
+    implementation("com.github.farmerbb:libtaskbar:2.2.0")
 
     // vtlib — 完整 VT 终端模拟器/视图（移植自 Termux terminal-emulator + terminal-view，Apache-2.0）
     // 提供双缓冲/备用屏幕/滚动/sixel/24 位真彩/鼠标协议/括号粘贴/OSC52/文本选择。

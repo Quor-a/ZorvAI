@@ -1917,6 +1917,14 @@ fun ChatScreen(
             onOpenCluster = { showClusterSettings = true },
             onOpenSystemStatus = { showSystemStatus = true },
             onOpenBgScreen = { showBgScreen = true },
+            onOpenDesktop = {
+                runCatching {
+                    ctx.startActivity(
+                        android.content.Intent(ctx, com.ai.assistance.quro.activity.QuroDesktopActivity::class.java)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+            },
             onOpenComponentGallery = { showComponentGallery = true },
             onOpenAppearance = { showAppearance = true },
             vm = vm,
@@ -5759,6 +5767,7 @@ private fun SheetOverlay(
     onOpenCluster: () -> Unit,
     onOpenSystemStatus: () -> Unit,
     onOpenBgScreen: () -> Unit,
+    onOpenDesktop: () -> Unit,
     onOpenComponentGallery: () -> Unit,
     onOpenAppearance: () -> Unit,
     vm: QuroChatViewModel,
@@ -5831,7 +5840,7 @@ private fun SheetOverlay(
                         onManagePersona, onOpenVoiceService,
                         onClearChat, settingsVoiceBallEnabled, onSettingsToggleVoiceBall,
                     settingsAiReplyNotify, onSettingsToggleAiReplyNotify,
-                        onOpenAbout, onOpenAci, onOpenMcp, onOpenCluster, onOpenSystemStatus, onOpenBgScreen, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenHarnessHotUpdate, onOpenHarnessNotify, onOpenPhoneControl, onOpenFileManager,
+                        onOpenAbout, onOpenAci, onOpenMcp, onOpenCluster, onOpenSystemStatus, onOpenBgScreen, onOpenDesktop, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenHarnessHotUpdate, onOpenHarnessNotify, onOpenPhoneControl, onOpenFileManager,
                         onOpenGitHub = onOpenGitHub, onOpenModelHub = onOpenModelHub, scaled
                     )
                     else -> {}
@@ -5885,6 +5894,7 @@ private fun SettingsSheetContent(
     onOpenCluster: () -> Unit,
     onOpenSystemStatus: () -> Unit,
     onOpenBgScreen: () -> Unit,
+    onOpenDesktop: () -> Unit,
     onOpenComponentGallery: () -> Unit,
     onOpenAppearance: () -> Unit,
     onExport: () -> Unit, onClear: () -> Unit,
@@ -5938,6 +5948,13 @@ private fun SettingsSheetContent(
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             // 后台虚拟屏（移植 Mika）：AI 在不打扰用户主屏的独立虚拟屏上操作 App，这里给可视化入口
             SetRowClickable(Icons.Filled.Apps, "后台虚拟屏", "看 AI 在后台屏上操作什么，可手动接管", "", onOpenBgScreen, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            // 桌面模式（libtaskbar）：官方唯一「当库引入」的 Android 10 桌面模式实现
+            SetRowClickable(
+                Icons.Filled.DesktopWindows, "桌面模式（Taskbar）",
+                "多窗口 + 任务栏 + 开始菜单；需把 ZorvAI 桌面设为默认，并打开自由窗口/强制桌面模式",
+                "", onOpenDesktop, scaled,
+            )
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             // DeepSeek Harness 引擎自启/保活：过去开机只拉起终端保活，引擎没人管，
             // 于是「手机有自启权限但 Harness 不会自己起环境」；这里给开关与实时状态。

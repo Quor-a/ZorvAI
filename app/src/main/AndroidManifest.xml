@@ -280,6 +280,24 @@
             android:enabled="true"
             android:exported="false" />
 
+        <!-- 桌面模式宿主（可选 Launcher）。
+             引入 libtaskbar 后，桌面模式生效的硬前提是「宿主是默认 launcher」，
+             所以这里声明 HOME / DEFAULT —— **只有用户自己把它设为默认桌面时才接管**，
+             不影响未设置的用户。详见 QuroDesktopActivity 的注释。 -->
+        <activity
+            android:name=".activity.QuroDesktopActivity"
+            android:exported="true"
+            android:label="ZorvAI 桌面"
+            android:theme="@style/Theme.Quro"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <activity
             android:name=".activity.QuroMainActivity"
             android:exported="true"
@@ -888,6 +906,17 @@
         </receiver>
 
         <!-- 终端保活开机接收器：开机/应用更新后拉起终端保活服务，恢复默认会话存活 -->
+        <!-- DeepSeek Harness 唤醒看门狗：AlarmManager 到点叫醒进程。
+             静态注册是必须的 —— 进程被杀后系统仍要能实例化它，否则「唤醒」无从谈起。 -->
+        <receiver
+            android:name=".core.harness.QuroDshWatchdog$AlarmReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.ai.assistance.quro.action.DSH_WATCHDOG" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name=".receiver.QuroTerminalBootReceiver"
             android:enabled="true"

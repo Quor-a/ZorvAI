@@ -55,6 +55,8 @@ object QuroDshKeepAlive {
 
     fun setAutoStartEnabled(ctx: Context, enabled: Boolean) {
         prefs(ctx).edit().putBoolean(K_AUTOSTART, enabled).apply()
+        // 开关与唤醒闹钟同生共死：关了就不许再偷偷唤醒
+        runCatching { if (enabled) QuroDshWatchdog.schedule(ctx) else QuroDshWatchdog.cancel(ctx) }
         Log.i(TAG, "DSH 自启已${if (enabled) "开启" else "关闭"}")
     }
 

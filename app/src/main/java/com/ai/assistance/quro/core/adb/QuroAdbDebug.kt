@@ -233,4 +233,192 @@ object QuroAdbDebug {
         command: String,
         timeoutMs: Long = QuroRootGateway.DEFAULT_TIMEOUT_MS,
     ): QuroRootGateway.RootResult = QuroRootGateway.exec(ctx, command, timeoutMs, "capos.adb.shell")
+    // ═══════════════════════════════════════════════════════════════════════
+    // 真实状态 / 多路开关 / 地址 / 无线配对发现
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * TCP adbd 的真实状态。
+     *
+     * **为什么要区分「配置端口」和「实际监听」**：`service.adb.tcp.port` 只是个配置属性，
+     * 写进去不代表 adbd 真的在听；而关闭时属性清不掉（非 root 下 `stop adbd` 常被拒），
+     * 界面就永远显示「已开启」—— 这正是用户报的「怎么关都关不掉」。
+     */
+    data class TcpStatus(
+        /** 属性里的期望端口；0 = 未配置 */
+        val configuredPort: Int,
+        /** 实际在监听的端口；0 = 没在监听 */
+        val listeningPort: Int,
+        /** 当前可用的提权通道（root / shizuku / none） */
+        val channel: String,
+    ) {
+        val running: Boolean get() = listeningPort > 0
+
+        /** 配置了但没监听：最坑的中间态，要单独告警而不是显示「已开启」。 */
+        val stale: Boolean get() = configuredPort > 0 && listeningPort == 0
+    }
+
+    /** 探测候选端口：属性值 + 常见 5555。 */
+    private val CANDIDATE_PORTS = intArrayOf(DEFAULT_PORT, 5037)
+
+    /**
+     * 一次性取回真实状态。**阻塞**，需 IO 线程。
+     */
+    fun tcpStatus(ctx: Context): TcpStatus {
+        val configured = currentTcpPort(ctx)
+        val candidates = buildList {
+            if (configured > 0) add(configured)
+            CANDIDATE_PORTS.forEach { if (it !in this) add(it) }
+        }
+        val live = candidates.firstOrNull { isAdbdListening(ctx, it) } ?: 0
+        val channel = when {
+            runCatching { QuroRootGateway.isRootAvailable() }.getOrDefault(false) -> "root"
+            runCatching { QuroShizuku.isReady }.getOrDefault(false) -> "shizuku"
+            else -> "none"
+        }
+        return TcpStatus(configured, live, channel)
+    }
+
+    /**
+     * 关闭 TCP adbd，并**复查是否真的关掉了**。
+     *
+     * 为什么写这么多路：非 root 时 `setprop service.adb.tcp.port -1` 与 `stop adbd`
+     * 都可能被 SELinux 拒，单条命令的退出码还可能是 0（命令串最后一步成功）。
+     * 所以这里依次尝试：属性置 -1 → 属性置空 → 通过本机 adb 客户端 `adb usb`，
+     * 每一步之后都用真实监听状态验证，只有验证通过才算成功。
+     */
+    fun disableTcpAdb(ctx: Context): Pair<Boolean, String> {
+        val tried = StringBuilder()
+
+        // ① 常规：属性 -1 + 重启 adbd
+        runCatching { QuroRootGateway.exec(ctx, "setprop service.adb.tcp.port -1; stop adbd; sleep 1; start adbd", PROBE_CMD_TIMEOUT) }
+            .onSuccess { tried.append("① setprop -1：${if (it.success) "ok" else "fail(${it.exitCode})"}\n") }
+            .onFailure { tried.append("① setprop -1：异常 ${it.message}\n") }
+        Thread.sleep(1200)
+        if (tcpStatus(ctx).listeningPort == 0 && currentTcpPort(ctx) == 0) {
+            return true to (tried.toString() + "✓ 已关闭（配置已清、端口已不在监听）")
+        }
+
+        // ② 有的 ROM 认空串而不认 -1
+        runCatching { QuroRootGateway.exec(ctx, "setprop service.adb.tcp.port ''; stop adbd; sleep 1; start adbd", PROBE_CMD_TIMEOUT) }
+            .onSuccess { tried.append("② setprop ''：${if (it.success) "ok" else "fail(${it.exitCode})"}\n") }
+        Thread.sleep(1200)
+        if (tcpStatus(ctx).listeningPort == 0) {
+            return true to (tried.toString() + "✓ 已关闭（端口已不在监听）")
+        }
+
+        // ③ 宿主若自带 adb 客户端，用它切回 USB 模式（等价于关掉无线）
+        runCatching { QuroRootGateway.exec(ctx, "command -v adb >/dev/null 2>&1 && adb usb || echo __NO_ADB__", PROBE_CMD_TIMEOUT) }
+            .onSuccess { tried.append("③ adb usb：${if (it.output.contains("__NO_ADB__")) "宿主无 adb" else if (it.success) "ok" else "fail"}\n") }
+        Thread.sleep(1200)
+        val st = tcpStatus(ctx)
+        return if (st.listeningPort == 0) {
+            true to (tried.toString() + "✓ 已关闭（端口已不在监听）")
+        } else {
+            false to (
+                tried.toString() +
+                    "✗ 没能关掉：仍在监听 :${st.listeningPort}。" +
+                    "当前通道=${st.channel}；`setprop service.adb.tcp.port` 需要 root，" +
+                    "Shizuku(shell) 在多数机型上会被 SELinux 拒绝。请用 root 或去系统「开发者选项」手动关。"
+                )
+        }
+    }
+
+    /**
+     * 开启 TCP adbd，并验证真的在监听。
+     *
+     * 路径顺序：属性 + 重启 adbd → 本机 adb 客户端 `adb tcpip <port>`（宿主有 adb 时最可靠）。
+     */
+    fun enableTcpAdb(ctx: Context, port: Int): Pair<Boolean, String> {
+        val p = port.coerceIn(1, 65535)
+        val tried = StringBuilder()
+
+        runCatching {
+            QuroRootGateway.exec(ctx, "setprop service.adb.tcp.port $p; stop adbd; sleep 1; start adbd", PROBE_CMD_TIMEOUT)
+        }.onSuccess {
+            tried.append("① setprop $p + 重启 adbd：${if (it.success) "ok" else "fail(${it.exitCode})"}\n")
+        }.onFailure { tried.append("① 异常 ${it.message}\n") }
+        Thread.sleep(1500)
+        if (isAdbdListening(ctx, p)) return true to (tried.toString() + "✓ 已在 :$p 监听")
+
+        runCatching {
+            QuroRootGateway.exec(ctx, "command -v adb >/dev/null 2>&1 && adb tcpip $p || echo __NO_ADB__", PROBE_CMD_TIMEOUT)
+        }.onSuccess {
+            tried.append(
+                "② adb tcpip $p：" +
+                    (if (it.output.contains("__NO_ADB__")) "宿主无 adb 客户端" else if (it.success) "ok" else "fail") + "\n",
+            )
+        }
+        Thread.sleep(1500)
+        return if (isAdbdListening(ctx, p)) {
+            true to (tried.toString() + "✓ 已在 :$p 监听")
+        } else {
+            false to (
+                tried.toString() +
+                    "✗ 开启失败：:$p 未在监听。若通道是 shizuku，写 adb 属性通常被 SELinux 拒绝，" +
+                    "改用系统「无线调试」（Android 11+，可免 root 配对）更稳。"
+                )
+        }
+    }
+
+    /**
+     * 本机所有可用于连接的 IPv4 地址（WiFi / 热点 / 以太网 / 移动网络）。
+     *
+     * 原来只返回 WiFi 地址，蜂窝网络或热点下就「连接地址都没有」。
+     */
+    fun allIps(ctx: Context): List<Pair<String, String>> {
+        val out = mutableListOf<Pair<String, String>>() // 地址 to 网络类型说明
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return out
+        runCatching {
+            cm.allNetworks.forEach { net ->
+                val caps = cm.getNetworkCapabilities(net) ?: return@forEach
+                val label = when {
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "WiFi"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "移动网络"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "以太网"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "VPN"
+                    else -> return@forEach
+                }
+                val link = cm.getLinkProperties(net) ?: return@forEach
+                link.linkAddresses.forEach { la ->
+                    val a = la.address
+                    if (a is Inet4Address && !a.isLoopbackAddress) {
+                        val ip = a.hostAddress?.substringBefore('%') ?: return@forEach
+                        // 169.254.x.x 是链路本地地址，连不通，过滤掉
+                        if (!ip.startsWith("169.254.")) out += ip to label
+                    }
+                }
+            }
+        }
+        return out.distinctBy { it.first }
+    }
+
+    /**
+     * 用 mDNS 找系统「无线调试」的配对端口（`_adb-tls-pairing._tcp`）。
+     *
+     * Android 11+ 的配对流程是：系统设置页显示 6 位配对码 → 客户端用 SPAKE2 在配对端口上
+     * 完成密钥交换。**配对端口每次都不一样**（随机高位端口），所以必须现找。
+     * 找不到返回 null（系统那页可能没打开）。
+     */
+    suspend fun findPairingPort(ctx: Context, timeoutMs: Long = 3000): Int? = runCatching {
+        com.ai.assistance.quro.core.adb.mika.NsdAdbServiceFinder(ctx)
+            .findPorts("_adb-tls-pairing._tcp", timeoutMs)
+            .firstOrNull()
+    }.getOrNull()
+
+    /** 找 `_adb-tls-connect._tcp` 端口（配对成功后用来建立长期连接）。 */
+    suspend fun findConnectPort(ctx: Context, timeoutMs: Long = 3000): Int? = runCatching {
+        com.ai.assistance.quro.core.adb.mika.NsdAdbServiceFinder(ctx)
+            .findPorts("_adb-tls-connect._tcp", timeoutMs)
+            .firstOrNull()
+    }.getOrNull()
+
+    /** 系统「无线调试」开关是否打开（Android 11+）；读不到返回 null。 */
+    fun wirelessDebugEnabled(ctx: Context): Boolean? = runCatching {
+        Settings.Global.getInt(ctx.contentResolver, "adb_wifi_enabled") == 1
+    }.getOrNull()
+
+    /** 执行命令时用的超时（setprop/stop/start 串起来比探针慢）。 */
+    private const val PROBE_CMD_TIMEOUT = 12_000L
+
 }
