@@ -424,6 +424,7 @@ object ToolCapabilityDirectory {
             ),
             tips = listOf(
                 "**要「不打扰用户」就用它**；用户明确说「帮我点屏幕上这个」才用无障碍的 tap_screen（那会抢焦点）。",
+                "open 会**自动兜住「App 跑到用户主屏」**：动作前后盯主屏 3 秒，若该 App 被系统放到了主屏，会自动挪回后台屏并如实告诉你；返回里出现「已自动挪回」就说明发生过，不必再重试。",
                 "固定流程：status → open → **read**（拿元素表）→ tap_element / tap → 再 read 确认 → 结束时 release。",
                 "**read 优先于 screenshot**：read 给出 ref + 真实坐标 + 控件类型，比看图猜坐标准得多、也更省 token。",
                 "read 返回「没有可读控件」时才退回 screenshot（该界面禁止无障碍读取，或还没渲染完）。",

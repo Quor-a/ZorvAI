@@ -1,5 +1,7 @@
 package com.ai.assistance.quro;
 
+import android.os.Bundle;
+
 import android.view.Surface;
 
 /**
@@ -98,5 +100,31 @@ interface IQuroShellService {
 
     /** 该 taskId 所在的屏；任务不存在返回 -1。 */
     int displayOfTask(int taskId) = 14;
+
+    /**
+     * 开始盯主屏（0 号屏）：记下从现在起 [windowMs] 内主屏最上面换上来的任务。
+     *
+     * 用途：AI 的动作（启动 App / 点通知 / 走系统选择器）可能让 App 开到**用户主屏**，
+     * 后台屏上看不出变化，模型会以为没点到而反复重试。动作前后各盯一次，就能认出来并挪回。
+     *
+     * @return 此刻主屏最上面的任务 id；主屏没有任务返回 -1
+     */
+    int watchMainScreen(int windowMs) = 15;
+
+    /**
+     * [sinceUptimeMs]（SystemClock.uptimeMillis）之后主屏冒到最上面的任务，按先后排。
+     *
+     * 字段是平行数组（Bundle 里没有对象列表），键名见 MainScreenWatch 的常量：
+     * task / package / user / at / from / sameTask / standard / activity / now / listening。
+     * 出错返回 null。
+     */
+    Bundle mainArrivals(long sinceUptimeMs) = 16;
+
+    /**
+     * 把一个任务挪到指定屏（`IActivityTaskManager.moveRootTaskToDisplay`，即 `am display move-stack`）。
+     *
+     * @return 是否成功；反射不可用时退回 am 命令行
+     */
+    boolean moveTask(int taskId, int displayId) = 17;
 }
 

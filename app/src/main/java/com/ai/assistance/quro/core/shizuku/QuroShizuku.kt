@@ -55,7 +55,7 @@ object QuroShizuku {
             // 🔴 AIDL 一改就必须 +1：Shizuku 按 (component, version) 判断要不要重新部署 user service。
             // 保持旧版本号会让已在跑的特权进程继续用旧接口，调用新方法直接 TransactionException。
             // v2：新增后台虚拟屏通道（createDisplay/releaseDisplay/startApp/injectTap/injectKey/injectStroke/topTaskId/topActivity/displayOfTask）。
-            .version(2)
+            .version(3)
     }
 
     private val serviceConnection = object : ServiceConnection {

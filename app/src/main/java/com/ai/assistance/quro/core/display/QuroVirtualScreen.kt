@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import android.view.KeyEvent
+import android.os.Bundle
+import android.os.SystemClock
 import com.ai.assistance.quro.core.shizuku.QuroShizuku
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -142,7 +144,14 @@ object QuroVirtualScreen {
         val d = ensureDisplay(context) ?: return lastError ?: "后台虚拟屏不可用"
         val shell = QuroShizuku.acquireShellService() ?: return "Shizuku 特权服务未就绪"
         return try {
-            when (val r = shell.startApp(d.displayId, packageName)) {
+            // 🔴 动作前开始盯主屏：不少 App 被 setLaunchDisplayId 拉起后，自己又会从
+            // 通知/服务/系统选择器里二次 launch，系统按默认把它放到**用户主屏**。
+            // 后台屏上看不出任何变化，模型会以为没点到而反复重试 —— 盯住并挪回。
+            val since = SystemClock.uptimeMillis()
+            val topBefore = runCatching { shell.watchMainScreen(MAIN_WATCH_MS) }.getOrDefault(-1)
+
+            val r = shell.startApp(d.displayId, packageName)
+            val base = when (r) {
                 0 -> {
                     refreshTopActivity()
                     "已把 $packageName 启动到后台屏（displayId=${d.displayId}）"
@@ -152,6 +161,11 @@ object QuroVirtualScreen {
                 4 -> "$packageName 正在另一块后台屏上使用中"
                 else -> "启动 $packageName 失败（code=$r）"
             }
+            if (r != 0) return base
+
+            // 动作后核对：这几秒内主屏冒到最上面的是不是它
+            val rescued = rescueIfOnMainScreen(shell, d.displayId, since, topBefore, packageName, context)
+            if (rescued != null) "$base\n$rescued" else base
         } catch (t: Throwable) {
             Log.e(TAG, "startApp failed", t)
             "启动 $packageName 失败：${t.message}"
@@ -210,6 +224,99 @@ object QuroVirtualScreen {
         val ys = IntArray(n) { i -> y1 + (y2 - y1) * i / (n - 1) }
         val times = LongArray(n) { i -> dur * i / (n - 1) }
         return runCatching { shell.injectStroke(d.displayId, xs, ys, times) }.getOrDefault(false)
+    }
+
+    /** 动作后盯主屏的窗口：3 秒。太短会漏掉慢启动的 App，太长会把用户自己的操作算进来。 */
+    private const val MAIN_WATCH_MS = 3000
+
+    /** 动作后等多久再核对（给二次 launch 一点时间）。 */
+    private const val RESCUE_WAIT_MS = 900L
+
+    /**
+     * 核对「刚才那个 App 是不是跑到用户主屏上了」，是就把它挪回后台屏。
+     *
+     * 判定用移植来的 [MainScreenSpill]（纯逻辑）：排除本应用自己、桌面/最近任务类页面、
+     * 从别的屏挪过来的任务、以及用户正在主屏上用着的那个 App（那属于用户意图，不能抢）。
+     *
+     * @return 给 AI 看的一句话；没有需要处理的情况返回 null
+     */
+    private fun rescueIfOnMainScreen(
+        shell: com.ai.assistance.quro.IQuroShellService,
+        displayId: Int,
+        since: Long,
+        topBefore: Int,
+        packageName: String,
+        context: Context,
+    ): String? {
+        return runCatching {
+            Thread.sleep(RESCUE_WAIT_MS)
+            val b = shell.mainArrivals(since) ?: return null
+            val arrivals = parseArrivals(b)
+            if (arrivals.isEmpty()) return null
+            val verdicts = MainScreenSpill.decide(
+                arrivals = arrivals,
+                since = since,
+                windowMs = MAIN_WATCH_MS.toLong(),
+                topBefore = topBefore,
+                excluded = setOf(context.packageName),
+                userTaps = emptyList(),
+            )
+            if (verdicts.isEmpty()) return null
+
+            val moved = mutableListOf<String>()
+            val inUse = mutableListOf<String>()
+            val failed = mutableListOf<String>()
+            for (v in verdicts) {
+                when (v) {
+                    is MainScreenSpill.PullBack -> {
+                        val pkg = v.arrival.packageName ?: continue
+                        if (shell.moveTask(v.arrival.taskId, displayId)) {
+                            moved += pkg
+                        } else {
+                            failed += pkg
+                        }
+                    }
+                    is MainScreenSpill.InUse -> {
+                        inUse += v.arrival.packageName ?: packageName
+                    }
+                }
+            }
+            when {
+                moved.isNotEmpty() ->
+                    "⚠️ ${moved.joinToString()} 被系统放到了你的主屏上，已自动挪回后台屏"
+                inUse.isNotEmpty() ->
+                    "${inUse.joinToString()} 开在你正在用的界面里，没有动它（要后台操作请先切走）"
+                failed.isNotEmpty() ->
+                    "${failed.joinToString()} 跑到了主屏且挪回失败（可能被系统锁定了任务）"
+                else -> null
+            }
+        }.getOrNull()
+    }
+
+    /** 把 AIDL 回来的平行数组还原成 [MainScreenSpill.Arrival] 列表。 */
+    private fun parseArrivals(b: Bundle): List<MainScreenSpill.Arrival> {
+        val tasks = b.getIntArray(MainScreenWatch.KEY_TASK) ?: return emptyList()
+        val pkgs = b.getStringArray(MainScreenWatch.KEY_PACKAGE)
+        val users = b.getIntArray(MainScreenWatch.KEY_USER)
+        val ats = b.getLongArray(MainScreenWatch.KEY_AT)
+        val froms = b.getIntArray(MainScreenWatch.KEY_FROM)
+        val same = b.getBooleanArray(MainScreenWatch.KEY_SAME_TASK)
+        val standard = b.getBooleanArray(MainScreenWatch.KEY_STANDARD)
+        val acts = b.getStringArray(MainScreenWatch.KEY_ACTIVITY)
+        val nows = b.getIntArray(MainScreenWatch.KEY_NOW)
+        return tasks.indices.map { i ->
+            MainScreenSpill.Arrival(
+                taskId = tasks[i],
+                packageName = pkgs?.getOrNull(i),
+                userId = users?.getOrNull(i) ?: -1,
+                at = ats?.getOrNull(i) ?: 0L,
+                from = froms?.getOrNull(i) ?: -1,
+                sameTask = same?.getOrNull(i) ?: false,
+                standard = standard?.getOrNull(i) ?: true,
+                now = nows?.getOrNull(i) ?: -1,
+                topActivity = acts?.getOrNull(i),
+            )
+        }
     }
 
     // ─────────── 界面结构读取（移植 Mika 的读树能力）───────────

@@ -5939,6 +5939,10 @@ private fun SettingsSheetContent(
             // 后台虚拟屏（移植 Mika）：AI 在不打扰用户主屏的独立虚拟屏上操作 App，这里给可视化入口
             SetRowClickable(Icons.Filled.Apps, "后台虚拟屏", "看 AI 在后台屏上操作什么，可手动接管", "", onOpenBgScreen, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            // DeepSeek Harness 引擎自启/保活：过去开机只拉起终端保活，引擎没人管，
+            // 于是「手机有自启权限但 Harness 不会自己起环境」；这里给开关与实时状态。
+            DshAutoStartRow(scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Info, stringResource(R.string.qk_03837), stringResource(R.string.qk_03865), "", onOpenComponentGallery, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Extension, stringResource(R.string.qk_00491), stringResource(R.string.qk_03851), "", onOpenPlugins, scaled)
@@ -10542,3 +10546,58 @@ private fun startVideoCall(ctx: Context) {
  * 6s 足够任何正常目录跑完；只有 rootfs 这种超大目录才会触发降级。
  */
 private const val DETAIL_SCAN_BUDGET_MS = 6_000L
+
+/**
+ * 设置里的「Harness 引擎自启」开关。
+ *
+ * 开启时由 [QuroTerminalKeepAliveService] 的巡检环负责：开机/应用更新后延迟自启，
+ * 引擎死了自动重启；关闭时只有用户打开 Harness 界面才启动。
+ * 副标题实时反映引擎状态（运行中 :端口 / 未运行 / 未安装）。
+ */
+@Composable
+private fun DshAutoStartRow(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
+    val ctx = LocalContext.current
+    var enabled by remember { mutableStateOf(com.ai.assistance.quro.core.harness.QuroDshKeepAlive.isAutoStartEnabled(ctx)) }
+    var status by remember { mutableStateOf(com.ai.assistance.quro.core.harness.QuroDshKeepAlive.statusText(ctx)) }
+    val scope = rememberCoroutineScope()
+
+    // 引擎状态会被保活服务在后台改变（自启完成 / 崩溃重启），定时取一次即可
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(3000)
+            status = runCatching {
+                com.ai.assistance.quro.core.harness.QuroDshKeepAlive.statusText(ctx)
+            }.getOrDefault(status)
+        }
+    }
+
+    SetRow(
+        icon = Icons.Filled.PlayArrow,
+        name = "Harness 引擎自启",
+        sub = if (enabled) status else "已关闭：仅打开 Harness 界面时才启动引擎",
+        checked = enabled,
+        onToggle = {
+            enabled = !enabled
+            com.ai.assistance.quro.core.harness.QuroDshKeepAlive.setAutoStartEnabled(ctx, enabled)
+            if (enabled) {
+                scope.launch {
+                    status = "正在启动引擎…（首次装配需十几秒）"
+                    val port = runCatching {
+                        com.ai.assistance.quro.core.harness.QuroDshKeepAlive.ensureRunning(ctx, ignoreCooldown = true)
+                    }.getOrNull()
+                    status = if (port != null) {
+                        "引擎运行中 · 127.0.0.1:$port"
+                    } else {
+                        "启动失败：可进 Harness 界面手动启动并查看诊断"
+                    }
+                }
+            } else {
+                scope.launch {
+                    com.ai.assistance.quro.core.harness.QuroDshKeepAlive.stop(ctx)
+                    status = com.ai.assistance.quro.core.harness.QuroDshKeepAlive.statusText(ctx)
+                }
+            }
+        },
+        scaled = scaled,
+    )
+}
