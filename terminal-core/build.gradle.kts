@@ -112,4 +112,8 @@ dependencies {
     // SSHD 依赖 slf4j；显式带上 nop 绑定，避免运行时无 provider 的告警
     implementation(libs.slf4j.api)
     implementation(libs.slf4j.nop)
+
+    // vtlib — 完整 VT 终端模拟器/视图（Termux terminal-emulator + terminal-view 去品牌化移植）
+    // 提供双缓冲/备用屏幕/滚动/sixel/括号粘贴/OSC52/鼠标协议/文本选择/额外按键栏
+    implementation(project(":vtlib"))
 }

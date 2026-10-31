@@ -79,7 +79,8 @@ import com.ai.assistance.quro.terminal.view.canvas.RenderConfig
 fun TerminalHome(
     env: TerminalEnv,
     onNavigateToSetup: () -> Unit,
-    onNavigateToMoyu: () -> Unit
+    onNavigateToMoyu: () -> Unit,
+    onNavigateToEnhanced: () -> Unit
 ) {
     val fontSize = 14.sp
     val padding = 8.dp
@@ -179,6 +180,7 @@ fun TerminalHome(
                 onOpenPrivilege = { showPrivilegePanel = true },
                 onOpenRemote = { showRemotePanel = true },
                 onNavigateToMoyu = onNavigateToMoyu,
+                onNavigateToEnhanced = onNavigateToEnhanced,
                 env = env
             )
         }
@@ -342,6 +344,7 @@ private fun TopBar(
     onOpenPrivilege: () -> Unit,
     onOpenRemote: () -> Unit,
     onNavigateToMoyu: () -> Unit,
+    onNavigateToEnhanced: () -> Unit,
     env: TerminalEnv
 ) {
     val context = LocalContext.current
@@ -493,6 +496,15 @@ private fun TopBar(
                     imageVector = Icons.Default.Wifi,
                     contentDescription = context.getString(com.ai.assistance.quro.terminal.R.string.terminal_remote),
                     tint = TerminalTheme.onSurfaceColor
+                )
+            }
+
+            // 增强终端（完整 VT 模拟器 + 额外按键栏）
+            IconButton(onClick = onNavigateToEnhanced) {
+                Icon(
+                    imageVector = Icons.Default.Computer,
+                    contentDescription = "增强终端",
+                    tint = TerminalTheme.primaryColor
                 )
             }
 

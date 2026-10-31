@@ -34,7 +34,11 @@ include(":app", ":aidl-aci-browser", ":aidl-aci-core", ":mnn", ":llama", ":lib_a
     ":codecanvas-core", ":engine-kotlindsl", ":renderer-canvas", ":renderer-compose", ":renderer-svg", ":llm-connector",
     // dsh-mobile-apk 完整内置（kelai141/dsh-mobile-apk，已去品牌化为 com.ai.assistance.quro.dshmobile）：
     // library 模块，壳 UI/服务/引擎管理全部进 ZorvAI；入口由工具箱显式拉起，不抢 LAUNCHER。
-    ":dshmobile:app")
+    ":dshmobile:app",
+    // vtlib — 完整 VT 终端模拟器/视图（移植自 Termux terminal-emulator + terminal-view，Apache-2.0）
+    // 已去品牌化：com.termux.terminal / com.termux.view → com.ai.assistance.quro.vt
+    // 提供双缓冲/备用屏幕/滚动/sixel/24 位真彩/鼠标协议/括号粘贴/OSC52/文本选择等能力
+    ":vtlib")
 project(":mnn").projectDir = file("llm/mnn")
 project(":llama").projectDir = file("llm/llama")
 // CodeCanvas 子模块实际位于 codecanvas/<模块名>/，模块名与目录名不同名，必须显式指路

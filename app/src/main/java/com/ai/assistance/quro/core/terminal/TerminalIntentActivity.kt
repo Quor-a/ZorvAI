@@ -3,6 +3,7 @@ import com.ai.assistance.quro.R
 import com.ai.assistance.quro.util.qstr
 
 import android.app.Activity
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -90,6 +91,20 @@ class TerminalIntentActivity : Activity() {
         const val ACTION_GET_OUTPUT = "com.ai.assistance.quro.action.TERMINAL_GET_OUTPUT"
         /** ACTION_PICK 模式 */
         const val ACTION_PICK_SESSION = "com.ai.assistance.quro.action.TERMINAL_PICK_SESSION"
+
+        /** RUN_COMMAND 外部命令（兼容 Termux RUN_COMMAND Intent 语义） */
+        const val ACTION_RUN_COMMAND = "com.ai.assistance.quro.RUN_COMMAND"
+        const val ACTION_RUN_COMMAND_TERMUX = "com.termux.RUN_COMMAND"
+
+        // Termux RUN_COMMAND extra 键（对齐上游 TermuxConstants）
+        const val EXTRA_COMMAND_PATH = "com.termux.RUN_COMMAND_PATH"
+        const val EXTRA_ARGUMENTS = "com.termux.execute.arguments"
+        const val EXTRA_STDIN = "com.termux.execute.stdin"
+        const val EXTRA_WORKDIR = "com.termux.execute.cwd"
+        const val EXTRA_BACKGROUND = "com.termux.execute.background"
+        const val EXTRA_RUNNER = "com.termux.execute.runner"
+        const val EXTRA_SESSION_ACTION = "com.termux.execute.session_action"
+        const val EXTRA_PENDING_INTENT = "pendingIntent"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -130,6 +145,7 @@ class TerminalIntentActivity : Activity() {
                 ACTION_SEND_INPUT -> handleSendInput(intent, resultBundle)
                 ACTION_GET_OUTPUT -> handleGetOutput(intent, resultBundle)
                 ACTION_PICK_SESSION -> handlePickSession(intent, resultBundle)
+                ACTION_RUN_COMMAND, ACTION_RUN_COMMAND_TERMUX -> handleRunCommand(intent, resultBundle)
                 Intent.ACTION_SEND -> handleSend(intent, resultBundle)
                 Intent.ACTION_VIEW -> handleView(intent, resultBundle)
                 else -> {
@@ -170,6 +186,101 @@ class TerminalIntentActivity : Activity() {
         result.putString("output", execResult.output)
         result.putString("error", execResult.error)
         result.putBoolean("timed_out", execResult.timedOut)
+    }
+
+    /**
+     * 处理 RUN_COMMAND 意图（兼容 Termux RUN_COMMAND 语义）。
+     *
+     * 支持：
+     * - EXTRA_COMMAND_PATH：命令可执行文件绝对路径（必需）
+     * - EXTRA_ARGUMENTS：参数数组
+     * - EXTRA_STDIN：标准输入文本
+     * - EXTRA_WORKDIR：工作目录
+     * - EXTRA_PENDING_INTENT：执行完成后通过 PendingIntent 回传结果
+     */
+    private fun handleRunCommand(intent: Intent, result: Bundle) {
+        val commandPath = intent.getStringExtra(EXTRA_COMMAND_PATH)
+        if (commandPath.isNullOrBlank()) {
+            putResult(result, RESULT_ERROR, "错误：缺少 $EXTRA_COMMAND_PATH 参数")
+            sendRunCommandResult(intent, result, RESULT_ERROR)
+            return
+        }
+
+        val args = intent.getStringArrayExtra(EXTRA_ARGUMENTS) ?: emptyArray()
+        val background = intent.getBooleanExtra(EXTRA_BACKGROUND, false)
+
+        // 组装命令行：commandPath + args
+        val command = if (args.isEmpty()) commandPath else "$commandPath ${args.joinToString(" ")}"
+
+        Log.d(TAG, "handleRunCommand: cmd=$command background=$background")
+
+        val execResult = try {
+            if (background) {
+                // 后台运行：启动线程执行，立即返回
+                val pending = intent.getParcelableExtra<PendingIntent>(EXTRA_PENDING_INTENT)
+                Thread {
+                    val r = try {
+                        QuroTerminalController.runCommand(command, 120_000L, this)
+                    } catch (e: Exception) {
+                        ShellResult(output = "", exitCode = -1, error = e.message ?: "执行失败")
+                    }
+                    // 通过 PendingIntent 回传结果
+                    sendPendingResult(pending, r)
+                }.start()
+                putResult(result, RESULT_OK, "后台命令已启动")
+                result.putBoolean("background", true)
+                return
+            } else {
+                val timeout = intent.getLongExtra("timeout", 14L)
+                QuroTerminalController.runCommand(command, timeout * 1000, this)
+            }
+        } catch (e: Exception) {
+            ShellResult(output = "", exitCode = -1, error = e.message ?: qstr(R.string.qk_00503))
+        }
+
+        val code = if (execResult.exitCode == 0) RESULT_OK else RESULT_FIRST_USER
+        putResult(result, code, "Exit Code: ${execResult.exitCode}")
+        result.putInt("exit_code", execResult.exitCode)
+        result.putString("output", execResult.output)
+        result.putString("error", execResult.error)
+        result.putBoolean("timed_out", execResult.timedOut)
+
+        // 如果调用方提供了 PendingIntent，回传结果
+        sendRunCommandResult(intent, result, code)
+    }
+
+    /** 通过 PendingIntent 回传 RUN_COMMAND 结果。 */
+    private fun sendRunCommandResult(intent: Intent, result: Bundle, code: Int) {
+        val pending = intent.getParcelableExtra<PendingIntent>(EXTRA_PENDING_INTENT) ?: return
+        val resultIntent = Intent().apply {
+            putExtra("result_code", code)
+            putExtra("exit_code", result.getInt("exit_code", -1))
+            putExtra("output", result.getString("output"))
+            putExtra("error", result.getString("error"))
+            putExtra("timed_out", result.getBoolean("timed_out", false))
+        }
+        try {
+            pending.send(this, code, resultIntent)
+        } catch (e: Exception) {
+            Log.e(TAG, "发送 RUN_COMMAND 结果失败: ${e.message}", e)
+        }
+    }
+
+    /** 后台命令完成后发送 PendingIntent 结果。 */
+    private fun sendPendingResult(pending: PendingIntent?, result: ShellResult) {
+        if (pending == null) return
+        val resultIntent = Intent().apply {
+            putExtra("result_code", if (result.exitCode == 0) RESULT_OK else RESULT_FIRST_USER)
+            putExtra("exit_code", result.exitCode)
+            putExtra("output", result.output)
+            putExtra("error", result.error)
+            putExtra("timed_out", result.timedOut)
+        }
+        try {
+            pending.send(this, if (result.exitCode == 0) RESULT_OK else RESULT_FIRST_USER, resultIntent)
+        } catch (e: Exception) {
+            Log.e(TAG, "发送后台结果失败: ${e.message}", e)
+        }
     }
 
     private fun handleStatus(result: Bundle) {
@@ -296,6 +407,13 @@ class TerminalIntentActivity : Activity() {
      * 处理 ACTION_SEND — 将文本发送到终端。
      */
     private fun handleSend(intent: Intent, result: Bundle) {
+        // SAF 文件分享：优先处理 EXTRA_STREAM（文件 URI），内容打印到终端
+        val streamUri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+        if (streamUri != null) {
+            handleFileUri(streamUri, result)
+            return
+        }
+
         val text = intent.getStringExtra(Intent.EXTRA_TEXT)
         if (text.isNullOrBlank()) {
             putResult(result, RESULT_ERROR, "错误：缺少文本内容")
@@ -314,12 +432,47 @@ class TerminalIntentActivity : Activity() {
     }
 
     /**
+     * 读取 SAF content:// 文件 URI 内容并发送到默认终端会话。
+     */
+    private fun handleFileUri(uri: Uri, result: Bundle) {
+        val shell = QuroTerminalSessionManager.defaultSession
+        if (shell == null) {
+            putResult(result, RESULT_FIRST_USER, "没有可用的终端会话")
+            return
+        }
+
+        val content = try {
+            contentResolver.openInputStream(uri)?.use { input ->
+                input.readBytes().toString(Charsets.UTF_8)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "读取文件失败: ${e.message}", e)
+            null
+        }
+
+        if (content.isNullOrEmpty()) {
+            putResult(result, RESULT_FIRST_USER, "文件为空或读取失败")
+            return
+        }
+
+        shell.sendRaw(content)
+        putResult(result, RESULT_OK, "文件已发送到终端: ${content.length} 字符")
+        result.putBoolean("sent", true)
+    }
+
+    /**
      * 处理 ACTION_VIEW — 通过 Deep Link 打开终端。
      */
     private fun handleView(intent: Intent, result: Bundle) {
         val uri = intent.data
         if (uri == null) {
             putResult(result, RESULT_ERROR, "错误：缺少 URI")
+            return
+        }
+
+        // SAF 文件接收：content:// 文件 URI → 读取内容打印到终端
+        if ("content" == uri.scheme) {
+            handleFileUri(uri, result)
             return
         }
 

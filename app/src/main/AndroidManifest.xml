@@ -643,6 +643,7 @@
                 <action android:name="com.ai.assistance.quro.action.TERMINAL_SEND_INPUT" />
                 <action android:name="com.ai.assistance.quro.action.TERMINAL_GET_OUTPUT" />
                 <action android:name="com.ai.assistance.quro.action.TERMINAL_PICK_SESSION" />
+                <action android:name="com.ai.assistance.quro.RUN_COMMAND" />
                 <action android:name="android.intent.action.PICK" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="vnd.android.cursor.dir/vnd.com.ai.assistance.quro.terminal.sessions" />
