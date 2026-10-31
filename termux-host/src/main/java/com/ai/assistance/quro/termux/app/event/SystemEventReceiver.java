@@ -81,7 +81,9 @@ public class SystemEventReceiver extends BroadcastReceiver {
         intentFilter.addAction(Intent.ACTION_PACKAGE_REMOVED);
         intentFilter.addAction(Intent.ACTION_PACKAGE_REPLACED);
         intentFilter.addDataScheme("package");
-        context.registerReceiver(getInstance(), intentFilter);
+        // Android 14（targetSdk 34）要求显式声明导出状态，系统广播用 NOT_EXPORTED 仍可正常接收。
+        androidx.core.content.ContextCompat.registerReceiver(context, getInstance(), intentFilter,
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     public synchronized static void unregisterPackageUpdateEvents(@NonNull Context context) {
