@@ -117,6 +117,23 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         mShellManager = TermuxShellManager.getShellManager();
 
+        // 自愈：若宿主 Application 的 Termux 初始化序列未跑通（例如异常被吞掉），
+        // 这里补做一次，否则后续 buildNotification()/createTermuxSession() 会 NPE。
+        try {
+            if (mProperties == null) {
+                Logger.logWarn(LOG_TAG, "TermuxAppSharedProperties was null, initializing now");
+                // 构造函数内部已调用 loadTermuxPropertiesFromDisk()，无需再手动加载。
+                mProperties = TermuxAppSharedProperties.init(this);
+            }
+            if (mShellManager == null) {
+                Logger.logWarn(LOG_TAG, "TermuxShellManager was null, initializing now");
+                mShellManager = TermuxShellManager.init(this);
+            }
+            TermuxShellEnvironment.init(this);
+        } catch (Throwable t) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to self-heal Termux initialization", t);
+        }
+
         // 🔴 ZorvAI proot 注入：官方 TermuxSession 默认查找 $PREFIX/bin/login（bootstrap），
         // 但增强终端使用 proot Ubuntu。注册 provider 后，所有新会话直接用 proot 启动。
         try {
@@ -126,9 +143,18 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
             Logger.logStackTraceWithMessage(LOG_TAG, "Failed to register ProotLaunchProvider", t);
         }
 
-        runStartForeground();
+        // 前台通知失败不应连累整个 Service（否则系统报 Unable to create service）。
+        try {
+            runStartForeground();
+        } catch (Throwable t) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to runStartForeground", t);
+        }
 
-        SystemEventReceiver.registerPackageUpdateEvents(this);
+        try {
+            SystemEventReceiver.registerPackageUpdateEvents(this);
+        } catch (Throwable t) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to registerPackageUpdateEvents", t);
+        }
     }
 
     @SuppressLint("Wakelock")
@@ -793,7 +819,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         // Set pending intent to be launched when notification is clicked
         Intent notificationIntent = TermuxActivity.newInstance(this);
-        PendingIntent contentIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
+        PendingIntent contentIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE);
 
 
         // Set notification text
@@ -836,7 +862,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         // Set Exit button action
         Intent exitIntent = new Intent(this, TermuxService.class).setAction(TERMUX_SERVICE.ACTION_STOP_SERVICE);
-        builder.addAction(android.R.drawable.ic_delete, res.getString(R.string.notification_action_exit), PendingIntent.getService(this, 0, exitIntent, 0));
+        builder.addAction(android.R.drawable.ic_delete, res.getString(R.string.notification_action_exit), PendingIntent.getService(this, 0, exitIntent, PendingIntent.FLAG_IMMUTABLE));
 
 
         // Set Wakelock button actions
@@ -844,7 +870,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         Intent toggleWakeLockIntent = new Intent(this, TermuxService.class).setAction(newWakeAction);
         String actionTitle = res.getString(wakeLockHeld ? R.string.notification_action_wake_unlock : R.string.notification_action_wake_lock);
         int actionIcon = wakeLockHeld ? android.R.drawable.ic_lock_idle_lock : android.R.drawable.ic_lock_lock;
-        builder.addAction(actionIcon, actionTitle, PendingIntent.getService(this, 0, toggleWakeLockIntent, 0));
+        builder.addAction(actionIcon, actionTitle, PendingIntent.getService(this, 0, toggleWakeLockIntent, PendingIntent.FLAG_IMMUTABLE));
 
 
         return builder.build();

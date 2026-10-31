@@ -20,6 +20,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Android 14+：foregroundServiceType="specialUse" 必须配套声明该权限，否则 startForeground 抛 SecurityException -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- 库模块不声明 application 级属性（name/icon/theme 等），避免与宿主 app manifest 合并冲突 -->
@@ -134,9 +136,16 @@
             android:name=".shared.activities.ReportActivity$ReportActivityBroadcastReceiver"
             android:exported="false" />
 
+        <!-- Android 14（targetSdk 34）前台服务必须声明 foregroundServiceType，
+             否则 startForeground() 抛 SecurityException。终端服务属特殊用途，无时长限制。 -->
         <service
             android:name=".app.TermuxService"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="specialUse" >
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Terminal emulator foreground service holding persistent shell sessions." />
+        </service>
 
         <service
             android:name=".app.RunCommandService"

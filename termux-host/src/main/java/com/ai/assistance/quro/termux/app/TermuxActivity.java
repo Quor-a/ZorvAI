@@ -921,7 +921,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         intentFilter.addAction(TERMUX_ACTIVITY.ACTION_RELOAD_STYLE);
         intentFilter.addAction(TERMUX_ACTIVITY.ACTION_REQUEST_PERMISSIONS);
 
-        registerReceiver(mTermuxActivityBroadcastReceiver, intentFilter);
+        // Android 14（targetSdk 34）起，注册非系统广播必须显式声明 RECEIVER_NOT_EXPORTED，
+        // 否则 registerReceiver 抛 SecurityException。ContextCompat 会自动兼容低版本。
+        androidx.core.content.ContextCompat.registerReceiver(this, mTermuxActivityBroadcastReceiver, intentFilter,
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     private void unregisterTermuxActivityBroadcastReceiver() {
