@@ -1,23 +1,86 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:android="http://schemas.android.com/apk/res/android">
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+     https://material.io/develop/android/theming/dark
+    -->
 
-    <!-- TermuxHostActivity DayNight NoActionBar theme (night). -->
-    <style name="Theme.TermuxHostActivity.DayNight.NoActionBar" parent="Theme.TermuxHost.DayNight.NoActionBar">
+    <!-- TermuxActivity DayNight NoActionBar theme. -->
+    <!-- See https://developer.android.com/training/material/theme.html for how to customize the Material theme. -->
+    <!-- NOTE: Cannot use "Light." since it hides the terminal scrollbar on the default black background. -->
+    <style name="Theme.TermuxActivity.DayNight.NoActionBar" parent="Theme.TermuxApp.DayNight.NoActionBar">
+        <!-- Primary brand color. -->
         <item name="colorPrimary">@color/black</item>
         <item name="colorPrimaryVariant">@color/black</item>
+
         <item name="android:windowBackground">@color/black</item>
+
+        <!-- Avoid action mode toolbar pushing down terminal content when
+             selecting text on pre-6.0 (non-floating toolbar). -->
         <item name="android:windowActionModeOverlay">true</item>
+
         <item name="android:windowTranslucentStatus">true</item>
         <item name="android:windowTranslucentNavigation">true</item>
+
+        <!-- https://developer.android.com/training/tv/start/start.html#transition-color -->
         <item name="android:windowAllowReturnTransitionOverlap">true</item>
         <item name="android:windowAllowEnterTransitionOverlap">true</item>
-        <item name="buttonBarButtonStyle">@style/TermuxHost.Drawer.ButtonBarStyle.Dark</item>
+
+        <!-- Left drawer. -->
+        <item name="buttonBarButtonStyle">@style/TermuxActivity.Drawer.ButtonBarStyle.Dark</item>
         <item name="termuxActivityDrawerBackground">@color/black</item>
         <item name="termuxActivityDrawerImageTint">@color/white</item>
+
+        <!-- Extra keys colors. -->
         <item name="extraKeysButtonTextColor">@color/white</item>
         <item name="extraKeysButtonActiveTextColor">@color/red_400</item>
         <item name="extraKeysButtonBackgroundColor">@color/black</item>
         <item name="extraKeysButtonActiveBackgroundColor">@color/grey_500</item>
     </style>
 
+
+    <style name="Theme.BaseActivity.DayNight.DarkActionBar" parent="Theme.MaterialComponents">
+        <!-- Primary brand color. -->
+        <item name="colorPrimary">@color/red_400</item>
+        <item name="colorPrimaryVariant">@color/red_800</item>
+        <item name="colorOnPrimary">@color/black</item>
+
+        <!-- Secondary brand color. -->
+        <item name="colorSecondary">@color/grey_400</item>
+        <item name="colorSecondaryVariant">@color/grey_500</item>
+        <item name="colorOnSecondary">@color/black</item>
+
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimaryVariant</item>
+        <item name="colorPrimaryDark" tools:targetApi="l">?attr/colorPrimary</item>
+
+        <!-- Text color. -->
+        <item name="android:textColorLink">@color/blue_link_dark</item>
+    </style>
+
+    <style name="Theme.BaseActivity.DayNight.NoActionBar" parent="Theme.BaseActivity.DayNight.DarkActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+    </style>
+
+    <style name="ThemeOverlay.BaseDialog.DayNight" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <!-- Primary brand color. -->
+        <item name="colorPrimary">@color/red_400</item>
+        <item name="colorPrimaryVariant">@color/red_800</item>
+        <item name="colorOnPrimary">@color/black</item>
+
+        <!-- Secondary brand color. -->
+        <item name="colorSecondary">@color/grey_400</item>
+        <item name="colorSecondaryVariant">@color/grey_500</item>
+        <item name="colorOnSecondary">@color/black</item>
+
+        <!-- Surface color. -->
+        <item name="colorSurface">@color/design_dark_default_color_surface</item>
+        <item name="colorOnSurface">@color/design_dark_default_color_on_surface</item>
+
+        <!-- Dialog title panel style. -->
+        <item name="materialAlertDialogTitlePanelStyle">@style/BaseDialog.Title.Panel</item>
+
+        <!-- Dialog message text style. -->
+        <item name="materialAlertDialogBodyTextStyle">@style/BaseDialog.Message.Text.Dark</item>
+    </style>
 </resources>

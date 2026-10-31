@@ -1,0 +1,45 @@
+<shortcuts xmlns:tools="http://schemas.android.com/tools"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="new_session"
+        android:enabled="true"
+        android:icon="@drawable/ic_new_session"
+        android:shortcutShortLabel="@string/action_new_session"
+        tools:targetApi="n_mr1">
+        <intent
+            android:action="android.intent.action.RUN"
+            android:targetPackage="com.ai.assistance.quro.termux"
+            android:targetClass="com.ai.assistance.quro.termux.app.TermuxActivity"
+            android:name="android.shortcut.conversation"/>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="new_failsafe_session"
+        android:enabled="true"
+        android:icon="@drawable/ic_new_session"
+        android:shortcutShortLabel="@string/action_new_session_failsafe"
+        tools:targetApi="n_mr1">
+        <intent
+            android:action="android.intent.action.RUN"
+            android:targetPackage="com.ai.assistance.quro.termux"
+            android:targetClass="com.ai.assistance.quro.termux.app.TermuxActivity"
+            android:name="android.shortcut.conversation">
+            <extra android:name="com.ai.assistance.quro.termux.app.failsafe_session" android:value="true"/>
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="settings"
+        android:enabled="true"
+        android:icon="@drawable/ic_settings"
+        android:shortcutShortLabel="@string/action_open_settings"
+        tools:targetApi="n_mr1">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.ai.assistance.quro.termux"
+            android:targetClass="com.ai.assistance.quro.termux.app.activities.SettingsActivity"
+            android:name="android.shortcut.conversation"/>
+    </shortcut>
+
+</shortcuts>
