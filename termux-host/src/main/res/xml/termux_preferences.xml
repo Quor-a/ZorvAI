@@ -3,16 +3,16 @@
     <Preference
         app:title="@string/termux_debugging_preferences_title"
         app:summary="@string/termux_debugging_preferences_summary"
-        app:fragment="com.termux.app.fragments.settings.termux.DebuggingPreferencesFragment"/>
+        app:fragment="com.ai.assistance.quro.termux.app.fragments.settings.termux.DebuggingPreferencesFragment"/>
 
     <Preference
         app:title="@string/termux_terminal_io_preferences_title"
         app:summary="@string/termux_terminal_io_preferences_summary"
-        app:fragment="com.termux.app.fragments.settings.termux.TerminalIOPreferencesFragment"/>
+        app:fragment="com.ai.assistance.quro.termux.app.fragments.settings.termux.TerminalIOPreferencesFragment"/>
 
     <Preference
         app:title="@string/termux_terminal_view_preferences_title"
         app:summary="@string/termux_terminal_view_preferences_summary"
-        app:fragment="com.termux.app.fragments.settings.termux.TerminalViewPreferencesFragment"/>
+        app:fragment="com.ai.assistance.quro.termux.app.fragments.settings.termux.TerminalViewPreferencesFragment"/>
 
 </PreferenceScreen>
