@@ -3,7 +3,7 @@ package com.ai.assistance.quro.terminal.runtime
 import java.io.File
 
 /**
- * proot 启动规格：供自研 PTY 链路与 vtlib 增强终端（TerminalSession）共用的启动参数。
+ * proot 启动规格：供自研 PTY 链路与 vtlib Termux（TerminalSession）共用的启动参数。
  */
 data class ProotLaunchSpec(
     /** proot 可执行文件路径（libproot.so）。 */

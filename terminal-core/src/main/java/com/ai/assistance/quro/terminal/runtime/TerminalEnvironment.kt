@@ -1125,7 +1125,7 @@ class TerminalEnvironment(context: Context) {
      */
     /**
      * 构造 proot 直接启动命令（参照 QuroLinuxEnv.shellLaunch 的成功参数）。
-     * 供 [startTerminalSession] 与 vtlib 增强终端（TerminalSession）共用。
+     * 供 [startTerminalSession] 与 vtlib Termux（TerminalSession）共用。
      */
     fun buildProotLaunch(): ProotLaunchSpec {
         // 1) 宿主侧确保 rootfs 解压 + 就绪（幂等；首次启动会解压内置 tarball，3-8 分钟）

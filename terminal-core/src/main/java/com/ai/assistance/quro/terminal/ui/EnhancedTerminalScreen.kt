@@ -41,7 +41,7 @@ import kotlinx.coroutines.withContext
 private const val TAG = "EnhancedTerminalScreen"
 
 /**
- * 增强终端页（vtlib 完整能力）。
+ * Termux页（vtlib 完整能力）。
  *
  * 使用 Termux terminal-emulator + terminal-view 移植栈渲染，支持：
  * 双缓冲/备用屏幕/滚动/sixel/24 位真彩/鼠标协议/括号粘贴/OSC52/文本选择/额外按键栏。
@@ -53,7 +53,7 @@ fun EnhancedTerminalScreen(
 ) {
     val context = LocalContext.current
     val bridge = remember { VtTerminalBridge(context, environment) }
-    var title by remember { mutableStateOf("增强终端") }
+    var title by remember { mutableStateOf("Termux") }
     var sessionFinished by remember { mutableStateOf(false) }
     var sessionExitCode by remember { mutableStateOf<Int?>(null) }
     var started by remember { mutableStateOf(false) }
@@ -68,7 +68,7 @@ fun EnhancedTerminalScreen(
         //（可能卡死 UI / ANR）。移到 IO 线程，完成后切回主线程更新状态。
         val ok = withContext(Dispatchers.IO) {
             runCatching { bridge.start() }.getOrElse {
-                Log.e(TAG, "启动增强终端失败", it)
+                Log.e(TAG, "启动Termux失败", it)
                 startError = it.message ?: it.javaClass.simpleName
                 false
             }
@@ -77,7 +77,7 @@ fun EnhancedTerminalScreen(
         started = ok
         startFailed = !ok
         if (ok) {
-            bridge.onTitleChanged = { title = it ?: "增强终端" }
+            bridge.onTitleChanged = { title = it ?: "Termux" }
             bridge.onSessionFinished = { code ->
                 sessionExitCode = code
                 sessionFinished = true

@@ -135,7 +135,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         }
 
         // 🔴 ZorvAI proot 注入：官方 TermuxSession 默认查找 $PREFIX/bin/login（bootstrap），
-        // 但增强终端使用 proot Ubuntu。注册 provider 后，所有新会话直接用 proot 启动。
+        // 但Termux使用 proot Ubuntu。注册 provider 后，所有新会话直接用 proot 启动。
         try {
             TermuxSession.setProotLaunchProvider(new ProotLaunchProviderImpl(this));
             Logger.logInfo(LOG_TAG, "ProotLaunchProvider registered");

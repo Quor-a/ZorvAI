@@ -192,7 +192,7 @@ class QuroApplication : Application(), Configuration.Provider {
         try {
             TerminalPrivilegeBridgeHolder.set(QuroTerminalPrivilegeBridge(applicationContext))
         } catch (_: Throwable) {}
-        // 增强终端 = 完整移植的 Termux 官方宿主。由于 app 的 Application 类是 QuroApplication
+        // Termux = 完整移植的 Termux 官方宿主。由于 app 的 Application 类是 QuroApplication
         // （library manifest 里的 TermuxApplication 不会生效），此处手动执行 TermuxApplication
         // 的初始化序列（SharedProperties/ShellManager/主题/ShellEnvironment/AM socket/崩溃处理），
         // 否则 TermuxService.onCreate() 里 getProperties() 会拿到 null 而崩溃。

@@ -10,7 +10,7 @@ object TerminalRoutes {
     const val MOYU_ROUTE = "moyu"
 
     /**
-     * 增强终端（vtlib 完整 VT 模拟器 + 额外按键栏）。
+     * Termux（vtlib 完整 VT 模拟器 + 额外按键栏）。
      */
     const val ENHANCED_TERMINAL_ROUTE = "enhanced_terminal"
 }

@@ -50,7 +50,7 @@ class TerminalManager private constructor(
     // 核心组件
     private val environment = TerminalEnvironment(context)
 
-    /** 公开访问终端环境（供增强终端等复用 proot 启动参数）。 */
+    /** 公开访问终端环境（供Termux等复用 proot 启动参数）。 */
     val terminalEnvironment: TerminalEnvironment get() = environment
     private val sessionManager = SessionManager(this)
     private val commandDispatcher = CommandDispatcher(

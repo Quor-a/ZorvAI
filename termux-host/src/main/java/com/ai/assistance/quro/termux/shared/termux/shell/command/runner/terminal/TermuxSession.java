@@ -48,7 +48,7 @@ public class TermuxSession {
 
     private static final String LOG_TAG = "TermuxSession";
 
-    /** 由宿主注入的 proot 启动器（ZorvAI 增强终端）。 */
+    /** 由宿主注入的 proot 启动器（Termux）。 */
     private static ProotLaunchProvider sProotLaunchProvider;
 
     /** 设置 proot 启动器提供者（null 表示不启用 proot，走官方默认 shell 查找）。 */

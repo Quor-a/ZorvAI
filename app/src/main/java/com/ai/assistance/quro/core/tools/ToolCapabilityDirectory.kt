@@ -35,6 +35,16 @@ object ToolCapabilityDirectory {
         KNOWLEDGE_MEMORY("知识/记忆", "记忆库、知识库、经验库"),
         WORKSPACE(qstr(R.string.qk_00025), "工作区文件管理"),
         ACCESSIBILITY("无障碍", "屏幕读取、点击、滑动等"),
+        /**
+         * 后台虚拟屏（移植 Mika）：在**用户看不见的独立虚拟屏**上启动 App、点按、截图。
+         *
+         * 🔴 必须与 ACCESSIBILITY 分开：
+         *  - `ACCESSIBILITY` 操作的是**用户正在看的那块屏**，会抢焦点、打断用户；
+         *  - 本类操作的是**后台独立屏**（Shizuku 建 VirtualDisplay），主屏焦点/输入法不受影响，
+         *    截图走 Surface→ImageReader 而非无障碍接口。
+         * 混在一起会让 AI 在「别打扰用户」的场景下错误地选用无障碍工具。
+         */
+        VIRTUAL_SCREEN("后台虚拟屏", "在不打扰用户主屏的独立虚拟屏上启动/操作 App、截图"),
         APP_MANAGEMENT("应用管理", "应用启动、安装、冻结等"),
         COMMUNICATION(qstr(R.string.qk_03313), "短信、联系人、日历等"),
         AI_CAPABILITIES("AI能力", "图像生成、视频生成、文档处理"),
@@ -319,6 +329,79 @@ object ToolCapabilityDirectory {
             ),
             relatedTools = listOf("quroterm_exec", "linux_run"),
             priority = 4
+        ),
+
+        // Termux = 完整移植的 Termux 官方宿主。与 terminal（自研 PTY 会话）分工：
+        // terminal 管「会话语义」（写入/中断/切换），termux 管「在这套发行版里干活」。
+        "termux" to ToolInfo(
+            name = "termux",
+            category = ToolCategory.TERMINAL_LINUX,
+            description = "Termux 环境工具：在本机 Termux（完整移植的 Termux 官方宿主）所用的 Ubuntu 发行版里执行命令、装包、查环境状态、拉起 Termux 界面。返回完整 stdout/stderr 与退出码。",
+            useCases = listOf(
+                "在 Termux 里跑个命令", "用 Termux 装个包", "查 Termux 环境好了没",
+                "用 apt 装 python3 然后跑一下", "打开 Termux 给我看看",
+                "在 Termux 里写个脚本跑起来"
+            ),
+            examples = listOf(
+                "termux(action=\"run\", command=\"uname -a && cat /etc/os-release | head -2\")",
+                "termux(action=\"pkg\", package=\"python3 git\")",
+                "termux(action=\"status\")",
+                "termux(action=\"open\")",
+                "termux(action=\"run\", command=\"apt-get update\", timeout_ms=180000)"
+            ),
+            parameters = mapOf(
+                "action" to "run（默认）/ pkg / status / open",
+                "command" to "run 用的 shell 命令（在 Termux 的 Ubuntu 内执行）",
+                "package" to "pkg 用的包名，多个空格分隔",
+                "timeout_ms" to "run 超时毫秒，默认 30000，长任务可调大"
+            ),
+            tips = listOf(
+                "命令跑在 Termux 的 Ubuntu 里，**不是** Android 的 /system/bin/sh；要执行 Android 命令用 terminal 或 shizuku_exec。",
+                "与 terminal 的分工：交互式会话（写入/中断/切换）用 terminal；「装包+执行拿完整输出」用 termux 更直接。",
+                "装包或首次运行若环境未解压，会返回「正在后台安装」，等一会重试即可（不要重复触发 setup）。",
+                "用户说「打开 Termux / 让我看看终端」→ termux(action=\"open\")。"
+            ),
+            relatedTools = listOf("terminal", "linux_run", "linux_pkg"),
+            priority = 4
+        ),
+
+        // 后台虚拟屏（移植 Mika）：与无障碍控屏是「两块不同的屏」，分类上也分开。
+        "bg_screen" to ToolInfo(
+            name = "bg_screen",
+            category = ToolCategory.VIRTUAL_SCREEN,
+            description = "后台虚拟屏：在一块用户看不见的独立虚拟屏上打开 App、点按、滑动、截图，不抢主屏焦点、不打断用户。需要 Shizuku 已授权。",
+            useCases = listOf(
+                "别打扰我，后台帮我操作一下", "在后台打开微信发条消息", "我看不到的时候帮我点一下",
+                "后台跑个 App 的流程", "不占我屏幕地操作手机",
+                "截图看看那个 App 现在什么界面（不影响我）"
+            ),
+            examples = listOf(
+                "bg_screen(action=\"status\")",
+                "bg_screen(action=\"open\", packageName=\"com.tencent.mm\")",
+                "bg_screen(action=\"screenshot\")",
+                "bg_screen(action=\"tap\", x=540, y=1200)",
+                "bg_screen(action=\"swipe\", x1=540, y1=1800, x2=540, y2=600, duration_ms=300)",
+                "bg_screen(action=\"back\")",
+                "bg_screen(action=\"top\")",
+                "bg_screen(action=\"release\")"
+            ),
+            parameters = mapOf(
+                "action" to "open / screenshot / tap / swipe / back / top / status / release",
+                "packageName" to "open 用的包名",
+                "x/y" to "tap 坐标（基于主屏分辨率，与截图像素一一对应）",
+                "x1/y1/x2/y2" to "swipe 起终点",
+                "duration_ms" to "swipe 时长，默认 300"
+            ),
+            tips = listOf(
+                "**要「不打扰用户」就用它**；用户明确说「帮我点屏幕上这个」才用无障碍的 tap_screen（那会抢焦点）。",
+                "固定流程：status 确认屏就绪 → open 目标 App → 等界面出来 → screenshot 看画面 → tap/swipe 操作 → 再 screenshot 确认。",
+                "截图返回的是文件路径，可以直接交给视觉分析工具读。",
+                "坐标基准与主屏一致：截图上的像素坐标可直接用于 tap。",
+                "任务结束调 release 释放屏，别长期占着。",
+                "需要 Shizuku 已安装/授权/运行；返回「特权服务未就绪」时提示用户去开 Shizuku，不要反复空转。"
+            ),
+            relatedTools = listOf("read_screen", "tap_screen", "screenshot", "shizuku_status"),
+            priority = 5
         ),
 
         "linux_run" to ToolInfo(
@@ -1445,6 +1528,9 @@ object ToolCapabilityDirectory {
                 ToolCategory.KNOWLEDGE_MEMORY
             name == "terminal" || name.startsWith("terminal_") || name.startsWith("linux_") || name.startsWith("quroterm_") ->
                 ToolCategory.TERMINAL_LINUX
+            // Termux（完整移植的 Termux 官方宿主）：AI 在 Termux 发行版里执行命令/装包/查状态/拉起界面。
+            // 必须显式归到 TERMINAL_LINUX，否则落 else->BASIC，tool_discovery 按分类列不出它。
+            name == "termux" -> ToolCategory.TERMINAL_LINUX
             // 墨语言独立运行时（编译/运行 .mo、读写源码修 bug）。必须与 QuroToolRouter.categorize 同源，
             // 否则 tool_discovery / tool_router 列不出它，AI 根本不知道有这门语言可用。
             name == "moyu" || name.startsWith("moyu_") -> ToolCategory.TERMINAL_LINUX
@@ -1460,6 +1546,9 @@ object ToolCapabilityDirectory {
 name.startsWith("codecanvas_") -> ToolCategory.AI_CAPABILITIES
             name in setOf("visual_analysis", "visual_question", "visual_action", "visual_popup", "visual_custom_popup") ->
                 ToolCategory.VISUAL_INTERACT
+            // 后台虚拟屏：必须在 ACCESSIBILITY 的 read_screen/tap_screen 规则之前命中，
+            // 否则会被 users 误认成"无障碍那套"，让 AI 在该用后台屏时去抢用户主屏。
+            name == "bg_screen" -> ToolCategory.VIRTUAL_SCREEN
             name in setOf("read_screen", "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen",
                 "input_text", "get_foreground_app", "get_screen_state", "screenshot", "screenshot_base64") ->
                 ToolCategory.ACCESSIBILITY
@@ -1761,6 +1850,20 @@ name.startsWith("codecanvas_") -> ToolCategory.AI_CAPABILITIES
 - 能用专用工具就不用通用工具（如发短信用send_sms不用http_request）
 - 能用简单工具就不用复杂工具（如读文件用read_text_file不用run_code）
 - 能用内置工具就不用外部工具（如计算用calculate不用run_code）
+
+## 4.1 终端 / Termux / Linux 怎么选（别混）
+本机的「终端」就是 **Termux**（完整移植的 Termux 官方宿主），它打开的是一个 **Ubuntu（proot）** 环境。
+- 用户说「用 Termux 跑 / 装个包 / 看看 Termux」→ **`termux`**（action=run / pkg / status / open）。它在 Termux 那套 Ubuntu 里执行，返回完整 stdout/stderr + 退出码。
+- 需要**交互式会话**（往正在跑的会话追加输入、中断当前命令、切换/新建会话）→ **`terminal`**（action=write / interrupt / session_new / session_switch）。
+- 要跑 **Android 系统命令**（/system/bin/sh、am、pm、settings）→ `terminal(action="run")` 或 `shizuku_exec`，**不要**丢给 `termux`（那是 Ubuntu，不是 Android）。
+- 环境未解压时 `termux`/`linux_run` 会自动触发后台安装并返回「正在后台安装」，等一会重试即可，**不要反复触发**。
+
+## 4.2 两块屏，别用错（后台虚拟屏 vs 无障碍）
+- 用户要「**别打扰我 / 后台做 / 我看不到的时候**」→ **`bg_screen`**（后台虚拟屏）。它在用户看不见的独立屏上 open App、tap/swipe、screenshot，
+  主屏焦点与输入法都不受影响，截图不走无障碍，因此安全窗口也能拿到画面。
+- 用户要「**点我屏幕上这个 / 帮我点点当前界面**」→ 无障碍的 `tap_screen` / `read_screen`（操作用户正在看的那块屏，会抢焦点）。
+- `bg_screen` 的标准流程：`status` → `open` → `screenshot` 看画面 → `tap`/`swipe` → 再 `screenshot` 确认 → 结束时 `release`。
+- `bg_screen` 依赖 Shizuku 已授权；返回「特权服务未就绪」时提示用户去开 Shizuku，**不要反复重试**。
 
 ## 5. 工具调用格式
 - 一次调用多个工具：返回多个tool_calls
