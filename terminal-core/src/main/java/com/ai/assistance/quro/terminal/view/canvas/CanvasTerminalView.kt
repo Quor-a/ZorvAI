@@ -140,7 +140,7 @@ class CanvasTerminalView @JvmOverloads constructor(
             onScroll = { _, distanceY ->
                 if (!selectionManager.hasSelection()) {
                     scrollOffsetY += distanceY
-                    scrollOffsetY = scrollOffsetY.coerceAtLeast(0f)
+                    clampScrollOffset()
                     requestRender()
                 }
             },
@@ -159,7 +159,9 @@ class CanvasTerminalView @JvmOverloads constructor(
                 // 与 AOSP Terminal 的 contextmenu→mousedown 映射同义：vim/htop 里要能按住拖。
                 val emu = emulator
                 if (emu != null && emu.mouseTracking >= 1002) {
-                    val (row, col) = screenToTerminalCoords(x, y)
+                    // 鼠标事件用「窗口内相对行号」（0..可见行-1），
+                    // 不能混入历史偏移，否则 vim/htop 收到的行号错位。
+                    val (row, col) = viewportCoordsAt(x, y)
                     mouseLastRow = row
                     mouseLastCol = col
                     mouseDragActive = true
@@ -246,7 +248,7 @@ class CanvasTerminalView @JvmOverloads constructor(
             onScroll = { _, distanceY ->
                 if (!selectionManager.hasSelection()) {
                     scrollOffsetY += distanceY
-                    scrollOffsetY = scrollOffsetY.coerceAtLeast(0f)
+                    clampScrollOffset()
                     requestRender()
                 }
             },
@@ -258,7 +260,9 @@ class CanvasTerminalView @JvmOverloads constructor(
                 // 与 AOSP Terminal 的 contextmenu→mousedown 映射同义：vim/htop 里要能按住拖。
                 val emu = emulator
                 if (emu != null && emu.mouseTracking >= 1002) {
-                    val (row, col) = screenToTerminalCoords(x, y)
+                    // 鼠标事件用「窗口内相对行号」（0..可见行-1），
+                    // 不能混入历史偏移，否则 vim/htop 收到的行号错位。
+                    val (row, col) = viewportCoordsAt(x, y)
                     mouseLastRow = row
                     mouseLastCol = col
                     mouseDragActive = true
@@ -405,12 +409,47 @@ class CanvasTerminalView @JvmOverloads constructor(
     }
     
     // === 核心渲染方法 ===
+
+    /**
+     * 计算当前滚动状态下的起始 buffer 行号（底部对齐滚动模型）。
+     *
+     * 数据源 = transcript 历史 + 当前屏。scrollOffsetY=0 时返回
+     * `bufferSize - visibleRows`（当前屏幕底部）；上滑时 scrollOffsetY 增大，
+     * 起始行继续前移，逐屏回看历史。所有需要行映射的地方（drawTerminal /
+     * drawCursor / drawSelection / screenToTerminalCoords）必须统一走这里，
+     * 否则滚动时光标/选择区会与文字行错位。
+     */
+    private fun computeStartRow(bufferSize: Int, visibleRows: Int, charHeight: Float): Int {
+        val maxScroll = ((bufferSize - visibleRows) * charHeight).coerceAtLeast(0f)
+        // 任何调用方都要统一约束滚动范围，避免 drawCursor/drawSelection
+        // 各自 clamp 不一致导致像素偏移。
+        scrollOffsetY = scrollOffsetY.coerceIn(0f, maxScroll)
+        val scrollRows = (scrollOffsetY / charHeight).toInt()
+        return max(0, bufferSize - visibleRows - scrollRows)
+    }
+
+    /**
+     * 把手势产生的滚动偏移约束到合法范围（[0, 最大可滚像素]）。
+     * 底部对齐模型下 scrollOffsetY=0 即当前屏，增大则回看历史；
+     * 数据源总行数 ≤ 可见行数时最大滚动为 0。
+     */
+    private fun clampScrollOffset() {
+        val emu = emulator ?: run {
+            scrollOffsetY = scrollOffsetY.coerceAtLeast(0f)
+            return
+        }
+        val buffer = emu.getScreenContentWithHistory()
+        val charHeight = textMetrics.charHeight.coerceAtLeast(1f)
+        val visibleRows = ((height - config.paddingTop - config.paddingBottom) / charHeight).toInt() + 1
+        val maxScroll = ((buffer.size - visibleRows) * charHeight).coerceAtLeast(0f)
+        scrollOffsetY = scrollOffsetY.coerceIn(0f, maxScroll)
+    }
     
     private fun drawTerminal(canvas: Canvas) {
         val emu = emulator ?: return
         // 🔴 用「历史 + 当前屏」作为渲染数据源：终端输出超过一屏后，
         // 用户可上滑回看历史（旧实现只有当前屏，滚动无内容可看）。
-        val buffer = emu.getScreenContentWithHistory() ?: return
+        val buffer = emu.getScreenContentWithHistory()
         
         // 清空背景
         canvas.drawColor(config.backgroundColor)
@@ -427,11 +466,13 @@ class CanvasTerminalView @JvmOverloads constructor(
         // 计算可见区域（用去掉上下内边距后的可用高度）
         val availHeight = (canvas.height - config.paddingTop - config.paddingBottom).coerceAtLeast(1f)
         val visibleRows = (availHeight / charHeight).toInt() + 1
-        // 🔴 滚动范围约束到「历史 + 当前屏」总行数内：
-        // startRow = 0 时显示最早历史（顶部）；scrollOffsetY=0 时显示当前屏（底部）。
+        // 🔴 底部对齐滚动模型（修复滚动方向反转）：
+        // 数据源 = transcript 历史 + 当前屏。scrollOffsetY=0 时必须显示「当前屏幕底部」
+        // （startRow = buffer.size - visibleRows），而不是历史顶部。
+        // 用户上滑（scrollOffsetY 增大）时 startRow 前移，逐屏回看历史。
         val maxScroll = ((buffer.size - visibleRows) * charHeight).coerceAtLeast(0f)
         scrollOffsetY = scrollOffsetY.coerceIn(0f, maxScroll)
-        val startRow = (scrollOffsetY / charHeight).toInt()
+        val startRow = computeStartRow(buffer.size, visibleRows, charHeight)
         val endRow = min(startRow + visibleRows, buffer.size)
         
         // 绘制每一行
@@ -635,18 +676,23 @@ class CanvasTerminalView @JvmOverloads constructor(
     
     private fun drawCursor(canvas: Canvas, charWidth: Float, charHeight: Float) {
         val emu = emulator ?: return
+        val buffer = emu.getScreenContentWithHistory()
         val rows = cachedRows.coerceAtLeast(1)
         val cols = cachedCols.coerceAtLeast(1)
         // deferred wrap 时光标列可能等于 screenWidth（越界一格），绘制时收敛到最后一列
         val cursorX = (emu.getCursorX()).coerceIn(0, cols - 1)
         val cursorY = (emu.getCursorY()).coerceIn(0, rows - 1)
 
-        // 🔴 必须与 drawTerminal 的行循环公式一致：
-        //   y = padTop + (row - startRow) * charHeight - (scrollOffsetY % charHeight)
-        // 旧实现直接用 cursorY * charHeight - scrollOffsetY，滚动时与文字行错位
+        // 🔴 底部对齐滚动模型：光标行号（0-based，相对当前屏幕）需要换算成
+        // 「历史+当前屏」联合缓冲中的行号，再与 drawTerminal 的行循环公式保持一致：
+        //   y = padTop + (rowInBuffer - startRow) * charHeight - (scrollOffsetY % charHeight)
+        // 旧实现直接 cursorY * charHeight - scrollOffsetY，滚动时与文字行错位
         // （差 scrollOffsetY % charHeight 的偏移），光标会浮在文字行之间。
-        val startRow = (scrollOffsetY / charHeight).toInt()
-        val y = config.paddingTop + (cursorY - startRow) * charHeight - (scrollOffsetY % charHeight)
+        val visibleRows = rows
+        val totalRows = buffer.size
+        val startRow = computeStartRow(totalRows, visibleRows, charHeight)
+        val rowInBuffer = (totalRows - visibleRows) + cursorY
+        val y = config.paddingTop + (rowInBuffer - startRow) * charHeight - (scrollOffsetY % charHeight)
         val x = config.paddingLeft + cursorX * charWidth
 
         // 绘制光标方块
@@ -660,9 +706,11 @@ class CanvasTerminalView @JvmOverloads constructor(
 
         // 当前可见区域从 startRow 开始（与 drawTerminal 的行循环一致），
         // 选择高亮的 y 必须用 (row - startRow) 偏移，否则与文字行错位。
-        val startRow = (scrollOffsetY / charHeight).toInt()
+        val visibleRows = ((canvas.height - config.paddingTop - config.paddingBottom) / charHeight).toInt() + 1
+        val startRow = computeStartRow(buffer.size, visibleRows, charHeight)
 
         for (row in selection.startRow..selection.endRow) {
+            if (row >= buffer.size) break
             val y = config.paddingTop + (row - startRow) * charHeight - (scrollOffsetY % charHeight)
 
             val startCol = if (row == selection.startRow) selection.startCol else 0
@@ -729,7 +777,8 @@ class CanvasTerminalView @JvmOverloads constructor(
         if (mouseDragActive) {
             when (event.actionMasked) {
                 MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    val (row, col) = screenToTerminalCoords(event.x, event.y)
+                    // 鼠标拖拽同样用「窗口内相对行号」，与 TUI 应用的屏幕坐标系一致
+                    val (row, col) = viewportCoordsAt(event.x, event.y)
                     if (row != mouseLastRow || col != mouseLastCol) {
                         mouseLastRow = row
                         mouseLastCol = col
@@ -777,16 +826,40 @@ class CanvasTerminalView @JvmOverloads constructor(
     /** 发一次滚轮事件（xterm 约定：64=上滚，65=下滚）。 */
     private fun sendWheel(down: Boolean, x: Float, y: Float) {
         val emu = emulator ?: return
-        val (row, col) = screenToTerminalCoords(x, y)
+        val (row, col) = viewportCoordsAt(x, y)
         inputCallback?.invoke(emu.encodeMouse(if (down) 65 else 64, col, row, press = true))
     }
     
     /**
-     * 屏幕坐标转换为终端坐标
+     * 屏幕坐标转换为「历史+当前屏」联合缓冲中的绝对行号。
+     *
+     * 底部对齐模型：屏幕第 0 行 = buffer 的 startRow（由 scrollOffsetY 决定）。
+     * 文本选择、长按选词使用此方法，返回的行号可直接索引联合缓冲。
      */
     private fun screenToTerminalCoords(x: Float, y: Float): Pair<Int, Int> {
-        val row = ((y + scrollOffsetY - config.paddingTop) / textMetrics.charHeight).toInt()
-        val col = ((x - config.paddingLeft) / textMetrics.charWidth).toInt()
+        val emu = emulator ?: return Pair(0, 0)
+        val buffer = emu.getScreenContentWithHistory()
+        val charWidth = textMetrics.charWidth
+        val charHeight = textMetrics.charHeight
+        val visibleRows = ((height - config.paddingTop - config.paddingBottom) / charHeight).toInt() + 1
+        val startRow = computeStartRow(buffer.size, visibleRows, charHeight)
+        val row = startRow + ((y - config.paddingTop) / charHeight).toInt()
+        val col = ((x - config.paddingLeft) / charWidth).toInt()
+        return Pair(row.coerceIn(0, buffer.size - 1), col.coerceAtLeast(0))
+    }
+
+    /**
+     * 屏幕坐标转换为「窗口内相对行号」（0..可见行数-1）。
+     *
+     * 鼠标/滚轮事件（encodeMouse）要求行号相对当前终端窗口，不能混入
+     * 历史偏移，否则 vim/htop 收到的行号错位。文本选择则用
+     * [screenToTerminalCoords]（绝对行号）。
+     */
+    private fun viewportCoordsAt(x: Float, y: Float): Pair<Int, Int> {
+        val charWidth = textMetrics.charWidth.coerceAtLeast(1f)
+        val charHeight = textMetrics.charHeight.coerceAtLeast(1f)
+        val row = ((y - config.paddingTop) / charHeight).toInt().coerceAtLeast(0)
+        val col = ((x - config.paddingLeft) / charWidth).toInt().coerceAtLeast(0)
         return Pair(row, col)
     }
     
