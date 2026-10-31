@@ -7,7 +7,7 @@ import android.net.Uri
 import android.util.Log
 
 /**
- * 外部把一句话交给 ZorvAI 的三个入口（范式取自 OPPO Breeno 的 TEXT_DIRECTIVE）。
+ * 外部把一句话交给 ZorvAI 的三个入口。
  *
  * 支持形态（任意一种，都落到同一个 [AssistantDirectiveBus]）：
  *
@@ -40,7 +40,7 @@ class AssistantDirectiveReceiver : BroadcastReceiver() {
         const val ACTION_DIRECTIVE = "com.ai.assistance.quro.action.DIRECTIVE"
 
         /**
-         * 后台任务中转（小布 `SUBMIT_BACKGROUND_TASK_RELAY`）：
+         * 后台任务中转：
          * 外部应用提交一个会长跑的能力，宿主在后台跑完通过
          * [com.ai.assistance.quro.core.assistant.BackgroundTaskRelay.RELAY_RESULT_ACTION] 回执。
          */
