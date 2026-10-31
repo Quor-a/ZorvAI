@@ -57,6 +57,9 @@ class AnsiTerminalEmulator(
         private const val TAG = "AnsiTerminalEmulator"
         private const val TAB_SIZE = 8
 
+        /** 历史滚动缓冲上限（行）。与 Termux 默认 transcript-rows=5000 一致。 */
+        const val MAX_TRANSCRIPT_ROWS = 5000
+
         // East Asian Wide / Fullwidth 的常见 UnicodeBlock 集合（用于 wcwidth 判定）
         private val wideBlocks: Set<Character.UnicodeBlock> = setOf(
             Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS,
@@ -108,6 +111,11 @@ class AnsiTerminalEmulator(
     // 屏幕缓冲区
     private var screenBuffer: Array<Array<TerminalChar>> = 
         Array(screenHeight) { Array(screenWidth) { TerminalChar() } }
+    
+    // 🔴 滚动历史缓冲（transcript）：终端输出超过一屏时，被滚动出屏幕的行
+    // 保存在这里，用户可回看历史输出。旧实现直接把最旧行覆盖丢弃，历史内容
+    // 永久丢失，滚动只能看到当前屏——这是终端「壳」的核心缺陷。
+    private val transcript: MutableList<Array<TerminalChar>> = mutableListOf()
     
     // 备用屏幕缓冲区（用于全屏应用如 vim）
     private var altScreenBuffer: Array<Array<TerminalChar>>? = null
@@ -590,6 +598,12 @@ class AnsiTerminalEmulator(
     
     private fun scrollUp(lines: Int = 1) {
         for (i in 0 until lines) {
+            // 🔴 滚动区域从 0 开始（普通全屏滚动）时，最旧行进入历史缓冲；
+            // 若 scrollTop > 0（DECSTBM 滚动区域，如 vim 编辑区），TUI 自己管理
+            // 内容，不进历史，避免 vim 滚动把编辑区内容混入历史。
+            if (scrollTop == 0 && transcript.size < MAX_TRANSCRIPT_ROWS) {
+                transcript.add(screenBuffer[0].copyOf())
+            }
             // 🔴 必须 copyOf() 逐行拷贝，不能引用赋值：否则多行共享同一 Array，
             // 后续任何一行被改写，其它行会「镜像」同样内容（终端滚动后文本错乱）。
             for (y in scrollTop until scrollBottom) {
@@ -621,7 +635,8 @@ class AnsiTerminalEmulator(
     
     private fun clearScreenAndScrollback() {
         clearScreen()
-        // 在实际实现中，这里还应该清除滚动回溯缓冲区
+        // 🔴 CSI 3 J：清屏并清空滚动历史
+        transcript.clear()
     }
     
     private fun eraseFromCursorToEnd() {
@@ -757,6 +772,24 @@ class AnsiTerminalEmulator(
     fun isCursorVisible(): Boolean = cursorVisible
     
     fun getScreenContent(): Array<Array<TerminalChar>> = screenBuffer
+
+    /**
+     * 返回「历史滚动缓冲 + 当前屏幕」的拼接视图。
+     *
+     * 渲染层用这个作为滚动数据源：buffer.size = 历史行数 + 当前屏行数，
+     * scrollOffsetY=0 时显示末尾（当前屏），滚动时 startRow 前移查看历史。
+     */
+    fun getScreenContentWithHistory(): Array<Array<TerminalChar>> {
+        if (transcript.isEmpty()) return screenBuffer
+        val total = transcript.size + screenHeight
+        val combined = Array(total) { y ->
+            if (y < transcript.size) transcript[y] else screenBuffer[y - transcript.size]
+        }
+        return combined
+    }
+
+    /** 历史行数（供渲染层计算滚动范围）。 */
+    fun getTranscriptSize(): Int = transcript.size
     
     fun resize(newWidth: Int, newHeight: Int) {
         val oldBuffer = screenBuffer
@@ -774,6 +807,10 @@ class AnsiTerminalEmulator(
         for (y in 0 until heightToCopy) {
             System.arraycopy(oldBuffer[y], 0, screenBuffer[y], 0, widthToCopy)
         }
+        
+        // 🔴 尺寸变化后历史行宽度失效，且重排会导致行错乱，直接清空历史
+        //（Termux 在 resize 时同样丢弃/重排 transcript）。
+        transcript.clear()
         
         cursorX = cursorX.coerceIn(0, screenWidth - 1)
         cursorY = cursorY.coerceIn(0, screenHeight - 1)

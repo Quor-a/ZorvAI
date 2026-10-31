@@ -407,7 +407,10 @@ class CanvasTerminalView @JvmOverloads constructor(
     // === 核心渲染方法 ===
     
     private fun drawTerminal(canvas: Canvas) {
-        val buffer = emulator?.getScreenContent() ?: return
+        val emu = emulator ?: return
+        // 🔴 用「历史 + 当前屏」作为渲染数据源：终端输出超过一屏后，
+        // 用户可上滑回看历史（旧实现只有当前屏，滚动无内容可看）。
+        val buffer = emu.getScreenContentWithHistory() ?: return
         
         // 清空背景
         canvas.drawColor(config.backgroundColor)
@@ -424,6 +427,10 @@ class CanvasTerminalView @JvmOverloads constructor(
         // 计算可见区域（用去掉上下内边距后的可用高度）
         val availHeight = (canvas.height - config.paddingTop - config.paddingBottom).coerceAtLeast(1f)
         val visibleRows = (availHeight / charHeight).toInt() + 1
+        // 🔴 滚动范围约束到「历史 + 当前屏」总行数内：
+        // startRow = 0 时显示最早历史（顶部）；scrollOffsetY=0 时显示当前屏（底部）。
+        val maxScroll = ((buffer.size - visibleRows) * charHeight).coerceAtLeast(0f)
+        scrollOffsetY = scrollOffsetY.coerceIn(0f, maxScroll)
         val startRow = (scrollOffsetY / charHeight).toInt()
         val endRow = min(startRow + visibleRows, buffer.size)
         
@@ -444,7 +451,7 @@ class CanvasTerminalView @JvmOverloads constructor(
         }
         
         // 绘制光标（闪烁可见时才绘制）
-        if (cursorBlinkVisible && emulator?.isCursorVisible() == true) {
+        if (cursorBlinkVisible && emu.isCursorVisible()) {
             drawCursor(canvas, charWidth, charHeight)
         }
     }
@@ -472,16 +479,18 @@ class CanvasTerminalView @JvmOverloads constructor(
 
         for (col in line.indices) {
             val termChar = line[col]
+            // 🔴 背景色用反转后的有效值（SGR 7 反色时 fg/bg 互换）
+            val bgColor = termChar.attributes.getEffectiveBackground()
 
             // 批量绘制相同背景色
-            if (termChar.bgColor != config.backgroundColor) {
-                if (currentBgColor != termChar.bgColor) {
+            if (bgColor != config.backgroundColor) {
+                if (currentBgColor != bgColor) {
                     // 绘制之前的背景
                     currentBgColor?.let {
                         bgPaint.color = it
                         canvas.drawRect(bgStartX, y, x, y + charHeight, bgPaint)
                     }
-                    currentBgColor = termChar.bgColor
+                    currentBgColor = bgColor
                     bgStartX = x
                 }
             } else {
@@ -516,7 +525,10 @@ class CanvasTerminalView @JvmOverloads constructor(
                     val actualW = textPaint.measureText(termChar.char.toString())
                     val drawX = if (actualW >= 2 * charWidth - 1f) x
                                 else x + (2 * charWidth - actualW) / 2f
-                    canvas.drawText(termChar.char.toString(), drawX, y + baseline, textPaint)
+                    // 🔴 闪烁字符在光标「灭」阶段隐藏文本
+                    if (!(termChar.isBlinking && !cursorBlinkVisible)) {
+                        canvas.drawText(termChar.char.toString(), drawX, y + baseline, textPaint)
+                    }
                     runStart = col + 1
                 }
                 else -> {
@@ -568,7 +580,12 @@ class CanvasTerminalView @JvmOverloads constructor(
         applyCharStyle(head)
 
         val runX = startX + runStart * charWidth
-        canvas.drawText(text, 0, text.length, runX, y + baseline, textPaint)
+        // 🔴 闪烁字符（SGR 5/6）：光标「灭」阶段隐藏文本（只留背景），
+        // 与光标闪烁共用 cursorBlinkVisible 周期。ls 的 blink 链接、vim 高亮依赖此行为。
+        val blinkHidden = head.isBlinking && !cursorBlinkVisible
+        if (!blinkHidden) {
+            canvas.drawText(text, 0, text.length, runX, y + baseline, textPaint)
+        }
 
         val runWidth = (runEnd - runStart) * charWidth
         if (head.isUnderline) {
@@ -587,7 +604,12 @@ class CanvasTerminalView @JvmOverloads constructor(
     private fun applyCharStyle(termChar: TerminalChar) {
         textMetrics.applyStyle(termChar.isBold, termChar.isItalic)
 
-        var fgColor = termChar.fgColor
+        // 🔴 反色（inverse）必须前景/背景互换：xterm 标准里 SGR 7 是交换 fg/bg。
+        // 旧实现只反转了前景色（fgColor = bgColor），背景色没反转，
+        // 导致 vim 选中态 / htop 高亮 / ls 目录色块等反色区域显示错误。
+        // 这里用 TextAttributes.getEffectiveForeground() 取反转后的前景，
+        // 背景反转由 drawLine 的背景批量绘制处理（用 getEffectiveBackground()）。
+        var fgColor = termChar.attributes.getEffectiveForeground()
         if (termChar.isDim) {
             // 使颜色变暗
             fgColor = Color.argb(
@@ -596,10 +618,6 @@ class CanvasTerminalView @JvmOverloads constructor(
                 Color.green(fgColor),
                 Color.blue(fgColor)
             )
-        }
-        if (termChar.isInverse) {
-            // 反转前景和背景色
-            fgColor = termChar.bgColor
         }
 
         textPaint.color = fgColor
@@ -623,8 +641,13 @@ class CanvasTerminalView @JvmOverloads constructor(
         val cursorX = (emu.getCursorX()).coerceIn(0, cols - 1)
         val cursorY = (emu.getCursorY()).coerceIn(0, rows - 1)
 
+        // 🔴 必须与 drawTerminal 的行循环公式一致：
+        //   y = padTop + (row - startRow) * charHeight - (scrollOffsetY % charHeight)
+        // 旧实现直接用 cursorY * charHeight - scrollOffsetY，滚动时与文字行错位
+        // （差 scrollOffsetY % charHeight 的偏移），光标会浮在文字行之间。
+        val startRow = (scrollOffsetY / charHeight).toInt()
+        val y = config.paddingTop + (cursorY - startRow) * charHeight - (scrollOffsetY % charHeight)
         val x = config.paddingLeft + cursorX * charWidth
-        val y = config.paddingTop + cursorY * charHeight - scrollOffsetY
 
         // 绘制光标方块
         canvas.drawRect(x, y, x + charWidth, y + charHeight, cursorPaint)
@@ -632,6 +655,8 @@ class CanvasTerminalView @JvmOverloads constructor(
     
     private fun drawSelection(canvas: Canvas, charWidth: Float, charHeight: Float) {
         val selection = selectionManager.selection?.normalize() ?: return
+        val emu = emulator ?: return
+        val buffer = emu.getScreenContentWithHistory()
 
         // 当前可见区域从 startRow 开始（与 drawTerminal 的行循环一致），
         // 选择高亮的 y 必须用 (row - startRow) 偏移，否则与文字行错位。
@@ -644,7 +669,7 @@ class CanvasTerminalView @JvmOverloads constructor(
             val endCol = if (row == selection.endRow) {
                 selection.endCol
             } else {
-                emulator?.getScreenContent()?.getOrNull(row)?.size ?: 0
+                buffer.getOrNull(row)?.size ?: 0
             }
 
             val x1 = config.paddingLeft + startCol * charWidth
@@ -814,7 +839,8 @@ class CanvasTerminalView @JvmOverloads constructor(
      */
     private fun copySelectedText() {
         val selection = selectionManager.selection?.normalize() ?: return
-        val buffer = emulator?.getScreenContent() ?: return
+        val emu = emulator ?: return
+        val buffer = emu.getScreenContentWithHistory()
         
         val text = buildString {
             for (row in selection.startRow..selection.endRow) {
@@ -954,8 +980,10 @@ class CanvasTerminalView @JvmOverloads constructor(
         cachedRows = rows
         cachedCols = cols
         
-        // 更新模拟器尺寸
+        // 更新模拟器尺寸（resize 会清空历史 transcript）
         emulator?.resize(cols, rows)
+        // 🔴 尺寸变化后历史被清空，滚动偏移必须归零，否则会滚到空区域
+        scrollOffsetY = 0f
         
         // 同步 PTY 窗口尺寸
         pty?.setWindowSize(rows, cols)

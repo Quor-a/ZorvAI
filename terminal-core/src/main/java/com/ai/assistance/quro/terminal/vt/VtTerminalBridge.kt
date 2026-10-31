@@ -8,6 +8,8 @@ import android.view.ScaleGestureDetector
 import android.view.View
 import com.ai.assistance.quro.terminal.runtime.TerminalEnvironment
 import com.ai.assistance.quro.vt.ExtraKeyButton
+import com.ai.assistance.quro.vt.ExtraKeysConstants
+import com.ai.assistance.quro.vt.ExtraKeysInfo
 import com.ai.assistance.quro.vt.ExtraKeysView
 import com.ai.assistance.quro.vt.TerminalExtraKeys
 import com.ai.assistance.quro.vt.TerminalSession
@@ -107,6 +109,10 @@ class VtTerminalBridge(
             context.resources.displayMetrics
         )
         view.setTextSize(textSizePx.toInt())
+        // 🔴 终端视图必须可聚焦/可触摸聚焦，否则 requestFocus() 无效、软键盘弹不出来
+        //（onCheckIsTextEditor 返回 true 但 View 默认 isFocusable=false）。
+        view.isFocusable = true
+        view.isFocusableInTouchMode = true
         val attached = view.attachSession(session)
         if (attached) {
             terminalView = view
@@ -115,7 +121,7 @@ class VtTerminalBridge(
     }
 
     /** 创建并绑定额外按键栏。 */
-    fun createExtraKeysView(container: android.view.ViewGroup): ExtraKeysView {
+    fun createExtraKeysView(container: android.view.ViewGroup): ExtraKeysView? {
         val view = ExtraKeysView(context, null)
         view.setExtraKeysViewClient(TerminalExtraKeys(terminalView ?: error("TerminalView 未绑定")))
         extraKeysView = view
@@ -126,7 +132,33 @@ class VtTerminalBridge(
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT
             )
         )
-        return view
+
+        // 🔴 必须调用 reload() 才会真正生成按键按钮！旧实现只 setExtraKeysViewClient
+        // 从不 reload，导致按键栏永远空白（「壳」的细节缺失）。
+        // 从 termux.properties 的 extra-keys 读取布局 JSON（默认两行：ESC//TAB/CTRL/方向键等）。
+        return runCatching {
+            val propsJson = properties.getProperty(
+                QuroTerminalProperties.KEY_EXTRA_KEYS
+            ) ?: QuroTerminalProperties.DEFAULT_VALUE_EXTRA_KEYS
+            val style = properties.getStringProperty(
+                QuroTerminalProperties.KEY_EXTRA_KEYS_STYLE,
+                QuroTerminalProperties.DEFAULT_VALUE_EXTRA_KEYS_STYLE,
+                setOf("default", "arrows-only", "arrows-all", "all", "none")
+            )
+            val info = ExtraKeysInfo(
+                propsJson,
+                style,
+                ExtraKeysConstants.CONTROL_CHARS_ALIASES
+            )
+            // 按键高度：约 48dp（Material 按钮标准高度）
+            val heightPx = 48f * context.resources.displayMetrics.density
+            view.reload(info, heightPx)
+            view
+        }.onFailure {
+            Log.e(tag, "加载额外按键栏失败", it)
+            extraKeysView = null
+            container.removeView(view)
+        }.getOrNull()
     }
 
     /** 输入一行（换行结尾自动补）。 */
@@ -160,6 +192,9 @@ class VtTerminalBridge(
     override fun onSingleTapUp(e: MotionEvent) {
         // 默认行为：请求焦点
         terminalView?.requestFocus()
+        // 🔴 点击终端后弹出软键盘（Termux 宿主在 onSingleTapUp 里显示 IME）
+        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+        terminalView?.let { imm?.showSoftInput(it, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT) }
     }
 
     override fun shouldBackButtonBeMappedToEscape(): Boolean =
