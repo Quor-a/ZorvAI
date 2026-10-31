@@ -41,7 +41,19 @@ action：
 - push：推文件（device + local + remote）
 - pull：拉文件（device + local + remote）
 - install：安装 APK（device + local）
+- uninstall：卸载（device + packageName；keep_data=true 保留数据）
 - disconnect：断开指定设备
+- shell_multi：顺序执行多条命令（device + commands 数组），一次调用跑一批，逐条回显退出码
+- logcat：抓对端日志（device + lines 条数默认 200 + tag 过滤 + priority V/D/I/W/E）
+- screencap：对端截屏并拉回本地（device + local 保存路径）
+- input：注入输入（device + kind=tap/swipe/text/keyevent + 对应参数 x/y/x2/y2/text/keycode）
+- pm：包管理（device + op=list/thirdparty/enable/disable/clear/grant + packageName/permission）
+- am：应用操作（device + op=start/force-stop/broadcast + packageName/component/action/extra）
+- dumpsys：系统状态（device + service=activity/window/battery/meminfo/package + 参数）
+- forward：本机端口转发到对端（device + local_port + remote，如 8080 或 127.0.0.1:8080）；remove=true 撤销
+- reverse：对端端口反向转发到本机（device + remote_port + local）；remove=true 撤销
+- props：设备关键信息一次拿全（型号/Android 版本/SDK/分辨率/density/电池/序列号）
+- reboot：重启对端（**必须 confirm=true**，否则拒绝执行）
 
 无线调试（Android 11+，加密 + 免数据线，**不需要 USB**）：
 - wireless_status：查配对/连接端口与当前状态（先调它确认系统那边开了没）
@@ -60,7 +72,7 @@ action：
 {
   "type": "object",
   "properties": {
-    "action": {"type": "string", "description": "guide / usb_list / usb_connect / tcp_connect / local_connect / devices / shell / push / pull / install / disconnect"},
+    "action": {"type": "string", "description": "guide / usb_list / usb_connect / tcp_connect / local_connect / devices / shell / shell_multi / logcat / screencap / input / pm / am / dumpsys / forward / reverse / props / push / pull / install / uninstall / reboot / disconnect / wireless_*"},
     "device": {"type": "string", "description": "目标设备标识（usb_list/devices 返回的名字），单设备时可省略"},
     "deviceId": {"type": "integer", "description": "usb_connect 用的 UsbDevice.deviceId"},
     "serial": {"type": "string", "description": "usb_connect 用的设备序列号（比 deviceId 稳定，拔插后仍可用）"},
@@ -94,6 +106,20 @@ action：
                 "pull" -> pull(obj)
                 "install" -> install(obj)
                 "disconnect" -> disconnect(obj)
+
+                // ── 完整 shell 功能集（全部由底层 shell() 组合，不新增协议面）──
+                "shell_multi" -> shellMulti(obj)
+                "logcat" -> logcat(obj)
+                "screencap" -> screencap(context, obj)
+                "input" -> input(obj)
+                "pm" -> pm(obj)
+                "am" -> am(obj)
+                "dumpsys" -> dumpsys(obj)
+                "forward" -> forward(obj)
+                "reverse" -> reverse(obj)
+                "props" -> props(obj)
+                "uninstall" -> uninstall(obj)
+                "reboot" -> reboot(obj)
 
                 // ── 无线调试（配对 + TLS）──
                 "wireless_status" -> QuroAdbWireless.status(context)
@@ -290,6 +316,213 @@ action：
         val timeout = obj.optLong("timeout_ms", 300_000)
         QuroAgentTrace.action("adb_dev", "install@$name", local)
         return runBlocking(Dispatchers.IO) { client.install(f, reinstall, timeout) }
+    }
+
+    /** 顺序执行多条命令：一次调用跑一批，逐条回显（失败也继续，最后汇总）。 */
+    private fun shellMulti(obj: JSONObject): String {
+        val arr = obj.optJSONArray("commands") ?: return "缺少 commands（JSON 字符串数组）"
+        if (arr.length() == 0) return "commands 为空"
+        val (name, client) = resolveClient(obj)
+        val timeout = obj.optLong("timeout_ms", 60_000).coerceIn(1_000, 600_000)
+        QuroAgentTrace.action("adb_dev", "批量 shell@$name", "${arr.length()} 条")
+        val sb = StringBuilder()
+        var failed = 0
+        for (i in 0 until arr.length()) {
+            val cmd = arr.optString(i).trim()
+            if (cmd.isEmpty()) continue
+            val out = runBlocking(Dispatchers.IO) { client.shell(cmd, timeout) }
+            val bad = out.contains("exit=1") || out.contains("exit=2") || out.contains("exit=127")
+            if (bad) failed++
+            sb.append("[${i + 1}] $ ").append(cmd).append('\n').append(out.trim()).append("\n\n")
+        }
+        return sb.append(if (failed == 0) "✅ 全部成功" else "⚠️ $failed 条失败").toString()
+    }
+
+    /** 对端日志：logcat -d 一次性抓取（-t 限制条数），支持 tag 与优先级过滤。 */
+    private fun logcat(obj: JSONObject): String {
+        val (name, client) = resolveClient(obj)
+        val lines = obj.optInt("lines", 200).coerceIn(10, 5000)
+        val tag = obj.optString("tag", "").trim()
+        val prio = obj.optString("priority", "").trim().uppercase()
+        val filter = buildString {
+            if (tag.isNotBlank()) {
+                append(tag)
+                if (prio in setOf("V", "D", "I", "W", "E")) append(":$prio")
+                append(" ")
+            }
+            append("*:${prio.ifBlank { "I" }}")
+        }
+        val cmd = "logcat -d -t $lines $filter"
+        QuroAgentTrace.action("adb_dev", "logcat@$name", "$lines 行")
+        return runBlocking(Dispatchers.IO) { client.shell(cmd, 30_000) }
+    }
+
+    /** 对端截屏 → 拉回本地文件（screencap -p 到 /sdcard 临时文件再 pull）。 */
+    private fun screencap(context: Context, obj: JSONObject): String {
+        val (name, client) = resolveClient(obj)
+        val stamp = System.currentTimeMillis()
+        val remote = "/sdcard/quro_adb_screencap_$stamp.png"
+        val local = File(
+            obj.optString("local", "").ifBlank {
+                File(context.getExternalFilesDir(null) ?: context.filesDir, "adb_screencap_$stamp.png").absolutePath
+            },
+        )
+        QuroAgentTrace.action("adb_dev", "截屏@$name", remote)
+        return runBlocking(Dispatchers.IO) {
+            val cap = client.shell("screencap -p $remote", 30_000)
+            if (!cap.contains("exit=0")) return@runBlocking "截屏失败：$cap"
+            try {
+                client.pull(remote, local, 60_000)
+                "✅ 已保存：${local.absolutePath}"
+            } finally {
+                runCatching { client.shell("rm -f $remote", 10_000) }
+            }
+        }
+    }
+
+    /** 输入注入：tap / swipe / text / keyevent。 */
+    private fun input(obj: JSONObject): String {
+        val kind = obj.optString("kind", "tap").lowercase()
+        val (name, client) = resolveClient(obj)
+        val cmd = when (kind) {
+            "tap" -> "input tap ${obj.optInt("x", -1)} ${obj.optInt("y", -1)}"
+            "swipe" -> "input swipe ${obj.optInt("x", -1)} ${obj.optInt("y", -1)} ${obj.optInt("x2", -1)} ${obj.optInt("y2", -1)} ${obj.optLong("duration_ms", 300)}"
+            "text" -> "input text '${obj.optString("text", "").replace("'", "\\'")}'"
+            "keyevent" -> "input keyevent ${obj.optInt("keycode", -1)}"
+            else -> return "未知 kind：$kind（tap/swipe/text/keyevent）"
+        }
+        if (cmd.endsWith("-1")) return "参数不全（x/y 等）"
+        QuroAgentTrace.action("adb_dev", "input@$name", cmd)
+        return runBlocking(Dispatchers.IO) {
+            val out = client.shell(cmd, 15_000)
+            if (out.contains("exit=0")) "✅ $kind 已注入" else "注入失败：$out"
+        }
+    }
+
+    /** 包管理：list/thirdparty/enable/disable/clear/grant。 */
+    private fun pm(obj: JSONObject): String {
+        val op = obj.optString("op", "list").lowercase()
+        val pkg = obj.optString("packageName", "").trim()
+        val (name, client) = resolveClient(obj)
+        val cmd = when (op) {
+            "list" -> "pm list packages"
+            "thirdparty" -> "pm list packages -3"
+            "enable" -> "pm enable $pkg"
+            "disable" -> "pm disable-user $pkg"
+            "clear" -> "pm clear $pkg"
+            "grant" -> "pm grant $pkg ${obj.optString("permission", "")}"
+            else -> return "未知 op：$op"
+        }
+        if (cmd.endsWith(" ") || cmd.endsWith("$pkg")) {
+            if (op in setOf("enable", "disable", "clear", "grant") && pkg.isBlank()) return "缺少 packageName"
+        }
+        QuroAgentTrace.action("adb_dev", "pm@$name", cmd)
+        return runBlocking(Dispatchers.IO) { client.shell(cmd, 60_000) }
+    }
+
+    /** 应用操作：start / force-stop / broadcast。 */
+    private fun am(obj: JSONObject): String {
+        val op = obj.optString("op", "start").lowercase()
+        val (name, client) = resolveClient(obj)
+        val cmd = when (op) {
+            "start" -> {
+                val comp = obj.optString("component", "").trim()
+                val act = obj.optString("action", "").trim()
+                when {
+                    comp.isNotBlank() -> "am start -n $comp"
+                    act.isNotBlank() -> "am start -a $act"
+                    else -> return "start 需要 component 或 action"
+                }
+            }
+            "force-stop" -> "am force-stop ${obj.optString("packageName", "").ifBlank { return "缺少 packageName" }}"
+            "broadcast" -> "am broadcast -a ${obj.optString("action", "").ifBlank { return "broadcast 缺少 action" }}"
+            else -> return "未知 op：$op"
+        }
+        QuroAgentTrace.action("adb_dev", "am@$name", cmd)
+        return runBlocking(Dispatchers.IO) { client.shell(cmd, 30_000) }
+    }
+
+    /** 系统状态：dumpsys 指定服务（截断到前 4000 字符防刷屏）。 */
+    private fun dumpsys(obj: JSONObject): String {
+        val service = obj.optString("service", "battery").trim()
+        val (name, client) = resolveClient(obj)
+        QuroAgentTrace.action("adb_dev", "dumpsys@$name", service)
+        val out = runBlocking(Dispatchers.IO) { client.shell("dumpsys $service", 30_000) }
+        return if (out.length > 4000) out.take(4000) + "\n…（已截断，共 ${out.length} 字符，可用 shell 分段取）" else out
+    }
+
+    /** 端口转发：本机 <local_port> → 对端 <remote>（如 8080 或 127.0.0.1:8080）。 */
+    private fun forward(obj: JSONObject): String {
+        val (name, client) = resolveClient(obj)
+        val cmd = if (obj.optBoolean("remove", false)) {
+            "forward --remove tcp:${obj.optInt("local_port", -1)}"
+        } else {
+            val lp = obj.optInt("local_port", -1)
+            val remote = obj.optString("remote", "").ifBlank { return "缺少 remote（如 8080 或 127.0.0.1:8080）" }
+            "forward tcp:$lp tcp:$remote"
+        }
+        QuroAgentTrace.action("adb_dev", "forward@$name", cmd)
+        return runBlocking(Dispatchers.IO) {
+            val out = client.shell(cmd, 15_000)
+            if (out.contains("exit=0")) "✅ forward 完成" else "失败：$out"
+        }
+    }
+
+    /** 反向转发：对端 <remote_port> → 本机 <local>。 */
+    private fun reverse(obj: JSONObject): String {
+        val (name, client) = resolveClient(obj)
+        val cmd = if (obj.optBoolean("remove", false)) {
+            "reverse --remove tcp:${obj.optInt("remote_port", -1)}"
+        } else {
+            val rp = obj.optInt("remote_port", -1)
+            val local = obj.optString("local", "").ifBlank { return "缺少 local（如 8080 或 127.0.0.1:8080）" }
+            "reverse tcp:$rp tcp:$local"
+        }
+        QuroAgentTrace.action("adb_dev", "reverse@$name", cmd)
+        return runBlocking(Dispatchers.IO) {
+            val out = client.shell(cmd, 15_000)
+            if (out.contains("exit=0")) "✅ reverse 完成" else "失败：$out"
+        }
+    }
+
+    /** 设备关键信息一次拿全（模型排查对端的第一步）。 */
+    private fun props(obj: JSONObject): String {
+        val (name, client) = resolveClient(obj)
+        QuroAgentTrace.action("adb_dev", "props@$name", "")
+        val script = listOf(
+            "model" to "getprop ro.product.model",
+            "brand" to "getprop ro.product.brand",
+            "android" to "getprop ro.build.version.release",
+            "sdk" to "getprop ro.build.version.sdk",
+            "serial" to "getprop ro.serialno",
+            "resolution" to "wm size",
+            "density" to "wm density",
+            "battery" to "dumpsys battery | grep -E 'level|status'",
+        ).joinToString("; ") { (k, c) -> "echo $k=\$($c)" }
+        return runBlocking(Dispatchers.IO) { client.shell(script, 30_000) }
+    }
+
+    /** 卸载（默认保留数据可 -k）。 */
+    private fun uninstall(obj: JSONObject): String {
+        val pkg = obj.optString("packageName", "").trim()
+        if (pkg.isBlank()) return "缺少 packageName"
+        val (name, client) = resolveClient(obj)
+        val keep = if (obj.optBoolean("keep_data", false)) " -k" else ""
+        QuroAgentTrace.action("adb_dev", "uninstall@$name", pkg)
+        return runBlocking(Dispatchers.IO) { client.shell("pm uninstall$keep $pkg", 60_000) }
+    }
+
+    /** 重启对端 —— 危险操作，必须显式 confirm=true。 */
+    private fun reboot(obj: JSONObject): String {
+        if (!obj.optBoolean("confirm", false)) {
+            return "重启会中断对端正在进行的所有操作。确认无误时带 confirm=true 再调。"
+        }
+        val (name, client) = resolveClient(obj)
+        QuroAgentTrace.action("adb_dev", "reboot@$name", "")
+        return runBlocking(Dispatchers.IO) {
+            val out = client.shell("reboot", 15_000)
+            if (out.contains("exit=0") || out.isBlank()) "✅ 重启指令已下发（对端将在数秒内断开）" else "失败：$out"
+        }
     }
 
     private fun disconnect(obj: JSONObject): String {

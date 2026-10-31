@@ -149,7 +149,7 @@ object QuroVirtualScreen {
     }
 
     /** 把 App 启动到后台屏。返回给 AI 看的一句话结果。 */
-    fun openApp(context: Context, packageName: String): String {
+    fun openApp(context: Context, packageName: String, userId: Int = -1, cold: Boolean = false): String {
         if (packageName.isBlank()) return "缺少 packageName"
         val d = ensureDisplay(context) ?: return lastError ?: "后台虚拟屏不可用"
         val shell = QuroShizuku.acquireShellService() ?: return "Shizuku 特权服务未就绪"
@@ -160,14 +160,42 @@ object QuroVirtualScreen {
             val since = SystemClock.uptimeMillis()
             val topBefore = runCatching { shell.watchMainScreen(MAIN_WATCH_MS) }.getOrDefault(-1)
 
-            val r = shell.startApp(d.displayId, packageName)
+            // 指定了分身（userId >= 0）就直接走分身通道（应用双开/工作资料/手机分身）
+            val r = if (userId >= 0) {
+                when (val ur = shell.startAppInUser(d.displayId, packageName, userId, cold)) {
+                    8 -> return "$packageName 不在用户 $userId 的可用分身列表里（先调 app_users 查）"
+                    else -> ur
+                }
+            } else {
+                if (cold) runCatching { shell.exec("am force-stop $packageName") }
+                shell.startApp(d.displayId, packageName)
+            }
             val base = when (r) {
                 0 -> {
                     refreshTopActivity()
                     "已把 $packageName 启动到后台屏（displayId=${d.displayId}）"
                 }
                 1 -> "用户正在主屏使用 $packageName，为不打扰已放弃启动"
-                2 -> "$packageName 没有可启动的入口（未安装？）"
+                2 -> {
+                    // 未安装 ≠ 没有：应用双开/手机分身/工作资料里装的那份在别的 userId 下，
+                    // 默认用户当然「没有可启动的入口」。自动查分身并改从分身启动，AI 无需再猜。
+                    val copies = runCatching { shell.appCopyUsers() }.getOrNull()
+                    val users = copies?.getIntArray("users") ?: IntArray(0)
+                    var done: String? = null
+                    for (u in users) {
+                        val pkgs = runCatching { shell.listPackages(u) }.getOrDefault("")
+                        if (pkgs.contains("package:$packageName")) {
+                            val ur = shell.startAppInUser(d.displayId, packageName, u, false)
+                            if (ur == 0) {
+                                done = "已从用户 $u（分身/工作资料）把 $packageName 启动到后台屏"
+                            } else {
+                                done = "$packageName 装在用户 $u（分身）里，但启动失败（code=$ur）"
+                            }
+                            break
+                        }
+                    }
+                    done ?: "$packageName 没有可启动的入口（主用户与全部分身都未安装）"
+                }
                 4 -> "$packageName 正在另一块后台屏上使用中"
                 else -> "启动 $packageName 失败（code=$r）"
             }
@@ -346,6 +374,39 @@ object QuroVirtualScreen {
         if (ok) return text.length
         // 没有可编辑控件，或该控件不认 ACTION_SET_TEXT
         return null
+    }
+
+    /**
+     * 列出设备上的应用分身（应用双开 / 手机分身 / 工作资料）。
+     *
+     * ## 为什么必须给 AI 这条
+     *
+     * 「双开 / 多开 AI 不会开 app」的根因：默认用户里查不到启动入口 ≠ 没装 ——
+     * 双开的那份在另一个 userId 下。AI 必须先能**列出**分身，才能指定 userId 启动；
+     * 否则它只会反复说「未安装」。
+     *
+     * @return 人读文本；没有分身时也返回明确说明
+     */
+    fun listAppCopies(context: Context): String {
+        val shell = QuroShizuku.acquireShellService() ?: return "Shizuku 特权服务未就绪"
+        return runCatching {
+            val b = shell.appCopyUsers()
+            val users = b.getIntArray("users") ?: IntArray(0)
+            val summary = b.getString("summary")
+            if (users.isEmpty()) {
+                "本机没有应用分身（应用双开 / 手机分身 / 工作资料均未开启）。"
+            } else {
+                val lines = users.map { u ->
+                    val n = runCatching {
+                        shell.listPackages(u).split("\n").count { it.startsWith("package:") }
+                    }.getOrDefault(-1)
+                    "  - 用户 $u：$n 个应用"
+                }
+                "本机有 ${users.size} 份用户空间：\n" + lines.joinToString("\n") +
+                    (summary?.let { "\n$it" } ?: "") +
+                    "\n启动分身里的 App：open 时传 userId（上面列出的编号）。"
+            }
+        }.getOrElse { "查询分身失败：${it.message}" }
     }
 
     // ─────────── 界面结构读取（移植 Mika 的读树能力）───────────

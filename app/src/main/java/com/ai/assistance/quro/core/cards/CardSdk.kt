@@ -956,6 +956,185 @@ object CardSdk {
         "input", "data", "layout", "action", "media", "nav", "flow", "decoration", "aiwrite",
     )
 
+    /**
+     * type 同义词 → 名册真实 type。
+     *
+     * ## 为什么必须有这张表
+     *
+     * 项目里有**两套**可视化通道，类型名还互相冲突：
+     *  - `CardSdk`（本名册，103 种，`ui_widget` / `ui_card` / 正文 `card` 围栏用）；
+     *  - `CardModule`（`quro-card` 围栏，7 种预设：metric / line_chart / button_group /
+     *    skeleton / table / **status** / custom）。
+     *
+     * 模型看过两边的文档后，几乎必然跨通道混用 —— 实测最高频的就是写 `status`
+     * （`quro-card` 有、本名册没有，本名册叫 `stat`）。原来的行为是落「未识别组件：status」，
+     * 用户看到一张红字兜底卡，且换任何模型都复现，因为**不是模型笨，是名字对不上**。
+     *
+     * 这里把「另一个通道的同义名」和「常见手滑写法」统一映射到真实 type：
+     * 命中别名不是篡改内容（字段本来同构），而是把同一件事的两种叫法归一，
+     * 归不了（如 skeleton 无对应）就照旧落兜底卡，不做臆测。
+     */
+    private val TYPE_ALIASES: Map<String, String> = mapOf(
+        // quro-card 围栏预设 → 本名册等价类型
+        "status" to "stat",
+        "metric" to "stat",
+        "line_chart" to "chart",
+        "linechart" to "chart",
+        "button_group" to "actions",
+        "buttongroup" to "actions",
+        "custom" to "composite",
+
+        // 容器类手滑写法 → 通用容器卡 / 组合卡
+        "cards" to "card",
+        "container" to "card",
+        "panel" to "card",
+        "box" to "card",
+        "group" to "card",
+        "stack" to "composite",
+        "accordion_group" to "accordion",
+
+        // 图表类常见别名
+        "progressbar" to "progress",
+        "progress_bar" to "progress",
+        "barchart" to "chart",
+        "bar_chart" to "chart",
+        "piechart" to "pie",
+        "pie_chart" to "pie",
+        "radarchart" to "radar",
+        "radar_chart" to "radar",
+        "candlestick_chart" to "candlestick",
+        "spark_line" to "sparkline",
+
+        // 文本 / 展示类
+        "quote_block" to "quote",
+        "divider_line" to "divider",
+        "hr" to "divider",
+
+        // 列表 / 表格类
+        "listview" to "list",
+        "list_view" to "list",
+        "table_view" to "table",
+        "datatable" to "table",
+        "timeline_list" to "timeline",
+
+        // 指标 / 状态类
+        "number" to "stat",
+        "kpi" to "stat",
+        "gauge_chart" to "gauge",
+        "speedometer_chart" to "speedometer",
+
+        // 输入 / 动作类
+        "input" to "form",
+        "textfield" to "form",
+        "text_field" to "form",
+        "buttons" to "actions",
+        "action_group" to "actions",
+        "quick_reply" to "quickreply",
+        "quick_action" to "quickaction",
+        "check_box" to "checklist",
+        "toggle_list" to "checklist",
+        "radio" to "segmented",
+        "select" to "segmented",
+
+        // 媒体 / 其它
+        "image" to "media",
+        "img" to "media",
+        "video" to "media",
+        "audio" to "media",
+        "qr" to "qrcode",
+        "code_qr" to "qrcode",
+        "alert_banner" to "alert",
+        "banner" to "alert",
+        "warning" to "alert",
+        "error" to "alert",
+        "success" to "alert",
+        "info_box" to "info",
+        "callout" to "info",
+        "badge_list" to "badge",
+        "tag_cloud" to "tagcloud",
+        "step_list" to "steps",
+        "stepper" to "steps",
+        "tab_list" to "tabs",
+        "tab" to "tabs",
+        "tree_view" to "tree",
+        "flow_chart" to "flow",
+        "flowchart" to "flow",
+        "mermaid_chart" to "mermaid",
+        "file" to "filecard",
+        "attachment" to "filecard",
+        "color_palette" to "palette",
+        "color_picker" to "color",
+        "clock_time" to "clock",
+        "count_down" to "countdown",
+        "time_countdown" to "countdown",
+        "todo_list" to "todo",
+        "checklist_items" to "checklist",
+        "kanban_board" to "kanban",
+        "board" to "kanban",
+        "compare_table" to "compare",
+        "funnel_chart" to "funnel",
+        "heat_map" to "heatmap",
+        "scatter_chart" to "scatter",
+        "polls" to "poll",
+        "vote" to "poll",
+        "rating_stars" to "rating",
+        "stars" to "rating",
+        "slider_input" to "slider",
+        "range" to "slider",
+        "chip_list" to "chips",
+        "tag_list" to "chips",
+        "carousel_slides" to "carousel",
+        "slider_gallery" to "carousel",
+        "gallery_images" to "gallery",
+        "photo_gallery" to "gallery",
+        "link_list" to "linklist",
+        "links" to "linklist",
+        "search" to "searchbox",
+        "search_bar" to "searchbox",
+        "terms" to "vocab",
+        "vocabulary" to "vocab",
+        "formula_math" to "formula",
+        "math" to "formula",
+        "translate_text" to "translate",
+        "translation" to "translate",
+        "stopwatch_timer" to "stopwatch",
+        "score_board" to "scoreboard",
+        "achievements" to "achievement",
+        "award" to "achievement",
+        "weather_card" to "weather",
+        "map_view" to "map",
+        "gantt_chart" to "gantt",
+        "invoice_bill" to "invoice",
+        "currency_exchange" to "currency",
+        "tracker_list" to "tracker",
+        "habit" to "tracker",
+        "waterfall_chart" to "waterfall",
+        "sankey_chart" to "sankey",
+        "quadrant_chart" to "quadrant",
+        "matrix_table" to "matrix",
+        "feed_list" to "feed",
+        "graph_view" to "graph",
+        "contact_card" to "contact",
+        "people" to "avatargroup",
+        "avatars" to "avatargroup",
+        "product_card" to "product",
+        "schedule_list" to "schedule",
+        "calendar" to "schedule",
+        "hierarchy_chart" to "hierarchy",
+        "tree_map" to "hierarchy",
+        "tool_call" to "toolcall",
+        "function_call" to "toolcall",
+        "diff_view" to "diff",
+        "code_diff" to "diff",
+        "ordering" to "ranking",
+        "leaderboard" to "ranking",
+        "leaderboard_table" to "scoreboard",
+        "decision_card" to "decision",
+        "confirm_card" to "confirm",
+        "layout" to "card",
+        "section_card" to "section",
+    )
+
     /** type → 定义。 */
     val byType: Map<String, CardSpec> = all.associateBy { it.type }
 
@@ -983,14 +1162,14 @@ object CardSdk {
      * 猜不出来才返回 null —— 宁可丢，也不要把用户的 schema 当成卡片渲染。
      */
     fun parseObj(s: JSONObject): QuroChatCard? {
-        val type = s.optString("type", "").trim().lowercase()
-        if (type.isEmpty()) {
+        val rawType = s.optString("type", "").trim().lowercase()
+        if (rawType.isEmpty()) {
             val g = CardShapeFallback.guess(s) ?: return null
             val built = runCatching { byType[g.type]?.builder?.invoke(g.spec) }.getOrNull()
             return built ?: fallbackCard(g.type, g.spec)
         }
-        val b = byType[type]?.builder
-        if (b != null) return runCatching { b(s) }.getOrNull() ?: fallbackCard(type, s)
+        val b = byType[rawType]?.builder
+        if (b != null) return runCatching { b(s) }.getOrNull() ?: fallbackCard(rawType, s)
         // type 存在但名册没收录：先按形状认一次（`{"type":"md","name":…,"path":…}`
         // 本来要落「未识别组件」，认对了就是一张正常文件卡，认错了还是原来那张兜底卡 ——
         // 这条路没有「篡改用户内容」的风险，与无 type 乱猜不同）。
@@ -1001,7 +1180,18 @@ object CardSdk {
                 runCatching { ub(u.spec) }.getOrNull()?.let { return it }
             }
         }
-        return fallbackCard(type, s)
+        // ── 同义词归一化（见 TYPE_ALIASES 的说明）放在**最后**兜底：─────────────
+        // 模型写 status/metric/line_chart 这类「另一套通道的名字」时落到这里。
+        // 不能放在最前面：会抢走 CardShapeFallback 的形状识别（如 md 文件卡按
+        // path/name 推断比盲映射到 note 准）——真名优先、形状次之、别名最后。
+        val aliased = TYPE_ALIASES[rawType]
+        if (aliased != null && aliased != rawType) {
+            val ab = byType[aliased]?.builder
+            if (ab != null) {
+                runCatching { ab(s) }.getOrNull()?.let { return it }
+            }
+        }
+        return fallbackCard(rawType, s)
     }
 
     /**

@@ -73,7 +73,7 @@ object ToolCapabilityDirectory {
          * zxwidget 动态交互界面。
          *
          * 🔴 必须单列一类，不能并进 UI_CARDS / DYNAMIC_UI：
-         *  - `UI_CARDS` 是**气泡内富卡片**（ui_card / ui_widget，101 种，原生 Compose 渲染）；
+         *  - `UI_CARDS` 是**气泡内富卡片**（ui_card / ui_widget，**就是用户说的「可视化小卡片」**，原生 Compose 渲染）；
          *  - `DYNAMIC_UI` 是 `quro-ui` 原生组件；
          *  - 本类是 **zxwidget**：477 个 zx 组件，由 `assets/zx/zxwidget.js` 编译，
          *    **直接渲染在对话框的消息流里**（不弹窗、不进卡片栏），两个对话框都支持它。
@@ -1863,7 +1863,10 @@ name.startsWith("codecanvas_") -> ToolCategory.AI_CAPABILITIES
             "UI展示" to listOf("ui_control"),
             "原生交互界面/动态UI" to listOf("ui_dsl_spec", "ui_validate"),
             "富组件/数据卡片（ui_widget / ui_card，禁止裸 JSON）" to listOf("ui_widget", "ui_card"),
-            "可视化小卡片（```quro-card 围栏自研渲染，非工具调用；下列工具仅为该功能关闭时的兜底）" to listOf("ui_widget", "ui_card"),
+            // 🔴 术语铁律（用户拍板 2026-11-01）：「可视化小卡片」= **```quro-card 正文围栏**
+            // （CardModule 自研渲染，7 种预设 + custom 自由布局），**不是** ui_widget/ui_card 富卡片。
+            // ui_widget/ui_card 是「富卡片」另一功能；围栏被关闭时才用它们兜底。
+            "可视化小卡片 / 小卡片（**在回复正文写 ```quro-card 围栏**，非工具调用；schema 见最佳实践 1；围栏被关闭时才用下列工具兜底）" to listOf("ui_widget", "ui_card"),
             "可视化弹窗（visual_popup，独立功能，≠小卡片）" to listOf("visual_popup"),
             "待办/进度/统计/评分/告警卡片" to listOf("ui_widget(type=\"list\")", "ui_widget(type=\"progress\")", "ui_widget(type=\"stat\")", "ui_widget(type=\"rating\")", "ui_widget(type=\"alert\")"),
             "列表/表格/饼图卡片" to listOf("ui_widget(type=\"list\")", "ui_widget(type=\"table\")", "ui_widget(type=\"pie\")"),
@@ -1915,7 +1918,46 @@ name.startsWith("codecanvas_") -> ToolCategory.AI_CAPABILITIES
 ## 1. 主动使用工具
 - 用户需要真实数据（天气/时间/设备状态）→ 调用工具获取，不要瞎猜
 - 用户需要真实动作（打开应用/读写文件/控制设备）→ 调用工具执行
-- 用户需要**富卡片/图表/列表/进度/统计/评分/告警**等结构化可视化结果 → **必须调用 `ui_widget` 或 `ui_card` 工具**；用户提到**「小卡片 / 可视化小卡片」** → 在回复正文写 **```quro-card 围栏**（AI 自写小卡片，首选 `custom` 自由设计卡——layout 布局树自由组合渐变/大数字/环形进度/进度条；metric 指标 / line_chart 折线 / table 表格 / button_group 按钮组 / status 状态为便捷预设，schema 见系统提示词）。**可视化弹窗 `visual_popup` 与可视化询问 `visual_question` 是独立功能，不是小卡片**。所有卡片 JSON 都严禁当作普通文本或代码块发出（用户只会看到不可读的源码）。
+- 用户提到**「小卡片 / 可视化小卡片」**，或要**轻量状态/指标/折线/按钮组/表格**卡片 → **在回复正文写 ```quro-card 围栏**（自研小卡片，端上 Canvas 自绘，共 7 种预设）。**这不是工具调用**。
+- 用户要**更重的可视化**（饼图/雷达/热力图/甘特图/看板/流程图/二维码/迷你应用…103 种）→ 调 `ui_widget` 或 `ui_card` 工具（富卡片，另一功能）。
+- **可视化弹窗 `visual_popup` 与可视化询问 `visual_question` 是独立功能，不是小卡片**。所有卡片 JSON 都严禁当普通文本或代码块发出。
+
+### ```quro-card 围栏 schema（必须严格按这个写）
+
+外层骨架：
+```json
+{"id":"可选","type":"必填","version":1,"renderHint":"canvas","data":{...按 type 区分},"actions":[{"type":"callback","name":"按钮文字"}],"style":{"bg":"surface","fg":"onSurface","cornerDp":12,"fontSizeSp":14}}
+```
+
+7 种 type 与对应 `data` 写法（`data.kind` 必须匹配）：
+
+| type | data.kind | data 字段 |
+|---|---|---|
+| `metric` 指标卡 | `chart` | `series:[{"name":"指标名","points":[数值],"labels":["单位"]}]`（取 series[0]） |
+| `line_chart` 折线图 | `chart` | `chartType:"line"`、`series:[{"name":"系列名","color":"primary","points":[3,5,8],"labels":["一","二","三"]}]`、`axis:{"showX":true,"showY":true}` |
+| `button_group` 按钮组 | `form` | `formType:"button_group"`、`buttons:[{"type":"callback","name":"确定"},{"type":"callback","name":"取消"}]` |
+| `table` 表格 | `media` | `mediaType:"table"`、`headers:["列1","列2"]`、`rows:[["a","b"],["c","d"]]` |
+| `status` 状态卡 | `status` | `statusType:"progress"(或 skeleton/error/tool)`、`text:"正在下载模型…"`、`progress:0.6`(0~1)、`retryable:true`、`reason:"失败原因"` |
+| `skeleton` 加载占位 | 任意 | 无需 data（流式输出时的占位） |
+| `custom` 自由布局 | 任意 | `layout:{"type":"column","children":[...]}` 自描述布局树（渐变/大数字/环形进度/进度条自由组合） |
+
+两个**可直接照抄**的完整示例：
+
+状态卡（正在下载，60%）：
+````
+```quro-card
+{"type":"status","data":{"kind":"status","statusType":"progress","text":"正在下载模型 612MB","progress":0.6}}
+```
+````
+
+指标卡（在线用户 1.2k）：
+````
+```quro-card
+{"type":"metric","data":{"kind":"chart","series":[{"name":"在线用户","points":[1230],"labels":["人"]}]}}
+```
+````
+
+🔴 **常见错误（都会渲染成「未识别组件：xxx」）**：把 `status`/`metric`/`line_chart`/`custom` 写进 `ui_widget` 工具（那是富卡片名册，没有这些 type）；或围栏里写名册类型 `stat`/`chart`（围栏不认）。两套名字**不通用**：围栏只认上表 7 种。
 - 用户需要流程图 → mermaid（`ui_widget(type="mermaid")` 或 `ui_control(action="widget", type="mermaid")`）。
 - 用户需要完整原生交互界面 → `quro-ui` DSL。
 - **ui_widget/ui_card、ui_control、quro-ui、visual_popup、visual_question 是相互独立的功能，严禁混用。**

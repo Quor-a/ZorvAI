@@ -31,7 +31,8 @@ class BackgroundScreenTool : QuroTool {
 适合：在不打扰用户的情况下操作 App（发消息、查信息、走流程）、读取 App 界面截图给自己看。
 
 action：
-- open：把某个 App 启动到后台屏（需 packageName）
+- open：把某个 App 启动到后台屏（需 packageName；可选 userId=分身编号、cold=true 冷启动）
+- app_users：列出应用分身（双开/手机分身/工作资料）。**双开的 App 开不起来时先调它**
 - read：**读界面结构**（控件树：ref / 类型 / 文字 / 中心坐标 / 是否可点可输）—— 优先用它，别靠截图猜坐标
 - input_text：在当前输入框里写入文字（走无障碍 ACTION_SET_TEXT，**不弹系统输入法**，主屏不会冒键盘）
 - tap_element：按 read 返回的 ref 精确点击（如 ref="@e3"）
@@ -53,6 +54,8 @@ action：
   "properties": {
     "action": {"type": "string", "description": "open / read / tap_element / input_text / screenshot / tap / swipe / back / top / status / release"},
     "ref": {"type": "string", "description": "tap_element 用的元素引用，如 @e3（来自 read 的返回）"},
+    "userId": {"type": "integer", "description": "open 时指定分身用户编号（来自 app_users 的列表）；不传=主用户"},
+    "cold": {"type": "boolean", "description": "open 时是否先 force-stop 再启动（冷启动），默认 false"},
     "text": {"type": "string", "description": "input_text 要输入的文字"},
     "hint": {"type": "string", "description": "input_text 选目标输入框时的提示语/占位文字（可选，多个输入框时用它区分）"},
     "append": {"type": "boolean", "description": "input_text 是否在原内容后追加，默认 false（覆盖）"},
@@ -77,8 +80,12 @@ action：
             "open" -> {
                 val pkg = obj.optString("packageName", "")
                 QuroAgentTrace.action("bg_screen", "打开应用到后台屏", pkg)
-                QuroVirtualScreen.openApp(context, pkg)
+                val uid = if (obj.has("userId")) obj.optInt("userId", -1) else -1
+                val cold = obj.optBoolean("cold", false)
+                QuroVirtualScreen.openApp(context, pkg, uid, cold)
             }
+
+            "app_users" -> QuroVirtualScreen.listAppCopies(context)
 
             "read" -> {
                 val snap = QuroVirtualScreen.readScreen()
