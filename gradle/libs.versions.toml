@@ -12,6 +12,8 @@ material = "1.12.0"
 lifecycleRuntimeKtx = "2.8.7"
 activityCompose = "1.9.3"
 okhttp = "4.12.0"
+commonsCompress = "1.26.2"
+mlkitTextRecognition = "16.0.1"
 coroutines = "1.9.0"
 orgjson = "20240303"
 jgit = "6.10.0.202406032230-r"
@@ -70,6 +72,9 @@ androidx-ui-text-android = { group = "androidx.compose.ui", name = "ui-text-andr
 androidx-animation-android = { group = "androidx.compose.animation", name = "animation-android" }
 androidx-ui-graphics-android = { group = "androidx.compose.ui", name = "ui-graphics-android" }
 navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
+mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitTextRecognition" }
+mlkit-text-recognition-chinese = { group = "com.google.mlkit", name = "text-recognition-chinese", version.ref = "mlkitTextRecognition" }
+commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }

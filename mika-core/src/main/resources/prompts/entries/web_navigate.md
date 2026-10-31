@@ -1,0 +1,1 @@
+Open a web page (http or https only) in Mika's built-in browser. From your next call on you also get the tools that read and operate the page (web_observe, web_tap, web_type_text, ...). To only read a page's text, web_read_page with url is enough.

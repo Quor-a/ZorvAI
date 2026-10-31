@@ -1,0 +1,1 @@
+Wait for text to appear or disappear, an activity class to open, or the phone screen to become stable. The Android port wakes on accessibility events. Use this after an action that starts loading instead of repeatedly observing at a fixed interval.

@@ -1,0 +1,1 @@
+Wait for accessibility window/content events on this task's virtual display, or for device notifications from an optional package. once returns the next event; watch collects multiple events during the timeout without gaps between subscriptions. Returns each event's package and short text. The listener exists only during this call; it does not return past events.

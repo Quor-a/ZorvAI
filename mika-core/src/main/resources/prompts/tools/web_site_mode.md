@@ -1,0 +1,1 @@
+Pages open as the desktop version by default. Switch the current tab's site to the mobile version (or back to desktop) and reload the page; the choice is remembered for that site. Use mobile only when the desktop page does not work or is unreadable on this screen. Earlier refs become stale.

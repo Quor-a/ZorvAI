@@ -246,6 +246,9 @@ dependencies {
     // （proot + Ubuntu 24.04 rootfs + ANSI 终端模拟 + canvas 渲染 + 多会话 + FTP 服务器），
     // 替换旧 Termux 可见终端。原 AI 工具链（QuroShellSession / QuroLinuxEnv）不动。
     implementation(project(":terminal-core"))
+    // 后台虚拟屏完整移植（Mika 的 cap/phone/a11y + display → :mika-phone，其内核为 :mika-core）。
+    // 依赖闭包证明这两块不可再切分，详见两个模块的 build.gradle.kts 说明。
+    implementation(project(":mika-phone"))
 
     // vtlib — 完整 VT 终端模拟器/视图（移植自 Termux terminal-emulator + terminal-view，Apache-2.0）
     // 提供双缓冲/备用屏幕/滚动/sixel/24 位真彩/鼠标协议/括号粘贴/OSC52/文本选择。

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      后台虚拟屏的无障碍服务（完整移植自 Mika 的 MikaAccessibilityService / ScreenAccessibility）。
+
+      为什么是**单独的**一个服务：QuroAccessibilityService 已继承 DeviceControlService（#484 合并
+      了重复授权），Kotlin 单继承下无法再继承 ScreenAccessibility。而虚拟屏操作需要
+      flagRetrieveInteractiveWindows 按 displayId 枚举窗口 —— 这是另一套职责，独立声明更清楚。
+      代价：用户需要在系统「无障碍」里为「后台虚拟屏」单独开一次。
+    -->
+    <application>
+        <service
+            android:name="com.ai.assistance.quro.core.mika.phone.a11y.ScreenAccessibility"
+            android:exported="true"
+            android:label="@string/quro_mika_a11y_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service" />
+        </service>
+    </application>
+</manifest>

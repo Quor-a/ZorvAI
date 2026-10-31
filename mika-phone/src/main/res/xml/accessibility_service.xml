@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  后台虚拟屏的无障碍配置（完整照搬上游 Mika 的 accessibility_service.xml）。
+
+  关键项说明：
+  - flagRetrieveInteractiveWindows：**按 displayId 枚举窗口**的前提。没有它只能读
+    当前活跃屏（主屏）的窗，虚拟屏永远是空的，AI 就只剩截图猜坐标。
+  - flagIncludeNotImportantViews：不少 App 把结果文字标成「对无障碍不重要」，
+    不读它们就看不到执行结果。
+  - canPerformGestures：按屏下发手势（GestureDescription.setDisplayId）需要它。
+  - canTakeScreenshot：兜底画面读取（API 30+）。
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows|flagReportViewIds|flagIncludeNotImportantViews"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
+    android:description="@string/quro_mika_a11y_description"
+    android:notificationTimeout="50" />

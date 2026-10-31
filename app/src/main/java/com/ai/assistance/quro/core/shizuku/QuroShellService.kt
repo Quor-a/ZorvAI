@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.shizuku
 
 import android.annotation.SuppressLint
 import android.app.ActivityOptions
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -9,6 +10,7 @@ import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.os.Build
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.util.Log
 import android.view.Display
@@ -54,11 +56,30 @@ class QuroShellService : IQuroShellService.Stub() {
         private const val STROKE_MAX_POINTS = 400
         private const val STROKE_MAX_MS = 10_000L
 
+        // 🔴 这些数字必须与 mika-phone 的 ShellCodes **逐值一致**（跨模块契约）。
+        // 上游：4=冷启动被降级、7=另一块屏在用；早期这里把 4 当成 IN_USE_BY_OTHER，已纠正。
         private const val START_OK = 0
         private const val START_IN_USE_ON_MAIN = 1
         private const val START_NOT_FOUND = 2
         private const val START_ERROR = 3
-        private const val START_IN_USE_BY_OTHER = 4
+        private const val START_OK_COLD_IGNORED = 4
+        private const val START_UNRESOLVED = 5
+        private const val START_INVALID_LINK = 6
+        private const val START_IN_USE_BY_OTHER = 7
+        private const val START_USER_NOT_ALLOWED = 8
+
+        private const val CLIP_SET = 0
+        private const val CLIP_UNREADABLE = 1
+        private const val CLIP_FAILED = 2
+
+        /** appCopyUsers() 返回里的键 */
+        private const val KEY_COPY_USERS = "users"
+
+        /** Ctrl 组合键白名单：只放行全选与粘贴，别的组合一律不发。 */
+        private val ALLOWED_CTRL_KEYS: Set<Int> = setOf(
+            KeyEvent.KEYCODE_A,
+            KeyEvent.KEYCODE_V,
+        )
 
         private const val USER_CURRENT = -2
         private const val INJECT_MODE_ASYNC = 0
@@ -596,4 +617,357 @@ class QuroShellService : IQuroShellService.Stub() {
 
     /** 按键白名单：绝不从这里发出电源/音量/Home/最近任务这类整机按键。 */
     private fun keyAllowed(keyCode: Int): Boolean = keyCode in ALLOWED_KEYS
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 以下为「后台虚拟屏」完整移植所需的宿主能力（对齐上游 43 方法契约）。
+    // 由 mika-phone 的 AndroidScreen（动作编排 1810 行）直接调用，
+    // 因此这里的语义必须与上游一致 —— 特别是返回码（见 START_* 常量）。
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /** 统一的活动启动通道：反射 startActivityAsUser（带 displayId + userId），失败回退 am。 */
+    private fun startIntentOnDisplay(intent: Intent, displayId: Int, userId: Int): Boolean {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val options = ActivityOptions.makeBasic().setLaunchDisplayId(displayId).toBundle()
+        return try {
+            val start = taskManager.javaClass.methods.first {
+                it.name == "startActivityAsUser" && it.parameterTypes.size == 12
+            }
+            val result = start.invoke(
+                taskManager, null, QuroShellContext.SHELL_PACKAGE, null, intent, null,
+                null, null, 0, 0, null, options, userId,
+            ) as Int
+            result >= 0
+        } catch (t: Throwable) {
+            Log.w(TAG, "startActivityAsUser 不可用，回退 am start", t)
+            val flags = buildString {
+                append("--display ").append(displayId)
+                if (userId != USER_CURRENT && userId >= 0) append(" --user ").append(userId)
+                append(" -a ").append(intent.action ?: Intent.ACTION_VIEW)
+                intent.dataString?.let { append(" -d ").append(it) }
+                intent.`package`?.let { append(" -p ").append(it) }
+            }
+            val out = runCatching { exec("am start $flags") }.getOrDefault("")
+            !out.contains("Error") && !out.contains("Exception")
+        }
+    }
+
+    override fun restartApp(displayId: Int, packageName: String): Int {
+        if (packageName.isBlank()) return START_ERROR
+        if (!ownDisplay(displayId)) return START_ERROR
+        if (inUseOnMainScreen(packageName)) return START_IN_USE_ON_MAIN
+        // 在别的自己的屏上还有任务：结束进程会连带杀掉那份，于是降级为普通启动
+        val elsewhere = onOtherOwnDisplay(packageName, displayId)
+        runCatching { exec("am force-stop $packageName") }
+        val r = startApp(displayId, packageName)
+        return if (elsewhere && r == START_OK) START_OK_COLD_IGNORED else r
+    }
+
+    override fun packageOfTask(taskId: Int): String? = try {
+        val idField = TASK_INFO.getField("taskId")
+        allTasks().firstOrNull { idField.getInt(it) == taskId }
+            ?.let { packagesOf(it).firstOrNull() }
+    } catch (t: Throwable) {
+        Log.w(TAG, "packageOfTask failed", t)
+        null
+    }
+
+    override fun userOfTask(taskId: Int): Int = try {
+        val idField = TASK_INFO.getField("taskId")
+        val userField = TASK_INFO.getField("userId")
+        allTasks().firstOrNull { idField.getInt(it) == taskId }
+            ?.let { userField.getInt(it) } ?: -1
+    } catch (t: Throwable) {
+        -1
+    }
+
+    override fun displayOfPackage(packageName: String): Int = try {
+        val own = synchronized(displays) { displays.keys.toSet() }
+        val idField = TASK_INFO.getField("taskId")
+        allTasks().firstOrNull {
+            displayOfTask0(it) in own && packagesOf(it).contains(packageName)
+        }?.let { displayOfTask0(it) } ?: -1
+    } catch (t: Throwable) {
+        -1
+    }
+
+    override fun displayOfPackageInUser(packageName: String, userId: Int): Int = try {
+        val own = synchronized(displays) { displays.keys.toSet() }
+        val userField = TASK_INFO.getField("userId")
+        allTasks().firstOrNull {
+            displayOfTask0(it) in own &&
+                packagesOf(it).contains(packageName) &&
+                userField.getInt(it) == userId
+        }?.let { displayOfTask0(it) } ?: -1
+    } catch (t: Throwable) {
+        -1
+    }
+
+    override fun injectCtrlKey(displayId: Int, keyCode: Int): Boolean {
+        if (!ownDisplay(displayId)) return false
+        if (keyCode !in ALLOWED_CTRL_KEYS) {
+            Log.w(TAG, "refused ctrl+key $keyCode")
+            return false
+        }
+        val now = SystemClock.uptimeMillis()
+        val meta = KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
+        return try {
+            val down = KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, meta, VIRTUAL_KEYBOARD, 0)
+            val up = KeyEvent(now, now + 20, KeyEvent.ACTION_UP, keyCode, 0, meta, VIRTUAL_KEYBOARD, 0)
+            // setDisplayId 是隐藏 API（公开 SDK 里没有）：与上游一样走反射
+            runCatching {
+                val m = KeyEvent::class.java.getMethod("setDisplayId", Int::class.javaPrimitiveType)
+                m.invoke(down, displayId)
+                m.invoke(up, displayId)
+            }
+            val inject = inputManager()
+            inject?.let { m ->
+                m.javaClass.getMethod("injectInputEvent", InputEvent::class.java, Int::class.javaPrimitiveType)
+                    .invoke(m, down, INJECT_MODE_ASYNC)
+                m.javaClass.getMethod("injectInputEvent", InputEvent::class.java, Int::class.javaPrimitiveType)
+                    .invoke(m, up, INJECT_MODE_ASYNC)
+            } != null
+        } catch (t: Throwable) {
+            Log.w(TAG, "injectCtrlKey failed", t)
+            false
+        }
+    }
+
+    // ── PLAY_AUDIO 静音（AppOps） ──
+
+    override fun setAudioMuted(packageName: String, muted: Boolean): Boolean =
+        setAudioMode(packageName, if (muted) "ignore" else "allow")
+
+    override fun getAudioMode(packageName: String): String? {
+        if (packageName.isBlank()) return null
+        val out = runCatching { exec("appops get $packageName PLAY_AUDIO") }.getOrDefault("")
+        return when {
+            out.contains("ignore") -> "ignore"
+            out.contains("allow") -> "allow"
+            out.contains("deny") -> "deny"
+            out.contains("default") -> "default"
+            else -> null
+        }
+    }
+
+    override fun setAudioMode(packageName: String, mode: String): Boolean {
+        if (packageName.isBlank()) return false
+        if (mode !in setOf("allow", "ignore", "deny", "default")) return false
+        val out = runCatching { exec("appops set $packageName PLAY_AUDIO $mode") }.getOrDefault("")
+        return !out.contains("Error") && !out.contains("Exception")
+    }
+
+    // ── 剪贴板 ──
+
+    /** setClipText 之前用户剪贴板里的文字；null = 没有待还原的。 */
+    private var savedClip: String? = null
+
+    /** 我们放进去的那段文字，用于判断剪贴板是否被用户换掉。 */
+    private var ourClip: String? = null
+
+    private fun clipboard(): android.content.ClipboardManager? = try {
+        privilegedContext.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+    } catch (t: Throwable) {
+        Log.w(TAG, "取剪贴板失败", t)
+        null
+    }
+
+    override fun setClipText(text: String): Int {
+        val cm = clipboard() ?: return CLIP_FAILED
+        return try {
+            val current = runCatching {
+                cm.primaryClip?.takeIf { it.itemCount > 0 }
+                    ?.getItemAt(0)?.coerceToText(privilegedContext)?.toString()
+            }.getOrNull()
+            if (savedClip == null) {
+                // 读不到原剪贴板时不动它：宁可放弃这次粘贴，也不让用户丢掉复制的内容
+                if (current == null && cm.hasPrimaryClip()) return CLIP_UNREADABLE
+                savedClip = current ?: ""
+            }
+            val clip = android.content.ClipData.newPlainText("ZorvAI", text)
+            runCatching {
+                // API 33+ 标为敏感：不进剪贴板历史，也不给输入法联想用
+                if (Build.VERSION.SDK_INT >= 33) {
+                    clip.description.extras = android.os.PersistableBundle().apply {
+                        putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                    }
+                }
+            }
+            cm.setPrimaryClip(clip)
+            ourClip = text
+            CLIP_SET
+        } catch (t: Throwable) {
+            Log.w(TAG, "setClipText failed", t)
+            CLIP_FAILED
+        }
+    }
+
+    override fun restoreClip() {
+        val original = savedClip ?: return
+        restoreClipText(original, ourClip ?: "")
+    }
+
+    override fun savedClipText(): String? = savedClip
+
+    override fun restoreClipText(original: String, ours: String) {
+        val cm = clipboard() ?: return
+        runCatching {
+            val current = cm.primaryClip?.takeIf { it.itemCount > 0 }
+                ?.getItemAt(0)?.coerceToText(privilegedContext)?.toString()
+            // 用户已经换成别的内容了：不要覆盖他的新内容
+            if (ours.isNotEmpty() && current != null && current != ours) {
+                Log.i(TAG, "剪贴板已被用户换掉，不还原")
+                return
+            }
+            if (original.isEmpty()) {
+                cm.clearPrimaryClip()
+            } else {
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("ZorvAI", original))
+            }
+            savedClip = null
+            ourClip = null
+        }.onFailure { Log.w(TAG, "restoreClipText failed", it) }
+    }
+
+    // ── 打开链接 / 系统动作 / 分享 ──
+
+    override fun startView(displayId: Int, action: String?, uri: String?, packageName: String?): Int {
+        if (!ownDisplay(displayId)) return START_ERROR
+        if (uri.isNullOrBlank()) return START_INVALID_LINK
+        if (packageName != null && inUseOnMainScreen(packageName)) return START_IN_USE_ON_MAIN
+        val intent = try {
+            Intent(action?.takeIf { it.isNotBlank() } ?: Intent.ACTION_VIEW, android.net.Uri.parse(uri))
+        } catch (t: Throwable) {
+            return START_INVALID_LINK
+        }
+        packageName?.takeIf { it.isNotBlank() }?.let { intent.setPackage(it) }
+        if (intent.resolveActivity(privilegedContext.packageManager) == null) return START_UNRESOLVED
+        return if (startIntentOnDisplay(intent, displayId, USER_CURRENT)) START_OK else START_ERROR
+    }
+
+    override fun startSystemAction(displayId: Int, intent: Intent, asMika: PendingIntent?): Int {
+        if (!ownDisplay(displayId)) return START_ERROR
+        // asMika（以 App 身份启动）只能在 App 进程里发；这里以 shell 身份先试，
+        // 页面要求 App 权限时会失败并如实返回，由调用方决定是否退回 App 侧。
+        val ok = startIntentOnDisplay(intent, displayId, USER_CURRENT)
+        if (!ok && asMika != null) {
+            Log.i(TAG, "shell 启动系统动作失败，交由 App 侧以自身身份重试")
+        }
+        return if (ok) START_OK else START_ERROR
+    }
+
+    override fun startShare(displayId: Int, packageName: String, text: String): Int {
+        if (!ownDisplay(displayId)) return START_ERROR
+        if (packageName.isBlank()) return START_NOT_FOUND
+        if (inUseOnMainScreen(packageName)) return START_IN_USE_ON_MAIN
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+            setPackage(packageName)
+        }
+        if (intent.resolveActivity(privilegedContext.packageManager) == null) return START_UNRESOLVED
+        return if (startIntentOnDisplay(intent, displayId, USER_CURRENT)) START_OK else START_ERROR
+    }
+
+    // ── 命令 ──
+
+    override fun runSystemCommand(displayId: Int, command: String): Bundle = Bundle().apply {
+        // 带屏号的命令：am/pm 支持 --display，其余命令在这里只影响需要屏上下文的那部分
+        val out = runCatching { exec(command) }.getOrElse { "exec failed: ${it.message}" }
+        putInt("exitCode", if (out.startsWith("exec failed")) -1 else 0)
+        putString("output", out)
+    }
+
+    override fun runCommand(command: String): Bundle = Bundle().apply {
+        val out = runCatching { exec(command) }.getOrElse { "exec failed: ${it.message}" }
+        putInt("exitCode", if (out.startsWith("exec failed")) -1 else 0)
+        putString("output", out)
+    }
+
+    // ── 用户 / 包 ──
+
+    override fun listUsers(): String? =
+        runCatching { exec("pm list users") }.getOrNull()?.takeIf { it.isNotBlank() }
+
+    override fun listPackages(userId: Int): String? = runCatching {
+        exec(if (userId >= 0) "pm list packages --user $userId" else "pm list packages")
+    }.getOrNull()?.takeIf { it.isNotBlank() }
+
+    override fun isSystemPackage(packageName: String): Boolean = try {
+        val ai = privilegedContext.packageManager.getApplicationInfo(packageName, 0)
+        (ai.flags and (android.content.pm.ApplicationInfo.FLAG_SYSTEM or
+            android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
+    } catch (t: Throwable) {
+        false
+    }
+
+    override fun appCopyUsers(): Bundle? = try {
+        val um = privilegedContext.getSystemService(Context.USER_SERVICE) as android.os.UserManager
+        val self = android.os.Process.myUid() / 100000
+        // userProfiles 的元素类型在不同 SDK 上被擦成 Any?，用反射取编号最稳
+        val users = um.userProfiles.mapNotNull { uh ->
+            runCatching { uh.javaClass.getMethod("getIdentifier").invoke(uh) as Int }.getOrNull()
+        }.filter { it != self }
+        Bundle().apply {
+            putIntArray(KEY_COPY_USERS, users.toIntArray())
+            putString("summary", users.joinToString(","))
+        }
+    } catch (t: Throwable) {
+        Log.w(TAG, "appCopyUsers failed", t)
+        null
+    }
+
+    override fun startAppInUser(displayId: Int, packageName: String, userId: Int, cold: Boolean): Int {
+        if (!ownDisplay(displayId)) return START_ERROR
+        val allowed = appCopyUsers()?.getIntArray(KEY_COPY_USERS)?.toSet() ?: emptySet()
+        if (userId !in allowed) return START_USER_NOT_ALLOWED
+        if (cold) runCatching { exec("am force-stop --user $userId $packageName") }
+        val intent = launchIntent(packageName) ?: return START_NOT_FOUND
+        return if (startIntentOnDisplay(intent, displayId, userId)) START_OK else START_ERROR
+    }
+
+    // ── 设备准备 ──
+
+    override fun wakeDevice(): Boolean {
+        val out = runCatching { exec("input keyevent KEYCODE_WAKEUP") }.getOrDefault("")
+        return !out.contains("Error")
+    }
+
+    override fun dismissDeviceKeyguard(): Boolean {
+        val out = runCatching { exec("wm dismiss-keyguard") }.getOrDefault("")
+        return !out.contains("Error") && !out.contains("Exception")
+    }
+
+    override fun enterDeviceCredential(kind: Int, credential: ByteArray): Boolean {
+        // 输入锁屏凭据需要系统解锁会话（IWindowManager.dismissKeyguard + 凭据校验），
+        // shell 身份拿不到这条通道。这里如实返回 false，由上层提示用户手动解锁。
+        Log.i(TAG, "enterDeviceCredential 不支持（shell 无法代表用户提交凭据）kind=$kind")
+        return false
+    }
+
+    // ── 生命周期 ──
+
+    override fun identity(): IntArray =
+        intArrayOf(android.os.Process.myUid(), android.os.Process.myPid())
+
+    override fun releaseAll() {
+        runCatching { restoreClip() }
+        val ids = synchronized(displays) { displays.keys.toList() }
+        ids.forEach { runCatching { releaseDisplay(it) } }
+        lastClipNote = null
+        Log.i(TAG, "releaseAll: 还原剪贴板、释放 ${ids.size} 块屏")
+    }
+
+    private var lastClipNote: String? = null
+
+    override fun openDevtoolsSocket(name: String): ParcelFileDescriptor? = try {
+        // 名字必须是本应用进程的 WebView 调试套接字，防止连到别人的
+        if (!name.startsWith("webview_devtools_remote_")) return null
+        val socket = android.net.LocalSocket()
+        socket.connect(android.net.LocalSocketAddress(name, android.net.LocalSocketAddress.Namespace.ABSTRACT))
+        // LocalSocket 不是 java.net.Socket，fromSocket 不接受；直接复制底层 fd
+        ParcelFileDescriptor.dup(socket.fileDescriptor)
+    } catch (t: Throwable) {
+        Log.w(TAG, "openDevtoolsSocket failed: $name", t)
+        null
+    }
+
 }

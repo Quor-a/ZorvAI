@@ -1,0 +1,1 @@
+Read App or website knowledge. When you enter an app or site its main text is already given to you, so use this to open one of its attachments (file_path, from files in the result) or to read up on an app or site you have not entered yet. name is a name from knowledge_search, optionally as app:<name> or site:<domain>.

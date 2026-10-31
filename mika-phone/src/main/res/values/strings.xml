@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 后台虚拟屏的无障碍服务说明（系统「无障碍」列表里显示） -->
+    <string name="quro_mika_a11y_description">让 AI 在后台虚拟屏上读界面结构并按坐标操作，不占用你的主屏幕。开启后才能精确点击控件（而不是靠截图猜位置）。</string>
+    <string name="quro_mika_a11y_label">ZorvAI 后台虚拟屏</string>
+</resources>

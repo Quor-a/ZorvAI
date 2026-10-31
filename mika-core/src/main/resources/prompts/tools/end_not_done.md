@@ -1,0 +1,1 @@
+End the task without the requested result, when it cannot be reached or only part of it can. In message, say what was confirmed done, what exactly stopped you and what the screen shows now. Do not use it just because the user asked you to stop.
