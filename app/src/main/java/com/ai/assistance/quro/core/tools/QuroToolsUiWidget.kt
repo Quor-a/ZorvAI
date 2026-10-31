@@ -53,6 +53,8 @@ class UiWidgetTool : QuroTool {
         "以及 v221 新增 open:<url>（内置浏览器打开）/ copy:<文本>（复制剪贴板）/ ai:<提示词>（直接发给 AI）/ screen:<名称>（界面导航）。" +
         "可用组件共 ${CardSdk.typeCount} 种，按类目：${CardSdk.compactCatalog()}。" +
         "要写某类的完整字段与样例，先调 card_catalog（参数 category 或 types），别凭空猜字段名。" +
+        "🔴 **本工具是「富卡片」（103 种），不是用户说的「可视化小卡片」**——用户要小卡片时应在**回复正文写 ```quro-card 围栏**（7 种预设：metric/line_chart/button_group/skeleton/table/status/custom，自研渲染），那是独立功能。仅当围栏被用户关闭时才用本工具兜底。" +
+        "🔴 type 名必须用本名册的（`stat`/`chart`/`actions`/`composite`…，见下方清单与 card_catalog）；围栏侧的 `status`/`metric`/`line_chart`/`button_group`/`custom` 不是本名册的 type（客户端会做同义词归一，但请直接写对）。" +
         "也可以直接在正文里下发卡片围栏：card（单个 JSON 对象）、cards（数组或组合卡）、cardui（A2UI 邻接表）、cardjson（**一行一个 JSON**，流式友好，逐行独立容错；组合卡请用 cards）。" +
         "围栏头后可跟属性（空格分隔）：开关 compact（内边距收紧，一组小卡片必给）/ scroll（超高内部滚动）/ bordered / flat / dense；带值 title=组级标题（各卡自带标题时以卡为准）/ theme=主题档位，只认 accent(默认)/warn/danger/plain，其它值一律降级为默认。" +
         "例：```cards title=Q3 复盘 theme=accent compact\n[{\"type\":\"stat\",...}]\n```" +
