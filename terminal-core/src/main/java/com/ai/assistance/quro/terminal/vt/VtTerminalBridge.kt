@@ -64,6 +64,13 @@ class VtTerminalBridge(
     var onTitleChanged: ((String?) -> Unit)? = null
 
     /**
+     * 待刷新标记：会话在 TerminalView 绑定前就已产生输出时置位。
+     * 绑定完成后消费（补一次 onScreenUpdated），避免「有数据但视图从不重绘」的黑屏。
+     */
+    @Volatile
+    private var pendingScreenUpdate = false
+
+    /**
      * 启动 proot 终端会话。
      *
      * Termux 的 [TerminalSession] 构造器只保存参数，真正创建子进程发生在
@@ -72,11 +79,22 @@ class VtTerminalBridge(
      * 表现为黑屏/无进程。因此这里用默认 80×24 立即初始化，后续视图布局完成后再
      * 由 TerminalView 的 onSizeChanged → updateSize 重设真实尺寸。
      *
+     * 🔴 启动前必须先确保 rootfs 解压就绪：buildProotLaunch() 只构造参数，
+     * 不负责解压。首次进入增强终端时 rootfs 可能尚未解压，proot 以不存在的
+     * --rootfs 启动会立即失败退出 → 黑屏 + 等一会「闪退」（实为会话结束页）。
+     * 这里显式调用 prepareGuestRootfs()（幂等，首次 3-8 分钟，后续秒级）。
+     *
      * @param transcriptRows 历史回滚行数，默认 5000（Termux 默认）。
      */
     fun start(transcriptRows: Int = 5000): Boolean {
         if (terminalSession != null) return true
         return runCatching {
+            // 1) 宿主侧确保 rootfs 解压 + usrmerge 链接就绪（幂等；首次启动会解压内置 tarball）
+            if (!environment.prepareGuestRootfs()) {
+                Log.e(tag, "启动增强终端失败：rootfs 未就绪（prepareGuestRootfs 返回 false）")
+                return@runCatching false
+            }
+
             val spec = environment.buildProotLaunch()
             val session = TerminalSession(
                 spec.shellPath,
@@ -88,6 +106,19 @@ class VtTerminalBridge(
             )
             // 立即用默认尺寸初始化 PTY 子进程（否则进程永远不会启动）
             session.initializeEmulator(80, 24, 10, 18)
+            // 🔴 验证子进程真的存活：proot 参数错误 / rootfs 缺失 / loader 路径不对时，
+            // createSubprocess 可能返回后子进程立即退出（waiter 线程随后上报退出）。
+            // 这里短暂等待让退出事件落地，若 isRunning()=false 直接判定启动失败，
+            // UI 显示「终端启动失败」而不是黑屏后闪退。
+            var alive = session.isRunning()
+            if (alive) {
+                Thread.sleep(300)
+                alive = session.isRunning()
+            }
+            if (!alive) {
+                Log.e(tag, "启动增强终端失败：proot 子进程未存活（isRunning=false）")
+                return@runCatching false
+            }
             terminalSession = session
             true
         }.onFailure {
@@ -116,6 +147,13 @@ class VtTerminalBridge(
         val attached = view.attachSession(session)
         if (attached) {
             terminalView = view
+            // 🔴 消费待刷新标记：会话在视图绑定前可能已产生输出（proot 启动横幅等），
+            // onTextChanged 时 terminalView 为 null 无法重绘。绑定成功后必须补一次
+            // onScreenUpdated()，否则已有内容永远不显示 → 黑屏。
+            view.onScreenUpdated()
+            if (pendingScreenUpdate) {
+                pendingScreenUpdate = false
+            }
         }
         return attached
     }
@@ -247,7 +285,14 @@ class VtTerminalBridge(
         // mTerminalView.onScreenUpdated() 触发 invalidate。如果不调，emulator 的
         // 内存屏幕缓冲区一直在更新（proot 输出已到达），但视图从不重绘，
         // 表现为「黑屏 / 有数据但看不见」。
-        terminalView?.onScreenUpdated()
+        val view = terminalView
+        if (view != null) {
+            view.onScreenUpdated()
+        } else {
+            // 🔴 视图尚未绑定（start() 初始化会话后、布局 post 完成前），
+            // 会话输出无法重绘。记录待刷新标记，attach 成功后补一次。
+            pendingScreenUpdate = true
+        }
     }
 
     override fun onTitleChanged(changedSession: TerminalSession) {
