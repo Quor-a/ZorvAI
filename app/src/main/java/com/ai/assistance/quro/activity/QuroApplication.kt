@@ -293,6 +293,16 @@ class QuroApplication : Application(), Configuration.Provider {
         try {
             QuroTerminalSessionManager.load(applicationContext)
             QuroTerminalSessionManager.ensureDefaultAsync(applicationContext, installIfMissing = true)
+            // 把「界面活跃」回调塞给 terminal-core：用户正在 Harness 界面里时，
+            // 定时看门狗不再替他启动引擎（避免「手动启动却被强行接管」）
+            runCatching {
+                com.ai.assistance.quro.terminal.ui.HarnessUiWatcher.onEnter = {
+                    com.ai.assistance.quro.core.harness.QuroDshKeepAlive.setUiActive(true)
+                }
+                com.ai.assistance.quro.terminal.ui.HarnessUiWatcher.onExit = {
+                    com.ai.assistance.quro.core.harness.QuroDshKeepAlive.setUiActive(false)
+                }
+            }
             QuroTerminalKeepAliveService.ensureStarted(applicationContext)
             // 同时启动终端 ACI 服务，确保跨进程能力可用
             QuroTerminalAciService.ensureStarted(applicationContext, installIfMissing = true)

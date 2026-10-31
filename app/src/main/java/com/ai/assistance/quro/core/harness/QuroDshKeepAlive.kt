@@ -49,6 +49,23 @@ object QuroDshKeepAlive {
     private fun prefs(ctx: Context): SharedPreferences =
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    /**
+     * 「用户正开着 Harness 界面」标记。
+     *
+     * 为什么需要它：定时看门狗（[QuroDshWatchdog]）会在后台定时唤醒。
+     * 如果用户此刻正在界面里手动启动/调试引擎，看门狗再插一脚就是「强行启动」——
+     * 用户的原话是「手动启动进去了不是会把强行启动」。所以界面在前台时，
+     * 引擎**没跑就让他手动跑**，看门狗只负责续闹钟，不负责启动。
+     */
+    @Volatile
+    private var uiActive: Boolean = false
+
+    /** 界面进入/退出时调用。 */
+    fun setUiActive(active: Boolean) {
+        uiActive = active
+        Log.i(TAG, "界面活跃=$active（看门狗将${if (active) "跳过自动启动" else "恢复自动启动"}）")
+    }
+
     /** 是否随应用自启。默认 **true**。 */
     fun isAutoStartEnabled(ctx: Context): Boolean =
         prefs(ctx).getBoolean(K_AUTOSTART, true)
@@ -89,8 +106,15 @@ object QuroDshKeepAlive {
         if (!h.isInstalled()) return null
 
         // 已在跑 / 已有引擎可接管 → 直接返回端口（这是「回到前台秒开」的关键路径）
+        // 🔴 幂等保证：这一步在 start() 之前，所以「已经启动」时**绝不会再 spawn 一次**。
         if (h.isRunning()) return h.activePort()
         h.attachIfAlive()?.let { return it }
+
+        // 用户正在界面里自己操作（可能刚点停止、正在手动启动）→ 不替他做主
+        if (uiActive) {
+            Log.i(TAG, "界面活跃且引擎未运行：交给用户手动处理，看门狗不介入")
+            return null
+        }
 
         val p = prefs(ctx)
         val now = System.currentTimeMillis()

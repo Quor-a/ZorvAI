@@ -118,11 +118,32 @@ object QuroDshWatchdog {
     class AlarmReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent?) {
             if (intent?.action != ACTION_WAKE) return
-            Log.i(TAG, "唤醒闹钟触发，拉起保活服务")
             // 先把下一次排上：万一后面抛异常，链路也不能断
             runCatching { schedule(context) }
-            runCatching { QuroTerminalKeepAliveService.ensureStarted(context) }
-                .onFailure { Log.w(TAG, "拉起保活服务失败", it) }
+
+            // 🔴 幂等第一道：引擎已经在服务？那只续闹钟，绝不重复拉服务/重复启动。
+            // 用户担心「已经启动会一直循环启动」——这里就是那道闸。
+            val alive = runCatching {
+                val h = com.ai.assistance.quro.terminal.harness.DeepSeekHarness.get(context)
+                if (!h.isInstalled()) return@runCatching null
+                when {
+                    h.isRunning() -> h.activePort()
+                    else -> h.attachIfAlive()
+                }
+            }.getOrNull()
+            if (alive != null) {
+                Log.i(TAG, "引擎已在 :$alive 服务，本次唤醒只续闹钟，不重复启动")
+                return
+            }
+
+            // 用户正开着 Harness 界面 → 同样不插手
+            if (QuroDshKeepAlive.isAutoStartEnabled(context)) {
+                Log.i(TAG, "引擎未运行，拉起保活服务（保活服务的巡检环会按幂等逻辑启动）")
+                runCatching { QuroTerminalKeepAliveService.ensureStarted(context) }
+                    .onFailure { Log.w(TAG, "拉起保活服务失败", it) }
+            } else {
+                Log.i(TAG, "自启开关已关闭，跳过")
+            }
         }
     }
 }

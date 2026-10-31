@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -57,10 +58,12 @@ import kotlin.math.roundToInt
  * 定位：只显示「AI 正在后台做什么」的画面，不承载操作；要操作就点一下进管理页。
  * 为什么需要它：后台屏对用户不可见，没有这块小窗，AI 在里面忙什么完全是黑盒。
  *
- * 交互（与 Mika 一致）：
- *  - 平时停在右下角、输入栏上方，不挡顶栏
+ * 交互（Mika 的拖动/吸角 + Extendroid 的三样）：
  *  - 拖动 1:1 跟手；松手按速度投射落点，吸附到最近的角（临界阻尼弹簧，见 [PipPhysics]）
- *  - 点一下 → 进管理页；点 × → 本次会话内隐藏
+ *  - **右下角手柄拖动 → 自由改变窗口大小**（对应 Extendroid 的 resizer）
+ *  - **点画面 → 直接操控虚拟屏**（坐标按比例换算成虚拟屏像素后注入；开关可切回「点击进管理页」）
+ *  - **右上角「—」→ 收成一颗漂浮球**，点球展开（对应 Extendroid 的可收起悬浮窗）
+ *  - 点 × → 本次会话内隐藏
  *
  * 外层 Box 不消费触摸（没有 pointerInput），事件会穿透到下层对话，不影响正常聊天。
  */
@@ -88,20 +91,31 @@ fun BackgroundScreenPip(
         }
         val aspect = frame?.let { it.height.toFloat() / it.width } ?: screenAspect
 
+        // ── Extendroid 三样：自由缩放 / 收起成球 / 直控虚拟屏 ──
+        var scale by rememberSaveable { mutableStateOf(1f) }
+        var collapsed by rememberSaveable { mutableStateOf(false) }
+        // 直控开关：默认开着（用户要的就是「直接操控虚拟屏」），关掉则点击进管理页
+        var directControl by rememberSaveable { mutableStateOf(true) }
+
         val marginPx = with(density) { 12.dp.toPx() }
         val baseW = with(density) { PIP_WIDTH.toPx() }
         val maxH = (areaH - topInsetPx - bottomInsetPx - marginPx).coerceAtLeast(1f)
         val wPx = minOf(baseW, areaW - marginPx * 2, maxH / aspect).coerceAtLeast(1f)
         val hPx = wPx * aspect
 
-        val wDp = with(density) { wPx.toDp() }
-        val hDp = with(density) { hPx.toDp() }
+        // 缩放后的实际尺寸：scale ∈ [0.6, 2.2]，同时不超出可用区域
+        val scaledWpx = (wPx * scale).coerceIn(wPx * 0.6f, minOf(wPx * 2.2f, areaW - marginPx * 2))
+        val scaledHpx = scaledWpx * aspect
 
-        val bounds = PipPhysics.Bounds(areaW, areaH, wPx, hPx, marginPx, topInsetPx, bottomInsetPx)
+        val wDp = with(density) { scaledWpx.toDp() }
+        val hDp = with(density) { scaledHpx.toDp() }
+
+        val bounds = PipPhysics.Bounds(areaW, areaH, scaledWpx, scaledHpx, marginPx, topInsetPx, bottomInsetPx)
         val currentBounds by rememberUpdatedState(bounds)
 
         var corner by rememberSaveable { mutableStateOf(PipPhysics.Corner.BottomEnd) }
         var free by remember { mutableStateOf<Offset?>(null) }
+
         val scope = rememberCoroutineScope()
         var settle by remember { mutableStateOf<Job?>(null) }
 
@@ -133,6 +147,21 @@ fun BackgroundScreenPip(
 
         // 画面出现时轻微放大，提示"有内容了"
         val widthAnim by animateDpAsState(wDp, tween(260), label = "pipW")
+
+        // ── 收起形态：一颗漂浮球，点它展开 ──
+        if (collapsed) {
+            Box(
+                Modifier.offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }
+                    .size(BALL_SIZE)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.92f))
+                    .clickable { collapsed = false },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("AI", color = MaterialTheme.colorScheme.onPrimary, fontSize = 11.sp)
+            }
+            return@BoxWithConstraints
+        }
 
         Box(
             Modifier.offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }
@@ -170,7 +199,25 @@ fun BackgroundScreenPip(
                         }
                     }
                 }
-                .pointerInput(Unit) { detectTapGestures { onOpenManage() } },
+                .pointerInput(directControl, scaledWpx, scaledHpx, frame) {
+                    detectTapGestures(
+                        onTap = { offset ->
+                            if (!directControl) {
+                                onOpenManage()
+                                return@detectTapGestures
+                            }
+                            // 把点击位置换算成虚拟屏像素：小窗显示的是整块屏的等比缩略
+                            val sysW = frame?.width ?: ctx.resources.displayMetrics.widthPixels
+                            val sysH = frame?.height ?: ctx.resources.displayMetrics.heightPixels
+                            if (sysW <= 0 || sysH <= 0) return@detectTapGestures
+                            val vx = (offset.x / scaledWpx * sysW).toInt().coerceIn(0, sysW - 1)
+                            val vy = (offset.y / scaledHpx * sysH).toInt().coerceIn(0, sysH - 1)
+                            QuroVirtualScreen.tapAt(ctx, vx, vy)
+                        },
+                        // 长按进管理页（直控模式下也要有办法进管理页）
+                        onLongPress = { onOpenManage() },
+                    )
+                },
         ) {
             if (frame != null) {
                 Image(
@@ -185,23 +232,54 @@ fun BackgroundScreenPip(
                 }
             }
 
-            // 右上角 ×：本次会话内隐藏（不销毁屏）
+            // 右上角按钮组：收起成球 / 直控开关 / 关闭
+            androidx.compose.foundation.layout.Row(
+                Modifier.align(Alignment.TopEnd).padding(4.dp),
+            ) {
+                PipChip("—") { collapsed = true }
+                PipChip(if (directControl) "✋" else "↗") {
+                    directControl = !directControl
+                }
+                PipChip("×") { QuroVirtualScreen.dismissUi() }
+            }
+
+            // 右下角缩放手柄：拖动改窗口大小（对应 Extendroid 的 resizer）
             Box(
-                Modifier.align(Alignment.TopEnd).padding(4.dp).size(20.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
-                    .clickable { QuroVirtualScreen.dismissUi() },
+                Modifier.align(Alignment.BottomEnd).size(22.dp)
+                    .pointerInput(Unit) {
+                        detectDragGestures { change, drag ->
+                            change.consume()
+                            // 按像素增量换算成比例：往右/下拖变大
+                            val delta = (drag.x + drag.y) / wPx
+                            scale = (scale + delta).coerceIn(0.6f, 2.2f)
+                        }
+                    },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = "隐藏后台屏小窗",
-                    modifier = Modifier.size(11.dp),
-                    tint = MaterialTheme.colorScheme.onSurface,
+                Box(
+                    Modifier.size(10.dp).clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),
                 )
             }
         }
     }
 }
 
+/** 小窗右上角的圆形小按钮。 */
+@Composable
+private fun PipChip(text: String, onClick: () -> Unit) {
+    Box(
+        Modifier.padding(start = 3.dp).size(20.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
 private val PIP_WIDTH = 96.dp
+
+/** 收起后的漂浮球直径。 */
+private val BALL_SIZE = 42.dp

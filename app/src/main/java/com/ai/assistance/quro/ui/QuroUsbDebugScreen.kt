@@ -82,6 +82,9 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
     // 真实监听状态（区别于配置属性）：running=在监听 / stale=配置了没监听 / 都没有=未开启
     var tcpLive by remember { mutableStateOf(0) }
     var tcpConfigured by remember { mutableStateOf(0) }
+    // 开关操作进行中 / 上一次操作的结果（直接显示在开关副标题，不让用户等也没反馈）
+    var toggling by remember { mutableStateOf(false) }
+    var tcpHint by remember { mutableStateOf<String?>(null) }
     var netAddrs by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
 
     // 无线调试配对（Android 11+，SPAKE2）
@@ -273,17 +276,23 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
         }
         scope.launch {
             busy = true
+            toggling = true
+            tcpHint = if (newVal) "正在开启 :$portNum …" else "正在关闭 …"
             val (ok, detail) = withContext(Dispatchers.IO) {
                 if (newVal) QuroAdbDebug.enableTcpAdb(ctx, portNum)
                 else QuroAdbDebug.disableTcpAdb(ctx)
             }
             busy = false
+            toggling = false
             log = detail
-            Toast.makeText(
-                ctx,
-                if (ok) (if (newVal) "已开启 :$portNum" else "已关闭") else "操作未生效，看下方日志",
-                Toast.LENGTH_SHORT,
-            ).show()
+            // 结果直接写在开关副标题：成功说端口，失败说原因 + 下一步
+            tcpHint = when {
+                ok && newVal -> "✅ 已开启，正在 :$portNum 监听"
+                ok -> "✅ 已关闭"
+                newVal -> "❌ 没开起来：这条通道写不进 adb 属性（需要 root）。请改用下面的「无线调试配对」——免 root。"
+                else -> "❌ 没关掉：仍在监听。需要 root 才能停 adbd；也可以重启手机恢复。"
+            }
+            Toast.makeText(ctx, if (ok) "已生效" else "没生效，看开关下面的原因", Toast.LENGTH_SHORT).show()
             delay(600)
             refresh()
         }
@@ -388,17 +397,68 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                 )
             }
 
+            // ── 无线调试配对（Android 11+，免 root）：这才是「怎么被无线调试」的正路
+            GroupCaption("无线调试配对（Android 11+，免 root）")
+            SetGroup {
+                InfoLine(
+                    "步骤：① 打开系统「无线调试」开关 → ② 点「使用配对码配对设备」，记下 6 位码 → " +
+                        "③ 在这里填入并点「配对」。配对成功后不用 USB 线、不用 root，电脑 / 另一台手机都能连。"
+                )
+                if (wirelessSwitch != null) {
+                    HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                    InfoLine("系统「无线调试」开关：${if (wirelessSwitch == true) "已打开" else "未打开（配对会失败）"}")
+                }
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = pairCode,
+                        onValueChange = { pairCode = it.filter { c -> c.isDigit() }.take(6) },
+                        label = { Text("6 位配对码", fontSize = 12.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        enabled = !pairing,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Button(
+                        onClick = { doPair() },
+                        enabled = !pairing && pairCode.length == 6,
+                    ) { Text(if (pairing) "配对中…" else "配对") }
+                }
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = { doWirelessConnect() }, enabled = !pairing) {
+                        Text("仅连接（已配对过）", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { QuroAdbDebug.openWirelessDebugging(ctx) }) {
+                        Text("打开系统无线调试", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                if (pairLog.isNotBlank()) {
+                    HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                    InfoLine(pairLog.trim())
+                }
+            }
+
             GroupCaption(stringResource(R.string.qk_03011))
             SetGroup {
                 SetRow(
-                    Icons.Filled.Wifi, "开启 TCP ADB（固定端口）",
-                    when {
+                    Icons.Filled.Wifi, "开启 TCP ADB :5555（需要 root）",
+                    tcpHint ?: when {
+                        toggling -> "处理中…"
                         tcpLive > 0 -> "已在 :$tcpLive 监听 · 点它可关闭"
-                        hasPriv -> "写 service.adb.tcp.port + 重启 adbd，让电脑能 adb connect"
-                        else -> "需要 root（Shizuku 多半会被 SELinux 拒）· 点它看替代方案"
+                        hasPriv -> "写 service.adb.tcp.port + 重启 adbd；Shizuku 通道多数机型和 root 一样会被拒"
+                        else -> "没有 root 开不了。免 root 请用下面「无线调试配对」"
                     },
                     tcpLive > 0,
-                    onToggle = { onToggle(tcpLive == 0) },
+                    onToggle = { if (!toggling) onToggle(tcpLive == 0) },
                     scaled = { it.sp },
                 )
                 if (hasPriv) {
@@ -449,56 +509,6 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                         )
                         HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                     }
-                }
-            }
-
-            // ── 无线调试配对（Android 11+，免 root）：这才是「怎么被无线调试」的正路
-            GroupCaption("无线调试配对（Android 11+，免 root）")
-            SetGroup {
-                InfoLine(
-                    "步骤：① 打开系统「无线调试」开关 → ② 点「使用配对码配对设备」，记下 6 位码 → " +
-                        "③ 在这里填入并点「配对」。配对成功后不用 USB 线、不用 root，电脑 / 另一台手机都能连。"
-                )
-                if (wirelessSwitch != null) {
-                    HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                    InfoLine("系统「无线调试」开关：${if (wirelessSwitch == true) "已打开" else "未打开（配对会失败）"}")
-                }
-                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = pairCode,
-                        onValueChange = { pairCode = it.filter { c -> c.isDigit() }.take(6) },
-                        label = { Text("6 位配对码", fontSize = 12.sp) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        enabled = !pairing,
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Button(
-                        onClick = { doPair() },
-                        enabled = !pairing && pairCode.length == 6,
-                    ) { Text(if (pairing) "配对中…" else "配对") }
-                }
-                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(onClick = { doWirelessConnect() }, enabled = !pairing) {
-                        Text("仅连接（已配对过）", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
-                    }
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = { QuroAdbDebug.openWirelessDebugging(ctx) }) {
-                        Text("打开系统无线调试", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-                if (pairLog.isNotBlank()) {
-                    HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                    InfoLine(pairLog.trim())
                 }
             }
 

@@ -90,8 +90,21 @@ app/src/main/java/dev/legendsayantan/extendroid/
 | 最小化应用实时预览 | ⚠️ 部分（`QuroAgentDisplay` 有帧流） |
 | 关屏保持活跃 | ❌ 缺 |
 
-**下一批：搬 `DisplayHelper` + `PopupWindow` 的窗口尺寸/位置管理与「最小化保活」**，
-接到 `QuroVirtualScreen` 上（自由窗口 = 可改虚拟屏尺寸 + 单 App 窗口位置）。
+**已搬（2026-11-01）—— 三样，形态对齐 Extendroid：**
+
+| Extendroid 的做法 | ZorvAI 的实现 | 位置 |
+|---|---|---|
+| `PopupWindow` 的 resizer 自由改窗口大小 | App 内画中画右下角拖拽改尺寸（0.6×–2.2×）；系统浮窗右下角手柄改宽高 | `BackgroundScreenPip` / `QuroBgScreenOverlayService` |
+| `OverlayMenu` 可收起的悬浮窗 | App 内「—」收成球；**系统级悬浮窗**收成一颗「AI」球，点球展开 | 同上 |
+| `DisplayHelper.injectMotionEvent` 直接操控虚拟屏 | 点画面按比例换算成虚拟屏像素 → `tapAt`（走无障碍手势，不需要 Shizuku） | 同上 |
+
+**系统级浮窗**（`QuroBgScreenOverlayService`）是关键差异点：
+- `TYPE_APPLICATION_OVERLAY` + `FLAG_NOT_FOCUSABLE`（不抢焦点，用户在原 App 打字不被打断）
+- 前台服务钉住进程，切 App / 锁屏再解锁浮窗都还在
+- 需要 `SYSTEM_ALERT_WINDOW`（manifest 已声明）并让用户授予「显示在其他应用上层」
+
+**还没搬**：Extendroid 的「最小化但保持运行 + 实时预览」（`ExtendService` 368 行）——
+我们已用「收成球」覆盖一部分，但缺少「多个任务同时最小化 + 缩略图列表」。
 
 ---
 

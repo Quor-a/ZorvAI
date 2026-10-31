@@ -907,6 +907,13 @@ private fun HarnessWebView(
         }
     }
 
+    // 告诉看门狗「用户正在界面里」：它就别在后台替用户启动引擎
+    // （用户原话：「手动启动进去了不是会把强行启动」）
+    DisposableEffect(Unit) {
+        HarnessUiWatcher.onEnter()
+        onDispose { HarnessUiWatcher.onExit() }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             webView?.let { wv ->
