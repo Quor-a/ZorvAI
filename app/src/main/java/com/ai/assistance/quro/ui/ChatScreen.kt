@@ -860,6 +860,9 @@ fun ChatScreen(
     var showClusterSettings by remember { mutableStateOf(false) }
     // 聚合式「系统状态」浏览界面（设备 / 权限 / 模块运行态 / 人格心跳）
     var showSystemStatus by remember { mutableStateOf(false) }
+    // 后台虚拟屏管理页（移植 Mika 的后台屏：AI 在看不见的独立屏上操作 App，
+    // 这里给它一个可视界面 —— 实时画面 + 当前 Activity + 手动返回/截图/释放）
+    var showBgScreen by remember { mutableStateOf(false) }
     // 可视化组件画廊
     var showComponentGallery by remember { mutableStateOf(false) }
     // 内置代码编辑器入口
@@ -962,6 +965,11 @@ fun ChatScreen(
             "ui_open_bots" -> showBots = true
             "ui_open_cms" -> showCms = true
             "ui_open_system_status" -> showSystemStatus = true
+            // 后台虚拟屏管理页：AI 在后台屏上操作时，可以主动把界面推到用户面前
+            "ui_open_bg_screen" -> {
+                com.ai.assistance.quro.core.display.QuroVirtualScreen.showUi()
+                showBgScreen = true
+            }
             "ui_open_permission" -> showPermission = true
             "ui_open_model_config" -> showModelConfig = true
             "ui_open_voice" -> showVoice = true
@@ -1908,6 +1916,7 @@ fun ChatScreen(
             onOpenMcp = { showMcp = true },
             onOpenCluster = { showClusterSettings = true },
             onOpenSystemStatus = { showSystemStatus = true },
+            onOpenBgScreen = { showBgScreen = true },
             onOpenComponentGallery = { showComponentGallery = true },
             onOpenAppearance = { showAppearance = true },
             vm = vm,
@@ -1969,10 +1978,29 @@ fun ChatScreen(
         }
 
         // 聚合式「系统状态」浏览界面：全屏覆盖层（从设置页入口进入，返回关页回设置）
+        // 后台虚拟屏画中画：常驻显示「AI 在后台做什么」（那块屏用户本来看不见）。
+        // 外层 Box 不消费触摸，事件穿透到下层对话；点了进管理页。
+        // bottomInset 让开底部输入栏，不让小窗压住发消息按钮。
+        if (!showBgScreen) {
+            BackgroundScreenPip(
+                onOpenManage = { showBgScreen = true },
+                bottomInsetPx = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() },
+            )
+        }
+
         if (showSystemStatus) {
             BackHandler { showSystemStatus = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
                 QuroSystemStatusScreen(onClose = { showSystemStatus = false }, personaVm = personaVm)
+            }
+        }
+
+        // 后台虚拟屏管理页：全屏覆盖层（从画中画小窗点进来）
+        // 关掉本页不销毁后台屏，只有页内「释放」才销毁 —— 因为 AI 可能还在用它。
+        if (showBgScreen) {
+            BackHandler { showBgScreen = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
+                BackgroundScreenPage(onClose = { showBgScreen = false })
             }
         }
 
@@ -5730,6 +5758,7 @@ private fun SheetOverlay(
     onOpenMcp: () -> Unit,
     onOpenCluster: () -> Unit,
     onOpenSystemStatus: () -> Unit,
+    onOpenBgScreen: () -> Unit,
     onOpenComponentGallery: () -> Unit,
     onOpenAppearance: () -> Unit,
     vm: QuroChatViewModel,
@@ -5802,7 +5831,7 @@ private fun SheetOverlay(
                         onManagePersona, onOpenVoiceService,
                         onClearChat, settingsVoiceBallEnabled, onSettingsToggleVoiceBall,
                     settingsAiReplyNotify, onSettingsToggleAiReplyNotify,
-                        onOpenAbout, onOpenAci, onOpenMcp, onOpenCluster, onOpenSystemStatus, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenHarnessHotUpdate, onOpenHarnessNotify, onOpenPhoneControl, onOpenFileManager,
+                        onOpenAbout, onOpenAci, onOpenMcp, onOpenCluster, onOpenSystemStatus, onOpenBgScreen, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenHarnessHotUpdate, onOpenHarnessNotify, onOpenPhoneControl, onOpenFileManager,
                         onOpenGitHub = onOpenGitHub, onOpenModelHub = onOpenModelHub, scaled
                     )
                     else -> {}
@@ -5855,6 +5884,7 @@ private fun SettingsSheetContent(
     onOpenMcp: () -> Unit,
     onOpenCluster: () -> Unit,
     onOpenSystemStatus: () -> Unit,
+    onOpenBgScreen: () -> Unit,
     onOpenComponentGallery: () -> Unit,
     onOpenAppearance: () -> Unit,
     onExport: () -> Unit, onClear: () -> Unit,
@@ -5907,6 +5937,9 @@ private fun SettingsSheetContent(
             SetRowClickable(Icons.Filled.Download, stringResource(R.string.qk_03841), stringResource(R.string.qk_03861), "", onOpenModelHub, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Info, stringResource(R.string.qk_02642), stringResource(R.string.qk_03859), "", onOpenSystemStatus, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            // 后台虚拟屏（移植 Mika）：AI 在不打扰用户主屏的独立虚拟屏上操作 App，这里给可视化入口
+            SetRowClickable(Icons.Filled.Apps, "后台虚拟屏", "看 AI 在后台屏上操作什么，可手动接管", "", onOpenBgScreen, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Info, stringResource(R.string.qk_03837), stringResource(R.string.qk_03865), "", onOpenComponentGallery, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))

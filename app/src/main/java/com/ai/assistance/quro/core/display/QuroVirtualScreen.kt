@@ -1,9 +1,18 @@
 package com.ai.assistance.quro.core.display
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.util.Log
 import android.view.KeyEvent
 import com.ai.assistance.quro.core.shizuku.QuroShizuku
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * 后台虚拟屏的统一入口（App 侧）。
@@ -15,25 +24,48 @@ import com.ai.assistance.quro.core.shizuku.QuroShizuku
  * 画面经 Surface 回到本进程 ImageReader，因此截图**不依赖无障碍**。
  *
  * 尺寸取主屏分辨率与 dpi，这样 App 在后台屏上的布局与真机一致，坐标可以直接换算。
+ *
+ * UI 侧通过 [state] / [frames] 观察它（管理页与画中画小窗都靠这两个流）。
  */
 object QuroVirtualScreen {
 
     private const val TAG = "QuroVirtualScreen"
 
+    /** 管理界面需要的屏状态快照。 */
+    data class UiState(
+        val ready: Boolean = false,
+        val displayId: Int = -1,
+        /** 当前最上层 Activity 的完整类名（判断 AI 走到哪一步了）。 */
+        val topActivity: String? = null,
+        /** 最近一次失败原因（Shizuku 未授权等），非空时界面要显示出来。 */
+        val error: String? = null,
+        /** 用户是否手动收起过管理窗（会话内有效）。 */
+        val dismissed: Boolean = false,
+    )
+
     private val lock = Any()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     @Volatile
     private var display: QuroAgentDisplay? = null
 
-    /** 最近一次失败原因，供工具返回给 AI 排查（Shizuku 未授权/未运行等）。 */
-    @Volatile
-    var lastError: String? = null
-        private set
+    private var frameJob: Job? = null
 
-    /** 屏是否已经建好。 */
+    private val _frames = MutableStateFlow<Bitmap?>(null)
+
+    /** 后台屏的实时画面（缩略到宽 ≤360，供管理页/画中画显示）。 */
+    val frames: StateFlow<Bitmap?> = _frames.asStateFlow()
+
+    private val _state = MutableStateFlow(UiState())
+
+    /** 屏状态（是否就绪、屏号、当前 Activity、错误）。 */
+    val state: StateFlow<UiState> = _state.asStateFlow()
+
+    /** 最近一次失败原因，供工具返回给 AI 排查（Shizuku 未授权/未运行等）。 */
+    val lastError: String? get() = _state.value.error
+
     val isReady: Boolean get() = display != null
 
-    /** 当前屏号；未建返回 -1。 */
     val displayId: Int get() = display?.displayId ?: -1
 
     /**
@@ -50,9 +82,10 @@ object QuroVirtualScreen {
             if (shell == null) {
                 // 尝试补绑一次，随后仍拿不到就如实报错（不静默失败，避免 AI 反复空转）
                 QuroShizuku.bindAidlService()
-                lastError = "Shizuku 特权服务未就绪：请确认 Shizuku 已安装、已授权、服务正在运行" +
+                val msg = "Shizuku 特权服务未就绪：请确认 Shizuku 已安装、已授权、服务正在运行" +
                     "（设置 → Shizuku）。绑定已重新发起，稍后重试。"
-                Log.w(TAG, lastError!!)
+                Log.w(TAG, msg)
+                _state.value = _state.value.copy(ready = false, error = msg)
                 return null
             }
 
@@ -64,15 +97,43 @@ object QuroVirtualScreen {
             return try {
                 val d = QuroAgentDisplay(shell, w, h, dpi)
                 display = d
-                lastError = null
                 Log.i(TAG, "后台虚拟屏已创建 id=${d.displayId} ${w}x$h @${dpi}dpi")
+
+                // 把屏的帧流转发到自己的 _frames，UI 只依赖本对象即可
+                frameJob?.cancel()
+                frameJob = scope.launch {
+                    d.frames.collect { bmp -> _frames.value = bmp }
+                }
+
+                _state.value = UiState(ready = true, displayId = d.displayId)
+                refreshTopActivity()
                 d
             } catch (t: Throwable) {
-                lastError = "创建后台虚拟屏失败：${t.message}"
+                val msg = "创建后台虚拟屏失败：${t.message}"
                 Log.e(TAG, "createDisplay failed", t)
+                _state.value = _state.value.copy(ready = false, error = msg)
                 null
             }
         }
+    }
+
+    /** 刷新「当前最上层 Activity」（管理界面用；也用于判断 AI 走到哪一步）。 */
+    fun refreshTopActivity() {
+        val d = display ?: return
+        val shell = QuroShizuku.acquireShellService() ?: return
+        val top = runCatching { shell.topActivity(d.displayId) }.getOrNull()
+        _state.value = _state.value.copy(topActivity = top)
+    }
+
+    /** 管理页关闭时调用：只收起界面，不销毁屏（屏还在给 AI 用）。 */
+    fun dismissUi() {
+        _state.value = _state.value.copy(dismissed = true)
+    }
+
+    /** 用户重新打开管理页。 */
+    fun showUi() {
+        _state.value = _state.value.copy(dismissed = false)
+        refreshTopActivity()
     }
 
     /** 把 App 启动到后台屏。返回给 AI 看的一句话结果。 */
@@ -82,7 +143,10 @@ object QuroVirtualScreen {
         val shell = QuroShizuku.acquireShellService() ?: return "Shizuku 特权服务未就绪"
         return try {
             when (val r = shell.startApp(d.displayId, packageName)) {
-                0 -> "已把 $packageName 启动到后台屏（displayId=${d.displayId}）"
+                0 -> {
+                    refreshTopActivity()
+                    "已把 $packageName 启动到后台屏（displayId=${d.displayId}）"
+                }
                 1 -> "用户正在主屏使用 $packageName，为不打扰已放弃启动"
                 2 -> "$packageName 没有可启动的入口（未安装？）"
                 4 -> "$packageName 正在另一块后台屏上使用中"
@@ -105,6 +169,7 @@ object QuroVirtualScreen {
         val d = ensureDisplay(context) ?: return null
         val shell = QuroShizuku.acquireShellService() ?: return null
         return runCatching { shell.topActivity(d.displayId) }.getOrNull()
+            ?.also { _state.value = _state.value.copy(topActivity = it) }
     }
 
     /** 在后台屏上点一下。 */
@@ -152,8 +217,13 @@ object QuroVirtualScreen {
         synchronized(lock) {
             val d = display ?: return
             display = null
+            frameJob?.cancel()
+            frameJob = null
             runCatching { d.release() }
+            _frames.value = null
+            _state.value = UiState()
             Log.i(TAG, "后台虚拟屏已释放 id=${d.displayId}")
         }
     }
 }
+
