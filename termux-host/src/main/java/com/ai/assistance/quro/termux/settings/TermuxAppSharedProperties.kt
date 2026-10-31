@@ -164,8 +164,8 @@ class TermuxAppSharedProperties private constructor(
             setOf("default", "arrows-only", "arrows-all", "all", "none")
         )
 
-    /** 会话快捷键动作映射（属性键 → action）。 */
-    fun getSessionShortcutAction(propertyKey: String): String? =
+    /** 会话快捷键动作映射（属性键 → action Int 值）。 */
+    fun getSessionShortcutAction(propertyKey: String): Int? =
         TermuxConstants.TERMUX_PROPERTY_CONSTANTS.MAP_SESSION_SHORTCUTS[propertyKey]
 
     /** 是否禁用会话切换 toast。 */
