@@ -35,6 +35,8 @@ import com.ai.assistance.quro.terminal.runtime.TerminalEnvironment
 import com.ai.assistance.quro.terminal.vt.VtTerminalBridge
 import com.ai.assistance.quro.vt.TerminalView
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private const val TAG = "EnhancedTerminalScreen"
 
@@ -54,18 +56,32 @@ fun EnhancedTerminalScreen(
     var title by remember { mutableStateOf("增强终端") }
     var sessionFinished by remember { mutableStateOf(false) }
     var sessionExitCode by remember { mutableStateOf<Int?>(null) }
+    var started by remember { mutableStateOf(false) }
+    var startFailed by remember { mutableStateOf(false) }
+    var startError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         // 写入默认属性文件（若不存在），用户可在 ~/.termux/termux.properties 修改
         writeDefaultProperties(context)
 
-        val ok = bridge.start()
+        // 🔴 bridge.start() 内部会 JNI fork proot 子进程，绝不能在主线程同步执行
+        //（可能卡死 UI / ANR）。移到 IO 线程，完成后切回主线程更新状态。
+        val ok = withContext(Dispatchers.IO) {
+            runCatching { bridge.start() }.getOrElse {
+                Log.e(TAG, "启动增强终端失败", it)
+                startError = it.message ?: it.javaClass.simpleName
+                false
+            }
+        }
         Log.d(TAG, "bridge.start() = $ok")
+        started = ok
+        startFailed = !ok
         if (ok) {
             bridge.onTitleChanged = { title = it ?: "增强终端" }
             bridge.onSessionFinished = { code ->
                 sessionExitCode = code
                 sessionFinished = true
+                started = false
             }
         }
     }
@@ -108,29 +124,57 @@ fun EnhancedTerminalScreen(
             }
         }
 
-        if (sessionFinished) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "会话已结束（exit=${sessionExitCode ?: "?"}）\n返回后重新进入可开启新会话",
-                    color = ComposeColor(0xFFE6EDF3)
+        when {
+            sessionFinished -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "会话已结束（exit=${sessionExitCode ?: "?"}）\n返回后重新进入可开启新会话",
+                        color = ComposeColor(0xFFE6EDF3)
+                    )
+                }
+            }
+            startFailed -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "终端启动失败\n${startError ?: "未知错误"}\n\n返回后重新进入可重试",
+                        color = ComposeColor(0xFFE6EDF3)
+                    )
+                }
+            }
+            !started -> {
+                // 会话尚未启动完成，显示轻量加载
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "正在启动终端…",
+                        color = ComposeColor(0xFF8B949E)
+                    )
+                }
+            }
+            else -> {
+                AndroidView(
+                    factory = { ctx ->
+                        createTerminalLayout(ctx, bridge)
+                    },
+                    update = { layout ->
+                        // 确保尺寸变化时 TerminalView 更新
+                        layout.requestLayout()
+                    },
+                    modifier = Modifier.fillMaxSize()
                 )
             }
-        } else {
-            AndroidView(
-                factory = { ctx ->
-                    createTerminalLayout(ctx, bridge)
-                },
-                update = { layout ->
-                    // 确保尺寸变化时 TerminalView 更新
-                    layout.requestLayout()
-                },
-                modifier = Modifier.fillMaxSize()
-            )
         }
     }
 }
@@ -162,12 +206,15 @@ private fun createTerminalLayout(context: Context, bridge: VtTerminalBridge): Li
     layout.addView(terminalView)
     layout.addView(extraKeysContainer)
 
-    // 绑定会话
-    bridge.attach(terminalView)
-
-    // 创建额外按键栏（仅在会话存在时）
-    if (bridge.isRunning) {
-        bridge.createExtraKeysView(extraKeysContainer)
+    // 🔴 绑定会话不能在这里同步做：此刻视图尚未布局，宽高为 0，
+    // TerminalView.updateSize() 会直接 return，emulator 永远不会初始化。
+    // 等布局完成（post）后再 attach，此时 onSizeChanged 已触发，updateSize
+    // 能读到真实宽高并重设 PTY 窗口尺寸。
+    // 额外按键栏也必须在 attach 成功之后创建（它依赖 bridge.terminalView）。
+    terminalView.post {
+        if (bridge.attach(terminalView)) {
+            bridge.createExtraKeysView(extraKeysContainer)
+        }
     }
 
     return layout

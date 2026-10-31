@@ -63,6 +63,13 @@ class VtTerminalBridge(
 
     /**
      * 启动 proot 终端会话。
+     *
+     * Termux 的 [TerminalSession] 构造器只保存参数，真正创建子进程发生在
+     * [TerminalSession.initializeEmulator]（由视图有尺寸后的 updateSize 触发）。
+     * 本桥接层没有 Activity 生命周期，若不主动初始化，会话会永远停在「未启动」，
+     * 表现为黑屏/无进程。因此这里用默认 80×24 立即初始化，后续视图布局完成后再
+     * 由 TerminalView 的 onSizeChanged → updateSize 重设真实尺寸。
+     *
      * @param transcriptRows 历史回滚行数，默认 5000（Termux 默认）。
      */
     fun start(transcriptRows: Int = 5000): Boolean {
@@ -77,6 +84,8 @@ class VtTerminalBridge(
                 transcriptRows,
                 this
             )
+            // 立即用默认尺寸初始化 PTY 子进程（否则进程永远不会启动）
+            session.initializeEmulator(80, 24, 10, 18)
             terminalSession = session
             true
         }.onFailure {
@@ -89,6 +98,15 @@ class VtTerminalBridge(
     fun attach(view: TerminalView): Boolean {
         val session = terminalSession ?: return false
         view.setTerminalViewClient(this)
+        // 🔴 必须先在视图上初始化渲染器（mRenderer），否则 attachSession → updateSize()
+        // 访问 mRenderer.mFontWidth 时 NPE，直接在主线程崩溃闪退（且无崩溃记录）。
+        // 上游 Termux 由 Activity 调用 setTextSize() 完成初始化，桥接层必须补这一步。
+        val textSizePx = android.util.TypedValue.applyDimension(
+            android.util.TypedValue.COMPLEX_UNIT_SP,
+            14f,
+            context.resources.displayMetrics
+        )
+        view.setTextSize(textSizePx.toInt())
         val attached = view.attachSession(session)
         if (attached) {
             terminalView = view

@@ -616,9 +616,12 @@ class CanvasTerminalView @JvmOverloads constructor(
     }
     
     private fun drawCursor(canvas: Canvas, charWidth: Float, charHeight: Float) {
+        val emu = emulator ?: return
+        val rows = cachedRows.coerceAtLeast(1)
+        val cols = cachedCols.coerceAtLeast(1)
         // deferred wrap 时光标列可能等于 screenWidth（越界一格），绘制时收敛到最后一列
-        val cursorX = (emulator?.getCursorX() ?: 0).coerceAtMost(cachedCols - 1)
-        val cursorY = (emulator?.getCursorY() ?: 0).coerceAtMost(cachedRows - 1)
+        val cursorX = (emu.getCursorX()).coerceIn(0, cols - 1)
+        val cursorY = (emu.getCursorY()).coerceIn(0, rows - 1)
 
         val x = config.paddingLeft + cursorX * charWidth
         val y = config.paddingTop + cursorY * charHeight - scrollOffsetY
@@ -629,20 +632,24 @@ class CanvasTerminalView @JvmOverloads constructor(
     
     private fun drawSelection(canvas: Canvas, charWidth: Float, charHeight: Float) {
         val selection = selectionManager.selection?.normalize() ?: return
-        
+
+        // 当前可见区域从 startRow 开始（与 drawTerminal 的行循环一致），
+        // 选择高亮的 y 必须用 (row - startRow) 偏移，否则与文字行错位。
+        val startRow = (scrollOffsetY / charHeight).toInt()
+
         for (row in selection.startRow..selection.endRow) {
-            val y = config.paddingTop + row * charHeight - scrollOffsetY
-            
+            val y = config.paddingTop + (row - startRow) * charHeight - (scrollOffsetY % charHeight)
+
             val startCol = if (row == selection.startRow) selection.startCol else 0
             val endCol = if (row == selection.endRow) {
                 selection.endCol
             } else {
                 emulator?.getScreenContent()?.getOrNull(row)?.size ?: 0
             }
-            
+
             val x1 = config.paddingLeft + startCol * charWidth
             val x2 = config.paddingLeft + (endCol + 1) * charWidth
-            
+
             canvas.drawRect(x1, y, x2, y + charHeight, selectionPaint)
         }
     }

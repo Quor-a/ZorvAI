@@ -327,8 +327,11 @@ public final class TerminalSession extends TerminalOutput {
             descriptorField.setAccessible(true);
             descriptorField.set(result, fileDescriptor);
         } catch (NoSuchFieldException | IllegalAccessException | IllegalArgumentException e) {
+            // 🔴 绝不能 System.exit(1)：那会直接杀死整个 App 进程，且不产生任何崩溃记录
+            //（无 FATAL EXCEPTION、无 tombstone），用户只会看到「闪退」。反射失败应向上抛，
+            // 由桥接层捕获并展示可读错误，而不是把整个应用带走。
             Logger.logStackTraceWithMessage(client, LOG_TAG, "Error accessing FileDescriptor#descriptor private field", e);
-            System.exit(1);
+            throw new RuntimeException("无法包装 PTY 文件描述符（反射失败），请反馈此错误", e);
         }
         return result;
     }
