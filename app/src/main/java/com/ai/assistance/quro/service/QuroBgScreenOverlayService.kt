@@ -1,443 +1,431 @@
 package com.ai.assistance.quro.service
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
-import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
-import android.net.Uri
-import android.os.Build
 import android.os.IBinder
-import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.Surface
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.FrameLayout
-import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.core.app.NotificationCompat
-import com.ai.assistance.quro.activity.QuroMainActivity
 import com.ai.assistance.quro.core.display.QuroVirtualScreen
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import kotlin.math.abs
-import kotlin.math.hypot
-import kotlin.math.roundToInt
 
 /**
- * 后台虚拟屏的**系统级悬浮窗**（跨 App 可见）。
+ * 后台虚拟屏的**系统级悬浮窗** —— 照 Extendroid 的 `PopupWindow` 重写。
  *
- * ## 和 App 内画中画的分工
+ * ## 与上一版的本质区别
  *
- * - `BackgroundScreenPip`（Compose，在 App 内）：只能在 ZorvAI 界面里看到；
- * - **本服务**（WindowManager overlay）：切到任何 App 都浮在屏幕上 ——
- *   这就是用户说的「手机层漂浮」，形态对齐 Extendroid 的 `PopupWindow` + `OverlayMenu`。
+ * 上一版走「ImageReader → Bitmap → Compose」转发，帧率低、大窗口卡；
+ * 这一版照 Extendroid 的核心机制改为 **SurfaceView 直出**：
+ * 特权端 `VirtualDisplay.surface = holder.surface`（零拷贝，GPU 合成），
+ * 窗口多大画面多大，全屏也不掉帧。
  *
- * ## 能力（对应 Extendroid 那几样）
+ * ## 让用户操控打开的软件（不只是 AI）
  *
- *  1. **直接操控虚拟屏**：点画面 → 按比例换算成虚拟屏像素 → `QuroVirtualScreen.tapAt`
- *     （注入走无障碍手势，不需要 Shizuku 在线）；
- *  2. **自由拉窗口大小**：右下角手柄拖拽改窗口宽高，画面等比跟随；
- *  3. **收起来成一个漂浮球**：右上角「—」→ 缩成小球，点球展开。
+ * SurfaceView 的完整触摸事件换算成屏内坐标后交给虚拟屏：按下/移动/抬起合成
+ * 手势注入（[QuroVirtualScreen.tapAt] / [swipeAt]）—— 用户在浮窗里就是在
+ * 直接操作那个 App，和 AI 同一条通道。
  *
- * ## 为什么用前台服务
+ * ## 窗口结构（对齐上游 layout_app_window）
  *
- * overlay 的 View 依附于本进程；进程被回收，浮窗会一起消失。前台服务把它钉住，
- * 这样用户切到别的 App、甚至锁屏再解锁，浮窗还在。
- *
- * ## 权限
- *
- * 需要 `SYSTEM_ALERT_WINDOW`（manifest 已声明），实际还要用户在系统里授予「显示在其他应用上层」。
- * 没授予时本服务不会静默失败 —— [isOverlayAllowed] 供 UI 先检查并跳转授权页。
+ * ```
+ * [控制条: ⠿拖动 | 球 | 全屏 | 返回 | ✕]
+ * [SurfaceView 画面（触摸直通虚拟屏）]
+ * [缩放行: ◧拉窄 | 提示 | 拉宽◨]
+ * ```
+ * 收球后只剩一颗「AI」圆球（可拖动），点球恢复窗口。
  */
 class QuroBgScreenOverlayService : Service() {
 
-    companion object {
-        private const val TAG = "QuroBgOverlay"
-        private const val CHANNEL_ID = "quro_bg_overlay"
-        private const val NOTIF_ID = 9531
-        private const val ACTION_STOP = "com.ai.assistance.quro.action.BG_OVERLAY_STOP"
-
-        /** 浮窗默认宽度（占屏宽比例）与缩放上下限。 */
-        private const val DEFAULT_W_RATIO = 0.34f
-        private const val MIN_W_DP = 120
-        private const val BALL_DP = 46
-
-        /** 浮窗是否已开（UI 用它显示开关状态）。 */
-        @Volatile
-        var running: Boolean = false
-            private set
-
-        fun isOverlayAllowed(ctx: Context): Boolean =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(ctx) else true
-
-        /** 引导用户授予「显示在其他应用上层」。 */
-        fun requestOverlayPermission(ctx: Context) {
-            runCatching {
-                ctx.startActivity(
-                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}"))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                )
-            }.onFailure { Log.w(TAG, "打不开悬浮窗授权页", it) }
-        }
-
-        fun start(ctx: Context) {
-            runCatching {
-                val i = Intent(ctx, QuroBgScreenOverlayService::class.java)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(i)
-                else ctx.startService(i)
-            }.onFailure { Log.w(TAG, "启动悬浮窗服务失败", it) }
-        }
-
-        fun stop(ctx: Context) {
-            runCatching {
-                ctx.startService(
-                    Intent(ctx, QuroBgScreenOverlayService::class.java).setAction(ACTION_STOP),
-                )
-            }
-        }
-    }
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var frameJob: Job? = null
-
     private lateinit var wm: WindowManager
     private var root: FrameLayout? = null
-    private var image: ImageView? = null
+    private var ball: TextView? = null
+    private var surfaceView: SurfaceView? = null
     private var params: WindowManager.LayoutParams? = null
 
-    /** 浮窗宽高（px），拖动缩放手柄时改这两个值。 */
-    private var winW = 0
-    private var winH = 0
-
-    /** 收起态：只显示一颗球。 */
-    private var collapsed = false
-
-    /** 手指按下时窗口左上角的位置，拖动用。 */
-    private var downRawX = 0f
-    private var downRawY = 0f
-    private var downParamX = 0
-    private var downParamY = 0
+    /** 是否已把虚拟屏显示面接到本窗口的 SurfaceView。 */
+    private var attached = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
-        wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        try {
-            startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } catch (t: Throwable) {
-            Log.w(TAG, "前台通知失败（SPECIAL_USE），降级 DATA_SYNC", t)
-            runCatching {
-                startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-            }.onFailure {
-                Log.e(TAG, "前台通知彻底失败", it)
-                stopSelf()
-                return
-            }
-        }
+        wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        startForeground(NOTIFY_ID, buildNotification())
         showWindow()
-        running = true
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        return START_STICKY
-    }
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onDestroy() {
-        running = false
-        frameJob?.cancel()
-        runCatching { root?.let { wm.removeView(it) } }
+        detachSurface()
+        root?.let { runCatching { wm.removeView(it) } }
+        ball?.let { runCatching { wm.removeView(it) } }
         root = null
-        scope.cancel()
+        ball = null
+        running = false
         super.onDestroy()
     }
 
-    // ─────────────────────────── 窗口 ───────────────────────────
+    // ────────────────────────── 窗口搭建 ──────────────────────────
 
+    @SuppressLint("ClickableViewAccessibility")
     private fun showWindow() {
         val dm = resources.displayMetrics
-        winW = (dm.widthPixels * DEFAULT_W_RATIO).roundToInt().coerceAtLeast(dp(MIN_W_DP))
-        winH = (winW * dm.heightPixels / dm.widthPixels.toFloat()).roundToInt()
+        val screenW = dm.widthPixels
+        val screenH = dm.heightPixels
+        // 默认窗口：主屏宽 72%，高按虚拟屏比例（Extendroid optimiseSizes 同思路）
+        val dw = QuroVirtualScreen.frameWidth().takeIf { it > 0 } ?: screenW
+        val dh = QuroVirtualScreen.frameHeight().takeIf { it > 0 } ?: screenH
+        val w = (screenW * 0.72f).toInt()
+        val h = ((w.toLong() * dh / dw).toInt()).coerceAtMost((screenH * 0.72f).toInt())
 
-        val p = WindowManager.LayoutParams(
-            winW,
-            winH,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
-            },
-            // NOT_FOCUSABLE：不抢焦点，用户在原 App 里打字不会被打断
+        val lp = WindowManager.LayoutParams(
+            w,
+            h,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = dm.widthPixels - winW - dp(12)
-            y = dp(120)
+            x = (screenW - w) / 2
+            y = (screenH - h) / 5
         }
-        params = p
+        params = lp
 
-        val container = FrameLayout(this).apply {
-            background = GradientDrawable().apply {
-                cornerRadius = dp(16).toFloat()
-                setColor(Color.parseColor("#0B0E14"))
-                setStroke(dp(1), Color.parseColor("#2A3140"))
-            }
-            clipToOutline = true
-        }
+        val container = FrameLayout(this)
+        container.addView(buildPanel())
         root = container
+        wm.addView(container, lp)
+        running = true
+    }
 
-        // 画面
-        val iv = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.FIT_XY
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT,
-            )
-        }
-        image = iv
-        container.addView(iv)
-
-        // 空闲时给个提示（画面还没到时）
-        val hint = TextView(this).apply {
-            text = "后台屏"
-            setTextColor(Color.parseColor("#9CA3AF"))
-            textSize = 11f
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.CENTER,
-            )
-        }
-        container.addView(hint)
-
-        // 触摸：单指 = 拖动窗口；轻点（没移动）= 直接操控虚拟屏
-        container.setOnTouchListener { _, ev ->
-            when (ev.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    downRawX = ev.rawX
-                    downRawY = ev.rawY
-                    downParamX = p.x
-                    downParamY = p.y
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (collapsed) {
-                        p.x = (downParamX + (ev.rawX - downRawX)).roundToInt()
-                        p.y = (downParamY + (ev.rawY - downRawY)).roundToInt()
-                        clampToScreen(p)
-                        runCatching { wm.updateViewLayout(container, p) }
-                    } else {
-                        val dx = ev.rawX - downRawX
-                        val dy = ev.rawY - downRawY
-                        // 位移超过阈值才算拖动，否则留给「点一下直控」
-                        if (hypot(dx, dy) > dp(6)) {
-                            p.x = (downParamX + dx).roundToInt()
-                            p.y = (downParamY + dy).roundToInt()
-                            clampToScreen(p)
-                            runCatching { wm.updateViewLayout(container, p) }
-                        }
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP -> {
-                    val moved = hypot(ev.rawX - downRawX, ev.rawY - downRawY)
-                    if (!collapsed && moved <= dp(6)) {
-                        // 轻点 = 直接操控虚拟屏：把窗口内坐标换算成虚拟屏像素
-                        val localX = ev.x
-                        val localY = ev.y
-                        val sysW = QuroVirtualScreen.frameWidth()
-                        val sysH = QuroVirtualScreen.frameHeight()
-                        if (sysW > 0 && sysH > 0 && winW > 0 && winH > 0) {
-                            val vx = (localX / winW * sysW).roundToInt().coerceIn(0, sysW - 1)
-                            val vy = (localY / winH * sysH).roundToInt().coerceIn(0, sysH - 1)
-                            QuroVirtualScreen.tapAt(this@QuroBgScreenOverlayService, vx, vy)
-                        }
-                    }
-                    true
-                }
-                else -> false
-            }
+    /** 构建主窗口：控制条 + SurfaceView + 缩放行。 */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun buildPanel(): LinearLayout {
+        val ctx = this
+        val col = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.argb(238, 14, 17, 25))
         }
 
-        // 右上角按钮：收起 / 关闭
-        val bar = FrameLayout.LayoutParams(dp(22), dp(22), Gravity.TOP or Gravity.END).apply {
-            topMargin = dp(4); marginEnd = dp(4)
+        // ── 控制条 ──
+        val bar = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(Color.argb(255, 28, 33, 46))
+            setPadding(12, 6, 12, 6)
+            gravity = Gravity.CENTER_VERTICAL
         }
-        container.addView(makeChip("—") { setCollapsed(true) }, bar)
-        val closeLp = FrameLayout.LayoutParams(dp(22), dp(22), Gravity.TOP or Gravity.END).apply {
-            topMargin = dp(4); marginEnd = dp(28)
-        }
-        container.addView(makeChip("×") { stopSelf() }, closeLp)
-
-        // 右下角缩放手柄：拖动改窗口大小（画面等比跟随）
-        val handle = View(this).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#803B82F6"))
-            }
-            layoutParams = FrameLayout.LayoutParams(dp(14), dp(14), Gravity.BOTTOM or Gravity.END).apply {
-                bottomMargin = dp(4); marginEnd = dp(4)
-            }
-            setOnTouchListener { v, e ->
+        val handle = TextView(ctx).apply {
+            text = "⠿ 后台屏"
+            setTextColor(Color.WHITE)
+            textSize = 13f
+            setPadding(8, 8, 20, 8)
+            // 拖动整窗（Extendroid dragHandle 同款）
+            setOnTouchListener { _, e ->
                 when (e.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> { downRawX = e.rawX; downRawY = e.rawY; true }
+                    MotionEvent.ACTION_DOWN -> {
+                        dragStartX = params?.x ?: 0; dragStartY = params?.y ?: 0
+                        touchDownX = e.rawX; touchDownY = e.rawY; false
+                    }
                     MotionEvent.ACTION_MOVE -> {
-                        val nw = (winW + (e.rawX - downRawX)).roundToInt()
-                            .coerceIn(dp(MIN_W_DP), resources.displayMetrics.widthPixels - dp(24))
-                        downRawX = e.rawX
-                        winW = nw
-                        winH = (nw * resources.displayMetrics.heightPixels /
-                            resources.displayMetrics.widthPixels.toFloat()).roundToInt()
-                        p.width = winW
-                        p.height = winH
-                        runCatching { wm.updateViewLayout(container, p) }
-                        v.performClick()
+                        params?.x = dragStartX + (e.rawX - touchDownX).toInt()
+                        params?.y = dragStartY + (e.rawY - touchDownY).toInt()
+                        root?.let { r -> runCatching { wm.updateViewLayout(r, params) } }
                         true
                     }
                     else -> false
                 }
             }
         }
-        container.addView(handle)
-
-        runCatching { wm.addView(container, p) }
-            .onFailure { Log.e(TAG, "加浮窗失败（没授予悬浮窗权限？）", it); stopSelf(); return }
-
-        // 画面流：收到帧就换图
-        frameJob = scope.launch {
-            QuroVirtualScreen.frames.collectLatest { bmp ->
-                applyFrame(bmp, hint)
-            }
-        }
-    }
-
-    private fun applyFrame(bmp: Bitmap?, hint: TextView) {
-        val iv = image ?: return
-        if (bmp == null) {
-            hint.visibility = View.VISIBLE
-            iv.setImageDrawable(null)
-        } else {
-            hint.visibility = View.GONE
-            iv.setImageBitmap(bmp)
-        }
-    }
-
-    /** 收起 / 展开：收起时窗口缩成一颗球，只留一个「AI」字样。 */
-    private fun setCollapsed(to: Boolean) {
-        val c = root ?: return
-        val p = params ?: return
-        collapsed = to
-        if (to) {
-            p.width = dp(BALL_DP)
-            p.height = dp(BALL_DP)
-            c.background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#EE3B82F6"))
-            }
-            image?.visibility = View.GONE
-            // 球上显示 AI：用一个居中的文字替代画面
-            if (image?.parent === c) {
-                val ballText = TextView(this).apply {
-                    text = "AI"
-                    setTextColor(Color.WHITE)
-                    textSize = 12f
-                    typeface = Typeface.DEFAULT_BOLD
-                    gravity = Gravity.CENTER
-                    layoutParams = FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                    )
-                    tag = "ball"
-                }
-                c.addView(ballText)
-            }
-            c.setOnClickListener { setCollapsed(false) }
-        } else {
-            val dm = resources.displayMetrics
-            winW = (dm.widthPixels * DEFAULT_W_RATIO).roundToInt().coerceAtLeast(dp(MIN_W_DP))
-            winH = (winW * dm.heightPixels / dm.widthPixels.toFloat()).roundToInt()
-            p.width = winW
-            p.height = winH
-            c.background = GradientDrawable().apply {
-                cornerRadius = dp(16).toFloat()
-                setColor(Color.parseColor("#0B0E14"))
-                setStroke(dp(1), Color.parseColor("#2A3140"))
-            }
-            // 移除球上的文字
-            (0 until c.childCount).map { c.getChildAt(it) }
-                .filter { it.tag == "ball" }
-                .forEach { c.removeView(it) }
-            image?.visibility = View.VISIBLE
-            c.setOnClickListener(null)
-        }
-        runCatching { wm.updateViewLayout(c, p) }
-    }
-
-    private fun makeChip(text: String, onClick: () -> Unit): TextView =
-        TextView(this).apply {
-            this.text = text
+        bar.addView(handle)
+        bar.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
+        fun barBtn(label: String, onClick: () -> Unit) = Button(ctx, null, android.R.attr.borderlessButtonStyle).apply {
+            text = label
             setTextColor(Color.WHITE)
-            textSize = 11f
-            gravity = Gravity.CENTER
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#CC1F2430"))
-            }
+            textSize = 12f
+            minWidth = 0
+            setPadding(16, 4, 16, 4)
             setOnClickListener { onClick() }
         }
+        bar.addView(barBtn("球") { collapseToBall() })
+        bar.addView(barBtn("全屏") { openFullscreen() })
+        bar.addView(barBtn("返回") { Thread { QuroVirtualScreen.back(ctx) }.start() })
+        bar.addView(barBtn("✕") { stopSelf() })
+        col.addView(bar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-    private fun clampToScreen(p: WindowManager.LayoutParams) {
-        val dm = resources.displayMetrics
-        p.x = p.x.coerceIn(-p.width / 2, dm.widthPixels - p.width / 2)
-        p.y = p.y.coerceIn(0, dm.heightPixels - dp(60))
+        // ── SurfaceView（零拷贝直出 + 触摸直通）──
+        val sv = SurfaceView(ctx)
+        surfaceView = sv
+        sv.holder.addCallback(object : SurfaceHolder.Callback {
+            override fun surfaceCreated(holder: SurfaceHolder) {
+                attachSurface(holder.surface)
+            }
+
+            override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+                attachSurface(holder.surface)
+            }
+
+            override fun surfaceDestroyed(holder: SurfaceHolder) = detachSurface()
+        })
+        // 触摸直通：按下/移动/抬起合成手势注入虚拟屏
+        val slop = ViewConfiguration.get(ctx).scaledTouchSlop
+        sv.setOnTouchListener { _, e ->
+            val dwS = QuroVirtualScreen.frameWidth().toFloat()
+            val dhS = QuroVirtualScreen.frameHeight().toFloat()
+            val vw = sv.width.toFloat()
+            val vh = sv.height.toFloat()
+            if (dwS <= 0 || dhS <= 0 || vw <= 0 || vh <= 0) return@setOnTouchListener true
+            fun toScreen(ex: Float, ey: Float) = Pair(
+                (ex / vw * dwS).toInt().coerceIn(0, dwS.toInt() - 1),
+                (ey / vh * dhS).toInt().coerceIn(0, dhS.toInt() - 1),
+            )
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    touchDownX = e.x; touchDownY = e.y
+                    strokeX.clear(); strokeY.clear()
+                    strokeX.add(toScreen(e.x, e.y).first); strokeY.add(toScreen(e.x, e.y).second)
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val p = toScreen(e.x, e.y)
+                    strokeX.add(p.first); strokeY.add(p.second)
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    val moved = abs(e.x - touchDownX) > slop || abs(e.y - touchDownY) > slop
+                    val xs = strokeX.toList(); val ys = strokeY.toList()
+                    val dur = (e.eventTime - e.downTime).coerceAtLeast(80L)
+                    val up = toScreen(e.x, e.y)
+                    Thread {
+                        if (moved && xs.size > 2) {
+                            QuroVirtualScreen.swipeAt(ctx, xs.first(), ys.first(), xs.last(), ys.last(), dur)
+                        } else {
+                            QuroVirtualScreen.tapAt(ctx, up.first, up.second)
+                        }
+                    }.start()
+                    true
+                }
+                else -> true
+            }
+        }
+        col.addView(sv, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        // ── 缩放行（Extendroid 左右 resizer：拖两侧改窗宽，高按屏比例跟随）──
+        val resize = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(Color.argb(255, 28, 33, 46))
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        fun resizer(label: String, sign: Int): TextView = TextView(ctx).apply {
+            text = label
+            setTextColor(Color.WHITE)
+            textSize = 13f
+            setPadding(26, 12, 26, 12)
+            setOnTouchListener { _, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        resizeStartX = e.rawX; resizeStartW = params?.width ?: 0; true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dwR = QuroVirtualScreen.frameWidth().coerceAtLeast(1)
+                        val dhR = QuroVirtualScreen.frameHeight().coerceAtLeast(1)
+                        val nw = (resizeStartW + sign * (e.rawX - resizeStartX).toInt())
+                            .coerceIn(minW, resources.displayMetrics.widthPixels - 40)
+                        params?.width = nw
+                        params?.height = (nw.toLong() * dhR / dwR).toInt().coerceAtLeast(200)
+                        root?.let { r -> runCatching { wm.updateViewLayout(r, params) } }
+                        true
+                    }
+                    else -> true
+                }
+            }
+        }
+        resize.addView(resizer("◧", -1))
+        resize.addView(TextView(ctx).apply {
+            text = "拖两侧调大小 · 拖顶栏移动 · 点画面直接操作"
+            setTextColor(Color.argb(150, 255, 255, 255))
+            textSize = 11f
+            gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        resize.addView(resizer("◨", 1))
+        col.addView(resize, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        return col
     }
 
-    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).roundToInt()
+    // ────────────────────────── 显示面 / 手势 ──────────────────────────
 
-    // ─────────────────────────── 通知 ───────────────────────────
+    private fun attachSurface(surface: Surface) {
+        val id = QuroVirtualScreen.displayId
+        if (id < 0) return
+        val dm = resources.displayMetrics
+        val w = surfaceView?.width?.coerceAtLeast(160) ?: 480
+        val h = surfaceView?.height?.coerceAtLeast(160) ?: 800
+        val ok = QuroVirtualScreen.attachSurface(id, surface, w, h, dm.densityDpi)
+        attached = ok
+        QuroVirtualScreen.setUiSurfaceAttached(ok)
+        Log.d(TAG, "overlay attach ok=$ok ${w}x$h")
+    }
+
+    private fun detachSurface() {
+        if (!attached) return
+        attached = false
+        QuroVirtualScreen.setUiSurfaceAttached(false)
+        Thread { QuroVirtualScreen.detachSurfaceToReader() }.start()
+    }
+
+    // ────────────────────────── 收球 / 全屏 ──────────────────────────
+
+    /** 收成一颗「AI」球（Extendroid hideBtn 同款）：移除主窗，显示小球，点球恢复。 */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun collapseToBall() {
+        detachSurface()
+        root?.let { runCatching { wm.removeView(it) } }
+        root = null
+
+        val size = (resources.displayMetrics.density * 56).toInt()
+        val ballLp = WindowManager.LayoutParams(
+            size, size,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = resources.displayMetrics.widthPixels - size - 24
+            y = (resources.displayMetrics.heightPixels * 0.62f).toInt()
+        }
+
+        val b = TextView(this).apply {
+            text = "AI"
+            setTextColor(Color.WHITE)
+            textSize = 17f
+            gravity = Gravity.CENTER
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(Color.argb(235, 72, 110, 240))
+            }
+            setOnTouchListener { _, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        dragStartX = ballLp.x; dragStartY = ballLp.y
+                        touchDownX = e.rawX; touchDownY = e.rawY; false
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        ballLp.x = dragStartX + (e.rawX - touchDownX).toInt()
+                        ballLp.y = dragStartY + (e.rawY - touchDownY).toInt()
+                        ball?.let { runCatching { wm.updateViewLayout(it, ballLp) } }
+                        true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        // 位移小于阈值 → 点球展开窗口
+                        if (abs(e.rawX - touchDownX) < 12 && abs(e.rawY - touchDownY) < 12) {
+                            expandFromBall(ballLp.x, ballLp.y)
+                        }
+                        true
+                    }
+                    else -> true
+                }
+            }
+        }
+        ball = b
+        wm.addView(b, ballLp)
+    }
+
+    /** 从球恢复窗口（球消失，窗口出现在球的位置）。 */
+    private fun expandFromBall(x: Int, y: Int) {
+        ball?.let { runCatching { wm.removeView(it) } }
+        ball = null
+        showWindow()
+        params?.let {
+            it.x = x.coerceAtLeast(0)
+            it.y = y.coerceAtLeast(0)
+        }
+        root?.let { r -> runCatching { wm.updateViewLayout(r, params) } }
+    }
+
+    /** 全屏：交给桌面 Activity（沉浸式全屏直出，同一块虚拟屏）。 */
+    private fun openFullscreen() {
+        runCatching {
+            startActivity(
+                Intent(this, Class.forName("com.ai.assistance.quro.activity.QuroDesktopActivity"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }.onFailure { Log.w(TAG, "打开桌面失败", it) }
+    }
+
+    // ────────────────────────── 杂项 ──────────────────────────
 
     private fun buildNotification(): Notification {
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val ch = "quro_bg_overlay"
+        val nm = getSystemService(NotificationManager::class.java)
+        if (nm.getNotificationChannel(ch) == null) {
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "后台屏悬浮窗", NotificationManager.IMPORTANCE_LOW)
-                    .apply { description = "让后台虚拟屏浮在屏幕上，可随时点它直接操作" },
+                NotificationChannel(ch, "后台屏悬浮窗", NotificationManager.IMPORTANCE_LOW),
             )
         }
-        val pi = PendingIntent.getActivity(
-            this, 0, Intent(this, QuroMainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("后台屏悬浮窗")
-            .setContentText("点画面直接操作虚拟屏 · 右上角「—」可收成小球")
+        return Notification.Builder(this, ch)
+            .setContentTitle("后台虚拟屏悬浮窗运行中")
             .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentIntent(pi)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
+    }
+
+    private var dragStartX = 0
+    private var dragStartY = 0
+    private var touchDownX = 0f
+    private var touchDownY = 0f
+    private var resizeStartX = 0f
+    private var resizeStartW = 0
+    private val strokeX = mutableListOf<Int>()
+    private val strokeY = mutableListOf<Int>()
+    private val minW get() = (resources.displayMetrics.density * 180).toInt()
+
+    companion object {
+        private const val TAG = "QuroBgOverlay"
+        private const val NOTIFY_ID = 1042
+
+        @Volatile
+        var running: Boolean = false
+            private set
+
+        fun isOverlayAllowed(ctx: Context): Boolean =
+            android.provider.Settings.canDrawOverlays(ctx)
+
+        fun requestOverlayPermission(ctx: Context) {
+            runCatching {
+                ctx.startActivity(
+                    Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+        }
+
+        fun start(ctx: Context) {
+            runCatching {
+                ctx.startForegroundService(Intent(ctx, QuroBgScreenOverlayService::class.java))
+            }
+        }
+
+        fun stop(ctx: Context) {
+            runCatching { ctx.stopService(Intent(ctx, QuroBgScreenOverlayService::class.java)) }
+            running = false
+        }
     }
 }

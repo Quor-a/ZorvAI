@@ -126,6 +126,9 @@ class QuroAgentDisplay(
         if (!hasFrame || bmp == null) null else Bitmap.createBitmap(bmp, 0, 0, width, height)
     }
 
+    /** 虚拟屏当前的输入面（ImageReader 的 surface）。UI 显示切走后可用它切回来。 */
+    val inputSurface: android.view.Surface get() = reader.surface
+
     fun release() {
         if (released) return
         released = true
