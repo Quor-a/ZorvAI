@@ -208,7 +208,11 @@ class VtTerminalBridge(
     // ── TerminalSessionClient ──
 
     override fun onTextChanged(changedSession: TerminalSession) {
-        // 渲染由 TerminalView 内部处理，无需额外动作
+        // 🔴 必须通知 TerminalView 重绘！Termux 宿主在 onTextChanged 里调用
+        // mTerminalView.onScreenUpdated() 触发 invalidate。如果不调，emulator 的
+        // 内存屏幕缓冲区一直在更新（proot 输出已到达），但视图从不重绘，
+        // 表现为「黑屏 / 有数据但看不见」。
+        terminalView?.onScreenUpdated()
     }
 
     override fun onTitleChanged(changedSession: TerminalSession) {
