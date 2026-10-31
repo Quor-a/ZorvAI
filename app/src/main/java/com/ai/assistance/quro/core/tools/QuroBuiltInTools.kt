@@ -354,6 +354,9 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(QuroPrivExecTool())
     // #565 ADB 可当 ADB 终端（无线调试中枢）：shell=本机 ADB shell / tcp_status|tcp_enable|tcp_disable=管理 TCP adbd
     r.register(QuroAdbTermTool())
+    // ADB 主机侧：本机当 ADB client 去调试**另一台**设备（USB 直连 / TCP / 回环），
+    // 支持 shell / push / pull / install。与 adb_term 的分工：adb_term 是「本机被调试」，本工具是「去调试别人」。
+    r.register(AdbDevTool())
     // LSPosed/Xposed 模块 AI 直驱（完整对接）：status/foreground 读桥数据、enable/disable 写 lsposed_bridge.json 管控桥开关
     r.register(QuroLsposeTool())
     // 记忆库：AI 自动沉淀长期记忆（保存/列出/检索/删除）

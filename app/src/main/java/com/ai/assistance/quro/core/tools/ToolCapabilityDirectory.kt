@@ -49,6 +49,15 @@ object ToolCapabilityDirectory {
         COMMUNICATION(qstr(R.string.qk_03313), "短信、联系人、日历等"),
         AI_CAPABILITIES("AI能力", "图像生成、视频生成、文档处理"),
         SECURITY("安全/权限", "Shizuku、ROOT、设备管理员"),
+        /**
+         * ADB 调试（主机侧 + 被调试侧）。
+         *
+         * 🔴 必须单列，不能并进 SECURITY（那讲的是本机提权）：
+         *  - 本类讲的是 **ADB 协议本身**：本机当主机去调试另一台设备（USB/TCP）、
+         *    以及本机作为被调试端（tcpip adbd）、无线调试配对。
+         *  - `adb_dev` = 去调试别人；`adb_term` = 本机被调试。两个方向常被搞混。
+         */
+        ADB_DEBUG("ADB 调试", "本机作 ADB 主机调试另一台设备（USB/TCP）、本机被调试、无线配对"),
         CMS_DEVELOPMENT("CMS开发", "CMS模块、引擎、开发环境管理与部署"),
         AIP_DOC(qstr(R.string.qk_00121), "长文档/PPT/报告/思维导图的 AIP 结构化排版与文档生成"),
         /**
@@ -402,6 +411,47 @@ object ToolCapabilityDirectory {
             ),
             relatedTools = listOf("read_screen", "tap_screen", "screenshot", "shizuku_status"),
             priority = 5
+        ),
+
+        // ADB 主机侧：本机当 ADB client 去调试另一台设备。与 adb_term（本机被调试）方向相反。
+        "adb_dev" to ToolInfo(
+            name = "adb_dev",
+            category = ToolCategory.ADB_DEBUG,
+            description = "ADB 调试工具：把本机当 ADB 主机去调试另一台 Android 设备（USB 直连 / 网络 / 回环），支持 shell、推拉文件、安装 APK。",
+            useCases = listOf(
+                "帮我连一下另一台手机", "用 USB 调试那台设备", "给对面装个 APK",
+                "在另一台机器上执行命令", "adb 连不上怎么回事", "USB 连上了但识别不到",
+                "怎么开启无线调试被电脑调试"
+            ),
+            examples = listOf(
+                "adb_dev(action=\"guide\")",
+                "adb_dev(action=\"usb_list\")",
+                "adb_dev(action=\"usb_connect\", serial=\"ABC123\")",
+                "adb_dev(action=\"tcp_connect\", host=\"192.168.1.8\", port=5555)",
+                "adb_dev(action=\"shell\", command=\"getprop ro.product.model\")",
+                "adb_dev(action=\"push\", local=\"/sdcard/a.apk\", remote=\"/data/local/tmp/a.apk\")",
+                "adb_dev(action=\"install\", local=\"/sdcard/a.apk\")",
+                "adb_dev(action=\"disconnect\")"
+            ),
+            parameters = mapOf(
+                "action" to "guide / usb_list / usb_connect / tcp_connect / local_connect / devices / shell / push / pull / install / disconnect",
+                "device" to "目标设备（usb_list/devices 给的名字），单设备可省略",
+                "serial/deviceId" to "usb_connect 用；serial 拔插后仍稳定，优先用它",
+                "host/port" to "tcp_connect 用；legacy 5555，无线调试是随机端口",
+                "command" to "shell 命令",
+                "local/remote" to "push/pull/install 的路径"
+            ),
+            tips = listOf(
+                "**方向别搞混**：本工具是「我去调试别人」；`adb_term` 是「本机被调试 / 开本机 tcpip」。",
+                "不确定怎么做时先 `adb_dev(action=\"guide\")`，里面有完整技术说明。",
+                "USB 直连要求**本机支持 USB Host/OTG**，且对端开着「USB 调试」；只充电的线不行。",
+                "首次连接**对端会弹「允许 USB 调试」**，没人点就会认证失败——要明确告诉用户去点。",
+                "认证失败排查：对端「开发者选项 → 撤销 USB 调试授权」，再重插线重连。",
+                "网络调试要先在对端执行 `adb tcpip 5555`；无线调试（Android 11+）端口随机，需用户现场抄 IP:端口。",
+                "拔插后 USB deviceName 会变，用 serial 定位设备，不要缓存 deviceId。"
+            ),
+            relatedTools = listOf("adb_term", "shizuku_status", "install_app"),
+            priority = 4
         ),
 
         "linux_run" to ToolInfo(
@@ -1548,6 +1598,8 @@ name.startsWith("codecanvas_") -> ToolCategory.AI_CAPABILITIES
                 ToolCategory.VISUAL_INTERACT
             // 后台虚拟屏：必须在 ACCESSIBILITY 的 read_screen/tap_screen 规则之前命中，
             // 否则会被 users 误认成"无障碍那套"，让 AI 在该用后台屏时去抢用户主屏。
+            // ADB 调试：必须在 SECURITY 相关规则之前命中（否则 adb_* 会被当成"本机提权"）
+            name == "adb_dev" || name == "adb_term" -> ToolCategory.ADB_DEBUG
             name == "bg_screen" -> ToolCategory.VIRTUAL_SCREEN
             name in setOf("read_screen", "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen",
                 "input_text", "get_foreground_app", "get_screen_state", "screenshot", "screenshot_base64") ->
@@ -1864,6 +1916,13 @@ name.startsWith("codecanvas_") -> ToolCategory.AI_CAPABILITIES
 - 用户要「**点我屏幕上这个 / 帮我点点当前界面**」→ 无障碍的 `tap_screen` / `read_screen`（操作用户正在看的那块屏，会抢焦点）。
 - `bg_screen` 的标准流程：`status` → `open` → `screenshot` 看画面 → `tap`/`swipe` → 再 `screenshot` 确认 → 结束时 `release`。
 - `bg_screen` 依赖 Shizuku 已授权；返回「特权服务未就绪」时提示用户去开 Shizuku，**不要反复重试**。
+
+## 4.3 ADB 的两个方向（最容易搞反）
+- **本机去调试别人** → **`adb_dev`**（USB 直连 / 网络 / 回环，shell·push·pull·install）。
+  前提：本机支持 USB Host/OTG、对端开「USB 调试」、首次连接对端点「允许」。
+- **本机被调试 / 开本机 tcpip** → **`adb_term`**（`tcp_enable` 需要 root，Shizuku 权限不够）。
+- 不确定流程就先 `adb_dev(action="guide")`，它会返回完整技术说明（含 USB 识别规则与常见坑）。
+- 认证失败不是代码问题：让用户在对端「撤销 USB 调试授权」后重插线重连，或确认已点「允许」。
 
 ## 5. 工具调用格式
 - 一次调用多个工具：返回多个tool_calls
