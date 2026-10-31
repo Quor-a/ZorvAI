@@ -49,7 +49,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -118,12 +120,23 @@ fun TerminalHome(
         failure = null
         env.currentSessionId?.let { id -> env.onCloseSession(id) }
     }
-    LaunchedEffect(currentPty) {
+    LaunchedEffect(currentPty, env.currentSessionId) {
         val pty = currentPty ?: return@LaunchedEffect
         val process = pty.process
+        // 🔴 2026-10-31：只监控「当前仍存在」的用户可见会话。
+        // 内部临时会话（setup-check）已由 SetupScreen 主动关闭并从列表移除；
+        // 若会话已被 closeSession 移除，这里必须静默退出，否则会为已关闭会话弹错误卡。
         while (true) {
+            val sessionStillExists = env.sessions.any { it.id == env.currentSessionId }
+            if (!sessionStillExists) break
+
             if (!process.isAlive) {
-                val code = runCatching { process.exitValue() }.getOrNull()
+                // 进程已死：后台线程取真实退出码（waitpid 阻塞，不能在主线程调）
+                val code = withContext(Dispatchers.IO) { pty.tryGetExitCode() }
+                    ?: runCatching { process.exitValue() }.getOrNull()
+                // 再次确认会话仍存在（取退出码期间可能被用户关闭）
+                if (!env.sessions.any { it.id == env.currentSessionId }) break
+
                 // 稳定码同时进 logcat（诊断包会带 logcat.txt），设备侧可直接 grep 归因
                 android.util.Log.e(
                     "terminal",
@@ -133,7 +146,7 @@ fun TerminalHome(
                 )
                 failure = TerminalFailure(
                     code = TerminalFailureCode.PROCESS_EXITED,
-                    title = if (code == 0) "会话已结束" else "会话异常退出",
+                    title = if (code == null || code == 0) "会话已结束" else "会话异常退出",
                     detail = "进程已退出" + (code?.let { "（exit=$it）" } ?: "") +
                         "。上方保留的是它最后的输出。",
                     hint = "点「重连」开一个新会话即可继续；若每次都秒退，" +

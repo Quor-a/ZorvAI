@@ -35,6 +35,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
@@ -144,7 +145,9 @@ fun SetupScreen(
         var createdSessionId: String? = null
         val job = coroutineScope.launch {
             try {
-                val session = terminalManager.createNewSession("setup-check")
+                // 🔴 2026-10-31：setup-check 是内部检查会话，不抢占当前会话（makeCurrent=false），
+                // 否则它成为终端页当前会话后，进程一退出就会弹「会话已结束」错误卡。
+                val session = terminalManager.createNewSession("setup-check", makeCurrent = false)
                 createdSessionId = session.id
                 checkSessionId = session.id
                 Log.d("SetupScreen", "Created check session: ${session.id}")
@@ -178,8 +181,10 @@ fun SetupScreen(
             packageStatus[pkg.id] = InstallStatus.CHECKING
         }
 
-        // 并发检查所有包
-        allPackages.forEach { pkg ->
+        // 并发检查所有包；joinAll 等全部结束后主动关闭内部检查会话，
+        // 避免 setup-check 残留在会话列表里变成终端页的「僵尸当前会话」。
+        // 60s 上限防止某个检查协程异常挂起导致会话永不关闭。
+        val checkJobs = allPackages.map { pkg ->
             launch {
                 val isInstalled = checkPackageInstalled(terminalManager, sessionId, pkg, this)
                 if (isInstalled) {
@@ -199,6 +204,15 @@ fun SetupScreen(
                     }
                 }
             }
+        }
+        try {
+            withTimeoutOrNull(60_000L) { checkJobs.joinAll() }
+        } finally {
+            // 检查全部完成（或协程被取消/超时）→ 主动关闭内部检查会话（幂等；
+            // 若用户已离开，onDispose 也会关闭，这里重复关闭无害）。
+            Log.d("SetupScreen", "Package checks finished, closing check session $sessionId")
+            terminalManager.closeSession(sessionId)
+            checkSessionId = null
         }
     }
 

@@ -22,8 +22,12 @@ class SessionManager(private val terminalManager: TerminalManager) {
     
     /**
      * 创建新会话
+     *
+     * @param makeCurrent 是否把新会话设为当前会话。默认 true（用户点「+」新建终端）。
+     *   🔴 2026-10-31：内部临时会话（如 SetupScreen 的 setup-check）应传 false——
+     *   否则它会抢走用户的当前会话，回到终端页时错误卡/输出都会显示这个内部会话。
      */
-    fun createNewSession(title: String? = null): TerminalSessionData {
+    fun createNewSession(title: String? = null, makeCurrent: Boolean = true): TerminalSessionData {
         lateinit var newSession: TerminalSessionData
         _state.update { currentState ->
             val sessionCount = currentState.sessions.size + 1
@@ -32,11 +36,11 @@ class SessionManager(private val terminalManager: TerminalManager) {
             )
             currentState.copy(
                 sessions = currentState.sessions + newSession,
-                currentSessionId = newSession.id
+                currentSessionId = if (makeCurrent) newSession.id else currentState.currentSessionId
             )
         }
         
-        Log.d("SessionManager", "Created new session: ${newSession.id}")
+        Log.d("SessionManager", "Created new session: ${newSession.id} makeCurrent=$makeCurrent")
         return newSession
     }
     

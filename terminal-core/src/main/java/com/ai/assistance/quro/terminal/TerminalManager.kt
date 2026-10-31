@@ -180,9 +180,14 @@ class TerminalManager private constructor(
 
     /**
      * 创建新会话 - 同步等待初始化完成。
+     *
+     * @param makeCurrent 是否把新会话设为当前会话。内部临时会话（如 setup-check）传 false。
      */
-    suspend fun createNewSession(title: String? = null): com.ai.assistance.quro.terminal.data.TerminalSessionData {
-        val newSession = sessionManager.createNewSession(title)
+    suspend fun createNewSession(
+        title: String? = null,
+        makeCurrent: Boolean = true,
+    ): com.ai.assistance.quro.terminal.data.TerminalSessionData {
+        val newSession = sessionManager.createNewSession(title, makeCurrent)
 
         coroutineScope.launch {
             initializeSession(newSession.id)
