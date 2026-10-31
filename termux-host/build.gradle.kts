@@ -17,7 +17,7 @@ android {
         // 官方 TermuxApplication 需要 TERMUX_PACKAGE_VARIANT 初始化 TermuxBootstrap
         buildConfigField("String", "TERMUX_PACKAGE_VARIANT", "\"apt-android-7\"")
         // manifest 占位符：注入去品牌化后的包名（权限/authorities/action 均以此为准）
-        manifestPlaceholders["TERMUX_PACKAGE_NAME"] = "com.ai.assistance.quro.termux"
+        manifestPlaceholders["TERMUX_PACKAGE_NAME"] = "com.ai.assistance.quro"
     }
 
     buildTypes {

@@ -9,7 +9,7 @@
         tools:targetApi="n_mr1">
         <intent
             android:action="android.intent.action.RUN"
-            android:targetPackage="com.ai.assistance.quro.termux"
+            android:targetPackage="com.ai.assistance.quro"
             android:targetClass="com.ai.assistance.quro.termux.app.TermuxActivity"
             android:name="android.shortcut.conversation"/>
     </shortcut>
@@ -22,10 +22,10 @@
         tools:targetApi="n_mr1">
         <intent
             android:action="android.intent.action.RUN"
-            android:targetPackage="com.ai.assistance.quro.termux"
+            android:targetPackage="com.ai.assistance.quro"
             android:targetClass="com.ai.assistance.quro.termux.app.TermuxActivity"
             android:name="android.shortcut.conversation">
-            <extra android:name="com.ai.assistance.quro.termux.app.failsafe_session" android:value="true"/>
+            <extra android:name="com.ai.assistance.quro.app.failsafe_session" android:value="true"/>
         </intent>
     </shortcut>
 
@@ -37,7 +37,7 @@
         tools:targetApi="n_mr1">
         <intent
             android:action="android.intent.action.VIEW"
-            android:targetPackage="com.ai.assistance.quro.termux"
+            android:targetPackage="com.ai.assistance.quro"
             android:targetClass="com.ai.assistance.quro.termux.app.activities.SettingsActivity"
             android:name="android.shortcut.conversation"/>
     </shortcut>
