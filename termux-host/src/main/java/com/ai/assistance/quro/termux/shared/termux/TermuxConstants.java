@@ -348,8 +348,10 @@ public final class TermuxConstants {
 
     /** Termux app name */
     public static final String TERMUX_APP_NAME = "Termux"; // Default: "Termux"
-    /** Termux package name */
-    public static final String TERMUX_PACKAGE_NAME = "com.ai.assistance.quro.termux"; // Default: "com.ai.assistance.quro.termux"
+    /** Termux 宿主 applicationId（必须等于宿主 app 的 applicationId，否则 createPackageContext 失败） */
+    public static final String TERMUX_PACKAGE_NAME = "com.ai.assistance.quro"; // Default: "com.ai.assistance.quro"
+    /** Termux Java 类实际所在包名（区别于 applicationId，用于类名拼接） */
+    public static final String TERMUX_APP_CLASS_PACKAGE_NAME = "com.ai.assistance.quro.termux"; // Default: "com.ai.assistance.quro.termux"
     /** Termux GitHub repo name */
     public static final String TERMUX_GITHUB_REPO_NAME = "termux-app"; // Default: "termux-app"
     /** Termux GitHub repo url */
@@ -925,17 +927,17 @@ public final class TermuxConstants {
 
 
         /** Termux app BuildConfig class name */
-        public static final String BUILD_CONFIG_CLASS_NAME = TERMUX_PACKAGE_NAME + ".BuildConfig"; // Default: "com.ai.assistance.quro.termux.BuildConfig"
+        public static final String BUILD_CONFIG_CLASS_NAME = TERMUX_APP_CLASS_PACKAGE_NAME + ".BuildConfig"; // Default: "com.ai.assistance.quro.termux.BuildConfig"
 
         /** Termux app FileShareReceiverActivity class name */
-        public static final String FILE_SHARE_RECEIVER_ACTIVITY_CLASS_NAME = TERMUX_PACKAGE_NAME + ".app.api.file.FileShareReceiverActivity"; // Default: "com.ai.assistance.quro.termux.app.api.file.FileShareReceiverActivity"
+        public static final String FILE_SHARE_RECEIVER_ACTIVITY_CLASS_NAME = TERMUX_APP_CLASS_PACKAGE_NAME + ".app.api.file.FileShareReceiverActivity"; // Default: "com.ai.assistance.quro.termux.app.api.file.FileShareReceiverActivity"
 
         /** Termux app FileViewReceiverActivity class name */
-        public static final String FILE_VIEW_RECEIVER_ACTIVITY_CLASS_NAME = TERMUX_PACKAGE_NAME + ".app.api.file.FileViewReceiverActivity"; // Default: "com.ai.assistance.quro.termux.app.api.file.FileViewReceiverActivity"
+        public static final String FILE_VIEW_RECEIVER_ACTIVITY_CLASS_NAME = TERMUX_APP_CLASS_PACKAGE_NAME + ".app.api.file.FileViewReceiverActivity"; // Default: "com.ai.assistance.quro.termux.app.api.file.FileViewReceiverActivity"
 
 
         /** Termux app core activity name. */
-        public static final String TERMUX_ACTIVITY_NAME = TERMUX_PACKAGE_NAME + ".app.TermuxActivity"; // Default: "com.ai.assistance.quro.termux.app.TermuxActivity"
+        public static final String TERMUX_ACTIVITY_NAME = TERMUX_APP_CLASS_PACKAGE_NAME + ".app.TermuxActivity"; // Default: "com.ai.assistance.quro.termux.app.TermuxActivity"
 
         /**
          * Termux app core activity.
@@ -943,25 +945,25 @@ public final class TermuxConstants {
         public static final class TERMUX_ACTIVITY {
 
             /** Intent extra for if termux failsafe session needs to be started and is used by {@link TERMUX_ACTIVITY} and {@link TERMUX_SERVICE#ACTION_STOP_SERVICE} */
-            public static final String EXTRA_FAILSAFE_SESSION = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.failsafe_session"; // Default: "com.ai.assistance.quro.termux.app.failsafe_session"
+            public static final String EXTRA_FAILSAFE_SESSION = TERMUX_PACKAGE_NAME + ".app.failsafe_session"; // Default: "com.ai.assistance.quro.termux.app.failsafe_session"
 
 
             /** Intent action to make termux app notify user that a crash happened. */
-            public static final String ACTION_NOTIFY_APP_CRASH = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.notify_app_crash"; // Default: "com.ai.assistance.quro.termux.app.notify_app_crash"
+            public static final String ACTION_NOTIFY_APP_CRASH = TERMUX_PACKAGE_NAME + ".app.notify_app_crash"; // Default: "com.ai.assistance.quro.termux.app.notify_app_crash"
 
 
             /** Intent action to make termux reload its termux session styling */
-            public static final String ACTION_RELOAD_STYLE = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.reload_style"; // Default: "com.ai.assistance.quro.termux.app.reload_style"
+            public static final String ACTION_RELOAD_STYLE = TERMUX_PACKAGE_NAME + ".app.reload_style"; // Default: "com.ai.assistance.quro.termux.app.reload_style"
             /** Intent {@code String} extra for what to reload for the TERMUX_ACTIVITY.ACTION_RELOAD_STYLE intent. This has been deperecated. */
             @Deprecated
-            public static final String EXTRA_RELOAD_STYLE = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.reload_style"; // Default: "com.ai.assistance.quro.termux.app.reload_style"
+            public static final String EXTRA_RELOAD_STYLE = TERMUX_PACKAGE_NAME + ".app.reload_style"; // Default: "com.ai.assistance.quro.termux.app.reload_style"
 
             /**  Intent {@code boolean} extra for whether to recreate activity for the TERMUX_ACTIVITY.ACTION_RELOAD_STYLE intent. */
             public static final String EXTRA_RECREATE_ACTIVITY = TERMUX_APP.TERMUX_ACTIVITY_NAME + ".EXTRA_RECREATE_ACTIVITY"; // Default: "com.ai.assistance.quro.termux.app.TermuxActivity.EXTRA_RECREATE_ACTIVITY"
 
 
             /** Intent action to make termux request storage permissions */
-            public static final String ACTION_REQUEST_PERMISSIONS = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.request_storage_permissions"; // Default: "com.ai.assistance.quro.termux.app.request_storage_permissions"
+            public static final String ACTION_REQUEST_PERMISSIONS = TERMUX_PACKAGE_NAME + ".app.request_storage_permissions"; // Default: "com.ai.assistance.quro.termux.app.request_storage_permissions"
         }
 
 
@@ -969,14 +971,14 @@ public final class TermuxConstants {
 
 
         /** Termux app settings activity name. */
-        public static final String TERMUX_SETTINGS_ACTIVITY_NAME = TERMUX_PACKAGE_NAME + ".app.activities.SettingsActivity"; // Default: "com.ai.assistance.quro.termux.app.activities.SettingsActivity"
+        public static final String TERMUX_SETTINGS_ACTIVITY_NAME = TERMUX_APP_CLASS_PACKAGE_NAME + ".app.activities.SettingsActivity"; // Default: "com.ai.assistance.quro.termux.app.activities.SettingsActivity"
 
 
 
 
 
         /** Termux app core service name. */
-        public static final String TERMUX_SERVICE_NAME = TERMUX_PACKAGE_NAME + ".app.TermuxService"; // Default: "com.ai.assistance.quro.termux.app.TermuxService"
+        public static final String TERMUX_SERVICE_NAME = TERMUX_APP_CLASS_PACKAGE_NAME + ".app.TermuxService"; // Default: "com.ai.assistance.quro.termux.app.TermuxService"
 
         /**
          * Termux app core service.
@@ -1120,7 +1122,7 @@ public final class TermuxConstants {
 
 
         /** Termux app run command service name. */
-        public static final String RUN_COMMAND_SERVICE_NAME = TERMUX_PACKAGE_NAME + ".app.RunCommandService"; // Termux app service to receive commands from 3rd party apps "com.ai.assistance.quro.termux.app.RunCommandService"
+        public static final String RUN_COMMAND_SERVICE_NAME = TERMUX_APP_CLASS_PACKAGE_NAME + ".app.RunCommandService"; // Termux app service to receive commands from 3rd party apps "com.ai.assistance.quro.termux.app.RunCommandService"
 
         /**
          * Termux app run command service to receive commands sent by 3rd party apps.
