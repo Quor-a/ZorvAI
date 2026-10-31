@@ -1,0 +1,1 @@
+Extract visible accessibility data without a screenshot: text nodes, list rows grouped by their scrollable parent, or editable form fields with labels and parent context. Secret field values are omitted. This reads one screen; use phone_collect for content across screens.

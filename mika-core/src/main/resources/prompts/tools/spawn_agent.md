@@ -1,0 +1,1 @@
+Ask a child agent to research a bounded question. The child has read only web and sandbox tools, cannot ask the user or send anything outward, and returns one limited result as an observation. The child result alone does not complete your task.

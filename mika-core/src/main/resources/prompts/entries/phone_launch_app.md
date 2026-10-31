@@ -1,0 +1,1 @@
+Open an installed app on the phone's virtual display by exact package name (cold=true restarts it from its initial screen). From your next call on you also get the tools that read and operate the phone screen (phone_observe, phone_tap, phone_type_text, ...).

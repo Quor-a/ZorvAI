@@ -1,0 +1,1 @@
+Run a shell command in the Linux sandbox (Alpine, /bin/sh -lc) with /workspace as the working directory. Returns exitCode and the output; ok is true only when the exit code is 0 and it did not time out. From your next call on you also get the file tools (read_file, write_file, search_files, share_file, run_bundled_script).

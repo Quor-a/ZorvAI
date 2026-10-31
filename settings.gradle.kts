@@ -41,7 +41,14 @@ include(":app", ":aidl-aci-browser", ":aidl-aci-core", ":mnn", ":llama", ":lib_a
     ":vtlib",
     // termux-host — Termux app 宿主层完整移植（TermuxActivity/Service/会话管理/设置/通知/快捷键/工具栏）
     // 去品牌化为 com.ai.assistance.quro.termux；依赖 :vtlib 终端核心 + :terminal-core proot 启动
-    ":termux-host")
+    ":termux-host",
+    // mika-core — Mika 内核（原 core 模块，纯 Kotlin JVM，338 文件 / 8.2 万行）完整 vendor。
+    // 后台虚拟屏（cap/phone/a11y）的依赖闭包包级稳定点覆盖 core 的 624/627 文件，
+    // 无法按子集切分，故整模块搬入；只做包名替换，见 docs/tools/vendor_mika_core.py
+    ":mika-core",
+    // mika-phone — Mika 后台虚拟屏操作层（cap/phone/a11y + display，24 文件）完整移植，
+    // 依赖 :mika-core；与上游唯一差别是宿主绑定换成 MikaShellPort（见该模块 kdoc）
+    ":mika-phone")
 project(":mnn").projectDir = file("llm/mnn")
 project(":llama").projectDir = file("llm/llama")
 // CodeCanvas 子模块实际位于 codecanvas/<模块名>/，模块名与目录名不同名，必须显式指路

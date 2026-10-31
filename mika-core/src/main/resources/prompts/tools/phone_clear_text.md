@@ -1,0 +1,1 @@
+Clear the focused text field, or the one given by ref+snapshotId. The result's effect reads the field back (readback, readbackMatches) so you can see it is empty. On a screen the element list cannot read, give the box's point instead (x+y, or the @vN ref from phone_find_visually): it is tapped, then cleared with select-all and delete; point_not_typed means nothing changed there.

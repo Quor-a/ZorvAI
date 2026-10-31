@@ -1,0 +1,1 @@
+List what is on this screen as text, without a screenshot. Each element comes with a ref (@eN); to act on one, pass its ref together with the snapshotId of this list. Positions use the same 0-999 grid as {{tap}}. When an action answers ref_expired, the screen has moved on: call {{observe}} or {{list_elements}} again and use the new refs.

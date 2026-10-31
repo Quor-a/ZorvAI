@@ -1,0 +1,1 @@
+Draw a one-finger path or two simultaneous paths on the task's virtual display. Each path is a sequence of normalized [x,y] points (0-999); two paths can pinch or spread. Prefer accessibility refs or ordinary scroll/swipe when they can express the action.

@@ -1,0 +1,1 @@
+Inspect the top dialog's text and visible buttons. Leave buttonText empty to inspect. Give an exact button label to click it through the normal phone action path. If no dialog or a nonunique button is found, no click occurs.

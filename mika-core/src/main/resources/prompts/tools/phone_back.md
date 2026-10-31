@@ -1,0 +1,1 @@
+Press Back on the phone's virtual display. If nothing changes, use the app's visible back control instead of repeating. effect.kind is place_changed (the app in effect.to) when back left the app, no_effect when nothing changed.

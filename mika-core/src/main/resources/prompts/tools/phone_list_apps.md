@@ -1,0 +1,1 @@
+List apps installed for the current user as package + label. Use an exact returned package with phone_launch_app. An app also installed in another user or profile (such as an app clone or a work profile) gets one more entry per copy, with the same package, a label naming the copy, and user: pass that user to phone_launch_app to open that copy.

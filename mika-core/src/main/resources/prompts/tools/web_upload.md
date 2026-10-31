@@ -1,0 +1,1 @@
+Give workspace files to a file input on the page: pass the file control's ref+snapshotId and 1-{{max_files}} paths under {{workspace}}. Files outside the workspace cannot be uploaded; ask the user to send them as chat attachments first.

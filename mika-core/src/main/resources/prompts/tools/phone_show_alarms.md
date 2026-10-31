@@ -1,0 +1,1 @@
+Open the clock app's alarm list on the phone's virtual display through the standard Android action. Use it to check alarms you set, or to change, switch off or delete an alarm: do that on the list with the screen tools. If it returns not_supported, open the clock app with phone_launch_app instead.

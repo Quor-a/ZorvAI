@@ -30,6 +30,10 @@ import android.view.Surface;
  *
  * ShellService 架构：通过 AIDL UserService 在 Shizuku 特权进程内执行命令。
  */
+import android.app.PendingIntent;
+import android.content.Intent;
+import android.os.ParcelFileDescriptor;
+
 interface IQuroShellService {
     /** 销毁服务进程（Shizuku 回调）。 */
     void destroy() = 16777114;
@@ -126,5 +130,96 @@ interface IQuroShellService {
      * @return 是否成功；反射不可用时退回 am 命令行
      */
     boolean moveTask(int taskId, int displayId) = 17;
+
+    // ═══════════ 以下为「后台虚拟屏」完整移植所需（对齐上游 43 方法契约）═══════════
+    // 说明：这些是 AndroidScreen（动作编排 1810 行）真正调用的宿主能力。
+    // 缺一个，移植过来的操作层就编不过、更跑不起来，所以必须补齐。
+
+    /** 冷启动：先结束该 App 进程再启动；返回码同 startApp，另有 4=App 在别的屏还有任务 */
+    int restartApp(int displayId, String packageName) = 18;
+
+    /** 任务最上面页面所属的包；任务不存在返回 null */
+    String packageOfTask(int taskId) = 19;
+
+    /** 任务所属用户（分身/工作资料）；不存在返回 -1 */
+    int userOfTask(int taskId) = 20;
+
+    /** 该包任务所在的自己那块虚拟屏；不在任何一块上返回 -1 */
+    int displayOfPackage(String packageName) = 21;
+
+    /** 该包在 userId 那份用户里的任务所在屏；不在返回 -1 */
+    int displayOfPackageInUser(String packageName, int userId) = 22;
+
+    /** 往这块屏发 Ctrl+键（只放行 A 全选、V 粘贴） */
+    boolean injectCtrlKey(int displayId, int keyCode) = 23;
+
+    /** 该包 PLAY_AUDIO 静音开关 */
+    boolean setAudioMuted(String packageName, boolean muted) = 24;
+
+    /** 该包当前 PLAY_AUDIO 模式；读不到返回 null */
+    String getAudioMode(String packageName) = 25;
+
+    /** 把 PLAY_AUDIO 设回指定模式 */
+    boolean setAudioMode(String packageName, String mode) = 26;
+
+    /** 以 shell 身份设剪贴板（不弹「已复制」浮层）；0=已设置 1=读不到原剪贴板 2=出错 */
+    int setClipText(String text) = 27;
+
+    /** 还原 setClipText 之前的剪贴板 */
+    void restoreClip() = 28;
+
+    /** setClipText 之前用户剪贴板的文字；没有待还原的返回 null */
+    String savedClipText() = 29;
+
+    /** 剪贴板仍是 ours 时换回 original（空串则清空）；已被用户换掉时不动 */
+    void restoreClipText(String original, String ours) = 30;
+
+    /** 打开链接/设置页；返回码同 startApp，另有 5=没有 App 能打开 6=链接不允许 */
+    int startView(int displayId, String action, String uri, String packageName) = 31;
+
+    /** 系统动作（闹钟/计时器/日程等白名单），启动到这块屏；返回码同 startView */
+    int startSystemAction(int displayId, in Intent intent, in PendingIntent asMika) = 32;
+
+    /** 把一段文字分享给该包（ACTION_SEND text/plain），启动到这块屏；返回码同 startApp，另有 5=没有收文字分享的页面 */
+    int startShare(int displayId, String packageName, String text) = 33;
+
+    /** 在该虚拟屏上下文中执行命令；Bundle: exitCode(int) / output(String) */
+    Bundle runSystemCommand(int displayId, String command) = 34;
+
+    /** 以 shell 身份跑一条不限于某块屏的命令；Bundle: exitCode / output */
+    Bundle runCommand(String command) = 35;
+
+    /** `pm list users` 原样输出；出错 null */
+    String listUsers() = 36;
+
+    /** `pm list packages --user <userId>` 原样输出；出错 null */
+    String listPackages(int userId) = 37;
+
+    /** 该包是系统自带的（含更新过的系统 App）；查不到 false */
+    boolean isSystemPackage(String packageName) = 38;
+
+    /** 能打开里面 App 的其它用户（分身/工作资料）：Bundle: users(int[]) / summary(String) */
+    Bundle appCopyUsers() = 39;
+
+    /** 在另一份用户里打开该包；只认 appCopyUsers 列出的那几份，别的返回 8 */
+    int startAppInUser(int displayId, String packageName, int userId, boolean cold) = 40;
+
+    /** 点亮屏幕 */
+    boolean wakeDevice() = 41;
+
+    /** 解除锁屏（无凭据的滑动锁） */
+    boolean dismissDeviceKeyguard() = 42;
+
+    /** 输入设备凭据解锁；kind 见上游 CredentialKind */
+    boolean enterDeviceCredential(int kind, in byte[] credential) = 43;
+
+    /** 服务所在进程的 [uid, pid] */
+    int[] identity() = 44;
+
+    /** 撤掉本次绑定留下的改动（还原剪贴板、解除静音、释放所有屏），进程不退出 */
+    void releaseAll() = 45;
+
+    /** 以 shell 身份连本应用 WebView 的调试套接字；名字不合规矩或连不上返回 null */
+    ParcelFileDescriptor openDevtoolsSocket(String name) = 46;
 }
 
