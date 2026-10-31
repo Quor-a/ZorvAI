@@ -319,6 +319,25 @@ object QuroVirtualScreen {
         }
     }
 
+    /**
+     * 在后台屏的输入框里写入文字（**不经过系统输入法**）。
+     *
+     * 为什么要单独一条：走 IME 会在用户主屏弹出键盘（输入法窗口跟焦点走），
+     * 是后台操作里最容易被察觉的打扰。走无障碍 ACTION_SET_TEXT 等价粘贴，零打扰。
+     *
+     * @return 实际写入的字符数；null = 这块屏上没有可用输入框（调用方应提示先点一下输入框）
+     */
+    fun inputText(context: Context, text: String, hint: String? = null, append: Boolean = false): Int? {
+        val d = display ?: return null
+        val svc = com.ai.assistance.quro.service.QuroAccessibilityService.instance ?: return null
+        val ok = runCatching {
+            BgScreenReader.inputText(svc, d.displayId, text, hint, append)
+        }.getOrDefault(false)
+        if (ok) return text.length
+        // 没有可编辑控件，或该控件不认 ACTION_SET_TEXT
+        return null
+    }
+
     // ─────────── 界面结构读取（移植 Mika 的读树能力）───────────
 
     /** 最近一次读到的界面快照；`tapElement` 靠它把 ref 换成坐标。 */

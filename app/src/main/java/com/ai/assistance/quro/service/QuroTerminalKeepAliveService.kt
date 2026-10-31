@@ -233,6 +233,9 @@ class QuroTerminalKeepAliveService : Service() {
         }
         // DSH 自启循环：只在首次 onCreate 之后的第一个 start 命令里起，
         // 因为只有这里能读到「开机拉起」标记（EXTRA_BOOT）。
+        // 每次服务起来都把唤醒闹钟续上：服务本身可能随时被冻结/回收，
+        // 只有 AlarmManager（系统级）能在进程死后把它叫回来。
+        runCatching { com.ai.assistance.quro.core.harness.QuroDshWatchdog.schedule(applicationContext) }
         if (!dshLoopStarted) {
             dshLoopStarted = true
             val fromBoot = intent?.getBooleanExtra(EXTRA_BOOT, false) == true

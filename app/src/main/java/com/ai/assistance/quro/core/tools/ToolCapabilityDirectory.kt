@@ -397,40 +397,49 @@ object ToolCapabilityDirectory {
         "bg_screen" to ToolInfo(
             name = "bg_screen",
             category = ToolCategory.VIRTUAL_SCREEN,
-            description = "后台虚拟屏：在一块用户看不见的独立虚拟屏上打开 App、点按、滑动、截图，不抢主屏焦点、不打断用户。需要 Shizuku 已授权。",
+            description = "后台虚拟屏：在一块**用户看不见**的独立虚拟屏上打开 App、读控件树、精确点按、滑动、截图。不抢主屏焦点、不弹输入法、不打断用户正在做的事。开屏需要 Shizuku；点击优先走无障碍手势（不需要 Shizuku）。",
             useCases = listOf(
-                "别打扰我，后台帮我操作一下", "在后台打开微信发条消息", "我看不到的时候帮我点一下",
-                "后台跑个 App 的流程", "不占我屏幕地操作手机",
-                "读一下那个 App 现在界面上有什么", "截图看看那个 App 现在什么界面（不影响我）"
+                // 触发语：用户这么说话时，必须用本工具，而不是 tap_screen
+                "别打扰我 / 后台帮我操作 / 悄悄做 / 不占我屏幕",
+                "我在忙，你帮我弄一下（用户此刻在别的 App 里）",
+                "后台打开某某 App，做某某步骤",
+                "读一下那个 App 现在界面上有什么（不影响我）",
+                "截图看看那个 App 现在什么界面",
+                "把流程跑一遍，我看着主屏就行",
             ),
             examples = listOf(
                 "bg_screen(action=\"status\")",
                 "bg_screen(action=\"open\", packageName=\"com.tencent.mm\")",
                 "bg_screen(action=\"read\")",
                 "bg_screen(action=\"tap_element\", ref=\"@e3\")",
-                "bg_screen(action=\"screenshot\")",
-                "bg_screen(action=\"tap\", x=540, y=1200)",
+                "bg_screen(action=\"input_text\", text=\"你好\")",
                 "bg_screen(action=\"swipe\", x1=540, y1=1800, x2=540, y2=600, duration_ms=300)",
                 "bg_screen(action=\"back\")",
+                "bg_screen(action=\"screenshot\")",
                 "bg_screen(action=\"top\")",
-                "bg_screen(action=\"release\")"
+                "bg_screen(action=\"release\")",
             ),
             parameters = mapOf(
-                "action" to "open / screenshot / tap / swipe / back / top / status / release",
-                "packageName" to "open 用的包名",
-                "x/y" to "tap 坐标（基于主屏分辨率，与截图像素一一对应）",
+                "action" to "status / open / read / tap_element / tap / swipe / input_text / back / screenshot / top / release",
+                "packageName" to "open 用的包名（如 com.tencent.mm）",
+                "ref" to "tap_element 用的元素引用，来自上一步 read 的返回（如 @e3）",
+                "x/y" to "tap 坐标（与截图/read 返回的 centerX/centerY 同一坐标系）",
                 "x1/y1/x2/y2" to "swipe 起终点",
-                "duration_ms" to "swipe 时长，默认 300"
+                "text" to "input_text 要输入的文字",
+                "duration_ms" to "swipe 时长，默认 300",
             ),
             tips = listOf(
-                "**要「不打扰用户」就用它**；用户明确说「帮我点屏幕上这个」才用无障碍的 tap_screen（那会抢焦点）。",
-                "open 会**自动兜住「App 跑到用户主屏」**：动作前后盯主屏 3 秒，若该 App 被系统放到了主屏，会自动挪回后台屏并如实告诉你；返回里出现「已自动挪回」就说明发生过，不必再重试。",
-                "固定流程：status → open → **read**（拿元素表）→ tap_element / tap → 再 read 确认 → 结束时 release。",
-                "**read 优先于 screenshot**：read 给出 ref + 真实坐标 + 控件类型，比看图猜坐标准得多、也更省 token。",
-                "read 返回「没有可读控件」时才退回 screenshot（该界面禁止无障碍读取，或还没渲染完）。",
-                "read 之后界面若变了，旧 ref 会失效 —— 点之前重新 read。",
-                "任务结束调 release 释放屏，别长期占着。",
-                "两条通道：开屏需要 Shizuku；点击/滑动优先走无障碍手势（不用 Shizuku），失败才回退 Shizuku 注入。"
+                // 🔴 触发条件写死，避免模型「看到 tap_screen 就选它」
+                "🔴 **只要用户表达「不要占用我的屏幕 / 我在忙 / 后台做 / 悄悄做」，就必须用本工具**，不要用 `tap_screen`（那会抢焦点、把 App 顶到用户眼前）。",
+                "边界：要操作**用户正看着的那块屏**（「点我屏幕上这个按钮」）→ 用无障碍 `tap_screen`；要**另开一块屏干活** → 用本工具。",
+                "标准流程：`status`（确认屏与 Shizuku）→ `open`（启动目标 App）→ `read`（读控件树，拿 ref 与真实坐标）→ `tap_element(ref)` 或 `tap(x,y)` → **再 `read` 确认界面变了** → 用完 `release`。",
+                "**优先 `read` + `tap_element`**：它给的是控件真实坐标 + 可点/可输/是否勾选，比截图猜坐标准得多、也省 token。只有 `read` 返回「没有可读控件」（界面禁止无障碍读取、或还没渲染完）时才退回 `screenshot` 看画面。",
+                "`read` 之后界面若变了，旧 ref 会失效 —— **点之前重新 `read`**，不要复用上一步的 ref 硬点。",
+                "输入文字：`input_text` 走无障碍在焦点控件里输入（不经过系统输入法，主屏不会弹键盘）。目标控件没焦点时先 `tap_element` 点一下它。",
+                "`open` 自带兜底：动作前后盯主屏 3 秒，若该 App 被系统丢到了用户主屏，会自动挪回后台屏并在返回里写「已自动挪回」——看到这句说明发生过，**不要重试 open**。",
+                "常见失败与对策：① 返回「特权服务未就绪」→ 让用户开 Shizuku（**不要反复重试**）；② `read` 空 → 换 `screenshot`；③ 返回「用户正在主屏使用该 App」→ 说明用户自己在用，**停下来问用户**，不要抢；④ 需要输入密码/支付/验证码 → 停手，交给用户。",
+                "任务结束调 `release` 释放屏，别长期占着（占着会一直消耗内存与电量）。",
+                "谁在干活：开屏靠 Shizuku（uid 2000），点击/滑动优先走无障碍手势、失败才回退 Shizuku 注入 —— 所以「Shizuku 在线但点不动」时先查无障碍是否被系统停用。",
             ),
             relatedTools = listOf("read_screen", "tap_screen", "screenshot", "shizuku_status"),
             priority = 5
@@ -1940,13 +1949,44 @@ name.startsWith("codecanvas_") -> ToolCategory.AI_CAPABILITIES
 
 要跑 **Android 系统命令**（/system/bin/sh、am、pm、settings）→ `shizuku_exec`，不要丢给 termux（那是 Ubuntu）。
 
-## 4.2 两块屏，别用错（后台虚拟屏 vs 无障碍）
-- 用户要「**别打扰我 / 后台做 / 我看不到的时候**」→ **`bg_screen`**（后台虚拟屏）。它在用户看不见的独立屏上 open App、tap/swipe、screenshot，
-  主屏焦点与输入法都不受影响，截图不走无障碍，因此安全窗口也能拿到画面。
-- 用户要「**点我屏幕上这个 / 帮我点点当前界面**」→ 无障碍的 `tap_screen` / `read_screen`（操作用户正在看的那块屏，会抢焦点）。
-- `bg_screen` 标准流程：`status` → `open` → **`read`（读控件树，拿到 ref 与真实坐标）** → `tap_element(ref)` 或 `tap(x,y)` → 再 `read` 确认界面变了 → 结束时 `release`。
-- **优先 `read` + `tap_element`，不要一上来就截图猜坐标**；只有 `read` 返回「没有可读控件」（界面禁止无障碍读取/还没渲染完）时才退回 `screenshot` + 视觉判断。
-- `bg_screen` 依赖 Shizuku 已授权；返回「特权服务未就绪」时提示用户去开 Shizuku，**不要反复重试**。
+## 4.2 两块屏：后台虚拟屏 vs 无障碍（用错就是「抢用户屏幕」）
+
+**先判「这块屏是谁的」**：
+- 要动的 App **用户正在看着 / 用户指着自己屏幕说「这个按钮」** → 无障碍 `read_screen` + `tap_screen`（这块屏就是用户的）。
+- 要在**另一块用户看不见的屏**上跑流程（用户忙别的、不想被打断、要后台做完再回报）→ **`bg_screen`**（后台虚拟屏）。
+
+**🔴 硬性触发（满足任一条就必须用 `bg_screen`，不许用 `tap_screen`）**
+1. 用户说「别打扰我 / 后台 / 悄悄 / 不占我屏幕 / 我在忙」；
+2. 用户是在**别的 App 里**让你做事（此时抢焦点会把他踢出当前界面）；
+3. 要连续操作多步、且中途用户可能在用手机（如「帮我把这个流程点完」）；
+4. 要读某个 App 的界面内容但**不想让它弹到前台**。
+
+**`bg_screen` 的完整脚本（照这个顺序走，别跳）**
+```
+① status                              → 确认屏可用 + Shizuku 状态
+② open(packageName)                   → 启动目标 App（自带主屏兜底）
+③ read                                → 拿元素表：ref / 类型 / 文字 / centerX,centerY / 可点可输
+④ tap_element(ref)  或 tap(x,y)        → 点它（ref 优先）
+⑤ read                                → 确认界面真的变了（别假设点成功）
+⑥ input_text(text) 或 swipe(...)       → 需要时输入/滑动
+⑦ back / top                          → 需要返回或确认当前 Activity
+⑧ release                             → 收工释放屏
+```
+
+**决策树（失败时改走哪条，别卡住）**
+| 现象 | 处理 |
+|---|---|
+| `read` 返回「没有可读控件」 | 换 `screenshot` 看画面，按图判断坐标后 `tap` |
+| 返回「特权服务未就绪」 | 请用户开 Shizuku，**不要反复重试** |
+| 返回「用户正在主屏使用该 App」 | 用户在用它 → **停下问用户**，绝不抢 |
+| 返回「已自动挪回后台屏」 | 系统把它丢到主屏后被我们挪回来了，**不要重试**，继续下一步 |
+| 点不动 / 手势无反应 | 先 `read` 确认坐标与控件；仍不行则检查无障碍是否被系统停用（点击优先走无障碍手势） |
+| 界面要求密码 / 支付 / 验证码 | **停手交给用户**，不要尝试输入 |
+
+**配合关系（这是「怎么配合使用」的关键）**
+- `bg_screen` 负责**在那块屏上动手**；`screenshot` 负责看画面；`read_screen`/`tap_screen` 负责**用户那块屏**。三者不要混用。
+- 需要在后台屏里跑命令（不是点 UI）→ 用 `termux` 或 `shizuku_exec`，不要用 `bg_screen` 硬点。
+- 需要调试另一台设备 → `adb_dev`（方向相反：那是「本机去连别人」）。
 
 ## 4.3 ADB 的两个方向（最容易搞反）
 - **本机去调试别人** → **`adb_dev`**（USB 直连 / 网络 / 回环，shell·push·pull·install）。

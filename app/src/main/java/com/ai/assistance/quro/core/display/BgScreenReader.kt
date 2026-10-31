@@ -88,6 +88,87 @@ data class BgSnapshot(
 
 object BgScreenReader {
 
+    /**
+     * 在指定屏的可编辑控件里写入文字（**不经过系统输入法**）。
+     *
+     * 为什么不用 IME：后台屏上弹输入法会在**用户的主屏**冒出键盘（输入法窗口跟焦点走），
+     * 这是最容易被察觉的打扰。走无障碍 `ACTION_SET_TEXT` 相当于粘贴，零打扰。
+     *
+     * 目标选择顺序：
+     *  1. 该控件本身有输入焦点（FOCUS_INPUT）；
+     *  2. 该屏上第一个 editable 控件（提示语/文字内容匹配优先）；
+     *  3. 都没有 → 返回 false，调用方提示「先点一下输入框」。
+     *
+     * @param append true 时在原文字后追加（不覆盖），等价于键盘继续输入
+     */
+    fun inputText(
+        service: com.ai.assistance.quro.service.QuroAccessibilityService,
+        displayId: Int,
+        text: String,
+        hint: String? = null,
+        append: Boolean = false,
+    ): Boolean {
+        if (text.isEmpty() && !append) return false
+        val windows: List<android.view.accessibility.AccessibilityWindowInfo> =
+            runCatching { service.windowsOn(displayId) }.getOrElse { emptyList() }
+        if (windows.isEmpty()) return false
+
+        // 收集该屏上所有可编辑节点（按遍历顺序，也就是视觉上的先后）
+        val editables = mutableListOf<android.view.accessibility.AccessibilityNodeInfo>()
+        fun walk(node: android.view.accessibility.AccessibilityNodeInfo?, depth: Int) {
+            if (node == null || depth > MAX_DEPTH) return
+            if (node.isEditable && node.isEnabled) editables += node
+            for (i in 0 until node.childCount) walk(node.getChild(i), depth + 1)
+        }
+        windows.forEach { w -> walk(w.root, 0) }
+        if (editables.isEmpty()) return false
+
+        val target = editables.firstOrNull { it.isFocused }
+            ?: editables.firstOrNull { n ->
+                hint != null && (
+                    n.text?.toString()?.contains(hint) == true ||
+                        n.hintText?.toString()?.contains(hint) == true
+                    )
+            }
+            ?: editables.first()
+
+        val finalText = if (append) (target.text?.toString().orEmpty() + text) else text
+        val args = android.os.Bundle().apply {
+            putCharSequence(
+                android.view.accessibility.AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                finalText,
+            )
+        }
+        val ok = runCatching {
+            target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        }.getOrDefault(false)
+        if (ok) return true
+
+        // 有的自定义 EditText 不认 ACTION_SET_TEXT：退回「聚焦 + 粘贴」
+        return runCatching {
+            target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_FOCUS)
+            target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+            false
+        }.getOrDefault(false)
+    }
+
+    /** 该屏上所有可编辑控件数量（供工具在输入失败时给出更准的提示）。 */
+    fun countEditable(
+        service: com.ai.assistance.quro.service.QuroAccessibilityService,
+        displayId: Int,
+    ): Int {
+        val windows: List<android.view.accessibility.AccessibilityWindowInfo> =
+            runCatching { service.windowsOn(displayId) }.getOrElse { emptyList() }
+        var n = 0
+        fun walk(node: android.view.accessibility.AccessibilityNodeInfo?, depth: Int) {
+            if (node == null || depth > MAX_DEPTH) return
+            if (node.isEditable && node.isEnabled) n++
+            for (i in 0 until node.childCount) walk(node.getChild(i), depth + 1)
+        }
+        windows.forEach { walk(it.root, 0) }
+        return n
+    }
+
     private const val MIN_SIZE = 5
     private const val MAX_DEPTH = 80
 

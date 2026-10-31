@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
 import com.ai.assistance.quro.core.adb.QuroAdbDebug
+import com.ai.assistance.quro.core.adb.QuroAdbWireless
 import com.ai.assistance.quro.core.approle.DefaultAppRole
 import com.ai.assistance.quro.core.approle.QuroDefaultAppManager
 import com.ai.assistance.quro.ui.theme.Accent
@@ -77,6 +78,18 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
     var portText by remember { mutableStateOf(QuroAdbDebug.DEFAULT_PORT.toString()) }
     var busy by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf("") }
+
+    // 真实监听状态（区别于配置属性）：running=在监听 / stale=配置了没监听 / 都没有=未开启
+    var tcpLive by remember { mutableStateOf(0) }
+    var tcpConfigured by remember { mutableStateOf(0) }
+    var netAddrs by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+
+    // 无线调试配对（Android 11+，SPAKE2）
+    var pairCode by remember { mutableStateOf("") }
+    var pairing by remember { mutableStateOf(false) }
+    var pairLog by remember { mutableStateOf("") }
+    var pairingPort by remember { mutableStateOf<Int?>(null) }
+    var wirelessSwitch by remember { mutableStateOf<Boolean?>(null) }
 
     // 本机 ADB Shell（控制代码 / 控制手机）：经特权通道以 root 执行命令
     var shellCmd by remember { mutableStateOf("") }
@@ -154,6 +167,10 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                 val dv = runCatching { QuroAdbDebug.adbDevices(ctx) }.getOrNull()
                 Quin(p, u, pt, a, l, cb, cs, dv)
             }
+            // 真实监听状态（不是配置属性）+ 全部本机地址
+            val status = withContext(Dispatchers.IO) { runCatching { QuroAdbDebug.tcpStatus(ctx) }.getOrNull() }
+            val addrs = withContext(Dispatchers.IO) { runCatching { QuroAdbDebug.allIps(ctx) }.getOrDefault(emptyList()) }
+            val wdSwitch = runCatching { QuroAdbDebug.wirelessDebugEnabled(ctx) }.getOrNull()
             val roles = withContext(Dispatchers.IO) {
                 enumValues<DefaultAppRole>().map { it to QuroDefaultAppManager.isHeld(ctx, it) }.toMap()
             }
@@ -165,6 +182,10 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
             usbCable = cable
             clients = cl
             adbOut = adb
+            tcpLive = status?.listeningPort ?: 0
+            tcpConfigured = status?.configuredPort ?: 0
+            netAddrs = addrs
+            wirelessSwitch = wdSwitch
             roleHeld = roles
             probing = false
         }
@@ -232,23 +253,78 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
         share(sb.toString())
     }
 
+    /**
+     * TCP ADB 开关。
+     *
+     * 🔴 关闭走 [QuroAdbDebug.disableTcpAdb]，它内部会**逐路尝试并复查真实监听**：
+     * 原来只发一条 `setprop -1; stop adbd; start adbd`，只要 `stop adbd` 被拒，
+     * 属性还是 5555，界面刷新又把「已开启」读回来 —— 用户看到的就是「怎么关都关不掉」。
+     */
     fun onToggle(newVal: Boolean) {
-        if (!QuroAdbDebug.hasPrivilegedChannel()) {
-            Toast.makeText(ctx, qstr(R.string.qk_02993), Toast.LENGTH_LONG).show()
-            QuroAdbDebug.openWirelessDebugging(ctx)
+        val portNum = portText.toIntOrNull()?.coerceIn(1, 65535) ?: QuroAdbDebug.DEFAULT_PORT
+        if (newVal && !QuroAdbDebug.hasPrivilegedChannel()) {
+            // 没有提权通道就开不了 adbd 的 TCP 监听（这是系统权限边界，不是按钮坏了）：
+            // 明确告知 + 给出真正可行的替代（系统「无线调试」免 root 配对）
+            Toast.makeText(ctx, "没有 root / Shizuku，无法直接开 TCP adbd。请用下面的「无线调试配对」（免 root）", Toast.LENGTH_LONG).show()
+            log = "无提权通道：\n" +
+                "· 想「被电脑连」：打开系统「无线调试」，用下面的配对码流程（免 root）\n" +
+                "· 想「固定端口 5555」：需要 root（写 service.adb.tcp.port + 重启 adbd）"
             return
         }
         scope.launch {
             busy = true
-            val portNum = portText.toIntOrNull()?.coerceIn(1, 65535) ?: QuroAdbDebug.DEFAULT_PORT
-            val r = withContext(Dispatchers.IO) { QuroAdbDebug.setTcpAdb(ctx, newVal, portNum) }
+            val (ok, detail) = withContext(Dispatchers.IO) {
+                if (newVal) QuroAdbDebug.enableTcpAdb(ctx, portNum)
+                else QuroAdbDebug.disableTcpAdb(ctx)
+            }
             busy = false
-            log = if (r.success) {
-                if (newVal) qstr(R.string.qk_02994, (portNum).toString(), (r.output).toString()) else qstr(R.string.qk_02995, (r.output).toString())
-            } else qstr(R.string.qk_02996, (r.render()).toString())
-            Toast.makeText(ctx, if (r.success) (if (newVal) qstr(R.string.qk_02997) else qstr(R.string.qk_02998)) else qstr(R.string.qk_01012), Toast.LENGTH_SHORT).show()
-            // adbd 重启后要等一两秒再探监听状态
-            delay(1500)
+            log = detail
+            Toast.makeText(
+                ctx,
+                if (ok) (if (newVal) "已开启 :$portNum" else "已关闭") else "操作未生效，看下方日志",
+                Toast.LENGTH_SHORT,
+            ).show()
+            delay(600)
+            refresh()
+        }
+    }
+
+    /** 无线调试配对：先 mDNS 找配对端口，再用 6 位码走 SPAKE2（免 root）。 */
+    fun doPair() {
+        val code = pairCode.trim()
+        if (code.length < 6) {
+            Toast.makeText(ctx, "配对码是系统「无线调试」页上的 6 位数字", Toast.LENGTH_SHORT).show()
+            return
+        }
+        scope.launch {
+            pairing = true
+            pairLog = "正在找配对端口（_adb-tls-pairing._tcp）…\n"
+            val port = withContext(Dispatchers.IO) { QuroAdbDebug.findPairingPort(ctx) }
+            pairingPort = port
+            pairLog += if (port != null) "找到配对端口 :$port\n" else "没找到配对端口（系统「无线调试」页要处于打开状态）\n"
+            pairLog += "正在配对（SPAKE2 + TLS1.3）…\n"
+            val r = withContext(Dispatchers.IO) { QuroAdbWireless.pair(ctx, port, code) }
+            pairLog += r + "\n"
+            if (port != null && r.contains("成功")) {
+                pairLog += "正在建立连接（_adb-tls-connect._tcp）…\n"
+                val cp = withContext(Dispatchers.IO) { QuroAdbDebug.findConnectPort(ctx) }
+                pairLog += withContext(Dispatchers.IO) { QuroAdbWireless.connect(ctx, cp) } + "\n"
+            }
+            pairing = false
+            refresh()
+        }
+    }
+
+    /** 只连接（已配对过时用）：mDNS 找连接端口 → TLS 连接。 */
+    fun doWirelessConnect() {
+        scope.launch {
+            pairing = true
+            pairLog = "正在找连接端口（_adb-tls-connect._tcp）…\n"
+            val cp = withContext(Dispatchers.IO) { QuroAdbDebug.findConnectPort(ctx) }
+            pairingPort = cp
+            pairLog += if (cp != null) "找到 :$cp\n" else "没找到（系统「无线调试」可能没开）\n"
+            pairLog += withContext(Dispatchers.IO) { QuroAdbWireless.connect(ctx, cp) } + "\n"
+            pairing = false
             refresh()
         }
     }
@@ -302,18 +378,27 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                 StatusRow(
                     Icons.Filled.Router,
                     "TCP ADB",
-                    if (tcpPort > 0) "监听端口 $tcpPort${if (listening) " · 已监听" else " · 未监听"}" else stringResource(R.string.qk_03010),
-                    tcpEnabled,
+                    when {
+                        tcpLive > 0 -> "正在监听 :$tcpLive · 电脑可 adb connect 本机"
+                        tcpConfigured > 0 -> "已配置 :$tcpConfigured 但 adbd 没在监听（多数是没权限重启 adbd）"
+                        else -> "未开启（下方可开关，或改用「无线调试配对」免 root）"
+                    },
+                    tcpLive > 0,
+                    unknown = probing,
                 )
             }
 
             GroupCaption(stringResource(R.string.qk_03011))
             SetGroup {
                 SetRow(
-                    Icons.Filled.Wifi, stringResource(R.string.qk_03012),
-                    if (hasPriv) stringResource(R.string.qk_03013) else stringResource(R.string.qk_03014),
-                    tcpEnabled,
-                    onToggle = { onToggle(!tcpEnabled) },
+                    Icons.Filled.Wifi, "开启 TCP ADB（固定端口）",
+                    when {
+                        tcpLive > 0 -> "已在 :$tcpLive 监听 · 点它可关闭"
+                        hasPriv -> "写 service.adb.tcp.port + 重启 adbd，让电脑能 adb connect"
+                        else -> "需要 root（Shizuku 多半会被 SELinux 拒）· 点它看替代方案"
+                    },
+                    tcpLive > 0,
+                    onToggle = { onToggle(tcpLive == 0) },
                     scaled = { it.sp },
                 )
                 if (hasPriv) {
@@ -343,11 +428,85 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                 }
             }
 
+            // ── 本机地址：**常驻显示**。原实现只在「有端口 + 有 WiFi」时出现，
+            //    于是热点/蜂窝/端口读不到时用户就「连接地址都没有」。这里始终列出全部地址。
+            GroupCaption("本机地址（电脑用它连接本机）")
+            SetGroup {
+                if (netAddrs.isEmpty()) {
+                    InfoLine("没取到本机 IPv4 地址：可能没连网络，或只有 IPv6。连上 WiFi / 热点后自动出现。")
+                } else {
+                    netAddrs.forEach { (addr, kind) ->
+                        val port = when {
+                            tcpLive > 0 -> tcpLive
+                            tcpConfigured > 0 -> tcpConfigured
+                            else -> QuroAdbDebug.DEFAULT_PORT
+                        }
+                        ConnectInfoRow(
+                            "adb connect $addr:$port",
+                            "$kind · " + if (tcpLive > 0) "该端口正在监听，可直接连" else "端口为默认值，需先开启 TCP ADB 或走无线调试配对",
+                            onCopy = { copy("adb connect $addr:$port") },
+                            onShare = { share("adb connect $addr:$port") },
+                        )
+                        HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                    }
+                }
+            }
+
+            // ── 无线调试配对（Android 11+，免 root）：这才是「怎么被无线调试」的正路
+            GroupCaption("无线调试配对（Android 11+，免 root）")
+            SetGroup {
+                InfoLine(
+                    "步骤：① 打开系统「无线调试」开关 → ② 点「使用配对码配对设备」，记下 6 位码 → " +
+                        "③ 在这里填入并点「配对」。配对成功后不用 USB 线、不用 root，电脑 / 另一台手机都能连。"
+                )
+                if (wirelessSwitch != null) {
+                    HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                    InfoLine("系统「无线调试」开关：${if (wirelessSwitch == true) "已打开" else "未打开（配对会失败）"}")
+                }
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = pairCode,
+                        onValueChange = { pairCode = it.filter { c -> c.isDigit() }.take(6) },
+                        label = { Text("6 位配对码", fontSize = 12.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        enabled = !pairing,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Button(
+                        onClick = { doPair() },
+                        enabled = !pairing && pairCode.length == 6,
+                    ) { Text(if (pairing) "配对中…" else "配对") }
+                }
+                HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = { doWirelessConnect() }, enabled = !pairing) {
+                        Text("仅连接（已配对过）", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { QuroAdbDebug.openWirelessDebugging(ctx) }) {
+                        Text("打开系统无线调试", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                if (pairLog.isNotBlank()) {
+                    HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+                    InfoLine(pairLog.trim())
+                }
+            }
+
             // 连接信息：被电脑控制 / 被手机控制（同一 TCP adbd，控制端可是电脑也可是另一台手机）
-            if (tcpEnabled && ip != null) {
+            if (tcpLive > 0 && ip != null) {
                 GroupCaption(stringResource(R.string.qk_03016))
                 SetGroup {
-                    val cmd = "adb connect $ip:$tcpPort"
+                    val cmd = "adb connect $ip:$tcpLive"
                     ConnectInfoRow(
                         cmd,
                         stringResource(R.string.qk_03017),
