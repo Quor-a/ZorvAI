@@ -3,6 +3,7 @@ package com.ai.assistance.quro.core.tools
 import android.content.Context
 import com.ai.assistance.quro.core.adb.AdbAuthException
 import com.ai.assistance.quro.core.adb.QuroAdbManager
+import com.ai.assistance.quro.core.adb.QuroAdbWireless
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -42,6 +43,13 @@ action：
 - install：安装 APK（device + local）
 - disconnect：断开指定设备
 
+无线调试（Android 11+，加密 + 免数据线，**不需要 USB**）：
+- wireless_status：查配对/连接端口与当前状态（先调它确认系统那边开了没）
+- pair：用配对码配对（需 code；port 可省略，自动 mDNS 发现）
+- wireless_connect：建立 TLS 连接（port 可省略）
+- wireless_exec：在无线连接上执行命令
+- wireless_forget：清除本地配对身份
+
 重要：
 - USB 直连要求**本机支持 USB Host/OTG**，且对端已开「USB 调试」；
 - 首次连接时**对端会弹出「允许 USB 调试」**，必须有人点允许，否则认证失败；
@@ -62,6 +70,7 @@ action：
     "local": {"type": "string", "description": "push/pull/install 的本地路径"},
     "remote": {"type": "string", "description": "push/pull 的设备端路径"},
     "reinstall": {"type": "boolean", "description": "install 是否 -r 覆盖安装，默认 true"},
+    "code": {"type": "string", "description": "pair 用的 6 位配对码（设备「使用配对码配对设备」弹窗里的数字）"},
     "timeout_ms": {"type": "integer", "description": "超时毫秒，默认 60000"}
   },
   "required": ["action"]
@@ -85,6 +94,26 @@ action：
                 "pull" -> pull(obj)
                 "install" -> install(obj)
                 "disconnect" -> disconnect(obj)
+
+                // ── 无线调试（配对 + TLS）──
+                "wireless_status" -> QuroAdbWireless.status(context)
+                "pair" -> QuroAdbWireless.pair(
+                    context,
+                    port = if (obj.has("port")) obj.optInt("port", 0).takeIf { it > 0 } else null,
+                    code = obj.optString("code", ""),
+                )
+                "wireless_connect" -> QuroAdbWireless.connect(
+                    context,
+                    port = if (obj.has("port")) obj.optInt("port", 0).takeIf { it > 0 } else null,
+                )
+                "wireless_exec" -> QuroAdbWireless.exec(
+                    obj.optString("command", ""),
+                    obj.optInt("timeout_ms", 60_000),
+                )
+                "wireless_forget" -> {
+                    QuroAdbWireless.forget(context)
+                    "已清除本地无线调试配对身份（设备侧授权需在系统设置里撤销）"
+                }
                 else -> "未知 action：$action"
             }
         }.getOrElse { t ->

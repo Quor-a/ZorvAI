@@ -5898,8 +5898,6 @@ private fun SettingsSheetContent(
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
-    var usePty by remember { mutableStateOf(QuroTerminalPrefs.usePty) }
-    var requireDestructiveConfirm by remember { mutableStateOf(QuroTerminalPrefs.requireDestructiveConfirm) }
     Column(
         Modifier.fillMaxWidth().heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
@@ -5952,21 +5950,6 @@ private fun SettingsSheetContent(
             SetRowClickable(Icons.Filled.AccountTree, stringResource(R.string.qk_03946), stringResource(R.string.qk_04065), "", onOpenCluster, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Public, stringResource(R.string.qk_03843), stringResource(R.string.qk_03866), "", onOpenAci, scaled)
-            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRow(
-                Icons.Filled.Code, stringResource(R.string.qk_03849),
-                stringResource(R.string.qk_03868), usePty,
-                onToggle = { usePty = !usePty; QuroTerminalPrefs.usePty = usePty },
-            )
-            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRow(
-                Icons.Filled.Warning, stringResource(R.string.qk_03850),
-                stringResource(R.string.qk_03871), requireDestructiveConfirm,
-                onToggle = {
-                    requireDestructiveConfirm = !requireDestructiveConfirm
-                    QuroTerminalPrefs.requireDestructiveConfirm = requireDestructiveConfirm
-                },
-            )
         }
         GroupCaption(stringResource(R.string.qk_01945))
         SetGroup {

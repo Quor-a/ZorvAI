@@ -212,6 +212,62 @@ object QuroVirtualScreen {
         return runCatching { shell.injectStroke(d.displayId, xs, ys, times) }.getOrDefault(false)
     }
 
+    // ─────────── 界面结构读取（移植 Mika 的读树能力）───────────
+
+    /** 最近一次读到的界面快照；`tapElement` 靠它把 ref 换成坐标。 */
+    @Volatile
+    private var lastSnapshot: BgSnapshot? = null
+
+    /**
+     * 读后台屏的**控件树**（不是截图）。
+     *
+     * 需要无障碍服务在运行；服务没开时返回 null（此时只能退回 screenshot）。
+     * 这一步是「精确点击」的前提：拿到 ref + 真实坐标，就不必靠看图猜位置。
+     */
+    fun readScreen(): BgSnapshot? {
+        val d = display ?: return null
+        val svc = com.ai.assistance.quro.service.QuroAccessibilityService.instance ?: return null
+        val snap = BgScreenReader.read(svc, d.displayId, d.width, d.height) ?: return null
+        lastSnapshot = snap
+        return snap
+    }
+
+    /** 最近一次快照（供 UI 显示，不重新读屏）。 */
+    fun lastSnapshot(): BgSnapshot? = lastSnapshot
+
+    /**
+     * 按 ref（如 `@e3`）点击某个元素。
+     *
+     * ref 来自上一次 [readScreen]；界面已经变了会点错，所以点之前应由调用方重新 read。
+     */
+    fun tapElement(context: Context, ref: String): Boolean {
+        val e = lastSnapshot?.elements?.firstOrNull { it.ref == ref } ?: return false
+        return tapAt(context, e.centerX, e.centerY)
+    }
+
+    /**
+     * 点一下：**优先用无障碍手势**（不需要任何特权），失败再退回 Shizuku 注入。
+     *
+     * 为什么这个顺序：无障碍通道在多数机型上更稳（不受 shell 输入注入限制），
+     * 而 Shizuku 注入需要服务在线；两条都留，任一条可用即可工作。
+     */
+    fun tapAt(context: Context, x: Int, y: Int): Boolean {
+        val d = display ?: return false
+        val svc = com.ai.assistance.quro.service.QuroAccessibilityService.instance
+        if (svc != null && svc.tapOn(d.displayId, x.toFloat(), y.toFloat())) return true
+        return tap(context, x, y)
+    }
+
+    /** 滑动：同样优先无障碍手势，失败退回 Shizuku 注入。 */
+    fun swipeAt(context: Context, x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Long = 300): Boolean {
+        val d = display ?: return false
+        val svc = com.ai.assistance.quro.service.QuroAccessibilityService.instance
+        if (svc != null && svc.swipeOn(d.displayId, x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), durationMs)) {
+            return true
+        }
+        return swipe(context, x1, y1, x2, y2, durationMs)
+    }
+
     /** 释放后台屏（会话结束 / 用户关闭能力时调用）。 */
     fun release() {
         synchronized(lock) {
@@ -221,6 +277,7 @@ object QuroVirtualScreen {
             frameJob = null
             runCatching { d.release() }
             _frames.value = null
+            lastSnapshot = null
             _state.value = UiState()
             Log.i(TAG, "后台虚拟屏已释放 id=${d.displayId}")
         }

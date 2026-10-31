@@ -25,25 +25,25 @@ class QuroTerminalTool : QuroTool {
     override val name: String = "terminal"
 
     override val description: String = """
-应用内终端统一工具（原 10 个 terminal_* 工具合并为一个）。通过 action 分发，所有终端能力都在这里：
+终端会话的**底层驱动**（Termux 的内部实现）。⚠️ 一般不要直接调用本工具。
 
-- run: 应用沙盒内一次性执行 shell 命令（设备 sh，无 proot/Linux）。返回 JSON：{exit_code, success, timed_out, output}。务必检查 exit_code/success。
-- exec: 在应用内 Linux 环境（proot + Ubuntu）里执行命令；返回带 distro 字段标明实际跑在哪（ubuntu / device）。Ubuntu 走 proot/Linux（与可见终端/「环境配置」页共用同一个 rootfs，用户已装的环境对 AI 可见），未就绪时会自动在后台开始安装（优先解压内置 Ubuntu，零下载）并返回失败，稍候重试即可。返回 JSON：{distro, source, exit_code, success, timed_out, output}。务必检查 exit_code/success。
-- write: 向当前交互式终端会话写入一行输入并回车（等价于在提示符后敲回车）。需终端界面已打开且存在活动会话；常用于让 AI 替用户在终端里执行命令或喂给交互式程序（如 python REPL）。
-- kill: 结束当前交互式终端会话（销毁常驻 shell 进程）。
-- status: 返回终端会话状态（是否存在、模式、是否忙碌、cwd、last_exit、last_interrupted）与 Linux 环境就绪度（ubuntu_ready）及全部会话列表。
-- interrupt: 中断交互式终端里正在运行的命令（等价于按 Ctrl+C / 界面「■ 中断」按钮）。
-- sessions: 列出所有终端会话（默认/额外/历史），含 id、名称、后端、是否默认、是否存活。
-- session_new: 创建一个新的终端会话（后端与默认一致），不自动成为默认。可选 name。
-- session_switch: 把指定 id 的会话切换为默认共享会话（AI 工具 / CMS 此后将使用该会话）。id 来自 sessions 的返回。
-- session_kill: 销毁指定 id 的会话；id=default 或省略则销毁默认共享会话。
+🔴 用户说「终端 / Termux / 命令行 / 跑个命令 / 装包 / bash / shell」时，
+   请调用 **`termux`** 工具 —— 那是 Termux 的对外统一入口，多会话（session_new/sessions/
+   session_switch/session_kill/write/interrupt）与环境执行（run/pkg）都在那里，语义完整且一致。
 
-参数：action(必填) + 按 action 选填 command / text / id / name。
-示例：
+什么时候才直接用本工具：
+- 需要操作「界面上已经打开的那个交互式终端」的底层会话（termux 转发到的就是这里）；
+- `termux` 明确返回环境不可用时的降级路径。
+
+各 action（仅供排查/降级时参考）：
+- run：应用沙盒内一次性执行设备 sh 命令（无 proot），返回 {exit_code, success, timed_out, output}
+- exec：在 proot + Ubuntu 里执行命令，返回带 distro 字段
+- write / interrupt / kill：向会话写一行输入 / 中断当前命令 / 结束会话
+- status / sessions / session_new / session_switch / session_kill：会话状态与多会话管理
+
+示例（降级时）：
 - terminal(action="exec", command="ls -la")
-- terminal(action="status")
-- terminal(action="write", text="pwd")
-- terminal(action="session_switch", id="ab12cd34")
+- terminal(action="sessions")
 """.trimIndent()
 
     override val parametersJson: String = """
