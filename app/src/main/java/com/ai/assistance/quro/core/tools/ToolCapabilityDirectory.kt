@@ -27,6 +27,15 @@ object ToolCapabilityDirectory {
         SYSTEM_CONTROL("系统控制", "音量、亮度、WiFi、蓝牙等设备控制"),
         FILE_OPERATION(qstr(R.string.qk_03181), "文件读写、复制、移动、删除等"),
         TERMINAL_LINUX("终端/Linux", "终端命令执行、Linux环境管理"),
+        /**
+         * Termux 官方宿主（应用内完整移植）。
+         *
+         * 🔴 必须与 TERMINAL_LINUX 分开，否则 AI 会去选底层的 `terminal` 而不是 `termux`：
+         *  - `TERMINAL_LINUX` 里的 `terminal` 是**底层会话驱动**（Termux 的内部实现），面向排查/降级；
+         *  - 本类是**用户可感知的「终端」本体**：多个终端会话 + Ubuntu 环境执行/装包。
+         * 用户说「终端 / Termux / 命令行」时，AI 必须落到这一类。
+         */
+        TERMUX("Termux 终端", "Termux 官方宿主：多终端会话 + Ubuntu 环境执行/装包（用户说「终端」首选）"),
         NETWORK_WEB(qstr(R.string.qk_03306), "HTTP请求、浏览器、MCP服务"),
         MEDIA("媒体", "音乐、视频、图片、音频处理"),
         UI_CARDS("UI/卡片", "对话框UI组件、可视化图表"),
@@ -342,36 +351,46 @@ object ToolCapabilityDirectory {
 
         // Termux = 完整移植的 Termux 官方宿主。与 terminal（自研 PTY 会话）分工：
         // terminal 管「会话语义」（写入/中断/切换），termux 管「在这套发行版里干活」。
+        // Termux = 应用内完整移植的官方宿主。用户口中的「终端」就是它。
+        // 与 terminal（底层会话驱动）分工：terminal 是它的内部实现，AI 一般不该直接调。
         "termux" to ToolInfo(
             name = "termux",
-            category = ToolCategory.TERMINAL_LINUX,
-            description = "Termux 环境工具：在本机 Termux（完整移植的 Termux 官方宿主）所用的 Ubuntu 发行版里执行命令、装包、查环境状态、拉起 Termux 界面。返回完整 stdout/stderr 与退出码。",
+            category = ToolCategory.TERMUX,
+            description = "Termux 终端（应用内完整移植的官方宿主）：管理多个终端会话，或在 Termux 的 Ubuntu 环境里执行命令、装包、查状态、拉起界面。",
             useCases = listOf(
-                "在 Termux 里跑个命令", "用 Termux 装个包", "查 Termux 环境好了没",
-                "用 apt 装 python3 然后跑一下", "打开 Termux 给我看看",
-                "在 Termux 里写个脚本跑起来"
+                "打开终端", "在终端里跑个命令", "用 Termux 装个包", "开个新终端窗口",
+                "看看有哪几个终端", "切到另一个终端", "在终端里输入这个", "中断一下这个命令",
+                "终端里 python 装一下 requests", "查 Termux 环境好了没"
             ),
             examples = listOf(
-                "termux(action=\"run\", command=\"uname -a && cat /etc/os-release | head -2\")",
-                "termux(action=\"pkg\", package=\"python3 git\")",
                 "termux(action=\"status\")",
-                "termux(action=\"open\")",
-                "termux(action=\"run\", command=\"apt-get update\", timeout_ms=180000)"
+                "termux(action=\"run\", command=\"uname -a && cat /etc/os-release | head -2\")",
+                "termux(action=\"session_new\", name=\"work\")",
+                "termux(action=\"sessions\")",
+                "termux(action=\"write\", text=\"python3 -V\")",
+                "termux(action=\"interrupt\")",
+                "termux(action=\"pkg\", package=\"python3 git\")",
+                "termux(action=\"open\")"
             ),
             parameters = mapOf(
-                "action" to "run（默认）/ pkg / status / open",
-                "command" to "run 用的 shell 命令（在 Termux 的 Ubuntu 内执行）",
-                "package" to "pkg 用的包名，多个空格分隔",
-                "timeout_ms" to "run 超时毫秒，默认 30000，长任务可调大"
+                "action" to "run / session_new / sessions / session_switch / session_kill / write / interrupt / kill / pkg / status / open",
+                "command" to "run 用的 shell 命令（Termux 的 Ubuntu 内执行）",
+                "text" to "write 写进当前会话的一行输入",
+                "id" to "session_switch / session_kill 的目标会话 id",
+                "name" to "session_new 的会话名",
+                "package" to "pkg 的包名，多个空格分隔",
+                "timeout_ms" to "run 超时毫秒，默认 30000"
             ),
             tips = listOf(
-                "命令跑在 Termux 的 Ubuntu 里，**不是** Android 的 /system/bin/sh；要执行 Android 命令用 terminal 或 shizuku_exec。",
-                "与 terminal 的分工：交互式会话（写入/中断/切换）用 terminal；「装包+执行拿完整输出」用 termux 更直接。",
-                "装包或首次运行若环境未解压，会返回「正在后台安装」，等一会重试即可（不要重复触发 setup）。",
-                "用户说「打开 Termux / 让我看看终端」→ termux(action=\"open\")。"
+                "🔴 **用户说「终端 / Termux / 命令行」时一律用本工具**，不要用 terminal —— 后者是底层驱动，用途是排查/降级。",
+                "**Termux 有多个终端会话**：要「开一个新窗口」→ session_new；要「看看有哪几个」→ sessions；要「切过去」→ session_switch。",
+                "一次性执行（装包+跑）用 run / pkg 最省事，能一次拿到完整 stdout/stderr + 退出码。",
+                "交互式程序（python REPL、vim、top）用 session_new 建会话后再 write 逐行输入，用 interrupt 发 Ctrl-C。",
+                "命令跑在 Termux 的 Ubuntu 里，**不是** Android /system/bin/sh；Android 命令走 shizuku_exec。",
+                "环境未解压时会自动后台安装并返回提示，稍后重试即可，**不要反复触发**。"
             ),
-            relatedTools = listOf("terminal", "linux_run", "linux_pkg"),
-            priority = 4
+            relatedTools = listOf("terminal", "linux_run", "linux_pkg", "bg_screen"),
+            priority = 5
         ),
 
         // 后台虚拟屏（移植 Mika）：与无障碍控屏是「两块不同的屏」，分类上也分开。
@@ -382,11 +401,13 @@ object ToolCapabilityDirectory {
             useCases = listOf(
                 "别打扰我，后台帮我操作一下", "在后台打开微信发条消息", "我看不到的时候帮我点一下",
                 "后台跑个 App 的流程", "不占我屏幕地操作手机",
-                "截图看看那个 App 现在什么界面（不影响我）"
+                "读一下那个 App 现在界面上有什么", "截图看看那个 App 现在什么界面（不影响我）"
             ),
             examples = listOf(
                 "bg_screen(action=\"status\")",
                 "bg_screen(action=\"open\", packageName=\"com.tencent.mm\")",
+                "bg_screen(action=\"read\")",
+                "bg_screen(action=\"tap_element\", ref=\"@e3\")",
                 "bg_screen(action=\"screenshot\")",
                 "bg_screen(action=\"tap\", x=540, y=1200)",
                 "bg_screen(action=\"swipe\", x1=540, y1=1800, x2=540, y2=600, duration_ms=300)",
@@ -403,11 +424,12 @@ object ToolCapabilityDirectory {
             ),
             tips = listOf(
                 "**要「不打扰用户」就用它**；用户明确说「帮我点屏幕上这个」才用无障碍的 tap_screen（那会抢焦点）。",
-                "固定流程：status 确认屏就绪 → open 目标 App → 等界面出来 → screenshot 看画面 → tap/swipe 操作 → 再 screenshot 确认。",
-                "截图返回的是文件路径，可以直接交给视觉分析工具读。",
-                "坐标基准与主屏一致：截图上的像素坐标可直接用于 tap。",
+                "固定流程：status → open → **read**（拿元素表）→ tap_element / tap → 再 read 确认 → 结束时 release。",
+                "**read 优先于 screenshot**：read 给出 ref + 真实坐标 + 控件类型，比看图猜坐标准得多、也更省 token。",
+                "read 返回「没有可读控件」时才退回 screenshot（该界面禁止无障碍读取，或还没渲染完）。",
+                "read 之后界面若变了，旧 ref 会失效 —— 点之前重新 read。",
                 "任务结束调 release 释放屏，别长期占着。",
-                "需要 Shizuku 已安装/授权/运行；返回「特权服务未就绪」时提示用户去开 Shizuku，不要反复空转。"
+                "两条通道：开屏需要 Shizuku；点击/滑动优先走无障碍手势（不用 Shizuku），失败才回退 Shizuku 注入。"
             ),
             relatedTools = listOf("read_screen", "tap_screen", "screenshot", "shizuku_status"),
             priority = 5
@@ -1580,7 +1602,7 @@ object ToolCapabilityDirectory {
                 ToolCategory.TERMINAL_LINUX
             // Termux（完整移植的 Termux 官方宿主）：AI 在 Termux 发行版里执行命令/装包/查状态/拉起界面。
             // 必须显式归到 TERMINAL_LINUX，否则落 else->BASIC，tool_discovery 按分类列不出它。
-            name == "termux" -> ToolCategory.TERMINAL_LINUX
+            name == "termux" || name.startsWith("termux_") -> ToolCategory.TERMUX
             // 墨语言独立运行时（编译/运行 .mo、读写源码修 bug）。必须与 QuroToolRouter.categorize 同源，
             // 否则 tool_discovery / tool_router 列不出它，AI 根本不知道有这门语言可用。
             name == "moyu" || name.startsWith("moyu_") -> ToolCategory.TERMINAL_LINUX
@@ -1903,18 +1925,26 @@ name.startsWith("codecanvas_") -> ToolCategory.AI_CAPABILITIES
 - 能用简单工具就不用复杂工具（如读文件用read_text_file不用run_code）
 - 能用内置工具就不用外部工具（如计算用calculate不用run_code）
 
-## 4.1 终端 / Termux / Linux 怎么选（别混）
-本机的「终端」就是 **Termux**（完整移植的 Termux 官方宿主），它打开的是一个 **Ubuntu（proot）** 环境。
-- 用户说「用 Termux 跑 / 装个包 / 看看 Termux」→ **`termux`**（action=run / pkg / status / open）。它在 Termux 那套 Ubuntu 里执行，返回完整 stdout/stderr + 退出码。
-- 需要**交互式会话**（往正在跑的会话追加输入、中断当前命令、切换/新建会话）→ **`terminal`**（action=write / interrupt / session_new / session_switch）。
-- 要跑 **Android 系统命令**（/system/bin/sh、am、pm、settings）→ `terminal(action="run")` 或 `shizuku_exec`，**不要**丢给 `termux`（那是 Ubuntu，不是 Android）。
-- 环境未解压时 `termux`/`linux_run` 会自动触发后台安装并返回「正在后台安装」，等一会重试即可，**不要反复触发**。
+## 4.1 终端 = Termux（**只认一个入口**）
+本机的「终端」就是 **Termux**（应用内完整移植的 Termux 官方宿主），它里面对应的是一套 **Ubuntu（proot）** 环境。
+
+**用户只要提到「终端 / Termux / 命令行 / 跑个命令 / 装个包 / bash / shell」→ 一律调用 `termux`。**
+它同时管两类事，别再去点 `terminal`：
+- **环境执行**：`run`（跑命令，返回完整 stdout/stderr + 退出码）、`pkg`（装包）、`status`、`open`（拉起界面）
+- **多个终端会话**：`sessions`（有哪几个）、`session_new`（开新窗口）、`session_switch`（切过去）、
+  `session_kill`（关掉）、`write`（往当前会话敲一行，用于 python REPL / vim 这类交互程序）、`interrupt`（Ctrl-C）
+
+`terminal` 是 **Termux 内部使用的底层会话驱动**，只在两种情况下直接用：① 要操作界面上已打开的那个交互式终端；
+② `termux` 明确返回环境不可用、需要降级。**不要因为「想跑个命令」就去调 terminal。**
+
+要跑 **Android 系统命令**（/system/bin/sh、am、pm、settings）→ `shizuku_exec`，不要丢给 termux（那是 Ubuntu）。
 
 ## 4.2 两块屏，别用错（后台虚拟屏 vs 无障碍）
 - 用户要「**别打扰我 / 后台做 / 我看不到的时候**」→ **`bg_screen`**（后台虚拟屏）。它在用户看不见的独立屏上 open App、tap/swipe、screenshot，
   主屏焦点与输入法都不受影响，截图不走无障碍，因此安全窗口也能拿到画面。
 - 用户要「**点我屏幕上这个 / 帮我点点当前界面**」→ 无障碍的 `tap_screen` / `read_screen`（操作用户正在看的那块屏，会抢焦点）。
-- `bg_screen` 的标准流程：`status` → `open` → `screenshot` 看画面 → `tap`/`swipe` → 再 `screenshot` 确认 → 结束时 `release`。
+- `bg_screen` 标准流程：`status` → `open` → **`read`（读控件树，拿到 ref 与真实坐标）** → `tap_element(ref)` 或 `tap(x,y)` → 再 `read` 确认界面变了 → 结束时 `release`。
+- **优先 `read` + `tap_element`，不要一上来就截图猜坐标**；只有 `read` 返回「没有可读控件」（界面禁止无障碍读取/还没渲染完）时才退回 `screenshot` + 视觉判断。
 - `bg_screen` 依赖 Shizuku 已授权；返回「特权服务未就绪」时提示用户去开 Shizuku，**不要反复重试**。
 
 ## 4.3 ADB 的两个方向（最容易搞反）

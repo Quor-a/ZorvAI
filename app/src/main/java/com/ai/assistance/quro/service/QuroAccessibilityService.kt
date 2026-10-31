@@ -17,7 +17,9 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.graphics.Path
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityWindowInfo
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.app.NotificationCompat
 import com.ai.assistance.quro.activity.QuroMainActivity
@@ -116,8 +118,69 @@ class QuroAccessibilityService : DeviceControlService() {
         // 预留扩展点：界面自动化 / 屏幕读取。当前不收集数据。
     }
 
-    override fun onInterrupt() {
-        // 注意：onInterrupt 由系统在「中断无障碍反馈」时调用（正常交互中频繁触发），
+    // ═══════════════ 后台虚拟屏支持（移植自 Mika 的 ScreenAccessibility）═══════════════
+    //
+    // 关键能力：无障碍服务能**按 displayId** 拿到那块后台虚拟屏上的窗口树，
+    // 也能**在指定屏上**下发手势。没有这两条，后台屏就只能靠截图猜坐标；
+    // 有了它们，AI 才能真正「读界面结构 → 精确定位控件 → 点击」。
+
+    /**
+     * 指定屏上的全部窗口（含输入法、浮层）。
+     *
+     * 该屏没有窗口、或系统不支持按屏枚举时返回空列表。
+     * 注意：不要用 `windows`（那是当前活跃屏），后台屏不是活跃屏。
+     */
+    fun windowsOn(displayId: Int): List<AccessibilityWindowInfo> {
+        if (displayId < 0) return emptyList()
+        return runCatching {
+            val all = windowsOnAllDisplays ?: return emptyList()
+            all.get(displayId).orEmpty()
+        }.getOrElse {
+            Log.w(TAG, "windowsOn($displayId) 失败: ${it.message}")
+            emptyList()
+        }
+    }
+
+    /**
+     * 在指定屏上下发一次手势（单指移动/点击/滑动都由 [paths] 描述）。
+     *
+     * 与后台注入（Shizuku injectInputEvent）相比，这条路不需要任何特权，
+     * 只要无障碍服务在跑；缺点是不能跨屏乱发（这里也只发到指定屏）。
+     *
+     * @return 手势是否被系统接受并完成
+     */
+    fun gestureOn(displayId: Int, paths: List<Path>, durationMs: Long): Boolean {
+        if (paths.isEmpty()) return false
+        // GestureDescription.Builder.setDisplayId 是 API 30 才有的；低于此版本只能走主屏
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+        if (displayId < 0) return false
+
+        return runCatching {
+            val builder = GestureDescription.Builder().setDisplayId(displayId)
+            paths.forEach { builder.addStroke(GestureDescription.StrokeDescription(it, 0, durationMs.coerceAtLeast(1))) }
+            dispatchGesture(builder.build(), null, null)
+        }.getOrElse {
+            Log.w(TAG, "gestureOn($displayId) 失败: ${it.message}")
+            false
+        }
+    }
+
+    /** 在指定屏上点一下（无障碍手势通道，无需 Shizuku）。 */
+    fun tapOn(displayId: Int, x: Float, y: Float, durationMs: Long = 40): Boolean {
+        val path = Path().apply { moveTo(x, y) }
+        return gestureOn(displayId, listOf(path), durationMs)
+    }
+
+    /** 在指定屏上从 (x1,y1) 滑到 (x2,y2)（无障碍手势通道，无需 Shizuku）。 */
+    fun swipeOn(displayId: Int, x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long = 300): Boolean {
+        val path = Path().apply {
+            moveTo(x1, y1)
+            lineTo(x2, y2)
+        }
+        return gestureOn(displayId, listOf(path), durationMs)
+    }
+
+    override fun onInterrupt() {        // 注意：onInterrupt 由系统在「中断无障碍反馈」时调用（正常交互中频繁触发），
         // 并不代表服务已断开/被禁用，因此绝不能在此清空 instance —— 否则实时检测信号会抖动，
         // 表现为「授权已开但软件显示未检测到」。instance 只在服务真正销毁时清空（见 onDestroy）。
         super.onInterrupt()

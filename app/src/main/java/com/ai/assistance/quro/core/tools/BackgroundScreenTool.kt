@@ -32,22 +32,26 @@ class BackgroundScreenTool : QuroTool {
 
 action：
 - open：把某个 App 启动到后台屏（需 packageName）
-- screenshot：截取后台屏当前画面，返回图片文件路径（可交给视觉分析）
-- tap：在后台屏点一下（需 x / y，坐标基于主屏分辨率）
-- swipe：在后台屏滑动（需 x1/y1/x2/y2）
-- back：在后台屏按返回键
-- top：查后台屏当前最上层的 Activity（判断走到哪一步了）
-- status：查后台屏是否已就绪 / displayId
+- read：**读界面结构**（控件树：ref / 类型 / 文字 / 中心坐标 / 是否可点可输）—— 优先用它，别靠截图猜坐标
+- tap_element：按 read 返回的 ref 精确点击（如 ref="@e3"）
+- screenshot：截取后台屏当前画面，返回图片文件路径（read 读不到结构时再用）
+- tap：盲点一个坐标（需 x / y）
+- swipe：滑动（需 x1/y1/x2/y2）
+- back：按返回键
+- top：查当前最上层 Activity（判断走到哪一步）
+- status：查屏是否就绪 / displayId
 - release：释放后台屏（任务结束时调用，避免长期占用）
 
-坐标说明：后台屏尺寸与主屏一致，截图上的像素坐标可以直接用来点击。
+**推荐流程**：status → open → read（拿到元素表）→ tap_element 或 tap → read 确认变化。
+坐标说明：read 返回的 centerX/centerY 与截图上的像素坐标一致，可直接用于 tap。
 """.trimIndent()
 
     override val parametersJson: String = """
 {
   "type": "object",
   "properties": {
-    "action": {"type": "string", "description": "open / screenshot / tap / swipe / back / top / status / release"},
+    "action": {"type": "string", "description": "open / read / tap_element / screenshot / tap / swipe / back / top / status / release"},
+    "ref": {"type": "string", "description": "tap_element 用的元素引用，如 @e3（来自 read 的返回）"},
     "packageName": {"type": "string", "description": "open 用的包名，如 com.tencent.mm"},
     "x": {"type": "integer", "description": "tap 的横坐标"},
     "y": {"type": "integer", "description": "tap 的纵坐标"},
@@ -72,6 +76,24 @@ action：
                 QuroVirtualScreen.openApp(context, pkg)
             }
 
+            "read" -> {
+                val snap = QuroVirtualScreen.readScreen()
+                    ?: return "读不到界面结构：无障碍服务未开启，或后台屏还没有界面。请开启无障碍（设置 → 无障碍 → ZorvAI），或改用 screenshot 看画面。"
+                QuroAgentTrace.result("bg_screen", "读界面", "${snap.elements.size} 个元素")
+                snap.toPromptText()
+            }
+
+            "tap_element" -> {
+                val ref = obj.optString("ref", "").trim()
+                if (ref.isBlank()) return "缺少 ref（先用 read 拿到元素表）"
+                QuroAgentTrace.action("bg_screen", "按 ref 点击", ref)
+                if (QuroVirtualScreen.tapElement(context, ref)) {
+                    "已点击 $ref"
+                } else {
+                    "点击 $ref 失败：该 ref 不在最近一次 read 的结果里（界面可能已变，请重新 read）"
+                }
+            }
+
             "screenshot" -> screenshot(context)
 
             "tap" -> {
@@ -79,7 +101,7 @@ action：
                 val y = obj.optInt("y", -1)
                 if (x < 0 || y < 0) return "缺少有效的 x / y"
                 QuroAgentTrace.action("bg_screen", "后台屏点击", "($x, $y)")
-                if (QuroVirtualScreen.tap(context, x, y)) "已点击 ($x, $y)" else tapFailed()
+                if (QuroVirtualScreen.tapAt(context, x, y)) "已点击 ($x, $y)" else tapFailed()
             }
 
             "swipe" -> {
@@ -90,7 +112,7 @@ action：
                 if (x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0) return "缺少有效的 x1/y1/x2/y2"
                 val dur = obj.optLong("duration_ms", 300L)
                 QuroAgentTrace.action("bg_screen", "后台屏滑动", "($x1,$y1)->($x2,$y2)")
-                if (QuroVirtualScreen.swipe(context, x1, y1, x2, y2, dur)) {
+                if (QuroVirtualScreen.swipeAt(context, x1, y1, x2, y2, dur)) {
                     "已滑动 ($x1,$y1) → ($x2,$y2)"
                 } else {
                     "滑动失败：${QuroVirtualScreen.lastError ?: "后台屏未就绪或注入被拒"}"
