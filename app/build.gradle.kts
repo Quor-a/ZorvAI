@@ -264,7 +264,10 @@ dependencies {
     implementation(project(":termux-host"))
     // 🔴 显式添加 Guava：app 的传递依赖可能覆盖 termux-host 的 Guava，导致
     // FileUtils.deleteFile/RecursiveDeleteOption 找不到 → NoClassDefFoundError
-    implementation("com.google.guava:guava:24.1-jre")
+    // 强制使用 -jre 版本（31-android 会覆盖并破坏 API）
+    implementation("com.google.guava:guava:24.1-jre") {
+        because("termux-host FileUtils 依赖 24.1-jre 的 RecursiveDeleteOption.ALLOW_INSECURE")
+    }
     implementation("com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava")
 
     // 小程序引擎（WebView + native.* 桥，MiniAppEngine，com.ai.assistance.quro.core.miniapp）：
@@ -374,7 +377,10 @@ dependencies {
     // 提供 HealthConnectClient / 权限契约 / Steps·HeartRate·Sleep·Exercise 等 Record 读写。
     // 注意 artifact 为 connect-client（非 health-connect-client）。
     // 与 Manifest 的 <meta-data android:name="health_permissions"> + res/values/health_permissions.xml 对应。
-    implementation("androidx.health.connect:connect-client:1.1.0-alpha06")
+    // 🔴 排除 connect-client 自带的 guava:31.1-android（会覆盖 24.1-jre 导致 RecursiveDeleteOption 崩溃）
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha06") {
+        exclude(mapOf("group" to "com.google.guava", "module" to "guava"))
+    }
 
     // Apache POI for Android：本地Office文档编辑SDK（Word/Excel/PPT）
     // 开源免费，无需服务器，支持离线编辑
