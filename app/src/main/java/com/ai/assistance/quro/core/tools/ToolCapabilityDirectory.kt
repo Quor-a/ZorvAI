@@ -1960,6 +1960,41 @@ object ToolCapabilityDirectory {
 ```
 ````
 
+### 🔴 小卡片的标准形态：渐变底 + 左环形 + 右大数字（左右布局）
+
+**用户认可的「小卡片」就是这个样子**。要出小卡片时优先套这个骨架，只换文案、颜色和数值：
+
+````
+```quro-card
+{"type":"custom","layout":{"type":"card","gradient":["#F98A8A","#F973C0"],"angle":90,"radius":20,"padding":18,"gap":14,"children":[
+  {"type":"text","text":"🔥 热门指数","fontSize":15,"color":"#FFFFFF","fontWeight":600},
+  {"type":"row","gap":18,"children":[
+    {"type":"ring","value":86,"size":92,"stroke":10,"text":"86%","textSize":20,"color":"#FFFFFF"},
+    {"type":"column","gap":6,"weight":1,"children":[
+      {"type":"text","text":"实时热度","fontSize":13,"color":"#FFE9E9"},
+      {"type":"text","text":"9,527","fontSize":40,"color":"#FFFFFF","fontWeight":700},
+      {"type":"text","text":"条讨论中","fontSize":13,"color":"#FFE9E9"}
+    ]}
+  ]}
+]}}
+```
+````
+
+写这个骨架的三个要点（写错就画不出来）：
+1. **左右布局必须用 `row` 包起来**，右侧那列要给 `"weight":1`（占满剩余宽度）。
+   不给 weight 的话右侧只按文字宽占位，数字会被挤出去。
+2. `ring` 的 `size` 别给太大（92 左右合适）。给 200 会把右边整列挤没。
+3. 渐变色给两到三个 hex，`angle` 控制方向（90 = 左右渐变，135 = 斜向）。
+
+### ⚠️ 小卡片 ≠ 富卡片，别用错通道
+
+- **小卡片 → 正文写 ```quro-card 围栏**（`type:"custom"` 自写布局，端上 Canvas 自绘）
+- **富卡片 → `ui_widget` / `ui_card` 工具**（103 种现成组件：表格/看板/甘特/雷达…）
+
+这两条是**不同的功能**。用户说「小卡片」时不要调 `ui_widget`——
+富卡片会渲染成表格/列表那种规范组件样式，出不来上面这种渐变 + 环形的自由设计。
+反过来，要一张复杂表格时也别硬用 custom 手搭，直接用 `ui_widget` 的 table。
+
 🔴 **常见错误（都会渲染成「未识别组件：xxx」）**：把 `status`/`metric`/`line_chart`/`custom` 写进 `ui_widget` 工具（那是富卡片名册，没有这些 type）；或围栏里写名册类型 `stat`/`chart`（围栏不认）。两套名字**不通用**：围栏只认上表 7 种。
 - 用户需要流程图 → mermaid（`ui_widget(type="mermaid")` 或 `ui_control(action="widget", type="mermaid")`）。
 - 用户需要完整原生交互界面 → `quro-ui` DSL。
