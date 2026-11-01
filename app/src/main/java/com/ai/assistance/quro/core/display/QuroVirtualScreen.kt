@@ -122,6 +122,13 @@ object QuroVirtualScreen {
 
                 _state.value = UiState(ready = true, displayId = d.displayId)
                 refreshTopActivity()
+                // 🔴 屏建好后自动拉起悬浮窗（用户要求：这东西是给 AI 用的，不设人工开关）。
+                // 没有这一步，屏虽然建好了但用户看不见任何东西——「后台虚拟屏没反映」的根因。
+                // start 是幂等的（已在跑时再调只会走 onStartCommand），且此处 display 已赋值，
+                // 悬浮窗 onCreate 里再调 ensureDisplay 会直接拿到现成对象，不会递归建屏。
+                runCatching {
+                    com.ai.assistance.quro.service.QuroBgScreenOverlayService.start(context)
+                }.onFailure { Log.w(TAG, "自动拉起后台屏悬浮窗失败", it) }
                 d
             } catch (t: Throwable) {
                 val msg = "创建后台虚拟屏失败：${t.message}"

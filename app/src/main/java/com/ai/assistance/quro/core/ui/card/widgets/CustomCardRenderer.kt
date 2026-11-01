@@ -156,7 +156,47 @@ private fun measureNode(node: LayoutNode, availW: Float, d: Float): Size {
             Size(s, s)
         }
         "bar" -> Size(availW, num(node.props, "h", 10f) * d)
-        else -> Size(0f, 0f)
+        // ── 2026-11-02 补：AI 常写但原来被当成未知节点吞掉（尺寸 0 → 布局塌陷）──
+        // 小标签/胶囊：文字宽 + 左右 padding，高 = 行高 + 上下 padding
+        "badge", "chip", "tag", "pill" -> {
+            val fs = num(node.props, "fontSize", 11f)
+            val t = node.props["text"]?.toString() ?: node.props["label"]?.toString() ?: ""
+            var w = 0f
+            for (ch in t) w += (if (ch.code > 0x2E80) 1f else 0.55f) * fs * d
+            val hp = num(node.props, "paddingX", 8f) * d
+            Size((w + hp * 2).coerceAtMost(availW), spPx(fs, d) + num(node.props, "paddingY", 4f) * d * 2)
+        }
+        // 按钮：撑满（或按 width 指定），高 = 行高 + 上下 padding
+        "button" -> {
+            val fs = num(node.props, "fontSize", 14f)
+            val bw = num(node.props, "width", 0f)
+            val w = if (bw > 0f) (bw * d).coerceAtMost(availW) else availW
+            Size(w, spPx(fs, d) + num(node.props, "paddingY", 10f) * d * 2)
+        }
+        // 图标/图片：方形占位（客户端不加载网络图，画占位块 + 可选文字）
+        "icon", "image", "avatar" -> {
+            val s = (num(node.props, "size", 24f) * d).coerceAtMost(availW).coerceAtLeast(0f)
+            Size(s, s)
+        }
+        // 列表：无 children 时按 props.items 的条数占高
+        "list", "items", "group", "grid" -> {
+            if (node.children.isNotEmpty()) {
+                val sizes = node.children.map { measureNode(it, inner, d) }
+                val hSum = sizes.fold(0f) { acc, s -> acc + s.height }
+                Size(availW, hSum + gap * (sizes.size - 1).coerceAtLeast(0) + pad * 2)
+            } else {
+                val n = (node.props["items"] as? List<*>)?.size ?: 1
+                val rowH = spPx(num(node.props, "fontSize", 14f), d) + gap
+                Size(availW, rowH * n.coerceAtLeast(1) + pad * 2)
+            }
+        }
+        // 🔴 未知节点不再返回 0：带 text 的按文本测，否则给最小可视高度。
+        // 原来返回 Size(0,0) 会让整块区域消失、后续兄弟节点坐标错位 —— 用户看到的就是「卡片不完整」。
+        else -> {
+            val t = node.props["text"]?.toString() ?: node.props["label"]?.toString() ?: ""
+            if (t.isNotEmpty()) measureNode(node.copy(type = "text"), availW, d)
+            else Size(availW, (num(node.props, "h", 0f) * d).coerceAtLeast(1f))
+        }
     }
 }
 
@@ -174,10 +214,11 @@ private fun measureContent(node: LayoutNode, availW: Float, d: Float): Size {
     val inner = (availW - pad * 2).coerceAtLeast(0f)
     return when (node.type) {
         // 叶子节点：measureNode 本身就是内容宽
-        "text", "ring", "spacer", "divider" -> measureNode(node, availW, d)
+        "text", "ring", "spacer", "divider", "badge", "chip", "tag", "pill",
+        "button", "icon", "image", "avatar" -> measureNode(node, availW, d)
         // 撑满型叶子：与 measureNode 同口径（占 availW），超出部分由 childAllocs/drawChildren 统一 clamp
         "bar" -> measureNode(node, availW, d)
-        "card", "box", "column" -> {
+        "card", "box", "column", "list", "items", "group", "grid" -> {
             if (node.children.isEmpty()) measureNode(node, availW, d)
             else {
                 val sizes = node.children.map { measureContent(it, inner, d) }
@@ -195,7 +236,9 @@ private fun measureContent(node: LayoutNode, availW: Float, d: Float): Size {
                 Size((w + pad * 2).coerceAtMost(availW), h + pad * 2)
             }
         }
-        else -> Size(0f, 0f)
+        // 🔴 未知节点也走 measureNode 兜底（带 text 按文本、否则最小高度），
+        // 不再返回 0 —— row 里返回 0 宽会让该子节点被跳过、整行错位。
+        else -> measureNode(node, availW, d)
     }
 }
 
@@ -254,13 +297,80 @@ private fun drawNode(backend: RenderBackend, node: LayoutNode, x: Float, y: Floa
         }
         "column" -> drawChildren(backend, node, x + pad, y + pad, (allocW - pad * 2).coerceAtLeast(0f), state, d)
         "row" -> drawChildren(backend, node, x + pad, y + pad, (allocW - pad * 2).coerceAtLeast(0f), state, d)
+        // 列表类容器：与 column 同绘制（有 children 就竖排；没 children 按 items 画文字行）
+        "list", "items", "group", "grid" -> {
+            if (node.children.isNotEmpty()) {
+                drawChildren(backend, node, x + pad, y + pad, (allocW - pad * 2).coerceAtLeast(0f), state, d)
+            } else {
+                val items = (node.props["items"] as? List<*>) ?: emptyList<Any?>()
+                val fs = num(node.props, "fontSize", 14f)
+                val rowH = spPx(fs, d) + gap
+                val color = parseColor(node.props["color"], backend) ?: backend.resolve(ColorToken.OnSurface)
+                items.forEachIndexed { i, it ->
+                    val t = when (it) {
+                        is Map<*, *> -> (it["text"] ?: it["label"] ?: it["title"] ?: "").toString()
+                        else -> it?.toString() ?: ""
+                    }
+                    if (t.isNotEmpty()) backend.drawText(t, x + pad, y + pad + rowH * i, color, fs, 400)
+                }
+            }
+        }
         "text" -> {
             val fs = num(node.props, "fontSize", node.style.fontSizeSp)
-            val weight = num(node.props, "weight", node.style.fontWeight.toFloat()).toInt()
+            // 🔴 字体粗细读 fontWeight / bold；`weight` 是布局权重（结构性键），不能当字体粗细用
+            val weight = when {
+                node.props.containsKey("fontWeight") -> num(node.props, "fontWeight", 400f).toInt()
+                (node.props["bold"] as? Boolean) == true -> 700
+                else -> node.style.fontWeight
+            }
             val color = parseColor(node.props["color"], backend)
                 ?: parseColor(node.style.fg.name.lowercase(), backend)
                 ?: backend.resolve(ColorToken.OnSurface)
             backend.drawText(displayText(node, state), x, y, color, fs, weight)
+        }
+        // ── 2026-11-02 补：胶囊标签 / 按钮 / 图标占位（原来落到 else 被完全忽略）──
+        "badge", "chip", "tag", "pill" -> {
+            val fs = num(node.props, "fontSize", 11f)
+            val t = node.props["text"]?.toString() ?: node.props["label"]?.toString() ?: ""
+            var tw = 0f
+            for (ch in t) tw += (if (ch.code > 0x2E80) 1f else 0.55f) * fs * d
+            val hp = num(node.props, "paddingX", 8f) * d
+            val bx = num(node.props, "paddingY", 4f) * d
+            val w = (tw + hp * 2).coerceAtMost(allocW)
+            val h = spPx(fs, d) + bx * 2
+            val bgc = parseColor(node.props["bg"], backend) ?: backend.resolve(ColorToken.Primary)
+            backend.drawRect(x, y, x + w, y + h, bgc, num(node.props, "radius", h / 2f))
+            if (t.isNotEmpty()) {
+                val fg = parseColor(node.props["color"], backend) ?: backend.resolve(ColorToken.OnPrimary)
+                backend.drawText(t, x + hp, y + bx, fg, fs, 600)
+            }
+        }
+        "button" -> {
+            val fs = num(node.props, "fontSize", 14f)
+            val bw = num(node.props, "width", 0f)
+            val w = if (bw > 0f) (bw * d).coerceAtMost(allocW) else allocW
+            val py = num(node.props, "paddingY", 10f) * d
+            val h = spPx(fs, d) + py * 2
+            val bgc = parseColor(node.props["bg"], backend) ?: backend.resolve(ColorToken.Primary)
+            backend.drawRect(x, y, x + w, y + h, bgc, num(node.props, "radius", 10f))
+            val t = node.props["text"]?.toString() ?: node.props["label"]?.toString() ?: ""
+            if (t.isNotEmpty()) {
+                var tw = 0f
+                for (ch in t) tw += (if (ch.code > 0x2E80) 1f else 0.55f) * fs * d
+                val fg = parseColor(node.props["color"], backend) ?: backend.resolve(ColorToken.OnPrimary)
+                backend.drawText(t, x + ((w - tw) / 2f).coerceAtLeast(0f), y + py, fg, fs, 600)
+            }
+        }
+        "icon", "image", "avatar" -> {
+            val s = (num(node.props, "size", 24f) * d).coerceAtMost(allocW).coerceAtLeast(0f)
+            val bgc = parseColor(node.props["bg"], backend) ?: backend.resolve(ColorToken.SurfaceVariant)
+            val radius = if (node.type == "avatar") s / 2f else num(node.props, "radius", 6f)
+            backend.drawRect(x, y, x + s, y + s, bgc, radius)
+            val t = node.props["text"]?.toString() ?: node.props["emoji"]?.toString() ?: ""
+            if (t.isNotEmpty()) {
+                val fs = num(node.props, "fontSize", 14f)
+                backend.drawText(t, x + s * 0.15f, y + s * 0.25f, backend.resolve(ColorToken.OnSurface), fs, 400)
+            }
         }
         "spacer" -> { /* 纯占位 */ }
         "divider" -> backend.drawLine(x, y, x + allocW, y, backend.resolve(ColorToken.Outline), 1f)
@@ -300,7 +410,18 @@ private fun drawNode(backend: RenderBackend, node: LayoutNode, x: Float, y: Floa
                 }
             }
         }
-        else -> { /* 未知节点忽略 */ }
+        // 🔴 未知节点兜底（必须是最后一个分支）：带文字就按文字画出来，绝不让内容凭空消失。
+        // 原来这里是 `else -> { /* 未知节点忽略 */ }`，AI 写 image/chart/progress 等
+        // 未实现节点时整块内容直接不见了 —— 用户看到的就是「卡片不完整」。
+        else -> {
+            val t = node.props["text"]?.toString() ?: node.props["label"]?.toString() ?: ""
+            if (t.isNotEmpty()) {
+                val fs = num(node.props, "fontSize", node.style.fontSizeSp)
+                val color = parseColor(node.props["color"], backend)
+                    ?: backend.resolve(ColorToken.OnSurface)
+                backend.drawText(t, x, y, color, fs, 400)
+            }
+        }
     }
 }
 

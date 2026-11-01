@@ -112,15 +112,25 @@ object QuroShizuku {
     /**
      * 等待 Shizuku AIDL UserService 绑定就绪。
      * 最多等待 [timeoutMs] 毫秒，返回非 null 即绑定成功，null 即超时。
+     *
+     * 🔴 主线程绝不轮询：`onServiceConnected` 回调通常在主线程派发，
+     * 若在主线程 sleep 等它，回调永远进不来 → 必然等满超时还可能 ANR。
+     * 主线程只做一次即时检查（拿不到就返回 null，让调用方回去走异步重试）。
      */
     fun waitForShellService(timeoutMs: Long): IQuroShellService? {
+        shellService?.let { return it }
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            Log.w(TAG, "waitForShellService 在主线程调用，跳过轮询（避免阻塞回调和 ANR）")
+            return null
+        }
         val deadline = SystemClock.uptimeMillis() + timeoutMs
         while (SystemClock.uptimeMillis() < deadline) {
             val s = shellService
             if (s != null) return s
-            Thread.sleep(100)
+            // 50ms 粒度：比 100ms 更早发现就绪，整体开销可忽略
+            runCatching { Thread.sleep(50) }
         }
-        return null
+        return shellService
     }
 
     // ════════════════════════════════════════

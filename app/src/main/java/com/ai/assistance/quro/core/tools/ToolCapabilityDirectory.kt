@@ -1957,6 +1957,31 @@ name.startsWith("codecanvas_") -> ToolCategory.AI_CAPABILITIES
 ```
 ````
 
+### `custom` 自由布局的节点清单（**只能写这些，写了别的会被兜底成纯文字**）
+
+`layout` 树里每个节点：`{"type":"节点名", ...属性平铺, "children":[...]}`。
+🔴 **属性直接写在节点上，不要包进 `props` 子对象**（端上两种都认，但平铺最稳）。
+
+| 节点 | 用途 | 常用属性 |
+|---|---|---|
+| `column` 竖排容器 / `row` 横排容器 | 布局骨架 | `gap`(子间距dp) `padding` `weight`(row 里占宽比，>0 才生效) |
+| `card` / `box` 卡片底板 | 画背景+圆角 | `bg`("#hex") 或 `gradient`(["#hex","#hex"]) `angle` `radius` `padding` `gap` |
+| `text` 文本 | 所有文案/数字 | `text` `fontSize`(sp) `color`("#hex") `fontWeight`(400/600/700) |
+| `ring` 环形进度 | 百分比圆环 | `value`(0-100) `size`(dp) `stroke` `color` `text`(中心文字) `textSize` |
+| `bar` 进度条 | 线性进度 | `value`(0-100) `h`(dp) `radius` `color` 或 `gradient` |
+| `badge` / `chip` / `tag` 胶囊标签 | 小标签 | `text` `bg` `color` `fontSize` `paddingX` `paddingY` |
+| `button` 按钮 | 视觉按钮 | `text` `bg` `color` `fontSize` `paddingY` `width` |
+| `icon` / `image` / `avatar` 图标位 | 方形占位 | `size`(dp) `bg` `radius` `text`(格内短文字) |
+| `divider` 分隔线 / `spacer` 占位 | 间距控制 | `divider` 无属性；`spacer` 用 `h`(dp) `w`(dp) |
+| `list` / `items` 列表 | 竖排条目 | `items:["行1","行2"]` 或 用 `children` |
+
+渐变 + 大数字的完整示例（照抄改数字即可）：
+````
+```quro-card
+{"type":"custom","layout":{"type":"card","gradient":["#C25A38","#B8902F"],"angle":135,"radius":16,"padding":16,"gap":10,"children":[{"type":"text","text":"热门指数","fontSize":13,"color":"#F4F1EA"},{"type":"text","text":"86","fontSize":40,"color":"#FFFFFF","fontWeight":700},{"type":"bar","value":86,"h":8,"radius":4,"gradient":["#F4F1EA","#FFFFFF"]}]}}
+```
+````
+
 🔴 **常见错误（都会渲染成「未识别组件：xxx」）**：把 `status`/`metric`/`line_chart`/`custom` 写进 `ui_widget` 工具（那是富卡片名册，没有这些 type）；或围栏里写名册类型 `stat`/`chart`（围栏不认）。两套名字**不通用**：围栏只认上表 7 种。
 - 用户需要流程图 → mermaid（`ui_widget(type="mermaid")` 或 `ui_control(action="widget", type="mermaid")`）。
 - 用户需要完整原生交互界面 → `quro-ui` DSL。

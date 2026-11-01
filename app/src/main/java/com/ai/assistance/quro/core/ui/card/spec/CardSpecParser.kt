@@ -60,7 +60,25 @@ fun parseCardSpec(json: String): CardSpec? {
         val style = parseStyle(obj.optJSONObject("style"))
         val a11y = parseA11y(obj.optJSONObject("a11y"))
         val renderHint = obj.optString("renderHint", "canvas").ifBlank { "canvas" }
+        // 🔴 layout 三种写法都要认（原来只认对象，其余一律 null → custom 卡渲染成空盒子）：
+        //  ① "layout":{...}         对象（标准）
+        //  ② "layout":"{...}"       字符串形式的 JSON（模型常这么写）
+        //  ③ 没有 layout，但顶层直接给了 children/layout 节点字段 → 用顶层当根
         val layout = parseLayoutNode(obj.optJSONObject("layout"))
+            ?: runCatching {
+                val s = obj.optString("layout", "")
+                if (s.isNotBlank() && s.trimStart().startsWith("{")) parseLayoutNode(JSONObject(s)) else null
+            }.getOrNull()
+            ?: run {
+                // 顶层兜底：{"type":"custom","children":[...]} 或 {"type":"custom","layout_type":"column",...}
+                if (obj.has("children") || obj.has("layoutType") || obj.has("layout_type")) {
+                    val root = JSONObject(obj.toString())
+                    if (!root.has("type") || !isLayoutNodeType(root.optString("type"))) {
+                        runCatching { root.put("type", obj.optString("layoutType", obj.optString("layout_type", "column"))) }
+                    }
+                    parseLayoutNode(root)
+                } else null
+            }
         CardSpec(id, type, version, layout, data, actions, style, a11y, renderHint, rawJson = json)
     } catch (_: Exception) {
         null
@@ -225,10 +243,39 @@ private fun parseA11y(o: JSONObject?): A11y {
     )
 }
 
+/**
+ * 布局节点解析。
+ *
+ * 🔴 2026-11-02 修：原来 `props` **只**从 `"props"` 子对象读，`type` 也不做大小写归一。
+ * AI 写自定义布局时 99% 是把字段**平铺**在节点上（`{"type":"text","text":"86%","fontSize":32}`），
+ * 于是 text/color/fontSize/gradient/value/radius/padding/gap 全部丢失 →
+ * 卡片只剩骨架、内容空白（用户反馈「可视化小卡片不完整」的根因之一）。
+ *
+ * 现在：节点上除结构性键（type/id/weight/...）以外的**所有平铺字段都并入 props**，
+ * 显式 `props` 子对象优先覆盖。节点 type 统一 trim+lowercase，并把常见同义词归一
+ * （progress→bar、container/view/div→column、label→text 等），避免渲染器 when 匹配不上。
+ */
 private fun parseLayoutNode(o: JSONObject?): LayoutNode? {
     if (o == null) return null
+
+    // 结构性键：不并入 props（它们有专门字段）
+    val structural = setOf(
+        "type", "id", "weight", "widthDp", "heightDp", "flex",
+        "style", "children", "props",
+    )
+    // 平铺字段 → props（AI 绝大多数时候直接写在节点上）
+    val flat = LinkedHashMap<String, Any?>()
+    val keys = o.keys()
+    while (keys.hasNext()) {
+        val k = keys.next()
+        if (k !in structural) flat[k] = jsonToPlain(o.opt(k))
+    }
+    // 显式 props 子对象优先级更高（同名覆盖平铺值）
+    val explicit = toMap(o.optJSONObject("props")).mapValues { jsonToPlain(it.value) }
+    flat.putAll(explicit)
+
     return LayoutNode(
-        type = o.optString("type", "box").ifBlank { "box" },
+        type = normalizeNodeType(o.optString("type", "box")),
         id = o.optString("id").ifBlank { null },
         weight = o.optDouble("weight", 0.0).toFloat(),
         widthDp = if (o.has("widthDp")) o.optDouble("widthDp", 0.0).toFloat() else null,
@@ -236,8 +283,65 @@ private fun parseLayoutNode(o: JSONObject?): LayoutNode? {
         flex = o.optInt("flex", 0),
         style = parseStyle(o.optJSONObject("style")),
         children = parseLayoutChildren(o.optJSONArray("children")),
-        props = toMap(o.optJSONObject("props")).mapValues { it.value },
+        props = flat,
     )
+}
+
+/**
+ * 布局节点 type 归一：trim + 小写 + 常见同义词映射。
+ *
+ * 渲染器 `CustomCardRenderer` 的 `when(node.type)` 全是小写字面量，
+ * AI 写 `"Column"`/`"Text"` 或写 `progress`/`label` 这些常见别名时
+ * 原样比较会落到 `else` → 节点被忽略、布局塌陷。这里一次性对齐。
+ */
+internal fun normalizeNodeType(raw: String): String {
+    val t = raw.trim().lowercase().replace('-', '_')
+    return when (t) {
+        "" -> "box"
+        // 容器同义词
+        "container", "view", "div", "vstack", "vertical" -> "column"
+        "hstack", "horizontal" -> "row"
+        "stack", "frame", "wrapper" -> "column"
+        // 叶子同义词
+        "label", "span", "p", "heading", "title" -> "text"
+        "progress", "progressbar", "progress_bar", "linear_progress" -> "bar"
+        "circle", "donut", "arc", "circular_progress", "ring_chart" -> "ring"
+        "space", "gap" -> "spacer"
+        "line", "hr", "separator" -> "divider"
+        else -> t
+    }
+}
+
+/** 布局节点合法 type 集合（归一后）。用于判断顶层对象能否直接当布局根。 */
+private val LAYOUT_NODE_TYPES = setOf(
+    "card", "box", "column", "row", "text", "spacer", "divider", "ring", "bar",
+    "badge", "chip", "tag", "pill", "button", "icon", "image", "avatar",
+    "list", "items", "group", "grid",
+)
+
+/** 该字符串（归一后）是否是一个布局节点 type（而非卡片 type 如 custom/metric）。 */
+private fun isLayoutNodeType(raw: String): Boolean = normalizeNodeType(raw) in LAYOUT_NODE_TYPES
+
+/**
+ * 把 org.json 的容器值转成 Kotlin 原生容器。
+ *
+ * 🔴 必须转：`JSONObject.opt()` 对数组返回的是 **JSONArray**，而渲染器里
+ * `(props["gradient"] as? List<*>)` / `(props["items"] as? List<*>)` 只认 List，
+ * 直接放 JSONArray 会让 `as? List` 一律返回 null ——
+ * 结果就是**渐变从来没生效过**（用户反馈「以前是渐变，现在没了」）、列表节点画不出条目。
+ */
+private fun jsonToPlain(v: Any?): Any? = when (v) {
+    is org.json.JSONArray -> (0 until v.length()).map { jsonToPlain(v.opt(it)) }
+    is JSONObject -> {
+        val m = LinkedHashMap<String, Any?>()
+        val ks = v.keys()
+        while (ks.hasNext()) {
+            val k = ks.next()
+            m[k] = jsonToPlain(v.opt(k))
+        }
+        m
+    }
+    else -> v
 }
 
 private fun parseLayoutChildren(a: JSONArray?): List<LayoutNode> {
