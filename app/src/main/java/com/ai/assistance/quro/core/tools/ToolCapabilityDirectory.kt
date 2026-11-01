@@ -2046,7 +2046,11 @@ object ToolCapabilityDirectory {
 
 ## 4.1 终端：一堆工具做同一件事，**只走主入口 `termux`**
 
-本机的「终端」就是 **Termux**（应用内完整移植的 Termux 官方宿主），里面是**一套 Ubuntu（proot）**环境。
+本机的「终端」就是 **Termux**（应用内完整移植的 Termux 官方宿主），里面跑的是
+**Termux 官方 bootstrap** —— 有 `PREFIX=/data/data/com.termux/files/usr`、`pkg` 包管理器、`TERMUX_VERSION`。
+
+🔴 **proot Ubuntu 24.04 是另一条通道**（走 `linux_*`），和 Termux 不混用：
+Termux 里是 `pkg` + Termux 的包源；Ubuntu 里是 `apt` + Ubuntu 的包源。别在一个环境里找另一个的东西。
 
 🔴 **先说清一件事**：终端相关的工具在目录里有 30 来个，其中很多是**同一个环境的重复入口**。
 它们不是让你挑的，是历史演进和底层实现留下的。**你只认三层，别在平级里乱选。**
@@ -2079,17 +2083,19 @@ object ToolCapabilityDirectory {
 
 | 环境 | 里面有什么 | 什么时候用 | 代表工具 |
 |---|---|---|---|
-| **proot Ubuntu** | apt / python3 / gcc / pip 全都有 | 装包、跑 Python、编译、任何真 Linux 活 | `termux`（主）、`linux_*` |
-| **应用沙盒 shell** | 只有系统自带命令（ls / pwd / cat / getprop） | 只想看一眼文件/属性，**不需要** apt/python | `terminal_run` / `terminal_exec` / `terminal_*` |
+| **Termux 官方 bootstrap** | `pkg` / apt / python / node / git，`PREFIX=/data/data/com.termux/files/usr` | 用户说「终端 / 装包 / 跑个命令」，要 Termux 语义 | `termux` |
+| **proot Ubuntu 24.04** | apt / python3 / gcc / pip，标准 Ubuntu 布局 | 需要标准 Ubuntu（路径 `/root`、`/etc/apt` 是 Ubuntu 的） | `linux_*` |
+| **应用沙盒 shell** | 只有系统自带命令（ls / pwd / cat / getprop） | 只想看一眼文件/属性，**不需要**装包 | `terminal_run` / `terminal_exec` / `terminal_*` |
 | **自研极轻沙盒** | 独立虚拟文件系统，不碰真实系统 | 要快、要隔离、命令简单 | `quroterm_exec` |
 
-判定口令一句话：**「要不要 apt / python / 编译？」要 → Ubuntu（termux）；不要 → 沙盒（terminal 家族）就够，还更快。**
+判定口令一句话：**要装包/跑 Python/编译 → 有 `pkg` 就用 `termux`，需要标准 Ubuntu 布局就用 `linux_*`；
+什么都不需要、只看一眼 → 沙盒（terminal 家族）最快。**
 
 ### 同环境别名（能不选就不选）
 
 `linux_run` / `linux_install` / `linux_pkg` / `linux_start` / `linux_stop` / `linux_status` / `linux_process`
-—— 和 `termux run` / `termux pkg` 指向**同一份 Ubuntu rootfs**，做的事一样。
-只在 `termux` 明确报「环境不可用 / 工具不存在」时兜底用。
+—— 这些是 **proot Ubuntu 的入口**，不是 Termux。要 Termux 语义（pkg / PREFIX）就用 `termux`；
+要标准 Ubuntu 环境才用它们。
 
 ### 别踩的坑
 

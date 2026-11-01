@@ -2,8 +2,10 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.termux.TermuxEnvironment
 import org.json.JSONObject
 
 /**
@@ -18,11 +20,12 @@ import org.json.JSONObject
  *  - **会话类**（session_new / sessions / session_switch / session_kill / write / interrupt / kill）
  *    → 转发给 [QuroTerminalTool] 的会话驱动，管理多个常驻终端会话；
  *  - **环境类**（run / pkg / status / open）
- *    → 走 [QuroLinuxEnv]，在 Termux 打开的那套 Ubuntu 里一次性执行并拿完整输出。
+ *    → 走 [TermuxEnvironment]，在 **Termux 官方 bootstrap** 里一次性执行并拿完整输出。
  *
- * 执行后端与 Termux 界面完全一致：[com.ai.assistance.quro.termux.app.ProotLaunchProviderImpl]
- * 用的 `TerminalEnvironment.buildProotLaunch` 与 [QuroLinuxEnv] 指向**同一份 Ubuntu rootfs**，
- * 所以在工具里跑的命令与用户在 Termux 里手敲处于同一环境（同样的 /root、同样的已装包、同样的文件）。
+ * 🔴 两套环境不要混：
+ *  - 本工具跑的是 **Termux 官方 bootstrap**（`PREFIX=/data/data/com.termux/files/usr`、`pkg`、`TERMUX_VERSION`）；
+ *  - **proot Ubuntu 24.04** 是另一条通道，走 `linux_*` 工具（`apt`、`/root`、标准 Ubuntu 布局）。
+ *  用户在 Termux 界面里手敲命令，走的也是这两套之一，取决于界面当前进的是哪个环境。
  */
 class TermuxTool : QuroTool {
 
@@ -44,9 +47,9 @@ Termux 支持**多个终端会话**，本工具同时管会话与环境：
 - kill：结束当前会话
 
 【环境类】（一次性执行，拿完整 stdout/stderr + 退出码）
-- run：在 Termux 的 Ubuntu 环境里执行一条 shell 命令（默认）
-- pkg：安装软件包（自动适配 apt/apk/dnf/pacman）
-- status：查看 Termux 环境是否就绪（proot + rootfs）与会话概况
+- run：在 **Termux 官方 bootstrap** 里执行一条 shell 命令（默认）
+- pkg：用 **pkg** 安装软件包（Termux 官方包管理器，底层是 apt + Termux 源）
+- status：查看 Termux 环境是否就绪（bootstrap 是否解压）与会话概况，并报出 PREFIX / TERMUX_VERSION
 - open：把 Termux 界面拉到前台，让用户看到终端
 
 选择建议：
@@ -55,7 +58,9 @@ Termux 支持**多个终端会话**，本工具同时管会话与环境：
 - 「看看有哪些终端 / 切到另一个」→ sessions / session_switch
 
 注意：
-- 命令跑在 Termux 的 Ubuntu 里，**不是** Android 的 /system/bin/sh；要执行 Android 命令请用 shizuku_exec 或 terminal(action="run")。
+- 命令跑在 **Termux**（官方 bootstrap）里，**不是** Android 的 /system/bin/sh，
+  也**不是** proot Ubuntu（那是 `linux_*` 的通道）；要执行 Android 命令请用 `shizuku_exec`。
+- Termux 里装包用 **pkg**，不要手敲 `apt` 去装 Ubuntu 源的东西。
 - 首次使用若环境未解压，会自动后台安装并返回提示，稍后重试即可，**不要反复触发**。
 """.trimIndent()
 
@@ -64,7 +69,7 @@ Termux 支持**多个终端会话**，本工具同时管会话与环境：
   "type": "object",
   "properties": {
     "action": {"type": "string", "description": "run/session_new/sessions/session_switch/session_kill/write/interrupt/kill/pkg/status/open"},
-    "command": {"type": "string", "description": "run 用的 shell 命令（在 Termux 的 Ubuntu 内执行）"},
+    "command": {"type": "string", "description": "run 用的 shell 命令（在 Termux 官方 bootstrap 内执行）"},
     "text": {"type": "string", "description": "write 写进当前会话的一行输入"},
     "id": {"type": "string", "description": "session_switch / session_kill 的目标会话 id"},
     "name": {"type": "string", "description": "session_new 的会话名（可选）"},
@@ -118,15 +123,13 @@ Termux 支持**多个终端会话**，本工具同时管会话与环境：
     private fun runCommand(context: Context, command: String, timeoutMs: Long): String {
         if (command.isBlank()) return "缺少 command"
 
-        if (!QuroLinuxEnv.probeLenient(context).available) {
-            // 与 linux_run 一致：环境没解压就自动触发安装，不留死路。
-            QuroLinuxEnv.setup(context)
-            return "⏳ Termux 环境尚未就绪，已在后台开始安装（解压 Ubuntu rootfs），稍后重试该命令。"
-        }
+        // 🔴 走**官方 Termux bootstrap**（有 PREFIX / pkg / TERMUX_VERSION），
+        // 不是 proot Ubuntu —— 那是 linux_* 那条通道。
+        ensureTermux(context)?.let { return it }
 
         QuroAgentTrace.action("termux", "执行命令", command)
         val safeTimeout = timeoutMs.coerceIn(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS)
-        val (code, out) = QuroLinuxEnv.run(context, command, timeoutMs = safeTimeout)
+        val (code, out) = TermuxEnvironment.run(context, command, timeoutMs = safeTimeout)
         QuroAgentTrace.result("termux", "exit=$code", out.take(800))
 
         return if (code == 0) {
@@ -136,36 +139,52 @@ Termux 支持**多个终端会话**，本工具同时管会话与环境：
         }
     }
 
+    /**
+     * 确保官方 Termux 环境已解压；未就绪则**后台开始安装**，并返回给模型/用户的提示。
+     * 返回 null 表示可以继续执行。
+     */
+    private fun ensureTermux(context: Context): String? {
+        if (TermuxEnvironment.isReady(context)) return null
+        if (!TermuxEnvironment.needsInstall(context)) {
+            return "❌ Termux 环境异常：bash 不可执行。可清空 termux 目录后重试，或检查存储空间是否足够。"
+        }
+        Thread {
+            val err = TermuxEnvironment.install(context)
+            if (err != null) Log.e(TAG, "Termux bootstrap 安装失败：$err")
+            else Log.i(TAG, "Termux bootstrap 安装完成")
+        }.start()
+        return "⏳ Termux 环境首次安装中（解压 Termux 官方 bootstrap，约 1~3 分钟）。" +
+            "装好后重新执行该命令即可 —— 期间不用换别的工具反复重试。"
+    }
+
     private fun installPackage(context: Context, packageLine: String): String {
         val pkgs = packageLine.split(Regex("\\s+")).filter { it.isNotBlank() }
         if (pkgs.isEmpty()) return "缺少 package"
 
-        if (!QuroLinuxEnv.probeLenient(context).available) {
-            QuroLinuxEnv.setup(context)
-            return "⏳ Termux 环境尚未就绪，已在后台开始安装，稍后重试安装 ${pkgs.joinToString(" ")}。"
-        }
+        ensureTermux(context)?.let { return it }
 
-        val pm = QuroLinuxEnv.detectPackageManager(context)
-        val cmd = pm.install(pkgs)
-        QuroAgentTrace.action("termux", "安装软件包", pkgs.joinToString(" "))
-        val (code, out) = QuroLinuxEnv.run(context, cmd, timeoutMs = INSTALL_TIMEOUT_MS)
+        // Termux 官方包管理器是 **pkg**（apt 的封装），不是 Ubuntu 的 apt 直调
+        val cmd = "pkg install -y ${pkgs.joinToString(" ")}"
+        QuroAgentTrace.action("termux", "pkg 安装", pkgs.joinToString(" "))
+        val (code, out) = TermuxEnvironment.run(context, cmd, timeoutMs = INSTALL_TIMEOUT_MS)
         val tail = out.takeLast(1500)
         return if (code == 0) {
-            "✅ 已安装 ${pkgs.joinToString(" ")}（${pm.displayName}）\n$tail"
+            "✅ 已通过 pkg 安装 ${pkgs.joinToString(" ")}\n$tail"
         } else {
-            "❌ 安装失败(exit=$code, ${pm.displayName})\n命令：$cmd\n$tail"
+            "❌ 安装失败(exit=$code)\n命令：$cmd\n$tail"
         }
     }
 
     private fun status(context: Context): String {
-        val st = QuroLinuxEnv.probeLenient(context)
         val sb = StringBuilder()
-        sb.appendLine("Termux 环境：${if (st.available) "✅ 就绪" else "❌ 未就绪"}")
-        st.prootPath?.let { sb.appendLine("proot：$it") }
-        st.rootfsPath?.let { sb.appendLine("rootfs：$it") }
-        if (!st.available) {
-            if (st.reason.isNotBlank()) sb.appendLine("原因：${st.reason}")
-            sb.appendLine("未就绪时调用 run 会自动触发后台安装。")
+        // 报真实身份：PREFIX / TERMUX_VERSION 是「这套到底是不是真 Termux」的判据
+        sb.appendLine(TermuxEnvironment.describe(context))
+        sb.appendLine()
+        sb.appendLine("说明：这是 **Termux 官方 bootstrap**（有 PREFIX / pkg / TERMUX_VERSION）。")
+        sb.appendLine("proot Ubuntu 24.04 是**另一条通道**，走 `linux_*` 工具，两者不混用。")
+        if (!TermuxEnvironment.isReady(context)) {
+            sb.appendLine()
+            sb.appendLine("未就绪时调用 run / pkg 会自动触发后台安装。")
         }
         // 顺带把会话概况带出来，AI 一次调用就能知道"有几个终端"
         val sessionInfo = runCatching { sessions.run(context, """{"action":"sessions"}""") }.getOrNull()
@@ -188,6 +207,7 @@ Termux 支持**多个终端会话**，本工具同时管会话与环境：
     }
 
     private companion object {
+        const val TAG = "TermuxTool"
         const val DEFAULT_TIMEOUT_MS = 30_000L
         const val MIN_TIMEOUT_MS = 1_000L
         const val MAX_TIMEOUT_MS = 600_000L
