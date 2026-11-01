@@ -195,4 +195,56 @@ class ToolTaxonomyTest {
             ToolTaxonomy.categoryOf("totally_made_up_tool_xyz"),
         )
     }
+
+    /**
+     * ⑪ 终端族：30 来个工具必须各归其位，且**主入口 termux 单独成类**。
+     *
+     * 🔴 为什么单独钉这一条：终端相关的工具有 30 多个（termux / terminal 家族 12 个 /
+     * linux_* 7 个 / quroterm_exec / run_code 系 4 个 / shizuku_exec / root_exec / tmux / moyu / harness）。
+     * 它们分属**三套不同的执行环境**（proot Ubuntu、应用沙盒、自研极轻沙盒），
+     * 一旦分类归错或混在一起，模型就会只反复用最眼熟的那一个，
+     * 表现为「明明装了 apt 却说找不到命令」「跑个 ls 也要启动整个 Ubuntu」。
+     */
+    @Test
+    fun 终端族必须分层清晰() {
+        // 主入口 termux 必须单独一类（提示词靠它做「只认一个入口」）
+        assertEquals("termux 必须归 TERMUX 而不是混进 TERMINAL_LINUX",
+            ToolCategory.TERMUX, ToolTaxonomy.categoryOf("termux"))
+
+        // proot Ubuntu 的旧入口统一归 TERMINAL_LINUX
+        listOf(
+            "linux_run", "linux_install", "linux_pkg", "linux_start", "linux_stop",
+            "linux_status", "linux_process", "quroterm_exec", "terminal",
+        ).forEach {
+            assertEquals("$it 应归 TERMINAL_LINUX", ToolCategory.TERMINAL_LINUX, ToolTaxonomy.categoryOf(it))
+        }
+
+        // 应用沙盒终端家族同样归 TERMINAL_LINUX（同类，靠 description 区分环境）
+        listOf(
+            "terminal_run", "terminal_exec", "terminal_write", "terminal_keys",
+            "terminal_interrupt", "terminal_kill", "terminal_status",
+            "terminal_sessions", "terminal_session_new", "terminal_session_switch",
+            "terminal_session_kill",
+        ).forEach {
+            assertEquals("$it 应归 TERMINAL_LINUX", ToolCategory.TERMINAL_LINUX, ToolTaxonomy.categoryOf(it))
+        }
+
+        // 代码执行类也归终端域（都是「跑起来拿结果」）
+        listOf("run_code", "python_run", "code_runner", "polyglot_run").forEach {
+            assertEquals("$it 应归 TERMINAL_LINUX", ToolCategory.TERMINAL_LINUX, ToolTaxonomy.categoryOf(it))
+        }
+    }
+
+    /** ⑫ 终端主入口必须常驻，否则模型得先检索才可能发现「终端」这个能力。 */
+    @Test
+    fun 终端主入口必须常驻() {
+        assertTrue(
+            "termux 不在常驻集 —— 用户说「终端」时模型可能根本发现不了它",
+            "termux" in QuroToolRouter.ALWAYS_ON,
+        )
+        assertTrue(
+            "shizuku_exec 不在常驻集 —— Android 系统命令（am/pm/settings）没有别的通道可走",
+            "shizuku_exec" in QuroToolRouter.ALWAYS_ON,
+        )
+    }
 }

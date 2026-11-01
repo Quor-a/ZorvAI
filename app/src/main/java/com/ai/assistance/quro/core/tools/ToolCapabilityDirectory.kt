@@ -1225,7 +1225,10 @@ object ToolCapabilityDirectory {
         // ═══════════════ AI能力 ═══════════════
         "run_code" to ToolInfo(
             name = "run_code",
-            category = ToolCategory.AI_CAPABILITIES,
+            // 🔴 归终端域而不是 AI_CAPABILITIES：它和 termux/python_run 一样属于「执行环境」，
+            // 放 AI_CAPABILITIES 会让「跑段代码」和「终端」分成两个篮子，
+            // 模型想执行东西时只会在一个篮子里翻（用户报「AI 只会用一个工具」）。
+            category = ToolCategory.TERMINAL_LINUX,
             description = qstr(R.string.qk_03429),
             useCases = listOf("跑个Python脚本", "执行这段代码", "算一下这个", "写个程序"),
             examples = listOf("run_code(code=\"print('Hello')\", lang=\"python\")"),
@@ -2041,19 +2044,62 @@ object ToolCapabilityDirectory {
 - 能用简单工具就不用复杂工具（如读文件用read_text_file不用run_code）
 - 能用内置工具就不用外部工具（如计算用calculate不用run_code）
 
-## 4.1 终端 = Termux（**只认一个入口**）
-本机的「终端」就是 **Termux**（应用内完整移植的 Termux 官方宿主），它里面对应的是一套 **Ubuntu（proot）** 环境。
+## 4.1 终端：一堆工具做同一件事，**只走主入口 `termux`**
 
-**用户只要提到「终端 / Termux / 命令行 / 跑个命令 / 装个包 / bash / shell」→ 一律调用 `termux`。**
-它同时管两类事，别再去点 `terminal`：
-- **环境执行**：`run`（跑命令，返回完整 stdout/stderr + 退出码）、`pkg`（装包）、`status`、`open`（拉起界面）
-- **多个终端会话**：`sessions`（有哪几个）、`session_new`（开新窗口）、`session_switch`（切过去）、
-  `session_kill`（关掉）、`write`（往当前会话敲一行，用于 python REPL / vim 这类交互程序）、`interrupt`（Ctrl-C）
+本机的「终端」就是 **Termux**（应用内完整移植的 Termux 官方宿主），里面是**一套 Ubuntu（proot）**环境。
 
-`terminal` 是 **Termux 内部使用的底层会话驱动**，只在两种情况下直接用：① 要操作界面上已打开的那个交互式终端；
-② `termux` 明确返回环境不可用、需要降级。**不要因为「想跑个命令」就去调 terminal。**
+🔴 **先说清一件事**：终端相关的工具在目录里有 30 来个，其中很多是**同一个环境的重复入口**。
+它们不是让你挑的，是历史演进和底层实现留下的。**你只认三层，别在平级里乱选。**
 
-要跑 **Android 系统命令**（/system/bin/sh、am、pm、settings）→ `shizuku_exec`，不要丢给 termux（那是 Ubuntu）。
+### 第一层：主入口（99% 的情况）
+
+**用户说「终端 / Termux / 命令行 / 跑个命令 / 装个包 / bash / shell / Linux」→ 一律 `termux`。**
+
+它一个工具管全部：
+- `run` —— 跑一条命令，返回完整 stdout/stderr + 退出码（**你要的就是这个**）
+- `pkg` —— 装/卸/搜索系统包（apt）
+- `status` —— 环境是否就绪
+- `open` —— 拉起终端界面给用户看
+- 多会话：`sessions` / `session_new` / `session_switch` / `session_kill`
+- 交互式程序：`write`（往当前会话敲一行，用于 python REPL、vim、top）
+- `interrupt`（≈ Ctrl-C）
+
+### 第二层：场景专用（明确不属于「跑 Linux 命令」时才用）
+
+| 你要干的事 | 用哪个 | 说明 |
+|---|---|---|
+| 跑 **Android 系统命令**（`am` / `pm` / `settings` / `dumpsys` / `getprop`） | `shizuku_exec` | 那是**宿主机** shell，不是 Ubuntu。丢给 termux 会找不到命令 |
+| 需要 **root** 才行的命令 | `root_exec` | 没有 root 就用 `shizuku_exec`（shell 身份） |
+| 只想跑**一小段代码**（Python/JS/一次性脚本）拿结果 | `run_code` / `python_run` | 不用进 shell，比 `termux run` 轻 |
+| 操作**界面上已经打开的那个**交互式终端 | `terminal` 家族 | 见第三层 |
+
+### 第三层：另外两套**不同的执行环境**（别跟 Ubuntu 混）
+
+这三套环境**不是同一件事**，选错会「命令找不到」或「明明能跑却说没有」：
+
+| 环境 | 里面有什么 | 什么时候用 | 代表工具 |
+|---|---|---|---|
+| **proot Ubuntu** | apt / python3 / gcc / pip 全都有 | 装包、跑 Python、编译、任何真 Linux 活 | `termux`（主）、`linux_*` |
+| **应用沙盒 shell** | 只有系统自带命令（ls / pwd / cat / getprop） | 只想看一眼文件/属性，**不需要** apt/python | `terminal_run` / `terminal_exec` / `terminal_*` |
+| **自研极轻沙盒** | 独立虚拟文件系统，不碰真实系统 | 要快、要隔离、命令简单 | `quroterm_exec` |
+
+判定口令一句话：**「要不要 apt / python / 编译？」要 → Ubuntu（termux）；不要 → 沙盒（terminal 家族）就够，还更快。**
+
+### 同环境别名（能不选就不选）
+
+`linux_run` / `linux_install` / `linux_pkg` / `linux_start` / `linux_stop` / `linux_status` / `linux_process`
+—— 和 `termux run` / `termux pkg` 指向**同一份 Ubuntu rootfs**，做的事一样。
+只在 `termux` 明确报「环境不可用 / 工具不存在」时兜底用。
+
+### 别踩的坑
+
+- ❌ 用户说「跑个命令」，你去调 `linux_run` / `quroterm_exec` —— **先想 `termux(run)`**；
+  除非你**明确知道**这命令不需要 apt/python（那用 `terminal_run` 更快）。
+- ❌ 要装包却用 `linux_install` 而不是 `termux(pkg)` —— 前者是旧入口。
+- ❌ Android 命令（`am`/`pm`/`settings`/`getprop`）丢给 `termux` —— 那些在**宿主机**，Ubuntu 里没有 → 用 `shizuku_exec`。
+- ❌ 需要交互（python REPL、vim）却用 `termux run` 一条命令硬跑 —— 该用 `session_new` + `write`。
+- ❌ 往用户界面上那个终端敲字时去调 `termux run`（那是新开一次性执行）—— 该用 `termux(write)` 或 `terminal_write`。
+- ✅ 环境没装好时 `termux(run)` 会自动触发安装并告诉你等，**照它说的等，别换工具反复试**。
 
 ## 4.2 两块屏：后台虚拟屏 vs 无障碍（用错就是「抢用户屏幕」）
 
