@@ -25,7 +25,9 @@ class QuroTerminalTool : QuroTool {
     override val name: String = "terminal"
 
     override val description: String = """
-终端会话的**底层驱动**（Termux 的内部实现）。⚠️ 一般不要直接调用本工具。
+【ZorvAI 终端】—— 应用内置终端会话的**底层驱动**（Termux 内部实现）。⚠️ 一般不要直接调用本工具。
+🔴 与 `termux` 的区别：`termux` = Termux 官方 bootstrap（PREFIX/pkg），用户说「终端」默认用它；
+   本工具（ZorvAI 终端）= 应用自己的终端会话驱动，管界面上那几个终端窗口。
 
 🔴 用户说「终端 / Termux / 命令行 / 跑个命令 / 装包 / bash / shell」时，
    请调用 **`termux`** 工具 —— 那是 Termux 的对外统一入口，多会话（session_new/sessions/

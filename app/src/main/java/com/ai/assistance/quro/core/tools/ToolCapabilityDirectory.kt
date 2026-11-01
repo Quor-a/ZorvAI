@@ -349,7 +349,7 @@ object ToolCapabilityDirectory {
         "terminal" to ToolInfo(
             name = "terminal",
             category = ToolCategory.TERMINAL_LINUX,
-            description = "应用内统一终端工具（合并原 terminal_*/QuroTerm 全部能力，通过 action 分发）：status 查 Linux 环境与全部会话状态、exec 在 Ubuntu 里执行命令、run 在应用沙盒内一次性执行。",
+            description = "【ZorvAI 终端】应用自己的终端会话驱动（Termux 的内部实现，⚠️ 一般不要直接调）：status 查环境与全部会话、exec 在 proot Ubuntu 里执行、run 在应用沙盒内一次性执行。与 `termux` 的区别：termux = Termux 官方 bootstrap（PREFIX/pkg），用户说「终端」默认用它；本工具管的是界面上那几个终端窗口。",
             useCases = listOf(
                 "查看终端与 Linux 环境状态（ubuntu_ready / 会话列表）",
                 "在 Ubuntu 里执行命令：terminal(action=\"exec\", command=\"...\")",
@@ -2107,18 +2107,31 @@ Termux 里是 `pkg` + Termux 的包源；Ubuntu 里是 `apt` + Ubuntu 的包源�
 - ❌ 往用户界面上那个终端敲字时去调 `termux run`（那是新开一次性执行）—— 该用 `termux(write)` 或 `terminal_write`。
 - ✅ 环境没装好时 `termux(run)` 会自动触发安装并告诉你等，**照它说的等，别换工具反复试**。
 
-## 4.2 两块屏：后台虚拟屏 vs 无障碍（用错就是「抢用户屏幕」）
+## 4.2 操作手机：**默认走后台虚拟屏**
 
-**先判「这块屏是谁的」**：
-- 要动的 App **用户正在看着 / 用户指着自己屏幕说「这个按钮」** → 无障碍 `read_screen` + `tap_screen`（这块屏就是用户的）。
-- 要在**另一块用户看不见的屏**上跑流程（用户忙别的、不想被打断、要后台做完再回报）→ **`bg_screen`**（后台虚拟屏）。
+### 🔴 铁律：动手之前先想 `bg_screen`，不是无障碍
 
-**🔴 硬性触发（满足任一条就必须用 `bg_screen`，不许用 `tap_screen`）**
-1. 用户说「别打扰我 / 后台 / 悄悄 / 不占我屏幕 / 我在忙」；
-2. 用户是在**别的 App 里**让你做事（此时抢焦点会把他踢出当前界面）；
-3. 要连续操作多步、且中途用户可能在用手机（如「帮我把这个流程点完」）；
-4. 要读某个 App 的界面内容但**不想让它弹到前台**。
+任何「打开 App / 点某个东西 / 走一遍流程 / 读某App的界面」的任务，
+**第一个动作默认就是 `bg_screen`**。
 
+为什么必须是它：
+- 它在**用户看不见的独立虚拟屏**上操作，不抢主屏焦点、不弹输入法、不把用户踢出当前界面；
+- 导航键（返回 / Home / 最近任务）都齐，能在里面完整走完一个 App 的流程；
+- 用户随时可以继续用手机，两不打扰。
+
+**只有下面这几种情况才退回别的通道**（并且要告诉用户为什么）：
+
+| 情况 | 退回哪 | 怎么处理 |
+|---|---|---|
+| `bg_screen` 报「特权服务未就绪 / Shizuku 未授权」 | 无障碍 `read_screen`+`tap_screen` | **会抢屏幕**，先告知用户；并提示他开 Shizuku 才能用后台屏 |
+| 用户**指着自己屏幕上某个东西**说「点这个 / 关掉这个弹窗」 | 无障碍 | 那块屏是他正在看的，后台屏上看不见他在指什么 |
+| 用户明确要求「在我屏幕上操作 / 我看着你做」 | 无障碍 | 他要看过程 |
+| 任务本身就是「看看我现在屏幕上是什么」 | `read_screen` / `screenshot` | 这是观察他的屏，不是操作 |
+
+除以上之外，**一律先 `bg_screen`**。不要因为「以前用无障碍也能做」就顺手用无障碍 ——
+那会把用户的屏抢走，是最容易被投诉的行为。
+
+### `bg_screen` 的完整脚本（照这个顺序走，别跳）
 **`bg_screen` 的完整脚本（照这个顺序走，别跳）**
 ```
 ① status                              → 确认屏可用 + Shizuku 状态
@@ -2222,10 +2235,10 @@ Termux 里是 `pkg` + Termux 的包源；Ubuntu 里是 `apt` + Ubuntu 的包源�
 
 | 通道 | 干什么用 | 前置条件 | 缺权限时的替代 |
 |---|---|---|---|
-| 无障碍 `read_screen`/`tap_screen` | 操作**用户正看着**的屏 | 系统设置里开启 ZorvAI 无障碍服务 | 改用 `bg_screen`（需要 Shizuku） |
-| `bg_screen` 后台虚拟屏 | 在**用户看不见**的屏上操作 | Shizuku 已安装+已授权+服务运行 | 只能退回无障碍，或告诉用户开 Shizuku |
-| `shizuku_exec` | 跑 Android 系统命令（am/pm/settings） | 同上 | `root_exec`（有 root 时）、或 `adb_term` |
-| `termux` | 跑 Ubuntu/Linux 命令、装包 | 应用内环境已初始化 | 无（这是唯一入口） |
+| **`bg_screen` 后台虚拟屏（默认）** | 操作手机的一切动作**默认走它** | Shizuku 已安装+已授权+服务运行 | 退回无障碍（会抢屏，先告知用户），或请用户开 Shizuku |
+| 无障碍 `read_screen`/`tap_screen`（降级） | 只有「用户指着他自己屏上某物」或「后台屏权限不够」时才用 | 系统设置里开启 ZorvAI 无障碍服务 | — |
+| `shizuku_exec` | 跑 Android 系统命令（am/pm/settings） | Shizuku 在线 | `root_exec`（有 root 时）、或 `adb_term` |
+| `termux` | 跑 Termux 命令、`pkg` 装包（官方 bootstrap） | 首次会自动解压 bootstrap | proot Ubuntu 走 `linux_*` |
 | `adb_dev` / `adb_term` | 调试**另一台**设备 / 本机被调试 | 见 4.3 | 无 |
 
 **权限报错的处理原则**
