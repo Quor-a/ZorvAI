@@ -70,18 +70,91 @@ private const val NET_CALL_TIMEOUT_MS = 90_000L
  * 用 adb logcat -s QuroLlm:* 可实时查看工具调用链路是否正常。
  */
 class QuroLlmClient(
-    private val client: OkHttpClient = OkHttpClient.Builder()
-        // 连接超时 15s：健康端点通常 <1s 建连，15s 足够；端点不可达时快速失败，
-        // 避免用户在「等等」状态干等 30s 才看到报错（原 30s 偏长）。读取超时保持 120s，
-        // 因为长生成（含 reasoning）可能持续数分钟，不应被误杀。
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
-        .build(),
+    private val client: OkHttpClient = SHARED_CLIENT,
 ) {
     companion object {
         /** 单次响应体最大 4MB；超过此限制的响应（如 MiMo 超长 reasoning）直接截断，
          * 作为内存护栏，避免超大响应直接 OOM。 */
         const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+
+        /** 首包延迟埋点。用 `adb logcat -s QuroLatency:*` 可直接看每段耗时。 */
+        private const val LAT = "QuroLatency"
+
+        /**
+         * 进程级共享的连接池（2026-11-02）。
+         *
+         * 🔴 修的是「发一条消息很久才响应」——不是执行慢，是**首字之前**就慢：
+         * 原来这里是默认参数 `OkHttpClient.Builder()...build()`，而
+         * ViewModel 每次发送前都 `QuroAssistant(QuroLlmClient(), ...)`，
+         * 于是**每发一条消息就新建一个 OkHttpClient = 一个全新的连接池**：
+         *   DNS 解析 → TCP 三次握手 → TLS 握手（国内到中转域名几百毫秒到数秒）
+         * 全部重来一遍，且发生在用户点完发送、屏幕上什么都还没动的那一段。
+         *
+         * 共享后：连接、TLS 会话、HTTP/2 多路复用、DNS 结果全部复用，
+         * 首包只剩「上传请求体 + 服务端 prefill」两段真开销。
+         */
+        internal val SHARED_CLIENT: OkHttpClient by lazy {
+            OkHttpClient.Builder()
+                // 建连 10s：健康端点 <1s；不可达时快速暴露，不让用户干等 15s
+                .connectTimeout(10, TimeUnit.SECONDS)
+                // 读 120s：长思考/长生成可能持续数分钟，每收到字节都会重置
+                .readTimeout(120, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                // 不设整体 callTimeout：会把合法的长生成掐死
+                .callTimeout(0, TimeUnit.MILLISECONDS)
+                // 保活 5 分钟：切页面、隔一会儿再发，连接还能复用
+                .connectionPool(okhttp3.ConnectionPool(8, 5, TimeUnit.MINUTES))
+                .retryOnConnectionFailure(true)
+                .dns(CacheDns)
+                .protocols(listOf(okhttp3.Protocol.HTTP_2, okhttp3.Protocol.HTTP_1_1))
+                .build()
+        }
+
+        /**
+         * DNS 缓存 + **IPv4 优先**。
+         *
+         * 两个国内实测的「首包慢」来源：
+         *  ① 每次新建连接重解析域名（系统 DNS 缓存不可靠，切网络后尤其明显）；
+         *  ② 域名同时有 AAAA 记录时，系统常先试 IPv6 —— 黑洞环境要等超时才回落 IPv4，
+         *     一次就是好几秒，而且全在首字之前。
+         * 缓存 5 分钟（CDN 切换最多晚 5 分钟，可接受），解析结果把 IPv4 排在前面。
+         */
+        private object CacheDns : okhttp3.Dns {
+            private const val TTL_MS = 5 * 60 * 1000L
+            private val cache =
+                java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<java.net.InetAddress>>>()
+
+            override fun lookup(hostname: String): List<java.net.InetAddress> {
+                val now = System.currentTimeMillis()
+                cache[hostname]?.let { (at, addrs) ->
+                    if (now - at < TTL_MS) return addrs
+                }
+                val resolved = okhttp3.Dns.SYSTEM.lookup(hostname)
+                if (resolved.isEmpty()) return resolved
+                // IPv4 优先，其余保持原序（IPv6 只作为兜底）
+                val ordered = resolved.sortedBy { if (it is java.net.Inet4Address) 0 else 1 }
+                cache[hostname] = now to ordered
+                return ordered
+            }
+        }
+
+        /**
+         * 预热一条连接：提前把 DNS + TCP + TLS 做完，让这段固定开销发生在**空闲时**，
+         * 而不是用户点完发送之后。失败无所谓（4xx 也算建连成功）。
+         */
+        fun warmUp(baseUrl: String) {
+            val host = runCatching { java.net.URI(baseUrl.trim()).host }.getOrNull()
+            if (host.isNullOrBlank()) return
+            Thread {
+                val t = System.currentTimeMillis()
+                runCatching {
+                    CacheDns.lookup(host)
+                    val url = baseUrl.trim().trimEnd('/') + "/"
+                    SHARED_CLIENT.newCall(Request.Builder().url(url).head().build()).execute().close()
+                }.onFailure { Log.d(TAG, "warmUp($host) 失败：${it.message}") }
+                Log.i(LAT, "warmUp($host) +${System.currentTimeMillis() - t}ms")
+            }.apply { isDaemon = true; name = "qllm-warmup" }.start()
+        }
     }
 
     suspend fun chat(
@@ -111,6 +184,10 @@ class QuroLlmClient(
         // 现按规则补全：裸 host → /v1/chat/completions；以 /v1 结尾 → /chat/completions；
         // 已带完整路径则原样；末尾加 '#' 可关闭自动补全（直达原始 URL）。
         val url = completeEndpoint(baseUrl)
+        // 🔴 首包延迟的分段计时起点（见 streamChat 里的 QuroLatency 日志）。
+        // 用户反馈「发一条消息很久才响应，但不是执行慢」，所以必须把
+        // 「请求体构造 / 请求发出 / 响应头 / 首个 token」拆开看，别再靠猜。
+        val tEnter = System.currentTimeMillis()
         // 🔧 OpenAI 官方 reasoning 模型（o1 / o3 / o4 系列）硬伤修复：
         //  这类模型**不支持 max_tokens**，必须发 max_completion_tokens，否则直接 400
         //  「max_tokens is not supported with this model」→ 整轮失败（表现为「部分模型直接不回复」，
@@ -244,7 +321,9 @@ class QuroLlmClient(
             .build()
         // 流式路径：逐字回调，不走重试（避免半截 token 后重试造成内容错乱）。
         if (stream && onToken != null) {
-            return streamChat(req, bodyStr, onToken, onThinking)
+            Log.i(LAT, "①请求体就绪 body=${bodyStr.length}ch tools=${tools.size} " +
+                "耗时=${System.currentTimeMillis() - tEnter}ms（含历史+提示词序列化）")
+            return streamChat(req, bodyStr, onToken, onThinking, tEnter)
         }
         // 重试策略：网关类临时故障（5xx / 429）与网络异常（超时/连接失败）自动重试，
         // 避免 openresty 等反向代理偶发 502/503 直接把原始错误甩给用户。
@@ -278,7 +357,10 @@ class QuroLlmClient(
                 runCatching { call.cancel() }
             }
             try {
+                val tReq = System.currentTimeMillis()
                 val callResult = call.execute().use { resp ->
+                    Log.i(LAT, "②非流式响应头 HTTP=${resp.code} 发出→头=${System.currentTimeMillis() - tReq}ms " +
+                        "总=${System.currentTimeMillis() - tEnter}ms")
                     val rawBody = resp.body?.string().orEmpty()
                     // 🛡️ 响应体超限截断：MiMo 等推理模型可能返回数 MB 的 reasoning_content，
                     // org.json 递归解析时 StackOverflowError → "stack size 8188KB"。
@@ -857,7 +939,14 @@ class QuroLlmClient(
      *    这与非流式 chat() 的重试策略对齐，也对齐「其他客户端连得上」的体感——
      *    单次建连因路由/解析抖动失败不该直接判死，给一次重连机会；已吐出内容则不重试（避免错乱）。
      */
-    private suspend fun streamChat(req: Request, requestBody: String, onToken: (String) -> Unit, onThinking: ((String) -> Unit)? = null): QuroLlmResult {
+    private suspend fun streamChat(
+        req: Request,
+        requestBody: String,
+        onToken: (String) -> Unit,
+        onThinking: ((String) -> Unit)? = null,
+        tEnter: Long = System.currentTimeMillis(),
+    ): QuroLlmResult {
+        var firstTokenLogged = false
         val contentAcc = StringBuilder()
         val reasoningAcc = StringBuilder()
         // 🔧 思考标签剥离：DeepSeek-R1 / Qwen-Think 等推理模型把 <think>…</think> 直接混进 content 流，
@@ -881,7 +970,17 @@ class QuroLlmClient(
                     else { reasoningAcc.append(s.substring(0, m.range.first)); inThink = false; s = s.substring(m.range.last + 1) }
                 }
             }
-            if (contentAcc.length != prevContentLen) { onToken(contentAcc.toString()); prevContentLen = contentAcc.length }
+            if (contentAcc.length != prevContentLen) {
+                // 首个正文 token 的时刻 = 用户真正「看到东西开始动」的时间点。
+                // 这是判断「慢在首包还是慢在生成」的唯一可靠分界。
+                if (!firstTokenLogged) {
+                    firstTokenLogged = true
+                    Log.i(LAT, "③首个 token 到达 总=${System.currentTimeMillis() - tEnter}ms " +
+                        "（此前的耗时全在『首字之前』：建连/等待上游）")
+                }
+                onToken(contentAcc.toString())
+                prevContentLen = contentAcc.length
+            }
             if (reasoningAcc.length != prevReasonLen) { onThinking?.invoke(reasoningAcc.toString()); prevReasonLen = reasoningAcc.length }
         }
         // 🔧 v291 修复：流式响应里模型返回的 tool_calls 也以 delta 形式下发，必须按 index 累计
@@ -921,7 +1020,11 @@ class QuroLlmClient(
                     if (cause is CancellationException) runCatching { call.cancel() }
                 }
                 val result = try {
+                    val tReq = System.currentTimeMillis()
                     call.execute().use { resp ->
+                    Log.i(LAT, "②响应头 HTTP=${resp.code} " +
+                        "发出→头=${System.currentTimeMillis() - tReq}ms " +
+                        "总=${System.currentTimeMillis() - tEnter}ms")
                     if (!resp.isSuccessful) {
                         val respText = resp.body?.string().orEmpty()
                         val code = resp.code
