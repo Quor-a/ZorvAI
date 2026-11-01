@@ -221,16 +221,5 @@ interface IQuroShellService {
 
     /** 以 shell 身份连本应用 WebView 的调试套接字；名字不合规矩或连不上返回 null */
     ParcelFileDescriptor openDevtoolsSocket(String name) = 46;
-
-    /**
-     * 把虚拟屏的显示面切换到调用方传来的 Surface（零拷贝直出，照 Extendroid 的
-     * `VirtualDisplay.surface = surface`）。
-     *
-     * 用途：悬浮窗 / 桌面用自己的 SurfaceView 直接显示虚拟屏画面（GPU 合成，
-     * 窗口多大画面多大，不经过位图中转）；AI 截图仍走 ImageReader，切换回来即可。
-     *
-     * @return 是否成功；displayId 不是本服务建的屏返回 false
-     */
-    boolean displaySetSurface(int displayId, in Surface surface, int width, int height, int dpi) = 47;
 }
 

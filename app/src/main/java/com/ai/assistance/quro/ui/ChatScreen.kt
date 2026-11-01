@@ -860,6 +860,9 @@ fun ChatScreen(
     var showClusterSettings by remember { mutableStateOf(false) }
     // 聚合式「系统状态」浏览界面（设备 / 权限 / 模块运行态 / 人格心跳）
     var showSystemStatus by remember { mutableStateOf(false) }
+    // 后台虚拟屏管理页（移植 Mika 的后台屏：AI 在看不见的独立屏上操作 App，
+    // 这里给它一个可视界面 —— 实时画面 + 当前 Activity + 手动返回/截图/释放）
+    var showBgScreen by remember { mutableStateOf(false) }
     // 可视化组件画廊
     var showComponentGallery by remember { mutableStateOf(false) }
     // 内置代码编辑器入口
@@ -962,8 +965,11 @@ fun ChatScreen(
             "ui_open_bots" -> showBots = true
             "ui_open_cms" -> showCms = true
             "ui_open_system_status" -> showSystemStatus = true
-            // 后台屏：AI 主动把画面推到用户面前 → 拉起系统级悬浮窗（入口已合体）
-            "ui_open_bg_screen" -> com.ai.assistance.quro.service.QuroBgScreenOverlayService.start(drivingCtx)
+            // 后台虚拟屏管理页：AI 在后台屏上操作时，可以主动把界面推到用户面前
+            "ui_open_bg_screen" -> {
+                com.ai.assistance.quro.core.display.QuroVirtualScreen.showUi()
+                showBgScreen = true
+            }
             "ui_open_permission" -> showPermission = true
             "ui_open_model_config" -> showModelConfig = true
             "ui_open_voice" -> showVoice = true
@@ -1910,6 +1916,7 @@ fun ChatScreen(
             onOpenMcp = { showMcp = true },
             onOpenCluster = { showClusterSettings = true },
             onOpenSystemStatus = { showSystemStatus = true },
+            onOpenBgScreen = { showBgScreen = true },
             onOpenDesktop = {
                 runCatching {
                     ctx.startActivity(
@@ -1979,10 +1986,29 @@ fun ChatScreen(
         }
 
         // 聚合式「系统状态」浏览界面：全屏覆盖层（从设置页入口进入，返回关页回设置）
+        // 后台虚拟屏画中画：常驻显示「AI 在后台做什么」（那块屏用户本来看不见）。
+        // 外层 Box 不消费触摸，事件穿透到下层对话；点了进管理页。
+        // bottomInset 让开底部输入栏，不让小窗压住发消息按钮。
+        if (!showBgScreen) {
+            BackgroundScreenPip(
+                onOpenManage = { showBgScreen = true },
+                bottomInsetPx = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() },
+            )
+        }
+
         if (showSystemStatus) {
             BackHandler { showSystemStatus = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
                 QuroSystemStatusScreen(onClose = { showSystemStatus = false }, personaVm = personaVm)
+            }
+        }
+
+        // 后台虚拟屏管理页：全屏覆盖层（从画中画小窗点进来）
+        // 关掉本页不销毁后台屏，只有页内「释放」才销毁 —— 因为 AI 可能还在用它。
+        if (showBgScreen) {
+            BackHandler { showBgScreen = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
+                BackgroundScreenPage(onClose = { showBgScreen = false })
             }
         }
 
@@ -5740,6 +5766,7 @@ private fun SheetOverlay(
     onOpenMcp: () -> Unit,
     onOpenCluster: () -> Unit,
     onOpenSystemStatus: () -> Unit,
+    onOpenBgScreen: () -> Unit,
     onOpenDesktop: () -> Unit,
     onOpenComponentGallery: () -> Unit,
     onOpenAppearance: () -> Unit,
@@ -5813,7 +5840,7 @@ private fun SheetOverlay(
                         onManagePersona, onOpenVoiceService,
                         onClearChat, settingsVoiceBallEnabled, onSettingsToggleVoiceBall,
                     settingsAiReplyNotify, onSettingsToggleAiReplyNotify,
-                        onOpenAbout, onOpenAci, onOpenMcp, onOpenCluster, onOpenSystemStatus, onOpenDesktop, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenHarnessHotUpdate, onOpenHarnessNotify, onOpenPhoneControl, onOpenFileManager,
+                        onOpenAbout, onOpenAci, onOpenMcp, onOpenCluster, onOpenSystemStatus, onOpenBgScreen, onOpenDesktop, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenHarnessHotUpdate, onOpenHarnessNotify, onOpenPhoneControl, onOpenFileManager,
                         onOpenGitHub = onOpenGitHub, onOpenModelHub = onOpenModelHub, scaled
                     )
                     else -> {}
@@ -5866,6 +5893,7 @@ private fun SettingsSheetContent(
     onOpenMcp: () -> Unit,
     onOpenCluster: () -> Unit,
     onOpenSystemStatus: () -> Unit,
+    onOpenBgScreen: () -> Unit,
     onOpenDesktop: () -> Unit,
     onOpenComponentGallery: () -> Unit,
     onOpenAppearance: () -> Unit,
@@ -5917,6 +5945,9 @@ private fun SettingsSheetContent(
             SetRowClickable(Icons.Filled.Download, stringResource(R.string.qk_03841), stringResource(R.string.qk_03861), "", onOpenModelHub, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Info, stringResource(R.string.qk_02642), stringResource(R.string.qk_03859), "", onOpenSystemStatus, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            // 后台虚拟屏（移植 Mika）：AI 在不打扰用户主屏的独立虚拟屏上操作 App，这里给可视化入口
+            SetRowClickable(Icons.Filled.Apps, "后台虚拟屏", "看 AI 在后台屏上操作什么，可手动接管", "", onOpenBgScreen, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             // 系统级悬浮窗：跨 App 漂浮 + 可收成球 + 自由缩放 + 直接操控（对照 Extendroid）
             BgOverlayRow(scaled)
@@ -7157,49 +7188,7 @@ private fun extractSelfCardSpecs(text: String): List<CardSpec> {
         if (!seen.add(spec.id)) continue
         out.add(spec)
     }
-    if (out.isNotEmpty()) return out
-
-    // ── 单行容错（2026-11-01 真机截图实证）：模型高频写「quro-card {json}」——
-    // 围栏标记 ``` 丢失、语言标签和 JSON 挤在同一行。这不是围栏，RE_FENCE 抓不到。
-    // 按出现位置逐个做**括号配对**提取（非贪婪正则会把嵌套 data 截断），解析失败的跳过。
-    var idx = text.indexOf("quro-card")
-    while (idx >= 0) {
-        val brace = text.indexOf('{', idx)
-        if (brace < 0) break
-        val json = extractBalancedJson(text, brace)
-        if (json != null) {
-            val spec = runCatching { parseCardSpec(json) }.getOrNull()
-            if (spec != null && seen.add(spec.id)) out.add(spec)
-            idx = brace + json.length.coerceAtLeast(1)
-        } else {
-            idx = brace + 1
-        }
-        idx = text.indexOf("quro-card", idx)
-    }
     return out
-}
-
-/** 从 [start]（必须指向 '{'）做括号配对提取一段完整 JSON（跳过字符串字面量内的括号）。 */
-private fun extractBalancedJson(text: String, start: Int): String? {
-    if (start >= text.length || text[start] != '{') return null
-    var depth = 0
-    var inStr = false
-    var escape = false
-    for (i in start until text.length) {
-        val c = text[i]
-        when {
-            escape -> escape = false
-            c == '\\' && inStr -> escape = true
-            c == '"' -> inStr = !inStr
-            inStr -> {}
-            c == '{' -> depth++
-            c == '}' -> {
-                depth--
-                if (depth == 0) return text.substring(start, i + 1)
-            }
-        }
-    }
-    return null // 未闭合（流式中）——交给围栏路径或下一条消息
 }
 
 /**
@@ -10659,7 +10648,7 @@ private fun BgOverlayRow(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
         name = "后台屏悬浮窗（跨 App）",
         sub = when {
             !allowed -> "缺「显示在其他应用上层」权限 · 点它去授权"
-            on -> "已浮在屏幕上 · 点画面直接操作 App · 顶栏「全屏」进桌面 · 「球」收成漂浮球"
+            on -> "已浮在屏幕上 · 点画面直接操作，右上「—」收成小球，右下角可拉大小"
             else -> "让 AI 的后台屏浮在任何 App 之上，随时插手"
         },
         checked = on && allowed,
