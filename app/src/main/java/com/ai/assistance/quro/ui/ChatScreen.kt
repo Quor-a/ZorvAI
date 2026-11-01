@@ -10651,46 +10651,47 @@ private fun DshAutoStartRow(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) 
 }
 
 /**
- * 设置里的「后台屏悬浮窗」开关（系统级 overlay，跨 App 可见）。
+ * 设置里的「后台虚拟屏大小」调节器。
  *
- * 与 App 内画中画的区别：这个浮在**任何 App 之上**，可收成一颗小球、可自由拉大小、
- * 点画面直接操控虚拟屏 —— 对应 Extendroid 的 PopupWindow/OverlayMenu。
- * 需要「显示在其他应用上层」权限，未授予时点开关直接跳授权页而不是静默失败。
+ * 原来是个开关，用户点开了就启动悬浮窗——多余。AI 执行任务时自动开虚拟屏，
+ * 用户只需要在这里调大小。
  */
 @Composable
 private fun BgOverlayRow(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
     val ctx = LocalContext.current
-    var on by remember { mutableStateOf(com.ai.assistance.quro.service.QuroBgScreenOverlayService.running) }
-    var allowed by remember { mutableStateOf(com.ai.assistance.quro.service.QuroBgScreenOverlayService.isOverlayAllowed(ctx)) }
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1500)
-            on = com.ai.assistance.quro.service.QuroBgScreenOverlayService.running
-            allowed = com.ai.assistance.quro.service.QuroBgScreenOverlayService.isOverlayAllowed(ctx)
-        }
+    // 从 Preference 读当前宽度比例（0.10~0.90，默认 0.30）
+    val prefs by lazy { ctx.getSharedPreferences("quro_settings", android.content.Context.MODE_PRIVATE) }
+    var widthRatio by remember {
+        mutableStateOf(prefs.getFloat("bg_screen_width_ratio", 0.30f))
     }
 
-    SetRow(
-        icon = Icons.Filled.Apps,
-        name = "后台屏悬浮窗（跨 App）",
-        sub = when {
-            !allowed -> "缺「显示在其他应用上层」权限 · 点它去授权"
-            on -> "已浮在屏幕上 · 点画面直接操作，右上「—」收成小球，右下角可拉大小"
-            else -> "让 AI 的后台屏浮在任何 App 之上，随时插手"
-        },
-        checked = on && allowed,
-        onToggle = {
-            if (!allowed) {
-                com.ai.assistance.quro.service.QuroBgScreenOverlayService.requestOverlayPermission(ctx)
-            } else if (on) {
-                com.ai.assistance.quro.service.QuroBgScreenOverlayService.stop(ctx)
-                on = false
-            } else {
-                com.ai.assistance.quro.service.QuroBgScreenOverlayService.start(ctx)
-                on = true
-            }
-        },
-        scaled = scaled,
-    )
+    Column(
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Text(
+            "虚拟屏宽度比例",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+        )
+        Slider(
+            value = widthRatio,
+            valueRange = 0.10f..0.90f,
+            onValueChange = {
+                widthRatio = it
+                prefs.edit().putFloat("bg_screen_width_ratio", it).apply()
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Text(
+            "当前: ${Math.round(widthRatio * 100)}%",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            "拖动滑块调节 AI 后台虚拟屏的宽度比例",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
