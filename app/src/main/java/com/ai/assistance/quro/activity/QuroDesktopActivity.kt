@@ -79,6 +79,12 @@ class QuroDesktopActivity : ComponentActivity() {
             c.systemBarsBehavior =
                 androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
+        // 双保险：部分 ROM 上 insets controller 不彻底，再补传统全屏旗标
+        @Suppress("DEPRECATION")
+        window.setFlags(
+            android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
+        )
         setContent {
             MaterialTheme {
                 DesktopHome()
@@ -130,18 +136,19 @@ private fun DesktopHome() {
         note = if (loaded.isEmpty()) "没有可显示的应用（可能是权限受限）" else ""
     }
 
-    // 🔴 桌面背景（用户要求「桌面背景你还没换」）：深空渐变 + 星点 + 顶部光晕，
-    // 替换原来的纯色 #12151C（被骂「看不懂」的灰盒子底）
+    // 🔴 桌面墙纸（ZorvAI 风格，用户要求「不是一片黑」）：
+    // 用 ZorvAI 官方主题色系（QuroTheme.kt）—— 暖墨底 #211E1A + 陶土橙 #C25A38 光晕 +
+    // 点缀金 #B8902F 顶边，纸色 #F4F1EA 文字。替换上一版不合品牌的深空蓝黑。
     Column(
         Modifier
             .fillMaxSize()
             .background(
                 androidx.compose.ui.graphics.Brush.verticalGradient(
-                    listOf(Color(0xFF0A0D16), Color(0xFF101527), Color(0xFF0A0D16)),
+                    listOf(Color(0xFF26221D), Color(0xFF1B1814), Color(0xFF211E1A)),
                 ),
             ),
     ) {
-        // 顶部光晕（一个半透明大圆压出纵深，纯绘制不加依赖）
+        // 顶部：陶土橙光晕（品牌主色）压出暖调纵深
         Box(
             Modifier
                 .fillMaxWidth()
@@ -153,14 +160,26 @@ private fun DesktopHome() {
                     .size(360.dp, 220.dp)
                     .background(
                         androidx.compose.ui.graphics.Brush.radialGradient(
-                            listOf(Color(0xFF2A3C7A).copy(alpha = 0.55f), Color.Transparent),
+                            listOf(Color(0xFFC25A38).copy(alpha = 0.50f), Color.Transparent),
                         ),
                         CircleShape,
                     ),
             )
+            // 点缀金细线（品牌第二强调色），呼应消息流里的金色点缀
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(0.5f)
+                    .height(2.dp)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            listOf(Color.Transparent, Color(0xFFB8902F), Color.Transparent),
+                        ),
+                    ),
+            )
             Text(
                 text = "桌面",
-                color = Color(0xFFE6E1E5),
+                color = Color(0xFFF4F1EA),
                 fontSize = 22.sp,
                 fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                 modifier = Modifier.align(Alignment.Center),
