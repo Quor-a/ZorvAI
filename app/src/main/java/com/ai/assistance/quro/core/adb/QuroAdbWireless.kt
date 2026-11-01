@@ -41,6 +41,83 @@ object QuroAdbWireless {
 
     private fun tls(context: Context) = AndroidAdb.tls(identity(context))
 
+    // ═══════════════ 保活：端口记忆 + 自动重连 ═══════════════
+    //
+    // 🔴 为什么需要这一层（用户问「关了 wifi 怎么保活 ADB 调试」）：
+    // 配对与连接都走 127.0.0.1 回环（见 LOOPBACK），所以**连接本身不依赖 wifi 的 IP**。
+    // 真正会断的是 mDNS 发现：NsdAdbServiceFinder 靠系统 mDNS 找 `_adb-tls-connect._tcp`，
+    // 而 mDNS 走网络接口 —— 关掉 wifi / 切数据 / 开关飞行模式后，mDNS 找不到端口了，
+    // 但 adbd 进程往往还在、端口号也没变。
+    // 于是「记住上次成功的端口，mDNS 失败时直接用它重连」就能把连接救回来。
+    //
+    // 仍然连不上的情形（adbd 随 wifi 一起停了）：只能用 Shizuku/root 把 adbd 重新拉起来
+    // （QuroAdbDebug.enableTcpAdb 走 setprop service.adb.tcp.port + 重启 adbd），
+    // 那条路把接口固定到所有地址含 localhost，关 wifi 依然通。
+
+    private const val PREFS = "quro_adb_wireless"
+    private const val KEY_PORT = "last_connect_port"
+
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    /** 记住成功的连接端口（Android 11+ 端口是随机的，但一次会话内基本稳定）。 */
+    private fun rememberPort(ctx: Context, port: Int) {
+        runCatching { prefs(ctx).edit().putInt(KEY_PORT, port).apply() }
+    }
+
+    /** 上次成功连接用过的端口；没有返回 -1。 */
+    fun lastConnectPort(ctx: Context): Int = runCatching { prefs(ctx).getInt(KEY_PORT, -1) }.getOrDefault(-1)
+
+    /** 清除端口记忆（配对被撤销 / 系统重置了无线调试时用）。 */
+    fun forgetPort(ctx: Context) {
+        runCatching { prefs(ctx).edit().remove(KEY_PORT).apply() }
+    }
+
+    /**
+     * **保活入口**：需要跑命令/查状态时先调它，不要直接假设连接还活着。
+     *
+     * 顺序：已连直接用 → 记住的端口重连 → mDNS 重新发现 → 再连一次。
+     * 返回 true 表示连接可用。
+     */
+    fun ensureConnected(context: Context): Boolean {
+        if (isConnected) return true
+
+        // ① 先试上次成功的端口：关 wifi 后 mDNS 没了，但端口通常没变，这是最常见能救回来的情况
+        val remembered = lastConnectPort(context)
+        if (remembered > 0) {
+            val r = connect(context, remembered)
+            if (isConnected) {
+                Log.i(TAG, "ensureConnected：用记住的端口 $remembered 重连成功（无需 mDNS）")
+                return true
+            }
+            Log.d(TAG, "ensureConnected：记住的端口 $remembered 已失效 → ${r.take(80)}")
+        }
+
+        // ② mDNS 重新发现端口（系统「无线调试」还开着时有效）
+        val r = connect(context, null)
+        if (isConnected) {
+            Log.i(TAG, "ensureConnected：mDNS 重新发现成功")
+            return true
+        }
+        Log.w(TAG, "ensureConnected 失败：${r.take(120)}")
+        return false
+    }
+
+    /** 心跳：连接还在但可能已经半死（对端 adbd 挂了），发一条轻量命令探活。 */
+    fun heartbeat(context: Context): Boolean {
+        if (!isConnected) return ensureConnected(context)
+        return runCatching {
+            val out = exec("echo ok", timeoutMs = 3_000)
+            out.contains("ok")
+        }.getOrDefault(false).also { alive ->
+            if (!alive) {
+                Log.w(TAG, "heartbeat 失败 → 丢弃旧连接，等下次 ensureConnected 重连")
+                runCatching { connection?.close() }
+                connection = null
+            }
+        }
+    }
+
+
     /** 找配对服务端口（`_adb-tls-pairing._tcp`）。配对对话框必须开着。 */
     fun findPairingPorts(context: Context, timeoutMs: Long = 8_000): List<Int> = runBlocking {
         runCatching {
@@ -104,6 +181,8 @@ object QuroAdbWireless {
         return runCatching {
             val conn = AdbConnection.open(LOOPBACK, target, tls(context), timeoutMs)
             connection = conn
+            // 记住端口：关 wifi / 切网络后 mDNS 会失效，靠这个端口把连接救回来（见 ensureConnected）
+            rememberPort(context, target)
             "✅ 已连接无线调试（端口 $target）\n设备：${conn.banner.take(120)}"
         }.getOrElse { t ->
             "❌ 连接失败（端口 $target）：${t.message}\n" +
