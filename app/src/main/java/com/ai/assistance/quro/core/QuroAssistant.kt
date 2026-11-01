@@ -53,6 +53,15 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /**
+ * 工具轮思考最多保留几步（更早的清空）。
+ *
+ * 模型陷入循环时每轮都会吐一段几乎相同的思考，全存下来会在折叠区堆出几百条重复内容
+ * （用户展开思考看到的就是一片「好的，让我执行。」）。只留最近几步即可看清
+ * 「现在在干什么」，完整过程另有 QuroAgentTrace 可查。
+ */
+private const val TOOL_THINK_KEEP = 8
+
+/**
  * Quro 助手编排核心：对话 + 工具调用的 ReAct 式循环。
  * - 把用户消息写入会话
  * - 调用 LLM；若返回工具调用，则执行工具并把结果回灌，再让 LLM 产出最终答复
@@ -413,6 +422,9 @@ class QuroAssistant(
             // 仅保留一个极高的安全天花板作最后兜底（云端 2000 / 离线 12）；真实多步任务远不会触及。
             // 🔐 一趟 ReAct = 编排器的一个执行步骤。轮次上限按趟重置：
             //   闸门打回后重新策划再跑一趟，每趟都该有完整预算（共用一个计数器会让第二趟直接被腰斩）。
+            //
+            // ⚠️ 这个上限是**安全天花板**，不是治循环的手段 —— 别靠压低它来掩盖「模型原地打转」。
+            // 真正的修复在下方「死循环检测」：靠签名重复识别原地打转并当场给模型出路。
             val roundLimit = if (isLocal) 12 else if (cfg.maxToolRounds in 1..2000) cfg.maxToolRounds else 2000
 
             // 🔴 issue #11 问题6：本趟 ReAct 若撞上「确定性失败」（LLM 上下文超限等），
@@ -433,6 +445,8 @@ class QuroAssistant(
             val recentSigs = mutableListOf<String>()
             var loopRepeatStreak = 0      // 连续命中窗口内已有签名的轮数（=原地打转）
             var loopSegmentHadText = true // 当前潜在循环段内是否产出过最终文本
+            // 窗口内打转的干预提示只对同一签名发一次，避免把上下文灌满
+            var warnedForLoopSig: String? = null
             while (round < roundLimit) {
                 // 协作取消点：用户点击「停止生成」取消父 Job 后，下一轮循环立即抛 CancellationException，
                 // 避免生成协程在「思考中」卡死无法中断（配合下方 client.chat 的取消透传）。
@@ -763,6 +777,35 @@ class QuroAssistant(
                             store.remove(streamPlaceholderId!!)
                             streamPlaceholderId = null
                         }
+                        // 🔴 2026-11-02 防「思考无限堆叠」：用户截图实证 —— 展开思考区后是
+                        // 316~336+ 条几乎相同的「好的，让我执行。/ 我需要先打开微信。让我执行。…」。
+                        // 原因是每一轮工具调用都把 reasoning 存成一条独立消息，模型循环多少轮就堆多少条。
+                        // 处理：
+                        //   ① 相邻工具轮前缀正文相同 → 删旧的（只留最新一条，界面不重复）
+                        //   ② 工具轮思考只保留最近若干步，更早的清空 —— 用户要看的是「现在在干什么」，
+                        //      不是几百条流水账；真正需要复盘的时候有 QuroAgentTrace。
+                        if (!result.content.isNullOrBlank()) {
+                            runCatching {
+                                val last = store.all().lastOrNull()
+                                if (last != null &&
+                                    last.role == "assistant" &&
+                                    last.toolCalls != null &&
+                                    last.content.trim() == result.content.trim()
+                                ) {
+                                    store.remove(last.id)
+                                }
+                            }
+                        }
+                        runCatching {
+                            val toolThink = store.all().filter {
+                                it.role == "assistant" && it.toolCalls != null && !it.reasoning.isNullOrBlank()
+                            }
+                            if (toolThink.size > TOOL_THINK_KEEP) {
+                                toolThink.dropLast(TOOL_THINK_KEEP).forEach { m ->
+                                    store.update(m.id) { it.copy(reasoning = null) }
+                                }
+                            }
+                        }
                         store.add(assistantMsg)
                         emit()
                         // 🔧 回复-边执行：工具调用轮若模型没给「前缀回复」（如"好的，我来查一下…"），
@@ -987,6 +1030,28 @@ class QuroAssistant(
             val hitWindow = recentSigs.contains(sig)
             if (hitWindow) {
                 loopRepeatStreak++
+                // 🔴 2026-11-02 修「AI 一直卡在思考、反复循环同一个思考」的真根因：
+                // 下面的 `sig == prevCallSig` 只跟**上一轮**比，模型在 A→B→A→B 之间来回打转时
+                // 每轮签名都和上一轮不同 → repeatStreak 永不增长 → **全程收不到任何提示**，
+                // 只能一路空转到硬阈值被掐死。用户看到的就是「同一个思考无限循环」。
+                // 这里补上窗口重复的干预：第 3 次命中就明确告诉它「你在原地打转」并给出路，
+                // 让它有机会自己换方法或直接收尾 —— 先修，8 次仍不改才兜底停止。
+                if (loopRepeatStreak == 3 && warnedForLoopSig != sig) {
+                    warnedForLoopSig = sig
+                    val repeated = result.calls.joinToString("、") { it.name }.ifBlank { "同一批工具" }
+                    store.add(
+                        QuroMessage(
+                            role = "system",
+                            content = "[系统提示] 你最近几轮在**反复执行同一批调用**（$repeated，参数也相同），" +
+                                "但界面/结果没有因此推进 —— 这是原地打转，不是进展。" +
+                                "请立刻停下来判断：① 这条路是不是根本走不通（权限/元素不存在/页面结构不对）？" +
+                                "② 有没有另一条路（换工具、换入口、改用截图判断）？" +
+                                "③ 如果已有足够信息，直接给出结论。**不要再用相同参数调用同一个工具。**",
+                            hidden = true,
+                        ),
+                    )
+                    emit()
+                }
             } else {
                 loopRepeatStreak = 0
                 loopSegmentHadText = false
@@ -1058,10 +1123,18 @@ class QuroAssistant(
                     }
                 }
             }
-            // 🔧 死循环兜底：连续 30 轮工具调用「命中近期窗口（原地打转）」且全程无最终文本 → 确认真·死循环，停止。
-            // 合法长任务（修 bug/多步探索）不断发出新签名调用 → loopRepeatStreak 持续归零 → 不会被误杀。
-            if (loopRepeatStreak >= 30 && !loopSegmentHadText) {
-                lastText = "⚠️ 检测到工具调用陷入循环（反复执行相同操作且无进展），已停止以避免卡死。可调整指令或简化任务后重试。"
+            // 🔧 死循环兜底：连续 8 轮工具调用「命中近期窗口（原地打转）」就停止。
+            //
+            // 🔴 2026-11-02 修「AI 一直卡在思考、反复循环同一段思考」：
+            // 原条件是 `loopRepeatStreak >= 30 && !loopSegmentHadText`，问题有两层：
+            //   ① 阈值 30 太高 —— 每轮几秒，用户要等好几分钟，观感上就是「永远在思考」；
+            //   ② `!loopSegmentHadText` 让检测**几乎永不触发** —— 模型每轮都会吐一段思考文本，
+            //      这个标志恒为 true，于是检测形同虚设，只能一路跑到 round 80 才强停。
+            // 现在：思考文本**不算有效进展**（原地打转时它每轮都会重复同样的废话），
+            // 只要有 8 轮签名重复就认定循环并立即收尾。
+            if (loopRepeatStreak >= 8) {
+                lastText = "⚠️ 检测到工具调用陷入循环（连续 8 轮重复相同操作、没有新进展），已停止以避免卡死。" +
+                    "可以换个说法或把任务拆小后重试。"
                 val ph = streamPlaceholderId
                 if (ph != null) runCatching { store.update(ph) { it.copy(content = lastText) } }
                 else store.add(QuroMessage(role = "assistant", content = lastText))

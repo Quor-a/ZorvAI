@@ -188,7 +188,9 @@ class LaunchAppTool : QuroTool {
                 ?: return "找不到可启动的入口：$pkg"
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
-            return "已启动 $pkg"
+            return "已在【主屏】启动 $pkg —— 这会切走用户当前界面。" +
+                "若要「在后台/不打扰用户」地操作它，请改用 bg_screen(action=\"open\", packageName=\"$pkg\")。" +
+                "**不要为了确认是否打开而重复调用本工具。**"
         }
 
         // 按名称搜索（混合：PackageManager + Shell 兜底）
@@ -197,7 +199,9 @@ class LaunchAppTool : QuroTool {
             ?: return "找到 ${target.label} 但无法启动"
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)
-        return "已启动 ${target.label}（${target.packageName}）"
+        return "已在【主屏】启动 ${target.label}（${target.packageName}）—— 这会切走用户当前界面。" +
+            "若要「在后台/不打扰用户」地操作它，请改用 bg_screen(action=\"open\", packageName=\"${target.packageName}\")。" +
+            "**不要为了确认是否打开而重复调用本工具。**"
     }
 }
 
@@ -222,7 +226,16 @@ class SearchAndLaunchAppTool : QuroTool {
             ?: return "找到 ${target.label} 但无法启动"
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)
-        return "已为您打开 ${target.label}"
+        // 🔴 2026-11-02 返回到位：这是**主屏启动**，会把用户当前的界面切走。
+        // 不写清楚会引发一种典型死循环（用户截图实证：连续 300+ 轮重复「让我使用
+        // search_and_launch_app 打开微信」）：模型想「在后台/不打扰地打开」，却一直调本工具；
+        // 本工具返回「已为您打开」，模型既看不到界面也不敢确认成功 → 反复重调。
+        // 所以必须明确告诉它「开在哪」以及「要后台开该用谁」。
+        return "已在【主屏】打开 ${target.label}（包名 ${target.packageName}）。\n" +
+            "⚠️ 注意：这会切走用户当前界面。\n" +
+            "如果任务是「在后台/不打扰用户地操作这个 App」，请改用 " +
+            "bg_screen(action=\"open\", packageName=\"${target.packageName}\") —— " +
+            "它会启动到独立虚拟屏，不抢用户主屏。**不要在同一个任务里反复重调本工具来确认是否打开。**"
     }
 }
 
