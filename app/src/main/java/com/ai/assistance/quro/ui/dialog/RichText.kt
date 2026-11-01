@@ -990,7 +990,6 @@ private fun MdHeading(
     }
 }
 
-@Composable
 /**
  * #213：代码块 —— 语法高亮 / 行号 / 复制 / 长代码折叠 / diff 增删着色 / 横向滚动。
  *
@@ -998,59 +997,70 @@ private fun MdHeading(
  * 两百行的代码直接把整条消息顶到屏幕外。这些都是「看得见但用不了」的典型。
  */
 
-/** 各语言关键字表。够用即可 —— 这里要的是扫读时的层次感，不是编译器。 */
-private fun keywordsFor(lang: String): Set<String> = when (lang.lowercase()) {
-    "kotlin", "kt", "kts" -> setOf(
+/**
+ * 各语言关键字表。够用即可 —— 这里要的是扫读时的层次感，不是编译器。
+ *
+ * 🔴 必须是「查表」而不是巨型 when：原先 50+ 分支的单表达式 when 里塞满字符串常量，
+ * D8 为它生成的 dex 会触发 ART 校验器拒绝（VerifyError: target dex pc is not at
+ * instruction start，真机 classes8.dex 实证）——整个 RichTextKt 类被拒、点消息即崩。
+ * 拆成静态查表后方法体只有一行 Map 查找，代码形状彻底改变，该 bug 不再触发。
+ */
+private val KEYWORD_TABLE: List<Pair<Set<String>, Set<String>>> = listOf(
+    setOf("kotlin", "kt", "kts") to setOf(
         "fun", "val", "var", "when", "if", "else", "return", "class", "object", "for", "while",
         "import", "package", "suspend", "data", "sealed", "const", "override", "private", "internal",
         "public", "companion", "interface", "enum", "try", "catch", "finally", "throw", "true",
         "false", "null", "this", "is", "in", "not", "by", "lazy", "also", "let", "apply", "run", "with",
-    )
-    "java" -> setOf(
+    ),
+    setOf("java") to setOf(
         "public", "private", "protected", "class", "interface", "enum", "static", "final", "void",
         "int", "long", "boolean", "new", "return", "if", "else", "for", "while", "try", "catch",
         "import", "package", "extends", "implements", "this", "super", "null", "true", "false",
         "abstract", "synchronized", "throws",
-    )
-    "python", "py" -> setOf(
+    ),
+    setOf("python", "py") to setOf(
         "def", "class", "if", "elif", "else", "for", "while", "return", "import", "from", "as",
         "with", "try", "except", "finally", "raise", "lambda", "yield", "global", "pass", "break",
         "continue", "and", "or", "not", "in", "is", "None", "True", "False", "self", "async", "await",
-    )
-    "javascript", "js", "typescript", "ts", "jsx", "tsx" -> setOf(
+    ),
+    setOf("javascript", "js", "typescript", "ts", "jsx", "tsx") to setOf(
         "function", "const", "let", "var", "if", "else", "for", "while", "return", "class", "import",
         "export", "from", "default", "new", "try", "catch", "finally", "async", "await", "this",
         "typeof", "instanceof", "null", "undefined", "true", "false", "switch", "case", "break",
         "continue", "extends", "super", "interface", "type",
-    )
-    "bash", "sh", "shell", "zsh" -> setOf(
+    ),
+    setOf("bash", "sh", "shell", "zsh") to setOf(
         "if", "then", "else", "fi", "for", "while", "do", "done", "case", "esac", "function",
         "return", "export", "local", "echo", "cd", "sudo", "npm", "git", "curl",
-    )
-    "sql" -> setOf(
+    ),
+    setOf("sql") to setOf(
         "select", "from", "where", "insert", "into", "values", "update", "set", "delete", "create",
         "table", "drop", "alter", "join", "left", "right", "inner", "on", "group", "order", "by",
         "limit", "and", "or", "not", "null", "as", "distinct", "having", "union",
-    )
-    "html", "xml" -> setOf(
+    ),
+    setOf("html", "xml") to setOf(
         "html", "head", "body", "div", "span", "script", "style", "meta", "link", "title", "p",
         "table", "tr", "td", "th", "ul", "li", "input", "button",
-    )
-    "go" -> setOf(
+    ),
+    setOf("go") to setOf(
         "func", "package", "import", "var", "const", "type", "struct", "interface", "if", "else",
         "for", "range", "return", "go", "defer", "chan", "map", "nil", "true", "false",
-    )
-    "rust", "rs" -> setOf(
+    ),
+    setOf("rust", "rs") to setOf(
         "fn", "let", "mut", "const", "static", "struct", "enum", "impl", "trait", "match", "if",
         "else", "for", "while", "loop", "return", "use", "mod", "pub", "self", "Some", "None",
         "Ok", "Err", "true", "false",
-    )
-    "c", "cpp", "cc", "h" -> setOf(
+    ),
+    setOf("c", "cpp", "cc", "h") to setOf(
         "int", "char", "float", "double", "void", "if", "else", "for", "while", "return", "struct",
         "class", "public", "private", "include", "define", "const", "static", "new", "delete",
         "this", "template", "namespace", "using",
-    )
-    else -> emptySet()
+    ),
+)
+
+private fun keywordsFor(lang: String): Set<String> {
+    val key = lang.lowercase()
+    return KEYWORD_TABLE.firstOrNull { key in it.first }?.second ?: emptySet()
 }
 
 private val CODE_KW = Color(0xFF7C5CFF)
