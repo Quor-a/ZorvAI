@@ -29,7 +29,17 @@ import com.ai.assistance.quro.core.rag.ToolRagIndex
  * 检索层重写后召回 14/14=100%，前提才成立：
  *  - 模型查得到 → 弱模型也能靠 `match_intent` 走通；
  *  - `loaded` 落盘 → 重启后不必重新学一遍；
- *  - [ALWAYS_ON] 154 个高频工具仍每轮直接下发，覆盖绝大多数日常请求。
+ *  - [ALWAYS_ON] 104 个高频工具仍每轮直接下发，覆盖绝大多数日常请求。
+ *
+ * 🔴 2026-11-02 从 154 精简到 104（响应变慢的排查结论之一）：
+ * 每轮请求都要把常驻工具的 name + description + parametersJson 全量塞进 API，
+ * 154 个工具的 schema 是相当可观的一笔固定输入开销，直接抬高首字延迟（prefill 时间）。
+ * 本次移出的全是**纯开发者/后台管理**类（cms_* 9 个、mcp_*+aci 11 个、auth_service_* 3 个、
+ * linux_* 5 个、wf_* 3 个、记忆库维护 5 个、媒体库 4 个、moyu/harness/dev_env/apk_plugin/
+ * sandbox/private_db/fluid_cloud_notify/node_editor 等），
+ * 用户口语日常不会触发，但**仍可通过 tool_router 检索后加载**，功能没有删。
+ * 保留项只做了一件事：日常真的会用到的（设备/文件/网络/短信/日程/终端/屏幕/输出通道/记忆）
+ * 一律留在常驻，避免弱模型「明明有工具却说不会」。
  * 若将来观察到弱模型「明明有工具却说不会」，**先查检索质量与 ALWAYS_ON 覆盖**，
  * 不要一上来就关掉这个开关——那会退回全量下发，也就退回了本轮要解决的问题。
  */
@@ -68,82 +78,31 @@ class QuroToolRouter(
          */
         val ALWAYS_ON: Set<String> = setOf(
             "get_current_time", "get_device_info", "calculate", "get_battery",
-            "get_wifi_info", "get_network_info", "get_sensors", "get_clipboard", "set_clipboard",
-            "vibrate",
-            "list_installed_apps", "launch_app", "search_and_launch_app", "get_package_name",
-            "get_active_notifications", "get_bluetooth_status", "toggle_flashlight",
-            "read_sms", "send_sms", "read_contacts",
-            "execute_intent", "send_broadcast",
-            "read_calendar", "write_calendar", "get_location", "geocode",
-            "list_files", "read_text_file", "browse_files", "file_read",
-            "write_file", "delete_file", "make_directory", "move_file", "copy_file", "find_files", "file_info",
-            "http_request", "open_web", "ai_browser", "browser_act",
-            // 自研端侧联网检索（常驻：涉及实时/事实类问题 AI 应优先主动调用）
-            "web_search", "read_url",
-            // 屏幕捕获授权（AI 主动发起 MediaProjection 系统授权，无需手动长按开关）
-            "enable_screen_capture",
-            "run_code", "creative_studio",
-            "terminal", "quroterm_exec",   // 合并后的统一终端工具（应用内 proot+Ubuntu / 设备 shell）
-            "speak", "stop_speak",
-            "set_alarm", "schedule_task", "list_scheduled_tasks", "delete_scheduled_task",
-            "memory_save", "memory_list", "memory_search", "memory_delete",
-            "experience_log", "experience_query", "experience_correct", "experience_version_check",
+            "get_wifi_info", "get_network_info", "get_sensors", "get_clipboard",
+            "set_clipboard", "vibrate", "list_installed_apps", "launch_app",
+            "search_and_launch_app", "get_package_name", "get_active_notifications", "get_bluetooth_status",
+            "toggle_flashlight", "read_sms", "send_sms", "read_contacts",
+            "execute_intent", "send_broadcast", "read_calendar", "write_calendar",
+            "get_location", "geocode", "list_files", "read_text_file",
+            "browse_files", "file_read", "write_file", "delete_file",
+            "make_directory", "move_file", "copy_file", "find_files",
+            "file_info", "http_request", "open_web", "ai_browser",
+            "browser_act", "web_search", "read_url", "enable_screen_capture",
+            "run_code", "creative_studio", "terminal", "quroterm_exec",
+            "speak", "stop_speak", "set_alarm", "schedule_task",
+            "list_scheduled_tasks", "delete_scheduled_task", "memory_save", "memory_list",
+            "memory_search", "memory_delete", "experience_log", "experience_query",
             "knowledge_search", "knowledge_add", "knowledge_manage", "knowledge_rag_search",
-            "aiwps_create", "chat_doc", "enhanced_doc_create",
-            // CodeCanvas 出图：进常驻集，模型无需先 tool_router 就能直接调
-            // （与 image_gen 分工：确定性渲染 vs 厂商生图）。
-            "codecanvas_probe", "codecanvas_script", "codecanvas_markup",
-            "ui_card", "ui_widget", "ui_control",
-            // 🟥 zxwidget 动态交互界面（zx_web_card / zx_catalog）**必须常驻**。
-            //   它是「AI 把结构化结果画成可交互控件、直接长在对话框里」的唯一入口，
-            //   与 ui_card/ui_widget 同属「用户看得见的产出通道」，却漏在了常驻集之外。
-            //
-            //    漏掉的后果**不是「要 Model 先 discovery 一下」那么轻**：
-            //    PROGRESSIVE=true（默认）时每轮只下发 ALWAYS_ON ∪ loaded，
-            //    于是 tools 字段里根本没有 zx_web_card —— 模型即使从系统提示词的
-            //    工具清单里读到它、也照着调了，这次调用也落不到真实工具上
-            //    （真实表现：AI 说自己画了界面 / 退化成纯文本罗列 / 干脆不画），
-            //    用户报的「zxwidget 根本渲染不了」就是这个。
-            //    2026-10-13：渲染链路（[ZxWebCardTool] → 消息上的工具调用 →
-            //    [com.ai.assistance.quro.ui.chat.ZxWidgetInline]）整条是通的、
-            //    正是「入口没接线」把它废掉——本仓反复出现的同一类故障。
-            "zx_web_card", "zx_catalog",
-            // 节点编辑器：AI 直接读写节点流工程（与工具中心面板共享 studio/flow/*.qne）
-            "node_editor",
-            "mcp_servers", "mcp_list_tools", "mcp_call", "mcp_deploy", "mcp_undeploy", "mcp_list_local",
-            "mcp_aci_list", "mcp_aci_call", "mcp_aci_bridge",
-            "auth_service_add", "auth_service_list", "auth_service_remove",
-            "cms_list", "cms_call", "cms_status", "cms_logs", "cms_result", "cms_run_dag",
-            "cms_deploy_terminal", "cms_undeploy_terminal", "priv_status", "cms_engine_status",
-            "aci_list", "aci_call",
-            "workspace_write", "workspace_read", "workspace_list",
-            "read_screen", "get_foreground_app", "get_screen_state",
-            "tap_screen", "swipe_screen", "long_press_screen", "input_text",
-            "scroll_screen", "global_action",
-            "ai_type_text", "ai_press_enter", "ai_press_send",
-            "local_music_player", "local_video_player", "list_media", "music_play",
-            "shizuku_exec", "shizuku_root_exec", "freeze_app", "install_app", "shizuku_status",
-            "lock_screen", "device_admin_status", "set_camera_disabled",
-            "root_exec", "root_status",
-            "linux_run", "linux_install", "linux_start", "linux_stop", "linux_status",
-            // 墨语言（Mo）独立运行时：编译/运行 .mo、读写源码修 bug。工具链零依赖、不经 Ubuntu，
-            // 属于高频开发能力，故常开下发（漏了这里 = 每轮靠检索召回，弱模型容易说"不会"）。
-            "moyu",
-            "harness",
-            "dev_env",
-            "fluid_cloud_notify",
-            // 隔离沙箱 + 私有数据库只读查询（应用内免权限）
-            "sandbox", "private_db",
-            // ★ APK 级插件框架总控：组件扩展与插件生态的唯一入口（装/卸/重载/调用插件工具/开插件界面）
-            "apk_plugin",
-            // 记忆工程五件套：用户显式说「记住/回忆/导出记忆」时不该先逼模型去查目录
-            "memory_space", "memory_rebuild", "memory_autosave", "memory_window_plan", "memory_export",
-            // 多智能体：spawn_subagent 是「拆解复杂任务」的默认路径
-            "spawn_subagent",
-            // 可视化弹窗与询问（ui_card / ui_widget / ui_control 之外的另两个入口）
-            "visual_popup", "visual_ask",
-            // 确定性编排（WorkflowEngine 三件套，已接 RunStore 与依赖解析）
-            "wf_create", "wf_trigger", "wf_run_status",
+            "aiwps_create", "chat_doc", "enhanced_doc_create", "codecanvas_probe",
+            "codecanvas_script", "codecanvas_markup", "ui_card", "ui_widget",
+            "ui_control", "zx_web_card", "zx_catalog", "priv_status",
+            "workspace_write", "workspace_read", "workspace_list", "read_screen",
+            "get_foreground_app", "get_screen_state", "tap_screen", "swipe_screen",
+            "long_press_screen", "input_text", "scroll_screen", "global_action",
+            "ai_type_text", "ai_press_enter", "ai_press_send", "shizuku_exec",
+            "shizuku_root_exec", "freeze_app", "install_app", "shizuku_status",
+            "lock_screen", "device_admin_status", "set_camera_disabled", "root_exec",
+            "root_status", "spawn_subagent", "visual_popup", "visual_ask",
         )
 
         private val CATALOG_PARAMS_JSON = """{
