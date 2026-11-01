@@ -36,10 +36,23 @@ import org.json.JSONObject
 fun parseCardSpec(json: String): CardSpec? {
     return try {
         val obj = JSONObject(json)
-        val type = obj.optString("type").ifBlank { return null }
+        // 🔴 缺 type 不再直接放弃（真机实证：模型高频写出
+        //   {"title":"..","value":98,"unit":"/100","trend":"↑"..} 这种无 type 的平铺格式，
+        //   旧逻辑整围栏跳过 → 用户看到的还是「卡片坏了」）。
+        //   按字段形状推断 type 并把平铺字段**包进 data 壳**，宁可猜一次也不空手而归。
+        var type = obj.optString("type").trim().lowercase()
+        var dataObj = obj.optJSONObject("data")
+        if (type.isBlank()) {
+            val inferred = inferTypeAndWrap(obj) ?: return null
+            type = inferred.first
+            dataObj = inferred.second
+        } else if (dataObj == null) {
+            // type 给了但 data 壳没给（字段平铺在外层）：也包一次壳
+            dataObj = inferTypeAndWrap(obj)?.second ?: JSONObject()
+        }
         val id = obj.optString("id").ifBlank { "card_" + json.hashCode().toString(36).replace("-", "m") }
         val version = obj.optInt("version", 1)
-        val data = parseCardData(obj.optJSONObject("data"))
+        val data = parseCardData(dataObj)
         val actions = parseActions(obj.optJSONArray("actions"))
         val style = parseStyle(obj.optJSONObject("style"))
         val a11y = parseA11y(obj.optJSONObject("a11y"))
@@ -270,4 +283,83 @@ private fun toMap(o: JSONObject?): Map<String, Any?> {
         }
     }
     return map
+}
+
+/**
+ * 按**平铺字段形状**推断小卡片 type，并把外层平铺字段包进标准 data 壳。
+ *
+ * ## 为什么必须有这层（2026-11-01 真机截图实证）
+ *
+ * 模型写小卡片最常见的错误不是写错 type，而是**根本不写 type**、字段全平铺：
+ * `{"title":"Zorv AI 健康度","value":98,"unit":"/100","trend":"↑ 良好",...}`。
+ * 旧逻辑缺 type 直接 return null → 整围栏跳过 → 用户以为小卡片彻底坏了。
+ * 这里按「哪些字段同时出现」判型（只判本模块 7 种预设，不臆测其它通道）：
+ *  - headers/rows → table
+ *  - statusType / (text+progress) → status
+ *  - buttons → button_group
+ *  - chartType/series → line_chart
+ *  - value + (unit|trend|delta) → metric（包成 kind=chart/chartType=metric 的 series[0]）
+ *  - layout 树 → custom
+ * 都不像 → null（调用方照旧降级，不做无据渲染）。
+ */
+private fun inferTypeAndWrap(o: JSONObject): Pair<String, JSONObject>? {
+    val data = JSONObject()
+    // table：headers / rows
+    if (o.has("headers") || o.has("rows")) {
+        data.put("kind", "media")
+        data.put("mediaType", "table")
+        o.optJSONArray("headers")?.let { data.put("headers", it) }
+        o.optJSONArray("rows")?.let { data.put("rows", it) }
+        return "table" to data
+    }
+    // status：statusType 或 text+progress
+    if (o.has("statusType") || (o.has("text") && o.has("progress"))) {
+        data.put("kind", "status")
+        data.put("statusType", o.optString("statusType", "progress").ifBlank { "progress" })
+        data.put("text", o.optString("text", ""))
+        data.put("progress", if (o.has("progress")) o.optDouble("progress", 0.0) else 0.0)
+        o.optBoolean("retryable", false).let { if (it) data.put("retryable", true) }
+        o.optString("reason").takeIf { it.isNotBlank() }?.let { data.put("reason", it) }
+        return "status" to data
+    }
+    // button_group：buttons
+    o.optJSONArray("buttons")?.let {
+        data.put("kind", "form")
+        data.put("formType", o.optString("formType", "button_group").ifBlank { "button_group" })
+        data.put("buttons", it)
+        return "button_group" to data
+    }
+    // line_chart：chartType / series
+    val series = o.optJSONArray("series")
+    if (o.has("chartType") || series != null) {
+        data.put("kind", "chart")
+        data.put("chartType", o.optString("chartType", "line").ifBlank { "line" })
+        series?.let { data.put("series", it) }
+        o.optJSONObject("axis")?.let { data.put("axis", it) }
+        return "line_chart" to data
+    }
+    // metric：value + (unit|trend|delta|trend_color)
+    if (o.has("value") && (o.has("unit") || o.has("trend") || o.has("delta") || o.has("trend_color"))) {
+        data.put("kind", "chart")
+        data.put("chartType", "metric")
+        val name = o.optString("title", o.optString("label", "指标")).ifBlank { "指标" }
+        val value = when {
+            o.optJSONArray("value") != null -> o.optJSONArray("value")?.optDouble(0) ?: 0.0
+            else -> o.optDouble("value", Double.NaN)
+        }
+        val point = if (value.isNaN()) o.optString("value", "0").toDoubleOrNull() ?: 0.0 else value
+        val s0 = JSONObject().apply {
+            put("name", name)
+            put("points", org.json.JSONArray().put(point))
+            val unit = o.optString("unit", "")
+            if (unit.isNotBlank()) put("labels", org.json.JSONArray().put(unit))
+        }
+        data.put("series", org.json.JSONArray().put(s0))
+        return "metric" to data
+    }
+    // custom：layout 树
+    o.optJSONObject("layout")?.let {
+        return "custom" to JSONObject().apply { put("kind", "empty") }
+    }
+    return null
 }
