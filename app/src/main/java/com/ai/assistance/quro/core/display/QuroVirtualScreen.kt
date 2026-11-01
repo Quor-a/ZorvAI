@@ -90,15 +90,18 @@ object QuroVirtualScreen {
         synchronized(lock) {
             display?.let { return it }
 
-            val shell = QuroShizuku.acquireShellService()
+            var shell = QuroShizuku.acquireShellService()
             if (shell == null) {
-                // 尝试补绑一次，随后仍拿不到就如实报错（不静默失败，避免 AI 反复空转）
+                // 尝试补绑，然后等待 Shizuku AIDL 回调就绪（最多 5s）
                 QuroShizuku.bindAidlService()
-                val msg = "Shizuku 特权服务未就绪：请确认 Shizuku 已安装、已授权、服务正在运行" +
-                    "（设置 → Shizuku）。绑定已重新发起，稍后重试。"
-                Log.w(TAG, msg)
-                _state.value = _state.value.copy(ready = false, error = msg)
-                return null
+                shell = QuroShizuku.waitForShellService(5000)
+                if (shell == null) {
+                    val msg = "Shizuku 特权服务未就绪（5s 超时）：请确认 Shizuku 已安装、已授权、服务正在运行" +
+                        "（设置 → Shizuku）。"
+                    Log.w(TAG, msg)
+                    _state.value = _state.value.copy(ready = false, error = msg)
+                    return null
+                }
             }
 
             val metrics = context.resources.displayMetrics
