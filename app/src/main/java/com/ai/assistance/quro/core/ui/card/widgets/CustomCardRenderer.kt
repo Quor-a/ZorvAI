@@ -251,12 +251,23 @@ private fun childAllocs(node: LayoutNode, inner: Float, d: Float): List<Pair<Flo
         // 非 weight 子节点按「内容宽」测量：绝不能每个都吃满 inner，否则横向连排必然溢出屏幕。
         val contentSizes = node.children.map { if (it.weight <= 0f) measureContent(it, inner, d) else null }
         val fixedW = contentSizes.filterNotNull().fold(0f) { acc, s -> acc + s.width }
+        val weightCount = node.children.count { it.weight > 0f }
         val wSum = node.children.filter { it.weight > 0f }.fold(0f) { acc, x -> acc + x.weight }.coerceAtLeast(0.001f)
-        val free = (inner - fixedW - gapTotal).coerceAtLeast(0f)
+
+        // 🔴 2026-11-02 修「小卡片右侧内容整块消失」：
+        // 原来 `free = inner - fixedW - gapTotal` 直接 coerceAtLeast(0)，
+        // 一旦固定宽节点（典型就是 ring：size 92dp≈253px）加上 gap 就吃满容器，
+        // weight 子节点分到 **0 宽**，随后 drawChildren 判定无剩余空间直接退出循环 ——
+        // 右边那列「实时热度 / 9,527 / 条讨论中」全部不画（用户截图实证）。
+        //
+        // 现在的规则：**有 weight 子节点时，必须给它留出最小份额**，
+        // 固定宽节点按需等比压缩（ring 会被画小，但不会再把人挤没）。
+        val minShare = if (weightCount > 0) (inner * 0.28f * weightCount).coerceAtMost(inner * 0.6f) else 0f
+        val availForFixed = (inner - gapTotal - minShare).coerceAtLeast(0f)
+        val shrink = if (fixedW > availForFixed && fixedW > 0f) availForFixed / fixedW else 1f
+        val fixedAfterShrink = fixedW * shrink
+        val free = (inner - fixedAfterShrink - gapTotal).coerceAtLeast(0f)
         val out = ArrayList<Pair<Float, Size>>(n)
-        // 内容宽总和超 inner 时整体等比压缩，保证横向绝不溢出
-        val over = (fixedW + gapTotal) - inner
-        val shrink = if (over > 0f && fixedW > 0f) (inner - gapTotal).coerceAtLeast(0f) / fixedW else 1f
         node.children.forEachIndexed { i, c ->
             if (c.weight > 0f) {
                 val w = free * (c.weight / wSum)
@@ -264,7 +275,11 @@ private fun childAllocs(node: LayoutNode, inner: Float, d: Float): List<Pair<Flo
             } else {
                 val s = contentSizes[i]!!
                 val w = (s.width * shrink).coerceAtMost(inner)
-                out.add(w to s)
+                // 高度也要跟着缩：ring 这类正方形节点，宽压了高不压会画出椭圆/溢出
+                val h = if (shrink < 1f && s.width > 0f && s.height <= s.width + 1f) {
+                    (s.height * shrink).coerceAtMost(s.height)
+                } else s.height
+                out.add(w to Size(w, h))
             }
         }
         return out
@@ -439,7 +454,11 @@ private fun drawChildren(
     node.children.forEachIndexed { i, child ->
         val (w, s) = allocs[i]
         if (node.type == "row") {
-            if (cx >= rightLimit - 0.5f) return   // 已无剩余空间，停止绘制后续子节点
+            // 🔴 这里原来是裸 `return`——在 forEachIndexed 的 lambda 里那是**非局部返回**，
+            // 一旦某一行宽度算到边界，就会直接退出整个 drawChildren，
+            // 后面所有兄弟节点一个都不画。用户看到的「小卡片只剩标题」正是这么来的。
+            // 改成 return@forEachIndexed：只跳过当前这个，后面的继续尝试。
+            if (cx >= rightLimit - 0.5f) return@forEachIndexed
             drawNode(backend, child, cx, cy, w.coerceAtMost(rightLimit - cx), state)
             cx += w + gap
         } else {
