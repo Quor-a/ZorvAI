@@ -62,6 +62,9 @@ class QuroBgScreenOverlayService : Service() {
     /** 是否已把虚拟屏显示面接到本窗口的 SurfaceView。 */
     private var attached = false
 
+    /** 「屏未就绪」提示（就绪后隐藏）。 */
+    private var statusText: TextView? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -69,6 +72,17 @@ class QuroBgScreenOverlayService : Service() {
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         startForeground(NOTIFY_ID, buildNotification())
         showWindow()
+        // 🔴 建屏必须在显示窗口之前/同时进行：上一版只挂窗口不建屏，
+        // displayId=-1 → SurfaceView attach 失败 → 用户看到黑窗口还以为「只有个球」。
+        Thread {
+            val d = QuroVirtualScreen.ensureDisplay(this)
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                statusText?.visibility = if (d != null) View.GONE else View.VISIBLE
+                statusText?.text = d?.let { null } ?: (QuroVirtualScreen.lastError ?: "后台虚拟屏不可用（检查 Shizuku）")
+                // 屏建好后重新 attach（SurfaceView 的 holder 可能已就绪）
+                surfaceView?.holder?.surface?.takeIf { it.isValid }?.let { attachSurface(it) }
+            }
+        }.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
@@ -112,6 +126,22 @@ class QuroBgScreenOverlayService : Service() {
 
         val container = FrameLayout(this)
         container.addView(buildPanel())
+        statusText = TextView(this).apply {
+            text = "正在启动后台虚拟屏…（需要 Shizuku 已授权）"
+            setTextColor(Color.WHITE)
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.argb(200, 20, 24, 34))
+            setPadding(16, 12, 16, 12)
+        }
+        container.addView(
+            statusText,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER,
+            ),
+        )
         root = container
         wm.addView(container, lp)
         running = true
