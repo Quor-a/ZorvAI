@@ -153,7 +153,13 @@ class QuroBgScreenOverlayService : Service() {
             }
         }
         showWindow()
-        // 🔴 开启服务先收成「桌面宠物」形态（用户要求：点宠物才展开后台虚拟屏，
+        // 🔴 开启悬浮窗服务 = 开启后台虚拟屏 → 自动建屏 + 显示宠物球
+        // 宠物球只随虚拟屏生命周期出现（服务启动就建屏）
+        Thread {
+            com.ai.assistance.quro.core.display.QuroVirtualScreen.ensureDisplay(this)
+            Log.i(TAG, "悬浮窗启动时自动建屏: running=" + running)
+        }.start()
+        // 收成「桌面宠物」形态（用户要求：点宠物才展开后台虚拟屏，
         // 而不是一开启就展开大窗口）。宠物可拖动，点它展开。
         setCollapsed(true)
         running = true
@@ -336,12 +342,15 @@ class QuroBgScreenOverlayService : Service() {
         val closeLp = FrameLayout.LayoutParams(dp(22), dp(22), Gravity.TOP or Gravity.END).apply {
             topMargin = dp(4); marginEnd = dp(28)
         }
-        // 🔴 「×」= 关闭后台虚拟屏（释放屏 + 收回宠物），**不关整个功能**：
-        // 服务与悬浮窗能力保持运行，再点宠物会重新建屏。真正退出走通知/设置开关。
+        // 🔴 「×」= 释放虚拟屏 + 停止悬浮窗服务（宠物球也消失）：
+        // 这是"关闭整个后台虚拟屏功能"的唯一入口（不走通知）。
+        // 「—」只是收起成球，不关功能。
         container.addView(makeChip("✕") {
-            Thread { QuroVirtualScreen.release() }.start()
-            setCollapsed(true)
-        }.apply { tag = "chip" }, closeLp)
+            Thread {
+                QuroVirtualScreen.release()
+                stop(this@QuroBgScreenOverlayService)
+            }.start()
+        }.apply { tag = "close-chip" }, closeLp)
 
         // 右下角缩放手柄：拖动改窗口大小（画面等比跟随）
         val handle = View(this).apply {
@@ -378,14 +387,8 @@ class QuroBgScreenOverlayService : Service() {
             .onFailure { Log.e(TAG, "加浮窗失败（没授予悬浮窗权限？）", it); stopSelf(); return }
 
         // 画面流：收到帧就换图
+        // 🔴 不再在 showWindow 里建屏——onCreate 已经建了（宠物球只随虚拟屏生命周期出现/消失）
         frameJob = scope.launch {
-            // 🔴 展开窗口时自动建屏（宠物态不建屏，展开后必须有人 ensureDisplay，
-            // 否则帧流永远是 null、注入也没目标 —— displayId=-1 全部静默失败）
-            val d = withContext(Dispatchers.IO) { QuroVirtualScreen.ensureDisplay(this@QuroBgScreenOverlayService) }
-            if (d == null) {
-                hint.text = QuroVirtualScreen.lastError ?: "后台屏不可用（检查 Shizuku）"
-                hint.visibility = View.VISIBLE
-            }
             QuroVirtualScreen.frames.collectLatest { bmp ->
                 applyFrame(bmp, hint)
             }
@@ -519,8 +522,12 @@ class QuroBgScreenOverlayService : Service() {
 
     private fun clampToScreen(p: WindowManager.LayoutParams) {
         val dm = resources.displayMetrics
-        p.x = p.x.coerceIn(-p.width / 2, dm.widthPixels - p.width / 2)
-        p.y = p.y.coerceIn(0, dm.heightPixels - dp(60))
+        val halfW = p.width / 2
+        val halfH = p.height / 2
+        // 🔴 宠物球/窗口必须完全在屏幕范围内：x 下限从 -halfW（一半露出左边缘）到
+        // screenWidth - halfW（一半露出右边缘）；y 同理，从 0 到 screenHeight - height（不允许下半部露出）
+        p.x = p.x.coerceIn(dm.widthPixels - p.width, 0)
+        p.y = p.y.coerceIn(0, dm.heightPixels - p.height)
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).roundToInt()

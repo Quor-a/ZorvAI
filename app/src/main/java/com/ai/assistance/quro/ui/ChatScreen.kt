@@ -1986,15 +1986,8 @@ fun ChatScreen(
         }
 
         // 聚合式「系统状态」浏览界面：全屏覆盖层（从设置页入口进入，返回关页回设置）
-        // 后台虚拟屏画中画：常驻显示「AI 在后台做什么」（那块屏用户本来看不见）。
-        // 外层 Box 不消费触摸，事件穿透到下层对话；点了进管理页。
-        // bottomInset 让开底部输入栏，不让小窗压住发消息按钮。
-        if (!showBgScreen) {
-            BackgroundScreenPip(
-                onOpenManage = { showBgScreen = true },
-                bottomInsetPx = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() },
-            )
-        }
+        // 🔴 2026-11-01 画中画已删除：后台虚拟屏的可视化入口统一收拢到
+        // 「后台屏悬浮窗（跨 App）」——系统级 overlay + 宠物球，不设 App 内画中画。
 
         if (showSystemStatus) {
             BackHandler { showSystemStatus = false }
@@ -2003,14 +1996,8 @@ fun ChatScreen(
             }
         }
 
-        // 后台虚拟屏管理页：全屏覆盖层（从画中画小窗点进来）
-        // 关掉本页不销毁后台屏，只有页内「释放」才销毁 —— 因为 AI 可能还在用它。
-        if (showBgScreen) {
-            BackHandler { showBgScreen = false }
-            Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
-                BackgroundScreenPage(onClose = { showBgScreen = false })
-            }
-        }
+        // 后台虚拟屏管理页：已删除（画中画入口统一收拢到悬浮窗服务）。
+        // showBgScreen 变量保留（onOpenBgScreen 赋值处还在引用），但不再渲染任何内容。
 
         // 可视化组件画廊
         if (showComponentGallery) {
@@ -5946,10 +5933,9 @@ private fun SettingsSheetContent(
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Info, stringResource(R.string.qk_02642), stringResource(R.string.qk_03859), "", onOpenSystemStatus, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            // 后台虚拟屏（移植 Mika）：AI 在不打扰用户主屏的独立虚拟屏上操作 App，这里给可视化入口
-            SetRowClickable(Icons.Filled.Apps, "后台虚拟屏", "看 AI 在后台屏上操作什么，可手动接管", "", onOpenBgScreen, scaled)
-            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            // 系统级悬浮窗：跨 App 漂浮 + 可收成球 + 自由缩放 + 直接操控（对照 Extendroid）
+            // 后台虚拟屏/悬浮窗（移植 Mika）：统一入口——设置页只有「后台屏悬浮窗（跨 App）」
+            // 这一项。它同时承担 App 内画中画 + 跨 App 悬浮窗 + 宠物球形态。
+            // 点开关自动建屏 + 显示宠物球；× 释放虚拟屏 + 停止悬浮窗。
             BgOverlayRow(scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             // 桌面模式（libtaskbar）：官方唯一「当库引入」的 Android 10 桌面模式实现
