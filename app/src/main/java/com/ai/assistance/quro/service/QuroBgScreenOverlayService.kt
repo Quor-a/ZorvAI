@@ -257,12 +257,17 @@ class QuroBgScreenOverlayService : Service() {
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (collapsed) {
+                    // 展开态 MOVE 也要 clamp：防止手指不按拖动条时直接拖容器把窗口拖出屏幕。
+                    // 展开态窗口位置更新走顶部拖动条（dragBar），但 clamp 必须每帧都做。
+                    if (!collapsed) {
+                        p.x = p.x.coerceIn(resources.displayMetrics.widthPixels - winW, 0)
+                        p.y = p.y.coerceIn(0, resources.displayMetrics.heightPixels - winH)
+                    } else {
                         p.x = (downParamX + (ev.rawX - downRawX)).roundToInt()
                         p.y = (downParamY + (ev.rawY - downRawY)).roundToInt()
-                        clampToScreen(p)
-                        runCatching { wm.updateViewLayout(container, p) }
                     }
+                    clampToScreen(p)
+                    runCatching { wm.updateViewLayout(container, p) }
                     // 展开态 MOVE 不拖窗：留给 UP 的 swipe 直控判定
                     true
                 }
@@ -522,10 +527,12 @@ class QuroBgScreenOverlayService : Service() {
 
     private fun clampToScreen(p: WindowManager.LayoutParams) {
         val dm = resources.displayMetrics
-        val halfW = p.width / 2
-        val halfH = p.height / 2
-        // 🔴 宠物球/窗口必须完全在屏幕范围内：x 下限从 -halfW（一半露出左边缘）到
-        // screenWidth - halfW（一半露出右边缘）；y 同理，从 0 到 screenHeight - height（不允许下半部露出）
+        // 🔴 防御：窗口比屏幕宽时（极端缩放），直接把 x=0, y=0
+        if (p.width > dm.widthPixels || p.height > dm.heightPixels) {
+            p.x = 0
+            p.y = 0
+            return
+        }
         p.x = p.x.coerceIn(dm.widthPixels - p.width, 0)
         p.y = p.y.coerceIn(0, dm.heightPixels - p.height)
     }
