@@ -1,338 +1,204 @@
 package com.ai.assistance.quro.activity
 
-import android.annotation.SuppressLint
-import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.Canvas
+import android.content.pm.PackageManager
 import android.os.Bundle
-import android.view.Gravity
-import android.view.SurfaceHolder
-import android.view.SurfaceView
-import android.view.View
-import android.widget.FrameLayout
-import android.widget.GridLayout
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ai.assistance.quro.core.display.QuroVirtualScreen
-import kotlin.math.abs
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
- * 内藏桌面 AI —— **打开即虚拟屏**（全屏沉浸版）。
+ * 桌面模式宿主（可选 Launcher）。
  *
- * ## 形态（用户原话：内藏一个完整的桌面AI，通过这个内藏打开就是虚拟屏）
+ * ## 为什么需要这个 Activity
  *
- * 进来就是**全屏**的虚拟屏画面（Extendroid 的 SurfaceView 零拷贝直出），
- * 画面本身就是一个完整桌面：应用从这里打开、跑在虚拟屏里，
- * **点画面就是直接操作那个 App**（用户和 AI 同一条操控通道）。
+ * [libtaskbar](https://github.com/farmerbb/libtaskbar) 是**唯一官方支持「当库引入」**的
+ * Android 10 桌面模式实现（farmerbb 的 Taskbar 拆出的 AAR，JitPack 上 2.2.0）。
+ * 但它的生效前提很硬：
+ *  1. 宿主 App **必须是系统默认 launcher**；
+ *  2. 用户要打开开发者选项里的「Enable freeform windows」与「Force desktop mode」；
+ *  3. 接外接屏（HDMI / 投屏）时出现任务栏。
  *
- * ## 上一版被用户批评「乱七八糟、看不懂字」后重写
+ * ZorvAI 原本不是 launcher，所以光加依赖不会生效。这里提供可选桌面入口 ——
+ * **只有用户自己把这个 Activity 设为默认桌面时才会接管**，不影响未设默认的用户。
  *
- * - 全屏沉浸（隐藏系统栏），画面铺满，不再是有边框的小盒子；
- * - 应用网格用**真实应用图标 + 名字**（旧版只有 11sp 文字，无法辨认）；
- * - Dock 固定底部，图标 64dp + 13sp 文字，操作一目了然；
- * - 悬浮窗的「全屏」按钮也进这里（同一块虚拟屏，两种形态）。
+ * ## 这个桌面做什么
+ *
+ * - 应用网格：点一下用普通方式启动；长按（此处简化为底部按钮）可让 AI 在**后台屏**打开；
+ * - 顶部入口：libtaskbar 的桌面模式设置、开发者选项；
+ * - 不抢占 LAUNCHER：主 Activity 仍是 ZorvAI 自己的入口，这里只声明 HOME/DEFAULT。
  */
 class QuroDesktopActivity : ComponentActivity() {
 
-    private var attached = false
-
-    @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContent {
+            MaterialTheme {
+                DesktopHome()
+            }
+        }
+    }
+}
 
-        // 全屏沉浸（画面铺满，不留系统栏）
-        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
-        androidx.core.view.WindowInsetsControllerCompat(window, window.decorView).let { c ->
-            c.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-            c.systemBarsBehavior =
-                androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+/** 桌面上一个应用条目。 */
+private data class DesktopApp(
+    val label: String,
+    val packageName: String,
+    val icon: android.graphics.Bitmap?,
+)
+
+@Composable
+private fun DesktopHome() {
+    val ctx = LocalContext.current
+    var apps by remember { mutableStateOf<List<DesktopApp>>(emptyList()) }
+    var note by remember { mutableStateOf("正在载入应用…") }
+
+    LaunchedEffect(Unit) {
+        val loaded = withContext(Dispatchers.IO) {
+            runCatching {
+                val pm = ctx.packageManager
+                val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                val list = pm.queryIntentActivities(intent, 0)
+                list.asSequence()
+                    .filter { it.activityInfo.packageName != ctx.packageName }
+                    .distinctBy { it.activityInfo.packageName }
+                    .map { ri ->
+                        val bmp = runCatching {
+                            val d = ri.loadIcon(pm)
+                            val w = (d.intrinsicWidth.takeIf { it > 0 } ?: 48).coerceAtMost(144)
+                            val h = (d.intrinsicHeight.takeIf { it > 0 } ?: 48).coerceAtMost(144)
+                            val b = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+                            val c = android.graphics.Canvas(b)
+                            d.setBounds(0, 0, w, h)
+                            d.draw(c)
+                            b
+                        }.getOrNull()
+                        DesktopApp(ri.loadLabel(pm).toString(), ri.activityInfo.packageName, bmp)
+                    }
+                    .sortedBy { it.label }
+                    .toList()
+            }.getOrDefault(emptyList())
+        }
+        apps = loaded
+        note = if (loaded.isEmpty()) "没有可显示的应用（可能是权限受限）" else ""
+    }
+
+    Column(Modifier.fillMaxSize().background(Color(0xFF12151C)).padding(16.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("ZorvAI 桌面", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            Pills("桌面模式设置", Color(0xFF3B82F6)) {
+                runCatching { com.farmerbb.taskbar.lib.Taskbar.openSettings(ctx) }
+                    .onFailure { Toast.makeText(ctx, "Taskbar 设置打不开：$it", Toast.LENGTH_SHORT).show() }
+            }
+            Spacer(Modifier.width(8.dp))
+            Pills("开发者选项", Color(0xFF6B7280)) {
+                com.ai.assistance.quro.core.adb.QuroAdbDebug.openDeveloperOptions(ctx)
+            }
         }
 
-        val root = FrameLayout(this).apply { setBackgroundColor(0xFF0B0E14.toInt()) }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "libtaskbar 需要：① 本页设为默认桌面 ② 开发者选项里打开「自由窗口」与「强制桌面模式」" +
+                " ③ 接外接屏时才出现任务栏",
+            color = Color(0xFF9CA3AF), fontSize = 11.sp,
+        )
+        if (note.isNotBlank()) {
+            Spacer(Modifier.height(6.dp))
+            Text(note, color = Color(0xFF9CA3AF), fontSize = 11.sp)
+        }
+        Spacer(Modifier.height(12.dp))
 
-        // ── 全屏虚拟屏画面（SurfaceView 直出 + 触摸直通）──
-        val sv = SurfaceView(this)
-        sv.holder.addCallback(object : SurfaceHolder.Callback {
-            override fun surfaceCreated(holder: SurfaceHolder) = attachSurface(holder.surface)
-            override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) =
-                attachSurface(holder.surface)
-            override fun surfaceDestroyed(holder: SurfaceHolder) = detachSurface()
-        })
-        // 触摸直通：点画面 = 直接操作虚拟屏里的 App（用户操控通道，与 AI 相同）
-        val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
-        var downX = 0f
-        var downY = 0f
-        val strokeX = mutableListOf<Int>()
-        val strokeY = mutableListOf<Int>()
-        sv.setOnTouchListener { _, e ->
-            val dw = QuroVirtualScreen.frameWidth().toFloat()
-            val dh = QuroVirtualScreen.frameHeight().toFloat()
-            val vw = sv.width.toFloat()
-            val vh = sv.height.toFloat()
-            if (dw <= 0 || dh <= 0 || vw <= 0 || vh <= 0) return@setOnTouchListener true
-            fun toScreen(ex: Float, ey: Float) = Pair(
-                (ex / vw * dw).toInt().coerceIn(0, dw.toInt() - 1),
-                (ey / vh * dh).toInt().coerceIn(0, dh.toInt() - 1),
-            )
-            when (e.actionMasked) {
-                android.view.MotionEvent.ACTION_DOWN -> {
-                    downX = e.x; downY = e.y
-                    strokeX.clear(); strokeY.clear()
-                    strokeX.add(toScreen(e.x, e.y).first); strokeY.add(toScreen(e.x, e.y).second)
-                    true
-                }
-                android.view.MotionEvent.ACTION_MOVE -> {
-                    val p = toScreen(e.x, e.y)
-                    strokeX.add(p.first); strokeY.add(p.second)
-                    true
-                }
-                android.view.MotionEvent.ACTION_UP -> {
-                    val moved = abs(e.x - downX) > slop || abs(e.y - downY) > slop
-                    val xs = strokeX.toList(); val ys = strokeY.toList()
-                    val dur = (e.eventTime - e.downTime).coerceAtLeast(80L)
-                    val up = toScreen(e.x, e.y)
-                    Thread {
-                        if (moved && xs.size > 2) {
-                            QuroVirtualScreen.swipeAt(this, xs.first(), ys.first(), xs.last(), ys.last(), dur)
-                        } else {
-                            QuroVirtualScreen.tapAt(this, up.first, up.second)
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(84.dp),
+            contentPadding = PaddingValues(bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            items(apps) { app ->
+                Column(
+                    Modifier.clip(RoundedCornerShape(12.dp)).clickable {
+                        runCatching {
+                            ctx.packageManager.getLaunchIntentForPackage(app.packageName)
+                                ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                ?.let { ctx.startActivity(it) }
+                        }.onFailure {
+                            Toast.makeText(ctx, "打不开 ${app.label}", Toast.LENGTH_SHORT).show()
                         }
-                    }.start()
-                    true
-                }
-                else -> true
-            }
-        }
-        root.addView(
-            sv,
-            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT),
-        )
-
-        // 未就绪提示（建屏失败时摆在画面上，不白屏）
-        val status = TextView(this).apply {
-            text = "正在启动后台虚拟屏…（需要 Shizuku 已授权）"
-            setTextColor(0xFFFFB4AB.toInt())
-            textSize = 15f
-            gravity = Gravity.CENTER
-            setPadding(48, 0, 48, 0)
-        }
-        root.addView(
-            status,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.CENTER,
-            ),
-        )
-
-        // ── 底部 Dock（固定，真实图标+清晰文字）──
-        root.addView(
-            buildDock(),
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM,
-            ),
-        )
-        setContentView(root)
-
-        // 建屏 + 状态更新
-        Thread {
-            val ok = QuroVirtualScreen.ensureDisplay(this)
-            runOnUiThread {
-                if (ok != null) {
-                    status.visibility = View.GONE // 就绪后隐藏（SurfaceView 已直出画面）
-                } else {
-                    status.text = QuroVirtualScreen.lastError ?: "后台虚拟屏不可用（检查 Shizuku 是否已授权并运行）"
-                    status.visibility = View.VISIBLE
-                }
-            }
-        }.start()
-    }
-
-    private fun attachSurface(surface: android.view.Surface) {
-        val id = QuroVirtualScreen.displayId
-        if (id < 0) return
-        val ok = QuroVirtualScreen.attachSurface(
-            id, surface,
-            resources.displayMetrics.widthPixels.coerceAtLeast(320),
-            resources.displayMetrics.heightPixels.coerceAtLeast(320),
-            resources.displayMetrics.densityDpi,
-        )
-        attached = ok
-        QuroVirtualScreen.setUiSurfaceAttached(ok)
-    }
-
-    private fun detachSurface() {
-        if (!attached) return
-        attached = false
-        QuroVirtualScreen.setUiSurfaceAttached(false)
-        Thread { QuroVirtualScreen.detachSurfaceToReader() }.start()
-    }
-
-    /** 底部 Dock：应用 / 返回 / 多任务 / 分身 / 退出（真实图标+大字）。 */
-    private fun buildDock(): LinearLayout {
-        val col = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(0xE6161A23.toInt())
-        }
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(8, 10, 8, 10)
-        }
-        fun item(label: String, iconRes: Int, onClick: () -> Unit): LinearLayout =
-            LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(22, 4, 22, 4)
-                setOnClickListener { onClick() }
-                addView(
-                    ImageView(context).apply {
-                        setImageResource(iconRes)
-                        setColorFilter(0xFFE6E1E5.toInt())
-                    },
-                    LinearLayout.LayoutParams(64, 64),
-                )
-                addView(
-                    TextView(context).apply {
-                        text = label
-                        setTextColor(0xFFE6E1E5.toInt())
-                        textSize = 13f
-                        gravity = Gravity.CENTER
-                    },
-                )
-            }
-        row.addView(item("应用", android.R.drawable.ic_menu_manage) { showAppGrid() })
-        row.addView(item("返回", android.R.drawable.ic_menu_revert) { Thread { QuroVirtualScreen.back(this) }.start() })
-        row.addView(item("多任务", android.R.drawable.ic_menu_sort_by_size) { showRecents() })
-        row.addView(item("分身", android.R.drawable.ic_menu_myplaces) { showClones() })
-        row.addView(item("退出", android.R.drawable.ic_menu_close_clear_cancel) { finish() })
-        col.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        return col
-    }
-
-    /** 应用网格：真实应用图标 + 名字，点开进虚拟屏。 */
-    private fun showAppGrid() {
-        Thread {
-            val apps = queryLaunchableApps(this)
-            runOnUiThread {
-                val grid = GridLayout(this).apply {
-                    columnCount = 4
-                    setPadding(24, 24, 24, 24)
-                }
-                for (app in apps) {
-                    val cell = LinearLayout(this).apply {
-                        orientation = LinearLayout.VERTICAL
-                        gravity = Gravity.CENTER
-                        setPadding(12, 16, 12, 16)
-                        setOnClickListener {
-                            Thread { QuroVirtualScreen.openApp(this@QuroDesktopActivity, app.packageName) }.start()
-                            dialog?.dismiss()
+                    }.padding(6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(
+                        Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF1F2430)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val bmp = app.icon
+                        if (bmp != null) {
+                            androidx.compose.foundation.Image(
+                                bitmap = bmp.asImageBitmap(),
+                                contentDescription = app.label,
+                                modifier = Modifier.size(36.dp),
+                            )
                         }
                     }
-                    cell.addView(
-                        ImageView(this).apply { setImageBitmap(app.icon) },
-                        LinearLayout.LayoutParams(136, 136),
-                    )
-                    cell.addView(
-                        TextView(this).apply {
-                            text = app.label
-                            setTextColor(0xFFE6E1E5.toInt())
-                            textSize = 12f
-                            maxLines = 1
-                            gravity = Gravity.CENTER
-                        },
-                    )
-                    grid.addView(
-                        cell,
-                        GridLayout.LayoutParams().apply {
-                            width = GridLayout.LayoutParams.WRAP_CONTENT
-                            height = GridLayout.LayoutParams.WRAP_CONTENT
-                            columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-                        },
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        app.label, color = Color(0xFFE5E7EB), fontSize = 10.sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 }
-                showInDialog("打开应用到虚拟屏", ScrollView(this).apply { addView(grid) })
             }
-        }.start()
+        }
     }
+}
 
-    /** 多任务：当前虚拟屏最上层 Activity。 */
-    private fun showRecents() {
-        Thread {
-            val top = QuroVirtualScreen.topActivity(this)
-            runOnUiThread {
-                Toast.makeText(
-                    this,
-                    if (top != null) "当前前台：$top" else "虚拟屏上没有运行的任务",
-                    Toast.LENGTH_LONG,
-                ).show()
-            }
-        }.start()
-    }
-
-    /** 分身列表。 */
-    private fun showClones() {
-        Thread {
-            val info = QuroVirtualScreen.listAppCopies(this)
-            runOnUiThread {
-                val tv = TextView(this).apply {
-                    text = info
-                    setTextColor(0xFFE6E1E5.toInt())
-                    textSize = 14f
-                    setPadding(32, 24, 32, 24)
-                }
-                showInDialog("应用分身（双开/工作资料）", tv)
-            }
-        }.start()
-    }
-
-    private var dialog: android.app.AlertDialog? = null
-
-    private fun showInDialog(title: String, content: View) {
-        dialog = android.app.AlertDialog.Builder(this)
-            .setTitle(title)
-            .setView(content)
-            .setPositiveButton("关闭", null)
-            .show()
-    }
-
-    override fun onDestroy() {
-        detachSurface()
-        super.onDestroy()
-    }
-
-    private data class DesktopApp(val label: String, val packageName: String, val icon: Bitmap)
-
-    private fun queryLaunchableApps(ctx: Context): List<DesktopApp> {
-        val pm = ctx.packageManager
-        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        return runCatching {
-            pm.queryIntentActivities(intent, 0)
-                .asSequence()
-                .filter { it.activityInfo?.packageName != ctx.packageName }
-                .distinctBy { it.activityInfo?.packageName }
-                .mapNotNull { ri ->
-                    val pkg = ri.activityInfo?.packageName ?: return@mapNotNull null
-                    val icon = runCatching {
-                        val d = ri.loadIcon(pm)
-                        val w = (d.intrinsicWidth.takeIf { it > 0 } ?: 96).coerceAtMost(144)
-                        val h = (d.intrinsicHeight.takeIf { it > 0 } ?: 96).coerceAtMost(144)
-                        Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also {
-                            d.setBounds(0, 0, w, h)
-                            d.draw(Canvas(it))
-                        }
-                    }.getOrNull() ?: return@mapNotNull null
-                    DesktopApp(ri.loadLabel(pm)?.toString() ?: pkg, pkg, icon)
-                }
-                .sortedBy { it.label.lowercase() }
-                .toList()
-        }.getOrDefault(emptyList())
+@Composable
+private fun Pills(text: String, color: Color, onClick: () -> Unit) {
+    Box(
+        Modifier.clip(RoundedCornerShape(20.dp)).background(color.copy(alpha = 0.22f))
+            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(text, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     }
 }
