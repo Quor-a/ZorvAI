@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,7 +64,7 @@ import kotlinx.coroutines.withContext
  *
  * ## 这个桌面做什么
  *
- * - 应用网格：点一下用普通方式启动；长按（此处简化为底部按钮）可让 AI 在**后台屏**打开；
+ * - 应用网格：点一下**开进后台虚拟屏**（画面可在悬浮窗/画中画里直接操控）；
  * - 顶部入口：libtaskbar 的桌面模式设置、开发者选项；
  * - 不抢占 LAUNCHER：主 Activity 仍是 ZorvAI 自己的入口，这里只声明 HOME/DEFAULT。
  */
@@ -71,6 +72,13 @@ class QuroDesktopActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 🔴 全屏沉浸（用户要求「桌面还不是全屏」）：隐藏系统栏，画面铺满
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        androidx.core.view.WindowInsetsControllerCompat(window, window.decorView).let { c ->
+            c.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            c.systemBarsBehavior =
+                androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
         setContent {
             MaterialTheme {
                 DesktopHome()
@@ -122,7 +130,42 @@ private fun DesktopHome() {
         note = if (loaded.isEmpty()) "没有可显示的应用（可能是权限受限）" else ""
     }
 
-    Column(Modifier.fillMaxSize().background(Color(0xFF12151C)).padding(16.dp)) {
+    // 🔴 桌面背景（用户要求「桌面背景你还没换」）：深空渐变 + 星点 + 顶部光晕，
+    // 替换原来的纯色 #12151C（被骂「看不懂」的灰盒子底）
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    listOf(Color(0xFF0A0D16), Color(0xFF101527), Color(0xFF0A0D16)),
+                ),
+            ),
+    ) {
+        // 顶部光晕（一个半透明大圆压出纵深，纯绘制不加依赖）
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(180.dp),
+        ) {
+            Box(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .size(360.dp, 220.dp)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.radialGradient(
+                            listOf(Color(0xFF2A3C7A).copy(alpha = 0.55f), Color.Transparent),
+                        ),
+                        CircleShape,
+                    ),
+            )
+            Text(
+                text = "桌面",
+                color = Color(0xFFE6E1E5),
+                fontSize = 22.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("ZorvAI 桌面", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
@@ -158,13 +201,17 @@ private fun DesktopHome() {
             items(apps) { app ->
                 Column(
                     Modifier.clip(RoundedCornerShape(12.dp)).clickable {
-                        runCatching {
-                            ctx.packageManager.getLaunchIntentForPackage(app.packageName)
-                                ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                ?.let { ctx.startActivity(it) }
-                        }.onFailure {
-                            Toast.makeText(ctx, "打不开 ${app.label}", Toast.LENGTH_SHORT).show()
-                        }
+                        // 🔴 桌面里的应用**全部开进后台虚拟屏**（用户要求「后台虚拟屏内操控软件」）：
+                        // openApp 走 setLaunchDisplayId，双开 App 自动查分身（QuroVirtualScreen 内处理）。
+                        // 悬浮窗/画中画显示画面，画面上的触摸就是直接操控这个 App。
+                        Thread {
+                            val r = com.ai.assistance.quro.core.display.QuroVirtualScreen.openApp(
+                                ctx, app.packageName,
+                            )
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                Toast.makeText(ctx, r, Toast.LENGTH_SHORT).show()
+                            }
+                        }.start()
                     }.padding(6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {

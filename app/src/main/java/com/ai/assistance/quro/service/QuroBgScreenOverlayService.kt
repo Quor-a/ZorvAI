@@ -73,8 +73,8 @@ class QuroBgScreenOverlayService : Service() {
         private const val NOTIF_ID = 9531
         private const val ACTION_STOP = "com.ai.assistance.quro.action.BG_OVERLAY_STOP"
 
-        /** 浮窗默认宽度（占屏宽比例）与缩放上下限。 */
-        private const val DEFAULT_W_RATIO = 0.34f
+        /** 浮窗默认宽度（占屏宽比例）与缩放上下限。0.26 = 用户要求「展开默认再小点」。 */
+        private const val DEFAULT_W_RATIO = 0.26f
         private const val MIN_W_DP = 120
         private const val BALL_DP = 46
 
@@ -152,6 +152,9 @@ class QuroBgScreenOverlayService : Service() {
             }
         }
         showWindow()
+        // 🔴 开启服务先收成「桌面宠物」形态（用户要求：点宠物才展开后台虚拟屏，
+        // 而不是一开启就展开大窗口）。宠物可拖动，点它展开。
+        setCollapsed(true)
         running = true
     }
 
@@ -233,7 +236,10 @@ class QuroBgScreenOverlayService : Service() {
         }
         container.addView(hint)
 
-        // 触摸：单指 = 拖动窗口；轻点（没移动）= 直接操控虚拟屏
+        // 触摸（照 Extendroid 分工）：
+        //  · 展开态 —— 画面触摸**全部直通虚拟屏**（轻点=点一下，滑动=滑一下），
+        //    拖动窗口走顶部新增的拖动条，两者不打架；
+        //  · 宠物态 —— 整个触摸 = 拖动，轻点 = 展开窗口。
         container.setOnTouchListener { _, ev ->
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -249,31 +255,36 @@ class QuroBgScreenOverlayService : Service() {
                         p.y = (downParamY + (ev.rawY - downRawY)).roundToInt()
                         clampToScreen(p)
                         runCatching { wm.updateViewLayout(container, p) }
-                    } else {
-                        val dx = ev.rawX - downRawX
-                        val dy = ev.rawY - downRawY
-                        // 位移超过阈值才算拖动，否则留给「点一下直控」
-                        if (hypot(dx, dy) > dp(6)) {
-                            p.x = (downParamX + dx).roundToInt()
-                            p.y = (downParamY + dy).roundToInt()
-                            clampToScreen(p)
-                            runCatching { wm.updateViewLayout(container, p) }
-                        }
                     }
+                    // 展开态 MOVE 不拖窗：留给 UP 的 swipe 直控判定
                     true
                 }
                 MotionEvent.ACTION_UP -> {
                     val moved = hypot(ev.rawX - downRawX, ev.rawY - downRawY)
-                    if (!collapsed && moved <= dp(6)) {
-                        // 轻点 = 直接操控虚拟屏：把窗口内坐标换算成虚拟屏像素
-                        val localX = ev.x
-                        val localY = ev.y
-                        val sysW = QuroVirtualScreen.frameWidth()
-                        val sysH = QuroVirtualScreen.frameHeight()
-                        if (sysW > 0 && sysH > 0 && winW > 0 && winH > 0) {
-                            val vx = (localX / winW * sysW).roundToInt().coerceIn(0, sysW - 1)
-                            val vy = (localY / winH * sysH).roundToInt().coerceIn(0, sysH - 1)
-                            QuroVirtualScreen.tapAt(this@QuroBgScreenOverlayService, vx, vy)
+                    if (collapsed) {
+                        // 宠物：没怎么动 → 点击展开
+                        if (moved <= dp(6)) setCollapsed(false)
+                        return@setOnTouchListener true
+                    }
+                    val sysW = QuroVirtualScreen.frameWidth()
+                    val sysH = QuroVirtualScreen.frameHeight()
+                    if (sysW > 0 && sysH > 0 && winW > 0 && winH > 0) {
+                        fun toSys(px: Float, py: Float) = Pair(
+                            (px / winW * sysW).roundToInt().coerceIn(0, sysW - 1),
+                            (py / winH * sysH).roundToInt().coerceIn(0, sysH - 1),
+                        )
+                        val (sx, sy) = toSys(downRawX - p.x, downRawY - p.y)
+                        val (ex, ey) = toSys(ev.x, ev.y)
+                        if (moved > dp(6)) {
+                            // 🔴 滑动直控（Extendroid 的触摸直通）：注入带真实时长的滑动
+                            QuroVirtualScreen.swipeAt(
+                                this@QuroBgScreenOverlayService,
+                                sx, sy, ex, ey,
+                                (ev.eventTime - ev.downTime).coerceAtLeast(120L),
+                            )
+                        } else {
+                            // 轻点 = 点一下虚拟屏
+                            QuroVirtualScreen.tapAt(this@QuroBgScreenOverlayService, sx, sy)
                         }
                     }
                     true
@@ -281,6 +292,34 @@ class QuroBgScreenOverlayService : Service() {
                 else -> false
             }
         }
+
+        // 顶部拖动条（展开态专管移窗，画面区让给直控）
+        val dragBar = View(this).apply {
+            background = GradientDrawable().apply {
+                cornerRadius = dp(8).toFloat()
+                setColor(Color.parseColor("#66222B3A"))
+            }
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, dp(16), Gravity.TOP,
+            ).apply { topMargin = dp(2); marginStart = dp(40); marginEnd = dp(40) }
+            setOnTouchListener { _, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downRawX = e.rawX; downRawY = e.rawY
+                        downParamX = p.x; downParamY = p.y; true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        p.x = (downParamX + (e.rawX - downRawX)).roundToInt()
+                        p.y = (downParamY + (e.rawY - downRawY)).roundToInt()
+                        clampToScreen(p)
+                        runCatching { wm.updateViewLayout(container, p) }
+                        true
+                    }
+                    else -> false
+                }
+            }
+        }
+        container.addView(dragBar)
 
         // 右上角按钮：收起 / 关闭
         val bar = FrameLayout.LayoutParams(dp(22), dp(22), Gravity.TOP or Gravity.END).apply {
@@ -353,26 +392,11 @@ class QuroBgScreenOverlayService : Service() {
         if (to) {
             p.width = dp(BALL_DP)
             p.height = dp(BALL_DP)
-            c.background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#EE3B82F6"))
-            }
+            c.background = null // 宠物自己带身体背景，容器不再叠圆角矩形
             image?.visibility = View.GONE
-            // 球上显示 AI：用一个居中的文字替代画面
-            if (image?.parent === c) {
-                val ballText = TextView(this).apply {
-                    text = "AI"
-                    setTextColor(Color.WHITE)
-                    textSize = 12f
-                    typeface = Typeface.DEFAULT_BOLD
-                    gravity = Gravity.CENTER
-                    layoutParams = FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                    )
-                    tag = "ball"
-                }
-                c.addView(ballText)
+            // 🔴 桌面宠物形态（用户要求）：身体 + 两只眼睛，点它展开后台虚拟屏
+            if (c.findViewWithTag<View>("pet") == null) {
+                c.addView(makePetBody())
             }
             c.setOnClickListener { setCollapsed(false) }
         } else {
@@ -386,10 +410,8 @@ class QuroBgScreenOverlayService : Service() {
                 setColor(Color.parseColor("#0B0E14"))
                 setStroke(dp(1), Color.parseColor("#2A3140"))
             }
-            // 移除球上的文字
-            (0 until c.childCount).map { c.getChildAt(it) }
-                .filter { it.tag == "ball" }
-                .forEach { c.removeView(it) }
+            // 移除宠物
+            c.findViewWithTag<View>("pet")?.let { c.removeView(it) }
             image?.visibility = View.VISIBLE
             c.setOnClickListener(null)
         }
@@ -408,6 +430,62 @@ class QuroBgScreenOverlayService : Service() {
             }
             setOnClickListener { onClick() }
         }
+
+    /**
+     * 桌面宠物（收起态外观）：渐变圆身体 + 两只眼白 + 黑瞳。
+     *
+     * 用户原话：「点击开按钮做成一个小小的桌面宠物立起来，点的时候展开后台虚拟屏」。
+     * 纯 View 叠加实现，不引任何资源；tag="pet" 供展开时移除。
+     */
+    private fun makePetBody(): FrameLayout {
+        val ctx = this
+        return FrameLayout(ctx).apply {
+            tag = "pet"
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            )
+            // 身体：竖向渐变圆
+            addView(View(ctx).apply {
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    colors = intArrayOf(
+                        Color.parseColor("#5B8CFF"),
+                        Color.parseColor("#3B5FD9"),
+                    )
+                    orientation = GradientDrawable.Orientation.TOP_BOTTOM
+                }
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                )
+            })
+            // 两只眼睛（白底黑瞳），位置略偏上中
+            val eyeDp = dp(7)
+            val pupilDp = dp(3)
+            fun eye(leftMarginDp: Int): FrameLayout =
+                FrameLayout(ctx).apply {
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(Color.WHITE)
+                    }
+                    layoutParams = FrameLayout.LayoutParams(eyeDp, eyeDp, Gravity.CENTER_HORIZONTAL).apply {
+                        topMargin = dp(16)
+                        marginStart = dp(leftMarginDp)
+                        gravity = Gravity.TOP
+                    }
+                    addView(View(ctx).apply {
+                        background = GradientDrawable().apply {
+                            shape = GradientDrawable.OVAL
+                            setColor(Color.parseColor("#101828"))
+                        }
+                        layoutParams = FrameLayout.LayoutParams(pupilDp, pupilDp, Gravity.CENTER)
+                    })
+                }
+            addView(eye(-10))
+            addView(eye(3))
+        }
+    }
 
     private fun clampToScreen(p: WindowManager.LayoutParams) {
         val dm = resources.displayMetrics
