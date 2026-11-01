@@ -19,11 +19,13 @@ import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import com.ai.assistance.quro.activity.QuroMainActivity
@@ -75,9 +77,18 @@ class QuroBgScreenOverlayService : Service() {
         private const val NOTIF_ID = 9531
         private const val ACTION_STOP = "com.ai.assistance.quro.action.BG_OVERLAY_STOP"
 
-        /** 浮窗默认宽度（占屏宽比例）与缩放上下限。0.26 = 用户要求「展开默认再小点」。 */
-        private const val DEFAULT_W_RATIO = 0.30f
+        /** 浮窗默认宽度（占屏宽比例）与缩放上下限。 */
+        private const val DEFAULT_W_RATIO = 0.22f
         private const val MIN_W_DP = 120
+        /** 收起态细条高度。 */
+        private const val COLLAPSED_H_DP = 34
+        /**
+         * 收起后的贴边胶囊尺寸（**不是漂浮球**）。
+         * 形态照 Mika 的 CapsuleDock：贴屏幕左/右边的一条竖胶囊，点它展开，
+         * 记住贴哪边 + 垂直位置，转屏后照样摆回原处。
+         */
+        private const val DOCK_W_DP = 26
+        private const val DOCK_H_DP = 96
         // 🔴 BALL_DP 已删除（宠物球功能已移除）
 
         /** 浮窗是否已开（UI 用它显示开关状态）。 */
@@ -127,6 +138,33 @@ class QuroBgScreenOverlayService : Service() {
     private var winW = 0
     private var winH = 0
 
+    /**
+     * 窗口锁定：锁定后拖动条与缩放手柄都不响应，防止误拖。
+     * 画面区仍然可直控（点击/滑动照旧穿到虚拟屏）。
+     */
+    private var locked = false
+
+    /**
+     * 收起态：只留一条细条（高度 [COLLAPSED_H_DP]），画面隐藏，点一下展开。
+     * 用户要求「能收起来」——之前跟宠物球一起删掉了，现在恢复成纯粹的收起，不是漂浮球。
+     */
+    private var collapsed = false
+
+    /** 收起前的高度，展开时还原。 */
+    private var winHBeforeCollapse = 0
+
+    /** 收起后停靠在哪一侧（true=右）。Mika 的做法是记「贴哪边 + 垂直比例」，转屏也能摆回原处。 */
+    private var dockSideRight = true
+
+    /** 底部功能条（导航键/锁定/收起）。收起态隐藏。 */
+    private var functionBar: LinearLayout? = null
+
+    /** 收起态的贴边胶囊提示（点它展开）。 */
+    private var collapseHint: TextView? = null
+
+    /** 设置项监听：改「默认宽度比例」后**实时**生效，不用重启悬浮窗。 */
+    private var prefListener: android.content.SharedPreferences.OnSharedPreferenceChangeListener? = null
+
     /** 收起态：已删除（宠物球功能已移除） */
     // private var collapsed = false
 
@@ -154,6 +192,19 @@ class QuroBgScreenOverlayService : Service() {
             }
         }
         showWindow()
+        // 🔴 监听「默认宽度比例」：用户拖完滑块**立刻**改变窗口大小。
+        // 原来只在 showWindow 里读一次，改完设置必须关掉悬浮窗再开才生效 ——
+        // 用户报「默认比例调整根本没用」就是这个。
+        runCatching {
+            val p = getSharedPreferences("quro_settings", android.content.Context.MODE_PRIVATE)
+            val l = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+                if (key == "bg_screen_width_ratio") {
+                    applyWidthRatio(sp.getFloat(key, DEFAULT_W_RATIO))
+                }
+            }
+            p.registerOnSharedPreferenceChangeListener(l)
+            prefListener = l
+        }.onFailure { Log.w(TAG, "注册比例监听失败（改设置需重开悬浮窗才生效）", it) }
         running = true
     }
 
@@ -167,11 +218,76 @@ class QuroBgScreenOverlayService : Service() {
 
     override fun onDestroy() {
         running = false
+        // 注销设置监听（不注销会泄漏：SharedPreferences 持有它，服务却已销毁）
+        runCatching {
+            prefListener?.let {
+                getSharedPreferences("quro_settings", android.content.Context.MODE_PRIVATE)
+                    .unregisterOnSharedPreferenceChangeListener(it)
+            }
+            prefListener = null
+        }
         frameJob?.cancel()
         runCatching { root?.let { wm.removeView(it) } }
         root = null
         scope.cancel()
         super.onDestroy()
+    }
+
+    /**
+     * 收起 / 展开。
+     *
+     * 收起形态**不是漂浮球**（用户明确否掉了球），照 Mika `CapsuleDock` 的做法：
+     * 收成贴屏幕左/右边的一条竖胶囊，记住贴在哪边，展开时从原来那一侧还原。
+     * 垂直位置保留当前 y —— 用户把它拖到屏幕下半部再收起，展开后还在那儿。
+     */
+    private fun toggleCollapse() {
+        val p = params ?: return
+        val v = root ?: return
+        val dm = resources.displayMetrics
+        collapsed = !collapsed
+
+        if (collapsed) {
+            winHBeforeCollapse = winH
+            // 按窗口中心落在屏幕哪半边决定贴哪边
+            val centerX = p.x + (if (p.width > 0) p.width else winW) / 2
+            dockSideRight = centerX > dm.widthPixels / 2
+            p.width = dp(DOCK_W_DP)
+            p.height = dp(DOCK_H_DP)
+            p.x = if (dockSideRight) dm.widthPixels - p.width else 0
+            // 垂直位置夹在屏内（Mika 也是按比例记，这里保留绝对 y 更直观）
+            p.y = p.y.coerceIn(0, (dm.heightPixels - p.height).coerceAtLeast(0))
+        } else {
+            p.width = winW
+            p.height = if (winHBeforeCollapse > 0) winHBeforeCollapse else winH
+            p.x = if (dockSideRight) {
+                (dm.widthPixels - p.width - dp(12)).coerceAtLeast(0)
+            } else dp(12)
+            p.y = p.y.coerceIn(0, (dm.heightPixels - p.height).coerceAtLeast(0))
+        }
+
+        clampToScreen(p)
+        runCatching { wm.updateViewLayout(v, p) }
+
+        // 收起：藏画面与功能条，露贴边胶囊；展开：反过来
+        image?.visibility = if (collapsed) View.GONE else View.VISIBLE
+        functionBar?.visibility = if (collapsed) View.GONE else View.VISIBLE
+        collapseHint?.visibility = if (collapsed) View.VISIBLE else View.GONE
+        Log.i(TAG, "收起=${collapsed} 停靠=${if (dockSideRight) "右" else "左"} ${p.width}x${p.height}@(${p.x},${p.y})")
+    }
+
+    /** 按比例热更新窗口尺寸（收起态只改宽度，高度保持细条）。 */    private fun applyWidthRatio(ratio: Float) {
+        val r = ratio.coerceIn(0.10f, 0.90f)
+        val dm = resources.displayMetrics
+        winW = (dm.widthPixels * r).roundToInt().coerceAtLeast(dp(MIN_W_DP))
+        winH = (winW * dm.heightPixels / dm.widthPixels.toFloat()).roundToInt()
+        if (collapsed) winHBeforeCollapse = winH
+        val p = params ?: return
+        val v = root ?: return
+        p.width = winW
+        p.height = if (collapsed) dp(COLLAPSED_H_DP) else winH
+        clampToScreen(p)
+        runCatching { wm.updateViewLayout(v, p) }
+        Log.i(TAG, "宽度比例热更新 → $r（${winW}x${p.height}）")
     }
 
     // ─────────────────────────── 窗口 ───────────────────────────
@@ -180,7 +296,7 @@ class QuroBgScreenOverlayService : Service() {
         val dm = resources.displayMetrics
         // 🔴 从 Preference 读用户调的大小，默认 0.30
         val prefs = getSharedPreferences("quro_settings", android.content.Context.MODE_PRIVATE)
-        val ratio = prefs.getFloat("bg_screen_width_ratio", 0.30f)
+        val ratio = prefs.getFloat("bg_screen_width_ratio", DEFAULT_W_RATIO)
         winW = (dm.widthPixels * ratio).roundToInt().coerceAtLeast(dp(MIN_W_DP))
         winH = (winW * dm.heightPixels / dm.widthPixels.toFloat()).roundToInt()
 
@@ -303,6 +419,7 @@ class QuroBgScreenOverlayService : Service() {
                 FrameLayout.LayoutParams.MATCH_PARENT, dp(16), Gravity.TOP,
             ).apply { topMargin = dp(2); marginStart = dp(40); marginEnd = dp(40) }
             setOnTouchListener { _, e ->
+                if (locked) return@setOnTouchListener false   // 锁定后禁止拖窗
                 when (e.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         downRawX = e.rawX; downRawY = e.rawY
@@ -342,6 +459,7 @@ class QuroBgScreenOverlayService : Service() {
                 bottomMargin = dp(4); marginEnd = dp(4)
             }
             setOnTouchListener { v, e ->
+                if (locked) return@setOnTouchListener false   // 锁定后禁止缩放
                 when (e.actionMasked) {
                     MotionEvent.ACTION_DOWN -> { downRawX = e.rawX; downRawY = e.rawY; true }
                     MotionEvent.ACTION_MOVE -> {
@@ -362,6 +480,79 @@ class QuroBgScreenOverlayService : Service() {
             }
         }
         container.addView(handle)
+
+        // ══════════ 底部功能条：导航键 + 锁定 + 收起 ══════════
+        // 用户反馈「只能点击滑动，返回 / 唤去手机键等等都缺」——虚拟屏也是一整块屏，
+        // 没有导航键就退不出 App、回不到桌面，等于半残。这里把键补齐。
+        val barH = dp(32)
+        val bar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                cornerRadius = dp(10).toFloat()
+                setColor(Color.parseColor("#D90B0E14"))
+            }
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, barH, Gravity.BOTTOM,
+            ).apply { bottomMargin = dp(3); marginStart = dp(3); marginEnd = dp(3) }
+        }
+        fun chipLp(): LinearLayout.LayoutParams =
+            LinearLayout.LayoutParams(0, barH - dp(6), 1f).apply {
+                gravity = Gravity.CENTER
+                setMargins(dp(1), dp(3), dp(1), dp(3))
+            }
+
+        // 导航键 → 注入到**虚拟屏**（injectKey 内部 ownDisplay 限定 displayId，不会误触用户主屏）
+        listOf(
+            "←" to KeyEvent.KEYCODE_BACK,
+            "⌂" to KeyEvent.KEYCODE_HOME,
+            "☰" to KeyEvent.KEYCODE_APP_SWITCH,
+        ).forEach { (label, code) ->
+            bar.addView(makeChip(label) {
+                Thread {
+                    val ok = runCatching {
+                        QuroVirtualScreen.key(this@QuroBgScreenOverlayService, code)
+                    }.getOrDefault(false)
+                    if (!ok) Log.w(TAG, "按键注入失败 key=$code（Shizuku 未就绪？）")
+                }.start()
+            }, chipLp())
+        }
+
+        // 锁定：禁止拖动/缩放，防误拖；画面直控不受影响
+        var lockView: TextView? = null
+        lockView = makeChip("🔒") {
+            locked = !locked
+            lockView?.text = if (locked) "🔓" else "🔒"
+        }.also { bar.addView(it, chipLp()) }
+
+        // 收起：贴边成胶囊（不是球）
+        bar.addView(makeChip("▾") { toggleCollapse() }, chipLp())
+
+        functionBar = bar
+        container.addView(bar)
+
+        // ══════════ 收起态：贴边竖胶囊（照 Mika CapsuleDock 的形态）══════════
+        // 点它展开。用品牌陶土橙，跟对话框视觉一致；不是宠物球那种圆形。
+        val dockChip = TextView(this).apply {
+            text = "后\n台\n屏"
+            setTextColor(Color.parseColor("#F4F1EA"))
+            textSize = 9f
+            gravity = Gravity.CENTER
+            letterSpacing = 0.05f
+            background = GradientDrawable().apply {
+                cornerRadius = dp(13).toFloat()
+                setColor(Color.parseColor("#E6C25A38"))
+                setStroke(dp(1), Color.parseColor("#F4F1EA"))
+            }
+            visibility = View.GONE
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            )
+            setOnClickListener { toggleCollapse() }
+        }
+        collapseHint = dockChip
+        container.addView(dockChip)
 
         runCatching { wm.addView(container, p) }
             .onFailure { Log.e(TAG, "加浮窗失败（没授予悬浮窗权限？）", it); stopSelf(); return }

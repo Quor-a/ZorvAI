@@ -65,7 +65,12 @@ object QuroShizuku {
             // 表现出来就是「屏建不出来」「open 永远失败」。
             // 现 AIDL 共 47 个方法（最大编号 45），统一升到 10，强制 Shizuku 重新部署。
             // ⚠️ 以后每次动 IQuroShellService.aidl 都必须再 +1。
-            .version(10)
+            //
+            // v11：QuroShellService.ALLOWED_KEYS 放开 HOME / APP_SWITCH / MENU
+            //      （悬浮窗要能按 Home、切最近任务）。虽然 AIDL 方法签名没变，
+            //      但**特权进程里跑的是旧代码**，白名单不更新的话这几个键会被直接拒掉，
+            //      表现就是「点了 Home 没反应」。所以实现侧的语义变更同样要 bump。
+            .version(11)
     }
 
     private val serviceConnection = object : ServiceConnection {
