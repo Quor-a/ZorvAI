@@ -399,6 +399,14 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
 
             // ── 无线调试配对（Android 11+，免 root）：这才是「怎么被无线调试」的正路
             GroupCaption("无线调试配对（Android 11+，免 root）")
+            // 配对码自动上通知栏：系统弹出配对弹窗时，无障碍服务自动把 6 位码 + IP:端口
+            // 抓成常驻通知（shell 读不到码，读屏是唯一正路）。另一台设备要连时直接看通知。
+            Text(
+                "💡 系统里点「使用配对码配对设备」时，6 位码和连接地址会自动出现在通知栏，无需手动抄。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
             SetGroup {
                 InfoLine(
                     "步骤：① 打开系统「无线调试」开关 → ② 点「使用配对码配对设备」，记下 6 位码 → " +

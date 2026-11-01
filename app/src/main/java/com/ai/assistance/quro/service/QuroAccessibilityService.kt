@@ -115,7 +115,17 @@ class QuroAccessibilityService : DeviceControlService() {
         event?.let {
             lastEventTime = System.currentTimeMillis()
         }
-        // 预留扩展点：界面自动化 / 屏幕读取。当前不收集数据。
+        // 无线调试配对码上通知栏：用户在系统设置点出配对弹窗时，自动把 6 位码 +
+        // IP:端口 抓成常驻通知（见 QuroAdbPairNotifier 的 kdoc，shell 读不到码只能读屏）。
+        event?.let {
+            runCatching {
+                com.ai.assistance.quro.core.adb.QuroAdbPairNotifier.onAccessibilityEvent(
+                    this,
+                    it.packageName?.toString(),
+                    it.eventType,
+                )
+            }
+        }
     }
 
     // ═══════════════ 后台虚拟屏支持（移植自 Mika 的 ScreenAccessibility）═══════════════
