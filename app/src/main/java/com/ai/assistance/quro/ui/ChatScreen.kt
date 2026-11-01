@@ -951,8 +951,20 @@ fun ChatScreen(
      */
 
     // ═══ UI 动作桥：把 AI 调用的 ui_* 工具回调到本组合作用域，打开对应界面/弹层/开关 ═══
+    // handleUiAction 是普通函数（非 @Composable），取不到后面定义的 appCtx，这里单独备一份。
+    val uiActionCtx = LocalContext.current
+
     fun handleUiAction(action: String) {
         when (action) {
+            // 打开 ZorvAI 桌面模式（任务栏桌面）。这是独立 Activity，不是本组合内的状态。
+            "ui_open_desktop" -> runCatching {
+                uiActionCtx.startActivity(
+                    android.content.Intent(
+                        uiActionCtx,
+                        com.ai.assistance.quro.activity.QuroDesktopActivity::class.java,
+                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }.onFailure { android.util.Log.w("ChatScreen", "打开桌面模式失败", it) }
             "ui_open_onlyoffice" -> showOnlyOffice = true
             "ui_open_knowledge" -> showKnowledge = true
             "ui_open_terminal" -> showTerminal = true

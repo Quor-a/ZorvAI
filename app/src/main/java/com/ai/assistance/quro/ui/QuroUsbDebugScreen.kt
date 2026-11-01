@@ -410,7 +410,8 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
             SetGroup {
                 InfoLine(
                     "步骤：① 打开系统「无线调试」开关 → ② 点「使用配对码配对设备」，记下 6 位码 → " +
-                        "③ 在这里填入并点「配对」。配对成功后不用 USB 线、不用 root，电脑 / 另一台手机都能连。"
+                        "③ 填进来点「配对」，**或点下面的「通知栏配对」直接在通知栏里填码**" +
+                        "（系统配对弹窗一关就失效，通知栏方式不用切界面，更稳）。配对成功后不用 USB 线、不用 root。"
                 )
                 if (wirelessSwitch != null) {
                     HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
@@ -445,6 +446,17 @@ fun QuroUsbDebugScreen(onClose: () -> Unit, onOpenTerminal: () -> Unit = {}) {
                         Text("仅连接（已配对过）", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
                     }
                     Spacer(Modifier.weight(1f))
+                    // 通知栏配对：系统的「使用配对码配对设备」弹窗关掉就失效，
+                    // 让用户切回 App 填码很容易把弹窗切没了。这条路径在通知栏就地输入，不切界面。
+                    TextButton(
+                        onClick = {
+                            com.ai.assistance.quro.service.QuroAdbPairingService.start(ctx)
+                            Toast.makeText(ctx, "已发到通知栏：找到配对服务后直接在通知里输入 6 位码", Toast.LENGTH_LONG).show()
+                        },
+                    ) {
+                        Text("通知栏配对", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(Modifier.width(4.dp))
                     TextButton(onClick = { QuroAdbDebug.openWirelessDebugging(ctx) }) {
                         Text("打开系统无线调试", fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold)
                     }

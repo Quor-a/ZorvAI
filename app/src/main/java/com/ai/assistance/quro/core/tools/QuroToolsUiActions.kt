@@ -58,6 +58,7 @@ private val UI_ACTIONS = listOf(
     UiActionSpec("ui_open_toolbox", qstr(R.string.qk_00214), "打开工具箱（文件管理/浏览器/IDE）"),
     UiActionSpec("ui_open_kaleidobox", qstr(R.string.qk_02777), "打开 KaleidoBox 工具包运行器：以进程内 JVM/Dex 引擎运行 Kotlin/Java 工具包，列出已装包、装载内置示例计数器并渲染可交互 UI 表面（列包/装包/调 unit/渲染 UI）"),
     UiActionSpec("ui_open_build", qstr(R.string.qk_02791), "打开 Zorv 构建台（端侧 APK 构建器：Java 工程 → DEX → APK，自带 ecj/d8/apksig 工具链，免 aapt2，可离线编译打包安卓安装包）"),
+    UiActionSpec("ui_open_desktop", "桌面模式", "打开 ZorvAI 桌面模式：全屏任务栏桌面，把已安装应用铺成桌面图标，点图标即在后台虚拟屏里打开（不打扰当前前台）。适合「像电脑一样用这台手机」的场景"),
     UiActionSpec("ui_open_plugins", qstr(R.string.qk_02779), "打开插件管理"),
     UiActionSpec("ui_open_skills", qstr(R.string.qk_00218), "打开技能 SKILL 管理（查看/新增/编辑/启用用户自定义技能）"),
     UiActionSpec("ui_open_cms", "能力模块(CMS)", "打开 CMS 能力模块"),
