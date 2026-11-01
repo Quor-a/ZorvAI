@@ -75,9 +75,9 @@ class QuroBgScreenOverlayService : Service() {
         private const val ACTION_STOP = "com.ai.assistance.quro.action.BG_OVERLAY_STOP"
 
         /** 浮窗默认宽度（占屏宽比例）与缩放上下限。0.26 = 用户要求「展开默认再小点」。 */
-        private const val DEFAULT_W_RATIO = 0.26f
+        private const val DEFAULT_W_RATIO = 0.45f
         private const val MIN_W_DP = 120
-        private const val BALL_DP = 46
+        // 🔴 BALL_DP 已删除（宠物球功能已移除）
 
         /** 浮窗是否已开（UI 用它显示开关状态）。 */
         @Volatile
@@ -126,8 +126,8 @@ class QuroBgScreenOverlayService : Service() {
     private var winW = 0
     private var winH = 0
 
-    /** 收起态：只显示一颗球。 */
-    private var collapsed = false
+    /** 收起态：已删除（宠物球功能已移除） */
+    // private var collapsed = false
 
     /** 手指按下时窗口左上角的位置，拖动用。 */
     private var downRawX = 0f
@@ -153,15 +153,6 @@ class QuroBgScreenOverlayService : Service() {
             }
         }
         showWindow()
-        // 🔴 开启悬浮窗服务 = 开启后台虚拟屏 → 自动建屏 + 显示宠物球
-        // 宠物球只随虚拟屏生命周期出现（服务启动就建屏）
-        Thread {
-            com.ai.assistance.quro.core.display.QuroVirtualScreen.ensureDisplay(this)
-            Log.i(TAG, "悬浮窗启动时自动建屏: running=" + running)
-        }.start()
-        // 收成「桌面宠物」形态（用户要求：点宠物才展开后台虚拟屏，
-        // 而不是一开启就展开大窗口）。宠物可拖动，点它展开。
-        setCollapsed(true)
         running = true
     }
 
@@ -244,9 +235,7 @@ class QuroBgScreenOverlayService : Service() {
         container.addView(hint)
 
         // 触摸（照 Extendroid 分工）：
-        //  · 展开态 —— 画面触摸**全部直通虚拟屏**（轻点=点一下，滑动=滑一下），
-        //    拖动窗口走顶部新增的拖动条，两者不打架；
-        //  · 宠物态 —— 整个触摸 = 拖动，轻点 = 展开窗口。
+        //  · 窗口态 —— 拖动走顶部拖动条，画面区轻点=点一下虚拟屏，滑动=滑一下
         container.setOnTouchListener { _, ev ->
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -257,18 +246,11 @@ class QuroBgScreenOverlayService : Service() {
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    // 展开态 MOVE 也要 clamp：防止手指不按拖动条时直接拖容器把窗口拖出屏幕。
-                    // 展开态窗口位置更新走顶部拖动条（dragBar），但 clamp 必须每帧都做。
-                    if (!collapsed) {
-                        p.x = p.x.coerceIn(resources.displayMetrics.widthPixels - winW, 0)
-                        p.y = p.y.coerceIn(0, resources.displayMetrics.heightPixels - winH)
-                    } else {
-                        p.x = (downParamX + (ev.rawX - downRawX)).roundToInt()
-                        p.y = (downParamY + (ev.rawY - downRawY)).roundToInt()
-                    }
+                    // 窗口移动也 clamp：防止拖出屏幕
+                    p.x = (downParamX + (ev.rawX - downRawX)).roundToInt()
+                    p.y = (downParamY + (ev.rawY - downRawY)).roundToInt()
                     clampToScreen(p)
                     runCatching { wm.updateViewLayout(container, p) }
-                    // 展开态 MOVE 不拖窗：留给 UP 的 swipe 直控判定
                     true
                 }
                 MotionEvent.ACTION_UP -> {
@@ -276,17 +258,15 @@ class QuroBgScreenOverlayService : Service() {
                     // 否则「点击直接被关闭」。异常只记日志。
                     runCatching {
                         val moved = hypot(ev.rawX - downRawX, ev.rawY - downRawY)
-                        if (collapsed) {
-                            // 宠物：没怎么动 → 点击展开
-                            if (moved <= dp(6)) setCollapsed(false)
-                            return@setOnTouchListener true
-                        }
                         val sysW = QuroVirtualScreen.frameWidth()
                         val sysH = QuroVirtualScreen.frameHeight()
-                        if (sysW > 0 && sysH > 0 && winW > 0 && winH > 0) {
+                        // 🔴 严格检查：sysW/sysH 必须 > 1 才能算坐标映射（否则 coerceIn 会崩溃）
+                        if (sysW > 1 && sysH > 1 && winW > 0 && winH > 0) {
+                            fun safeCoerceIn(value: Int, min: Int, max: Int): Int =
+                                if (min <= max) value.coerceIn(min, max) else min
                             fun toSys(px: Float, py: Float) = Pair(
-                                (px / winW * sysW).roundToInt().coerceIn(0, sysW - 1),
-                                (py / winH * sysH).roundToInt().coerceIn(0, sysH - 1),
+                                safeCoerceIn((px / winW * sysW).roundToInt(), 0, sysW - 1),
+                                safeCoerceIn((py / winH * sysH).roundToInt(), 0, sysH - 1),
                             )
                             val (sx, sy) = toSys(downRawX - p.x, downRawY - p.y)
                             val (ex, ey) = toSys(ev.x, ev.y)
@@ -337,25 +317,16 @@ class QuroBgScreenOverlayService : Service() {
         }
         container.addView(dragBar)
 
-        // 右上角按钮：收起 / 关闭。
-        // 🔴 tag="chip"：宠物态必须隐藏 —— 宠物只有 46dp，两个 chip 叠在它右上角，
-        // 点宠物上半部就等于点到「×」直接把悬浮窗关了（用户实测「点击直接被关闭」）。
-        val bar = FrameLayout.LayoutParams(dp(22), dp(22), Gravity.TOP or Gravity.END).apply {
+        // 右上角关闭按钮：释放虚拟屏 + 停止悬浮窗服务
+        val closeLp = FrameLayout.LayoutParams(dp(22), dp(22), Gravity.TOP or Gravity.END).apply {
             topMargin = dp(4); marginEnd = dp(4)
         }
-        container.addView(makeChip("—") { setCollapsed(true) }.apply { tag = "chip" }, bar)
-        val closeLp = FrameLayout.LayoutParams(dp(22), dp(22), Gravity.TOP or Gravity.END).apply {
-            topMargin = dp(4); marginEnd = dp(28)
-        }
-        // 🔴 「×」= 释放虚拟屏 + 停止悬浮窗服务（宠物球也消失）：
-        // 这是"关闭整个后台虚拟屏功能"的唯一入口（不走通知）。
-        // 「—」只是收起成球，不关功能。
         container.addView(makeChip("✕") {
             Thread {
                 QuroVirtualScreen.release()
                 stop(this@QuroBgScreenOverlayService)
             }.start()
-        }.apply { tag = "close-chip" }, closeLp)
+        }, closeLp)
 
         // 右下角缩放手柄：拖动改窗口大小（画面等比跟随）
         val handle = View(this).apply {
@@ -411,51 +382,6 @@ class QuroBgScreenOverlayService : Service() {
         }
     }
 
-    /** 收起 / 展开：收起时缩成桌面宠物（身体+眼睛），点宠物展开虚拟屏窗口。 */
-    private fun setCollapsed(to: Boolean) {
-        // 🔴 视图结构变更统一 post 到下一帧：触摸回调里同步 addView/removeView
-        // 会触发 view 树不一致类崩溃（「点击直接被关闭」的另一半来源）。
-        android.os.Handler(android.os.Looper.getMainLooper()).post { applyCollapsed(to) }
-    }
-
-    private fun applyCollapsed(to: Boolean) {
-        val c = root ?: return
-        val p = params ?: return
-        collapsed = to
-        // 🔴 chips（—/×）只在展开态显示：宠物只有 46dp，chips 叠在它右上角，
-        // 点宠物上半部等于点到「×」直接 stopSelf —— 用户实测「点击直接被关闭」。
-        val chips = (0 until c.childCount).map { c.getChildAt(it) }.filter { it.tag == "chip" }
-        if (to) {
-            p.width = dp(BALL_DP)
-            p.height = dp(BALL_DP)
-            c.background = null // 宠物自己带身体背景，容器不再叠圆角矩形
-            image?.visibility = View.GONE
-            chips.forEach { it.visibility = View.GONE }
-            // 🔴 桌面宠物形态：身体 + 两只眼睛，点它展开后台虚拟屏
-            if (c.findViewWithTag<View>("pet") == null) {
-                c.addView(makePetBody())
-            }
-            c.setOnClickListener { setCollapsed(false) }
-        } else {
-            val dm = resources.displayMetrics
-            winW = (dm.widthPixels * DEFAULT_W_RATIO).roundToInt().coerceAtLeast(dp(MIN_W_DP))
-            winH = (winW * dm.heightPixels / dm.widthPixels.toFloat()).roundToInt()
-            p.width = winW
-            p.height = winH
-            c.background = GradientDrawable().apply {
-                cornerRadius = dp(16).toFloat()
-                setColor(Color.parseColor("#0B0E14"))
-                setStroke(dp(1), Color.parseColor("#2A3140"))
-            }
-            // 移除宠物，chips 回来
-            c.findViewWithTag<View>("pet")?.let { c.removeView(it) }
-            chips.forEach { it.visibility = View.VISIBLE }
-            image?.visibility = View.VISIBLE
-            c.setOnClickListener(null)
-        }
-        runCatching { wm.updateViewLayout(c, p) }
-    }
-
     private fun makeChip(text: String, onClick: () -> Unit): TextView =
         TextView(this).apply {
             this.text = text
@@ -469,62 +395,6 @@ class QuroBgScreenOverlayService : Service() {
             setOnClickListener { onClick() }
         }
 
-    /**
-     * 桌面宠物（收起态外观）：渐变圆身体 + 两只眼白 + 黑瞳。
-     *
-     * 用户原话：「点击开按钮做成一个小小的桌面宠物立起来，点的时候展开后台虚拟屏」。
-     * 纯 View 叠加实现，不引任何资源；tag="pet" 供展开时移除。
-     */
-    private fun makePetBody(): FrameLayout {
-        val ctx = this
-        return FrameLayout(ctx).apply {
-            tag = "pet"
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT,
-            )
-            // 身体：竖向渐变圆
-            addView(View(ctx).apply {
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    colors = intArrayOf(
-                        Color.parseColor("#5B8CFF"),
-                        Color.parseColor("#3B5FD9"),
-                    )
-                    orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                }
-                layoutParams = FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                )
-            })
-            // 两只眼睛（白底黑瞳），位置略偏上中
-            val eyeDp = dp(7)
-            val pupilDp = dp(3)
-            fun eye(leftMarginDp: Int): FrameLayout =
-                FrameLayout(ctx).apply {
-                    background = GradientDrawable().apply {
-                        shape = GradientDrawable.OVAL
-                        setColor(Color.WHITE)
-                    }
-                    layoutParams = FrameLayout.LayoutParams(eyeDp, eyeDp, Gravity.CENTER_HORIZONTAL).apply {
-                        topMargin = dp(16)
-                        marginStart = dp(leftMarginDp)
-                        gravity = Gravity.TOP
-                    }
-                    addView(View(ctx).apply {
-                        background = GradientDrawable().apply {
-                            shape = GradientDrawable.OVAL
-                            setColor(Color.parseColor("#101828"))
-                        }
-                        layoutParams = FrameLayout.LayoutParams(pupilDp, pupilDp, Gravity.CENTER)
-                    })
-                }
-            addView(eye(-10))
-            addView(eye(3))
-        }
-    }
-
     private fun clampToScreen(p: WindowManager.LayoutParams) {
         val dm = resources.displayMetrics
         // 🔴 防御：窗口比屏幕宽时（极端缩放），直接把 x=0, y=0
@@ -533,19 +403,16 @@ class QuroBgScreenOverlayService : Service() {
             p.y = 0
             return
         }
+        // 用安全 coerceIn：范围非法时（min > max）直接返回 min，不再抛异常
+        fun safeCoerceIn(value: Int, min: Int, max: Int): Int =
+            if (min <= max) value.coerceIn(min, max) else min
         // coerceIn(最小值, 最大值)
         val minX = dm.widthPixels - p.width  // 窗口右下角不超右边缘
         val maxX = 0                          // 窗口左上角不超左边缘
         val minY = 0
         val maxY = dm.heightPixels - p.height
-        if (minX <= maxX && minY <= maxY) {
-            p.x = p.x.coerceIn(minX, maxX)
-            p.y = p.y.coerceIn(minY, maxY)
-        } else {
-            // 窗口比屏幕大（高度方向同理），窗口完全覆盖屏幕 → 居中
-            p.x = (minX.coerceAtLeast(0) + maxX.coerceAtMost(0)) / 2
-            p.y = (minY.coerceAtLeast(0) + maxY.coerceAtMost(0)) / 2
-        }
+        p.x = safeCoerceIn(p.x, minX, maxX)
+        p.y = safeCoerceIn(p.y, minY, maxY)
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).roundToInt()
@@ -566,7 +433,7 @@ class QuroBgScreenOverlayService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("后台屏悬浮窗")
-            .setContentText("点画面直接操作虚拟屏 · 右上角「—」可收成小球")
+            .setContentText("点画面直接操作虚拟屏")
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentIntent(pi)
             .setOngoing(true)
