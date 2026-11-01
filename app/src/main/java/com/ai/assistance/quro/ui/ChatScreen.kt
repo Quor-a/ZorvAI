@@ -10676,7 +10676,7 @@ private fun BgOverlayRow(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
     // 从 Preference 读当前宽度比例（0.10~0.90，默认 0.30）
     val prefs by lazy { ctx.getSharedPreferences("quro_settings", android.content.Context.MODE_PRIVATE) }
     var widthRatio by remember {
-        mutableStateOf(prefs.getFloat("bg_screen_width_ratio", 0.30f))
+        mutableStateOf(prefs.getFloat("bg_screen_width_ratio", 0.22f))
     }
 
     Column(

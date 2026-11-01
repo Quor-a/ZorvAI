@@ -121,6 +121,12 @@ class QuroShellService : IQuroShellService.Stub() {
             KeyEvent.KEYCODE_MOVE_END,
             KeyEvent.KEYCODE_PAGE_UP,
             KeyEvent.KEYCODE_PAGE_DOWN,
+            // 🔴 2026-11-02 补：悬浮窗上的导航键（用户反馈「只能点击滑动，返回/手机键都没有」）。
+            // 这三个只注入到本服务自建的虚拟屏（injectKey 已用 ownDisplay 限定 displayId），
+            // 不会误触用户主屏，因此放开是安全的。
+            KeyEvent.KEYCODE_HOME,        // Home：回到虚拟屏的桌面
+            KeyEvent.KEYCODE_APP_SWITCH,  // 最近任务：虚拟屏上的多任务
+            KeyEvent.KEYCODE_MENU,        // 菜单键（部分老 App 还需要）
         )
     }
 
