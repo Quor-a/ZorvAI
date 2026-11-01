@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.ServiceConnection
 import android.os.IBinder
+import android.os.SystemClock
 import android.util.Log
 import com.ai.assistance.quro.IQuroShellService
 import com.ai.assistance.quro.core.privilege.QuroShellQuote
@@ -107,6 +108,20 @@ object QuroShizuku {
      * 调用方拿不到时应先 [bindAidlService] 再重试。
      */
     fun acquireShellService(): IQuroShellService? = shellService
+
+    /**
+     * 等待 Shizuku AIDL UserService 绑定就绪。
+     * 最多等待 [timeoutMs] 毫秒，返回非 null 即绑定成功，null 即超时。
+     */
+    fun waitForShellService(timeoutMs: Long): IQuroShellService? {
+        val deadline = SystemClock.uptimeMillis() + timeoutMs
+        while (SystemClock.uptimeMillis() < deadline) {
+            val s = shellService
+            if (s != null) return s
+            Thread.sleep(100)
+        }
+        return null
+    }
 
     // ════════════════════════════════════════
     // 备选路径：反射 newProcess（v427 方案）

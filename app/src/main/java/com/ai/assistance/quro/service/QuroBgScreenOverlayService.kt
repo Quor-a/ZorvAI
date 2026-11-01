@@ -154,19 +154,6 @@ class QuroBgScreenOverlayService : Service() {
             }
         }
         showWindow()
-        // 悬浮窗服务启动 → 尝试建屏（最多等 10s）
-        frameJob = scope.launch {
-            for (i in 1..10) {
-                delay(1000)
-                val d = com.ai.assistance.quro.core.display.QuroVirtualScreen.ensureDisplay(this@QuroBgScreenOverlayService)
-                if (d != null) {
-                    Log.i(TAG, "悬浮窗启动时建屏成功: displayId=${d.displayId}")
-                    return@launch
-                }
-                Log.d(TAG, "建屏尝试 $i/10，Shizuku 可能还没绑好")
-            }
-            Log.w(TAG, "建屏 10 次失败，Shizuku 可能未就绪")
-        }
         running = true
     }
 
