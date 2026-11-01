@@ -376,8 +376,7 @@ object CardSdk {
             QuroChatCard.HtmlPreviewCard(s.id(), s.title(), s.optString("html", ""))
         })
         add(CardSpec("composite", "aiwrite", "组合卡：多子卡聚合（stack 堆叠 / tabs 标签页 / accordion 折叠）", """{"type":"composite","layout":"stack","children":[{"type":"stat","label":"内存","value":"6G"},{"type":"progress","label":"下载","value":60}],"description":"系统概览"}""") { s ->
-            val kids = (0 until s.arrLen("children")).mapNotNull { s.objOrNull("children", it) }
-                .mapNotNull { parseObj(it) }
+            val kids = parseKids(s)
             if (kids.isEmpty()) null else QuroChatCard.CompositeCard(
                 s.id(), s.title(), s.optString("layout", "stack"), kids,
                 s.strOrNull("description"),
@@ -388,8 +387,7 @@ object CardSdk {
         // CustomCard(kind="card") 显示「未识别组件：card」。这里与 composite 同 builder，
         // 让 card 成为 composite 的别名容器，子卡照常递归解析渲染。
         add(CardSpec("card", "layout", "通用卡片容器：多子卡聚合展示（等价 composite 的 stack 布局；与动态 UI 的 card 节点同名兼容，避免误写时落「未识别组件」）", """{"type":"card","title":"系统概览","children":[{"type":"stat","label":"内存","value":"6G"},{"type":"progress","label":"下载","value":60}]}""") { s ->
-            val kids = (0 until s.arrLen("children")).mapNotNull { s.objOrNull("children", it) }
-                .mapNotNull { parseObj(it) }
+            val kids = parseKids(s)
             if (kids.isEmpty()) null else QuroChatCard.CompositeCard(
                 s.id(), s.title(), s.optString("layout", "stack"), kids,
                 s.strOrNull("description"),
@@ -1137,6 +1135,27 @@ object CardSdk {
 
     /** type → 定义。 */
     val byType: Map<String, CardSpec> = all.associateBy { it.type }
+
+    /**
+     * 容器子卡数组的**候选键序**（2026-11-01 残缺卡复现）：
+     * 模型高频把子卡塞进 `stats`/`items`/`cards`/`sections` 而不是 `children` ——
+     * `{"type":"card","title":"测试报告","stats":[...]}` 旧逻辑只读 children，
+     * 读不到 → builder 返回 null → 整卡退化成兜底壳（标题空壳，真机截图实证）。
+     * 按序取第一个非空数组，逐项递归 [parseObj]。
+     */
+    private val CONTAINER_CHILD_KEYS = listOf("children", "cards", "items", "stats", "sections", "content")
+
+    private fun parseKids(s: JSONObject): List<QuroChatCard> {
+        for (k in CONTAINER_CHILD_KEYS) {
+            val arr = s.optJSONArray(k) ?: continue
+            if (arr.length() == 0) continue
+            val kids = (0 until arr.length()).mapNotNull { i ->
+                (arr.opt(i) as? JSONObject)?.let { parseObj(it) }
+            }
+            if (kids.isNotEmpty()) return kids
+        }
+        return emptyList()
+    }
 
     /** type 集合。 */
     val types: Set<String> = byType.keys
