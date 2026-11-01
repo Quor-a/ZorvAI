@@ -262,6 +262,10 @@ dependencies {
     // termux-host — Termux app 宿主层完整移植（TermuxActivity/Service/会话管理/设置/通知/快捷键/工具栏）
     // 去品牌化后包名 com.ai.assistance.quro.termux，接入 proot Ubuntu 终端。
     implementation(project(":termux-host"))
+    // 🔴 显式添加 Guava：app 的传递依赖可能覆盖 termux-host 的 Guava，导致
+    // FileUtils.deleteFile/RecursiveDeleteOption 找不到 → NoClassDefFoundError
+    implementation("com.google.guava:guava:24.1-jre")
+    implementation("com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava")
 
     // 小程序引擎（WebView + native.* 桥，MiniAppEngine，com.ai.assistance.quro.core.miniapp）：
     // 自研 WebView 运行时，AI 用 miniapp 工具写入的 HTML 工程在此渲染，可调用真实 Android 能力。
