@@ -366,9 +366,24 @@ class QuroBgScreenOverlayService : Service() {
         runCatching { wm.addView(container, p) }
             .onFailure { Log.e(TAG, "加浮窗失败（没授予悬浮窗权限？）", it); stopSelf(); return }
 
-        // 画面流：收到帧就换图
-        // 🔴 不再在 showWindow 里建屏——onCreate 已经建了（宠物球只随虚拟屏生命周期出现/消失）
+        // 画面流：**先建屏，再收帧**。
+        // 🔴 这里必须自己 ensureDisplay：本服务是悬浮窗的唯一入口，onCreate 里不再建屏
+        // （虚拟屏按需创建，AI 任务的 openApp 也会建）。若这里不建，服务启动后只是
+        // 被动等 QuroVirtualScreen.frames —— 没人建屏就永远没有帧，窗口里只剩「后台屏」三个字。
         frameJob = scope.launch {
+            hint.text = "正在建屏…"
+            hint.visibility = View.VISIBLE
+            // ensureDisplay 内部会等 Shizuku AIDL 绑定（最长 5s），必须放 IO
+            val d = withContext(Dispatchers.IO) {
+                QuroVirtualScreen.ensureDisplay(this@QuroBgScreenOverlayService)
+            }
+            if (d == null) {
+                hint.text = QuroVirtualScreen.lastError ?: "后台屏不可用（检查 Shizuku）"
+                hint.visibility = View.VISIBLE
+                Log.w(TAG, "悬浮窗启动建屏失败: ${QuroVirtualScreen.lastError}")
+                return@launch
+            }
+            Log.i(TAG, "悬浮窗建屏成功 displayId=${d.displayId}")
             QuroVirtualScreen.frames.collectLatest { bmp ->
                 applyFrame(bmp, hint)
             }
