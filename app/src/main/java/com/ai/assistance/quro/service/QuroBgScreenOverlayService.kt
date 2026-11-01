@@ -35,6 +35,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.roundToInt
@@ -367,6 +368,13 @@ class QuroBgScreenOverlayService : Service() {
 
         // 画面流：收到帧就换图
         frameJob = scope.launch {
+            // 🔴 展开窗口时自动建屏（宠物态不建屏，展开后必须有人 ensureDisplay，
+            // 否则帧流永远是 null、注入也没目标 —— displayId=-1 全部静默失败）
+            val d = withContext(Dispatchers.IO) { QuroVirtualScreen.ensureDisplay(this@QuroBgScreenOverlayService) }
+            if (d == null) {
+                hint.text = QuroVirtualScreen.lastError ?: "后台屏不可用（检查 Shizuku）"
+                hint.visibility = View.VISIBLE
+            }
             QuroVirtualScreen.frames.collectLatest { bmp ->
                 applyFrame(bmp, hint)
             }

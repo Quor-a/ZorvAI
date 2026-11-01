@@ -450,6 +450,15 @@ object QuroVirtualScreen {
      */
     fun tapAt(context: Context, x: Int, y: Int): Boolean {
         val d = display ?: return false
+        // 🔴 Shizuku 特权注入**优先**（Extendroid 同款路径：InputManager.injectInputEvent +
+        //    setDisplayId）。之前无障碍手势优先是错的 —— dispatchGesture 的跨屏
+        //    （setDisplayId）在大量 ROM 上被静默忽略，表现就是「点了没反应，
+        //    虚拟屏只是个投屏」。特权注入才是主通道，无障碍只做兜底。
+        runCatching {
+            QuroShizuku.acquireShellService()?.let { shell ->
+                if (shell.injectTap(d.displayId, x, y)) return true
+            }
+        }
         val svc = com.ai.assistance.quro.service.QuroAccessibilityService.instance
         if (svc != null && svc.tapOn(d.displayId, x.toFloat(), y.toFloat())) return true
         return tap(context, x, y)
@@ -458,6 +467,16 @@ object QuroVirtualScreen {
     /** 滑动：同样优先无障碍手势，失败退回 Shizuku 注入。 */
     fun swipeAt(context: Context, x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Long = 300): Boolean {
         val d = display ?: return false
+        // 同 tapAt：特权 injectStroke（逐点带时间戳的真实滑动）优先，无障碍兜底
+        runCatching {
+            QuroShizuku.acquireShellService()?.let { shell ->
+                val n = 16
+                val xs = IntArray(n) { i -> x1 + (x2 - x1) * i / (n - 1) }
+                val ys = IntArray(n) { i -> y1 + (y2 - y1) * i / (n - 1) }
+                val ts = LongArray(n) { i -> durationMs * i / (n - 1) }
+                if (shell.injectStroke(d.displayId, xs, ys, ts)) return true
+            }
+        }
         val svc = com.ai.assistance.quro.service.QuroAccessibilityService.instance
         if (svc != null && svc.swipeOn(d.displayId, x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), durationMs)) {
             return true
