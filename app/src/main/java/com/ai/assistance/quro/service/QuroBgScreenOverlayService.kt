@@ -533,8 +533,19 @@ class QuroBgScreenOverlayService : Service() {
             p.y = 0
             return
         }
-        p.x = p.x.coerceIn(dm.widthPixels - p.width, 0)
-        p.y = p.y.coerceIn(0, dm.heightPixels - p.height)
+        // coerceIn(最小值, 最大值)
+        val minX = dm.widthPixels - p.width  // 窗口右下角不超右边缘
+        val maxX = 0                          // 窗口左上角不超左边缘
+        val minY = 0
+        val maxY = dm.heightPixels - p.height
+        if (minX <= maxX && minY <= maxY) {
+            p.x = p.x.coerceIn(minX, maxX)
+            p.y = p.y.coerceIn(minY, maxY)
+        } else {
+            // 窗口比屏幕大（高度方向同理），窗口完全覆盖屏幕 → 居中
+            p.x = (minX.coerceAtLeast(0) + maxX.coerceAtMost(0)) / 2
+            p.y = (minY.coerceAtLeast(0) + maxY.coerceAtMost(0)) / 2
+        }
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).roundToInt()
