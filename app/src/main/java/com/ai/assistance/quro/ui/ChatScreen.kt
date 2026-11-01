@@ -3,6 +3,7 @@ import com.ai.assistance.quro.util.qstr
 import androidx.compose.ui.res.stringResource
 import com.ai.assistance.quro.R
 import com.ai.assistance.quro.dshmobile.DevTools
+import com.ai.assistance.quro.service.QuroBgScreenOverlayService
 
 import android.util.Log
 import android.net.Uri
@@ -10653,8 +10654,8 @@ private fun DshAutoStartRow(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) 
 /**
  * 设置里的「后台虚拟屏大小」调节器。
  *
- * 原来是个开关，用户点开了就启动悬浮窗——多余。AI 执行任务时自动开虚拟屏，
- * 用户只需要在这里调大小。
+ * 虚拟屏由 AI 任务自动创建，用户不需要手动开关。
+ * 这个滑块只是设置虚拟屏的默认宽度比例——以后虚拟屏启动时按这个比例创建。
  */
 @Composable
 private fun BgOverlayRow(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
@@ -10670,7 +10671,7 @@ private fun BgOverlayRow(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Text(
-            "虚拟屏宽度比例",
+            "虚拟屏默认宽度比例",
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
         )
@@ -10689,7 +10690,7 @@ private fun BgOverlayRow(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
             color = MaterialTheme.colorScheme.primary,
         )
         Text(
-            "拖动滑块调节 AI 后台虚拟屏的宽度比例",
+            "虚拟屏由 AI 任务自动创建，按此比例设置宽度。拖动滑块调节默认大小。",
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
