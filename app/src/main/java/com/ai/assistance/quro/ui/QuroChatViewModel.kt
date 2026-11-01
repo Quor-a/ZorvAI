@@ -542,6 +542,16 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // 消掉首张卡片 200-500ms 冷启动。该模块已随旧 GenUI 整体删除，预热逻辑一并移除。
         _convs.value = emptyList()
         _messages.value = emptyList()
+        // 🔴 首包提速（2026-11-02）：进对话框时就把「DNS + TCP + TLS」预热掉。
+        // 用户反馈的是「发一条消息很久才响应，但不是执行慢」—— 那段时间正是握手，
+        // 现在把它挪到空闲时；真正点发送时连接已在池里，只剩上传 + 服务端 prefill。
+        runCatching {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { repo.load() }.getOrNull()?.let { c ->
+                    if (c.baseUrl.isNotBlank()) QuroLlmClient.warmUp(c.baseUrl)
+                }
+            }
+        }
         viewModelScope.launch(AppExecutors.io) {
             val loaded = convRepo.loadAll().toMutableList()
             if (loaded.isEmpty()) {

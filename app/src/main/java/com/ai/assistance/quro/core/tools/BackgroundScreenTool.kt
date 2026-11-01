@@ -50,7 +50,11 @@ action：
 
 **打开软件**：知道包名就直接 open，不要先 list_installed_apps。
 刚建好的屏是空的，这是正常的（那是你自己的屏），空屏不等于失败。
-返回「没有可启动的入口」先 app_users 查分身再重开；返回「用户正在主屏使用该 App」就停手问用户，绝不抢。
+多开/双开的应用不用特殊处理：open 会自动遍历所有用户空间（含 OPPO/小米那些不在 userProfiles 里的
+分身用户），从装它的那一份启动；要指定就在 open 里传 userId（不确定就先 app_users）。
+返回「已接管 / 已另开一个实例 / 已挪到后台屏 / 已从用户 N（分身）启动」**全都算成功**，直接 read 继续，
+不要为了确认再 open 一遍。只有返回 code=1（主屏前台在跑 + 系统拒绝另起实例 + 挪不动）
+或「主用户与所有分身都没有启动页」才是真的打不开。
 
 **任务结束时**：不 release、不关 App，让它留在当前页。唯一例外是它此刻正在放声音/放视频 → 先停掉再汇报。
 一次性登录页/验证码页这类不该留给用户看的，按 back 退出去或明确告知用户留在后台了。
@@ -62,14 +66,14 @@ action：
 {
   "type": "object",
   "properties": {
-    "action": {"type": "string", "description": "open / read / tap_element / input_text / screenshot / tap / swipe / back / top / status / release"},
+    "action": {"type": "string", "description": "open / read / tap_element / input_text / screenshot / tap / swipe / back / top / status / app_users / release"},
     "ref": {"type": "string", "description": "tap_element 用的元素引用，如 @e3（来自 read 的返回）"},
-    "userId": {"type": "integer", "description": "open 时指定分身用户编号（来自 app_users 的列表）；不传=主用户"},
+    "userId": {"type": "integer", "description": "open 时指定分身用户编号（来自 app_users 的列表）。多开/双开的应用不传也行：open 会自动去所有用户空间里找装着它的那一份"},
     "cold": {"type": "boolean", "description": "open 时是否先 force-stop 再启动（冷启动），默认 false"},
     "text": {"type": "string", "description": "input_text 要输入的文字"},
     "hint": {"type": "string", "description": "input_text 选目标输入框时的提示语/占位文字（可选，多个输入框时用它区分）"},
     "append": {"type": "boolean", "description": "input_text 是否在原内容后追加，默认 false（覆盖）"},
-    "packageName": {"type": "string", "description": "open 用的包名，如 com.tencent.mm"},
+    "packageName": {"type": "string", "description": "open 用的包名，如 com.tencent.mm。app_users 时带上它，可查「这个包装在哪几份用户里、现在开在哪块屏」"},
     "x": {"type": "integer", "description": "tap 的横坐标"},
     "y": {"type": "integer", "description": "tap 的纵坐标"},
     "x1": {"type": "integer", "description": "swipe 起点横坐标"},
@@ -95,7 +99,8 @@ action：
                 QuroVirtualScreen.openApp(context, pkg, uid, cold)
             }
 
-            "app_users" -> QuroVirtualScreen.listAppCopies(context)
+            // 带 packageName 时回答「这个包装在哪几份用户里、现在开在哪」，AI 不用瞎猜 userId
+            "app_users" -> QuroVirtualScreen.listAppCopies(context, obj.optString("packageName", "").trim())
 
             "read" -> {
                 val snap = QuroVirtualScreen.readScreen()

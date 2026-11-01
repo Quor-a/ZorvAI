@@ -185,7 +185,14 @@ class LaunchAppTool : QuroTool {
         // 优先用包名精确启动
         if (pkg.isNotEmpty()) {
             val intent = context.packageManager.getLaunchIntentForPackage(pkg)
-                ?: return "找不到可启动的入口：$pkg"
+            if (intent == null) {
+                // 🔴 主用户没有入口 ≠ 没装：很多人的第二个微信/QQ 只装在应用分身里，
+                // 主用户的 getLaunchIntentForPackage 必然返回 null。原来这里直接回
+                // 「找不到可启动的入口」，用户看着主屏上就有那个图标 —— 这就是
+                // 「多开的应用 AI 根本打不开」的一条路径。现在去分身里找并启动。
+                return launchInCloneUsers(context, pkg)
+                    ?: "找不到可启动的入口：$pkg（主用户与所有分身里都没有启动页）"
+            }
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
             return "已在【主屏】启动 $pkg —— 这会切走用户当前界面。" +
@@ -196,7 +203,8 @@ class LaunchAppTool : QuroTool {
         // 按名称搜索（混合：PackageManager + Shell 兜底）
         val target = findAppByName(context, name) ?: return "未找到匹配「$name」的应用"
         val intent = context.packageManager.getLaunchIntentForPackage(target.packageName)
-            ?: return "找到 ${target.label} 但无法启动"
+            ?: return (launchInCloneUsers(context, target.packageName)
+                ?: "找到 ${target.label} 但主用户与所有分身都没有启动页")
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)
         return "已在【主屏】启动 ${target.label}（${target.packageName}）—— 这会切走用户当前界面。" +
@@ -220,7 +228,11 @@ class SearchAndLaunchAppTool : QuroTool {
         val appName = JSONObject(arguments).optString("app_name", "").trim()
         if (appName.isEmpty()) return "缺少 app_name 参数"
 
-        val target = findAppByName(context, appName) ?: return "未找到匹配「$appName」的应用，设备上可能未安装"
+        val target = findAppByName(context, appName)
+            ?: return "主用户里没找到「$appName」。\n" +
+                "如果它装在应用分身 / 工作资料里（PackageManager 只能看到主用户），" +
+                "请改用 bg_screen(action=\"open\", packageName=\"包名\") —— 它会自动去分身里找并开在后台屏；" +
+                "不确定包名就先 bg_screen(action=\"app_users\") 看有哪些用户空间。"
 
         val intent = context.packageManager.getLaunchIntentForPackage(target.packageName)
             ?: return "找到 ${target.label} 但无法启动"
@@ -244,6 +256,62 @@ class SearchAndLaunchAppTool : QuroTool {
  * 匹配优先级：精确匹配 > 首字匹配 > 包名包含 > 第一个结果
  */
 private data class AppMatch(val packageName: String, val label: String)
+
+/**
+ * 主用户拿不到启动入口时，去**应用分身 / 工作资料**里找并启动（主屏）。
+ *
+ * 为什么需要它：很多人的第二个微信/QQ 只装在分身用户里（OPPO 常见 user 999、
+ * 小米 999/10 等），主用户的 `getLaunchIntentForPackage` 必然返回 null。
+ * 原来的代码直接回「找不到可启动的入口」，而用户主屏上明明有这个图标 ——
+ * 这就是「多开的应用 AI 根本打不开」的一条直接路径。
+ *
+ * 做法：`appCopyUsers()` 拿全部用户空间 → 逐个 `listPackages` 找该包 →
+ * `cmd package resolve-activity --user N` 解析 LAUNCHER 组件 →
+ * `am start --user N -n 组件` 启动。
+ *
+ * @return 人类可读的结果；null 表示所有分身里也没有这个包。
+ */
+private fun launchInCloneUsers(context: Context, packageName: String): String? {
+    val shell = runCatching {
+        com.ai.assistance.quro.core.shizuku.QuroShizuku.acquireShellService()
+    }.getOrNull() ?: return null
+    val users = runCatching { shell.appCopyUsers() }
+        .getOrNull()?.getIntArray("users") ?: return null
+    if (users.isEmpty()) return null
+
+    for (u in users) {
+        val pkgs = runCatching { shell.listPackages(u) }.getOrNull() ?: continue
+        if (!pkgs.contains("package:$packageName")) continue
+
+        // 解析该用户下的 LAUNCHER 组件（主用户 PM 查不到分身里的 Activity）
+        val resolved = runCatching {
+            shell.runCommand(
+                "cmd package resolve-activity --user $u" +
+                    " -a android.intent.action.MAIN -c android.intent.category.LAUNCHER $packageName"
+            ).getString("output")
+        }.getOrNull().orEmpty()
+
+        val comp = Regex("""([A-Za-z][\w.]*)/(\.?[\w.$]+)""").find(resolved)?.let { m ->
+            val p = m.groupValues[1]
+            val cls = if (m.groupValues[2].startsWith(".")) p + m.groupValues[2] else m.groupValues[2]
+            "$p/$cls"
+        } ?: "$packageName/.MainActivity"
+
+        val out = runCatching {
+            shell.runCommand("am start --user $u -n $comp").getString("output")
+        }.getOrNull().orEmpty()
+
+        return if (out.contains("Error") || out.contains("Exception")) {
+            "在用户 $u（分身）找到了 $packageName，但启动失败：${out.take(200)}\n" +
+                "可以改用 bg_screen(action=\"open\", packageName=\"$packageName\", userId=$u) 在后台屏里开。"
+        } else {
+            "已在【主屏】启动用户 $u（分身）里的 $packageName —— 这会切走用户当前界面。\n" +
+                "要后台操作请改用 bg_screen(action=\"open\", packageName=\"$packageName\", userId=$u)。\n" +
+                "**不要为了确认是否打开而重复调用本工具。**"
+        }
+    }
+    return null
+}
 
 private fun findAppByName(ctx: Context, name: String): AppMatch? {
     val q = name.lowercase()

@@ -173,7 +173,13 @@ object QuroVirtualScreen {
             // 指定了分身（userId >= 0）就直接走分身通道（应用双开/工作资料/手机分身）
             val r = if (userId >= 0) {
                 when (val ur = shell.startAppInUser(d.displayId, packageName, userId, cold)) {
-                    8 -> return "$packageName 不在用户 $userId 的可用分身列表里（先调 app_users 查）"
+                    8 -> {
+                        val us = runCatching { shell.appCopyUsers() }
+                            .getOrNull()?.getIntArray("users")
+                        return "$packageName 不在用户 $userId 的可用分身列表里。本机分身用户：" +
+                            (if (us == null || us.isEmpty()) "无（未开应用分身 / 工作资料）" else us.joinToString(",")) +
+                            "。要不试试不传 userId，让系统自己找？"
+                    }
                     else -> ur
                 }
             } else {
@@ -185,7 +191,26 @@ object QuroVirtualScreen {
                     refreshTopActivity()
                     "已把 $packageName 启动到后台屏（displayId=${d.displayId}）"
                 }
-                1 -> "用户正在主屏使用 $packageName，为不打扰已放弃启动"
+                // ── 接管阶梯的结果（QuroShellService.startApp 新增码）──
+                // 用户原话：「AI 根本不会换起打开老是说在主屏」→ 现在不再放弃，而是接手，
+                // 并把「怎么接手的」讲清楚，让 AI 知道当前状态而不是以为自己没成功。
+                10 -> {
+                    refreshTopActivity()
+                    "$packageName 本来就在后台屏，已切到前台（没有重启，界面状态保留）"
+                }
+                11 -> {
+                    refreshTopActivity()
+                    "已把 $packageName 挪到后台屏（任务从别处移过来，界面状态保留）"
+                }
+                12 -> {
+                    refreshTopActivity()
+                    "已在后台屏另开一个 $packageName 实例（你主屏那份没动，两边可同时用）"
+                }
+                13 -> {
+                    refreshTopActivity()
+                    "已接管 $packageName：把主屏那份移到了后台屏（原界面状态保留）"
+                }
+                1 -> "$packageName 正在你主屏前台使用，且系统拒绝另起实例。要么先切走它，要么冷启动（cold=true）—— 不要重复调用本工具。"
                 2 -> {
                     // 未安装 ≠ 没有：应用双开/手机分身/工作资料里装的那份在别的 userId 下，
                     // 默认用户当然「没有可启动的入口」。自动查分身并改从分身启动，AI 无需再猜。
@@ -197,6 +222,7 @@ object QuroVirtualScreen {
                         if (pkgs.contains("package:$packageName")) {
                             val ur = shell.startAppInUser(d.displayId, packageName, u, false)
                             if (ur == 0) {
+                                refreshTopActivity()
                                 done = "已从用户 $u（分身/工作资料）把 $packageName 启动到后台屏"
                             } else {
                                 done = "$packageName 装在用户 $u（分身）里，但启动失败（code=$ur）"
@@ -204,14 +230,19 @@ object QuroVirtualScreen {
                             break
                         }
                     }
-                    done ?: "$packageName 没有可启动的入口（主用户与全部分身都未安装）"
+                    done ?: ("$packageName 在主用户和全部分身里都没装（已查用户：" +
+                        (if (users.isEmpty()) "无分身" else users.joinToString(",")) + "）")
                 }
                 4 -> "$packageName 正在另一块后台屏上使用中"
                 else -> "启动 $packageName 失败（code=$r）"
             }
-            if (r != 0) return base
+            if (r !in setOf(0, 10, 11, 12, 13)) return base
 
-            // 动作后核对：这几秒内主屏冒到最上面的是不是它
+            // 动作后核对：这几秒内主屏冒到最上面的是不是它。
+            // 🔴 接管类结果（10/11/13）刚由我们自己挪过屏，watch 窗口里会把它记成「主屏到达」，
+            // 再跑一次救援是白折腾甚至误判，所以只对「全新启动(0)」和「另开实例(12)」做核对。
+            if (r != 0 && r != 12) return base
+
             val rescued = rescueIfOnMainScreen(shell, d.displayId, since, topBefore, packageName, context)
             if (rescued != null) "$base\n$rescued" else base
         } catch (t: Throwable) {
@@ -397,12 +428,44 @@ object QuroVirtualScreen {
      *
      * @return 人读文本；没有分身时也返回明确说明
      */
-    fun listAppCopies(context: Context): String {
+    /**
+     * 列应用分身 / 工作资料用户空间。
+     *
+     * [target] 非空时额外回答「这个 App 装在哪几份用户里、哪块后台屏正开着它」——
+     * 用户说「用分身的微信」时，AI 靠这个拿到确切 userId，不用瞎猜。
+     */
+    fun listAppCopies(context: Context, target: String = ""): String {
         val shell = QuroShizuku.acquireShellService() ?: return "Shizuku 特权服务未就绪"
         return runCatching {
             val b = shell.appCopyUsers()
             val users = b.getIntArray("users") ?: IntArray(0)
-            val summary = b.getString("summary")
+            val selfUser = android.os.Process.myUid() / 100000
+
+            // 指定了包名：直接回答「装在哪、现在开在哪」，比让模型逐个试快得多
+            if (target.isNotBlank()) {
+                val sb = StringBuilder()
+                sb.appendLine("「$target」的安装分布：")
+                var any = false
+                fun probe(u: Int, label: String) {
+                    val pkgs = runCatching { shell.listPackages(u) }.getOrDefault("")
+                    if (pkgs.contains("package:$target")) {
+                        any = true
+                        sb.appendLine("  - $label（userId=$u）：已安装")
+                    }
+                }
+                probe(selfUser, "主用户")
+                users.forEach { probe(it, "分身/工作资料") }
+                if (!any) sb.appendLine("  - 主用户与所有分身里都没装")
+                val dOn = runCatching { shell.displayOfPackage(target) }.getOrDefault(-1)
+                if (dOn >= 0) sb.appendLine("当前在后台屏 displayId=$dOn 上开着。")
+                if (users.isEmpty()) {
+                    sb.appendLine("本机没有应用分身（应用双开 / 手机分身 / 工作资料均未开启）。")
+                }
+                sb.append("直接 open(packageName=\"$target\") 即可，它会自动从装着的那一份启动；")
+                sb.append("要指定某一份就在 open 里传 userId。")
+                return sb.toString().trim()
+            }
+
             if (users.isEmpty()) {
                 "本机没有应用分身（应用双开 / 手机分身 / 工作资料均未开启）。"
             } else {
@@ -413,8 +476,8 @@ object QuroVirtualScreen {
                     "  - 用户 $u：$n 个应用"
                 }
                 "本机有 ${users.size} 份用户空间：\n" + lines.joinToString("\n") +
-                    (summary?.let { "\n$it" } ?: "") +
-                    "\n启动分身里的 App：open 时传 userId（上面列出的编号）。"
+                    "\n启动分身里的 App：open 时传 userId（上面列出的编号）；不传也行，会自动去找。" +
+                    "\n想知道某个 App 装在哪几份里 → app_users 带上 packageName。"
             }
         }.getOrElse { "查询分身失败：${it.message}" }
     }

@@ -150,6 +150,23 @@ object ShellCodes {
     const val START_IN_USE_BY_OTHER = 7
     const val START_USER_NOT_ALLOWED = 8
 
+    /**
+     * 「接管阶梯」结果码（2026-11-02 新增，与 QuroShellService 逐值一致）。
+     *
+     * 背景：`START_IN_USE_ON_MAIN` 原来表示「主屏有该 App → 放弃启动」，
+     * 结果任何「用户开过这个 App」的场景都打不开。现在 startApp 会逐级接手：
+     * 带到前台 → 挪屏 → 另起独立实例 → 接管主屏那份，并用这几个码说明「怎么接手的」。
+     *
+     * 🔴 调用方判断成功时**不要只认 START_OK**：10~13 同样是成功。
+     */
+    const val START_OK_RESUMED = 10
+    const val START_OK_MOVED = 11
+    const val START_OK_SECOND = 12
+    const val START_OK_TAKEOVER = 13
+
+    /** 10~13 是否属于「已经成功打开」。 */
+    fun isStartOk(code: Int): Boolean = code == START_OK || code in 10..13
+
     /** appCopyUsers() 返回里的键：能打开该 App 的其它用户编号 */
     const val KEY_COPY_USERS = "users"
 

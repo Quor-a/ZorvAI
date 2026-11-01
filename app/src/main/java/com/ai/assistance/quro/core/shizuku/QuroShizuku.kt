@@ -70,7 +70,13 @@ object QuroShizuku {
             //      （悬浮窗要能按 Home、切最近任务）。虽然 AIDL 方法签名没变，
             //      但**特权进程里跑的是旧代码**，白名单不更新的话这几个键会被直接拒掉，
             //      表现就是「点了 Home 没反应」。所以实现侧的语义变更同样要 bump。
-            .version(11)
+            // v12：startApp 从「见到主屏就放弃」重写为**接管阶梯**（带到前台 / 挪屏 /
+            //      另起实例 / 接管主屏那份），并新增返回码 10~13；startAppInUser 改为
+            //      按 userId 解析 launch intent（多开应用原来因此永远「打不开」）；
+            //      appCopyUsers 改为 pm list users + userProfiles 合并（国产 ROM 的应用
+            //      分身不在 userProfiles 里）；startView/startShare/restartApp 不再拒绝。
+            //      这些全是**特权进程里的实现变更**，不 bump 就等于没改。
+            .version(12)
     }
 
     private val serviceConnection = object : ServiceConnection {
