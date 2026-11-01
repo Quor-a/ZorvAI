@@ -245,19 +245,47 @@ private fun TextHandler(uri: Uri?) {
 private fun WebHandler(url: String?) {
     if (url.isNullOrBlank()) { EmptyNote("未收到网页地址") ; return }
     val ctx = LocalContext.current
-    AndroidView(
-        factory = { ctx2 ->
-            android.webkit.WebView(ctx2).apply {
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.loadWithOverviewMode = true
-                settings.useWideViewPort = true
-                webViewClient = android.webkit.WebViewClient()
-                loadUrl(url)
-            }
-        },
-        modifier = Modifier.fillMaxSize(),
-    )
+    var webView by remember { mutableStateOf<android.webkit.WebView?>(null) }
+    var currentUrl by remember { mutableStateOf(url) }
+    Column(Modifier.fillMaxSize()) {
+        // 🔴 ZorvAI 品牌浏览器栏（默认浏览器入口 = ZorvAI 浏览器模块，不再是裸 WebView）
+        Row(
+            Modifier.fillMaxWidth().background(Color(0xFFC25A38)).padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("ZorvAI 浏览器", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(end = 8.dp))
+            Text(
+                currentUrl, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp,
+                maxLines = 1, modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { webView?.goBack() }, enabled = webView?.canGoBack() == true) { Text("←", color = Color.White) }
+            TextButton(onClick = { webView?.goForward() }, enabled = webView?.canGoForward() == true) { Text("→", color = Color.White) }
+            TextButton(onClick = { webView?.reload() }) { Text("⟳", color = Color.White) }
+            TextButton(onClick = {
+                runCatching {
+                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }) { Text("↗", color = Color.White) }
+        }
+        AndroidView(
+            factory = { ctx2 ->
+                android.webkit.WebView(ctx2).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.loadWithOverviewMode = true
+                    settings.useWideViewPort = true
+                    webViewClient = object : android.webkit.WebViewClient() {
+                        override fun onPageFinished(view: android.webkit.WebView, u: String?) {
+                            currentUrl = u ?: currentUrl
+                        }
+                    }
+                    loadUrl(url)
+                    webView = this
+                }
+            },
+            modifier = Modifier.fillMaxSize().weight(1f),
+        )
+    }
 }
 
 @Composable

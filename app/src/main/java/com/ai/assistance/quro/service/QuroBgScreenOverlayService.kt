@@ -336,7 +336,12 @@ class QuroBgScreenOverlayService : Service() {
         val closeLp = FrameLayout.LayoutParams(dp(22), dp(22), Gravity.TOP or Gravity.END).apply {
             topMargin = dp(4); marginEnd = dp(28)
         }
-        container.addView(makeChip("×") { stopSelf() }.apply { tag = "chip" }, closeLp)
+        // 🔴 「×」= 关闭后台虚拟屏（释放屏 + 收回宠物），**不关整个功能**：
+        // 服务与悬浮窗能力保持运行，再点宠物会重新建屏。真正退出走通知/设置开关。
+        container.addView(makeChip("✕") {
+            Thread { QuroVirtualScreen.release() }.start()
+            setCollapsed(true)
+        }.apply { tag = "chip" }, closeLp)
 
         // 右下角缩放手柄：拖动改窗口大小（画面等比跟随）
         val handle = View(this).apply {
