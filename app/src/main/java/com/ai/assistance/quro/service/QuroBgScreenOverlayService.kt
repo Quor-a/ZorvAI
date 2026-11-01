@@ -75,7 +75,7 @@ class QuroBgScreenOverlayService : Service() {
         private const val ACTION_STOP = "com.ai.assistance.quro.action.BG_OVERLAY_STOP"
 
         /** 浮窗默认宽度（占屏宽比例）与缩放上下限。0.26 = 用户要求「展开默认再小点」。 */
-        private const val DEFAULT_W_RATIO = 0.45f
+        private const val DEFAULT_W_RATIO = 0.30f
         private const val MIN_W_DP = 120
         // 🔴 BALL_DP 已删除（宠物球功能已移除）
 
@@ -177,7 +177,10 @@ class QuroBgScreenOverlayService : Service() {
 
     private fun showWindow() {
         val dm = resources.displayMetrics
-        winW = (dm.widthPixels * DEFAULT_W_RATIO).roundToInt().coerceAtLeast(dp(MIN_W_DP))
+        // 🔴 从 Preference 读用户调的大小，默认 0.30
+        val prefs = getSharedPreferences("quro_settings", android.content.Context.MODE_PRIVATE)
+        val ratio = prefs.getFloat("bg_screen_width_ratio", 0.30f)
+        winW = (dm.widthPixels * ratio).roundToInt().coerceAtLeast(dp(MIN_W_DP))
         winH = (winW * dm.heightPixels / dm.widthPixels.toFloat()).roundToInt()
 
         val p = WindowManager.LayoutParams(
