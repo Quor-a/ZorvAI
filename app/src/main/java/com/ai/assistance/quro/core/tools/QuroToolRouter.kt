@@ -29,17 +29,24 @@ import com.ai.assistance.quro.core.rag.ToolRagIndex
  * 检索层重写后召回 14/14=100%，前提才成立：
  *  - 模型查得到 → 弱模型也能靠 `match_intent` 走通；
  *  - `loaded` 落盘 → 重启后不必重新学一遍；
- *  - [ALWAYS_ON] 104 个高频工具仍每轮直接下发，覆盖绝大多数日常请求。
+ *  - [ALWAYS_ON] 43 个核心工具每轮直接下发；其余约 255 个全部走 [tool_router] 分类检索。
  *
- * 🔴 2026-11-02 从 154 精简到 104（响应变慢的排查结论之一）：
- * 每轮请求都要把常驻工具的 name + description + parametersJson 全量塞进 API，
- * 154 个工具的 schema 是相当可观的一笔固定输入开销，直接抬高首字延迟（prefill 时间）。
- * 本次移出的全是**纯开发者/后台管理**类（cms_* 9 个、mcp_*+aci 11 个、auth_service_* 3 个、
- * linux_* 5 个、wf_* 3 个、记忆库维护 5 个、媒体库 4 个、moyu/harness/dev_env/apk_plugin/
- * sandbox/private_db/fluid_cloud_notify/node_editor 等），
- * 用户口语日常不会触发，但**仍可通过 tool_router 检索后加载**，功能没有删。
- * 保留项只做了一件事：日常真的会用到的（设备/文件/网络/短信/日程/终端/屏幕/输出通道/记忆）
- * 一律留在常驻，避免弱模型「明明有工具却说不会」。
+ * ## 🔴 常驻集为什么必须小（2026-11-02 重构）
+ *
+ * 常驻集的大小直接等于**每轮请求的固定输入开销**：每个常驻工具都要把
+ * name + description + parametersJson 全量塞进 API 的 tools 字段。
+ * 它一度膨胀到 154 个 —— 那不是因为「这 154 个都高频」，而是因为**分类架构没做好**：
+ * 四处规则手写、两份实现靠注释人工同步、谁也没有全量覆盖约定，
+ * 工具分不出类 → `tool_router` 按分类列不出来 → 只好靠常驻硬塞来保证「至少能看见」。
+ *
+ * 现在的判据只有两条，缺一即进核心集：
+ *   ① 用户最高频的口语直接触发（现在几点 / 打开微信 / 记一下 / 搜一下）；
+ *   ② 缺了它整条链路就断（没有 read_screen 就没法操作屏幕，没有 bg_screen 就没法用后台屏）。
+ * 其余一律交给分类检索 —— 检索层已重写为分词 + 多字段加权，实测召回 100%，
+ * 且 [catalogSpec] 里明确写了「认为自己没有某个能力时，必须先查一遍再说」。
+ *
+ * ⚠️ 新增工具时**不要往这里加**，先去 [ToolTaxonomy] 给它一条正确的分类规则；
+ *    只有确实满足上面 ① 或 ② 才进核心集。
  * 若将来观察到弱模型「明明有工具却说不会」，**先查检索质量与 ALWAYS_ON 覆盖**，
  * 不要一上来就关掉这个开关——那会退回全量下发，也就退回了本轮要解决的问题。
  */
@@ -77,32 +84,24 @@ class QuroToolRouter(
          * 其余工具经 tool_router 按需加载。
          */
         val ALWAYS_ON: Set<String> = setOf(
-            "get_current_time", "get_device_info", "calculate", "get_battery",
-            "get_wifi_info", "get_network_info", "get_sensors", "get_clipboard",
-            "set_clipboard", "vibrate", "list_installed_apps", "launch_app",
-            "search_and_launch_app", "get_package_name", "get_active_notifications", "get_bluetooth_status",
-            "toggle_flashlight", "read_sms", "send_sms", "read_contacts",
-            "execute_intent", "send_broadcast", "read_calendar", "write_calendar",
-            "get_location", "geocode", "list_files", "read_text_file",
-            "browse_files", "file_read", "write_file", "delete_file",
-            "make_directory", "move_file", "copy_file", "find_files",
-            "file_info", "http_request", "open_web", "ai_browser",
-            "browser_act", "web_search", "read_url", "enable_screen_capture",
-            "run_code", "creative_studio", "terminal", "quroterm_exec",
-            "speak", "stop_speak", "set_alarm", "schedule_task",
-            "list_scheduled_tasks", "delete_scheduled_task", "memory_save", "memory_list",
-            "memory_search", "memory_delete", "experience_log", "experience_query",
-            "knowledge_search", "knowledge_add", "knowledge_manage", "knowledge_rag_search",
-            "aiwps_create", "chat_doc", "enhanced_doc_create", "codecanvas_probe",
-            "codecanvas_script", "codecanvas_markup", "ui_card", "ui_widget",
-            "ui_control", "zx_web_card", "zx_catalog", "priv_status",
-            "workspace_write", "workspace_read", "workspace_list", "read_screen",
-            "get_foreground_app", "get_screen_state", "tap_screen", "swipe_screen",
-            "long_press_screen", "input_text", "scroll_screen", "global_action",
-            "ai_type_text", "ai_press_enter", "ai_press_send", "shizuku_exec",
-            "shizuku_root_exec", "freeze_app", "install_app", "shizuku_status",
-            "lock_screen", "device_admin_status", "set_camera_disabled", "root_exec",
-            "root_status", "spawn_subagent", "visual_popup", "visual_ask",
+            "get_current_time", "get_device_info", "calculate",
+            "get_battery", "list_installed_apps", "launch_app",
+            "search_and_launch_app", "list_files", "read_text_file",
+            "write_file", "find_files", "file_info",
+            "browse_files", "http_request", "open_web",
+            "web_search", "read_url", "read_sms",
+            "send_sms", "read_contacts", "read_calendar",
+            "write_calendar", "set_alarm", "terminal",
+            "termux", "quroterm_exec", "shizuku_exec",
+            "memory_save", "memory_search", "rag_search",
+            "speak", "stop_speak", "read_screen",
+            "tap_screen", "input_text", "get_foreground_app",
+            "bg_screen", "ui_card", "ui_widget",
+            "ui_control", "zx_web_card", "visual_question",
+            // 确定性出图三件套：用户历史上明确反馈「新加的代码生图 AI 根本查不到」，
+            // 保留在常驻里（不靠检索），避免同类问题复发。
+            "codecanvas_probe", "codecanvas_script", "codecanvas_markup",
+            "spawn_subagent",
         )
 
         private val CATALOG_PARAMS_JSON = """{
@@ -430,66 +429,12 @@ class QuroToolRouter(
     // ───────────────────────── 分类推断（目录里没有的工具按命名归类） ─────────────────────────
 
     private fun categorize(name: String): ToolCapabilityDirectory.ToolCategory? {
-        ToolCapabilityDirectory.getToolInfo(name)?.category?.let { return it }
-        return when {
-            name == "apk_plugin" -> ToolCapabilityDirectory.ToolCategory.PLUGIN
-            name.startsWith("aip_") -> ToolCapabilityDirectory.ToolCategory.AIP_DOC
-            // zxwidget 动态交互界面：与 ToolCapabilityDirectory.inferCategory **同源**（两处都加）。
-            // 🔴 本函数最后是 `else -> null`，所以漏掉这条 = 从路由索引里彻底消失：
-            //   tool_router 的 match_intent / list_tools 都查不到 zx_catalog / zx_web_card，
-            //   模型即使想用也无从发现（用户报的「AI 根本不会用 zxwidget」就是这条）。
-            name.startsWith("zx_") -> ToolCapabilityDirectory.ToolCategory.ZXWIDGET
-            name in setOf("ui_dsl_spec", "ui_validate") -> ToolCapabilityDirectory.ToolCategory.DYNAMIC_UI
-            name == "game_ui" -> ToolCapabilityDirectory.ToolCategory.DYNAMIC_UI
-            // 生成式 UI 画布 + Web 应用工程：与 ToolCapabilityDirectory.inferCategory 同源，
-            // 保证"目录里没手写条目的 genui_* 工具"也能落进 GENUI 分类，而不是掉到 BASIC。
-            name.startsWith("genui_") || name == "miniapp" -> ToolCapabilityDirectory.ToolCategory.GENUI
-            name.startsWith("workspace_") -> ToolCapabilityDirectory.ToolCategory.WORKSPACE
-            name.startsWith("aci_") -> ToolCapabilityDirectory.ToolCategory.APP_MANAGEMENT
-            name.startsWith("mcp_") -> ToolCapabilityDirectory.ToolCategory.NETWORK_WEB
-            name.startsWith("cms_") -> ToolCapabilityDirectory.ToolCategory.AI_CAPABILITIES
-            name.startsWith("memory_") || name.startsWith("experience_") || name.startsWith("knowledge_") ->
-                ToolCapabilityDirectory.ToolCategory.KNOWLEDGE_MEMORY
-            name == "terminal" || name.startsWith("terminal_") || name.startsWith("linux_") || name.startsWith("quroterm_") ->
-                ToolCapabilityDirectory.ToolCategory.TERMINAL_LINUX
-            // 墨语言独立运行时：必须与 ToolCapabilityDirectory.inferCategory 同源，
-            // 否则本函数末尾 `else -> null` 会让 moyu 从路由索引里彻底消失。
-            name == "harness" || name.startsWith("harness_") ->
-                ToolCapabilityDirectory.ToolCategory.TERMINAL_LINUX
-            name == "moyu" || name.startsWith("moyu_") ->
-                ToolCapabilityDirectory.ToolCategory.TERMINAL_LINUX
-            name.startsWith("ui_") -> ToolCapabilityDirectory.ToolCategory.UI_CARDS
-            name.startsWith("skill__") -> ToolCapabilityDirectory.ToolCategory.AI_CAPABILITIES
-            // CodeCanvas 确定性渲染出图：与 ToolCapabilityDirectory.inferCategory **同源**。
-            //   🔴 本函数最后是 `else -> null`（不分类，直接从路由索引里消失），
-            //   所以漏掉这条的后果比 inferCategory 更严重：tool_router 的 match_intent / list_tools
-            //   都找不到 codecanvas_*，模型即使想调也「查不到」。
-            name.startsWith("codecanvas_") -> ToolCapabilityDirectory.ToolCategory.AI_CAPABILITIES
-            // 新集群（tool-first 重写）：一组 cluster_* 工具，归到 AI 能力类，避免从路由索引消失。
-            name.startsWith("cluster_") -> ToolCapabilityDirectory.ToolCategory.AI_CAPABILITIES
-            name in setOf("visual_analysis", "visual_question", "visual_action", "visual_popup", "visual_custom_popup") ->
-                ToolCapabilityDirectory.ToolCategory.VISUAL_INTERACT
-            name in setOf("read_screen", "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen",
-                "input_text", "get_foreground_app", "get_screen_state", "screenshot", "screenshot_base64") ->
-                ToolCapabilityDirectory.ToolCategory.ACCESSIBILITY
-            name.startsWith("send_sms") || name.startsWith("read_contacts") || name.startsWith("read_sms") ||
-                name.contains("calendar") -> ToolCapabilityDirectory.ToolCategory.COMMUNICATION
-            name.startsWith("launch_app") || name.startsWith("open_app") || name.startsWith("list_installed") ||
-                name.startsWith("search_and_launch") || name.startsWith("install_app") || name.startsWith("freeze_app") ||
-                name.startsWith("get_package_name") -> ToolCapabilityDirectory.ToolCategory.APP_MANAGEMENT
-            name.startsWith("volume") || name.startsWith("brightness") || name.startsWith("wifi") ||
-                name.startsWith("bluetooth") || name.startsWith("notification") || name.startsWith("airplane") ||
-                name.startsWith("screen_rotation") || name.startsWith("set_timer") ->
-                ToolCapabilityDirectory.ToolCategory.SYSTEM_CONTROL
-            name.startsWith("image") || name.startsWith("video") || name.startsWith("audio") ||
-                name.startsWith("music") || name.startsWith("local_") || name.startsWith("media") ||
-                name.startsWith("list_media") -> ToolCapabilityDirectory.ToolCategory.MEDIA
-            name.startsWith("shizuku") || name.startsWith("root_") || name.startsWith("lock_screen") ||
-                name.startsWith("device_admin") || name.startsWith("set_camera") || name.startsWith("priv_") ->
-                ToolCapabilityDirectory.ToolCategory.SECURITY
-            name.startsWith("get_") || name in setOf("calculate", "vibrate", "set_clipboard", "get_clipboard") ->
-                ToolCapabilityDirectory.ToolCategory.BASIC
-            else -> null
-        }
+        // 🔴 2026-11-02 重构：改调 ToolTaxonomy（单一真相源）。
+        // 原来这里是与 ToolCapabilityDirectory.inferCategory **几乎逐行重复**的手写 when，
+        // 两边靠注释「必须同源」人工同步，已经漂移（cms_* 一边 CMS_DEVELOPMENT 一边 AI_CAPABILITIES）。
+        // 更要命的是本函数末尾是 `else -> null`：没被覆盖的工具**直接从路由索引消失**，
+        // tool_router 的 list_tools / match_intent 永远查不到它们（实测 100/239 落这个坑）。
+        // 现在由 ToolTaxonomy 兜底保证一定有分类，不再有「工具存在但查不到」的情况。
+        return ToolTaxonomy.categoryOf(name)
     }
 }

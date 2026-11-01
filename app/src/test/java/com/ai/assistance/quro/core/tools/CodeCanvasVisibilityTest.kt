@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.core.tools
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -88,28 +89,42 @@ class CodeCanvasVisibilityTest {
 
     @Test
     fun `分类规则必须命中 不能落到 BASIC 或 null`() {
-        // inferCategory 结尾是 else -> BASIC（查得到但分类错），categorize 结尾是 else -> null（彻底查不到）
-        assertTrue(
-            "ToolCapabilityDirectory.inferCategory 缺 codecanvas_ 规则，会落到 else -> BASIC",
-            dirKt.contains("""name.startsWith("codecanvas_") -> ToolCategory.AI_CAPABILITIES"""),
-        )
-        assertTrue(
-            "QuroToolRouter.categorize 缺 codecanvas_ 规则，会落到 else -> null（tool_router 完全查不到）",
-            routerKt.contains("""name.startsWith("codecanvas_") -> ToolCapabilityDirectory.ToolCategory.AI_CAPABILITIES"""),
-        )
+        // 🔴 2026-11-02：分类逻辑已从「目录侧 + 路由侧各写一份 when」重构为单一真相源
+        // ToolTaxonomy（两份手写实现会漂移，且都靠逐条打补丁，谁也没有全量覆盖约定）。
+        // 因此这里从「在源码文本里找某段 when」改成**行为断言**：
+        // 直接问分类器「这个工具归哪」，比匹配源码字符串更强，也不会再被重构打穿。
+        //
+        // 原契约不变：codecanvas_* 必须明确归到 AI_CAPABILITIES，
+        // 不能落到兜底（旧 inferCategory 的 else -> BASIC 查得到但分类错，
+        // 旧 categorize 的 else -> null 则是从路由索引彻底消失）。
+        tools.forEach { name ->
+            assertTrue("$name 没有被任何分类规则覆盖（会从分类检索里消失）", ToolTaxonomy.isClassified(name))
+            assertEquals(
+                "$name 应归 AI_CAPABILITIES（与 image_gen/video_gen 同为「产出图像」），实际 ${ToolTaxonomy.categoryOf(name)}",
+                ToolCapabilityDirectory.ToolCategory.AI_CAPABILITIES,
+                ToolTaxonomy.categoryOf(name),
+            )
+        }
     }
 
     @Test
-    fun `分类规则必须排在 get_ 与 else 兜底之前`() {
-        // Kotlin when 是顺序匹配：`get_* -> BASIC` 在前会吃掉一切；codecanvas 不含 "get_"，
-        // 但仍要求规则存在且位置在 else 兜底之前，防止后续有人把它加到 when 末尾。
-        val s = dirKt
-        val rule = s.indexOf("""name.startsWith("codecanvas_")""")
-        val fallback = s.indexOf("else -> ToolCategory.BASIC", rule)
-        assertTrue("codecanvas_ 规则未找到", rule > 0)
-        assertTrue(
-            "codecanvas_ 规则必须排在 `else -> ToolCategory.BASIC` 之前（when 顺序匹配，放末尾等于失效）",
-            fallback > rule,
+    fun `分类规则不能被 get_ 或兜底规则抢走`() {
+        // 旧实现在 when 里靠书写顺序保证「codecanvas_ 规则排在 get_* 和 else 兜底之前」。
+        // 新架构里顺序由 ToolTaxonomy.RULES 的排列保证，这里直接断言结果：
+        // 若有人把宽前缀（get_ / 通用兜底）排到前面，这几个工具会被抢先归到别处，测试立刻红。
+        val expected = ToolCapabilityDirectory.ToolCategory.AI_CAPABILITIES
+        tools.forEach { name ->
+            assertEquals(
+                "$name 被更宽的规则抢走了分类（检查 ToolTaxonomy.RULES 的顺序：精确名单要排在宽前缀之前）",
+                expected,
+                ToolTaxonomy.categoryOf(name),
+            )
+        }
+        // 同类回归：ui_open_* 必须落在界面导航，不能被 ui_ 宽前缀吞进 UI_CARDS
+        assertEquals(
+            "ui_open_build 被 ui_ 前缀抢进了 UI_CARDS",
+            ToolCapabilityDirectory.ToolCategory.APP_NAVIGATION,
+            ToolTaxonomy.categoryOf("ui_open_build"),
         )
     }
 
