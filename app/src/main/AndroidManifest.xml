@@ -507,6 +507,20 @@
                 android:value="后台虚拟屏悬浮窗：把 AI 操作的虚拟屏浮在屏幕上，支持直接点按与自由缩放" />
         </service>
 
+        <!--
+          无线调试配对前台服务：配对码直接在通知栏输入（RemoteInput 内联输入框）。
+          做成前台服务的原因：系统的「使用配对码配对设备」弹窗一关就失效，
+          用户必须在弹窗还开着的时候把码输进去 —— 不能要求他切回 App 再找输入框。
+        -->
+        <service
+            android:name=".service.QuroAdbPairingService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="无线调试配对：后台搜索 _adb-tls-pairing 服务并在通知栏直接接收配对码" />
+        </service>
+
         <service
             android:name=".service.QuroTerminalKeepAliveService"
             android:exported="false"

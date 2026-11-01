@@ -4388,4 +4388,19 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_04415" formatted="false">正在读取许可证清单…</string>
     <string name="qk_04416" formatted="false">许可义务</string>
     <string name="qk_04417">本应用以 %1$s 发布</string>
+    <string name="qk_04418" formatted="false">无线调试配对</string>
+    <string name="qk_04419" formatted="false">正在搜索配对服务</string>
+    <string name="qk_04420" formatted="false">请保持系统「使用配对码配对设备」弹窗打开，6 位配对码就在那个弹窗里</string>
+    <string name="qk_04421" formatted="false">停止搜索</string>
+    <string name="qk_04422" formatted="false">已找到配对服务</string>
+    <string name="qk_04423">配对端口 %1$d · 点下面「输入配对码」填入弹窗上的 6 位数字</string>
+    <string name="qk_04424" formatted="false">输入配对码</string>
+    <string name="qk_04425" formatted="false">配对码（6 位数字）</string>
+    <string name="qk_04426" formatted="false">正在配对…</string>
+    <string name="qk_04427" formatted="false">正在与系统无线调试握手，请稍候</string>
+    <string name="qk_04428" formatted="false">配对成功</string>
+    <string name="qk_04429" formatted="false">已配对并建立连接，可以直接用了</string>
+    <string name="qk_04430" formatted="false">已配对成功，连接稍后会自动重试</string>
+    <string name="qk_04431" formatted="false">配对失败</string>
+    <string name="qk_04432" formatted="false">90 秒内没找到配对服务。请确认已打开「使用配对码配对设备」弹窗后重试</string>
 </resources>

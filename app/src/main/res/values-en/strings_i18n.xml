@@ -4328,4 +4328,19 @@ Your configured models were kept; you can also type a model name manually.</stri
     <string name="qk_04415" formatted="false">Loading license list…</string>
     <string name="qk_04416" formatted="false">License obligations</string>
     <string name="qk_04417">This app is released under %1$s</string>
+    <string name="qk_04418" formatted="false">Wireless debugging pairing</string>
+    <string name="qk_04419" formatted="false">Searching for pairing service</string>
+    <string name="qk_04420" formatted="false">Keep the system "Pair device with pairing code" dialog open — the 6-digit code is in it</string>
+    <string name="qk_04421" formatted="false">Stop searching</string>
+    <string name="qk_04422" formatted="false">Pairing service found</string>
+    <string name="qk_04423">Pairing port %1$d · Tap "Enter pairing code" below and type the 6 digits from the dialog</string>
+    <string name="qk_04424" formatted="false">Enter pairing code</string>
+    <string name="qk_04425" formatted="false">Pairing code (6 digits)</string>
+    <string name="qk_04426" formatted="false">Pairing…</string>
+    <string name="qk_04427" formatted="false">Handshaking with the system wireless debugging, please wait</string>
+    <string name="qk_04428" formatted="false">Paired successfully</string>
+    <string name="qk_04429" formatted="false">Paired and connected — ready to use</string>
+    <string name="qk_04430" formatted="false">Paired. Connection will retry automatically</string>
+    <string name="qk_04431" formatted="false">Pairing failed</string>
+    <string name="qk_04432" formatted="false">No pairing service found within 90s. Open "Pair device with pairing code" and try again</string>
 </resources>
