@@ -87,7 +87,26 @@ object ToolCapabilityDirectory {
          * 与 UI_CARDS（气泡内富卡片）/ DYNAMIC_UI（quro-ui 原生组件）区分开，
          * 避免 tool_discovery / tool_router 把"该用哪个"讲混（issue #12）。
          */
-        VISUAL_INTERACT("可视化交互", "对话框内可视化询问/弹窗/确认：visual_question/visual_action/visual_popup/visual_custom_popup")
+        VISUAL_INTERACT("可视化交互", "对话框内可视化询问/弹窗/确认：visual_question/visual_action/visual_popup/visual_custom_popup"),
+        /**
+         * 工作流 / 定时自动化。
+         *
+         * 🔴 必须单列，不能并进 BASIC 或 AI_CAPABILITIES：
+         *  - 本类是「按条件/时间自动跑一串动作」的编排能力（wf_*、schedule_task、tasker）；
+         *  - 与 `schedule_task` 的区别在于：AGENT 定时是**给 AI 自己排期**，WORKFLOW 是**编排用户的任务流**。
+         * 混进 BASIC 后 tool_router 按分类列不出来，模型会以为没有自动化能力。
+         */
+        WORKFLOW("工作流/自动化", "工作流编排与定时自动化：wf_create/wf_trigger/wf_run_status、schedule_task、tasker"),
+        /**
+         * 应用界面导航（打开设置页 / 面板 / 开关）。
+         *
+         * 🔴 必须与 UI_CARDS 分开：原来 `ui_` 前缀规则把它们全归进 UI_CARDS，
+         * 于是「卡片渲染」这一类的 42 个工具里，30+ 个其实是**打开某个设置页**的导航动作
+         * （ui_open_build / ui_open_permission / ui_open_model_config …）。
+         * 语义错配的直接后果：模型想画卡片时去看到一堆 ui_open_*，
+         * 想打开设置页时又以为要进「卡片」分类 —— 两头都不准。
+         */
+        APP_NAVIGATION("界面导航", "打开 App 内某个设置页/面板/功能入口，以及界面级开关（ui_open_* / ui_toggle_*）"),
     }
     
     /**
@@ -1591,70 +1610,13 @@ object ToolCapabilityDirectory {
 
     /** 命名推断分类（兜底；handbook 已含手写分类优先）。与 QuroToolRouter.categorize 同源逻辑。 */
     private fun inferCategory(name: String): ToolCategory {
-        return when {
-            // zxwidget 动态交互界面（zx_catalog / zx_web_card）。
-            // 🔴 这条以前不存在，两个工具一路掉到 `else -> BASIC`，
-            //   tool_discovery / tool_router 按分类列举时**根本列不出 zxwidget**，
-            //   模型因此不知道有这个能力（用户报「AI 不会用 / 渲染不出来」）。
-            //   与 QuroToolRouter.categorize 必须同源——那边最后是 `else -> null`，
-            //   漏掉即从路由索引里彻底消失，后果比这里更重。
-            name.startsWith("zx_") -> ToolCategory.ZXWIDGET
-            name in setOf("ui_dsl_spec", "ui_validate") -> ToolCategory.DYNAMIC_UI
-            // 生成式 UI 画布 + Web 应用工程：归一类（都是"交付一件界面"的能力，查起来在同一个篮子里）
-            name.startsWith("genui_") || name == "miniapp" -> ToolCategory.GENUI
-            name.startsWith("workspace_") -> ToolCategory.WORKSPACE
-            name.startsWith("aci_") -> ToolCategory.APP_MANAGEMENT
-            name.startsWith("mcp_") -> ToolCategory.NETWORK_WEB
-            name.startsWith("cms_") -> ToolCategory.CMS_DEVELOPMENT
-            name.startsWith("memory_") || name.startsWith("experience_") || name.startsWith("knowledge_") ->
-                ToolCategory.KNOWLEDGE_MEMORY
-            name == "terminal" || name.startsWith("terminal_") || name.startsWith("linux_") || name.startsWith("quroterm_") ->
-                ToolCategory.TERMINAL_LINUX
-            // Termux（完整移植的 Termux 官方宿主）：AI 在 Termux 发行版里执行命令/装包/查状态/拉起界面。
-            // 必须显式归到 TERMINAL_LINUX，否则落 else->BASIC，tool_discovery 按分类列不出它。
-            name == "termux" || name.startsWith("termux_") -> ToolCategory.TERMUX
-            // 墨语言独立运行时（编译/运行 .mo、读写源码修 bug）。必须与 QuroToolRouter.categorize 同源，
-            // 否则 tool_discovery / tool_router 列不出它，AI 根本不知道有这门语言可用。
-            name == "moyu" || name.startsWith("moyu_") -> ToolCategory.TERMINAL_LINUX
-            name == "harness" || name.startsWith("harness_") -> ToolCategory.TERMINAL_LINUX
-            name.startsWith("ui_") -> ToolCategory.UI_CARDS
-            name.startsWith("skill__") -> ToolCategory.AI_CAPABILITIES
-            // CodeCanvas 确定性渲染出图（codecanvas_* 5 个工具）。
-            // 🔴 必须排在 `get_* -> BASIC` 与 else 兜底**之前**：
-            //   此前 codecanvas_probe/script/markup/code_card/llm_code 无任何规则命中，
-            //   一律落到 `else -> ToolCategory.BASIC`，导致 tool_discovery / tool_router
-            //   按分类列举时根本查不到它们（用户报「AI 根本查不到新加的生图工具」）。
-            //   归 AI_CAPABILITIES（与 image_gen/video_gen 同类：都是「产出图像」）。
-name.startsWith("codecanvas_") -> ToolCategory.AI_CAPABILITIES
-            name in setOf("visual_analysis", "visual_question", "visual_action", "visual_popup", "visual_custom_popup") ->
-                ToolCategory.VISUAL_INTERACT
-            // 后台虚拟屏：必须在 ACCESSIBILITY 的 read_screen/tap_screen 规则之前命中，
-            // 否则会被 users 误认成"无障碍那套"，让 AI 在该用后台屏时去抢用户主屏。
-            // ADB 调试：必须在 SECURITY 相关规则之前命中（否则 adb_* 会被当成"本机提权"）
-            name == "adb_dev" || name == "adb_term" -> ToolCategory.ADB_DEBUG
-            name == "bg_screen" -> ToolCategory.VIRTUAL_SCREEN
-            name in setOf("read_screen", "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen",
-                "input_text", "get_foreground_app", "get_screen_state", "screenshot", "screenshot_base64") ->
-                ToolCategory.ACCESSIBILITY
-            name.startsWith("send_sms") || name.startsWith("read_contacts") || name.startsWith("read_sms") ||
-                name.contains("calendar") -> ToolCategory.COMMUNICATION
-            name.startsWith("launch_app") || name.startsWith("open_app") || name.startsWith("list_installed") ||
-                name.startsWith("search_and_launch") || name.startsWith("install_app") || name.startsWith("freeze_app") ||
-                name.startsWith("get_package_name") -> ToolCategory.APP_MANAGEMENT
-            name.startsWith("volume") || name.startsWith("brightness") || name.startsWith("wifi") ||
-                name.startsWith("bluetooth") || name.startsWith("notification") || name.startsWith("airplane") ||
-                name.startsWith("screen_rotation") || name.startsWith("set_timer") ->
-                ToolCategory.SYSTEM_CONTROL
-            name.startsWith("image") || name.startsWith("video") || name.startsWith("audio") ||
-                name.startsWith("music") || name.startsWith("local_") || name.startsWith("media") ||
-                name.startsWith("list_media") -> ToolCategory.MEDIA
-            name.startsWith("shizuku") || name.startsWith("root_") || name.startsWith("lock_screen") ||
-                name.startsWith("device_admin") || name.startsWith("set_camera") || name.startsWith("priv_") ->
-                ToolCategory.SECURITY
-            name.startsWith("get_") || name in setOf("calculate", "vibrate", "set_clipboard", "get_clipboard") ->
-                ToolCategory.BASIC
-            else -> ToolCategory.BASIC
-        }
+        // 🔴 2026-11-02 重构：分类逻辑搬到 ToolTaxonomy（单一真相源），本函数只做委托。
+        // 原来这里是一份 ~80 行的 when 规则，QuroToolRouter.categorize 里还有**另一份**
+        // 几乎一样的实现，靠注释「必须同源」人工同步，已经漂移（cms_* 两边归属不同）。
+        // 而且两份都是逐条打补丁，实测 239 个工具里 100 个（42%）落到兜底 BASIC：
+        // tool_router 按分类列不出 write_file / run_code / set_alarm / http_request 这些日常工具，
+        // 只好把它们全塞进 ALWAYS_ON 每轮全量下发 —— 常驻集膨胀到 154 个，这才是响应变慢的机制。
+        return ToolTaxonomy.categoryOf(name)
     }
 
     /**
@@ -1918,6 +1880,22 @@ name.startsWith("codecanvas_") -> ToolCategory.AI_CAPABILITIES
 ## 1. 主动使用工具
 - 用户需要真实数据（天气/时间/设备状态）→ 调用工具获取，不要瞎猜
 - 用户需要真实动作（打开应用/读写文件/控制设备）→ 调用工具执行
+
+### 🔴 工具是**分分类按需取用**的，不是一次全给你
+
+你手上能用的工具远多于当前 `tools` 字段里列出的那些。除了少数核心工具常驻，
+其余约 250 个都在**分类目录**里，需要你主动查。**这不是限制，是让你别在一堆没用的东西里挑。**
+
+规矩只有三条：
+1. **不确定用哪个工具 → 先 `tool_router(action="match_intent", intent="用户原话")`**。
+   直接把用户那句话丢进去，比你自己想关键词准。
+2. 拿到工具名 → `get_schema(name=...)` 取参数用法，**下一轮就能直接调**。
+3. `match_intent` 没结果 → `list_categories()` 看有哪几类，再 `list_tools(category=...)`。
+
+⚠️ **只要你心里冒出「我没有这个能力」的念头，必须先查一遍再说。**
+你「没听说过」某个工具，通常只是因为它没常驻，不代表它不存在。
+说「做不到」之前没查过分类，就是在骗用户。
+
 - 用户提到**「小卡片 / 可视化小卡片」**，或要**轻量状态/指标/折线/按钮组/表格**卡片 → **在回复正文写 ```quro-card 围栏**（自研小卡片，端上 Canvas 自绘，共 7 种预设）。**这不是工具调用**。
 - 用户要**更重的可视化**（饼图/雷达/热力图/甘特图/看板/流程图/二维码/迷你应用…103 种）→ 调 `ui_widget` 或 `ui_card` 工具（富卡片，另一功能）。
 - **可视化弹窗 `visual_popup` 与可视化询问 `visual_question` 是独立功能，不是小卡片**。所有卡片 JSON 都严禁当普通文本或代码块发出。
