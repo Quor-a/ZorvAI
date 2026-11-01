@@ -261,31 +261,35 @@ class QuroBgScreenOverlayService : Service() {
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    val moved = hypot(ev.rawX - downRawX, ev.rawY - downRawY)
-                    if (collapsed) {
-                        // 宠物：没怎么动 → 点击展开
-                        if (moved <= dp(6)) setCollapsed(false)
-                        return@setOnTouchListener true
-                    }
-                    val sysW = QuroVirtualScreen.frameWidth()
-                    val sysH = QuroVirtualScreen.frameHeight()
-                    if (sysW > 0 && sysH > 0 && winW > 0 && winH > 0) {
-                        fun toSys(px: Float, py: Float) = Pair(
-                            (px / winW * sysW).roundToInt().coerceIn(0, sysW - 1),
-                            (py / winH * sysH).roundToInt().coerceIn(0, sysH - 1),
-                        )
-                        val (sx, sy) = toSys(downRawX - p.x, downRawY - p.y)
-                        val (ex, ey) = toSys(ev.x, ev.y)
-                        if (moved > dp(6)) {
-                            // 🔴 滑动直控（Extendroid 的触摸直通）：注入带真实时长的滑动
-                            QuroVirtualScreen.swipeAt(
-                                this@QuroBgScreenOverlayService,
-                                sx, sy, ex, ey,
-                                (ev.eventTime - ev.downTime).coerceAtLeast(120L),
+                    // 🔴 兜底：UP 里任何一步（含注入）抛异常都不能拖垮服务，
+                    // 否则「点击直接被关闭」。异常只记日志。
+                    runCatching {
+                        val moved = hypot(ev.rawX - downRawX, ev.rawY - downRawY)
+                        if (collapsed) {
+                            // 宠物：没怎么动 → 点击展开
+                            if (moved <= dp(6)) setCollapsed(false)
+                            return@setOnTouchListener true
+                        }
+                        val sysW = QuroVirtualScreen.frameWidth()
+                        val sysH = QuroVirtualScreen.frameHeight()
+                        if (sysW > 0 && sysH > 0 && winW > 0 && winH > 0) {
+                            fun toSys(px: Float, py: Float) = Pair(
+                                (px / winW * sysW).roundToInt().coerceIn(0, sysW - 1),
+                                (py / winH * sysH).roundToInt().coerceIn(0, sysH - 1),
                             )
-                        } else {
-                            // 轻点 = 点一下虚拟屏
-                            QuroVirtualScreen.tapAt(this@QuroBgScreenOverlayService, sx, sy)
+                            val (sx, sy) = toSys(downRawX - p.x, downRawY - p.y)
+                            val (ex, ey) = toSys(ev.x, ev.y)
+                            if (moved > dp(6)) {
+                                // 🔴 滑动直控（Extendroid 的触摸直通）：注入带真实时长的滑动
+                                QuroVirtualScreen.swipeAt(
+                                    this@QuroBgScreenOverlayService,
+                                    sx, sy, ex, ey,
+                                    (ev.eventTime - ev.downTime).coerceAtLeast(120L),
+                                )
+                            } else {
+                                // 轻点 = 点一下虚拟屏
+                                QuroVirtualScreen.tapAt(this@QuroBgScreenOverlayService, sx, sy)
+                            }
                         }
                     }
                     true
@@ -322,15 +326,17 @@ class QuroBgScreenOverlayService : Service() {
         }
         container.addView(dragBar)
 
-        // 右上角按钮：收起 / 关闭
+        // 右上角按钮：收起 / 关闭。
+        // 🔴 tag="chip"：宠物态必须隐藏 —— 宠物只有 46dp，两个 chip 叠在它右上角，
+        // 点宠物上半部就等于点到「×」直接把悬浮窗关了（用户实测「点击直接被关闭」）。
         val bar = FrameLayout.LayoutParams(dp(22), dp(22), Gravity.TOP or Gravity.END).apply {
             topMargin = dp(4); marginEnd = dp(4)
         }
-        container.addView(makeChip("—") { setCollapsed(true) }, bar)
+        container.addView(makeChip("—") { setCollapsed(true) }.apply { tag = "chip" }, bar)
         val closeLp = FrameLayout.LayoutParams(dp(22), dp(22), Gravity.TOP or Gravity.END).apply {
             topMargin = dp(4); marginEnd = dp(28)
         }
-        container.addView(makeChip("×") { stopSelf() }, closeLp)
+        container.addView(makeChip("×") { stopSelf() }.apply { tag = "chip" }, closeLp)
 
         // 右下角缩放手柄：拖动改窗口大小（画面等比跟随）
         val handle = View(this).apply {
@@ -392,17 +398,27 @@ class QuroBgScreenOverlayService : Service() {
         }
     }
 
-    /** 收起 / 展开：收起时窗口缩成一颗球，只留一个「AI」字样。 */
+    /** 收起 / 展开：收起时缩成桌面宠物（身体+眼睛），点宠物展开虚拟屏窗口。 */
     private fun setCollapsed(to: Boolean) {
+        // 🔴 视图结构变更统一 post 到下一帧：触摸回调里同步 addView/removeView
+        // 会触发 view 树不一致类崩溃（「点击直接被关闭」的另一半来源）。
+        android.os.Handler(android.os.Looper.getMainLooper()).post { applyCollapsed(to) }
+    }
+
+    private fun applyCollapsed(to: Boolean) {
         val c = root ?: return
         val p = params ?: return
         collapsed = to
+        // 🔴 chips（—/×）只在展开态显示：宠物只有 46dp，chips 叠在它右上角，
+        // 点宠物上半部等于点到「×」直接 stopSelf —— 用户实测「点击直接被关闭」。
+        val chips = (0 until c.childCount).map { c.getChildAt(it) }.filter { it.tag == "chip" }
         if (to) {
             p.width = dp(BALL_DP)
             p.height = dp(BALL_DP)
             c.background = null // 宠物自己带身体背景，容器不再叠圆角矩形
             image?.visibility = View.GONE
-            // 🔴 桌面宠物形态（用户要求）：身体 + 两只眼睛，点它展开后台虚拟屏
+            chips.forEach { it.visibility = View.GONE }
+            // 🔴 桌面宠物形态：身体 + 两只眼睛，点它展开后台虚拟屏
             if (c.findViewWithTag<View>("pet") == null) {
                 c.addView(makePetBody())
             }
@@ -418,8 +434,9 @@ class QuroBgScreenOverlayService : Service() {
                 setColor(Color.parseColor("#0B0E14"))
                 setStroke(dp(1), Color.parseColor("#2A3140"))
             }
-            // 移除宠物
+            // 移除宠物，chips 回来
             c.findViewWithTag<View>("pet")?.let { c.removeView(it) }
+            chips.forEach { it.visibility = View.VISIBLE }
             image?.visibility = View.VISIBLE
             c.setOnClickListener(null)
         }
