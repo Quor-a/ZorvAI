@@ -2,25 +2,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      后台虚拟屏的无障碍服务（完整移植自 Mika 的 MikaAccessibilityService / ScreenAccessibility）。
+      🔴 这里**不再**声明无障碍服务（2026-11-01 撤销）。
 
-      为什么是**单独的**一个服务：QuroAccessibilityService 已继承 DeviceControlService（#484 合并
-      了重复授权），Kotlin 单继承下无法再继承 ScreenAccessibility。而虚拟屏操作需要
-      flagRetrieveInteractiveWindows 按 displayId 枚举窗口 —— 这是另一套职责，独立声明更清楚。
-      代价：用户需要在系统「无障碍」里为「后台虚拟屏」单独开一次。
+      历史：移植 Mika 时原样带来了 ScreenAccessibility 的服务声明，导致系统「无障碍」
+      列表出现两项（"ZorvAI 后台虚拟屏" + "ZorvAI 无障碍与设备控制"）——即用户反馈的
+      「无障碍和 Shizuku 权限声明重复」。
+
+      现实：app 侧从未接线这个服务——AndroidScreen 全仓没有实例化点，所需能力
+      （flagRetrieveInteractiveWindows 按屏枚举窗口、canPerformGestures 按屏手势、
+      canTakeScreenshot 按屏截屏）早已全部并入 app 的 QuroAccessibilityService
+      （见 quro_accessibility_service.xml 的能力并集注释）。留着一个无人消费的
+      服务声明只会让用户多开一个没用的开关。
+
+      Kotlin 类全部保留（ScreenAccessibility/AndroidScreen/LazyPhoneScreen 等），
+      只是不再注册为系统服务；将来若要走 Mika 的任务编排再接线不迟。
     -->
-    <application>
-        <service
-            android:name="com.ai.assistance.quro.core.mika.phone.a11y.ScreenAccessibility"
-            android:exported="true"
-            android:label="@string/quro_mika_a11y_label"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service" />
-        </service>
-    </application>
 </manifest>
