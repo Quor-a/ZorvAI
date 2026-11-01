@@ -56,7 +56,16 @@ object QuroShizuku {
             // 🔴 AIDL 一改就必须 +1：Shizuku 按 (component, version) 判断要不要重新部署 user service。
             // 保持旧版本号会让已在跑的特权进程继续用旧接口，调用新方法直接 TransactionException。
             // v2：新增后台虚拟屏通道（createDisplay/releaseDisplay/startApp/injectTap/injectKey/injectStroke/topTaskId/topActivity/displayOfTask）。
-            .version(3)
+            //
+            // 🔴 2026-11-02 修「后台虚拟屏打不开软件」：version 停在 3 太久了。
+            // 自 4057a1609 定下 version(3) 之后，AIDL 被连续大改四次却一次都没 bump：
+            //   1f3007c4f 移植 Mika 后台虚拟屏 / a64fb2f2e 主屏监视 / e43cf8032 完整移植 / 7c4675af9 Extendroid 直出
+            // 结果真机上跑的特权进程还是远古那份（方法表根本对不上），
+            // App 侧 createDisplay / startAppInUser / watchMainScreen 一调就 TransactionException，
+            // 表现出来就是「屏建不出来」「open 永远失败」。
+            // 现 AIDL 共 47 个方法（最大编号 45），统一升到 10，强制 Shizuku 重新部署。
+            // ⚠️ 以后每次动 IQuroShellService.aidl 都必须再 +1。
+            .version(10)
     }
 
     private val serviceConnection = object : ServiceConnection {
