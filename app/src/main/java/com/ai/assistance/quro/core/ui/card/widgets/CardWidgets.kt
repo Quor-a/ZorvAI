@@ -47,9 +47,16 @@ class MetricCardRenderer : CardRenderer<MetricCardState> {
     override fun render(backend: RenderBackend, spec: CardSpec, result: LayoutResult, state: MetricCardState) {
         val chart = spec.data as? CardData.Chart
         val s = chart?.series?.firstOrNull()
-        val name = s?.name ?: ""
+        // 🔴 rawJson 兜底（2026-11-01 残缺卡实证）：data 壳缺 series/points 时旧逻辑直接画
+        // "--"，用户看到的就是灰盒残缺卡。回读原始 JSON 的 label/value/unit 平铺字段，
+        // 字符串值（"12/15"、"86%"）按原文直显 —— 宁可显示原文也不出空壳。
+        val raw = runCatching { org.json.JSONObject(spec.rawJson) }.getOrNull()
+        val rawLabel = raw?.optString("label", "")?.ifBlank { raw.optString("title", "") } ?: ""
+        val rawUnit = raw?.optString("unit", "") ?: ""
+        val rawValue: Any? = raw?.opt("value")
+        val name = (s?.name ?: "").ifBlank { rawLabel }
         val value = s?.points?.firstOrNull()
-        val unit = s?.labels?.firstOrNull() ?: ""
+        val unit = (s?.labels?.firstOrNull() ?: "").ifBlank { rawUnit }
         // 卡片背景
         backend.drawRect(0f, 0f, result.width, result.height, backend.resolve(ColorToken.SurfaceVariant), radiusDp = 12f)
         val onSurface = backend.resolve(ColorToken.OnSurface)
@@ -63,12 +70,18 @@ class MetricCardRenderer : CardRenderer<MetricCardState> {
         if (name.isNotEmpty()) {
             backend.drawText(name, pad, titleY, onSurface, titleFs, 500)
         }
-        if (value != null) {
-            val v = if (value == value.toLong().toFloat()) value.toLong().toString() else value.toString()
-            backend.drawText(
-                if (unit.isEmpty()) v else "$v $unit",
-                pad, valueY, backend.resolve(ColorToken.Primary), valueFs, 700,
-            )
+        // 展示文本：优先 series 数值；没有则回读 rawJson 的 value 原文（Number→字符串 / String→原文）
+        val valueText: String? = when {
+            value != null -> {
+                val v = if (value == value.toLong().toFloat()) value.toLong().toString() else value.toString()
+                if (unit.isEmpty()) v else "$v $unit"
+            }
+            rawValue is Number -> rawValue.toString()
+            rawValue is String && rawValue.isNotBlank() -> rawValue
+            else -> null
+        }
+        if (valueText != null) {
+            backend.drawText(valueText, pad, valueY, backend.resolve(ColorToken.Primary), valueFs, 700)
         } else {
             backend.drawText("--", pad, valueY, backend.resolve(ColorToken.OnSurfaceVariant), valueFs, 700)
         }

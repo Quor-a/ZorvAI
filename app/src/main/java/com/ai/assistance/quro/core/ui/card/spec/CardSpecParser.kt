@@ -47,8 +47,11 @@ fun parseCardSpec(json: String): CardSpec? {
             type = inferred.first
             dataObj = inferred.second
         } else if (dataObj == null) {
-            // type 给了但 data 壳没给（字段平铺在外层）：也包一次壳
-            dataObj = inferTypeAndWrap(obj)?.second ?: JSONObject()
+            // type 给了但 data 壳没给（字段平铺在外层）：也包一次壳。
+            // type=metric 且带了 value 时强制走 metric 包壳 —— 否则
+            // {"type":"metric","label":"通过率","value":86} 这种少写 unit 的平铺
+            // 会包壳失败落 CardData.Empty，渲染成灰盒 "--"（残缺卡实证）。
+            dataObj = inferTypeAndWrap(obj, forceMetric = type == "metric" && obj.has("value"))?.second ?: JSONObject()
         }
         val id = obj.optString("id").ifBlank { "card_" + json.hashCode().toString(36).replace("-", "m") }
         val version = obj.optInt("version", 1)
@@ -302,7 +305,7 @@ private fun toMap(o: JSONObject?): Map<String, Any?> {
  *  - layout 树 → custom
  * 都不像 → null（调用方照旧降级，不做无据渲染）。
  */
-private fun inferTypeAndWrap(o: JSONObject): Pair<String, JSONObject>? {
+private fun inferTypeAndWrap(o: JSONObject, forceMetric: Boolean = false): Pair<String, JSONObject>? {
     val data = JSONObject()
     // table：headers / rows
     if (o.has("headers") || o.has("rows")) {
@@ -338,20 +341,32 @@ private fun inferTypeAndWrap(o: JSONObject): Pair<String, JSONObject>? {
         o.optJSONObject("axis")?.let { data.put("axis", it) }
         return "line_chart" to data
     }
-    // metric：value + (unit|trend|delta|trend_color)
-    if (o.has("value") && (o.has("unit") || o.has("trend") || o.has("delta") || o.has("trend_color"))) {
+    // metric：value + (unit|trend|delta|trend_color)；type=metric 平铺时 forceMetric 放行
+    if ((o.has("value") && (o.has("unit") || o.has("trend") || o.has("delta") || o.has("trend_color"))) || forceMetric) {
         data.put("kind", "chart")
         data.put("chartType", "metric")
         val name = o.optString("title", o.optString("label", "指标")).ifBlank { "指标" }
-        val value = when {
-            o.optJSONArray("value") != null -> o.optJSONArray("value")?.optDouble(0) ?: 0.0
-            else -> o.optDouble("value", Double.NaN)
+        // 🔴 value 容错（2026-11-01 残缺卡）：模型高频写 "86%" / "12/15" 这类字符串值。
+        // 旧逻辑 optDouble → NaN → point=0 → 渲染成 "0"，用户看到的就是残缺卡。
+        //  - "86%"  → point=86，unit 补 "%"
+        //  - "12/15" 等非数值串 → point 置 0，原文留给渲染器走 rawJson 兜底直显
+        var point = 0.0
+        var unit = o.optString("unit", "")
+        when (val rawVal = o.opt("value")) {
+            is Number -> point = rawVal.toDouble()
+            is String -> {
+                val m = Regex("^\\s*([0-9]+(?:\\.[0-9]+)?)\\s*%?\\s*$").find(rawVal)
+                if (m != null) {
+                    point = m.groupValues[1].toDouble()
+                    if (rawVal.contains('%') && unit.isBlank()) unit = "%"
+                } else if (unit.isBlank()) {
+                    unit = rawVal
+                }
+            }
         }
-        val point = if (value.isNaN()) o.optString("value", "0").toDoubleOrNull() ?: 0.0 else value
         val s0 = JSONObject().apply {
             put("name", name)
             put("points", org.json.JSONArray().put(point))
-            val unit = o.optString("unit", "")
             if (unit.isNotBlank()) put("labels", org.json.JSONArray().put(unit))
         }
         data.put("series", org.json.JSONArray().put(s0))
