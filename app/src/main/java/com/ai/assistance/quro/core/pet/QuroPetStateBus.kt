@@ -30,6 +30,7 @@ object QuroPetStateBus {
     /** AI 是否在忙（busy 期间环境动画暂停，避免覆盖真实状态）。 */
     val isActive: Boolean get() = phase != PetPhase.IDLE
 
+    /** 🔴 事件反应（2026-11-05 对齐 BotHub strings:1577）：回复完成时短暂庆祝气泡。 */
     var celebrateText by mutableStateOf<String?>(null)
     private var celebrateJob: kotlinx.coroutines.Job? = null
 

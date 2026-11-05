@@ -963,6 +963,11 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             store.loadSilently(latest.messages)
             _messages.value = store.all()
             emitMeta()
+            // 🔴 修复「上下文按钮重启后消失」（2026-11-06 用户实测）：冷启动恢复最近会话后
+            //    从不重算窗口占用 → ctxUsageMap 为空 → 输入框旁的占用圆环（usage != null
+            //    才渲染）整个消失，要发一次消息（send 收尾的 recompute）才回来。
+            //    与 selectConversation 同款：恢复会话后立即补一次重算。
+            recomputeContextUsage(latest.id)
         }
 
         // 注册机器人会话绑定器：把平台用户消息按设置写�? App 持久化会话（纯内存操作，留主线程�?
@@ -2131,18 +2136,6 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         if (targetId == _currentId.value) {
             activeConversationId = targetId
             store.add(QuroMessage(role = "user", content = text, senderName = userProfile.value.name.takeIf { it.isNotBlank() }, avatarUrl = userProfile.value.avatarUri.takeIf { it.isNotBlank() }))
-            // 触发词自动激活（当前可见会话路径）：与 send() 同源逻辑，只注入「未开启」的技能
-            val onDemand = QuroSkillStore.scopedTo(QuroSkillStore.matchTriggerSkills(text, appContext), activePersona()?.id ?: "").filter { !it.enabled }
-            if (onDemand.isNotEmpty()) {
-                val inject = onDemand.joinToString("\n\n") { "### ${it.name}\n${it.prompt}" }
-                store.add(
-                    QuroMessage(
-                        role = "user",
-                        content = "[本轮已根据触发词自动激活以下技能，请按其对用户消息作答]\n$inject",
-                        hidden = true,
-                    ),
-                )
-            }
             commitCurrent()
             val reply = runVoiceAsk(cfg, text) { commitCurrent() }
             commitCurrent()
@@ -2157,18 +2150,6 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         return try {
             store.loadSilently(conv.messages)
             store.add(QuroMessage(role = "user", content = text, senderName = userProfile.value.name.takeIf { it.isNotBlank() }, avatarUrl = userProfile.value.avatarUri.takeIf { it.isNotBlank() }))
-            // 触发词自动激活（绑定其它会话路径）：与 send() 同源逻辑，只注入「未开启」的技能
-            val onDemand = QuroSkillStore.scopedTo(QuroSkillStore.matchTriggerSkills(text, appContext), activePersona()?.id ?: "").filter { !it.enabled }
-            if (onDemand.isNotEmpty()) {
-                val inject = onDemand.joinToString("\n\n") { "### ${it.name}\n${it.prompt}" }
-                store.add(
-                    QuroMessage(
-                        role = "user",
-                        content = "[本轮已根据触发词自动激活以下技能，请按其对用户消息作答]\n$inject",
-                        hidden = true,
-                    ),
-                )
-            }
             val reply = runVoiceAsk(cfg, text) { commitCurrent(targetId) }
             val finalMsgs = store.all().toList()
             _convs.value = _convs.value.map { c ->

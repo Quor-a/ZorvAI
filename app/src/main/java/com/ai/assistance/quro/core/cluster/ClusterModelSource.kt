@@ -150,6 +150,30 @@ class DefaultClusterModelSource(private val context: Context) : ClusterModelSour
             }
         }
 
+        // ——— 适配点 4：保存的预设模型（2026-11-06 用户要求：集群可选保存的预设）———
+        // 旧实现只有「当前配置 + 自定义厂商 + 本地模型」，用户在模型设置里保存的预设
+        // 全部不可选 —— 集群闭门造车。每条预设带自己的 baseUrl/apiKey，角色绑定后
+        // 实际请求打到预设自己的通道。
+        runCatching {
+            val repo = com.ai.assistance.quro.core.model.QuroSavedProfileRepository(context)
+            repo.loadAll().forEach { sp ->
+                if (sp.name.isBlank() || sp.baseUrl.isBlank()) return@forEach
+                out += ModelProfile(
+                    id = "profile:" + sp.id,
+                    displayName = sp.name + " · " + sp.model.ifBlank { sp.provider },
+                    kind = if (sp.provider == "MNN" || sp.provider == "LLAMA_CPP") ModelKind.LOCAL else ModelKind.CLOUD,
+                    provider = sp.provider,
+                    baseUrl = sp.baseUrl,
+                    apiKey = sp.apiKey,
+                    supportsTools = sp.enableTools,
+                    supportsJsonMode = true,
+                    maxConcurrency = 2,
+                    contextWindow = 0,
+                    available = sp.apiKey.isNotBlank() || sp.baseUrl.isNotBlank(),
+                )
+            }
+        }
+
         // 兜底：一个都没解析出来时，至少给一条当前配置，保证集群能跑
         if (out.isEmpty()) {
             out += ModelProfile(
