@@ -27,6 +27,8 @@ class MiniAppTool : QuroTool {
     override val name = "miniapp"
     override val description = """Web 应用：AI 直接创建/写入/读取/运行 Web 应用工程（HTML + Page() 运行时 + native.* 原生桥）。
 
+🔴 **术语边界（先读这个）**：「Web 应用」就是 Web 应用（HTML + WebView 渲染），**不是小程序**。用户说「Web 应用 / 网页应用 / 做个网站 / 网页工具 / HTML 应用」→ 用本工具，**严禁**改用 miniapp_sdk（那是 WXML/WXSS 微信小程序引擎，仅在用户明确要微信小程序时才用）。
+
 工程结构（存放在手机私有目录 filesDir/miniapp/<name>/，与工具中心「Web 应用」面板共享同一份文件）：
 - app.json：全局配置（appId/version/name/pages 路由表/window 样式）
 - pages/<page>/<page>.html：页面（完整 HTML，用 Page() 运行时组织状态，可调 native.*）

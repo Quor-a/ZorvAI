@@ -93,7 +93,8 @@ class WebSocketConnection private constructor(
             if (fin && assembling == null) return payload.toString(Charsets.UTF_8)
             if (assembling == null) assembling = ByteArrayOutputStream(maxOf(payload.size * 2, 1024))
             assembling.write(payload)
-            if (fin) return assembling.toString(Charsets.UTF_8)
+            // ByteArrayOutputStream.toString(Charset) 安卓 13 才有
+            if (fin) return String(assembling.toByteArray(), Charsets.UTF_8)
         }
     }
 

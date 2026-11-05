@@ -30,7 +30,7 @@
     <string name="qk_00027">ACI アプリ: %1$s (パッケージ: %2$s)</string>
     <string name="qk_00028" formatted="false">ユーザーが選択: 可視化ポップアップ。visual_popup ツールをすぐに呼び出して可視化ポップアップを作成してください</string>
     <string name="qk_00029" formatted="false">ユーザーが選択: 可視化質問。visual_question ツールをすぐに呼び出して可視化質問を作成してください</string>
-    <string name="qk_00030" formatted="false">ユーザーが選択: 可視化カード。返信内で ```quro-card フェンスを使い、自作の可視化カード（指標 / 進捗 / 構造化された単一結果）を出力してください。テキストのみの返信は禁止です</string>
+    <string name="qk_00030" formatted="false">ユーザーが選択: ウィジェットカード（独立カテゴリ）。まず visual_card_skeleton(kind=...) で HTML スケルトンを取得し、{{プレースホルダ}} を実データに置換してから visual_card(title, html=...) を呼び出し、インラインの小カードを 1 枚表示してください。動的UI / リッチコンポーネント / ポップアップ / Web ページプレビュー / quro-card フェンスでの代用は禁止。テキストのみの返信も禁止です</string>
     <string name="qk_00031" formatted="false">ユーザーが選択: 動的 UI コンポーネント。返信内で ```quro-ui フェンスを使い、ネイティブの操作可能な画面（フォーム / パネル / ツール入口など）を出力してください。テキストのみの返信は禁止です</string>
     <string name="qk_00032" formatted="false">ユーザーが選択: AIP ドキュメント組版。```aip フェンス（または aip_compose ツール）で文書 / PPT / レポート（doc/deck/mindmap）を全体組版して出力してください。テキストのみで返さないこと</string>
     <string name="qk_00033">Enabled skills (%1$s): ${enabledSkills.joinToString(</string>
@@ -2408,7 +2408,7 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02477" formatted="false">Two independent controls, no mutual influence. On = 100% proactive use; Off = only when the user reminds.</string>
     <string name="qk_02478" formatted="false">動的UIコンポーネント</string>
     <string name="qk_02479" formatted="false">On: AI proactively outputs native interactive UI via ```quro-ui; Off: only when the user asks.</string>
-    <string name="qk_02480" formatted="false">On: AI proactively outputs self-built small cards via ```quro-card; Off: only when the user asks.</string>
+    <string name="qk_02480" formatted="false">オン：AI が visual_card ツールで小カードを能動的に出力（必要なら visual_card_skeleton で骨格取得）；オフ：ユーザーが要求した時のみ。</string>
     <string name="qk_02481" formatted="false">ソウルカードを保存</string>
     <string name="qk_02482" formatted="false">タグ管理</string>
     <string name="qk_02483" formatted="false">No tags yet, tap + at top right to create one.</string>

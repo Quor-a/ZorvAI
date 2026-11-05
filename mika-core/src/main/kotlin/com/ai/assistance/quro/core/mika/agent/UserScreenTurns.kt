@@ -25,7 +25,7 @@ internal class UserScreenTurns(
 ) {
     /**
      * 换好的一句:[said] 是用户这句话(给模型的原话),[images] 接在它里面,[details] 是紧跟着的详情(来源 → 正文);
-     * [words] 是用户自己打的字(记忆引文、意图判断只看它)。
+     * [words] 是用户自己打的字(记忆引文、意图判断、语言提示和回答的语言检查只看它)。
      */
     class Rendered(val said: String, val images: List<Part>, val details: List<Pair<String, String>>, val words: String)
 

@@ -82,6 +82,14 @@ private fun PageCanvas(
     content: @Composable () -> Unit
 ) {
     val scheme = theme.colorScheme
+    // 🔴 2026-11-04 手机屏钳制：把「页面实际可用宽」下发给整棵组件树 ——
+    //    固定宽度在 StyleResolver 统一取 min(值, 本值)，AI 写 width:1080 也不再横向溢出。
+    //    可用宽 = 屏宽 − 页边距，夹到阅读宽上限内；SDK 内不依赖 app 模块，
+    //    用 LocalConfiguration 拿屏宽（纯 Compose 语义，预览/真机一致）。
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val pageMaxWidth = ((configuration?.screenWidthDp ?: 360) - (GenUIDesignTokens.pagePaddingH * 2).value)
+        .coerceAtMost(GenUILayoutGuard.MAX_WIDTH_DP)
+        .coerceAtLeast(200f)
     // 🔴 2026-10-06 补全：原先只列了 scroll / list / lazy_column / column_scroll / virtual_list，
     // 漏掉了仓库里真实存在的 nested_scroll、custom_scroll、flex_column+方向属性 等类型。
     // 漏判的后果是**双重滚动**：根节点自己滚一层，PageCanvas 又套一层 verticalScroll，
@@ -89,30 +97,34 @@ private fun PageCanvas(
     val rootSelfScrolls = rootType.lowercase(Locale.ROOT) in SELF_SCROLLING_ROOT_TYPES
     Surface(color = scheme.background, modifier = modifier.fillMaxSize()) {
         val page = Modifier.fillMaxWidth().widthIn(max = GenUILayoutGuard.MAX_WIDTH_DP.dp)
-        if (rootSelfScrolls) {
-            Box(Modifier.fillMaxSize()) {
-                Column(
-                    page.align(Alignment.TopCenter)
-                        .padding(
-                    start = GenUIDesignTokens.pagePaddingH,
-                    end = GenUIDesignTokens.pagePaddingH,
-                    top = GenUIDesignTokens.pagePaddingTop,
-                    bottom = GenUIDesignTokens.pagePaddingBottom,
-                )
-                ) { content() }
-            }
-        } else {
-            // 内容可能远高于一屏（AI 常一次产出整页）→ 页面层负责滚动
-            Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                Column(
-                    page.align(Alignment.TopCenter)
-                        .padding(
-                    start = GenUIDesignTokens.pagePaddingH,
-                    end = GenUIDesignTokens.pagePaddingH,
-                    top = GenUIDesignTokens.pagePaddingTop,
-                    bottom = GenUIDesignTokens.pagePaddingBottom,
-                )
-                ) { content() }
+        androidx.compose.runtime.CompositionLocalProvider(
+            GenUILayoutGuard.LocalPageMaxWidth provides pageMaxWidth,
+        ) {
+            if (rootSelfScrolls) {
+                Box(Modifier.fillMaxSize()) {
+                    Column(
+                        page.align(Alignment.TopCenter)
+                            .padding(
+                        start = GenUIDesignTokens.pagePaddingH,
+                        end = GenUIDesignTokens.pagePaddingH,
+                        top = GenUIDesignTokens.pagePaddingTop,
+                        bottom = GenUIDesignTokens.pagePaddingBottom,
+                    )
+                    ) { content() }
+                }
+            } else {
+                // 内容可能远高于一屏（AI 常一次产出整页）→ 页面层负责滚动
+                Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    Column(
+                        page.align(Alignment.TopCenter)
+                            .padding(
+                        start = GenUIDesignTokens.pagePaddingH,
+                        end = GenUIDesignTokens.pagePaddingH,
+                        top = GenUIDesignTokens.pagePaddingTop,
+                        bottom = GenUIDesignTokens.pagePaddingBottom,
+                    )
+                    ) { content() }
+                }
             }
         }
     }
@@ -271,7 +283,11 @@ fun GenUIDialogOverlay(ctx: RenderContext) {
             shadowElevation = androidx.compose.ui.unit.Dp(0f)
         ) {
             val padding = StyleResolver.resolvePadding(currentDialog.style.padding)
-            Box(modifier = Modifier.padding(padding)) {
+            // 🔴 移动端适配修复（2026-11-04）：usePlatformDefaultWidth=false 下 Surface
+            //    wrap 内容、无宽度上限 —— 对话框子树里任何宽 child（fixed width 500）都横向出屏。
+            //    统一钳到「页面可用宽」，与 PageCanvas 同口径。
+            val dialogMax = GenUILayoutGuard.LocalPageMaxWidth.current
+            Box(modifier = Modifier.widthIn(max = dialogMax.dp).padding(padding)) {
                 RenderChildren(currentDialog.children, ctx)
             }
         }

@@ -281,14 +281,16 @@ private fun policyLabel(p: QuroPolicy): String = when (p) {
 @Composable
 private fun SummaryTag(
     text: String,
-    background: Color = AccentSoft.copy(alpha = 0.7f),
-    foreground: Color = AccentPress,
+    background: Color = Color.Unspecified,
+    foreground: Color = Color.Unspecified,
 ) {
-    Surface(color = background, shape = RoundedCornerShape(999.dp)) {
+    val bg = if (background == Color.Unspecified) AccentSoft.copy(alpha = 0.7f) else background
+    val fg = if (foreground == Color.Unspecified) AccentPress else foreground
+    Surface(color = bg, shape = RoundedCornerShape(999.dp)) {
         Text(
             text,
             fontSize = 10.sp,
-            color = foreground,
+            color = fg,
             maxLines = 1,
             softWrap = false,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),

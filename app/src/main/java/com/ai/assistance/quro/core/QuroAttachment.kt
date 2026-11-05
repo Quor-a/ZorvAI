@@ -8,6 +8,8 @@ import android.util.Base64
 import android.provider.OpenableColumns
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 附件模型与摄取工具（原创）：聊天支持图片 / 视频 / 文件附件。
@@ -80,6 +82,59 @@ object QuroAttachmentKit {
                 mime = mime,
                 size = out.length(),
             )
+        }.getOrNull()
+    }
+
+    /**
+     * 带进度回调的异步复制：把 content Uri 复制到应用私有目录，实时回调进度 [0,1]。
+     * 用于大文件（尤其视频）在附件预览行显示逐项进度条，避免主线程同步 copyTo 卡死。
+     * 完成后返回附件；失败返回 null（进度会回调到 1f 或抛出）。
+     */
+    suspend fun fromUriWithProgress(
+        context: Context,
+        uri: Uri,
+        mimeHint: String,
+        onProgress: (Float) -> Unit,
+    ): QuroAttachment? = withContext(Dispatchers.IO) {
+        runCatching {
+            val cr = context.contentResolver
+            val mime = mimeHint.takeIf { it.isNotBlank() }
+                ?: (cr.getType(uri) ?: "application/octet-stream")
+            val type = typeOf(mime)
+            var originalName = ""
+            var originalExt = ""
+            cr.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) originalName = cursor.getString(0) ?: ""
+            }
+            if (originalName.isNotEmpty()) {
+                val lastDot = originalName.lastIndexOf('.')
+                if (lastDot >= 0) originalExt = originalName.substring(lastDot + 1).lowercase()
+            }
+            val ext = when {
+                originalExt.isNotEmpty() -> originalExt
+                type == "image" -> "jpg"
+                type == "video" -> "mp4"
+                else -> getExtensionFromMime(mime)
+            }
+            val name = "att_${System.nanoTime()}_${UUID.randomUUID().toString().take(8)}.$ext"
+            val out = File(uploadsDir(context), name)
+            val input = cr.openInputStream(uri) ?: return@runCatching null
+            val total = runCatching { cr.openAssetFileDescriptor(uri, "r")?.length ?: -1L }.getOrDefault(-1L)
+            input.use { ins ->
+                out.outputStream().use { os ->
+                    val buf = ByteArray(64 * 1024)
+                    var copied = 0L
+                    while (true) {
+                        val n = ins.read(buf)
+                        if (n < 0) break
+                        os.write(buf, 0, n)
+                        copied += n
+                        if (total > 0) onProgress((copied.toFloat() / total.toFloat()).coerceIn(0f, 1f))
+                    }
+                }
+            }
+            onProgress(1f)
+            QuroAttachment(type = type, uri = out.absolutePath, name = name, mime = mime, size = out.length())
         }.getOrNull()
     }
 

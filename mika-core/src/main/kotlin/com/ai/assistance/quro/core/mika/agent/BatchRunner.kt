@@ -45,6 +45,9 @@ private const val WAIT_STABLE = "wait_stable"
 private const val TIMEOUT_S = "timeout_s"
 private val STEP_FIELDS = setOf("tool", "args", EXPECT, EXPECT_GONE, EXPECT_APP, WAIT_STABLE, TIMEOUT_S)
 
+/** 应用访问被挡:批里要停下,并把执行入口的说明原样带给模型。 */
+private fun appAccessDenied(code: String) = com.ai.assistance.quro.core.mika.access.AppAccessDenied.isAppAccessCode(code)
+
 /** 一批里的一步;[until] 是做完之后、接着做之前要等到的样子,没给为 null。 */
 data class BatchStep(val tool: String, val argsJson: String, val until: Until? = null)
 
@@ -98,16 +101,19 @@ class BatchRunner(
             val out = executor.run(Part.ToolCall("$callId.${i + 1}", s.tool, s.argsJson), Origin.Batch(step))
             val before = out.before
             note(s, null, before)
-            fun notRun(reason: String, extra: JsonObject = JsonObject(emptyMap())) = Stop(i, reason, entry(s.tool) {
+            fun notRun(reason: String, extra: JsonObject = JsonObject(emptyMap()), message: String? = null) = Stop(i, reason, entry(s.tool) {
                 put("ok", false); put("error", reason); put("executed", false)
+                message?.let { put("message", it) }
                 if (before.isNotEmpty()) put("guard", JsonArray(before.map { it.toJson() }))
             }, executed = false, extra = extra)
             val exec = when (out) {
                 is ActionOutcome.Ran -> out.exec
                 is ActionOutcome.Refused -> {
                     val hit = out.hit
-                    stop = if (hit == null) notRun(out.code)
-                    else notRun(out.code, buildJsonObject { put("action", hit.action.name); put("matched", hit.matched) })
+                    // 应用权限拒绝:把执行入口给的下一步说明一起交给模型,别让它只看到错误码
+                    val message = (out.content["message"] as? JsonPrimitive)?.contentOrNull?.takeIf { appAccessDenied(out.code) }
+                    stop = if (hit == null) notRun(out.code, message = message)
+                    else notRun(out.code, buildJsonObject { put("action", hit.action.name); put("matched", hit.matched) }, message)
                     break
                 }
                 is ActionOutcome.Cancelled -> { stop = notRun("cancelled"); break }
@@ -216,8 +222,16 @@ class BatchRunner(
                     put("error", "batch_stopped")
                     put("reason", stop.reason)
                     val n = "Step ${stop.index + 1} of ${steps.size}"
-                    put("message", (if (stop.executed) "$n was run but did not pass its check (${stop.reason})" else "$n was not run (${stop.reason})") +
-                        "; the steps after it were not run. Check the screen, then continue one step at a time or with a new batch.")
+                    if (appAccessDenied(stop.reason)) {
+                        // 权限拒绝不是普通的操作失败:不要建议「换个批继续」,把下一步该怎么做说清楚
+                        val detail = (stop.entry["message"] as? JsonPrimitive)?.contentOrNull
+                            ?: "Step ${stop.index + 1} of ${steps.size} was not run (${stop.reason})."
+                        put("message", "$detail The remaining steps in this batch were not run.")
+                        put("retryable", false)
+                    } else {
+                        put("message", (if (stop.executed) "$n was run but did not pass its check (${stop.reason})" else "$n was not run (${stop.reason})") +
+                            "; the steps after it were not run. Check the screen, then continue one step at a time or with a new batch.")
+                    }
                 }
             }
             advice?.let { put("advice", it) }

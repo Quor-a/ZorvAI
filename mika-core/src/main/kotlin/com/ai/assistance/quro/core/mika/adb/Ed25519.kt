@@ -62,10 +62,11 @@ internal class EdPoint private constructor(
     override fun hashCode(): Int = encode().contentHashCode()
 
     companion object {
-        val P: BigInteger = BigInteger.TWO.pow(255) - BigInteger.valueOf(19)
+        // 不用 BigInteger.TWO:安卓 13 才有这个字段,安卓 12 上类一加载就抛 NoSuchFieldError,配对时整个进程崩掉
+        private val TWO = BigInteger.valueOf(2)
+        val P: BigInteger = TWO.pow(255) - BigInteger.valueOf(19)
         /** 素数阶子群的阶。 */
-        val L: BigInteger = BigInteger.TWO.pow(252) + BigInteger("27742317777372353535851937790883648493")
-        private val TWO = BigInteger.TWO
+        val L: BigInteger = TWO.pow(252) + BigInteger("27742317777372353535851937790883648493")
         private val D: BigInteger = (BigInteger.valueOf(-121665) * BigInteger.valueOf(121666).modInverse(P)).mod(P)
         private val D2 = D * TWO % P
         private val SQRT_M1: BigInteger = TWO.modPow((P - BigInteger.ONE).shiftRight(2), P)

@@ -15,17 +15,15 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * Gemini generateContent 原生接口。
  * - 角色只有 user / model;相邻同角色合并。历史里的 System 消息并入 systemInstruction。
  * - Gemini 不给调用编号:合成 "gemini-<序号>-<名称>"(响应带 id 则用之);
  *   回传 functionResponse 时按 callId 到历史里的 ToolCall 找函数名。
- * - thought 部分解析为 Thinking,不回传、请求也不开 thinkingConfig。
+ * - thought 部分解析为 Thinking;选了思考强度时用 `generationConfig.thinkingConfig.thinkingLevel` 控制深度。
  */
 /** Google 给的占位签名:调用不是 Gemini 自己产生的(带不出原签名)时用它跳过签名校验。 */
 internal const val SKIP_SIGNATURE = "skip_thought_signature_validator"
@@ -40,6 +38,8 @@ class GeminiModel(
     private val headers: Map<String, String> = emptyMap(),
     /** 回复最多多少 token(`generationConfig.maxOutputTokens`);null 不限,按服务端默认。 */
     private val maxOutputTokens: Int? = null,
+    /** 用户选的思考档位;null 不发,`none` 尽量关掉思考,其余作为 `thinkingConfig.thinkingLevel` 发出。 */
+    private val reasoningEffort: String? = null,
 ) : StreamingChatModel {
     override val name: String get() = model
     private val endpoint = baseUrl.trimEnd('/') + "/v1beta/models/$model:generateContent"
@@ -64,7 +64,7 @@ class GeminiModel(
         return stream.finish()
     }
 
-    private fun request(system: String, messages: List<Message>, tools: List<ToolSpec>, stream: Boolean): Request {
+    private suspend fun request(system: String, messages: List<Message>, tools: List<ToolSpec>, stream: Boolean): Request {
         val systemText = (listOf(system) + messages.filter { it.role == Role.System }
             .map { m -> m.parts.filterIsInstance<Part.Text>().joinToString("\n") { it.text } })
             .filter { it.isNotBlank() }.joinToString("\n\n")
@@ -78,32 +78,28 @@ class GeminiModel(
                 })
             })
             put("contents", buildContents(messages))
-            maxOutputTokens?.let { n -> putJsonObject("generationConfig") { put("maxOutputTokens", n) } }
+            if (maxOutputTokens != null || reasoningEffort != null) putJsonObject("generationConfig") {
+                maxOutputTokens?.let { put("maxOutputTokens", it) }
+                reasoningEffort?.let { effort ->
+                    putJsonObject("thinkingConfig") {
+                        if (effort == "none") {
+                            put("thinkingBudget", 0)
+                        } else {
+                            put("includeThoughts", true)
+                            put("thinkingLevel", effort.uppercase())
+                        }
+                    }
+                }
+            }
         }
         return Request.Builder().url(if (stream) streamEndpoint else endpoint)
             .withHeaders(headers)
             .header("x-goog-api-key", apiKey)
-            .post(payload.toString().toRequestBody("application/json".toMediaType()))
+            .postInference(InferenceProtocol.Gemini, payload)
             .build()
     }
 
-    private fun mapError(status: Int, retryAfter: String?, body: String): ModelError {
-        val err = try { json.parseToJsonElement(body).jsonObject["error"] as? JsonObject } catch (e: Exception) { null }
-        val st = (err?.get("status") as? JsonPrimitive)?.contentOrNull.orEmpty()
-        val msg = (err?.get("message") as? JsonPrimitive)?.contentOrNull ?: body
-        val lower = msg.lowercase()
-        ModelAccessErrors.of(status, body, model)?.let { return it }
-        return when {
-            status == 401 || status == 403 -> ModelError.Auth()
-            // 这个模型额度为零的 429 上面已认成用不了;其余 429 按可重试限流处理(其限流与额度文案混用,无法可靠区分)
-            status == 429 || st == "RESOURCE_EXHAUSTED" -> ModelError.RateLimited(HttpSupport.retryAfterMs(retryAfter))
-            status == 404 -> ModelError.ModelNotFound(model)
-            status == 413 || (status == 400 && lower.contains("token") &&
-                (lower.contains("exceed") || lower.contains("too long") || lower.contains("maximum"))) -> ModelError.ContextTooLong()
-            status in 500..599 -> ModelError.Server(status)
-            else -> ModelError.BadResponse("HTTP $status ${body.take(200)}")
-        }
-    }
+    private fun mapError(status: Int, retryAfter: String?, body: String): ModelError = ModelHttp.geminiError(status, retryAfter, body, model)
 
     // Gemini 不接受 additionalProperties / $schema / $id 等 OpenAPI 子集之外的键
     private val rejectedKeys = setOf("additionalProperties", "\$schema", "\$id", "\$defs")
@@ -241,7 +237,8 @@ class GeminiModel(
         fun n(k: String) = (u[k] as? JsonPrimitive)?.intOrNull
         val inT = n("promptTokenCount") ?: return null
         // promptTokenCount 已含缓存命中部分,与统一口径一致
-        return Usage(inT, (n("candidatesTokenCount") ?: 0) + (n("thoughtsTokenCount") ?: 0), n("cachedContentTokenCount") ?: 0)
+        val thoughts = n("thoughtsTokenCount") ?: 0
+        return Usage(inT, (n("candidatesTokenCount") ?: 0) + thoughts, n("cachedContentTokenCount") ?: 0, thoughts)
     }
 }
 

@@ -47,7 +47,7 @@ class OutcomeJudge(
     private val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
 ) {
     suspend fun judge(goal: String, answer: String, priorTurns: List<Turn> = emptyList()): JudgedOutcome {
-        val prior = Conversation.context(priorTurns, maxTurns = 2, maxChars = 1600)
+        val prior = Conversation.context(priorTurns, maxTurns = 2, maxTokens = 800)
             ?.parts?.filterIsInstance<Part.Text>()?.joinToString("\n") { it.text }.orEmpty()
         val input = buildString {
             if (prior.isNotEmpty()) appendLine(prior).appendLine()

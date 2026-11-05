@@ -7,6 +7,10 @@ import org.json.JSONObject
 import com.ai.assistance.quro.core.QuroToolCall
 import com.ai.assistance.quro.core.QuroToolResult
 import com.ai.assistance.quro.core.QuroToolSpec
+import com.ai.assistance.quro.core.chat.ApprovalGate
+import com.ai.assistance.quro.core.chat.ApprovalMemory
+import com.ai.assistance.quro.core.chat.ApprovalPolicy
+import com.ai.assistance.quro.core.chat.ApprovalRequest
 import com.ai.assistance.quro.core.agent.loop.ClosedLoopExecutor
 import com.ai.assistance.quro.core.agent.loop.DEFAULT_TABLE
 import com.ai.assistance.quro.core.agent.loop.ExecResult
@@ -72,6 +76,35 @@ interface QuroTool {
      * 拿不准就填 false。
      */
     val readOnly: Boolean get() = false
+
+    /**
+     * 该工具执行前是否**需要用户审批**（危险/不可逆/高副作用）。
+     *
+     * 默认 false（大多数工具不需要审批）；只有「执行 shell、写/删文件、
+     * 控制手机、发消息、支付、装卸应用」这类**一旦执行就无法撤回**的工具才填 true。
+     *
+     * 审批在 [QuroAssistant] 的工具执行协程里拦截：调用 [com.ai.assistance.quro.core.chat.ApprovalGate.awaitDecision]
+     * 挂起等用户在审批卡上拍板；拒绝则短路，工具不执行。
+     *
+     * 与 [requiredPermissions] 的区别：权限是**系统级一次性授权**（运行时申请），
+     * 审批是**每一次调用前的业务确认**（用户主观判断这次该不该做）。
+     */
+    val requiresApproval: Boolean get() = false
+
+    /**
+     * 风险等级提示（可选）：审批卡上显示的醒目风险说明，如「不可逆」「涉及扣款」。
+     * 仅当 [requiresApproval] 为 true 时有意义；为空则只展示默认提示。
+     */
+    val risk: String? get() = null
+
+    /**
+     * 用于「按 Bot 隔离工具」——人格卡可用 [QuroPersona.enabledToolCategories]
+     * 声明启用的类别白名单，未命中类别的工具不下发给该 Bot。
+     *
+     * 默认 [ToolCategory.GENERAL]（通用）。类别清单见 [ToolCategory]。
+     * 实现者可在 override 时改类别；未显式声明的工具归入 general，保证白名单为空（=全部）时零影响。
+     */
+    val category: String get() = ToolCategory.GENERAL
 }
 
 /** 工具注册表（持有全部原创工具）。 */
@@ -170,6 +203,8 @@ class QuroToolRegistry {
             "list_app_functions", "invoke_app_function",
             // 通知 / 蓝牙 / 手电（注意：真实注册名是 get_active_notifications，coreNames 必须与之一致，否则工具会被静默丢弃）
             "get_active_notifications", "get_bluetooth_status", "toggle_flashlight",
+            // 相机能力补充（能力查询/录像；take_photo 拍照此前漏在核心集外，一并补入）
+            "get_camera_capabilities", "take_photo", "capture_video",
             // 通信
             "read_sms", "send_sms", "read_contacts",
             // Intent / 系统广播（唤起其他 App 的 Activity/Service、发系统广播）
@@ -201,7 +236,11 @@ class QuroToolRegistry {
             // 广义 IDE 集成（图形/视频/音频/3D/游戏/低代码/代码 IDE）
             "creative_studio",
             // 终端（应用沙盒内 PTY / shell，免权限，无 root/Shizuku）
-            "terminal", "quroterm_exec",   // 合并后的统一终端工具（应用内 proot+Ubuntu / 设备 shell）
+            // 🔴 `termux` 必须在 coreNames 里：coreSpecs() 是**下发给模型的 tools 字段的唯一来源**
+            // （注释已说明菜单与 tools 字段同源）。此前只有 `terminal`，于是 `termux` 工具
+            // 从未出现在 tools 里 —— 模型连看都看不到，表现就是「怎么提示都不会用 pkg」。
+            // 两者是**两套环境**，不是替代关系：terminal=proot Ubuntu（apt），termux=官方 bootstrap（pkg）。
+            "terminal", "termux", "quroterm_exec",   // 合并后的统一终端工具（应用内 proot+Ubuntu / 设备 shell / Termux 原生）
             // TTS
             "speak", "stop_speak",
             // 闹钟
@@ -309,8 +348,8 @@ class QuroToolRegistry {
             "git", "syntax_check",
             // 自动化集成：Tasker 双向（#39）
             "tasker",
-            // 宿主技能库管理：让 AI 可列举 / 启用 / 禁用用户技能（issue #17 问题 3）
-            "skill_list", "skill_enable", "skill_disable",
+            // 宿主技能库管理：AI 只可列举技能（具体用哪个由用户在对话框选择后随消息发送）
+            "skill_list",
         ) + uiActionToolNames() // 并入「UI 动作工具」：对话框界面/弹层/开关 → AI 可调用（见 QuroToolsUiActions）
         val base = map.values.filter { it.name in coreNames }.map {
             QuroToolSpec(it.name, it.description, it.parametersJson)
@@ -358,7 +397,16 @@ class QuroToolRegistry {
                     "原因：上游会整段拒收 tools 数组（=所有工具调用一起失效）。请在注册处修正名字。",
             )
         }
-        return legal
+        //
+        // 目的：活动流里每条工具调用要显示一句**用户可读**的意图描述
+        // （如「探测本地 MCP 端点」），而不是 `quroterm_exec` 这种内部工具名。
+        // 做法：给工具 schema 追加一个可选字符串参数 display_intent，
+        // 并在描述里写明写法要求；模型调用时会自己填这句话，UI 直接显示。
+        //
+        // 为什么放在 guardSpecs 而不是各处构造：这里**所有下发路径的唯一收口**
+        // （coreSpecs / fullSpecs / specs / skillSpecs 都过它），
+        // 放这里才能保证「下发的工具」与「UI 能显示意图」永远一致。
+        return legal.map { QuroToolSpecGuard.withDisplayIntent(it) }
     }
 
     /**
@@ -423,6 +471,18 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
             "get_package_name", "get_active_notifications", "get_bluetooth_status",
             "root_status", "shizuku_status",
         )
+
+        /**
+         * 一轮里**串行**工具调用的总预算上限。
+         *
+         * 为什么要有：单个工具默认 60s，模型一次给 6 个写操作 = 最坏 6 分钟无反馈，
+         * 用户体感就是「卡死」然后只能点停止。取 3 分钟：够跑几次真实的
+         * `pkg install` / 大文件操作，又不会让一轮对话无限期占着。
+         *
+         * 有工具显式声明了更长的 `execTimeoutMs`（如 harness 的 3600s）时，
+         * 本上限对那一轮**不生效**（改按各工具预算之和），否则会把长任务误杀。
+         */
+        const val MAX_ROUND_BUDGET_MS: Long = 180_000L
     }
 
     private val droidMcp: DroidMcp = DroidMcp.builder()
@@ -443,10 +503,11 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
 
     init {
         // #496：harness（DeepSeek Harness 派活）专属失败策略。
-        // 默认表 TIMEOUT=[RETRY, RETRY, ESCALATE] 会把超时任务**原样重跑两次**——
-        // 每次重跑都新建一个引擎会话重复派同一个任务，用户侧看到「活被干了多遍、
-        // 过程和结果却回不来」。harness 场景下 TIMEOUT / TRANSPORT 一律直接升级
-        // （交还模型如实转告），不自动重派；其余失败类型仍沿用默认表。
+        // 全局 TIMEOUT 现在已是「首档即升级」（见 FailurePolicy.DEFAULT_TABLE —— 超时重试同参数
+        // 只会再超时，把「卡」放大成「长时间卡」）。这里仍显式保留 harness 的覆写，原因不同：
+        // harness 超时要**如实交还模型**，不能重派（每次重派都新建引擎会话重复派同一个任务，
+        // 用户侧看到「活被干了多遍、过程和结果却回不来」）。两条规则独立成立，
+        // 别因为全局表改了就把这段删掉，否则将来全局回退时 harness 会静默复活旧行为。
         FailurePolicyRegistry.register(
             ScenarioFailurePolicy(
                 scenario = "harness",
@@ -498,7 +559,30 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
         }
 
         // 有副作用的先按原顺序跑完（顺序必须与模型给出的调用序一致）。
-        for (i in serial) results[i] = runOne(context, calls[i])
+        //
+        // 🔴 整轮预算（「调用工具会卡」的直接成因之一）：
+        // 串行调用每个默认 60s，模型一次给出 6 个写操作，最坏就是 6 分钟。
+        // 全程没有任何异常、进度条也一直在转 —— 用户侧看到的就是「卡住了」。
+        // 这里给整轮一个上限：超出的调用**不执行**，直接按超时回喂，模型据此收敛成分步执行。
+        // 单个调用不设这层限制（交给它自己的 execTimeoutMs，长跑工具如 harness 声明了 3600s）。
+        val roundDeadline =
+            if (serial.size <= 1) Long.MAX_VALUE
+            else System.currentTimeMillis() + roundBudgetMs(calls, serial)
+        for (i in serial) {
+            val left = roundDeadline - System.currentTimeMillis()
+            results[i] = if (roundDeadline != Long.MAX_VALUE && left <= 0L) {
+                QuroToolResult.Failed(
+                    "tool_round_budget",
+                    QuroToolFeedback.compose(
+                        calls[i].name,
+                        "本轮工具执行总时长已到上限（${MAX_ROUND_BUDGET_MS / 1000}s），该调用未执行。" +
+                            "请分步重试：一次只做一步，做完看结果再继续。",
+                    ),
+                )
+            } else {
+                runOne(context, calls[i])
+            }
+        }
         // 只读的并发跑；协程里 try/catch 兜底，绝不让一个失败带走整批。
         if (parallel.size > 1) {
             coroutineScope {
@@ -527,11 +611,82 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
     }
 
     /**
+     * 本轮串行调用的总预算（毫秒）。
+     *
+     * 规则（刻意保守）：
+     *  · 只有一个串行调用 → 不受整轮限制，交给它自己的 `execTimeoutMs`；
+     *  · 有工具声明了超过默认值的长超时 → 按各工具预算之和，**不封顶**（避免误杀长任务）；
+     *  · 其余情况 → 求和后封顶到 [MAX_ROUND_BUDGET_MS]。
+     */
+    private fun roundBudgetMs(calls: List<QuroToolCall>, serial: List<Int>): Long {
+        var sum = 0L
+        var anyLong = false
+        for (i in serial) {
+            val budget = runCatching {
+                registry.get(calls[i].name)?.execTimeoutMs(calls[i].arguments)
+            }.getOrNull() ?: TOOL_EXEC_TIMEOUT_MS
+            if (budget > TOOL_EXEC_TIMEOUT_MS) anyLong = true
+            sum += budget
+        }
+        return if (anyLong) sum else sum.coerceAtMost(MAX_ROUND_BUDGET_MS)
+    }
+
+    /**
      * 单个调用走完整闭环。
      * 抽出来是为了让「串行分支」与「并发分支」复用同一段逻辑，避免两条路径行为漂移。
      */
-    private suspend fun runOne(context: Context, call: QuroToolCall): QuroToolResult =
-        closedLoop.dispatch(
+    private suspend fun runOne(context: Context, call: QuroToolCall): QuroToolResult {
+        // ── 审批拦截：危险/高副作用工具在执行前挂起等用户拍板 ──
+        // 只有「本会话 / 总是允许」之外的调用才真正弹卡；已记住允许的免问。
+        // 🔴 通道开关直通（2026-11-04 用户实测：特权已开「允许」还弹审批卡）：
+        //    权限面板的 CMS / 特权开关此前只管 CMS broker / 特权管理器那道关卡，
+        //    这道审批卡是独立的第二道门 —— 开关=允许时照样弹。现在反向也接上：
+        //    工具所属通道开关为 ALLOW → 直接免卡放行；DENY → 直接拒，不弹卡。
+        val channel = com.ai.assistance.quro.core.chat.ApprovalPolicy.channelFor(call.name)
+        val channelAllows = when (channel) {
+            com.ai.assistance.quro.core.chat.ApprovalChannel.CMS ->
+                com.ai.assistance.quro.core.policy.QuroPolicyStore.getCms(context) ==
+                    com.ai.assistance.quro.core.policy.QuroPolicy.ALLOW
+            com.ai.assistance.quro.core.chat.ApprovalChannel.PRIV ->
+                com.ai.assistance.quro.core.policy.QuroPolicyStore.getPriv(context) ==
+                    com.ai.assistance.quro.core.policy.QuroPolicy.ALLOW
+            null -> false
+        }
+        val channelDenies = when (channel) {
+            com.ai.assistance.quro.core.chat.ApprovalChannel.CMS ->
+                com.ai.assistance.quro.core.policy.QuroPolicyStore.getCms(context) ==
+                    com.ai.assistance.quro.core.policy.QuroPolicy.DENY
+            com.ai.assistance.quro.core.chat.ApprovalChannel.PRIV ->
+                com.ai.assistance.quro.core.policy.QuroPolicyStore.getPriv(context) ==
+                    com.ai.assistance.quro.core.policy.QuroPolicy.DENY
+            null -> false
+        }
+        if (channelDenies) {
+            return QuroToolResult.Failed("approval_denied", "权限面板已把该通道设为「禁止」：${ApprovalPolicy.labelFor(call.name)}")
+        }
+        val declared = registry.get(call.name)?.requiresApproval ?: false
+        if (channelAllows.not() &&
+            ApprovalPolicy.needsApproval(call.name, call.arguments, declared) &&
+            !ApprovalMemory.isAllowed(call.name)
+        ) {
+            val request = ApprovalRequest(
+                id = "approval_${System.currentTimeMillis()}_${call.name.hashCode()}",
+                toolName = call.name,
+                toolLabel = ApprovalPolicy.labelFor(call.name),
+                summary = "即将执行「${ApprovalPolicy.labelFor(call.name)}」",
+                reason = null,
+                facts = ApprovalPolicy.factsFor(call.name, call.arguments),
+                risk = registry.get(call.name)?.risk,
+            )
+            val denial = ApprovalGate.awaitDecision(request)
+            if (denial != null) {
+                // 拒绝/超时：短路，工具不执行，把审查说明回喂给模型。
+                return QuroToolResult.Failed("approval_denied", denial)
+            }
+            // 允许：按用户选的粒度记住，后续同类调用免问。
+            // （粒度在 ApprovalGate.resolve 时由 UI 传入，这里通过 listener 回传的记忆集合兜底）
+        }
+        return closedLoop.dispatch(
             context = context,
             scenario = scenarioFor(call),
             name = call.name,
@@ -544,6 +699,7 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
                 correctionHint(call, failure) != null
             },
         ).toToolResult(call.name, call)
+    }
 
     /**
      * 该调用是否可并发。

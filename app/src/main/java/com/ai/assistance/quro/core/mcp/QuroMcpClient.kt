@@ -35,6 +35,16 @@ object QuroMcpClient {
     private val sessions = mutableMapOf<String, String?>()
     private val initializedUrls = mutableSetOf<String>()
 
+    /**
+     * OAuth token 解析器，由 Application 注入（[QuroMcpOAuth.bearerFor]）。
+     *
+     * 🔴 旧链路把 `completeOAuth` 拿到的 access token 直接静态写进 [McpServerConfig.token]，
+     *    过期后没有续期、也没有任何地方调用 `bearerFor`；本钩子让每次请求都取「有效」token。
+     *    未注入时保持旧行为（用配置里的静态 Key）。
+     */
+    @Volatile
+    var tokenProvider: ((alias: String, config: McpServerConfig) -> String?)? = null
+
     /** 已连接的 MCP 服务器配置。 */
     data class McpServerConfig(
         val alias: String,
@@ -43,6 +53,8 @@ object QuroMcpClient {
         val kind: String = "remote", // "remote"（外部 URL）| "local"（AI 部署到本应用内）| "ws"（WebSocket）
         val toolDefs: String = "",   // 仅 local：AI 定义的工具清单 JSON 字符串
         val handshake: Boolean = false, // 是否执行 initialize 握手（严格 MCP 服务器需要）
+        /** 单服务器启停：false 时不出现在 AI 可用清单、也不发起任何请求。 */
+        val enabled: Boolean = true,
     )
 
     /** 外部服务器暴露的工具（精简描述，供 AI 选择）。 */
@@ -326,7 +338,9 @@ object QuroMcpClient {
         val reqBuilder = Request.Builder().url(config.url.trim())
             .post(body.toRequestBody(jsonMediaType))
             .addHeader("Accept", "application/json, text/event-stream")
-        if (config.token.isNotBlank()) reqBuilder.addHeader("Authorization", "Bearer ${config.token}")
+        val bearer = runCatching { tokenProvider?.invoke(config.alias, config) }.getOrNull()
+            ?.takeIf { it.isNotBlank() } ?: config.token
+        if (bearer.isNotBlank()) reqBuilder.addHeader("Authorization", "Bearer $bearer")
         // 握手成功后携带会话 ID（部分服务器要求后续请求带同一 session）
         sessions[config.url]?.let { sid -> if (sid != null) reqBuilder.addHeader("Mcp-Session-Id", sid) }
         reqBuilder.addHeader("MCP-Protocol-Version", "2025-03-26")
@@ -378,6 +392,16 @@ object QuroMcpClient {
             .put("protocolVersion", "2025-03-26")
             .put("capabilities", JSONObject())
             .put("clientInfo", JSONObject().put("name", "Zorv AI").put("version", "1.0"))
+        // 🔴 WS 配置没有可 POST 的 HTTP 端点：旧实现仍走 rpcRaw，OkHttp 对 ws:// 直接报错，
+        //    导致「WebSocket + 握手」组合永远连不上。握手帧改走 WS 通道（不发 HTTP 通知）。
+        if (config.kind == "ws") {
+            return runCatching {
+                val root = runBlocking {
+                    QuroMcpWsClient.callToolWs(config.url, "initialize", params, config.token)
+                }
+                !root.has("error")
+            }.getOrDefault(false)
+        }
         val (root, _) = rpcRaw(config, "initialize", params, captureSession = true)
         if (root.has("error")) return false
         // 部分服务器要求握手后发送 initialized 通知（best-effort）

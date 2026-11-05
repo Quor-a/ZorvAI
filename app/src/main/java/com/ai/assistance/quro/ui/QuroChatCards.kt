@@ -28,6 +28,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -39,6 +40,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
+import com.ai.assistance.quro.ui.theme.isDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -52,6 +54,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.asImageBitmap
@@ -314,6 +317,7 @@ fun QuroChatCardView(card: QuroChatCard, onCommand: (String) -> Unit, modifier: 
             is QuroChatCard.AvatarGroupCard -> AvatarGroupCardView(card, onCommand)
             is QuroChatCard.MermaidCard -> MermaidCardView(card)
             is QuroChatCard.HtmlPreviewCard -> HtmlPreviewCardView(card)
+            is QuroChatCard.VisualMiniCard -> VisualMiniCardView(card)
             is QuroChatCard.MiniAppCard -> MiniAppCardView(card)
             is QuroChatCard.CompositeCard -> CompositeCardView(card, onCommand)
             is KeyValueCard -> KeyValueCardView(card, onCommand)
@@ -1958,7 +1962,7 @@ internal fun MermaidWebView(
     onHeight: (Int) -> Unit = {},
     onSvg: ((String) -> Unit)? = null,
 ) {
-    val dark = isSystemInDarkTheme()
+    val dark = isDarkTheme()
     val theme = run {
         val t = card.theme.trim().lowercase()
         if (t in setOf("default", "dark", "forest", "neutral", "base")) t else if (dark) "dark" else "default"
@@ -2284,12 +2288,20 @@ internal fun HtmlPreviewWebView(
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
                         // #185 修复：离屏 destroy 后不再对死 WebView 调 evaluateJavascript（防 SIGTRAP）
-                        if (view?.isAttachedToWindow == true) {
-                            view.evaluateJavascript("document.documentElement.scrollHeight") { value ->
-                                val px = value?.replace("\"", "")?.toIntOrNull() ?: return@evaluateJavascript
+                        fun measure() {
+                            if (view?.isAttachedToWindow != true) return
+                            view.evaluateJavascript(
+                                "Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0)"
+                            ) { value ->
+                                val px = value?.replace("\"", "")?.toDoubleOrNull()?.toInt()
+                                    ?: return@evaluateJavascript
                                 onHeight(px.coerceIn(160, 1440))
                             }
                         }
+                        measure()
+                        // 🔴 图片/字体/Canvas 常在 onPageFinished 之后才把内容撑开，
+                        //    只量一次会停在骨架高度 → 补一次延迟测量（相当于 size 消息）。
+                        view?.postDelayed({ measure() }, 350L)
                     }
                     
                     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
@@ -2305,9 +2317,18 @@ internal fun HtmlPreviewWebView(
                 
                 // 注入CDN错误恢复脚本
                 val htmlWithFallback = assetLibResolver.injectFallbackScript(html)
-                
+
                 tag = html
-                loadDataWithBaseURL("file:///android_asset/", htmlWithFallback, "text/html", "UTF-8", null)
+                // 🔴 file:// origin → https origin + viewport/兜底 CSS（2026-11-04）：
+                //    null/file origin 下主流 CDN 拒绝跨域请求（「外部资源直接加载不了」）；
+                //    无 viewport 时 WebView 按 980px 虚拟宽度渲染（「组件超出屏幕」）。
+                loadDataWithBaseURL(
+                    com.ai.assistance.quro.ui.chat.CardHtmlCompat.BASE_URL,
+                    com.ai.assistance.quro.ui.chat.CardHtmlCompat.inject(htmlWithFallback),
+                    "text/html",
+                    "UTF-8",
+                    null,
+                )
             }
         },
         update = { wv ->
@@ -2315,7 +2336,13 @@ internal fun HtmlPreviewWebView(
             if (wv.isAttachedToWindow && wv.tag != html) {
                 wv.tag = html
                 val htmlWithFallback = assetLibResolver.injectFallbackScript(html)
-                wv.loadDataWithBaseURL("file:///android_asset/", htmlWithFallback, "text/html", "UTF-8", null)
+                wv.loadDataWithBaseURL(
+                    com.ai.assistance.quro.ui.chat.CardHtmlCompat.BASE_URL,
+                    com.ai.assistance.quro.ui.chat.CardHtmlCompat.inject(htmlWithFallback),
+                    "text/html",
+                    "UTF-8",
+                    null,
+                )
             }
         },
         onRelease = { wv -> wv.destroy() }
@@ -2327,6 +2354,120 @@ private fun copyText(context: Context, text: String, toast: String) {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     cm.setPrimaryClip(ClipData.newPlainText("quro", text))
     Toast.makeText(context, toast, Toast.LENGTH_SHORT).show()
+}
+
+/**
+ * 🔴 可视化小卡渲染器（2026-11-04 统一骨架）：
+ * Widget Lab 卡壳（圆角 20 / 头部 emoji+标题+副标题 / 亮暗自适应 / 强调色点缀）
+ * + 卡体 [HtmlPreviewWebView]（AI 自由写任意 HTML，CardHtmlCompat 已保证
+ * viewport 兜底、替换元素不超屏、https 外部资源）。
+ *
+ * 内容完全由 AI 决定（天气/新闻/终端/日程/音乐/行情/待办/时钟/设备……），
+ * 骨架只负责「长得像一张设计过的小卡」——这正是设计稿要传达的：观感统一、内容自由。
+ */
+@Composable
+private fun VisualMiniCardView(card: QuroChatCard.VisualMiniCard) {
+    val cs = MaterialTheme.colorScheme
+    val accent = remember(card.accent) {
+        runCatching { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(card.accent)) }
+            .getOrDefault(cs.primary)
+    }
+    Surface(
+        color = cs.surfaceContainerLow,
+        shape = RoundedCornerShape(20.dp),
+        tonalElevation = 1.dp,
+        shadowElevation = 2.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .border(1.dp, accent.copy(alpha = 0.25f), RoundedCornerShape(20.dp))
+        ) {
+            // ── 头部：emoji + 标题 + 副标题（任一为空则省）──
+            if (card.emoji.isNotBlank() || card.title.isNotBlank() || card.subtitle.isNotBlank()) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(accent.copy(alpha = 0.06f))
+                        .padding(horizontal = 18.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (card.emoji.isNotBlank()) {
+                        Text(card.emoji, fontSize = 18.sp)
+                        Spacer(Modifier.width(10.dp))
+                    }
+                    Column(Modifier.weight(1f)) {
+                        if (card.title.isNotBlank()) {
+                            Text(
+                                card.title,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = cs.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (card.subtitle.isNotBlank()) {
+                            Text(
+                                card.subtitle,
+                                fontSize = 12.sp,
+                                color = cs.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .background(accent, androidx.compose.foundation.shape.CircleShape)
+                    )
+                }
+            }
+            // ── 卡体：AI 自由 HTML（高度显式指定则固定，否则按内容自适应）──
+            // 🔴 主题注入：WebView 不跟随 App 的 MaterialTheme，骨架里的 `color:CanvasText`
+            //    会一直按系统亮色解析，暗色主题下变成「白底黑字一块」。这里把卡壳底色/文字色
+            //    和 color-scheme 显式写进卡体，保证浅色/暗色/玻璃三套主题都读得清。
+            val surface = cs.surfaceContainerLow
+            val onSurface = cs.onSurface
+            val themedHtml = remember(card.html, surface, onSurface) {
+                val dark = 0.2126f * surface.red + 0.7152f * surface.green + 0.0722f * surface.blue < 0.5f
+                val bgHex = "#%06X".format(0xFFFFFF and surface.toArgb())
+                val fgHex = "#%06X".format(0xFFFFFF and onSurface.toArgb())
+                // token 与 WebUI widgetCompatHtml 同源，模型写的卡片引用 --card /
+                // --border 等设计系统变量时两端都能取到当前主题色。
+                "<style>:root{color-scheme:${if (dark) "dark" else "light"};" +
+                    "--background:$bgHex;--foreground:$fgHex;--card:$bgHex;--card-foreground:$fgHex;" +
+                    "--border:rgba(128,138,160,.28);--muted:rgba(128,138,160,.12);" +
+                    "--muted-foreground:$fgHex;--radius-sm:4px;--radius-md:6px;" +
+                    "--radius-lg:8px;--radius-xl:12px}" +
+                    "html,body{background:$bgHex!important;color:$fgHex!important}" +
+                    ".wc{color:$fgHex!important}</style>" + card.html
+            }
+            //    HtmlPreviewWebView 早就有 onHeight 回调，但这里一直没人接 ——
+            //    未显式指定高度时 AndroidView 走 wrap_content，卡体会塌成一条
+            //    或按 WebView 默认测量撑爆。现在先给 220dp 兜底，页面量出
+            //    内容高度后按 dp 回填；模型显式给的高度仍然优先。
+            val density = LocalDensity.current
+            var measuredDp by remember(card.html) { mutableStateOf(220) }
+            val bodyDp = if (card.height > 0) card.height.coerceIn(140, 620) else measuredDp
+            Box(Modifier.fillMaxWidth().height(bodyDp.dp)) {
+                HtmlPreviewWebView(
+                    themedHtml,
+                    Modifier.fillMaxSize(),
+                    onHeight = { px ->
+                        if (card.height <= 0) {
+                            val dp = (px / density.density).toInt().coerceIn(140, 620)
+                            if (dp != measuredDp) measuredDp = dp
+                        }
+                    },
+                )
+            }
+        }
+    }
 }
 
 /** 把 SVG 文本写入公共 Download 目录（API 29+ 用 MediaStore，无需存储权限）。返回是否成功。 */
@@ -2643,12 +2784,20 @@ private fun MiniAppWebView(
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
                         // #185 修复：离屏 destroy 后不再对死 WebView 调 evaluateJavascript（防 SIGTRAP）
-                        if (view?.isAttachedToWindow == true) {
-                            view.evaluateJavascript("document.documentElement.scrollHeight") { value ->
-                                val px = value?.replace("\"", "")?.toIntOrNull() ?: return@evaluateJavascript
+                        fun measure() {
+                            if (view?.isAttachedToWindow != true) return
+                            view.evaluateJavascript(
+                                "Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0)"
+                            ) { value ->
+                                val px = value?.replace("\"", "")?.toDoubleOrNull()?.toInt()
+                                    ?: return@evaluateJavascript
                                 onHeight(px.coerceIn(160, 1440))
                             }
                         }
+                        measure()
+                        // 🔴 图片/字体/Canvas 常在 onPageFinished 之后才把内容撑开，
+                        //    只量一次会停在骨架高度 → 补一次延迟测量（相当于 size 消息）。
+                        view?.postDelayed({ measure() }, 350L)
                     }
 
                     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
@@ -2700,7 +2849,16 @@ private fun MiniAppWebView(
                 }
                 
                 tag = html
-                loadDataWithBaseURL("file:///android_asset/", wrappedHtml, "text/html", "UTF-8", null)
+                // 🔴 外部资源修复（2026-11-04）：file:// origin 下 CDN fetch/XHR/ES modules
+                //    被跨域策略拦截（「HTML 外部资源加载不了」的漏修路径——对话内 Web 应用卡）。
+                //    统一 https origin + viewport/兜底 CSS（与 HtmlPreviewWebView 同口径）。
+                loadDataWithBaseURL(
+                    com.ai.assistance.quro.ui.chat.CardHtmlCompat.BASE_URL,
+                    com.ai.assistance.quro.ui.chat.CardHtmlCompat.inject(wrappedHtml),
+                    "text/html",
+                    "UTF-8",
+                    null,
+                )
             }
             webView
         },
@@ -2741,7 +2899,14 @@ private fun MiniAppWebView(
                     </html>
                     """.trimIndent()
                 }
-                wv.loadDataWithBaseURL("file:///android_asset/", wrappedHtml, "text/html", "UTF-8", null)
+                // 🔴 外部资源修复（2026-11-04）：同上，统一 https origin + 兼容层。
+                wv.loadDataWithBaseURL(
+                    com.ai.assistance.quro.ui.chat.CardHtmlCompat.BASE_URL,
+                    com.ai.assistance.quro.ui.chat.CardHtmlCompat.inject(wrappedHtml),
+                    "text/html",
+                    "UTF-8",
+                    null,
+                )
             }
         },
         onRelease = { wv -> wv.destroy() }

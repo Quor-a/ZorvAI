@@ -94,6 +94,11 @@ internal class Interfaces(
     }
     private val gateView = GateView()
 
+    suspend fun checkAppAccess(tool: AgentTool?, after: Boolean = false) {
+        if (tool == null || tool.offScreen || tool.capability !in sessions || tool.verb == Verb.ListApps) return
+        sessionFor(tool).checkAppAccess(current = after || tool.verb !in APP_TARGET_VERBS)
+    }
+
     /** 此刻在操作的那块屏的读屏状态。 */
     val session: ScreenSession get() = sessions.getValue(focus.current.id)
 
@@ -142,6 +147,12 @@ internal class Interfaces(
     }
 
     override suspend fun around(tool: AgentTool, args: JsonObject, inlineScreen: Boolean, body: suspend (reportsEffect: Boolean) -> ToolExecution): ToolExecution {
+        if (tool.offScreen || tool.verb == Verb.ListApps) return body(false)
+        // 按目标启动可离开受限应用;此时不采集旧页面,只在启动后附上允许的页面。
+        if (tool.verb in APP_TARGET_VERBS) {
+            val raw = body(false)
+            return finish(tool, args, Prep(session, null, null), raw, inlineScreen)
+        }
         val prep = prepare(tool, args)
         return finish(tool, args, prep, body(prep.reportsEffect), inlineScreen)
     }
@@ -221,9 +232,8 @@ internal class Interfaces(
         }
         val role = args.argStr(DESCRIBED_ROLE)?.trim()?.ifEmpty { null }
         // 内部读的一屏:模型没看到,不算它读过(不清掉「手里那屏已过时」);这一屏留给接着的动作当「动作前」
-        val snap = try { session.snapshot(internal = true) } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            return Described.Failed(fail("screen_unavailable", Feedback["screen_unavailable"]))
-        }
+        val snap = screenAttempt { session.snapshot(internal = true) }
+            ?: return Described.Failed(fail("screen_unavailable", Feedback["screen_unavailable"]))
         // 页面弹框挂着:页面停着,什么都点不到
         if (snap.web?.dialog != null) {
             session.clearPrimed()
@@ -321,7 +331,7 @@ internal class Interfaces(
 
     /** 等最近操作的那块屏稳定,最多 [timeoutMs];读不到状态也照常返回。 */
     override suspend fun settle(timeoutMs: Long) {
-        try { session.screen.waitStable(timeoutMs) } catch (e: CancellationException) { throw e } catch (e: Exception) { }
+        screenAttempt { session.screen.waitStable(timeoutMs) }
     }
 
     /** 最近操作的那块屏此刻的一帧(原图)和它的画面编号,登记进回看;受保护页面、付款页不截,截不到为 null。 */
@@ -341,3 +351,5 @@ internal class Interfaces(
     /** 运行状态里写的这块屏此刻的版本(网页的手机版、电脑版);没有或读不到为 null。 */
     override suspend fun mode(): String? = focus.surfaces.firstNotNullOfOrNull { it.mode }?.invoke()
 }
+
+private val APP_TARGET_VERBS = setOf(Verb.LaunchApp, Verb.OpenLink, Verb.ShareText, Verb.SetAlarm, Verb.SetTimer, Verb.ShowAlarms, Verb.AddCalendarEvent)

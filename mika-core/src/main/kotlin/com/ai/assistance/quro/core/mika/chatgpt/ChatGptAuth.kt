@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.mika.chatgpt
 
 import com.ai.assistance.quro.core.mika.model.HttpSupport
 import com.ai.assistance.quro.core.mika.model.ModelError
+import com.ai.assistance.quro.core.mika.oauth.Pkce
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -15,7 +16,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.math.BigInteger
 import java.security.KeyFactory
-import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.Signature
 import java.security.spec.RSAPublicKeySpec
@@ -23,8 +23,8 @@ import java.util.Base64
 
 /** 一次登录尝试的随机值:每次都新生成,回调和换令牌时核对。[redirectUri] 是这次监听的回调地址。 */
 data class SignInAttempt(val state: String, val nonce: String, val verifier: String, val redirectUri: String) {
-    /** PKCE S256:校验串的 SHA-256,base64url 不带补位。 */
-    val challenge: String get() = ChatGptAuth.b64url(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)))
+    /** PKCE S256(见 [Pkce.challenge])。 */
+    val challenge: String get() = Pkce.challenge(verifier)
 }
 
 /** 换令牌(用授权码或刷新令牌)得到的一组令牌;[scopes] 是实际授予的权限。 */

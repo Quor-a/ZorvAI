@@ -64,12 +64,15 @@ fun MarkdownText(
                     b.text.lines().forEach { line ->
                         Row(Modifier.fillMaxWidth()) {
                             Text("• ", color = color)
-                            InlineText(line, onLinkClick, color)
+                            // 列表项同样走 LaTeX 通道（行内公式常见于列表），无公式时退化为富文本
+                            LatexMathText(line, Modifier.weight(1f), color)
                         }
                     }
                 }
                 "blank" -> Spacer(Modifier.height(4.dp))
                 "container" -> ContainerBlock(b, onLinkClick, color)
+                "table" -> TableBlock(b, onLinkClick, color)
+                "p" -> LatexMathText(b.text, Modifier.fillMaxWidth(), color)
                 else -> InlineText(b.text, onLinkClick, color)
             }
         }
@@ -148,6 +151,68 @@ private fun ContainerBlock(b: MdBlock, onLinkClick: (String) -> Unit, color: Col
     }
 }
 
+/**
+ * Markdown 表格渲染（| a | b | 分隔行 | 数据行）。
+ * 表格以「分隔行」（--- 与 | 组成）为界，分隔行上方是表头，下方是数据行。
+ * 表头加粗，所有单元格水平对齐；无多余内边距，保持紧凑。
+ */
+@Composable
+private fun TableBlock(b: MdBlock, onLinkClick: (String) -> Unit, color: Color) {
+    // b.text 是多行原始表格文本；b.extra 存表头行数（1 = 有表头）。
+    val lines = b.text.lines().filter { it.trim().isNotEmpty() }
+    if (lines.isEmpty()) return
+    val hasHeader = b.extra == "1"
+    val header = if (hasHeader) lines.firstOrNull() else null
+    val body = if (hasHeader) lines.drop(1) else lines
+
+    fun parseCells(line: String): List<String> =
+        line.trim().trim('|').split('|').map { it.trim() }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), RoundedCornerShape(8.dp)),
+    ) {
+        if (header != null) {
+            val cols = parseCells(header)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .padding(vertical = 6.dp),
+            ) {
+                cols.forEach { c ->
+                    Box(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                        InlineText(c, onLinkClick, color)
+                    }
+                }
+            }
+        }
+        body.forEachIndexed { idx, line ->
+            val cols = parseCells(line)
+            if (cols.isEmpty()) return@forEachIndexed
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (idx % 2 == 1) {
+                            Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f))
+                        } else Modifier,
+                    )
+                    .padding(vertical = 5.dp),
+            ) {
+                cols.forEach { c ->
+                    Box(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                        InlineText(c, onLinkClick, color)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun InlineText(text: String, onLinkClick: (String) -> Unit, color: Color) {
     val annotated = remember(text) { inlineAnnotated(text, color) }
@@ -200,6 +265,22 @@ private fun inlineAnnotated(text: String, color: Color): AnnotatedString {
     }
 }
 
+/** 表格行：以 | 开头/包含 |，且不是分隔行。 */
+private fun isTableRow(line: String): Boolean =
+    line.trim().startsWith("|") && !isTableSeparator(line)
+
+/** 表格分隔行：由 |、-、:、空格组成，且至少含一个 -。 */
+private fun isTableSeparator(line: String): Boolean {
+    val t = line.trim()
+    if (!t.startsWith("|") || !t.endsWith("|")) return false
+    val inner = t.trim('|').trim()
+    if (inner.isEmpty() || !inner.contains('-')) return false
+    // 每个单元格必须是 -+: 组合
+    return inner.split('|').all { cell ->
+        cell.isNotBlank() && cell.all { it == '-' || it == ':' || it == ' ' }
+    }
+}
+
 private fun parseBlocks(src: String): List<MdBlock> {
     val lines = src.replace("\r\n", "\n").split("\n")
     val out = mutableListOf<MdBlock>()
@@ -234,6 +315,17 @@ private fun parseBlocks(src: String): List<MdBlock> {
             line.startsWith("## ") -> { out.add(MdBlock("h2", line.substring(3))); i++ }
             line.startsWith("### ") -> { out.add(MdBlock("h3", line.substring(4))); i++ }
             line.startsWith(">") -> { out.add(MdBlock("quote", line.removePrefix(">").trim())); i++ }
+            isTableRow(line) && i + 1 < lines.size && isTableSeparator(lines[i + 1]) -> {
+                // Markdown 表格：| 表头 |（下一行是分隔行）
+                val rows = mutableListOf<String>()
+                rows.add(line)
+                i++ // 表头
+                i++ // 分隔行（跳过）
+                while (i < lines.size && isTableRow(lines[i])) {
+                    rows.add(lines[i]); i++
+                }
+                out.add(MdBlock("table", rows.joinToString("\n"), "1"))
+            }
             line.matches(Regex("""^[-*]\s+.+""")) -> {
                 val items = mutableListOf<String>()
                 while (i < lines.size && lines[i].matches(Regex("""^[-*]\s+.+"""))) {
@@ -249,6 +341,7 @@ private fun parseBlocks(src: String): List<MdBlock> {
                     && !lines[i].startsWith("```") && !lines[i].startsWith("#")
                     && !lines[i].startsWith(">") && !lines[i].startsWith(":::")
                     && !lines[i].matches(Regex("""^[-*]\s+.+"""))
+                    && !isTableRow(lines[i])
                 ) {
                     para.appendLine(lines[i]); i++
                 }

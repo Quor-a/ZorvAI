@@ -147,6 +147,11 @@ class MiniAppView @JvmOverloads constructor(
     }
     private val overlay = FrameLayout(context)
     private val painter = CanvasPainter()
+    // 🔴 <image> 修复（2026-11-04）：CanvasPainter.imageProvider 此前从未被宿主赋值，
+    //    小程序里所有 <image> 全部静默空白（「渲染不完整」的主力之一）。
+    //    这里按 src 解码：包内相对路径（filesDir / assets）→ data URI → http(s)。
+    //    注意用 HashMap+synchronized（缓存要存 null「解码失败」标记，ConcurrentHashMap 不收 null）。
+    private val imgCache = HashMap<String, android.graphics.Bitmap?>()
     private lateinit var logic: LogicRuntime
     private lateinit var wxApi: WxApi
     private var appConfig: AppConfig = AppConfig.empty()
@@ -206,9 +211,63 @@ class MiniAppView @JvmOverloads constructor(
     }
 
     // ------------------------------------------------------------ lifecycle
+
+    /**
+     * 🔴 图片解析（2026-11-04）：按 src 来源解码 `<image>`。
+     *  - 包内相对路径：filesDir/miniapps/<appId>/<src> → assets/miniprograms/<appId>/<src>
+     *    （直接走文件/流解码，绕开 MiniPackage 的纯文本装载 —— 二进制图片被 readText
+     *    读过就损坏了，绝不能从 pkg.files 拿）；
+     *  - data URI：base64 直接解码；
+     *  - http(s)：后台线程解码 + 内存缓存，完成后 postInvalidate 重绘（不在绘制线程阻塞网络）。
+     * 解析失败缓存 null，避免每帧重试。
+     */
+    private fun loadImageForSrc(srcRaw: String): android.graphics.Bitmap? {
+        val src = srcRaw.trim().trimStart('/')
+        if (src.isEmpty()) return null
+        synchronized(imgCache) { if (imgCache.containsKey(src)) return imgCache[src] }
+        val bmp: android.graphics.Bitmap? = runCatching {
+            when {
+                src.startsWith("data:") -> {
+                    val b64 = src.substringAfter("base64,").trim()
+                    val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                }
+                src.startsWith("http://") || src.startsWith("https://") -> {
+                    // 异步加载：首帧先占位 null，解码完成后重绘
+                    Thread {
+                        val fetched = runCatching {
+                            val conn = java.net.URL(src).openConnection() as java.net.HttpURLConnection
+                            conn.connectTimeout = 5000; conn.readTimeout = 8000
+                            conn.inputStream.use { android.graphics.BitmapFactory.decodeStream(it) }
+                        }.getOrNull()
+                        if (fetched != null) {
+                            synchronized(imgCache) { imgCache[src] = fetched }
+                            postInvalidate()
+                        }
+                    }.start()
+                    null
+                }
+                else -> {
+                    val local = java.io.File(context.filesDir, "miniapps/${pkg?.appId ?: ""}/$src")
+                    if (local.isFile) {
+                        android.graphics.BitmapFactory.decodeFile(local.absolutePath)
+                    } else {
+                        context.assets.open("miniprograms/${pkg?.appId ?: ""}/$src").use {
+                            android.graphics.BitmapFactory.decodeStream(it)
+                        }
+                    }
+                }
+            }
+        }.getOrNull()
+        synchronized(imgCache) { imgCache[src] = bmp }
+        return bmp
+    }
+
     fun start(packageLoader: MiniPackage, config: AppConfig) {
         pkg = packageLoader
         appConfig = config
+        // 🔴 <image> 修复配套（2026-11-04）：接上图片解析器，包内图片从此可见。
+        painter.imageProvider = { src -> loadImageForSrc(src) }
         wxApi = WxApi(context, this, overlay)
         logic = LogicRuntime(packageLoader, wxApi, this, object : LogicRuntime.EngineListener {
             // 记录与转发分开：即使宿主一个监听都没装（或装得比 start 晚），

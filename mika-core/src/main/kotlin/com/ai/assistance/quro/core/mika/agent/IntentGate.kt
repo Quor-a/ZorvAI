@@ -13,7 +13,7 @@ internal class IntentGate(private val judge: ChatModel, private val fallback: Ch
     enum class Intent { Discuss, Read, Act }
 
     suspend fun assess(task: String, priorTurns: List<Turn>): Intent? {
-        val prior = Conversation.context(priorTurns, maxTurns = 3, maxChars = 1600)
+        val prior = Conversation.context(priorTurns, maxTurns = 3, maxTokens = 800)
             ?.parts?.filterIsInstance<Part.Text>()?.joinToString("\n") { it.text }.orEmpty()
         val input = buildString {
             if (prior.isNotEmpty()) appendLine(prior).appendLine()

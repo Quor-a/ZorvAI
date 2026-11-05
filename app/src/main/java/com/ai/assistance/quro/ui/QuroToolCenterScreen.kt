@@ -18,6 +18,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.compose.foundation.isSystemInDarkTheme
+import com.ai.assistance.quro.ui.theme.isDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -100,8 +101,20 @@ fun QuroToolCenterScreen(
 ) {
     val cs = MaterialTheme.colorScheme
     var selected by remember { mutableStateOf<String?>(initialSelected) }
+    // 🔴 沉浸式工作区（2026-11-05 用户：小程序 / Web 应用顶部「一层又一层」永远不达全屏）：
+    // 这些面板是「运行态工作区」，不是工具中心的二级列表页 —— 外壳标题行在这里必须消失，
+    // 系统状态栏/导航栏一并隐藏，整屏只留内容。唯一控制条由 ImmersiveWorkSurface 悬浮提供，
+    // 自动收起，不占任何布局高度。其它面板（沙箱/数据库/可视化编程等编辑页）保持原样。
+    val immersiveSurface = selected in setOf("miniapp", "miniapp_sdk", "flow")
+    if (immersiveSurface) {
+        ImmersiveSystemBars()
+        // 外壳标题行没了，系统返回键改为「回工具列表」而不是直接关掉整个工具中心。
+        // 面板内部（如 Web 应用页内历史）注册的 BackHandler 组合序更靠后，优先级更高。
+        BackHandler { selected = null }
+    }
 
     Column(Modifier.fillMaxSize().background(cs.background)) {
+        if (!immersiveSurface) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -136,14 +149,15 @@ fun QuroToolCenterScreen(
                 LucideIcon("x", stringResource(R.string.qk_00065), Modifier.size(22.dp), tint = cs.onBackground)
             }
         }
+        }
         when (selected) {
             null -> ToolGrid(onLaunch = onLaunch, onSelect = { selected = it })
             "sandbox" -> SandboxPanel(context)
             "db" -> DbPanel(context)
             "vispro" -> VisProPanel(context, onRenderInChat)
-            "flow" -> NodeEditorPanel(context, onRenderInChat)
-            "miniapp" -> MiniAppPanel(context, onRenderInChat)
-            "miniapp_sdk" -> MiniAppSdkPanel(context, onRenderInChat)
+            "flow" -> NodeEditorPanel(context, onRenderInChat, onClose = onClose, onExit = { selected = null })
+            "miniapp" -> MiniAppPanel(context, onRenderInChat, onClose = onClose, onExit = { selected = null })
+            "miniapp_sdk" -> MiniAppSdkPanel(context, onRenderInChat, onClose = onClose, onExit = { selected = null })
             "kaleidobox" -> KaleidoBoxPanel(context, onRenderInChat, onAskAi)
             "pkgmgr" -> PackageManagerPanel(context)
             // 复用 terminal-core 的 MoyuScreen（全屏 Column，自带返回），返回即回到工具列表
@@ -348,7 +362,7 @@ private fun VisProPanel(
     onRenderInChat: (type: String, value: String, label: String) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val isDark = isSystemInDarkTheme()
+    val isDark = isDarkTheme()
     var src by remember { mutableStateOf("") }
     var projName by remember { mutableStateOf("") }
     var pageReady by remember { mutableStateOf(false) }
@@ -547,12 +561,18 @@ private fun VisProPanel(
 private fun NodeEditorPanel(
     context: Context,
     onRenderInChat: (type: String, value: String, label: String) -> Unit,
+    onClose: () -> Unit,
+    onExit: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val wvRef = remember { mutableStateOf<WebView?>(null) }
     val flowDir = remember { File(context.filesDir, "studio/flow") }
     var flowName by remember { mutableStateOf("default") }
     var flowRefresh by remember { mutableStateOf(0) }
+    // 🔴 黑屏修复（2026-11-04）：渲染进程崩溃（onRenderProcessGone）后 WebView 永远黑屏，
+    //    且旧实现离开面板不 destroy —— 反复开关后渲染进程接连崩溃。加 epoch 强制重建 +
+    //    onRelease 销毁，崩溃后自动重载画布。
+    var editorEpoch by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
     val flowProjects = remember(flowRefresh) {
         flowDir.listFiles()?.filter { it.extension == "qne" }?.map { it.nameWithoutExtension }?.sorted() ?: emptyList()
@@ -676,9 +696,15 @@ private fun NodeEditorPanel(
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
+    // 🔴 全屏工作区：画布独占整屏，原来 3 行工具栏收进控制条的「工具」按钮，
+    //    默认完全不渲染 —— 顶部不再有任何常驻层。
+    ImmersiveWorkSurface(
+        title = stringResource(R.string.qk_02776),
+        onBack = onExit,
+        onClose = onClose,
+        toolsContent = {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(stringResource(R.string.qk_02829),
@@ -766,11 +792,27 @@ private fun NodeEditorPanel(
                 }
             }
         }
+        }
+    ) {
+        androidx.compose.runtime.key(editorEpoch) {
         AndroidView(
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 WebView(ctx).apply {
                     webViewClient = object : WebViewClient() {
+                        override fun onRenderProcessGone(
+                            view: WebView?,
+                            detail: android.webkit.RenderProcessGoneDetail?,
+                        ): Boolean {
+                            // 渲染进程崩溃（低内存/内核 bug）→ 表现为整块黑屏。
+                            // 销毁尸体并自增 epoch 触发重组重建 WebView，自动恢复画布。
+                            android.util.Log.e("NodeEditor", "render process gone; recreating")
+                            runCatching { view?.destroy() }
+                            wvRef.value = null
+                            editorEpoch++
+                            return true // 已处理，不再杀宿主进程
+                        }
+
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
                             // 只恢复「当前正在查看的工程」自身文件，绝不取全局最新 .qne 劫持画布/改工程名
@@ -825,7 +867,15 @@ private fun NodeEditorPanel(
                     loadUrl("file:///android_asset/www/node_editor.html")
                 }.also { wvRef.value = it }
             },
+            onRelease = { wv ->
+                // 🔴 黑屏修复配套：离开面板必须销毁 WebView —— 渲染进程是有限资源，
+                //    反复开关不释放会在第 N 次打开时崩溃（表现即「节点编辑器黑屏」）。
+                if (wvRef.value === wv) wvRef.value = null
+                runCatching { wv.destroy() }
+            },
+            update = { _ -> }
         )
+        }
     }
 }
 
@@ -833,70 +883,15 @@ private fun NodeEditorPanel(
 // Web 应用：完整移植 MiniAppFramework，AI 用 miniapp 工具写入的工程在此渲染
 // ---------------------------------------------------------------------------
 
-/**
- * Web 应用 / 小程序详情页的紧凑顶栏。
- *
- * 🔴 为什么不用一排 TextButton（2026-10-06 真机截图的根因）：
- * TextButton 自带 8~12dp 水平内边距与最小高度，窄屏上一行放不下 4 个就换行，
- * 换行后每个独占一行垂直空间 —— 顶栏从 48dp 膨胀到 100dp+，
- * 底下的渲染区被压到只剩一条边（截图里正是「只露底边一条蓝」）。
- *
- * 布局：`(返回图标) (标题 weight=1 单行省略) (溢出图标) (删除图标)`，
- * 整行恒定 48dp，标题再长也不会顶高。
- *
- * @param overflowItems 次要操作（label → onClick），收进 ⋮ 菜单。传空则不显示该按钮。
- */
-@Composable
-private fun MiniAppDetailBar(
-    title: String,
-    onBack: () -> Unit,
-    overflowItems: List<Pair<String, () -> Unit>> = emptyList(),
-) {
-    val cs = MaterialTheme.colorScheme
-    var menuOpen by remember { mutableStateOf(false) }
-
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .padding(start = 4.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onBack) {
-            LucideIcon("chevron_left", stringResource(R.string.qk_00143), Modifier.size(22.dp), tint = cs.onBackground)
-        }
-        Text(
-            title.ifBlank { "—" },
-            Modifier.weight(1f),
-            style = MaterialTheme.typography.titleMedium,
-            color = cs.onBackground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (overflowItems.isNotEmpty()) {
-            // 次要操作收进溢出菜单。用 Material3 DropdownMenu（本仓既有用法）：
-            // 它走 Popup 通道，不受父 Row 固定高度裁剪的影响。
-            Box {
-                IconButton(onClick = { menuOpen = true }) {
-                    LucideIcon("menu", stringResource(R.string.qk_03909), Modifier.size(20.dp), tint = cs.onBackground)
-                }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    overflowItems.forEach { (label, act) ->
-                        DropdownMenuItem(
-                            text = { Text(label) },
-                            onClick = { menuOpen = false; act() },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
+// 🔴 2026-11-05：删除 MiniAppDetailBar。任何「面板内再画一条详情标题行」都会
+//    重新叠出一层顶栏；返回 / 标题 / 操作统一由 ImmersiveWorkSurface 的悬浮控制条提供。
 
 @Composable
 private fun MiniAppPanel(
     context: Context,
     onRenderInChat: (type: String, value: String, label: String) -> Unit,
+    onClose: () -> Unit,
+    onExit: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     // 统一后的根目录：filesDir/miniapp（旧的 workbench/ 与 studio/miniapp/ 已自动迁入）
@@ -946,23 +941,49 @@ private fun MiniAppPanel(
         if (!handled) { current = null; engineRef.value = null }
     }
 
-    Column(Modifier.fillMaxSize()) {
-        if (current == null) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.qk_02775), style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
-                TextButton(onClick = { importLauncher.launch("text/html") }) { Text(stringResource(R.string.qk_02840)) }
-                TextButton(onClick = {
-                    scope.launch(Dispatchers.IO) {
-                        val res = MiniAppTool().run(context, JSONObject().put("action", "create").put("name", "demo").toString())
-                        withContext(Dispatchers.Main) { refreshKey++; Toast.makeText(context, res.take(120), Toast.LENGTH_SHORT).show() }
-                    }
-                }) { Text(qstr(R.string.qk_02841)) }
+    // 🔴 全屏工作区（2026-11-05）：列表态 / 运行态都不再有任何常驻顶栏。
+    //    工程列表用 contentPadding 给悬浮控制条留白，而不是再加一行占位。
+    val listActions: List<Pair<String, () -> Unit>> = listOf(
+        stringResource(R.string.qk_02840) to { importLauncher.launch("text/html") },
+        qstr(R.string.qk_02841) to {
+            scope.launch(Dispatchers.IO) {
+                val res = MiniAppTool().run(context, JSONObject().put("action", "create").put("name", "demo").toString())
+                withContext(Dispatchers.Main) { refreshKey++; Toast.makeText(context, res.take(120), Toast.LENGTH_SHORT).show() }
             }
-            Spacer(Modifier.height(8.dp))
+        },
+    )
+    val appActions: List<Pair<String, () -> Unit>> = listOf(
+        qstr(R.string.qk_02844) to {
+            scope.launch(Dispatchers.IO) {
+                val html = MiniAppTool().run(context, JSONObject().put("action", "run").put("name", current).toString())
+                withContext(Dispatchers.Main) {
+                    if (html.startsWith("❌")) Toast.makeText(context, html, Toast.LENGTH_SHORT).show()
+                    else { onRenderInChat("miniapp", html, current ?: qstr(R.string.qk_02775)); Toast.makeText(context, qstr(R.string.qk_02843), Toast.LENGTH_SHORT).show() }
+                }
+            }
+        },
+        qstr(R.string.qk_00091) to {
+            if (current != null && File(root, current!!).deleteRecursively()) { refreshKey++; current = null; Toast.makeText(context, qstr(R.string.qk_02845), Toast.LENGTH_SHORT).show() }
+        },
+    )
+    ImmersiveWorkSurface(
+        title = current ?: stringResource(R.string.qk_02775),
+        onBack = { if (current == null) onExit() else { current = null; engineRef.value = null } },
+        onClose = onClose,
+        menuItems = if (current == null) listActions else appActions,
+    ) {
+        if (current == null) {
             if (projects.isEmpty()) {
-                Text(stringResource(R.string.qk_02842), color = Muted, modifier = Modifier.padding(16.dp))
+                Text(
+                    stringResource(R.string.qk_02842), color = Muted,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 64.dp),
+                )
             } else {
-                LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 60.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     items(projects) { name ->
                         Card(
                             Modifier.fillMaxWidth().clickable { current = name },
@@ -978,29 +999,8 @@ private fun MiniAppPanel(
                 }
             }
         } else {
-            // 🔴 顶栏紧凑化（2026-10-06 真机截图：原来一行平铺 4 个 TextButton，
-            // 窄屏上 TextButton 换行后每个占满整行垂直空间，把渲染区挤到只剩一条边）。
-            // 现在：返回用图标、标题单行省略、次要操作收进溢出菜单 —— 整行恒定 48dp。
-            MiniAppDetailBar(
-                title = current ?: "",
-                onBack = { current = null; engineRef.value = null },
-                overflowItems = listOf(
-                    qstr(R.string.qk_02844) to {
-                        scope.launch(Dispatchers.IO) {
-                            val html = MiniAppTool().run(context, JSONObject().put("action", "run").put("name", current).toString())
-                            withContext(Dispatchers.Main) {
-                                if (html.startsWith("❌")) Toast.makeText(context, html, Toast.LENGTH_SHORT).show()
-                                else { onRenderInChat("miniapp", html, current ?: qstr(R.string.qk_02775)); Toast.makeText(context, qstr(R.string.qk_02843), Toast.LENGTH_SHORT).show() }
-                            }
-                        }
-                    },
-                    qstr(R.string.qk_00091) to {
-                        if (current != null && File(root, current!!).deleteRecursively()) { refreshKey++; current = null; Toast.makeText(context, qstr(R.string.qk_02845), Toast.LENGTH_SHORT).show() }
-                    },
-                ),
-            )
             AndroidView(
-                modifier = Modifier.fillMaxSize().weight(1f),
+                modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
                     WebView(ctx).apply {
                         settings.javaScriptEnabled = true
@@ -1015,6 +1015,11 @@ private fun MiniAppPanel(
                         engineRef.value = engine
                         wvRef.value = this
                     }
+                },
+                onRelease = { wv ->
+                    if (wvRef.value === wv) wvRef.value = null
+                    engineRef.value = null
+                    runCatching { wv.destroy() }
                 },
             )
         }
@@ -1031,39 +1036,41 @@ private fun MiniAppPanel(
 private fun MiniAppSdkPanel(
     context: Context,
     onRenderInChat: (type: String, value: String, label: String) -> Unit,
+    onClose: () -> Unit,
+    onExit: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     var refreshKey by remember { mutableStateOf(0) }
     val appIds = remember(refreshKey) { NativeMiniAppEngine.listAppIds(context) }
     var current by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
 
     // 引擎只需初始化一次（默认 Config：Canvas 后端 + 60fps + 日志开）
+    // 🔴 系统栏由工具中心外壳统一隐藏（ImmersiveSystemBars），面板不再各自调用，
+    //    否则进入/退出时多个 DisposableEffect 互相把系统栏 show 回来。
     LaunchedEffect(Unit) { NativeMiniAppEngine.init(context) }
+    // 运行态返回先回小程序列表，再退回工具列表。
+    BackHandler(enabled = current != null) { current = null }
 
-    Column(Modifier.fillMaxSize()) {
+    // 全屏工作区：列表 / 渲染都铺满，唯一控制条自动收起。
+    ImmersiveWorkSurface(
+        title = current ?: stringResource(R.string.qk_02781),
+        onBack = { if (current == null) onExit() else current = null },
+        onClose = onClose,
+        menuItems = if (current == null) {
+            listOf<Pair<String, () -> Unit>>(stringResource(R.string.qk_00459) to { refreshKey++ })
+        } else emptyList(),
+    ) {
         if (current == null) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stringResource(R.string.qk_02781),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = cs.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = { refreshKey++ }) { Text(stringResource(R.string.qk_00459)) }
-            }
-            Spacer(Modifier.height(4.dp))
             if (appIds.isEmpty()) {
                 Text(
                     stringResource(R.string.qk_02846) + stringResource(R.string.qk_02847),
                     color = Muted,
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 64.dp),
                 )
             } else {
                 LazyColumn(
-                    Modifier.fillMaxSize().padding(16.dp),
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 60.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(appIds) { id ->
@@ -1091,10 +1098,8 @@ private fun MiniAppSdkPanel(
                 }
             }
         } else {
-            // 同上：顶栏恒定 48dp，把剩余高度全给渲染区。
-            MiniAppDetailBar(title = current ?: "", onBack = { current = null }, overflowItems = emptyList())
             AndroidView(
-                modifier = Modifier.fillMaxSize().weight(1f),
+                modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
                     NativeMiniAppEngine.createResolved(ctx, current!!) ?: android.widget.TextView(ctx).apply {
                         text = qstr(R.string.qk_02849, (current).toString(), (current).toString()) + qstr(R.string.qk_02850)

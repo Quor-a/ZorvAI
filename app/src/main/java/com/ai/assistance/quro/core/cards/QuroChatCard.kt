@@ -497,6 +497,33 @@ sealed interface QuroChatCard {
     ) : QuroChatCard
 
     /**
+     * 🔴 可视化小卡（2026-11-04 统一骨架，对齐 Widget Lab 设计稿的**观感**而非固定卡片）：
+     *
+     * AI 用 `visual_card` 工具**自由写任意 HTML 小卡**——天气/新闻/终端/日程/音乐/行情/
+     * 待办/时钟/设备……内容完全由 AI 决定（不是内置固定模板），本骨架只统一「卡壳」：
+     * 圆角 20、卡片底色、阴影、头部（emoji + 标题 + 副标题）、亮暗主题自适应、
+     * 卡体 WebView（CardHtmlCompat：viewport 兜底 + 替换元素不超屏 + https 外部资源）。
+     *
+     * 之前「可视化小卡」被搞乱：动态UI组件/富卡片/visual_popup/zx_web_card 多套并存、
+     * 术语撞车、渲染分散。本类型是统一出口：**卡壳统一 + 内容自由**。
+     *
+     * @param subtitle 头部副标题（如「11月4日 周三 · 夜间更新」）
+     * @param emoji 头部 emoji 图标（如 "📍"）
+     * @param accent 强调色（#RRGGBB，标题/边框点缀；空=主题色）
+     * @param html 卡体自由 HTML（AI 任意写；框架自动补 viewport/兼容层）
+     * @param height 卡体高度 dp（缺省按内容自适应，140~620 夹取）
+     */
+    data class VisualMiniCard(
+        override val id: String,
+        override val title: String,
+        val subtitle: String = "",
+        val emoji: String = "",
+        val accent: String = "",
+        val html: String,
+        val height: Int = 0,
+    ) : QuroChatCard
+
+    /**
      * AI 自写 Web 应用卡片（MiniApp）：AI 生成完整 Web 应用代码（HTML + JS + CSS），
      * 客户端用 MiniAppEngine 渲染，支持 JSBridge 调用原生能力（存储/网络/UI，以及原生 Kotlin 融合层
      * `window.native.kotlin.*`：剪贴板/分享/打开App/通知/TTS 等真·Android 能力）。
@@ -1005,6 +1032,15 @@ fun parseComponentSpec(spec: String): QuroChatCard? {
             "htmlpreview" -> QuroChatCard.HtmlPreviewCard(
                 id, title, s.optString("html", ""),
             )
+            // ── 可视化小卡：工具下发同样可渲染（与 parseCard "visualmini" 对齐）──
+            "visualmini" -> QuroChatCard.VisualMiniCard(
+                id, title,
+                subtitle = s.optString("subtitle", ""),
+                emoji = s.optString("emoji", ""),
+                accent = s.optString("accent", ""),
+                html = s.optString("html", ""),
+                height = s.optInt("height", 0),
+            )
             // ── v1400 增强组件：未知 type 交给 [CardSdk.parseObj]（唯一解析层），未知落 CustomCard 而非丢弃 ──
             else -> CardSdk.parseObj(s)
         }
@@ -1075,6 +1111,7 @@ fun serializeCard(card: QuroChatCard): JSONObject {
         is QuroChatCard.AvatarGroupCard -> "avatargroup"
         is QuroChatCard.MermaidCard -> "mermaid"
         is QuroChatCard.HtmlPreviewCard -> "htmlpreview"
+        is QuroChatCard.VisualMiniCard -> "visualmini"
         is QuroChatCard.MiniAppCard -> "miniapp"
         is QuroChatCard.CompositeCard -> "composite"
         // ── v1400 增强组件（sealed 子类在 QuroChatCardEx.kt，wire type 必须登记在此，否则 when 不穷尽）──
@@ -1296,6 +1333,13 @@ fun serializeCard(card: QuroChatCard): JSONObject {
             o.put("theme", card.theme.ifBlank { JSONObject.NULL })
         }
         is QuroChatCard.HtmlPreviewCard -> o.put("html", card.html)
+        is QuroChatCard.VisualMiniCard -> {
+            o.put("subtitle", card.subtitle)
+            o.put("emoji", card.emoji)
+            o.put("accent", card.accent)
+            o.put("html", card.html)
+            if (card.height > 0) o.put("height", card.height)
+        }
         is QuroChatCard.MiniAppCard -> {
             o.put("html", card.html)
             if (card.config.isNotEmpty()) {
@@ -1473,6 +1517,14 @@ fun parseCard(o: JSONObject): QuroChatCard? {
             "htmlpreview" -> QuroChatCard.HtmlPreviewCard(
                 id, title,
                 o.optString("html", ""),
+            )
+            "visualmini" -> QuroChatCard.VisualMiniCard(
+                id, title,
+                subtitle = o.optString("subtitle", ""),
+                emoji = o.optString("emoji", ""),
+                accent = o.optString("accent", ""),
+                html = o.optString("html", ""),
+                height = o.optInt("height", 0),
             )
             "miniapp" -> {
                 val miniappConfig = o.optJSONObject("config")?.let { config ->

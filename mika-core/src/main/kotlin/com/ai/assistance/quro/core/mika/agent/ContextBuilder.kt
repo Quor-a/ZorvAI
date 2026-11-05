@@ -13,10 +13,11 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-internal const val KNOWLEDGE_BODY_LIMIT = 4000
+internal const val KNOWLEDGE_BODY_LIMIT = 2_000
 internal const val KNOWLEDGE_TRUNCATED_HINT = "…(truncated; use knowledge_read for the full text)"
 
-internal fun clipBody(body: String, limit: Int, hint: String): String = if (body.length <= limit) body else body.take(limit) + "\n" + hint
+internal fun clipBody(body: String, limit: Int, hint: String): String =
+    if (TokenEstimate.of(body) <= limit) body else TokenEstimate.clip(body, limit, "\n$hint")
 
 internal fun clipKnowledge(body: String): String = clipBody(body, KNOWLEDGE_BODY_LIMIT, KNOWLEDGE_TRUNCATED_HINT)
 
@@ -54,15 +55,19 @@ enum class ContextKind(val wire: String, val layer: ContextLayer, val trust: Tru
     }
 }
 
-/** 字数预算:[total] 管 L5+L2+L4 合计,[layers] 管各层;单份参考资料另有上限(正文字数)。技能索引整份给,不受预算裁剪(见 [ContextBuilder.start])。 */
+/**
+ * token 预算(按 [TokenEstimate]):[total] 管 L5+L2+L4 合计,[layers] 管各层;单份参考资料另有上限(正文 token)。
+ * 技能索引整份给,不受预算裁剪(见 [ContextBuilder.start])。按 token 计后各语言占的上下文一样多:
+ * 和原来按字数的额度比,英文能放的字多了约一倍,中文少了约三分之一;自带的 App/网站知识正文(APP.md、SITE.md)单份都在 [KNOWLEDGE_BODY_LIMIT] 以内。
+ */
 data class ContextBudget(
-    val total: Int = 16_000,
-    val layers: Map<ContextLayer, Int> = mapOf(ContextLayer.Task to 8_000, ContextLayer.Knowledge to 10_000),
+    val total: Int = 8_000,
+    val layers: Map<ContextLayer, Int> = mapOf(ContextLayer.Task to 4_000, ContextLayer.Knowledge to 5_000),
     val knowledgeItem: Int = KNOWLEDGE_BODY_LIMIT,
     /** 每任务至多注入几份 App/站点参考资料(开局与中途合计)。 */
     val maxKnowledge: Int = 3,
-    /** 裁到不足这么多字的正文不值得给,整份不给。 */
-    val minKeep: Int = 300,
+    /** 裁到不足这么多 token 的正文不值得给,整份不给。 */
+    val minKeep: Int = 150,
 )
 
 /**
@@ -135,9 +140,9 @@ class ContextBuilder(
     fun notice(source: String, text: String): Message = Piece(ContextKind.Notice, source, body = text).message()
 
     /**
-     * 每轮一段的运行时状态:当前界面、第几步、本地时间、用户最近一句话的开头。是一段文字,接在这一步最后一条消息的末尾(见 AgentLoop)。
+     * 每轮一段的运行时状态:当前界面、第几步、本地时间、用户最近一句话里他自己打的字的开头。是一段文字,接在这一步最后一条消息的末尾(见 AgentLoop)。
      * [place] 是任务此刻在哪(App 或站点),[label] 是 App 名,[siteMode] 是 desktop / mobile(不知道为 null)。
-     * [userWords] 是用户最近一句话:读到的内容多是别的语言时,模型写给用户的话容易跟着换语言,紧挨着生成处摆出原话的开头,
+     * [userWords] 是用户最近一句话里他自己打的字(不带屏幕、页面说明这些,见 AgentLoop):读到的内容多是别的语言时,模型写给用户的话容易跟着换语言,紧挨着生成处摆出这些字的开头,
      * 让它照这句话的语言写;不在这里判断是哪种语言。
      */
     fun runtimeState(place: Place?, label: String?, siteMode: String?, step: Int, maxSteps: Int, nowMs: Long, userWords: String? = null): Part.Text {
@@ -171,7 +176,7 @@ class ContextBuilder(
 
     /**
      * 按优先级给额度:层按 L5 > L2 > L4,层内按 [RANK](标准先于记忆先于之前几轮);每份不超过本层上限和剩下的总额。
-     * 放不下的可截正文就截,截不出 [ContextBudget.minKeep] 字或不可截就不给;L5 与技能索引一律保留(L5 占掉的额度会挤掉后面的层)。
+     * 放不下的可截正文就截,截不出 [ContextBudget.minKeep] 个 token 或不可截就不给;L5 与技能索引一律保留(L5 占掉的额度会挤掉后面的层)。
      * 不进预算的层原样保留。结果按原顺序。
      */
     private fun fit(pieces: List<Piece>): List<Piece> {
@@ -201,17 +206,17 @@ class ContextBuilder(
         val kind: ContextKind, val source: String, val head: String = "", val body: String, val tail: String = "",
         val clip: Int? = null, val hint: String = CLIPPED_HINT, val entry: KnowledgeEntry? = null,
     ) {
-        val fixed get() = head.length + tail.length
-        val size get() = head.length + body.length + tail.length
+        val fixed get() = TokenEstimate.of(head) + TokenEstimate.of(tail)
+        val size get() = fixed + TokenEstimate.of(body)
 
-        /** 单份上限:正文留前 [clip] 字,后面补 [hint]。 */
-        fun capped(): Piece = if (clip != null && body.length > clip) withBody(clipBody(body, clip, hint)) else this
+        /** 单份上限:正文最多 [clip] token,后面补 [hint]。 */
+        fun capped(): Piece = if (clip != null && TokenEstimate.of(body) > clip) withBody(TokenEstimate.clip(body, clip, "\n$hint")) else this
 
-        /** 截到总长不超过 [n](含附注、链接与截断说明)。 */
+        /** 截到总长不超过 [n] token(含附注、链接与截断说明)。 */
         fun clipTo(n: Int): Piece {
             val room = n - fixed
-            if (body.length <= room) return this
-            return withBody(body.take((room - hint.length - 1).coerceAtLeast(0)) + "\n" + hint)
+            if (TokenEstimate.of(body) <= room) return this
+            return withBody(TokenEstimate.clip(body, room, "\n$hint"))
         }
 
         private fun withBody(b: String) = Piece(kind, source, head, b, tail, clip, hint, entry)

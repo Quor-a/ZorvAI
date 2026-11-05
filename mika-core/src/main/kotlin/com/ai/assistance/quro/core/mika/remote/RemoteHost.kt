@@ -1,12 +1,6 @@
 package com.ai.assistance.quro.core.mika.remote
 
-import com.ai.assistance.quro.core.mika.mcp.McpRpc
-import com.ai.assistance.quro.core.mika.mcp.McpTaskTools
-
 import com.ai.assistance.quro.core.mika.device.DeviceAccess
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import java.net.InetAddress
 import java.net.InetSocketAddress
 
@@ -29,46 +23,15 @@ class RemoteHost(
     private val onError: (Throwable) -> Unit = {},
     loopbackToken: () -> String? = { null },
     device: DeviceAccess? = null,
+    private val endpoints: RemoteEndpoints = RemoteEndpoints(tasks, serverVersion, clock, device),
 ) {
     private val access = RemoteAccess(token, clock, loopbackToken = loopbackToken)
-    private val clients = LinkedHashMap<String, Long>()
-    private val _activity = MutableStateFlow(RemoteActivity())
-    val activity: StateFlow<RemoteActivity> = _activity.asStateFlow()
-    private val service = RemoteTaskService(tasks)
-    private val api = RemoteTaskApi(service, serverVersion, device)
-    private val rpc = McpRpc(McpTaskTools(service, device), serverVersion) { remote, name -> seen(remote, name) }
+    val activity get() = endpoints.activity
     private var server: MiniHttpServer? = null
 
     val boundPort: Int get() = server?.port ?: -1
 
-    fun handle(req: HttpRequest): HttpResponse {
-        when (val v = access.check(req)) {
-            is RemoteAccess.Verdict.Reject -> return if (req.path == McpRpc.PATH)
-                McpRpc.transportError(v.status, v.message, v.headers)
-            else RemoteTaskApi.error(v.status, "access_denied", v.message, v.headers)
-            RemoteAccess.Verdict.Pass -> Unit
-        }
-        if (req.path == McpRpc.PATH) return rpc.handle(req)
-        if (req.path == RemoteTaskApi.ROOT || req.path.startsWith("${RemoteTaskApi.ROOT}/")) {
-            seen(req.remote, req.header("x-quro-client")?.take(64))
-            return api.handle(req)
-        }
-        return RemoteTaskApi.error(404, "not_found", "No such endpoint")
-    }
-
-    /** 同一客户端(地址 + 自报的名字)算一个;十分钟内来过的算「最近」。 */
-    private fun seen(remote: InetAddress, name: String?) {
-        val now = clock()
-        synchronized(this) {
-            val who = remote.hostAddress ?: "?"
-            // 老一代客户端只在握手时报名字,之后的请求按地址归到已有的那一个
-            val key = if (name != null) "$who|$name" else clients.keys.lastOrNull { it.startsWith("$who|") } ?: "$who|"
-            clients.remove(key)
-            clients[key] = now
-            clients.entries.removeAll { now - it.value > RECENT_MS }
-            _activity.value = RemoteActivity(clients.size, now)
-        }
-    }
+    fun handle(req: HttpRequest): HttpResponse = access.handle(req, endpoints::handle)
 
     /** 开始监听;端口被占等绑定失败时抛出异常。 */
     fun start() {

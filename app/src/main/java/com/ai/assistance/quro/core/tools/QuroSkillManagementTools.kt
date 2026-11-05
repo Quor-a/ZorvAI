@@ -1,72 +1,57 @@
 package com.ai.assistance.quro.core.tools
 
-import com.ai.assistance.quro.R
-import com.ai.assistance.quro.util.qstr
-
 import android.content.Context
-import com.ai.assistance.quro.core.skill.QuroSkill
 import com.ai.assistance.quro.core.skill.QuroSkillStore
 import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * 宿主技能库管理工具（issue #17 问题 3）。
+ * 宿主技能库查询工具：告诉 AI「库里有哪些技能」，供 `skill` 工具按需加载时对照 id。
  *
- * 此前技能库只有「运行」通道（skill__<name> 让 AI 调起某个技能），但没有对「库本身」的可调接口：
- * AI 既看不到自己有哪些技能，也无法在对话里按需启用 / 禁用某个技能。本文件补齐这一缺口。
+ * ## 2026-11-05 删除了 SkillEnableTool / SkillDisableTool
+ * 「启用 / 禁用」只改本地一个布尔值：AI 既不知道用户开了什么，也看不到技能正文，
+ * 却会在用户没注意时把技能从列表里藏起来 —— 开关根本不是一种发送方式，是错误的作用方式。
+ *
+ * 现在技能只有一条作用路径：**用户在对话框选择 → 技能全文随那条消息发给 AI → AI 直接遵循**
+ * （见 `QuroSkillStore.attachedBlock`）。因此 AI 侧只保留「列举」，不再有任何能改写
+ * 技能可见状态的接口；`skill_list` 的输出也不再出现 enabled 字段，避免模型误以为存在开关。
  */
 class SkillListTool : QuroTool {
     override val name = "skill_list"
+
     override val description =
-        "列举宿主技能库中的所有技能：返回每个技能的名称、启用状态、是否可调用、所属套件与简介（优先中文）。参数为 {} 或 {\"enabled_only\":false}。"
+        "列举技能库中的所有技能：返回名称、id、所属套件与简介（优先中文）。" +
+            "技能无需启用：用户在对话框选中某个技能后，它的完整指令会随那条消息一起发给你。" +
+            "参数为 {} 或 {\"query\":\"关键词\"}。"
+
     override val parametersJson =
-        """{"type":"object","properties":{"enabled_only":{"type":"boolean","description":"仅返回已启用的技能，默认 false"}},"required":[]}"""
+        """{"type":"object","properties":{"query":{"type":"string","description":"按名称/简介/套件过滤，留空返回全部"}},"required":[]}"""
+
     override fun run(context: Context, arguments: String): String {
-        val enabledOnly = runCatching { JSONObject(arguments) }.getOrNull()?.optBoolean("enabled_only", false) ?: false
-        val list = QuroSkillStore.load(context).let { if (enabledOnly) it.filter { s -> s.enabled } else it }
+        val query = runCatching { JSONObject(arguments) }.getOrNull()
+            ?.optString("query", "")?.trim().orEmpty()
+        val list = QuroSkillStore.load(context).let { all ->
+            if (query.isBlank()) all
+            else all.filter { s ->
+                s.name.contains(query, ignoreCase = true) ||
+                    s.description.contains(query, ignoreCase = true) ||
+                    s.descriptionZh.contains(query, ignoreCase = true) ||
+                    s.suite.contains(query, ignoreCase = true)
+            }
+        }
         val arr = JSONArray()
         list.forEach { s ->
             arr.put(
                 JSONObject().apply {
                     put("name", s.name)
                     put("id", s.id)
-                    put("enabled", s.enabled)
-                    put("callable", s.callable)
                     put("suite", s.suite)
                     put("description", if (s.descriptionZh.isNotBlank()) s.descriptionZh else s.description)
+                    put("promptChars", s.prompt.length)
                 }
             )
         }
-        return "共 ${list.size} 个技能：\n" + arr.toString(2)
+        return "共 ${list.size} 个技能（技能由用户在对话框选择后随消息发送，不存在启用/禁用开关）：\n" +
+            arr.toString(2)
     }
-}
-
-class SkillEnableTool : QuroTool {
-    override val name = "skill_enable"
-    override val description = "启用宿主技能库中的某个技能（按名称或 id 匹配）。参数为 {\"name\":\"技能名\"}。"
-    override val parametersJson =
-        """{"type":"object","properties":{"name":{"type":"string","description":"技能名称或 id"}},"required":["name"]}"""
-    override fun run(context: Context, arguments: String): String = setSkillEnabled(context, arguments, true)
-}
-
-class SkillDisableTool : QuroTool {
-    override val name = "skill_disable"
-    override val description = "禁用宿主技能库中的某个技能（按名称或 id 匹配）。参数为 {\"name\":\"技能名\"}。"
-    override val parametersJson =
-        """{"type":"object","properties":{"name":{"type":"string","description":"技能名称或 id"}},"required":["name"]}"""
-    override fun run(context: Context, arguments: String): String = setSkillEnabled(context, arguments, false)
-}
-
-private fun setSkillEnabled(context: Context, arguments: String, enabled: Boolean): String {
-    val name = runCatching { JSONObject(arguments) }.getOrNull()?.optString("name", "")?.trim() ?: ""
-    if (name.isEmpty()) return "缺少 name 参数"
-    val list = QuroSkillStore.load(context)
-    val target = list.firstOrNull {
-        it.name == name || it.id == name || QuroSkill.toolNameOf(it.name) == name
-    } ?: return "未找到技能：$name"
-    QuroSkillStore.addOrUpdate(
-        context,
-        target.copy(enabled = enabled, updatedAt = System.currentTimeMillis())
-    )
-    return "已${if (enabled) "启用" else "禁用"}技能：${target.name}"
 }

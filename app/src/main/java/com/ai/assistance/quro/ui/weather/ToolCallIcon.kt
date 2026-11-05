@@ -8,6 +8,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import com.ai.assistance.quro.ui.theme.isDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -1083,7 +1084,7 @@ fun ToolCallIcon(
     tint: Color? = null,
     modifier: Modifier = Modifier.size(22.dp),
 ) {
-    val isLight = !isSystemInDarkTheme()
+    val isLight = !isDarkTheme()
     val cat = kind.categoryToken()
     val color = tint ?: cat.color(isLight).copy(alpha = 0.85f)
 
@@ -1218,7 +1219,7 @@ fun ToolCallChip(
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val isLight = !isSystemInDarkTheme()
+    val isLight = !isDarkTheme()
     val cs = MaterialTheme.colorScheme
     val cat = kind.categoryToken()
     val catColor = cat.color(isLight)

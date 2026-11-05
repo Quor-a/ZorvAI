@@ -461,6 +461,13 @@ class QuroVideoCallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         when (source) {
             QuroFrameVisionSource.MAIN_MODEL -> {
                 val att = QuroAttachmentKit.fromFile(this, frame, "image/jpeg")
+                // 🔴 视觉诊断埋点（2026-11-04）：用户实测「自带视觉的主模型用不了画面」。
+                //    此处确认帧已注入 store —— 若真机仍看不见画面，下一步就查
+                //    QuroAssistant.toLlmMessages 对 hidden 消息 attachments 的下发（tag 同名过滤）。
+                android.util.Log.i(
+                    "VideoVision",
+                    "MAIN_MODEL 帧注入 store: model=${mainCfg.model} uri=${att.uri} size=${att.size}B",
+                )
                 store.add(
                     QuroMessage(
                         role = "user",

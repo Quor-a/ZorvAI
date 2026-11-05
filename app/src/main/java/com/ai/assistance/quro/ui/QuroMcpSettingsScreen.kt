@@ -149,33 +149,95 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
                     addAll(QuroMcpClientPrefs.load(ctx))
                 }
             }
+            var editing by remember { mutableStateOf<QuroMcpClient.McpServerConfig?>(null) }
             clientServers.forEach { srv ->
                 Card(
                     Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
                 ) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(srv.alias, style = MaterialTheme.typography.bodyMedium)
-                            Text(srv.url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        TextButton(onClick = {
-                            scope.launch {
-                                val n = withContext(Dispatchers.IO) {
-                                    runCatching { QuroMcpClient.listTools(srv).size }.getOrNull()
-                                }
-                                Toast.makeText(ctx, if (n != null) qstr(R.string.qk_02076, (n).toString()) else qstr(R.string.qk_02077), Toast.LENGTH_SHORT).show()
+                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(srv.alias + if (srv.enabled) "" else " · 已停用", style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    srv.url + (if (srv.handshake) " · initialize" else "") +
+                                        (if (srv.kind == "ws") " · WebSocket" else ""),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
-                        }) { Text(qstr(R.string.qk_02078)) }
-                        TextButton(onClick = {
-                            QuroMcpClientPrefs.remove(ctx, srv.alias)
-                            clientServers.remove(srv)
-                        }) { Text(qstr(R.string.qk_00091), color = MaterialTheme.colorScheme.error) }
+                            // 单服务器启停：显示「已停用」状态，不再只能删了重加。
+                            Switch(checked = srv.enabled, onCheckedChange = { on ->
+                                val updated = srv.copy(enabled = on)
+                                QuroMcpClientPrefs.add(ctx, updated)
+                                val idx = clientServers.indexOfFirst { it.alias == srv.alias }
+                                if (idx >= 0) clientServers[idx] = updated
+                            })
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            TextButton(onClick = {
+                                scope.launch {
+                                    val info = withContext(Dispatchers.IO) {
+                                        runCatching {
+                                            val caps = QuroMcpClient.getServerCapabilities(srv)
+                                            val names = caps.keys().asSequence().joinToString(",")
+                                            val tools = QuroMcpClient.listTools(srv).size
+                                            val res = QuroMcpClient.listResources(srv).size
+                                            val prompts = QuroMcpClient.listPrompts(srv).size
+                                            val pong = QuroMcpClient.ping(srv)
+                                            "工具 $tools · 资源 $res · 提示词 $prompts · 能力[$names] · ping=${if (pong) "ok" else "无响应"}"
+                                        }.getOrElse { "能力查询失败: ${it.message}" }
+                                    }
+                                    Toast.makeText(ctx, info, Toast.LENGTH_LONG).show()
+                                }
+                            }) { Text(qstr(R.string.qk_02078)) }
+                            TextButton(onClick = { editing = srv }) { Text("编辑") }
+                            TextButton(onClick = {
+                                QuroMcpClientPrefs.remove(ctx, srv.alias)
+                                clientServers.remove(srv)
+                            }) { Text(qstr(R.string.qk_00091), color = MaterialTheme.colorScheme.error) }
+                        }
                     }
                 }
+            }
+
+            // 编辑已有服务器：URL / Token / 握手 / 传输（旧版只能删除后重加）。
+            editing?.let { cur ->
+                var eUrl by remember(cur.alias) { mutableStateOf(cur.url) }
+                var eToken by remember(cur.alias) { mutableStateOf(cur.token) }
+                var eHandshake by remember(cur.alias) { mutableStateOf(cur.handshake) }
+                var eWs by remember(cur.alias) { mutableStateOf(cur.kind == "ws") }
+                AlertDialog(
+                    onDismissRequest = { editing = null },
+                    title = { Text("编辑 ${cur.alias}") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(eUrl, { eUrl = it }, label = { Text("端点 URL") }, singleLine = true)
+                            OutlinedTextField(eToken, { eToken = it }, label = { Text("Token（可选）") }, singleLine = true)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Switch(checked = eHandshake, onCheckedChange = { eHandshake = it })
+                                Spacer(Modifier.width(8.dp)); Text("启用 initialize 握手", fontSize = 13.sp)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Switch(checked = eWs, onCheckedChange = { eWs = it })
+                                Spacer(Modifier.width(8.dp)); Text("WebSocket 传输", fontSize = 13.sp)
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val updated = cur.copy(
+                                url = eUrl.trim(), token = eToken.trim(), handshake = eHandshake,
+                                kind = if (eWs) "ws" else if (cur.kind == "local") "local" else "remote",
+                            )
+                            QuroMcpClientPrefs.add(ctx, updated)
+                            val idx = clientServers.indexOfFirst { it.alias == cur.alias }
+                            if (idx >= 0) clientServers[idx] = updated
+                            editing = null
+                        }) { Text("保存") }
+                    },
+                    dismissButton = { TextButton(onClick = { editing = null }) { Text("取消") } },
+                )
             }
 
             Text(stringResource(R.string.qk_02079, (clientServers.size).toString()),
@@ -186,21 +248,65 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
             var newAlias by remember { mutableStateOf("") }
             var newUrl by remember { mutableStateOf("") }
             var newToken by remember { mutableStateOf("") }
+            var newHandshake by remember { mutableStateOf(false) }
+            var newWs by remember { mutableStateOf(false) }
             OutlinedTextField(newAlias, { newAlias = it }, label = { Text(stringResource(R.string.qk_02080)) }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(newUrl, { newUrl = it }, label = { Text(stringResource(R.string.qk_02081)) }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(newToken, { newToken = it }, label = { Text(stringResource(R.string.qk_02082)) }, modifier = Modifier.fillMaxWidth())
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = newHandshake, onCheckedChange = { newHandshake = it })
+                Spacer(Modifier.width(8.dp)); Text("启用 initialize 握手（严格型服务器）", fontSize = 13.sp)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = newWs, onCheckedChange = { newWs = it })
+                Spacer(Modifier.width(8.dp)); Text("WebSocket 传输", fontSize = 13.sp)
+            }
             Button(onClick = {
                 val a = newAlias.trim(); val u = newUrl.trim()
                 if (a.isEmpty() || u.isEmpty()) {
                     Toast.makeText(ctx, qstr(R.string.qk_02083), Toast.LENGTH_SHORT).show()
                 } else {
-                    val cfg = QuroMcpClient.McpServerConfig(a, u, newToken.trim())
+                    val cfg = QuroMcpClient.McpServerConfig(
+                        alias = a, url = u, token = newToken.trim(),
+                        kind = if (newWs) "ws" else "remote", handshake = newHandshake,
+                    )
                     QuroMcpClientPrefs.add(ctx, cfg)
                     if (clientServers.none { it.alias == a }) clientServers.add(cfg)
                     newAlias = ""; newUrl = ""; newToken = ""
                     Toast.makeText(ctx, qstr(R.string.qk_02084, (a).toString()), Toast.LENGTH_SHORT).show()
                 }
             }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.qk_02085)) }
+
+            // 从剪贴板导入标准 { "mcpServers": { ... } } 配置（Claude Desktop / Cursor / VS Code 通用）。
+            TextButton(onClick = {
+                val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val raw = cm.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
+                var added = 0
+                runCatching {
+                    val root = org.json.JSONObject(raw)
+                    val servers = root.optJSONObject("mcpServers") ?: root
+                    val keys = servers.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        val o = servers.optJSONObject(k) ?: continue
+                        val url = o.optString("url", "").ifBlank { o.optString("serverUrl", "") }
+                        if (url.isBlank()) continue
+                        val token = o.optJSONObject("headers")?.optString("Authorization", "")
+                            ?.removePrefix("Bearer ") ?: ""
+                        val cfg = QuroMcpClient.McpServerConfig(
+                            alias = k, url = url, token = token, kind = "remote", handshake = true,
+                        )
+                        QuroMcpClientPrefs.add(ctx, cfg)
+                        if (clientServers.none { it.alias == k }) clientServers.add(cfg)
+                        added++
+                    }
+                }
+                Toast.makeText(
+                    ctx,
+                    if (added > 0) "已导入 $added 台 MCP 服务器" else "剪贴板里没有可识别的 mcpServers 配置",
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }, modifier = Modifier.fillMaxWidth()) { Text("从剪贴板导入 mcpServers 配置") }
 
             HorizontalDivider()
 
@@ -245,5 +351,10 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
                 }
             }
         }
+
+        // ── 应用目录（应用与 MCP 同页，切换开关即把服务接入 AI 目录）──
+        com.ai.assistance.quro.ui.QuroServiceCatalogSection()
+
+        Spacer(Modifier.height(20.dp))
     }
 }

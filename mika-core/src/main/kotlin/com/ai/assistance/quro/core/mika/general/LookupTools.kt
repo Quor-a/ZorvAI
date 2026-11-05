@@ -7,6 +7,7 @@ import com.ai.assistance.quro.core.mika.knowledge.PERSONAL_KIND
 import com.ai.assistance.quro.core.mika.knowledge.SKILL_KINDS
 import com.ai.assistance.quro.core.mika.knowledge.toolsNote
 import com.ai.assistance.quro.core.mika.prompt.Prompts
+import com.ai.assistance.quro.core.mika.skills.PersonalSkills
 import com.ai.assistance.quro.core.mika.tool.AgentTool
 import com.ai.assistance.quro.core.mika.tool.ArgError
 import com.ai.assistance.quro.core.mika.tool.Args
@@ -130,6 +131,9 @@ private suspend fun read(a: Args, ctx: ToolContext, among: Set<String>): ToolExe
                 put("name", v.info.name); put("kind", v.info.kind); put("file", v.file)
                 put("content", v.content); put("truncated", v.truncated)
                 put("files", JsonArray(v.info.files.map(::JsonPrimitive)))
+                // 个人技能的版本号:改写它(skill_save)时带上,中途被别处改过就对不上
+                if (v.info.kind == PERSONAL_KIND && v.file == v.info.files.firstOrNull())
+                    ctx.config.personalSkills?.get(v.info.name)?.let { put("version", PersonalSkills.version(it.markdown)) }
                 if (scripts.isNotEmpty()) {
                     put("scriptSource", dir)
                     put("scripts", JsonArray(scripts.map { e ->

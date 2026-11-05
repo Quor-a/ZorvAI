@@ -368,6 +368,10 @@ class QuroWebUiServer(
                 val asset = when {
                     path.startsWith("/runtimes/") -> "runtimes/" + path.removePrefix("/runtimes/")
                     path.startsWith("/www/") -> "www/" + path.removePrefix("/www/")
+                    // 🔴 /libs/ 之前没有路由，导致 assets/libs/katex.min.{js,css} 与 60 个
+                    //    KaTeX 字体文件全部 404 —— WebUI 的公式渲染「代码写了但永远不可达」。
+                    //    katex.min.css 用相对路径 url(fonts/…)，命中同一前缀即可。
+                    path.startsWith("/libs/") -> "libs/" + path.removePrefix("/libs/")
                     else -> STATIC[path]
                 }
                 if (asset == null) {
@@ -1702,6 +1706,11 @@ class QuroWebUiServer(
         path.endsWith(".css") -> "text/css; charset=utf-8"
         path.endsWith(".js") -> "application/javascript; charset=utf-8"
         path.endsWith(".json") -> "application/json; charset=utf-8"
+        // KaTeX 字体走 /libs/fonts/，返回 octet-stream 会让部分浏览器拒绝 @font-face。
+        path.endsWith(".woff2") -> "font/woff2"
+        path.endsWith(".woff") -> "font/woff"
+        path.endsWith(".ttf") -> "font/ttf"
+        path.endsWith(".svg") -> "image/svg+xml"
         else -> "application/octet-stream"
     }
 

@@ -18,6 +18,7 @@ import com.ai.assistance.quro.core.mika.action.FollowUp
 import com.ai.assistance.quro.core.mika.action.Origin
 import com.ai.assistance.quro.core.mika.action.Presented
 import com.ai.assistance.quro.core.mika.action.Refusals
+import com.ai.assistance.quro.core.mika.access.AppAccessDenied
 import com.ai.assistance.quro.core.mika.model.Author
 import com.ai.assistance.quro.core.mika.gate.ConfirmationGate
 import com.ai.assistance.quro.core.mika.knowledge.ChannelAdvisor
@@ -76,13 +77,14 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.time.ZoneId
 import com.ai.assistance.quro.core.mika.userscreen.UserScreenSource
+import com.ai.assistance.quro.core.mika.general.HISTORY_READ
 import com.ai.assistance.quro.core.mika.general.VIEW_USER_SCREEN
 
 /** 批做完后另看的一眼:内容和画面同一时刻。 */
 private fun batchViewNote(content: String) = Feedback.format("batch_view_note", "screen" to content)
 private val MEMORY_VERBS = setOf(Verb.MemorySearch, Verb.MemorySave)
-/** 讨论历史时仍可查本地记忆与技能资料；这些调用不会打开 App 或网站。 */
-private val DISCUSSION_LOOKUP_VERBS = setOf(Verb.MemorySearch, Verb.KnowledgeSearch, Verb.KnowledgeRead, Verb.SkillSearch, Verb.SkillRead)
+/** 讨论历史时仍可查本地记忆与技能资料、之前几轮的记录；这些调用不会打开 App 或网站。 */
+private val DISCUSSION_LOOKUP_VERBS = setOf(Verb.MemorySearch, Verb.KnowledgeSearch, Verb.KnowledgeRead, Verb.SkillSearch, Verb.SkillRead, Verb.HistoryRead)
 
 /**
  * 驱动“模型 ↔ 工具”的循环,只做调度:问模型([ModelCaller])→ 交执行入口([ActionExecutor])→
@@ -151,6 +153,8 @@ class AgentLoop(
     private val reviewFinalAnswer: Boolean = true,
     /** 同一网站、App 里连着做对外动作(发送、提交)时两次之间的间隔;默认不等。 */
     private val outwardPacing: OutwardPacing = OutwardPacing.Off,
+    /** 运行轨迹接收方(事件总线订阅者 + 模型/工具调用埋点);不接 OTLP 时传 null 即可。 */
+    private val trace: RunTrace? = null,
 ) {
     init {
         require(maxSteps > 0) { "maxSteps must be positive" }
@@ -159,13 +163,16 @@ class AgentLoop(
     }
 
     /** 运行记录:按因果先后写(见 [RecordOrder])。 */
-    val events = RunEventBus().also { it.subscribe(sink) }
+    val events = RunEventBus().also { bus ->
+        bus.subscribe(sink)
+        trace?.let { bus.subscribe(it) }
+    }
     private val sink = RecordOrder(events).also { order ->
         // 记进证据账本的每条观察原样进运行记录(跟在读到它的那次调用的结果后面)
         tools.observer = { record { order.observed(RunEvent.Observed.of(it)) } }
     }
 
-    private val caller = ModelCaller(model, tools, router, flags, retry, ::emit, ::now, autonomous)
+    private val caller = ModelCaller(model, tools, router, flags, retry, ::emit, ::now, autonomous, trace)
     private val intentGate = intentJudge?.let { IntentGate(it, model.takeUnless { main -> main === it }) }
     private val routeMatcher = routes
     /** 本任务的上下文生成器(外壳、预算、已给过的参考资料)。 */
@@ -175,6 +182,11 @@ class AgentLoop(
     /** 这次的原话给模型时的样子(带着屏幕时换成了说明,见 [UserScreenTurns]);还没开始为 null。判结局、提取记忆按它读。 */
     @Volatile var taskText: String? = null
         private set
+    /**
+     * 用户最近一句话(开局原话或插话)里他这次打的字,见 [ownWords];插话里没打字(只发了屏幕、只选了字)时沿用上一句的。
+     * 语言提示和回答的语言检查按它;记忆、技能的引文收的是 [UserWords.said](还认他引的自己说过的话)。
+     */
+    private var latestWords = ""
 
     private val _state = MutableStateFlow<TaskState>(TaskState.Idle)
     val state: StateFlow<TaskState> = _state.asStateFlow()
@@ -186,8 +198,8 @@ class AgentLoop(
     /** 本次任务真的用过的能力组(记进这一轮,下一轮开局预先展开);任务结束后读取。 */
     val usedGroups: Set<String> get() = tools.used
 
-    /** 用户本次说的话(memory_save 的引文校验用);记忆关着时不收集。 */
-    private val utterances get() = if (memory != null) tools.utterances else null
+    /** 用户本次说的话(memory_save、skill_save 的引文校验用);给了就收集,只在内存里、每个任务开始清空。 */
+    private val utterances get() = tools.utterances
 
     private val user = UserExchange(tools, confirmations, confirmTimeoutMs, inputTimeoutMs, { utterances }, { _state.value = it }, ::emit, ::now)
     private val replay = routes?.let { RouteReplay(it, tools, ::awaitGate, { r -> gateState = r; _state.value = r }, ::emit, clock) }
@@ -316,11 +328,12 @@ class AgentLoop(
         val opening = shots.render(raw)
         val task = opening?.said ?: raw
         taskText = task
+        latestWords = ownWords(raw, opening)
         val priorTurns = shots.collapse(rawPrior)
         earlierGoals = priorTurns.map { it.userText }
         // 之前的轮次只作参考,放在本次任务之前
         val context = Conversation.context(priorTurns)
-        utterances?.add(opening?.words ?: task)
+        utterances?.add(UserWords.said(opening?.words ?: raw, tools))
         // 记忆块:对话上文之后、任务原文之前;用到的条目由代码记下
         usedMemory = emptyList()
         // 上次没读出记忆文件(密钥库一时不可用)就再读一次;还读不出就这次不带记忆
@@ -384,7 +397,10 @@ class AgentLoop(
         val matched = knowledge?.matchTask(task, Int.MAX_VALUE, installed).orEmpty()
         val index = if (skills != null && recommendSkills) GuideRecommender.index(skills, task) else null
         val start = ctx.start(
-            task, priorTurns = context?.let { (it.parts.single() as Part.Text).text },
+            task, priorTurns = context?.let { (it.parts.single() as Part.Text).text }?.let { prior ->
+                // 之前几轮读到的东西查得到时说一句(只在有记过运行的轮次、提供了 history_read 时)
+                if (tools.definitions().any { it.name == HISTORY_READ }) Feedback.format("history_hint", "turns" to prior) else prior
+            },
             memory = listOfNotNull(ProfileContext.render(profileSnapshot), block?.message).takeIf { it.isNotEmpty() }?.joinToString("\n\n"),
             channel = if (knowledge != null) channelLine(matched) else null,
             knowledge = matched, knowledgeNote = toolsNote(tools.scriptsOffered()), withLinks = flags.deepLinks,
@@ -457,14 +473,14 @@ class AgentLoop(
                     // 提议的调用尚未写进历史、也没有执行；重问一次，只给直接回答的机会。
                     val discussion = history + ctx.notice("conversation_intent",
                         "The user is discussing or reviewing this time. Answer this question directly, without reading or operating apps, websites or other outside content.")
-                    reply = try { caller.ask(discussion, emptyList(), using = model, onText = previewFor(step)) }
+                    reply = try { caller.ask(discussion, emptyList(), step, using = model, onText = previewFor(step)) }
                     catch (e: CancellationException) { throw e }
                     catch (e: Exception) { return StopRules.modelFailed(e) }
                     used = model
                 }
             }
             val text = reply.parts.filterIsInstance<Part.Text>().joinToString("") { it.text }.trim()
-            history += Message(Role.Assistant, reply.parts, Author.ZorvAI).also { caller.noteReply(it, used) }
+            history += Message(Role.Assistant, reply.parts, Author.ZorvAI).also { caller.noteReply(it, used, reply.usage) }
             val calls = reply.parts.filterIsInstance<Part.ToolCall>()
             note = text.ifEmpty { calls.firstOrNull()?.name ?: note }
             val tool = calls.firstOrNull()?.name
@@ -527,7 +543,7 @@ class AgentLoop(
                 }
                 // 回答的正文不是用户最近那句的语言:退回一次整段改写;改写后还不对照样交出
                 if (!languageNudged) {
-                    val mismatch = ReplyLanguage.mismatch(latestUserWords(history), text)
+                    val mismatch = ReplyLanguage.mismatch(latestWords, text)
                     if (mismatch != null) {
                         languageNudged = true
                         TurnPolicy.language(mismatch).let { history += ctx.notice(it.source, it.text) }
@@ -550,6 +566,7 @@ class AgentLoop(
             answered = null
 
             val first = calls.first()
+            trace?.toolStarted(step, first.name, first.id, now())
             val skipped = calls.drop(1).map {
                 Part.ToolResult(it.id, buildJsonObject {
                     put("ok", false)
@@ -634,6 +651,11 @@ class AgentLoop(
                         recordReply(Redactor.args(tools.verb(first.name), first.argsJson, secretField = true))
                         return StopRules.guard(it)
                     }
+                    // 应用权限拒绝已经由执行入口作为工具结果交给模型:不结束任务,让模型换路线或向用户说明
+                    if (AppAccessDenied.isAppAccessCode(action.code)) {
+                        track.after(tools.verb(first.name), ok = false, guard = false, changed = null, recovery = false, app = null)
+                        continue
+                    }
                     // 模型单步只会被守卫叫停、被确认关卡拦下或因作用在 ZorvAI 自己身上不做;别的拒绝说明执行入口和这里对不上
                     check(action.hit != null || action.code == Refusals.OWN_APP) { "unexpected refusal ${action.code} for ${first.name}" }
                     // 被确认关卡拦下:不计入失败熔断,交给模型走确认流程
@@ -709,17 +731,18 @@ class AgentLoop(
      */
     private suspend fun appendRuntimeState(history: MutableList<Message>, place: Place?, labels: Map<String, String>, step: Int) {
         val mode = if (place?.kind == PlaceKind.Site) tools.placeMode() else null
-        val userWords = history.lastOrNull { it.author == Author.User }?.parts?.filterIsInstance<Part.Text>()?.joinToString(" ") { it.text }
-        val state = ctx.runtimeState(place, place?.name?.let(labels::get), mode, step, maxSteps, now(), userWords)
+        val state = ctx.runtimeState(place, place?.name?.let(labels::get), mode, step, maxSteps, now(), latestWords)
         val last = history.lastOrNull()
         if (last == null || last.role == Role.Assistant) history += Message(Role.User, listOf(state), Author.ZorvAI)
         else history[history.lastIndex] = last.copy(parts = last.parts + state)
     }
 
-    /** 用户最近一句话的文字(不含接在后面的运行时状态和插话标记)。 */
-    private fun latestUserWords(history: List<Message>): String =
-        history.lastOrNull { it.author == Author.User }?.let(ContextBuilder::withoutRuntimeState)?.parts?.filterIsInstance<Part.Text>()
-            ?.joinToString(" ") { it.text.removePrefix(STEER_MARKER) }.orEmpty()
+    /**
+     * 用户这句话里他这次打的字:屏幕的说明、浏览器页的页面说明、引的那一段和附件行先后去掉(见 [UserWords.typed];几样都带着时都去掉),
+     * 都没有时是原话;只发了屏幕、只引了一段、只选了字、只带了附件时为空。
+     * 给模型的那句带着固定的英文说明、插话标记,后面还可能接着运行时状态,不能拿来判断用户用的语言。
+     */
+    private fun ownWords(raw: String, shown: UserScreenTurns.Rendered?): String = UserWords.typed(shown?.words ?: raw, tools)
 
     private suspend fun channelLine(matched: List<KnowledgeEntry>): String? {
         val facts = channelFacts ?: return null
@@ -737,9 +760,11 @@ class AgentLoop(
     private suspend fun appendSteers(history: MutableList<Message>, updates: List<RunInbox.UserSteer>): Boolean {
         updates.forEach { update ->
             val shown = screens?.render(update.text)
+            val words = ownWords(update.text, shown)
+            if (words.isNotBlank()) latestWords = words
             history += Message(Role.User, listOf(Part.Text("$STEER_MARKER\n${shown?.said ?: update.text}")) + shown?.images.orEmpty(), Author.User)
             shown?.details?.forEach { (source, body) -> history += ctx.userScreen(source, body) }
-            utterances?.add(shown?.words ?: update.text)
+            utterances?.add(UserWords.said(shown?.words ?: update.text, tools))
             emit(RunEvent.State(now(), "steer_received", RunEvent.clip(Redactor.text(update.messageId))))
         }
         return updates.isNotEmpty()
@@ -919,7 +944,7 @@ class AgentLoop(
             _state.value = TaskState.Running(step, "")
             val asked = now()
             val reply = try {
-                caller.ask(history, TurnPolicy.finalTools(specs, tools::verb), onText = previewFor(step))
+                caller.ask(history, TurnPolicy.finalTools(specs, tools::verb), step, onText = previewFor(step))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

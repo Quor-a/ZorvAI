@@ -98,6 +98,14 @@ class QuroToolRouter(
             "tap_screen", "input_text", "get_foreground_app",
             "bg_screen", "ui_card", "ui_widget",
             "ui_control", "zx_web_card", "visual_question",
+            // 🔴 可视化小卡片是独立分类且是用户高频口语（「小卡片」），必须常驻：
+            //   过去只靠 discovery，模型既不知道 visual_card 存在、也把它当弹窗类，
+            //   结果「AI 永远不用可视化小卡片、老用动态UI/富组件顶替」。
+            "visual_card", "visual_card_skeleton",
+            // 🔴 技能按需加载：系统提示词只注入 Skills Catalog 元数据，全文必须靠本工具取。
+            //   注册在 QuroBuiltInTools，但过去没进 ALWAYS_ON / 能力目录 → 模型查不到、
+            //   于是「技能开关似乎没用、AI 也不会去读技能全文」。与可视化小卡片同一病根。
+            "skill",
             // 确定性出图三件套：用户历史上明确反馈「新加的代码生图 AI 根本查不到」，
             // 保留在常驻里（不靠检索），避免同类问题复发。
             "codecanvas_probe", "codecanvas_script", "codecanvas_markup",
@@ -110,7 +118,7 @@ class QuroToolRouter(
     "action": {
       "type": "string",
       "description": "操作类型",
-      "enum": ["list_categories", "list_tools", "match_intent", "match_everything", "get_schema", "get_best_practices", "get_directory_summary"]
+      "enum": ["list_categories", "list_tools", "list_screen_tools", "match_intent", "match_everything", "get_schema", "get_best_practices", "get_directory_summary"]
     },
     "category": { "type": "string", "description": "分类名（list_tools 使用）" },
     "intent": { "type": "string", "description": "用户意图描述（match_intent 使用）" },
@@ -227,6 +235,7 @@ class QuroToolRouter(
         return when (action) {
             "list_categories" -> listCategories()
             "list_tools" -> listTools(args.optString("category"))
+            "list_screen_tools" -> listScreenTools()
             "match_intent" -> matchIntent(args.optString("intent"))
             // 跨域检索：工具 + 系统提示词规则 + UI 组件 + 界面交付路径一次给。
             // 与 match_intent 的分工：那个只答「哪个工具」，这个答「我该走哪条路」。
@@ -258,6 +267,7 @@ class QuroToolRouter(
             appendLine("- `get_schema(name=\"工具名\")`：返回完整参数 JSON Schema + 专属用法，并加载它。")
             appendLine("- `list_categories()`：列出所有工具分类。")
             appendLine("- `list_tools(category=\"分类名\")`：查看某分类下的工具及其说明。")
+            appendLine("- `list_screen_tools()`：一次性列出**全部看屏/屏幕操作工具**（读屏、截图、点按、UI树、视觉分析、后台虚拟屏 bg_screen、ADB 截屏投屏…），AI 操控虚拟屏或读屏前先用它摸底。")
             appendLine("- `get_directory_summary()`：全部工具 name + 说明（较长，只在确实需要时调用）。")
             appendLine()
             appendLine("## 当前已加载（可直接调用，无需再查）：${if (loaded.isEmpty()) "（暂无可调，先用 match_intent 检索你需要的）" else loaded.joinToString(", ")}")
@@ -325,6 +335,39 @@ class QuroToolRouter(
             tools.sortedBy { it.name }.forEach { appendLine("- ${it.name}：${it.description}") }
             appendLine()
             appendLine("需要某工具的完整参数与用法，调 get_schema(name=工具名) 加载。")
+        }
+    }
+
+    /**
+     * 一次性列出「看屏 / 屏幕操作」能力全家桶。
+     *
+     * 解决用户实测反馈的「AI 操控虚拟屏时不知道已有的全部看屏工具」：把读屏、截图、点按滑动、
+     * UI 控件树、视觉分析、图像识别、后台虚拟屏（bg_screen）、ADB 截屏投屏等屏相关工具
+     * 全部聚到一屏，让模型在操控虚拟屏 / 读屏 / 截图前先摸底。
+     */
+    private fun listScreenTools(): String {
+        val tools = ToolCapabilityDirectory.getScreenTools()
+        val names = tools.map { it.name }.toSet()
+        return buildString {
+            appendLine("## 看屏 / 屏幕操作 工具全家桶（${tools.size} 个）")
+            appendLine()
+            appendLine("🔴 使用边界：")
+            appendLine("- `bg_screen` 是**后台虚拟屏**（不打扰用户主屏，开屏需 Shizuku）；其余是操作**用户正在看的主屏**（会抢焦点、打断用户）。")
+            appendLine("- 用户说「别打扰我 / 后台做 / 悄悄做」→ 用 `bg_screen`；用户说「点我屏幕上这个」→ 用 `tap_screen`/`read_screen` 等主屏工具。")
+            appendLine()
+            tools.sortedByDescending { it.priority }.forEach { t ->
+                appendLine("### ${t.name}（${t.category.displayName}）")
+                appendLine("- **说明**：${t.description}")
+                appendLine("- **使用场景**：${t.useCases.joinToString("、")}")
+                if (t.examples.isNotEmpty()) appendLine("- **示例**：`${t.examples.first()}`")
+                appendLine()
+            }
+            val missing = ToolCapabilityDirectory.SCREEN_TOOL_FAMILY.filter { it !in names }
+            if (missing.isNotEmpty()) {
+                appendLine("（以下本机未注册/未启用，按需跳过：${missing.joinToString(", ")}）")
+            }
+            appendLine()
+            appendLine("需要某工具的完整参数与用法 → get_schema(name=工具名)。")
         }
     }
 

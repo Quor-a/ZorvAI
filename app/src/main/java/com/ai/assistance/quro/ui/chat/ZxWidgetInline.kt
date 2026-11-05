@@ -141,8 +141,17 @@ private fun InlineZxWebView(
     // 若不在这里随 html 重载，组件会永远停在「首次渲染时的半截 dsl」上 ——
     // 表现为「能渲染但渲染不完整 / AI 写完了界面却卡在半成品」。
     // 因此把加载放进 LaunchedEffect(html)：html 一变就重新 loadDataWithBaseURL。
+    // 🔴 baseUrl=null → https origin（2026-11-04）：null origin 下相对路径 /
+    //    CDN fetch / ES modules 全被拦（「外部资源直接加载不了」的根因之一）；
+    //    同时补 viewport + 兜底 CSS，dsl 卡不再横向超屏。
     LaunchedEffect(html) {
-        webView?.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+        webView?.loadDataWithBaseURL(
+            com.ai.assistance.quro.ui.chat.CardHtmlCompat.BASE_URL,
+            com.ai.assistance.quro.ui.chat.CardHtmlCompat.inject(html),
+            "text/html",
+            "utf-8",
+            null,
+        )
     }
 
     AndroidView(
@@ -153,6 +162,7 @@ private fun InlineZxWebView(
                 setBackgroundColor(AndroidColor.TRANSPARENT)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 settings.cacheMode = WebSettings.LOAD_NO_CACHE
                 settings.defaultTextEncodingName = "UTF-8"
                 settings.loadWithOverviewMode = true

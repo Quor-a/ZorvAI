@@ -1,0 +1,206 @@
+#!{{SHEBANG}}
+# ─────────────────────────────────────────────────────────────────────
+#  zorv — zorvAI 双环境切换器（原创命令；随 App 自动生成，手改会被覆盖）
+#
+#  同一台设备上有两套彼此隔离的 Linux，命令**不通用**，这是最容易踩的坑：
+#    termux   Termux 官方 bootstrap   包管理器 pkg   Android 原生，无 systemd / 无 root
+#    ubuntu   zorvAI 沙箱 (proot)     包管理器 apt   桌面工具链齐全，跑在 Ubuntu 24.04
+#
+#  用法：
+#    zorv                进入 zorvAI 终端（Ubuntu 沙箱）
+#    zorv termux         回 Termux（在沙箱里请直接 exit）
+#    zorv status         两套环境体检：装没装、什么版本、当前在哪
+#    zorv which CMD      一条命令属于哪套环境（pkg / apt / python3 / node …）
+#    zorv help           本帮助
+#
+#  进沙箱是真 exec：当前进程直接换成 proot，不留残壳；回 Termux 用 exit。
+# ─────────────────────────────────────────────────────────────────────
+
+: "${ZORV_ENV:={{DEFAULT_ENV}}}"
+
+ZORV_TERMUX_PREFIX='{{PREFIX}}'
+ZORV_TERMUX_HOME='{{HOME}}'
+ZORV_UBUNTU_ROOT='{{ROOTFS}}'
+ZORV_HOST='{{HOST}}'
+ZORV_PROOT='{{PROOT}}'
+ZORV_PROOT_LOADER='{{PROOT_LOADER}}'
+ZORV_PROOT_TMP='{{PROOT_TMP}}'
+ZORV_SANDBOX_DIR='{{SANDBOX_DIR}}'
+ZORV_TERMUX_VERSION='{{TVERSION}}'
+ZORV_PROOT_ARGS=({{PROOT_ARGS}})
+
+# proot 要能找到自己的 loader 与沙箱库，否则会以
+# 「proot info: ptrace acceleration (seccomp mode 2) enabled」之后立即退出，
+# 或者在 guest 里找不到 /usr/bin 下的二进制。
+export PROOT_LOADER="$ZORV_PROOT_LOADER"
+export PROOT_TMP_DIR="$ZORV_PROOT_TMP"
+export LD_LIBRARY_PATH="$ZORV_SANDBOX_DIR:$ZORV_SANDBOX_DIR/usr/bin${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+# 在沙箱里，宿主路径要经 /quro 映射才看得见（proot 把 filesDir 绑到了 /quro）
+zorv_hostpath() {
+    case "$1" in
+        "$ZORV_HOST"/*) printf '%s' "$1" ;;
+        /*)
+            if [ "$ZORV_ENV" = ubuntu ]; then
+                printf '%s%s' "$ZORV_HOST" "$1"
+            else
+                printf '%s' "$1"
+            fi
+            ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
+zorv_help() {
+    cat <<'ZORV_HELP'
+zorv — zorvAI 双环境切换器（原创命令）
+
+  本机有两套彼此隔离的 Linux，命令不通用：
+    termux   Termux 官方 bootstrap   包管理器 pkg   Android 原生，无 systemd / 无 root
+    ubuntu   zorvAI 沙箱 (proot)     包管理器 apt   桌面工具链齐全，跑在 Ubuntu 24.04
+
+  zorv                进入 zorvAI 终端（Ubuntu 沙箱）
+  zorv termux         回 Termux（在沙箱里请直接 exit）
+  zorv status         两套环境体检：装没装、什么版本、当前在哪
+  zorv which CMD      一条命令属于哪套环境（pkg / apt / python3 / node …）
+  zorv help           本帮助
+
+  进沙箱是真 exec：当前进程直接换成 proot，不留残壳；回 Termux 用 exit。
+ZORV_HELP
+}
+
+# proot 的实际启动：区分「能不能直接 exec」。
+#
+# 🔴 Android 10+ 的 W^X 策略删除了 untrusted_app 对 **app_data_file**（/data/user/0/<pkg>）
+#    的 execute 权限，所以躺在应用私有目录里的 ELF 直接 execve 必 EACCES。
+#    官方解法是 system_linker_exec：execve("/system/bin/linker64", [目标ELF, ...])，
+#    linker 以读权限 mmap，不受 execute 限制。
+#    而 nativeLibraryDir（/data/app/...）属 apk_data_file，允许 execute，直接跑更快。
+zorv_proot_exec() {
+    case "$ZORV_PROOT" in
+        /data/user/* | /data/data/*)
+            if [ -x /system/bin/linker64 ]; then
+                exec /system/bin/linker64 "$ZORV_PROOT" "$@"
+            fi
+            ;;
+    esac
+    exec "$ZORV_PROOT" "$@"
+}
+
+zorv_enter_ubuntu() {
+    if [ "$ZORV_ENV" = ubuntu ]; then
+        echo "你已经在 zorvAI 终端（Ubuntu）里了；回 Termux 请输入 exit"
+        return 0
+    fi
+    if [ ! -x "$ZORV_PROOT" ] && [ ! -f "$ZORV_PROOT" ]; then
+        echo "✗ zorvAI 沙箱还没装好（缺 proot）：请在「设置 → 功能」里安装 Linux 环境"
+        return 1
+    fi
+    if [ ! -d "$ZORV_UBUNTU_ROOT" ]; then
+        echo "✗ 沙箱 rootfs 缺失：$ZORV_UBUNTU_ROOT"
+        echo "  请在「设置 → 功能」里重新安装 Linux 环境"
+        return 1
+    fi
+    echo "→ 进入 zorvAI 终端（Ubuntu）…  回 Termux 请输入 exit"
+    zorv_proot_exec "${ZORV_PROOT_ARGS[@]}" /usr/bin/env ZORV_ENV=ubuntu /bin/bash -l
+}
+
+zorv_os_release() {
+    local f
+    f="$(zorv_hostpath "$ZORV_UBUNTU_ROOT")/etc/os-release"
+    [ -r "$f" ] || return 1
+    sed -n 's/^PRETTY_NAME="\{0,1\}\(.*\)"\{0,1\}$/\1/p' "$f" | head -1
+}
+
+zorv_status() {
+    echo "当前环境：$ZORV_ENV"
+    echo
+    local tp rp
+    tp="$(zorv_hostpath "$ZORV_TERMUX_PREFIX")"
+    if [ -x "$tp/bin/bash" ]; then
+        printf '  termux  ✅  %s\n' "$ZORV_TERMUX_PREFIX"
+        printf '             bootstrap %s · 包管理器 pkg（apt 后端）· 无 root\n' "$ZORV_TERMUX_VERSION"
+    else
+        printf '  termux  ❌  %s 不存在\n' "$ZORV_TERMUX_PREFIX"
+    fi
+    rp="$(zorv_hostpath "$ZORV_UBUNTU_ROOT")"
+    if [ -d "$rp/etc" ]; then
+        local os
+        os="$(zorv_os_release || echo unknown)"
+        printf '  ubuntu  ✅  %s\n' "$ZORV_UBUNTU_ROOT"
+        printf '             %s · 包管理器 apt · proot 沙箱\n' "$os"
+    else
+        printf '  ubuntu  ❌  %s 不存在（设置里安装 Linux 环境）\n' "$ZORV_UBUNTU_ROOT"
+    fi
+    echo
+    echo "两套环境命令不通用：找不到命令时用 zorv which <命令> 查它在哪一侧。"
+}
+
+zorv_which() {
+    local c="$1"
+    if [ -z "$c" ]; then
+        echo "用法：zorv which <命令>"
+        return 2
+    fi
+    local tp rp n=0 d
+    tp="$(zorv_hostpath "$ZORV_TERMUX_PREFIX")"
+    rp="$(zorv_hostpath "$ZORV_UBUNTU_ROOT")"
+    if [ -x "$tp/bin/$c" ]; then
+        printf '  termux   %s/bin/%s\n' "$ZORV_TERMUX_PREFIX" "$c"
+        n=$((n + 1))
+    fi
+    if [ -x "/system/bin/$c" ]; then
+        printf '  android  /system/bin/%s\n' "$c"
+        n=$((n + 1))
+    fi
+    for d in usr/local/sbin usr/local/bin usr/sbin usr/bin sbin bin; do
+        if [ -x "$rp/$d/$c" ]; then
+            printf '  ubuntu   %s/%s/%s\n' "$ZORV_UBUNTU_ROOT" "$d" "$c"
+            n=$((n + 1))
+        fi
+    done
+    if [ "$n" -eq 0 ]; then
+        echo "✗ 两套环境都没有 $c"
+        echo "  termux 侧装：pkg install <包>    ubuntu 侧装：apt install <包>"
+        return 1
+    fi
+    # 当前环境用不了时给一句可执行的提示，省掉「command not found 然后猜半天」
+    if [ "$ZORV_ENV" = ubuntu ] && [ ! -x "$rp/usr/bin/$c" ] && [ ! -x "$rp/bin/$c" ] && [ -x "$tp/bin/$c" ]; then
+        echo "提示：$c 只在 Termux 侧，先 exit 回 Termux 再执行"
+    fi
+    if [ "$ZORV_ENV" = termux ] && [ ! -x "$tp/bin/$c" ] && [ -x "$rp/usr/bin/$c" ]; then
+        echo "提示：$c 只在 zorvAI 沙箱里，先 zorv 进沙箱再执行"
+    fi
+    return 0
+}
+
+zorv_main() {
+    case "${1:-}" in
+        "" | enter) zorv_enter_ubuntu ;;
+        ubuntu | linux) zorv_enter_ubuntu ;;
+        termux)
+            if [ "$ZORV_ENV" = ubuntu ]; then
+                echo "→ 退出沙箱即回到 Termux：请输入 exit"
+            else
+                echo "已经在 Termux 里了"
+            fi
+            ;;
+        status) zorv_status ;;
+        which)
+            shift
+            zorv_which "${1:-}"
+            ;;
+        -h | --help | help) zorv_help ;;
+        *)
+            echo "未知参数：$1"
+            echo
+            zorv_help
+            exit 2
+            ;;
+    esac
+}
+
+# 直接执行（脚本模式）时才跑；被 .bashrc `source` 时只定义函数，不执行任何动作。
+if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
+    zorv_main "$@"
+fi

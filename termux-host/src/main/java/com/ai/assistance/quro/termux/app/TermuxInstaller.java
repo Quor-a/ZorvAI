@@ -10,6 +10,8 @@ import android.system.Os;
 import android.util.Pair;
 import android.view.WindowManager;
 
+import androidx.annotation.Nullable;
+
 import com.ai.assistance.quro.termux.R;
 import com.ai.assistance.quro.termux.shared.file.FileUtils;
 import com.ai.assistance.quro.termux.shared.termux.crash.TermuxCrashUtils;
@@ -156,7 +158,18 @@ final class TermuxInstaller {
                     final byte[] buffer = new byte[8096];
                     final List<Pair<String, String>> symlinks = new ArrayList<>(50);
 
-                    final byte[] zipBytes = loadZipBytes();
+                    // 🔴 崩溃防护：libtermux-bootstrap.so 全工程不存在（termux-host 无 jniLibs/
+                    //   externalNativeBuild），loadZipBytes() 里的 System.loadLibrary 会抛
+                    //   UnsatisfiedLinkError —— 它是 Error 不是 Exception，旧代码接不住，
+                    //   首次打开 TermuxActivity（前缀目录为空 → 走安装线程）直接进程崩溃。
+                    //   现改为返回 null → 走统一的 bootstrap 错误弹窗（提示用 App 内
+                    //   termux 工具安装，TermuxEnvironment 会装到本 Activity 现在监听的同一路径）。
+                    final byte[] zipBytes = loadZipBytesOrNull();
+                    if (zipBytes == null) {
+                        showBootstrapErrorDialog(activity, whenDone,
+                            "Bootstrap 压缩包不可用（libtermux-bootstrap.so 缺失）。请回到 Zorv AI 对话里执行 `termux(install)` 安装运行环境后重试。");
+                        return;
+                    }
                     try (ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
                         ZipEntry zipEntry;
                         while ((zipEntry = zipInput.getNextEntry()) != null) {
@@ -373,6 +386,20 @@ final class TermuxInstaller {
 
     private static Error ensureDirectoryExists(File directory) {
         return FileUtils.createDirectoryFile(directory.getAbsolutePath());
+    }
+
+    /**
+     * 🔴 崩溃防护版：libtermux-bootstrap.so 缺失时 {@link UnsatisfiedLinkError}（Error，
+     * 不是 Exception）会击穿调用线程；包一层 Throwable 转 null，由调用方走错误弹窗。
+     */
+    @Nullable
+    public static byte[] loadZipBytesOrNull() {
+        try {
+            return loadZipBytes();
+        } catch (Throwable t) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to load bootstrap zip (libtermux-bootstrap.so missing?): " + t.getMessage());
+            return null;
+        }
     }
 
     public static byte[] loadZipBytes() {

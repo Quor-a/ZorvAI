@@ -60,8 +60,18 @@ fun QuroApp(
         return
     }
 
-    var darkMode by remember { mutableStateOf(chatVm.isDarkMode()) }
-        QuroTheme(darkOverride = darkMode) {
+    // 深色模式三态：system 时传 null 让 QuroTheme 跟随系统（实时响应系统切换）。
+    var darkMode by remember { mutableStateOf(chatVm.darkModeTriState()) }
+    val darkOverride = remember(darkMode) {
+        when (darkMode) {
+            "dark" -> true
+            "light" -> false
+            else -> null
+        }
+    }
+    // 主题强调色：运行时注入 QuroTheme，切换后全站立即生效。
+    val accentHex by chatVm.accentColorPref.collectAsState()
+    QuroTheme(darkOverride = darkOverride, accentHex = accentHex) {
         Box(Modifier.fillMaxSize()) {
             ChatScreen(
                 chatVm,
@@ -69,10 +79,15 @@ fun QuroApp(
                 personaVm,
                 voiceBallEnabled = voiceBallEnabled,
                 onToggleVoiceBall = onToggleVoiceBall,
-                darkMode = darkMode,
+                darkMode = darkMode == "dark",
                 onToggleDark = {
-                    darkMode = !darkMode
-                    chatVm.setDarkMode(darkMode)
+                    val next = when (darkMode) {
+                        "dark" -> "light"
+                        "light" -> "system"
+                        else -> "dark"
+                    }
+                    darkMode = next
+                    chatVm.setDarkModeTriState(next)
                 },
             )
         }

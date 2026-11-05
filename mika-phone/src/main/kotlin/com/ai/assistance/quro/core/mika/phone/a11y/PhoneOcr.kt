@@ -18,7 +18,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /** 两套内置模型均在本机运行；同一帧并行识别，完成后才释放位图。两套都出错时抛异常(不当成没字)。 */
-internal object PhoneOcr {
+object PhoneOcr {
     private const val TAG = "PhoneOcr"
 
     private val chinese: TextRecognizer by lazy {
@@ -26,6 +26,18 @@ internal object PhoneOcr {
     }
     private val latin: TextRecognizer by lazy {
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    }
+
+    /**
+     * 预热：主动初始化两套识别器。
+     *
+     * 首次 `process` 要加载模型（约 1s），这一步在真机上表现为「第一次看屏明显卡一下」。
+     * 趁空闲先把它付掉，之后的识别就是纯推理。失败无副作用（`lazy` 不会缓存异常，
+     * 下次真正用到时会重试）。
+     */
+    fun warmUp() {
+        runCatching { chinese }
+        runCatching { latin }
     }
 
     suspend fun read(bitmap: Bitmap): List<VisibleTextLine> {

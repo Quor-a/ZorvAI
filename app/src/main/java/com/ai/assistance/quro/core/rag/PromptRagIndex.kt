@@ -180,21 +180,24 @@ object PromptRagIndex {
             title = "界面交付路径",
             body = """
                 ## 界面交付路径（选错会白干，务必分清）
-                - **小卡片 / 可视化图表** → `ui_card` / `ui_widget`（对话气泡内的富卡片）
+                - **可视化小卡片（独立分类，不是动态UI/富组件/弹窗）** → 直接调 `visual_card(title, html=...)`，**html 自由写任意场景**（天气/新闻/日程/行情/待办/时钟/收件箱/番茄钟/登机牌/任何长尾场景…）；拿不准结构时才用 `visual_card_skeleton(kind=...)` 取 13 份参考样板改造
+                - **可视化图表 / 现成组件库标准件** → `ui_card` / `ui_widget`（富组件，另一分类）
                 - **动态 UI 组件（可交互）** → `ui_control` / `quro-ui` 原生组件
                 - **整屏界面** → GenUI 画布（`genui_draw`）
-                - **Web 应用 / 小程序** → `miniapp`
+                - **Web 应用（HTML + WebView，不是小程序）** → `miniapp`
+                - **微信小程序形态（WXML/WXSS）** → `miniapp_sdk`（仅用户明确要小程序时）
                 - **可视化弹窗 / 询问** → `visual_popup` / `visual_ask`
                 - **可交互卡片（zxwidget）** → `zx_web_card`（WebView 承载 zx 组件族 477 个）；
                   写之前**先 `rag_search(domain="zx_components", query="用户想看什么效果")`** 秒级命中最匹配的
                   组件名 + 字段契约 + 可照抄的示例 DSL，照着改数据即可一次写对；
                   若已知道组件名、要查确切字段，再用 `zx_catalog(component="zx_xxx")` 取契约。
                 - **出图（静态图片）** → `codecanvas_onscreen_*`（端侧渲染，无需服务器）
-                - ⚠️ 这六条路径**互不等价**，不要用一个凑另一个。需要「能点」就用可交互组件，
-                  需要「能看」用富卡片，需要「整屏」用画布，需要「用户在卡片上当场操作并回传」用 zxwidget 动态交互界面。
+                - ⚠️ 这些路径**互不等价**，不要用一个凑另一个。需要「单块只读展示」就用可视化小卡片（visual_card，独立分类），
+                  需要「能点」用可交互组件，需要「现成标准件」用富组件，需要「整屏」用画布，需要「用户在卡片上当场操作并回传」用 zxwidget 动态交互界面。
+                - 🔴 用户说「小卡片」时**严禁**改用动态UI组件 / 富组件 / 弹窗顶替——那是分类错误。
             """.trimIndent(),
-            triggers = listOf("界面", "卡片", "组件", "画布", "页面", "弹窗", "小程序", "可视化", "交互", "zx", "zxwidget", "对比", "占比", "趋势", "表单", "时间线"),
-            keywords = listOf("ui_card", "ui_widget", "ui_control", "genui", "miniapp", "codecanvas", "zx_web_card", "zx_catalog", "rag_search", "zx_components"),
+            triggers = listOf("界面", "卡片", "组件", "画布", "页面", "弹窗", "小程序", "Web应用", "Web 应用", "网页应用", "可视化", "交互", "zx", "zxwidget", "对比", "占比", "趋势", "表单", "时间线"),
+            keywords = listOf("visual_card", "visual_card_skeleton", "ui_card", "ui_widget", "ui_control", "genui", "miniapp", "codecanvas", "zx_web_card", "zx_catalog", "rag_search", "zx_components"),
         ),
         PromptBlock(
             id = "memory_policy",

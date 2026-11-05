@@ -74,7 +74,7 @@ private fun String.takeLastCodePoints(n: Int): String {
  */
 data class QuroMessage(
     val id: String = UUID.randomUUID().toString(),
-    val role: String,
+    override val role: String,
     val content: String,
     val toolCallId: String? = null,
     val toolCalls: List<QuroToolCall>? = null,
@@ -111,7 +111,11 @@ data class QuroMessage(
     /** 内部管道消息标记：true 时 UI 层不渲染此消息（LLM 上下文仍包含）。默认 false。 */
     val hidden: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-)
+    /** 本条消息的思考段耗时（毫秒）：首个思考 token → 首个可见 token。0 = 未知/无思考。 */
+    val thinkDurationMs: Long = 0,
+) : com.ai.assistance.quro.core.chat.QuroMessageLike {
+    override val textContent: String get() = content
+}
 
 /**
  * 会话存储（原创，内存版；v1 不做落盘以控制风险）。
@@ -242,12 +246,22 @@ class QuroConversationStore(
             // 导致：(a) 真实正文丢失；(b) HTML 泄漏进对话上下文，污染后续回复（用户截图确诊）。
             // 策略：优先用真实正文；仅当正文确为空且存在思考时，才把「已去除 HTML 标签」的思考
             // 作为兜底上下文，避免模型拿到空历史。多步工具编排链由 toolCalls + 工具结果承载，不依赖思考。
-            val content = when {
-                m.role == "assistant" && m.content.isBlank() && !m.reasoning.isNullOrBlank() ->
-                    m.reasoning!!.replace(Regex("<[^>]*>"), "")
-                else -> m.content
-            }
-            built.add(QuroChatMessage(m.role, content, m.toolCalls, m.toolCallId, m.attachments, reasoning = m.reasoning))
+            // 🔴 修复「同一段思考在历史里出现两遍」：旧实现把去标签的 reasoning
+            //    填进 content **同时**还保留 reasoning 字段；带 tool_calls 的 assistant
+            //    消息在 messageToJson 里会额外回传 reasoning_content → 模型一轮读到
+            //    两遍自己的推理，顺着「接着想」越滚越长（219 步思考的助推器之一）。
+            //    规则：工具轮 content 交给 tool_calls 承载，不拿思考兜底；
+            //    纯文本轮正文为空才兜底，且兜底后清掉 reasoning，二选一不重复。
+            val thinkingFallback = m.role == "assistant" && m.content.isBlank() &&
+                m.toolCalls.isNullOrEmpty() && !m.reasoning.isNullOrBlank()
+            val content = if (thinkingFallback) m.reasoning!!.replace(Regex("<[^>]*>"), "")
+                else m.content
+            built.add(
+                QuroChatMessage(
+                    m.role, content, m.toolCalls, m.toolCallId, m.attachments,
+                    reasoning = if (thinkingFallback) null else m.reasoning,
+                )
+            )
         }
         // 「保留对话轮数」对话框级覆盖：仅保留最近 N 个 (用户+助手) 轮次，其余丢弃。
         // 仅当 historyRounds > 0 时生效；0/未设置则跳过（与历史行为完全一致）。

@@ -175,7 +175,7 @@ class QuroTaskSchedulerTool(private val context: Context) : QuroTool {
                 TaskSchedule.Once(delayMs)
             }
             "recurring" -> {
-                val intervalMs = args.optLong("intervalMs", 3600000) // 默认1小时
+                val intervalMs = args.optLong("interval_ms", 3600000) // 默认1小时
                 TaskSchedule.Recurring(intervalMs)
             }
             "cron" -> {

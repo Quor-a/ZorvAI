@@ -56,16 +56,18 @@ class ReadCalendarTool : QuroTool {
 class WriteCalendarTool : QuroTool {
     override val name = "write_calendar"
     override val description =
-        "在系统日历中创建事件(标题+开始时间，可选结束时间/地点/描述/全天)。参数为 " +
+        "在系统日历中创建事件(标题+开始时间，可选结束时间/地点/描述/全天/提醒)。参数为 " +
             "{\"title\":\"会议\",\"start\":\"2026-07-25 15:00\" 或毫秒时间戳,\"end\":\"2026-07-25 16:00\"(可选,默认+1h)," +
-            "\"location\":\"(可选)\",\"description\":\"(可选)\",\"all_day\":false}。需 WRITE_CALENDAR 权限。"
+            "\"location\":\"(可选)\",\"description\":\"(可选)\",\"all_day\":false,\"reminder_minutes\":10}。" +
+            "reminder_minutes>0 时写入带提醒的日历事件（METHOD_ALERT，默认无提醒）。需 WRITE_CALENDAR 权限。"
     override val parametersJson = """{"type":"object","properties":{
         "title":{"type":"string","description":"事件标题（必填）"},
         "start":{"type":"string","description":"开始时间：'yyyy-MM-dd HH:mm' 或 毫秒时间戳（必填）"},
         "end":{"type":"string","description":"结束时间：同上格式；缺省默认开始+1小时"},
         "location":{"type":"string","description":"地点（可选）"},
         "description":{"type":"string","description":"描述/备注（可选）"},
-        "all_day":{"type":"boolean","description":"是否全天事件，默认 false"}
+        "all_day":{"type":"boolean","description":"是否全天事件，默认 false"},
+        "reminder_minutes":{"type":"integer","description":"提前多少分钟提醒；>0 时写入日历提醒（默认 0=无提醒）"}
     },"required":["title","start"]}"""
     override val requiredPermissions = listOf(Manifest.permission.WRITE_CALENDAR)
 
@@ -86,6 +88,7 @@ class WriteCalendarTool : QuroTool {
         val location = a.optString("location", "").trim()
         val desc = a.optString("description", "").trim()
         val allDay = a.optBoolean("all_day", false)
+        val reminderMinutes = a.optInt("reminder_minutes", 0).coerceIn(0, 10080)
 
         val calId = resolveWritableCalendar(context)
             ?: return "设备上没有可写入的日历账户，请先在系统日历创建一个本地日历后再试。"
@@ -100,6 +103,9 @@ class WriteCalendarTool : QuroTool {
             if (location.isNotEmpty()) put(CalendarContract.Events.EVENT_LOCATION, location)
             if (desc.isNotEmpty()) put(CalendarContract.Events.DESCRIPTION, desc)
             put(CalendarContract.Events.ALL_DAY, if (allDay) 1 else 0)
+            // 带提醒：reminder_minutes>0 时写 HAS_ALARM，随后补 CalendarContract.Reminders 记录
+            // 「日历事件 + METHOD_ALERT 提醒」语义。
+            if (reminderMinutes > 0) put(CalendarContract.Events.HAS_ALARM, 1)
         }
         return try {
             val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
@@ -107,7 +113,18 @@ class WriteCalendarTool : QuroTool {
                 "写入日历失败：insert 返回 null（可能被日历应用拒绝，或账户不可写）"
             } else {
                 val eventId = uri.lastPathSegment ?: "?"
-                "✅ 已写入系统日历：[$title] ${fmt(startMs)} → ${fmt(endMs)}（事件ID=$eventId）"
+                if (reminderMinutes > 0) {
+                    val reminderValues = ContentValues().apply {
+                        put(CalendarContract.Reminders.EVENT_ID, eventId.toLongOrNull() ?: -1L)
+                        put(CalendarContract.Reminders.MINUTES, reminderMinutes)
+                        put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT)
+                    }
+                    runCatching {
+                        context.contentResolver.insert(CalendarContract.Reminders.CONTENT_URI, reminderValues)
+                    }
+                }
+                val remindNote = if (reminderMinutes > 0) "，提前 $reminderMinutes 分钟提醒" else ""
+                "✅ 已写入系统日历：[$title] ${fmt(startMs)} → ${fmt(endMs)}（事件ID=$eventId$remindNote）"
             }
         } catch (e: Exception) {
             "写入日历失败: ${e.message}"

@@ -104,16 +104,22 @@ class QuroHealthCheckService(private val context: Context) {
      * 检查单个提供商的健康状态
      */
     private suspend fun checkProviderHealth(config: QuroProviderConfig): Boolean {
-        // 实现实际的健康检查逻辑
-        // 这里可以：
-        // 1. 尝试获取模型列表
-        // 2. 发送简单的测试请求
-        // 3. 检查API密钥有效性
-        
-        // 简单实现：检查配置是否完整
-        return config.baseUrl.isNotBlank() && 
-               (config.apiKey.isNotBlank() || !config.requiresApiKey) &&
-               config.defaultModel.isNotBlank()
+        // 先做字段完整性快检（本地、零网络），不完整直接判不健康，省一次网络往返。
+        if (config.baseUrl.isBlank() ||
+            (config.apiKey.isBlank() && config.requiresApiKey) ||
+            config.defaultModel.isBlank()) {
+            return false
+        }
+        // 真探活：真实拉取模型列表（/models 或 Ollama /api/tags）。
+        // 此前只查字段非空，从不发请求，断网/失效的提供商也会被标 HEALTHY。
+        return try {
+            val result = com.ai.assistance.quro.core.network.QuroModelListFetcher()
+                .fetch(config.baseUrl, config.apiKey)
+            result is com.ai.assistance.quro.core.network.QuroModelListResult.Success
+        } catch (e: Exception) {
+            Log.w(TAG, "提供商 ${config.name} 健康探测异常: ${e.message}")
+            false
+        }
     }
     
     /**

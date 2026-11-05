@@ -156,6 +156,13 @@ fun ChatScreen(
             viewModel.send(text)
         }
     }
+    // 🔴 界面直接调工具（DSL 动作 call_tool）：按钮点下去就**真跑**宿主工具。
+    //
+    // 此前这条通路的每一环都缺：SDK 的 ActionHost 没有 callTool、GenUIAction 没有 call_tool、
+    // AiActionHost 也没有工具回调 → 界面上任何「要真做事」的按钮只能退化成 send_message
+    // （发一句话让模型再绕一轮），于是用户看到的就是「GenUI 调不了工具」。
+    // 现在三端补齐：点「刷新/查询/发送」这类按钮由界面直接执行，结果当场回显。
+    actionHost.onCallTool = { name, args -> viewModel.runToolFromUi(name, args) }
     var inputText by remember { mutableStateOf("") }
 
     // 思考面板状态
@@ -409,9 +416,12 @@ fun ChatScreen(
         // ── 漂浮宠物（可自由拖动；点击开侧边栏；按 AI 状态播报）──
         val petPhase = when {
             !state.isStreaming && state.streamingText.isNotBlank() -> PetPhase.DONE
-            state.isStreaming && state.streamingText.isNotBlank() -> PetPhase.GENERATING
+            // 工具执行中必须排在 GENERATING 之前：执行期间 streamingText 可能还留着上一轮的文本，
+            // 若先判 GENERATING，就永远看不出「在等工具回来」，用户体感就是卡住不动。
+            // 占位记录（result 为空）由 ChatViewModel.markToolStarted 在执行前写入。
             state.isStreaming && state.toolCallRecords.lastOrNull()?.result?.isBlank() == true ->
                 PetPhase.TOOL_CALLING
+            state.isStreaming && state.streamingText.isNotBlank() -> PetPhase.GENERATING
             state.isStreaming && state.thoughtChain != null -> PetPhase.THINKING
             else -> PetPhase.IDLE
         }

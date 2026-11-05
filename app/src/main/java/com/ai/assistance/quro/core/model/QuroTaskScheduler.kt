@@ -79,11 +79,16 @@ class QuroTaskScheduler(private val context: Context) {
         
         scheduledTasks[task.id] = task
         
+        // 把动作序列化进 inputData，让 TaskWorker（可能在不同进程/重启后恢复）能真正执行，
+        // 而非只能拿到一个 task_ 前缀的 tag 干瞪眼。
+        val actionData = serializeAction(action)
+        
         // 根据调度类型设置 WorkManager
         when (schedule) {
             is TaskSchedule.Once -> {
                 val request = OneTimeWorkRequestBuilder<TaskWorker>()
                     .setInitialDelay(schedule.delayMs, TimeUnit.MILLISECONDS)
+                    .setInputData(actionData)
                     .addTag(task.id)
                     .build()
                 
@@ -94,6 +99,7 @@ class QuroTaskScheduler(private val context: Context) {
                     schedule.intervalMs,
                     TimeUnit.MILLISECONDS
                 )
+                    .setInputData(actionData)
                     .addTag(task.id)
                     .build()
                 
@@ -108,6 +114,7 @@ class QuroTaskScheduler(private val context: Context) {
                 val delayMs = calculateCronDelay(schedule.cronExpression)
                 val request = OneTimeWorkRequestBuilder<TaskWorker>()
                     .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
+                    .setInputData(actionData)
                     .addTag(task.id)
                     .build()
                 
@@ -159,9 +166,11 @@ class QuroTaskScheduler(private val context: Context) {
         scheduledTasks[taskId] = updatedTask
         
         // 重新调度任务
+        val actionData = serializeAction(task.action)
         when (task.schedule) {
             is TaskSchedule.Once -> {
                 val request = OneTimeWorkRequestBuilder<TaskWorker>()
+                    .setInputData(actionData)
                     .addTag(task.id)
                     .build()
                 
@@ -172,6 +181,7 @@ class QuroTaskScheduler(private val context: Context) {
                     task.schedule.intervalMs,
                     TimeUnit.MILLISECONDS
                 )
+                    .setInputData(actionData)
                     .addTag(task.id)
                     .build()
                 
@@ -185,6 +195,7 @@ class QuroTaskScheduler(private val context: Context) {
                 val delayMs = calculateCronDelay(task.schedule.cronExpression)
                 val request = OneTimeWorkRequestBuilder<TaskWorker>()
                     .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
+                    .setInputData(actionData)
                     .addTag(task.id)
                     .build()
                 
@@ -333,19 +344,18 @@ class TaskWorker(
     
     override suspend fun doWork(): Result {
         return try {
-            // 获取任务信息：调度时用 addTag(task.id) 传入，id 形如 task_<时间戳>_<序号>。
-            // 注意 CoroutineWorker 取标签用的是 ListenableWorker 的 tags 属性，
-            // 不存在 inputTags 这个成员（此前误用导致编译失败）。
             val taskId = tags.firstOrNull { it.startsWith("task_") }
-                ?: return Result.failure()
-            
             Log.d(TAG, "执行任务: $taskId")
             
-            // 这里需要实现实际的任务执行逻辑
-            // 简化实现
-            
-            Log.d(TAG, "任务执行完成: $taskId")
-            Result.success()
+            // 从 inputData 反序列化动作并真正执行（此前是空壳，动作从未被消费）。
+            val action = deserializeAction(inputData)
+            val outcome = if (action != null) {
+                executeAction(applicationContext, action)
+            } else {
+                "（未携带动作信息，跳过执行）"
+            }
+            Log.d(TAG, "任务执行完成: $taskId → $outcome")
+            Result.success(workDataOf("outcome" to outcome))
         } catch (e: Exception) {
             Log.e(TAG, "任务执行失败: ${e.message}")
             Result.failure()
@@ -354,5 +364,93 @@ class TaskWorker(
     
     companion object {
         private const val TAG = "TaskWorker"
+    }
+}
+
+/** 把 [AutomationAction] 序列化为 WorkManager 的 [Data]（跨进程可恢复）。 */
+internal fun serializeAction(action: AutomationAction): Data {
+    val b = Data.Builder()
+        .putString("action_type", action.javaClass.simpleName)
+    when (action) {
+        is AutomationAction.Click -> {
+            b.putInt("x", action.x).putInt("y", action.y)
+        }
+        is AutomationAction.LongClick -> {
+            b.putInt("x", action.x).putInt("y", action.y)
+        }
+        is AutomationAction.Swipe -> {
+            b.putInt("sx", action.startX).putInt("sy", action.startY)
+                .putInt("ex", action.endX).putInt("ey", action.endY)
+                .putLong("dur", action.durationMs)
+        }
+        is AutomationAction.InputText -> b.putString("text", action.text)
+        is AutomationAction.KeyEvent -> b.putInt("keycode", action.keyCode)
+        is AutomationAction.LaunchApp -> b.putString("pkg", action.packageName)
+        is AutomationAction.WaitForElement -> b.putLong("timeout", action.timeoutMs)
+        is AutomationAction.TakeScreenshot -> b.putString("path", action.savePath)
+        is AutomationAction.Custom -> {
+            b.putString("custom", action.action)
+            action.parameters.forEach { (k, v) -> b.putString("p_$k", v.toString()) }
+        }
+    }
+    return b.build()
+}
+
+/** 从 [Data] 反序列化回 [AutomationAction]。 */
+internal fun deserializeAction(data: Data): AutomationAction? {
+    val type = data.getString("action_type") ?: return null
+    return when (type) {
+        "Click" -> AutomationAction.Click(data.getInt("x", 0), data.getInt("y", 0))
+        "LongClick" -> AutomationAction.LongClick(data.getInt("x", 0), data.getInt("y", 0))
+        "Swipe" -> AutomationAction.Swipe(
+            data.getInt("sx", 0), data.getInt("sy", 0),
+            data.getInt("ex", 0), data.getInt("ey", 0), data.getLong("dur", 300),
+        )
+        "InputText" -> AutomationAction.InputText(data.getString("text") ?: "")
+        "KeyEvent" -> AutomationAction.KeyEvent(data.getInt("keycode", 0))
+        "LaunchApp" -> AutomationAction.LaunchApp(data.getString("pkg") ?: "")
+        "WaitForElement" -> AutomationAction.WaitForElement(data.getLong("timeout", 5000))
+        "TakeScreenshot" -> AutomationAction.TakeScreenshot(data.getString("path") ?: "")
+        "Custom" -> AutomationAction.Custom(data.getString("custom") ?: "custom_action", emptyMap())
+        else -> null
+    }
+}
+
+/**
+ * 在 Worker 里真正执行一个动作。
+ *
+ * 覆盖「无复杂环境依赖、可直接落地」的类型（LaunchApp / TakeScreenshot），
+ * 其余需虚拟屏/无障碍的类型给出明确反馈，而非静默吞掉。
+ */
+internal suspend fun executeAction(context: Context, action: AutomationAction): String {
+    return when (action) {
+        is AutomationAction.LaunchApp -> {
+            runCatching {
+                val intent = context.packageManager.getLaunchIntentForPackage(action.packageName)
+                if (intent == null) {
+                    "应用未安装或无启动入口: ${action.packageName}"
+                } else {
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                    "已启动应用 ${action.packageName}"
+                }
+            }.getOrElse { "启动应用失败: ${it.message}" }
+        }
+        is AutomationAction.TakeScreenshot -> {
+            // 截图依赖 MediaProjection 授权 + 虚拟屏，后台 Worker 无前台 UI 无法弹授权，
+            // 尝试走虚拟屏截图，失败则明确反馈。
+            runCatching {
+                val bmp = QuroVirtualDisplay.getInstance(context).takeScreenshot()
+                if (bmp == null) "虚拟屏未就绪，无法截图（需先在前台启动虚拟屏）"
+                else "截图成功（${bmp.width}x${bmp.height}）"
+            }.getOrElse { "截图失败: ${it.message}" }
+        }
+        is AutomationAction.Click -> "该动作（点击 ${action.x},${action.y}）需虚拟屏/无障碍环境，后台定时暂不支持，请在前台执行"
+        is AutomationAction.LongClick -> "该动作（长按）需虚拟屏/无障碍环境，后台定时暂不支持"
+        is AutomationAction.Swipe -> "该动作（滑动）需虚拟屏/无障碍环境，后台定时暂不支持"
+        is AutomationAction.InputText -> "该动作（输入文本）需无障碍/键盘环境，后台定时暂不支持"
+        is AutomationAction.KeyEvent -> "该动作（按键）需无障碍/虚拟屏环境，后台定时暂不支持"
+        is AutomationAction.WaitForElement -> "该动作（等待元素）需虚拟屏环境，后台定时暂不支持"
+        is AutomationAction.Custom -> "自定义动作「${action.action}」后台定时暂不支持"
     }
 }

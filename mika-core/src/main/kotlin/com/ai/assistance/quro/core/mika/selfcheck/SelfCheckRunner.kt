@@ -108,12 +108,18 @@ class SelfCheckRunner(
 
         private fun seconds(ms: Long) = (ms + 999) / 1000
 
-        /** 「设备」这一项:安卓 12 以下手机操作用不了;没有无线调试只能用电脑启动,算部分可用。 */
+        /**
+         * 「设备」这一项:安卓 12 以下手机操作用不了;这个环境没有能起助手的路也用不了;
+         * 没有无线调试只能用电脑启动,算部分可用。
+         */
         fun judgeDevice(f: DeviceFacts): CheckOutcome {
             val detail = "Android ${f.androidRelease} (SDK ${f.sdk}), ${f.abis.firstOrNull() ?: "unknown ABI"}" +
                 ", wireless debugging ${when (f.wirelessDebugging) { true -> "present"; false -> "missing"; null -> "unknown" }}"
             return when {
                 f.sdk < DeviceFacts.MIN_PHONE_SDK -> CheckOutcome.fail("$detail; phone control needs Android 12+", Advice.PhoneTooOld)
+                f.phoneControlUnavailable -> CheckOutcome.fail(
+                    "$detail, developer options page missing; phone control unavailable in this environment", Advice.PhoneControlUnavailable,
+                )
                 f.wirelessDebugging == false -> CheckOutcome.partial(detail, Advice.NoWirelessDebugging)
                 else -> CheckOutcome.pass(detail)
             }

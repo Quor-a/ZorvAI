@@ -194,53 +194,13 @@ fun FileAttachmentCard(att: QuroAttachment) {
     }
 }
 
-/** 思考过程卡：可折叠展示模型的 reasoning。 */
-@Composable
-fun ThinkingCard(reasoning: String) {
-    var expanded by remember { mutableStateOf(true) }
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-    ) {
-        Column(Modifier.fillMaxWidth().padding(10.dp)) {
-            Row(
-                Modifier.fillMaxWidth().clickable { expanded = !expanded },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(stringResource(R.string.qk_02369), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
-                Text(if (expanded) stringResource(R.string.qk_00818) else stringResource(R.string.qk_00944), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (expanded) {
-                Spacer(Modifier.height(4.dp))
-                Text(reasoning, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-/** 输入指示：思考中动画三点。 */
-@Composable
-fun TypingIndicator() {
-    val transition = rememberInfiniteTransition()
-    val dots = listOf(0, 1, 2)
-    Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(stringResource(R.string.qk_00093), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        dots.forEach { i ->
-            val alpha by transition.animateFloat(
-                initialValue = 0.3f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(600, delayMillis = i * 200),
-                    repeatMode = RepeatMode.Reverse,
-                ),
-            )
-            Text("•", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha), modifier = Modifier.padding(horizontal = 2.dp))
-        }
-    }
-}
+// 🔴 已删除旧版 `ThinkingCard` / `TypingIndicator`（2026-11-05 全面排查）：
+//   · ThinkingCard 默认 `expanded = true` 且把 reasoning **全文平铺**，就是
+//     「旧的思考显示混乱 / 收不起来」的那套实现；全项目零调用，留着只会被误接回渲染链。
+//   · TypingIndicator 是第三套「思考中…」等待指示，与 ChatScreen.WaitingDots /
+//     WorkingIndicator 重复。状态行是 spinner↔完成态二选一，不做叠加。
+//   现在唯一口径：ChatScreen.ThinkFoldRow（默认折叠一行）+ ThinkProcessSheet（全量按需）
+//   + WebUI renderThink（最近 3 步），等待指示由 WaitingDots / WorkingIndicator 互斥承担。
 
 /** 一组附件的渲染（图片/视频/文件分派到对应卡片）。 */
 @Composable

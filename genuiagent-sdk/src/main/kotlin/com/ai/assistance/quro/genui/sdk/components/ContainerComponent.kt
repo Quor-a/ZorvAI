@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
@@ -64,9 +65,18 @@ fun ContainerRenderer(
 
     when (component.type) {
         ComponentTypes.COLUMN -> {
+            // 🔴 根因2（2026-11-06）：固定高度 column 的 arrangement(end/space_between)
+            //    会把内容推到底、中间大片空白（截图症状1的精确形态）；内容超出则被裁。
+            //    固定高度时钳回均匀排布并允许纵向滚动 —— 内容永远完整可见。
+            val fixedH = (component.style.height as? com.ai.assistance.quro.genui.sdk.dsl.Dimension.Fixed)?.dp
+            val colModifier = if (fixedH != null && fixedH > 0f) modifier
+                .heightIn(max = fixedH.dp)
+                .verticalScroll(rememberScrollState()) else modifier.fillMaxSize()
+            val arrangement = if (fixedH != null && fixedH > 0f) androidx.compose.foundation.layout.Arrangement.spacedBy(spacing.dp)
+                else verticalArrangement(component.style.arrangement, spacing)
             Column(
-                modifier = modifier.fillMaxSize(),
-                verticalArrangement = verticalArrangement(component.style.arrangement, spacing),
+                modifier = colModifier,
+                verticalArrangement = arrangement,
                 horizontalAlignment = horizontalAlign(component.style.crossAlignment)
             ) {
                 RenderChildren(

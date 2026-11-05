@@ -3,6 +3,9 @@ package com.ai.assistance.quro.genui.sdk.components
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
@@ -89,7 +92,17 @@ fun CardRenderer(
         border = border
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().then(innerPad),
+            modifier = Modifier.fillMaxWidth().then(innerPad).then(
+                // 🔴 内容永不裁剪（2026-11-06 根治「卡片空白/内容缺失」）：
+                //    AI 给卡片写了固定高度时，超出部分此前被 Card 的 shape 裁剪静默吃掉，
+                //    表现就是「卡片很高、里面大片空白、只有零星内容」。
+                //    固定高度卡片的内容区改为纵向可滚 —— 任何组件组合都完整可见。
+                if (component.style.height is com.ai.assistance.quro.genui.sdk.dsl.Dimension.Fixed &&
+                    (component.style.height as com.ai.assistance.quro.genui.sdk.dsl.Dimension.Fixed).dp > 0f
+                ) Modifier.heightIn(max = (component.style.height as com.ai.assistance.quro.genui.sdk.dsl.Dimension.Fixed).dp.dp)
+                    .verticalScroll(rememberScrollState())
+                else Modifier
+            ),
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.Top,
             horizontalAlignment = Alignment.Start
         ) {

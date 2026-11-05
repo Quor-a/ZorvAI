@@ -221,5 +221,17 @@ interface IQuroShellService {
 
     /** 以 shell 身份连本应用 WebView 的调试套接字；名字不合规矩或连不上返回 null */
     ParcelFileDescriptor openDevtoolsSocket(String name) = 46;
+
+    /**
+     * 替这块后台屏报一次「用户活动」，让它别自己息屏。
+     *
+     * 为什么必须有：带 OWN_DISPLAY_GROUP 建的屏（Android 13 起的可信屏）**自成一个显示组**，
+     * 有独立的息屏计时。AI 注入的输入不算用户操作，放着不管到点这组屏就睡了 ——
+     * 表现是「画面不再合成、截图一直是同一张、点按没反应」，模型于是以为界面没变、反复重点。
+     * 只对**自成一组**的屏报；报给默认组会让用户自己的主屏也一直不灭。
+     *
+     * @return 报成功 true；系统没有按屏报的接口（安卓 12 以下）或该屏不属于本服务 false
+     */
+    boolean pokeUserActivity(int displayId) = 47;
 }
 

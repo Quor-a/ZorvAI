@@ -21,6 +21,8 @@ class HttpRequest(
     val body: ByteArray,
     val remote: InetAddress,
     val query: String = "",
+    /** 失败冷却按它记。本地监听就是对方地址;经网关转发的是网关看到的调用方地址,与本地地址分开记。 */
+    val source: String = remote.hostAddress ?: "?",
 ) {
     fun header(name: String): String? = headers[name.lowercase()]
 }

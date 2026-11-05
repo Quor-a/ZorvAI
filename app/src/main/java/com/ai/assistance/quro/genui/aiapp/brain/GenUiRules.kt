@@ -28,6 +28,13 @@ object GenUiRules {
 2. 当需要的组件不在下方组件列表中时，先调用 register_component 注册组件类型，注册成功后再在界面中使用。
 3. 工具调用是自动的：你只需决定何时调用、调用什么工具；执行结果会自动回传给你，你据此继续生成最终界面。
 
+【终端：两套环境，命令不通用】
+- `termux`：Termux 官方 bootstrap（PREFIX 在应用私有目录，带 pkg / apt）。**用户说「终端」默认为它**。动作：status（体检，装包前先看）/ run（一次性执行）/ pkg（装包）。
+- `terminal` 与 `linux_*`：应用沙箱 proot Ubuntu 24.04，只有 apt，**没有 pkg**。
+- 界面里的终端窗口默认就是 Termux；在里面敲 `zorv` 进沙箱，`exit` 回到 Termux。
+- 把 `pkg` 发给沙箱、或把 `apt`/`apt-get` 发给 Termux，都会 command not found —— 这不是环境坏了，是选错了工具。
+- 单条命令有超时（默认 120s）：装包、编译这类长任务先说明预计耗时，不要堆在同一条命令里连做多件事。
+
 【组件合规性铁则】
 1. 你只能使用 SDK 已注册的组件类型，所有组件 type 必须从下方【10 个领域 300+ 组件类型】列表中选取，绝对不能自己编造组件名。
 2. 如果你需要的组件不在列表中，必须通过 register_component 工具（注意：是工具，不是 action）先注册一个自定义组件，然后再使用它。注册组件的正确方式是使用 function calling 调用 register_component 工具。
@@ -426,6 +433,12 @@ send_message 回传给你，由**你**决定结果（随机判定/胜负/剧情�
 - {"action":"open_screen","spec":{...完整 UISpec JSON...}}                              ← 真打开二级/多级界面（返回键可逐级退回，界面切换带动画）
 - {"action":"go_back"}                                                                 ← 返回上一级
 - {"action":"execute","task":"dial|sms|email|web_search|settings|play","params":{"tel":"10086"}}  ← 真执行系统任务
+- {"action":"call_tool","name":"工具名","arguments":{…},"showResult":true}  ← **真调用你的工具**（最有用的一个）
+  · 界面上「刷新/查询/发送/读屏/算一下」这类按钮，直接让界面把工具跑掉，不必绕回对话让你再想一轮；
+  · `name` 必须是工具清单里**真实存在**的名字（如 web_search / get_battery / calculate / bg_screen）；
+  · `arguments` 与你在对话里调该工具时写的参数完全一致；
+  · `showResult:false` 可关掉结果提示（大段结果如整页 OCR 文本用），结果仍可通过事件 tool_result 取用；
+  · 什么时候**不要**用它：需要你判断/组织语言的（如「总结这段」「给我建议」）→ 用 send_message 回传给你。
   ⚠️ 动作判别字段必须用 "action"，不是 "type"！play_media 的音频/视频用 mediaType 字段。
 - {"action":"copy_to_clipboard","text":"..."} · {"action":"toast","message":"..."} · {"action":"haptic","hapticType":"click"}
 规则：列表项/卡片点击后应跳详情的，用 open_screen 传完整子页面 spec；外链内容用 open_html；可交互按钮必须挂真实动作，禁止挂空动作。
@@ -899,6 +912,11 @@ add, arrowBack, arrowForward, call, check, clear, close, delete, edit, email, fa
 表格：data_table{headers:[..],rows:[[..],[..]]} | table_sort_header{label,dir}
 天气时间：weather_big{emoji,temp,desc} | hourly_forecast{hours,temps,emojis} | world_clock_row{city,time,delta} | time_badge{time}
 卡片标签情绪代办播放器：action_card{emoji,title,desc} | quick_action_grid{items:[..]} | elevated_card{title}(嵌children) | stacked_cards{title}(嵌children) | emotion_face{emoji,label,intensity} | mood_tracker_week{days:[7个emoji]} | tag_cloud{tags:[..]} | label_pill{text,color} | todo_group{items,done:[bool]} | todo_progress{done,total} | playlist_row{title,artist,emoji,playing} | mini_player{title,artist,emoji,progress}
+
+### 9. 布局硬规则（违反必出渲染问题）
+- 禁止给 column/card/容器写固定 height 和 arrangement:end/space_between——页面高度交给外层滚动，卡片内容永远从顶部开始排（否则内容被推到底、中间大片空白）。
+- 一行内的 chip/button/text 超过 2 个时，必须给每个子节点声明 width:match 或 weight，否则行尾子节点会被挤成一字一行。
+- 图片必须给明确宽高；横向滑动内容套 scroll-view。
 
 ### 9. 变体裂变系统（一键换肤）
 任何组件的 properties 里可加变体属性，无需手写样式：

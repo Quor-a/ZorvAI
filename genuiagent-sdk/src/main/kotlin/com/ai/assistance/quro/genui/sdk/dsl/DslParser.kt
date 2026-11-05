@@ -72,6 +72,22 @@ object DslParser {
             // 页面控制类
             subclass(GenUIAction.Refresh::class)
             subclass(GenUIAction.LoadMore::class)
+
+            // 真实设备动作 v1.9 —— 这一批此前**全部漏注册**。
+            // sealed class 的自动子类发现在多数路径能兜住，但本文件的注释已经说明
+            // 「深层嵌套（events['onTap'].actions[0]）下可能失效」，而动作就住在那一层。
+            // 漏注册的后果不是「少一个动作」，而是**整份 UI 解析失败**（unknown subclass），
+            // 界面直接变成「⚠️ UI 解析失败」卡片 —— 用户只会说「AI 画不出界面」。
+            subclass(GenUIAction.OpenApp::class)
+            subclass(GenUIAction.PlayMedia::class)
+            subclass(GenUIAction.StopMedia::class)
+            subclass(GenUIAction.OpenScreen::class)
+            subclass(GenUIAction.OpenHtml::class)
+            subclass(GenUIAction.Execute::class)
+            subclass(GenUIAction.SendMessage::class)
+
+            // 调用宿主工具（真实执行）—— GenUI「用不了工具」的补丁点，见 GenUIAction.CallTool
+            subclass(GenUIAction.CallTool::class)
         }
     }
 

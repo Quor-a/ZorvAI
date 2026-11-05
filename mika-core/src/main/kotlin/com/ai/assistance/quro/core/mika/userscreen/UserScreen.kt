@@ -35,4 +35,4 @@ interface UserScreenSource {
 }
 
 /** 截下来、还没发出去的一屏:画面([jpeg],不让截图时为 null)和说明([screen],编号在存进对话时才定)。 */
-class CapturedScreen(val jpeg: ByteArray?, val screen: UserScreen)
+class CapturedScreen(val jpeg: ByteArray?, val screen: UserScreen, val sourcePackages: Set<String> = setOfNotNull(screen.packageName))

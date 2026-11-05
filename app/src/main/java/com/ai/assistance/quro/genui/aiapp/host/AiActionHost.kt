@@ -38,6 +38,37 @@ class AiActionHost(
     /** 对话回传回调（选择/落子 → 新一轮生成），由 ChatScreen 注入 viewModel.send */
     var onSendMessage: ((String) -> Unit)? = null
 
+    /**
+     * **真实工具调用回调**（对应 DSL 的 `call_tool` 动作），由 ChatScreen 注入
+     * [ChatViewModel.runToolFromUi]。
+     *
+     * 为什么用回调而不是让 AiActionHost 直接拿 QuroToolEngine：
+     *  · 宿主工具执行有归属（谁发起的、算不算本轮对话、要不要进工具记录），
+     *    这些只有 ViewModel 知道；
+     *  · 这里保持纯 UI 层，不引入 core 依赖，编译依赖链也不会绕回去。
+     *
+     * 为 null 时 [callTool] 返回一条可判定的失败 JSON（不是静默 null）——
+     * 「点了没反应」是最难查的故障，宁可让用户看到一句明确的话。
+     */
+    var onCallTool: (suspend (name: String, argumentsJson: String) -> String)? = null
+
+    /** 工具调用的本机执行能力是否就绪（SDK 探针用）。 */
+    override fun supportsToolCall(): Boolean = onCallTool != null
+
+    override suspend fun callTool(name: String, argumentsJson: String): String {
+        val runner = onCallTool
+            ?: return """{"success":false,"error":"界面工具通道未接入（宿主没有注入执行器）","tool":"$name"}"""
+        return try {
+            runner(name, argumentsJson).ifBlank {
+                """{"success":true,"result":"（该工具没有返回内容）","tool":"$name"}"""
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            """{"success":false,"error":"${e.message ?: e.javaClass.simpleName}","tool":"$name"}"""
+        }
+    }
+
     private var mediaPlayer: MediaPlayer? = null
 
     /**

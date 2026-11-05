@@ -14,6 +14,8 @@ enum class SetupPhase {
     Success,
     /** 出错:[SetupView.failure] 给原因和修复,[SetupView.suspect] 指出最可能要回去重做的一步。 */
     Failed,
+    /** 这个环境里没有能起助手的路(见 [PhoneSetupFlow.unavailable]):一开始就说明,不给走不通的步骤。 */
+    Unavailable,
 }
 
 /** 配对通知频道的样子:[Off] 被关掉,通知发不出来;[Lowered] 被用户调成不在屏幕顶部弹出,还能下拉通知栏去填。 */
@@ -43,6 +45,10 @@ enum class PairingNotifyIssue {
  * [wirelessMissing] 是系统里根本没有无线调试这一项(原版开机时总会写好这项设置,读不到就是系统没带这个功能);
  * [stalledMs] 是停在无线调试、配对(还没找到配对窗口)、自动连接这几处多久没有进展(见 [PhoneSetupFlow.stallPoint]);
  * [usbAsked] 是用户点了「找不到无线调试?」,或卡片已经出现过(出现后不再收回,免得一会儿有一会儿没)。
+ * [restart] 是助手停了以后靠什么再起来(见 [HelperRestart]):只用 USB 启动命令起过时,无线调试和配对两步记作跳过,
+ * 助手停了就停在连接一步说它停了、给命令,不退回无线调试一步。
+ * [developerSettingsMissing] 是系统里打不开「开发者选项」页(跳过去的 Intent 没有页面接):和 [wirelessMissing] 一起成立时,
+ * 用户既开不了 USB 调试也开不了无线调试,见 [PhoneSetupFlow.unavailable]。
  */
 data class SetupInputs(
     val developerOptions: Boolean,
@@ -61,6 +67,8 @@ data class SetupInputs(
     val wirelessMissing: Boolean = false,
     val stalledMs: Long = 0L,
     val usbAsked: Boolean = false,
+    val restart: HelperRestart = HelperRestart.None,
+    val developerSettingsMissing: Boolean = false,
 )
 
 /** 配对或连接没成功时最可能的原因:[step] 这一步读到是关着的;[unreadable] 为真是这台手机根本读不到。 */
@@ -86,6 +94,8 @@ data class SetupView(
     val revisiting: Boolean = false,
     /** 在当前这一步给「改用电脑启动」的卡片:无线调试多半用不了,或者卡住了。正常走下去时不给。 */
     val usbFallback: Boolean = false,
+    /** 助手停了以后靠什么再起来(照抄 [SetupInputs.restart]):成功页的提醒、「改用电脑启动」卡片怎么说看它。 */
+    val restart: HelperRestart = HelperRestart.None,
 ) {
     /** 通知发不出来(没允许,或「配对」通知被关):配对码要填在通知里,先修好。 */
     val needsNotifications: Boolean
@@ -114,7 +124,22 @@ object PhoneSetupFlow {
     /** 这几类失败说明无线调试这条路走不通,给「改用电脑启动」:找不到配对窗口、连不上、电脑起的助手停了。 */
     private val USB_FAILURES = setOf(BuiltinShellFailure.PairingWindowClosed, BuiltinShellFailure.ConnectFailed, BuiltinShellFailure.UsbHelperStopped)
 
-    fun view(i: SetupInputs): SetupView = steps(i).let { it.copy(usbFallback = usbFallback(it, i)) }
+    fun view(i: SetupInputs): SetupView {
+        if (unavailable(i)) return SetupView(SetupPhase.Unavailable, SetupStep.entries.associateWith { StepMark.Todo }, null, restart = i.restart)
+        return steps(i).let { it.copy(usbFallback = usbFallback(it, i), restart = i.restart) }
+    }
+
+    /**
+     * 这个环境能不能设置手机操作:系统里打不开开发者选项页、也没有无线调试这一项,就没有能起助手的路
+     * (USB 调试和无线调试都在开发者选项里,电脑启动也要 USB 调试)。助手已经在运行、正在起来,或以前起来过,
+     * 说明有别的路,不算。
+     */
+    fun unavailable(developerSettingsMissing: Boolean, wirelessMissing: Boolean, status: BuiltinShellStatus, restart: HelperRestart): Boolean =
+        developerSettingsMissing && wirelessMissing && restart == HelperRestart.None &&
+            status != BuiltinShellStatus.Running && status != BuiltinShellStatus.Connecting
+
+    fun unavailable(i: SetupInputs): Boolean =
+        unavailable(i.developerSettingsMissing, i.wirelessMissing, i.status, i.restart)
 
     /**
      * 卡住计时算在哪一处:停在无线调试一步、停在配对一步还没找到配对窗口(系统一直没有配对服务)、正在自动连接。
@@ -154,11 +179,21 @@ object PhoneSetupFlow {
         return guide(back, i).copy(marks = marks, revisiting = true)
     }
 
-    /** 没有回头重做时的样子。 */
+    /**
+     * 没有回头重做时的样子。正在连接(包括助手换手、刚起来等交接)以进度为准,不因为读到无线调试关着就退回那一步:
+     * 电脑起的助手、能替用户打开无线调试时,都不用用户去开。USB 启动命令起的助手停了,同样不往无线调试引。
+     */
     private fun natural(i: SetupInputs, status: BuiltinShellStatus): SetupView {
         if (blocks(SetupStep.DeveloperOptions, i)) return guide(SetupStep.DeveloperOptions, i)
         if (blocks(SetupStep.UsbDebugging, i)) return guide(SetupStep.UsbDebugging, i)
         if (blocks(SetupStep.Accessibility, i)) return guide(SetupStep.Accessibility, i)
+        if (status == BuiltinShellStatus.Connecting) return working(i)
+        if (status is BuiltinShellStatus.Failed && status.reason == BuiltinShellFailure.UsbHelperStopped) {
+            return SetupView(
+                SetupPhase.Failed, marks(SetupStep.Connect.ordinal, i, current = SetupStep.Connect, mark = StepMark.Failed), SetupStep.Connect,
+                failure = status,
+            )
+        }
         // 读不到开关时以助手的说法为准;用户确认过就不拦
         val wirelessConfirmed = SetupStep.WirelessDebugging in i.confirmed
         val wirelessOff = !wirelessConfirmed &&
@@ -173,9 +208,9 @@ object PhoneSetupFlow {
         }
         return when (status) {
             BuiltinShellStatus.Running -> error("handled above")
+            BuiltinShellStatus.Connecting -> error("handled above")
             // 配对过、无线调试开着而状态还没跟上:实现马上会自动连,先显示「正在连接」
-            BuiltinShellStatus.Connecting, BuiltinShellStatus.WirelessDebuggingOff ->
-                SetupView(SetupPhase.Working, marks(SetupStep.Connect.ordinal, i, current = SetupStep.Connect), null)
+            BuiltinShellStatus.WirelessDebuggingOff -> working(i)
             BuiltinShellStatus.NotPaired -> guide(SetupStep.PairingCode, i)
             is BuiltinShellStatus.Failed -> {
                 val step = if (status.reason.duringPairing || status.fix == BuiltinShellFix.RePair) SetupStep.PairingCode else SetupStep.Connect
@@ -189,6 +224,8 @@ object PhoneSetupFlow {
             }
         }
     }
+
+    private fun working(i: SetupInputs) = SetupView(SetupPhase.Working, marks(SetupStep.Connect.ordinal, i, current = SetupStep.Connect), null)
 
     /** 读到这一步没做好,用户也没确认(无障碍还可以跳过):停在这一步。 */
     private fun blocks(step: SetupStep, i: SetupInputs): Boolean =
@@ -226,11 +263,15 @@ object PhoneSetupFlow {
         else -> null
     }
 
-    /** 前 [done] 步做完(跳过的无障碍记成跳过),[current] 这一步打 [mark],其余待做。 */
+    /** 只用 USB 启动命令起过助手时没走的两步。 */
+    private val WIRELESS_STEPS = setOf(SetupStep.WirelessDebugging, SetupStep.PairingCode)
+
+    /** 前 [done] 步做完(跳过的无障碍、USB 启动时没走的无线调试和配对记成跳过),[current] 这一步打 [mark],其余待做。 */
     private fun marks(done: Int, i: SetupInputs, current: SetupStep? = null, mark: StepMark = StepMark.Current): Map<SetupStep, StepMark> =
         SetupStep.entries.associateWith { s ->
             when {
                 s.ordinal < done && s == SetupStep.Accessibility && !i.accessibility && s !in i.confirmed -> StepMark.Skipped
+                s.ordinal < done && s in WIRELESS_STEPS && i.restart == HelperRestart.UsbCommand -> StepMark.Skipped
                 s.ordinal < done -> StepMark.Done
                 s == current -> mark
                 else -> StepMark.Todo

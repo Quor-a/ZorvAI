@@ -27,7 +27,8 @@ private const val TAG = "QuroFailover"
  */
 class QuroFailoverManager(
     private val repository: QuroMultiProviderRepository,
-    private val llmClient: QuroLlmClient
+    private val llmClient: QuroLlmClient,
+    private val context: android.content.Context? = null,
 ) {
     private val failoverState = AtomicLong(0L) // 简化状态管理
     private val isPerformingFailover = AtomicBoolean(false)
@@ -101,6 +102,10 @@ class QuroFailoverManager(
     
     /**
      * 使用默认提供商执行聊天（无故障转移）
+     *
+     * 直接走「当前模型配置」（QuroModelConfig）单通道，与主对话链路 [QuroAssistant]
+     * 的云端路径行为一致。此前这里是空实现（返回「默认提供商配置未实现」），
+     * 导致禁用故障转移时任何经此通道的请求都直接失败。现补全为真实调用。
      */
     private suspend fun chatWithDefaultProvider(
         messages: List<QuroChatMessage>,
@@ -111,9 +116,25 @@ class QuroFailoverManager(
         onToken: ((String) -> Unit)?,
         onThinking: ((String) -> Unit)?,
     ): QuroLlmResult {
-        // 从 QuroModelConfig 获取默认配置
-        // 这里需要与现有的 QuroModelConfig 集成
-        return QuroLlmResult.Error("默认提供商配置未实现")
+        val ctx = context ?: return QuroLlmResult.Error("缺省上下文，无法读取当前模型配置")
+        val cfg = runCatching { QuroModelConfigRepository(ctx).load() }.getOrNull()
+            ?: return QuroLlmResult.Error("未配置模型（模型配置为空）")
+        if (cfg.apiKey.isBlank() && cfg.provider != "MNN" && cfg.provider != "LLAMA_CPP") {
+            return QuroLlmResult.Error("未配置 API Key，无法调用默认提供商")
+        }
+        return llmClient.chat(
+            baseUrl = cfg.baseUrl,
+            apiKey = cfg.apiKey,
+            model = cfg.model,
+            messages = messages,
+            temperature = temperature,
+            maxTokens = maxTokens,
+            tools = tools,
+            stream = stream,
+            onToken = onToken,
+            onThinking = onThinking,
+            provider = cfg.provider,
+        )
     }
     
     /**
@@ -316,13 +337,21 @@ class QuroFailoverManager(
         val enabledConfigs = repository.getEnabledConfigs()
         for (provider in enabledConfigs) {
             try {
-                // 简单的健康检查：尝试获取模型列表
+                // 真探活：真实拉取该提供商的模型列表（/models 或 Ollama /api/tags）。
+                // 此前是「假探活」——只查 baseUrl/apiKey 字段非空，从不发真实请求，
+                // 导致 FAILED/断网的提供商被错误标成 HEALTHY，故障转移永远选不到真正可用的。
                 val startTime = System.currentTimeMillis()
-                // 这里可以添加实际的健康检查逻辑
+                val result = com.ai.assistance.quro.core.network.QuroModelListFetcher()
+                    .fetch(provider.baseUrl, provider.apiKey)
                 val responseTime = System.currentTimeMillis() - startTime
-                
-                recordHealthCheck(provider.id, true, responseTime)
-                repository.updateHealthStatus(provider.id, QuroProviderConfig.HealthStatus.HEALTHY)
+                if (result is com.ai.assistance.quro.core.network.QuroModelListResult.Success) {
+                    recordHealthCheck(provider.id, true, responseTime)
+                    repository.updateHealthStatus(provider.id, QuroProviderConfig.HealthStatus.HEALTHY)
+                } else {
+                    val msg = (result as com.ai.assistance.quro.core.network.QuroModelListResult.Error).message
+                    recordHealthCheck(provider.id, false, responseTime, msg)
+                    repository.updateHealthStatus(provider.id, QuroProviderConfig.HealthStatus.UNHEALTHY, msg)
+                }
             } catch (e: Exception) {
                 recordHealthCheck(provider.id, false, 0L, e.message)
                 repository.updateHealthStatus(

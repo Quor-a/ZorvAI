@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.core.mika.agent
 
+import com.ai.assistance.quro.core.mika.net.ProxyFailure
 import com.ai.assistance.quro.core.mika.guard.GuardVerdict
 import com.ai.assistance.quro.core.mika.model.ModelError
 import com.ai.assistance.quro.core.mika.tool.Outcome
@@ -50,9 +51,18 @@ internal object StopRules {
 internal fun userReason(e: ModelError): String = when (e) {
     is ModelError.Auth -> "模型服务拒绝了请求:API Key 无效或没有权限。请在设置里检查 API Key 是否填写正确、是否有权使用该模型。"
     is ModelError.QuotaExceeded -> "模型账户额度已用完,请检查服务商账户的余额或套餐。"
-    is ModelError.ModelNotFound ->
-        if (e.model.isEmpty()) "找不到该模型,请到设置 › 模型检查模型名和 Base URL 是否正确。"
-        else "模型「${e.model}」在这个服务商那里不存在。去设置 › 模型,检查模型名(要填完整的模型 ID,比如 Gemini 的模型名类似 gemini-flash-latest)或改用对应的预设。"
+    is ModelError.ModelNotFound -> {
+        // 404 不一定是模型名不对(地址不对,或网关、中转服务说的别的情况):有原话时照原话说,不断定模型不存在
+        val check = if (e.model.isEmpty()) "请到设置 › 模型检查模型名和 Base URL 是否正确。"
+            else "去设置 › 模型,检查模型名(要填完整的模型 ID,比如 Gemini 的模型名类似 gemini-flash-latest)或改用对应的预设。"
+        when {
+            e.detail.isNotEmpty() ->
+                (if (e.model.isEmpty()) "" else "调用模型「${e.model}」时") +
+                    "服务端回复：${quoted(e.detail)}。可能是模型名不对，或者服务那边暂时不可用。$check"
+            e.model.isEmpty() -> "找不到该模型,$check"
+            else -> "模型「${e.model}」在这个服务商那里不存在。$check"
+        }
+    }
     is ModelError.ModelNotAvailable ->
         "模型「${e.model.ifEmpty { "当前模型" }}」这个账号没开通或没权限用。去设置 › 模型换一个模型，或到服务商后台开通。"
     is ModelError.ToolsUnsupported ->
@@ -61,6 +71,11 @@ internal fun userReason(e: ModelError): String = when (e) {
     is ModelError.ContentRefused -> "模型拒绝处理该内容,请调整任务描述或换一个模型。"
     is ModelError.RateLimited -> "模型服务限流,重试后仍然请求太频繁。请稍后再试,或检查账户的调用频率限制。"
     is ModelError.Network -> "连接模型服务失败,重试后仍然不通。请检查网络和 Base URL。"
+    is ModelError.Proxy -> when (e.failure) {
+        ProxyFailure.Unreachable ->
+            "连不上网络代理,或代理没有转发这个请求,重试后仍然不通。请检查代理是否开着、设置 › 网络代理 里的地址和端口是否正确;不需要代理时把它清空。"
+        ProxyFailure.AuthFailed -> "网络代理拒绝了账号或密码(HTTP 407)。请在设置 › 网络代理 里检查代理地址中的用户名和密码。"
+    }
     is ModelError.Server -> "模型服务出错(HTTP ${e.status}),请稍后再试。"
     is ModelError.StreamCut ->
         "模型的回复还没传完,连接就在上游被断开了,重试后仍然如此。常见原因是网络不稳,或中转服务、网关的空闲超时太短(模型长时间思考时容易碰上)。请稍后再试。"
@@ -68,6 +83,16 @@ internal fun userReason(e: ModelError): String = when (e) {
     is ModelError.ChatGptLimitReached ->
         "ChatGPT 额度用完了,稍后再试。用量可以在 ChatGPT 设置 › 用量(chatgpt.com/settings/usage)查看;Plus 每 5 小时的额度和其他用 ChatGPT 登录的 App 共用。也可以先换一个模型。"
     is ModelError.ChatGptNotEligible ->
-        "这个账号不能在其他 App 里用 ChatGPT 额度(需要 Plus 或 Pro,并且所在地区和账号设置允许)。${if (e.detail.isEmpty()) "" else "服务端说明:${e.detail}。"}可以换一个模型。"
-    is ModelError.SignInExpired -> "ChatGPT 登录已失效,请在设置 › 模型里重新用 ChatGPT 登录。"
+        "这个账号不能在其他 App 里用 ChatGPT 额度(需要 Plus 或 Pro,并且所在地区和账号设置允许)。${if (e.detail.isEmpty()) "" else "服务端说明:${quoted(e.detail)}。"}可以换一个模型。"
+    is ModelError.SignInExpired -> "${e.account} 登录已失效,请在设置 › 模型里重新用 ${e.account} 登录。"
+    is ModelError.AccountPlanNotAllowed ->
+        "你的 ${e.account} 订阅档位不能用这个接口(HTTP 403)。${if (e.detail.isEmpty()) "" else "服务端说明:${quoted(e.detail)}。"}可以改用 ${e.account} 的 API Key,或在设置 › 模型里换一个模型。"
 }
+
+/** 引在句中的服务端原话:去掉末尾一个句号(原话自带的),由引它的句子补上自己的「。」;省略号(截短的「…」、「...」)不动。 */
+private fun quoted(detail: String): String =
+    when {
+        detail.endsWith("..") -> detail
+        detail.endsWith(".") || detail.endsWith("。") -> detail.dropLast(1)
+        else -> detail
+    }

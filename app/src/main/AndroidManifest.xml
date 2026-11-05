@@ -464,6 +464,17 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- 桌面宠物前台服务：独立于语音球的常驻 AI 伙伴悬浮窗，形象取 PetPrefs、
+             状态实时取 QuroPetStateBus（对话生成/工具调用投影）。需要 SYSTEM_ALERT_WINDOW（已声明）。 -->
+        <service
+            android:name=".service.QuroDesktopPetService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="桌面宠物悬浮窗：常驻桌面的 AI 伙伴，实时反映对话生成状态" />
+        </service>
+
         <!-- 视频通话前台服务：摄像头 + 麦克风，叠加视觉/视频识别层（参考语音球实现） -->
         <service
             android:name=".service.QuroVideoCallService"
@@ -519,6 +530,21 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="无线调试配对：后台搜索 _adb-tls-pairing 服务并在通知栏直接接收配对码" />
+        </service>
+
+        <!--
+          通知侦听服务（AI 理解通知上下文 / 清除通知）。
+          修复：此前该服务在 manifest 完全未注册，系统永远无法拉起，NotificationCache 恒为空。
+          需用户授权「通知使用权限」后由系统绑定（BIND_NOTIFICATION_LISTENER_SERVICE）。
+        -->
+        <service
+            android:name=".service.QuroNotificationListenerService"
+            android:exported="false"
+            android:label="通知读取"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
         </service>
 
         <service
@@ -755,6 +781,12 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- 外部连接：OpenAI 兼容模型服务端点，绑 0.0.0.0（局域网可访问），Bearer 密钥校验 -->
+        <service
+            android:name=".service.QuroExternalAccessService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <!-- 百分百开源本地音乐播放器：前台媒体播放服务 -->
         <service
             android:name=".service.QuroMediaService"
@@ -772,6 +804,23 @@
         <activity
             android:name="com.canhub.cropper.CropImageActivity"
             android:theme="@style/Theme.Quro.Crop"
+            tools:replace="android:theme" />
+
+        <!-- 🔴 桌面模式设置黑屏修复（2026-11-04）：libtaskbar 的设置页（MainActivity 等）
+             在本 App 的 DayNight 状态下出现「深底深字」不可读（用户实测截图）。
+             这里强制浅色 AppCompat 主题，库内布局的文字色按浅色渲染，恢复可读。
+             覆盖其所有可见设置面，防止漏网。 -->
+        <activity
+            android:name="com.farmerbb.taskbar.activity.MainActivity"
+            android:theme="@style/Theme.Quro.TaskbarSettings"
+            tools:replace="android:theme" />
+        <activity
+            android:name="com.farmerbb.taskbar.activity.EnableAdditionalSettingsActivity"
+            android:theme="@style/Theme.Quro.TaskbarSettings"
+            tools:replace="android:theme" />
+        <activity
+            android:name="com.farmerbb.taskbar.activity.DashboardActivity"
+            android:theme="@style/Theme.Quro.TaskbarSettings"
             tools:replace="android:theme" />
 
         <!-- Shizuku 客户端 Provider：Shizuku 管理器经此 binder 端点与本应用建立连接。

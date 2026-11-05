@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.cards
 
 import com.ai.assistance.quro.core.ui.card.CardModule
+import com.ai.assistance.quro.core.ui.card.compose.CardExtractors
 import com.ai.assistance.quro.core.ui.card.spec.parseCardSpec
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -171,41 +172,20 @@ class CardRichRegressionTest {
         // data 壳存在但没有 series（模型只写了 title）——渲染器必须回读 rawJson
         val json = """{"type":"metric","title":"后台虚拟屏 · 测试报告","value":"12/15"}"""
         val spec = parseCardSpec(json)!!
-        val renderer = com.ai.assistance.quro.core.ui.card.widgets.MetricCardRenderer()
-        val state = renderer.createInitialState()
-        val size = renderer.measure(spec, state, 600f, 2.75f)
-        val backend = TextRecordingBackend()
-        renderer.render(backend, spec, com.ai.assistance.quro.core.ui.card.registry.LayoutResult(size.width, size.height), state)
+        val d = CardExtractors.metricValues(spec)
         assertTrue(
-            "应直显原文 12/15，实际画了: ${backend.texts}",
-            backend.texts.any { it.contains("12/15") },
+            "应直显原文 12/15，实际提取到: ${d.valueText}",
+            d.valueText?.contains("12/15") == true,
         )
-        assertTrue("不应画 -- 占位", backend.texts.none { it == "--" })
+        assertTrue("不应是 -- 占位", d.valueText != "--")
     }
 
     @Test
     fun `I5 metric无任何数据仍保底dash不崩`() {
         val json = """{"type":"metric"}"""
         val spec = parseCardSpec(json)!!
-        val renderer = com.ai.assistance.quro.core.ui.card.widgets.MetricCardRenderer()
-        val state = renderer.createInitialState()
-        val size = renderer.measure(spec, state, 600f, 2.75f)
-        val backend = TextRecordingBackend()
-        renderer.render(backend, spec, com.ai.assistance.quro.core.ui.card.registry.LayoutResult(size.width, size.height), state)
-        assertTrue("完全没数据时保底 --", backend.texts.any { it == "--" })
+        val d = CardExtractors.metricValues(spec)
+        // 完全没数据时 valueText 为 null，渲染器据此显示 --（保底占位，绝不抛异常）
+        assertTrue("完全没数据时 valueText 应为 null（渲染器显示 --）", d.valueText == null)
     }
-}
-
-/** 只录文本的假 backend（I4/I5 渲染器断言用）。 */
-private class TextRecordingBackend : com.ai.assistance.quro.core.ui.card.render.RenderBackend {
-    val texts = mutableListOf<String>()
-    override fun drawRect(l: Float, t: Float, r: Float, b: Float, c: androidx.compose.ui.graphics.Color, radiusDp: Float) {}
-    override fun drawText(text: String, x: Float, y: Float, c: androidx.compose.ui.graphics.Color, sizeSp: Float, weight: Int) { texts.add(text) }
-    override fun drawLine(x1: Float, y1: Float, x2: Float, y2: Float, c: androidx.compose.ui.graphics.Color, widthDp: Float) {}
-    override fun drawPath(p: androidx.compose.ui.graphics.Path, c: androidx.compose.ui.graphics.Color, widthDp: Float, fill: Boolean) {}
-    override fun drawImage(bitmap: Any?, l: Float, t: Float, w: Float, h: Float) {}
-    override fun saveLayer() {}
-    override fun restore() {}
-    override fun clip(l: Float, t: Float, r: Float, b: Float) {}
-    override fun resolve(token: com.ai.assistance.quro.core.ui.card.spec.ColorToken): androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Gray
 }

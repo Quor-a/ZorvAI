@@ -30,7 +30,7 @@
     <string name="qk_00027">ACI应用: %1$s (包名: %2$s)</string>
     <string name="qk_00028" formatted="false">用户选择了：可视化弹窗，请立即调用visual_popup工具创建一个可视化弹窗</string>
     <string name="qk_00029" formatted="false">用户选择了：可视化询问，请立即调用visual_question工具创建一个可视化询问</string>
-    <string name="qk_00030" formatted="false">用户选择了：可视化小卡片，请立即在回复中用 ```quro-card 围栏输出一张自研可视化小卡片（指标/进度/结构化单块结果），纯文字回复禁止</string>
+    <string name="qk_00030" formatted="false">用户选择了：可视化小卡片（独立分类）。请立即调用 visual_card_skeleton(kind 按内容选) 取回 HTML 骨架，把 {{数据位}} 换成真实内容，再调用 visual_card(title, html=...) 输出一张内联小卡片。禁止用动态UI组件 / 富组件 / 可视化弹窗 / 网页预览 / quro-card 围栏顶替，纯文字回复禁止</string>
     <string name="qk_00031" formatted="false">用户选择了：动态UI组件，请立即在回复中用 ```quro-ui 围栏输出原生可交互界面（表单/面板/工具入口等），纯文字回复禁止</string>
     <string name="qk_00032" formatted="false">用户选择了：AIP文档排版，请用 ```aip 围栏（或 aip_compose 工具）输出整篇排版的文档/PPT/报告（doc/deck/mindmap），不要只回纯文本</string>
     <string name="qk_00033" formatted="false">已启用技能(${enabledSkillsCount}个): ${enabledSkills.joinToString(</string>
@@ -2403,7 +2403,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_02477" formatted="false">两项独立控制，互不影响。开 = 百分百主动使用；关 = 用户提醒才使用。</string>
     <string name="qk_02478" formatted="false">动态 UI 组件</string>
     <string name="qk_02479" formatted="false">开：AI 主动用 ```quro-ui 输出原生交互界面；关：仅用户要求时输出。</string>
-    <string name="qk_02480" formatted="false">开：AI 主动用 ```quro-card 输出自研小卡片；关：仅用户要求时输出。</string>
+    <string name="qk_02480" formatted="false">开：AI 主动调用 visual_card 工具输出可视化小卡片（可先用 visual_card_skeleton 取骨架）；关：仅用户要求时输出。</string>
     <string name="qk_02481" formatted="false">保存灵魂卡</string>
     <string name="qk_02482" formatted="false">标签管理</string>
     <string name="qk_02483" formatted="false">还没有标签，点右上角 + 新建。</string>
@@ -4403,4 +4403,222 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_04430" formatted="false">已配对成功，连接稍后会自动重试</string>
     <string name="qk_04431" formatted="false">配对失败</string>
     <string name="qk_04432" formatted="false">90 秒内没找到配对服务。请确认已打开「使用配对码配对设备」弹窗后重试</string>
+    <string name="qk_04440" formatted="false">本轮没有正常结束</string>
+    <string name="qk_04441" formatted="false">上游的内容安全策略拦下了这次回答。换个说法，或换一个模型再试。</string>
+    <string name="qk_04442" formatted="false">回复撞到单次输出上限，只写到一半。可以说「继续」，我会接着往下写。</string>
+    <string name="qk_04443" formatted="false">模型只输出了思考过程，没有给出正文。可以重试一次；如果反复出现，换一个不强制长思考的模型。</string>
+    <string name="qk_04444" formatted="false">工具都执行完了，模型没有接着往下说。发一句「继续」通常就能接上。</string>
+    <string name="qk_04445" formatted="false">这一步要用的工具没能执行成功（多为权限或环境问题）。先看上面那条工具卡的报错再重试。</string>
+    <string name="qk_04446" formatted="false">模型没有返回任何内容。多半是上游波动或网络中断，重试一次即可。</string>
+    <string name="qk_04447" formatted="false">模型连续给出了无法解析的工具调用。换个模型，或把任务拆小一点再试。</string>
+    <string name="qk_04448" formatted="false">重试</string>
+    <string name="qk_04449" formatted="false">继续</string>
+    <string name="qk_04450" formatted="false">知道了</string>
+    <string name="qk_04451" formatted="false">这一轮已经完成，但内容被截断；可以继续让我写完整。</string>
+    <string name="qk_04452" formatted="false">上下文窗口</string>
+    <string name="qk_04452_used" formatted="false">已用</string>
+    <string name="qk_04452_reserved" formatted="false">自动压缩预留</string>
+    <string name="qk_04452_free" formatted="false">剩余空间</string>
+    <string name="qk_04452_unavailable" formatted="false">当前会话暂未返回上下文窗口用量。这里会在模型或运行时提供 token 统计后显示进度。</string>
+    <string name="qk_04453" formatted="false">已用 %1$s / %2$s</string>
+    <string name="qk_04454" formatted="false">剩余 %1$s</string>
+    <string name="qk_04455" formatted="false">为回复预留 %1$s</string>
+    <string name="qk_04456" formatted="false">系统提示词</string>
+    <string name="qk_04457" formatted="false">工具定义</string>
+    <string name="qk_04458" formatted="false">MCP 工具</string>
+    <string name="qk_04459" formatted="false">技能</string>
+    <string name="qk_04460" formatted="false">记忆</string>
+    <string name="qk_04461" formatted="false">对话历史</string>
+    <string name="qk_04462" formatted="false">临时注入</string>
+    <string name="qk_04463" formatted="false">其他</string>
+    <string name="qk_04464" formatted="false">上下文已用 %1$s，点开看是谁占的</string>
+    <string name="qk_04465" formatted="false">关闭</string>
+    <string name="qk_04466" formatted="false">估算值。中文按一字一 token、其余按四字符一 token，用于判断占比，不追求精确。</string>
+    <string name="qk_04467" formatted="false">修改</string>
+    <string name="qk_04468" formatted="false">朗读</string>
+    <string name="qk_04469" formatted="false">保存</string>
+    <string name="qk_04470" formatted="false">修改消息</string>
+    <string name="qk_04471" formatted="false">生成进行中，稍后再改</string>
+    <string name="qk_04472" formatted="false">语音未就绪，请先在语音设置里准备 TTS</string>
+    <string name="qk_04473" formatted="false">昨天</string>
+    <string name="qk_04474" formatted="false">近 7 天</string>
+    <string name="qk_04475" formatted="false">近 30 天</string>
+    <string name="qk_04476" formatted="false">本轮 %1$s</string>
+    <string name="qk_04477" formatted="false">临时对话</string>
+    <string name="qk_04478" formatted="false">临时对话，不保存到历史</string>
+    <string name="qk_04480" formatted="false">打断</string>
+    <string name="qk_04481" formatted="false">排队</string>
+    <string name="qk_04482" formatted="false">引导</string>
+    <string name="qk_04483" formatted="false">停下当前回复，按这条新消息重新回答</string>
+    <string name="qk_04484" formatted="false">等这一轮结束，再按顺序处理排队的消息</string>
+    <string name="qk_04485" formatted="false">插进当前回复的上下文，AI 下一步就会读到并调整方向</string>
+    <string name="qk_04486" formatted="false">发送（生成中）</string>
+    <string name="qk_04487" formatted="false">已排队 %1$d 条消息，这一轮结束后按顺序发送</string>
+    <string name="qk_04488" formatted="false">取消排队</string>
+    <string name="qk_04490" formatted="false">已排队 %1$d 条 · 下一条：%2$s</string>
+    <string name="qk_04500" formatted="false">需要你批准</string>
+    <string name="qk_04501" formatted="false">已允许</string>
+    <string name="qk_04502" formatted="false">已拒绝</string>
+    <string name="qk_04503" formatted="false">已失效</string>
+    <string name="qk_04504" formatted="false">仅这一次</string>
+    <string name="qk_04505" formatted="false">本会话允许</string>
+    <string name="qk_04506" formatted="false">总是允许</string>
+    <string name="qk_04507" formatted="false">拒绝</string>
+    <string name="qk_04508" formatted="false">允许</string>
+    <string name="qk_04509" formatted="false">以上是 AI 的自述，请以下方的实际调用为准</string>
+    <string name="qk_04510" formatted="false">…还有 %1$d 个参数</string>
+    <string name="qk_04511" formatted="false">审查说明（可选）</string>
+    <string name="qk_04512" formatted="false">实际调用</string>
+    <string name="qk_04513" formatted="false">正在等待批准…</string>
+    <string name="qk_04514" formatted="false">风险提示</string>
+    <string name="qk_04515" formatted="false">正在生成回复，稍后再试</string>
+    <string name="qk_04516" formatted="false">上一次压缩仍在进行中</string>
+    <string name="qk_04517" formatted="false">当前模型无法压缩上下文（需配置云端模型与密钥）</string>
+    <string name="qk_04518" formatted="false">当前没有可压缩的对话</string>
+    <string name="qk_04519" formatted="false">压缩失败，请稍后重试</string>
+    <string name="qk_04520" formatted="false">压缩期间对话内容有变化，这次压缩未生效</string>
+    <string name="qk_04521" formatted="false">已停止压缩</string>
+    <string name="qk_04522" formatted="false">以上内容已压缩</string>
+    <string name="qk_04523" formatted="false">压缩中…</string>
+    <string name="qk_04524" formatted="false">压缩上下文</string>
+    <string name="qk_04525" formatted="false">停止压缩</string>
+    <string name="qk_04526" formatted="false">暂停语音条</string>
+    <string name="qk_04527" formatted="false">播放语音条</string>
+    <string name="qk_04528" formatted="false">语音条 · 收起文字</string>
+    <string name="qk_04529" formatted="false">听筒</string>
+    <string name="qk_04530" formatted="false">扬声器</string>
+    <string name="qk_04531" formatted="false">转文字</string>
+    <string name="qk_04532" formatted="false">分支</string>
+    <string name="qk_04533" formatted="false">创建分支</string>
+    <string name="qk_04534" formatted="false">拍照</string>
+    <string name="qk_04535" formatted="false">需要相机权限才能拍照，请在系统设置中授予</string>
+    <string name="qk_04540">AI 正在使用 %1$s…</string>
+    <string name="qk_04541">AI 正在%1$s…</string>
+    <string name="qk_04542">AI 思考中…</string>
+    <string name="qk_04543">AI 工作中…</string>
+    <string name="qk_04544">%1$d 个对话后台生成中</string>
+    <string name="qk_04549" formatted="false">应用中心</string>
+    <string name="qk_04550" formatted="false">浏览器</string>
+    <string name="qk_04551" formatted="false">终端</string>
+    <string name="qk_04552" formatted="false">知识库</string>
+    <string name="qk_04553" formatted="false">技能</string>
+    <string name="qk_04554" formatted="false">工具箱</string>
+    <string name="qk_04555" formatted="false">定时任务</string>
+    <string name="qk_04556" formatted="false">语音服务</string>
+    <string name="qk_04557" formatted="false">记忆</string>
+    <string name="qk_04558" formatted="false">文件管理</string>
+    <string name="qk_04559" formatted="false">CMS</string>
+    <string name="qk_04560" formatted="false">工作台</string>
+    <string name="qk_04561" formatted="false">组件画廊</string>
+    <string name="qk_04562" formatted="false">模型配置</string>
+    <string name="qk_04563" formatted="false">机器人</string>
+    <string name="qk_04564" formatted="false">ACI</string>
+    <string name="qk_04565" formatted="false">集群</string>
+    <string name="qk_04566" formatted="false">网页搜索</string>
+    <string name="qk_04567" formatted="false">系统状态</string>
+    <string name="qk_04568" formatted="false">把 Zorv AI 内置能力模块集中在此，点击即可跳转对应功能。</string>
+    <string name="qk_04570" formatted="false">联网浏览网页</string>
+    <string name="qk_04571" formatted="false">命令行环境</string>
+    <string name="qk_04572" formatted="false">文档知识检索</string>
+    <string name="qk_04573" formatted="false">AI 技能市场</string>
+    <string name="qk_04574" formatted="false">扩展工具集</string>
+    <string name="qk_04575" formatted="false">定时提醒任务</string>
+    <string name="qk_04576" formatted="false">语音对话合成</string>
+    <string name="qk_04577" formatted="false">长期记忆管理</string>
+    <string name="qk_04578" formatted="false">本地文件浏览</string>
+    <string name="qk_04579" formatted="false">内容管理系统</string>
+    <string name="qk_04580" formatted="false">桌面工作台</string>
+    <string name="qk_04581" formatted="false">UI 组件展示</string>
+    <string name="qk_04582" formatted="false">模型与参数</string>
+    <string name="qk_04583" formatted="false">多端机器人</string>
+    <string name="qk_04584" formatted="false">应用控制中心</string>
+    <string name="qk_04585" formatted="false">多角色集群</string>
+    <string name="qk_04586" formatted="false">联网搜索服务</string>
+    <string name="qk_04587" formatted="false">设备运行状态</string>
+    <string name="qk_04590" formatted="false">桌面宠物</string>
+    <string name="qk_04591" formatted="false">AI 伙伴常驻桌面，实时反映生成状态</string>
+    <string name="qk_04592" formatted="false">需要悬浮窗权限才能常驻桌面，请在系统设置中授予</string>
+    <string name="qk_04593" formatted="false">关闭宠物</string>
+    <string name="qk_04600" formatted="false">悬浮语音球</string>
+    <string name="qk_04601" formatted="false">Web UI 宿主</string>
+    <string name="qk_04602" formatted="false">机器人保活</string>
+    <string name="qk_04603" formatted="false">后台虚拟屏</string>
+    <string name="qk_04604" formatted="false">视频通话</string>
+    <string name="qk_04605" formatted="false">屏幕捕获</string>
+    <string name="qk_04606" formatted="false">通知侦听</string>
+    <string name="qk_04610" formatted="false">全局悬浮球：语音对话 / 随时唤醒 AI</string>
+    <string name="qk_04611" formatted="false">桌面常驻 AI 伙伴，实时反映生成状态</string>
+    <string name="qk_04612" formatted="false">在浏览器里看同一个对话框（本机 HTTP 服务）</string>
+    <string name="qk_04613" formatted="false">连接已启用的飞书 / QQ / 微信机器人自动回复</string>
+    <string name="qk_04614" formatted="false">AI 在后台屏上操作的悬浮窗（需从功能内启动）</string>
+    <string name="qk_04615" formatted="false">摄像头 + 麦克风的视觉识别（需从功能内启动）</string>
+    <string name="qk_04616" formatted="false">屏幕投影识别（需系统投屏授权后启动）</string>
+    <string name="qk_04617" formatted="false">AI 理解通知上下文（系统托管，需通知使用权）</string>
+    <string name="qk_04620" formatted="false">后台进程</string>
+    <string name="qk_04621" formatted="false">本应用常驻服务一览。常驻是为了让 AI 在后台持续可用（回复 / 保活 / 悬浮），按需开关即可。</string>
+    <string name="qk_04622" formatted="false">运行中</string>
+    <string name="qk_04623" formatted="false">未运行</string>
+    <string name="qk_04624" formatted="false">此服务由功能内部按需拉起或由系统托管，不提供直接开关</string>
+    <string name="qk_04700" formatted="false">上下文窗口</string>
+    <string name="qk_04701" formatted="false">当前模型未上报窗口大小，无法估算占用</string>
+    <string name="qk_04702" formatted="false">%s%% 已用</string>
+    <string name="qk_04704" formatted="false">自动压缩预留</string>
+    <string name="qk_04705" formatted="false">剩余空间</string>
+    <string name="qk_04706" formatted="false">压缩上下文</string>
+    <string name="qk_04707" formatted="false">思考了 %s 秒</string>
+    <string name="qk_04708" formatted="false">思考过程</string>
+    <string name="qk_04709" formatted="false">在新对话中创建分支</string>
+    <string name="qk_04710" formatted="false">编辑此消息</string>
+    <string name="qk_04711" formatted="false">删除此消息</string>
+    <string name="qk_04712" formatted="false">搜索可用服务</string>
+    <string name="qk_04713" formatted="false">已连接</string>
+    <string name="qk_04714" formatted="false">Quro 本地工具</string>
+    <string name="qk_04715" formatted="false">本地 AI 工具直连设备能力与系统功能，无需配置即可使用</string>
+    <string name="qk_04716" formatted="false">内置</string>
+    <string name="qk_04720" formatted="false">互动动作</string>
+    <string name="qk_04721" formatted="false">新增互动动作</string>
+    <string name="qk_04722" formatted="false">删除</string>
+    <string name="qk_04723" formatted="false">触发词（如：讲笑话）</string>
+    <string name="qk_04724" formatted="false">动画类型</string>
+    <string name="qk_04725" formatted="false">行为</string>
+    <string name="qk_04726" formatted="false">自由位置</string>
+    <string name="qk_04727" formatted="false">在屏幕内可自由拖动到任意位置；关闭则吸附右缘</string>
+    <string name="qk_04728" formatted="false">显示思考匹配</string>
+    <string name="qk_04729" formatted="false">AI 思考中时同步播放思考动画</string>
+    <string name="qk_04730" formatted="false">宠物外观</string>
+    <string name="qk_04731" formatted="false">宠物大小：%s%%</string>
+    <string name="qk_04732" formatted="false">动作间隔：%s 秒</string>
+    <string name="qk_04733" formatted="false">确定</string>
+    <string name="qk_04734" formatted="false">取消</string>
+    <string name="qk_04735" formatted="false">宠物设置</string>
+    <string name="qk_04736" formatted="false">形象 · 互动动作 · 行为 · 大小 · 动作间隔</string>
+    <string name="qk_04737" formatted="false">AI 生成宠物</string>
+    <string name="qk_04738" formatted="false">描述你想要的宠物（如：戴围巾的橙色小猫）</string>
+    <string name="qk_04739" formatted="false">生成中…</string>
+    <string name="qk_04740" formatted="false">生成失败，请确认已配置模型服务 API Key</string>
+    <string name="qk_04741" formatted="false">生成</string>
+    <string name="qk_04742" formatted="false">人格画像（Soul）</string>
+    <string name="qk_04743" formatted="false">已沉淀人格画像，点击查看完整内容</string>
+    <string name="qk_04744" formatted="false">尚未形成 Soul。开启自动进化或与它多聊聊，画像会逐步沉淀</string>
+    <string name="qk_04745" formatted="false">最近沉淀：%s</string>
+    <string name="qk_04746" formatted="false">查看完整 Soul</string>
+    <string name="qk_04747" formatted="false">主设置</string>
+    <string name="qk_04748" formatted="false">自动进化</string>
+    <string name="qk_04749" formatted="false">对话若干轮后自动总结沉淀，长成本人格独有的人格画像</string>
+    <string name="qk_04750" formatted="false">记忆</string>
+    <string name="qk_04751" formatted="false">关闭后本人格的系统提示词不携带记忆库条目</string>
+    <string name="qk_04752" formatted="false">主动模式</string>
+    <string name="qk_04753" formatted="false">允许本人格在心跳/事件触发时主动发消息给你</string>
+    <string name="qk_04754" formatted="false">采样参数（覆盖全局模型默认）</string>
+    <string name="qk_04755" formatted="false">温度覆盖</string>
+    <string name="qk_04756" formatted="false">温度：%s</string>
+    <string name="qk_04757" formatted="false">Top-P：%s</string>
+    <string name="qk_04758" formatted="false">工具白名单</string>
+    <string name="qk_04759" formatted="false">工具（已启用 %s 类）</string>
+    <string name="qk_04760" formatted="false">不选任何类别 = 全部工具可用</string>
+    <string name="qk_04761" formatted="false">选择</string>
+    <string name="qk_04762" formatted="false">分享人格</string>
+    <string name="qk_04763" formatted="false">导出完整配置 JSON（含 Soul），对方导入即可恢复</string>
+    <string name="qk_04764" formatted="false">分享</string>
+    <string name="qk_04765" formatted="false">修改后点「保存」落盘；Soul 是自动进化沉淀 + 手动编辑的长期人格画像</string>
 </resources>

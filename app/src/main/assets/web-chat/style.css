@@ -261,6 +261,12 @@ html.dark .thinkbox{background:#241F18;border-color:var(--line2)}
 .thinkbox .ts{display:flex;gap:6px;padding:1px 0;font-size:11px;line-height:16px;color:var(--fg-soft)}
 .thinkbox .ts-n{flex:none;color:var(--muted)}
 .thinkbox .ts-t{word-break:break-word}
+/* 「查看全部」：默认只给最近 3 步，全文按需展开，不再一次性平铺 219 行 */
+.thinkbox .ts-more{
+  padding:3px 0 5px;margin-bottom:3px;border-bottom:1px dashed var(--line);
+  font-size:11px;color:var(--primary);cursor:pointer;user-select:none;
+}
+.thinkbox .ts-more:hover{text-decoration:underline}
 /* ── 正文（无气泡壳：用户消息暖褐 #5A3322，AI 消息主题色，统一靠左）── */
 .md{min-width:0;word-wrap:break-word;overflow-wrap:anywhere}
 .msg.mine .md{color:#5A3322}
@@ -288,20 +294,85 @@ html.dark .msg.mine .md{color:#E8B9A0}
 }
 .md a{color:var(--primary);text-decoration:none;border-bottom:1px solid var(--primary);border-bottom:1px solid color-mix(in srgb,var(--primary) 35%,transparent)}
 .md a:hover{border-bottom-color:var(--primary)}
+/* 代码块：与原生 CodeBlock 同一套（语言头 / 行号 / 折叠 / 全屏 / 高亮）。
+   旧版是 absolute 浮在 pre 上的「复制 + 语言」，会随代码横向滚动错位。 */
 .code{
-  position:relative;margin:8px 0;background:var(--surface);
+  margin:8px 0;background:var(--surface);
   border:1px solid var(--line);border-radius:var(--r-card);overflow:hidden;
   box-shadow:var(--shadow-1);
 }
-.code pre{margin:0;padding:12px 14px;overflow-x:auto;max-width:100%}
-.code code{background:none;padding:0;font-size:12.5px;line-height:1.6}
-.code .code-c{
-  position:absolute;top:8px;right:8px;font:inherit;font-size:11px;
-  color:var(--fg-soft);background:var(--surface);
-  border:1px solid var(--line);border-radius:var(--r-tag);padding:3px 10px;cursor:pointer;
+.code-hd{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 10px;border-bottom:1px solid var(--line);background:var(--bg2);
+}
+.code .code-l{
+  font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--fg-soft);
+  max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.code .code-n{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+.code .code-sp{flex:1}
+.code .code-a{
+  font:inherit;font-size:11px;color:var(--fg-soft);background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r-tag);
+  padding:3px 10px;cursor:pointer;
   transition:all var(--t-fast) var(--ease-out);
 }
-.code .code-c:hover{color:var(--primary);border-color:var(--primary)}
+.code .code-a:hover{color:var(--primary);border-color:var(--primary)}
+.code-body{display:flex;align-items:stretch;min-width:0}
+.code-body pre{
+  margin:0;padding:12px 14px;overflow-x:auto;max-width:100%;
+  font-family:var(--font-mono);font-size:12.5px;line-height:1.6;
+  background:none;border:0;border-radius:0;
+}
+.code-body pre.code-g{
+  flex:0 0 auto;padding:12px 8px 12px 12px;color:var(--muted);opacity:.55;
+  user-select:none;overflow:hidden;text-align:right;
+  border-right:1px solid var(--line);
+}
+.code-body pre:last-child{flex:1;min-width:0}
+.md .code code{
+  display:block;font-family:var(--font-mono);font-size:12.5px;line-height:1.6;
+  background:none;border:0;padding:0;border-radius:0;
+}
+.code.folded .code-body{max-height:320px;overflow:hidden}
+.code .code-more{
+  display:block;width:100%;font:inherit;font-size:11px;color:var(--primary);
+  background:var(--bg2);border:0;border-top:1px solid var(--line);
+  padding:7px 0;cursor:pointer;
+}
+/* 公式（KaTeX 离线）：块级可横滚，行内不撑破行高 */
+.md-math-block{display:block;overflow-x:auto;margin:10px 0;text-align:center}
+.md-math code{font-family:var(--font-mono);font-size:.92em}
+.md .katex{font-size:1.04em}
+.katex-error{color:var(--err)}
+/* 全屏代码预览 */
+.code-fs-overlay{
+  position:fixed;inset:0;z-index:9999;background:var(--bg);
+  display:flex;flex-direction:column;padding:10px;overflow:auto;
+}
+.code-fs-bar{display:flex;justify-content:flex-end;margin-bottom:6px}
+.code-fs-bar button{
+  font:inherit;font-size:13px;padding:6px 14px;border-radius:var(--r-ctl);
+  border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;
+}
+.code-fs-overlay .code{flex:1;margin:0;overflow:auto}
+.code-fs-overlay .code-body{max-height:none!important}
+/* hljs token 配色（自写，明暗两套）。不引整包 github-dark.css：
+   它会给 pre code.hljs 加自己的底色/内边距，覆盖对话卡壳。 */
+.hljs-keyword,.hljs-selector-tag,.hljs-literal,.hljs-built_in{color:#A626A4;font-weight:600}
+.hljs-string,.hljs-attr,.hljs-template-variable,.hljs-addition{color:#50A14F}
+.hljs-comment,.hljs-quote{color:#A0A1A7;font-style:italic}
+.hljs-number,.hljs-symbol,.hljs-bullet{color:#986801}
+.hljs-title,.hljs-function .hljs-title,.hljs-section,.hljs-type{color:#4078F2}
+.hljs-attribute,.hljs-variable,.hljs-params{color:#C18401}
+.hljs-deletion{color:#E45649}
+html.dark .hljs-keyword,html.dark .hljs-selector-tag,html.dark .hljs-literal,html.dark .hljs-built_in{color:#C678DD}
+html.dark .hljs-string,html.dark .hljs-attr,html.dark .hljs-template-variable,html.dark .hljs-addition{color:#98C379}
+html.dark .hljs-comment,html.dark .hljs-quote{color:#7F848E}
+html.dark .hljs-number,html.dark .hljs-symbol,html.dark .hljs-bullet{color:#D19A66}
+html.dark .hljs-title,html.dark .hljs-function .hljs-title,html.dark .hljs-section,html.dark .hljs-type{color:#61AFEF}
+html.dark .hljs-attribute,html.dark .hljs-variable,html.dark .hljs-params{color:#E5C07B}
+html.dark .hljs-deletion{color:#E06C75}
 /* 表格：投影最容易顶宽的地方，必须能横向滚动而不是把整页顶开 */
 .tw{overflow-x:auto;max-width:100%;margin:8px 0}
 .md table{border-collapse:collapse;width:max-content;min-width:100%;font-size:13.5px}
@@ -800,15 +871,8 @@ html.dark .msg.mine .md{color:#E8B9A0}
 .md-task li.done .qcheck{background:var(--primary);border-color:var(--primary)}
 .md-task li.done>span:last-child{color:var(--muted);text-decoration:line-through}
 
-/* 代码块语言标签（mdHtml / blockNode 共用）：贴在复制按钮左侧 */
-.code .code-l{
-  position:absolute;top:8px;right:64px;font:inherit;font-size:11px;
-  font-family:var(--font-mono);color:var(--muted);
-  background:var(--surface);border:1px solid var(--line);
-  border-radius:var(--r-tag);padding:3px 10px;line-height:1.4;
-  max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-}
-.code:has(.code-l) pre{padding-top:36px}
+/* 语言标签已并入 .code-hd 头部行（见文件前段），此处不再保留 absolute 版，
+   也不再给 pre 加 36px 顶部占位 —— 那会让行号列与代码列错位。 */
 
 /* ── 组件卡片围栏（renderCard 输出）────────────────────────────────── */
 .qcard{
@@ -1022,6 +1086,28 @@ html.dark .msg.mine .md{color:#E8B9A0}
 }
 .qhtml-frame.miniapp{height:520px}
 .aip-html-frame{display:block;width:100%;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--surface)}
+
+/* ── 可视化小卡片（独立分类：visual_card / cardType=visualmini）─────────
+   与原生 VisualMiniCardView 同构：圆角 20 卡壳 + emoji/标题/副标题头部 + iframe 卡体。
+   刻意不复用富组件/动态 UI 的卡片样式，避免分类再次被混在一起。 */
+.wcard{
+  margin:6px 0;border:1px solid var(--line);border-radius:20px;overflow:hidden;
+  background:var(--surface);box-shadow:var(--shadow-1);
+}
+.wcard-hd{
+  display:flex;align-items:center;gap:10px;padding:12px 18px;
+  background:color-mix(in srgb,var(--primary) 6%,transparent);
+  background:rgba(79,107,255,.06);border-bottom:1px solid var(--line);
+}
+.wcard-emoji{font-size:18px;line-height:1;flex:none}
+.wcard-tx{flex:1;min-width:0}
+.wcard-t{font-size:15px;font-weight:700;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wcard-s{font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wcard-dot{width:8px;height:8px;border-radius:50%;flex:none}
+.wcard-frame{display:block;width:100%;border:0;background:var(--surface)}
+/* renderCards 外面已经套了 .qcard 壳，这里融进去，避免出现两层卡片边框 */
+.qcard .wcard{margin:0;border:0;border-radius:0;box-shadow:none}
+.qcard .wcard-frame{background:transparent}
 
 /* ── 动态 UI（renderDynamicUi 输出）────────────────────────────────── */
 .dui-root{display:flex;flex-direction:column;gap:8px;min-width:0}
@@ -1532,7 +1618,7 @@ html.dark .msg.mine .md{color:#E8B9A0}
   .md{font-size:15.5px}
   .md h1{font-size:24px}.md h2{font-size:21px}.md h3{font-size:18px}.md h4{font-size:16.5px}
   .md table{font-size:14.5px}
-  .code code{font-size:13px}
+  .md .code code{font-size:13px}
   #composer{padding:10px 32px;padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   #inp{font-size:15.5px}
   .pm-l{font-size:15px}

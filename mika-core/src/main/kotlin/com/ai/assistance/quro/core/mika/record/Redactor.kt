@@ -155,7 +155,7 @@ object Redactor {
     private val WORD_SPLIT = Regex("[^A-Za-z0-9]+")
 
     /** 名字按词拆开(驼峰、下划线、连字符)后有像凭据的词。 */
-    private fun secretName(name: String): Boolean {
+    internal fun secretName(name: String): Boolean {
         val words = name.split(WORD_SPLIT).flatMap { it.split(CASE_BOUNDARY) }.map { it.lowercase() }.filter { it.isNotEmpty() }
         return words.any { it in SECRET_WORDS } || words.joinToString("") in SECRET_COMPOUNDS
     }

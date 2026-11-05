@@ -47,7 +47,30 @@ data class Attachment(
     val type: String? = null,   // "image" | "video" | "file"
 )
 
-data class ThinkBlock(val steps: List<String>)
+/**
+ * 思考块：一轮回复的推理过程（reasoning）。
+ *
+ * @param steps 思考的行（流式期间逐行累积）。
+ * @param durationMs 本段思考耗时（首个思考 token → 首个可见 token）；
+ *   0 表示未知（旧消息 / 上游没给 reasoning 用量），UI 回退为「思考过程 · N 步」。
+ */
+data class ThinkBlock(val steps: List<String>, val durationMs: Long = 0)
+
+/**
+ * 语音条（AI 主动发的一条语音消息）。
+ *
+ * 与「自动朗读」不同：语音条是**落盘、可回放**的音频，气泡里显示播放控件，
+ * 支持播放/暂停、转文字/收起、听筒/扬声器切换。文字是音频的同内容转写。
+ *
+ * @param text 语音条的文字转写（转文字时展示、也是模型收到的原文）。
+ * @param audioPath 已合成的音频文件绝对路径（mp3/wav）。空 = 合成失败/未生成。
+ * @param generating 是否正在合成中（合成是异步的，完成前显示「正在生成语音」）。
+ */
+data class VoiceNoteUi(
+    val text: String,
+    val audioPath: String = "",
+    val generating: Boolean = false,
+)
 
 /** 工具调用展示块（让 AI 的自动化操作在对话中可见）。 */
 data class ToolCallUi(
@@ -56,6 +79,14 @@ data class ToolCallUi(
     val result: String? = null,
     /** 工具执行耗时（毫秒），展示用。 */
     val durationMs: Long = 0,
+)
+
+/** 一条可溯源引用（web_search / read_url 返回的来源），用于消息底部渲染可点击来源胶囊。 */
+data class CitationUi(
+    val index: Int,
+    val title: String,
+    val url: String,
+    val domain: String = "",
 )
 
 /**
@@ -88,6 +119,10 @@ data class Message(
     val attachments: List<Attachment> = emptyList(),
     val think: ThinkBlock? = null,
     val tools: List<ToolCallUi>? = null,  // 本消息关联的工具调用（可见化，而非隐藏管道）
+    /** 语音条：AI 主动发的一条可回放语音消息（与 [text] 正文可并存，但通常 voiceNote 为主形态）。 */
+    val voiceNote: VoiceNoteUi? = null,
+    /** 可溯源引用列表（web_search/read_url 返回的来源），消息底部渲染可点击胶囊。 */
+    val citations: List<CitationUi> = emptyList(),
     val cards: List<QuroChatCard> = emptyList(), // 气泡内富组件（一等公民，合体进聊天气泡）
     /**
      * 本消息要**内联渲染**的 zxwidget 动态交互界面（撑满宽度，长在消息流里）。
@@ -219,3 +254,36 @@ val SAMPLE_MESSAGES = listOf(
         text = "好，草拟一下，语气正式一点。"
     )
 )
+
+/**
+ * 从 web_search / read_url 工具的返回文本里解析「引用来源」清单，产出可渲染的 [CitationUi]。
+ *
+ * 工具返回文本形态（WebSearchTool.render）：
+ *   …上下文…
+ *   引用来源：
+ *   [1] 标题A — https://a.com
+ *   [2] 标题B — https://b.com
+ *   检索置信度：85%
+ *
+ * 解析「[n] 标题 — url」行；容忍缺破折号、无 url 等情况。
+ */
+fun parseCitationsFromToolResults(toolResults: List<String>): List<CitationUi> {
+    val out = mutableListOf<CitationUi>()
+    val seen = mutableSetOf<String>()
+    for (raw in toolResults) {
+        // 定位「引用来源」段落之后的 [n] 行
+        for (line in raw.lineSequence()) {
+            val m = Regex("""^\s*\[(\d+)\]\s+(.+?)\s*[—\-–]\s*(https?://\S+)\s*$""").find(line.trim())
+                ?: continue
+            val index = m.groupValues[1].toIntOrNull() ?: continue
+            val title = m.groupValues[2].trim()
+            val url = m.groupValues[3].trim()
+            if (url in seen) continue
+            seen.add(url)
+            val domain = runCatching { java.net.URI(url).host ?: "" }.getOrDefault("")
+                .removePrefix("www.")
+            out.add(CitationUi(index = index, title = title, url = url, domain = domain))
+        }
+    }
+    return out.distinctBy { it.url }.sortedBy { it.index }
+}

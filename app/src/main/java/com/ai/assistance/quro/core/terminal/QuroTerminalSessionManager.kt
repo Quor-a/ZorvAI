@@ -3,6 +3,7 @@ package com.ai.assistance.quro.core.terminal
 import android.content.Context
 import android.util.Log
 import com.ai.assistance.quro.activity.QuroApplication
+import com.ai.assistance.quro.core.termux.ZorvSwitch
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
 import com.ai.assistance.quro.core.vm.QuroVmEnv
 import kotlinx.coroutines.CoroutineScope
@@ -41,7 +42,7 @@ object QuroTerminalSessionManager {
     private const val DEFAULT_NAME = "默认会话"
     private const val UI_ID = "__ui_termux__"
 
-    enum class Backend { LINUX_PROOT, DEVICE_SH, VM_LINUX }
+    enum class Backend { LINUX_PROOT, DEVICE_SH, TERMUX_NATIVE, VM_LINUX }
     enum class Kind { DEFAULT, EXTRA, UI_TERMUX }
 
     /** 对外的会话摘要（不含进程句柄，可安全序列化 / 跨层传递）。 */
@@ -143,7 +144,20 @@ object QuroTerminalSessionManager {
     suspend fun ensureDefault(context: Context, installIfMissing: Boolean = true): QuroShellSession? {
         return mutex.withLock {
             // ── 快速路径：已是 proot/VM 的默认会话，直接复用（不做任何重操作） ──
-            val cur = defaultEntry?.takeIf { it.alive }
+            var cur = defaultEntry?.takeIf { it.alive }
+            // 默认环境被切换（Termux ⇄ zorvAI 沙箱）时，旧会话必须换掉，
+            // 否则用户改了设置却还是进原来那套环境；DEVICE 交给下面的升级逻辑处理。
+            val wantTermux = QuroTerminalPrefs.defaultEnv == ZorvSwitch.ENV_TERMUX
+            val envMismatch = cur != null && when {
+                wantTermux -> cur.shell?.mode != ShellMode.TERMUX && cur.shell?.mode != ShellMode.DEVICE
+                else -> cur.shell?.mode == ShellMode.TERMUX
+            }
+            if (envMismatch) {
+                Log.i(TAG, "ensureDefault: 默认环境已切到 ${QuroTerminalPrefs.defaultEnv} → 重建默认会话")
+                runCatching { cur?.shell?.destroy() }
+                defaultEntry = null
+                cur = null
+            }
             if (cur != null && cur.shell?.mode != ShellMode.DEVICE) {
                 return@withLock cur.shell
             }
@@ -187,6 +201,7 @@ object QuroTerminalSessionManager {
                 val backend = when (shell.mode) {
                     ShellMode.VM -> Backend.VM_LINUX
                     ShellMode.LINUX -> Backend.LINUX_PROOT
+                    ShellMode.TERMUX -> Backend.TERMUX_NATIVE
                     ShellMode.DEVICE -> Backend.DEVICE_SH
                 }
                 val entry = Entry("default", DEFAULT_NAME, Kind.DEFAULT, backend, System.currentTimeMillis(), shell)
@@ -279,7 +294,9 @@ object QuroTerminalSessionManager {
         // 必须切 IO 线程。UI「+ 新会话」按钮用的是 rememberCoroutineScope（Main 调度器），
         // 不切线程会直接 5 秒 Input dispatching 超时 ANR。
         return withContext(Dispatchers.IO) {
-            if (installIfMissing) {
+            // 默认环境是 Termux 时不该为了「新建会话」去装 200MB 的 Ubuntu rootfs：
+            // 那是另一个环境的事，按需（用户真的选了 ubuntu / 输入 zorv）再装。
+            if (installIfMissing && QuroTerminalPrefs.defaultEnv == ZorvSwitch.ENV_UBUNTU) {
                 val st = QuroLinuxEnv.probeLenient(context)
                 if (!st.available) QuroLinuxEnv.ensureInstalledBlocking(context)
             }
@@ -287,6 +304,7 @@ object QuroTerminalSessionManager {
             val backend = when (shell.mode) {
                 ShellMode.VM -> Backend.VM_LINUX
                 ShellMode.LINUX -> Backend.LINUX_PROOT
+                ShellMode.TERMUX -> Backend.TERMUX_NATIVE
                 ShellMode.DEVICE -> Backend.DEVICE_SH
             }
             val id = UUID.randomUUID().toString().take(8)

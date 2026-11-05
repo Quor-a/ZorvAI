@@ -62,7 +62,7 @@ object ToolTaxonomy {
     private val RULES: List<Rule> = listOf(
 
         // ════════ 顶层：这几类一旦混进别的分类就会导致「用错工具」，必须最优先 ════════
-        Rule(ToolCategory.VIRTUAL_SCREEN, exact = setOf("bg_screen")),
+        Rule(ToolCategory.VIRTUAL_SCREEN, exact = setOf("bg_screen", "pet")),
         Rule(ToolCategory.ADB_DEBUG, exact = setOf("adb_dev", "adb_term")),
         Rule(ToolCategory.TERMUX, prefixes = listOf("termux")),
         // 生图/生视频/多模态识别必须在 MEDIA 的 image*/video* 之前，否则被当成媒体文件处理
@@ -70,7 +70,7 @@ object ToolTaxonomy {
             ToolCategory.AI_CAPABILITIES,
             exact = setOf(
                 "image_gen", "img_gen_provider", "video_gen", "audio_recognition",
-                "visual_analysis", "image_recognition", "video_recognition",
+                "visual_analysis", "video_recognition",
                 "creative_studio", "tool_discovery", "zorvai_capabilities",
                 "kaleidobox", "visual",
             ),
@@ -95,6 +95,12 @@ object ToolTaxonomy {
         Rule(ToolCategory.UI_CARDS, prefixes = listOf("ui_")),
         // ui_tree 是 dump 无障碍节点树（供自动点击定位），属于无障碍读屏，不是卡片工具
         Rule(ToolCategory.ACCESSIBILITY, exact = setOf("ui_tree")),
+        // 🔴 可视化小卡片是**独立分类**，必须在 `visual_` 宽前缀之前精确命中，
+        //    否则会被归进「可视化交互/弹窗」，模型检索「小卡片」时永远找不到它。
+        Rule(
+            ToolCategory.WIDGET_CARD,
+            exact = setOf("visual_card", "visual_card_skeleton"),
+        ),
         Rule(
             ToolCategory.VISUAL_INTERACT,
             exact = setOf(
@@ -168,14 +174,20 @@ object ToolTaxonomy {
             ),
         ),
 
-        // ════════ 屏幕 / 无障碍（用户这块屏）════════
+        // ════════ 看屏 / 屏幕操作（用户这块屏 + 理解屏幕画面）════════
+        // 🔴 把全部「看屏」能力聚到一类：read_screen/screenshot/tap_screen/ui_tree 这些原本散在
+        // ACCESSIBILITY 的、visual_analysis 原本在 VISUAL_INTERACT 的、image_recognition 原本在
+        // AI_CAPABILITIES 的，统一收进 SCREEN_PERCEPTION，让 AI 操控虚拟屏/读屏/截图时能一次列全。
+        // bg_screen（后台虚拟屏）仍单列 VIRTUAL_SCREEN（见 ToolTaxonomyTest 硬断言），靠
+        // ToolCapabilityDirectory.getScreenTools() 与它们互链，不重复进本规则。
         Rule(
-            ToolCategory.ACCESSIBILITY,
+            ToolCategory.SCREEN_PERCEPTION,
             exact = setOf(
                 "read_screen", "tap_screen", "swipe_screen", "long_press_screen",
                 "scroll_screen", "input_text", "get_foreground_app", "get_screen_state",
                 "screenshot", "screenshot_base64", "global_action", "enable_screen_capture",
                 "screen_record", "take_photo", "ai_type_text", "ai_press_enter", "ai_press_send",
+                "ui_tree", "visual_analysis", "image_recognition",
             ),
         ),
 

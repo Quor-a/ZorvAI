@@ -313,4 +313,71 @@ internal object ChatHistory {
         }
         return out
     }
+
+    /**
+     * 修正 `tool` 消息与 `assistant[tool_calls]` 的配对（发请求前的最后一道闸）。
+     *
+     * ## 为什么必须修（「工具调着调着就不动了 / 发什么都不回」的真因之一）
+     * OpenAI 兼容网关对 function calling 有两条硬约束：
+     *  ① 每条 `tool` 消息必须紧跟在带 `tool_calls` 的 assistant 之后，且 `tool_call_id` 对得上；
+     *  ② 带 `tool_calls` 的 assistant 之后，**每个 id 都必须有一条 tool 回应**。
+     * 任一条不满足，上游直接 400；而 400 在界面上表现为「一直转圈然后报错」，很难归因。
+     *
+     * 本项目有两条路会造出不配对：
+     *  · 用户点「停止」时协程被取消 —— [GenUIChatViewModel.handleToolCallsResult] 已经把
+     *    assistant[tool_calls] 写进历史，但 tool 结果还没执行完/没写入 → 孤儿 assistant；
+     *  · 持久化恢复只认 `(role, content)`，`toolCallId` 丢失 → 孤儿 tool 消息。
+     *
+     * 处理策略（宁可少一条上下文，也不能让整轮 400）：
+     *  · 孤儿 `tool` 消息 → 丢弃；
+     *  · 缺失的 tool 回应 → 补一条**可判定失败**的 tool 结果（模型据此知道「那次没跑成」，
+     *    而不是以为成功了继续往下编）。
+     *
+     * @return 保证「assistant[tool_calls] 后面紧跟它全部的 tool 回应」的消息列表
+     */
+    fun normalizeToolMessages(input: List<GenUIChatMessage>): List<GenUIChatMessage> {
+        // 1) 剔除空 assistant 占位（无正文、无 tool_calls）—— 它在 assistant 与 tool 之间
+        //    会触发 DeepSeek 400，且对模型毫无信息量。
+        val filtered = input.filterNot {
+            it.role == "assistant" && it.content.isBlank() && it.toolCalls.isNullOrEmpty()
+        }
+
+        val result = ArrayList<GenUIChatMessage>(filtered.size)
+        var i = 0
+        while (i < filtered.size) {
+            val m = filtered[i]
+            if (m.role == "tool") {
+                i++ // 前面没有待回应的 assistant[tool_calls] → 孤儿，丢弃
+                continue
+            }
+            result.add(m)
+            i++
+            val calls = m.toolCalls
+            if (m.role != "assistant" || calls.isNullOrEmpty()) continue
+
+            val unanswered = calls.map { it.id }.toMutableSet()
+            while (i < filtered.size && filtered[i].role == "tool") {
+                val t = filtered[i]
+                val id = t.toolCallId.orEmpty()
+                // id 对得上才保留：顺序错位 / 张冠李戴同样会被网关拒
+                if (id.isNotEmpty() && unanswered.remove(id)) result.add(t)
+                i++
+            }
+            unanswered.forEach { id ->
+                result.add(
+                    GenUIChatMessage(
+                        role = "tool",
+                        content = INTERRUPTED_TOOL_RESULT,
+                        toolCallId = id,
+                        toolName = "",
+                    )
+                )
+            }
+        }
+        return result
+    }
+
+    /** 补齐用的「这次调用没跑成」结果；措辞要能直接指导模型下一步，而不是一句无信息量的 null。 */
+    const val INTERRUPTED_TOOL_RESULT: String =
+        """{"success":false,"error":"该工具调用没有返回结果（本轮被中断或执行器异常），请按失败处理，不要原样重复调用"}"""
 }

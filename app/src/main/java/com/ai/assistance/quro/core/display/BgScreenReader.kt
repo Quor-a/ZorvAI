@@ -36,9 +36,27 @@ data class BgElement(
     val checked: Boolean,
     val enabled: Boolean,
     val password: Boolean,
+    /**
+     * 资源 ID 短名，如 `search_src_text`。
+     *
+     * 为什么要给：界面上常有好几个长得一样、名字都是「搜索」的输入框；
+     * 而回车前要认出「哪个是真搜索框」只能靠 ID。混淆过的短名（`a1`、`b2`）不给，那没有信息量。
+     */
+    val resourceId: String? = null,
+    /** 当前显示的「名字」其实只是占位提示语（还没输入内容）。 */
+    val hint: Boolean = false,
+    /** 这个控件此刻有输入焦点（点完输入框后判断焦点落在哪）。 */
+    val focused: Boolean = false,
+    /** 输入框的占位提示语（仅 editable 有）。 */
+    val placeholder: String? = null,
 )
 
-/** 一次读屏的结果。 */
+/**
+ * 一次读屏的结果（**只有结构，不含 OCR 与画面诊断**）。
+ *
+ * 面向模型的文本由 `QuroVirtualScreen.BgReading.toPromptText()` 生成 ——
+ * 这里刻意不再提供 `toPromptText`：两份格式长期必然走样，模型看到的描述会前后不一致。
+ */
 data class BgSnapshot(
     val displayId: Int,
     val width: Int,
@@ -50,41 +68,7 @@ data class BgSnapshot(
     /** 界面指纹：点输入框只换焦点也算变化。用来判断动作有没有生效。 */
     val hash: Long,
     val passwordField: Boolean,
-) {
-    /** 压成一段给模型看的紧凑文本。 */
-    fun toPromptText(maxElements: Int = ELEMENT_LIMIT): String {
-        val sb = StringBuilder()
-        sb.appendLine("后台屏 displayId=$displayId  ${width}x$height")
-        topPackage?.let { sb.appendLine("前台包：$it") }
-        if (elements.isEmpty()) {
-            sb.appendLine("（没有可读控件：可能界面还没渲染完，或该界面禁止无障碍读取，请改用 screenshot）")
-        } else {
-            sb.appendLine("可操作元素（共 ${elements.size} 个，ref 可直接用于 tapElement）：")
-            elements.take(maxElements).forEach { e ->
-                val flags = buildList {
-                    if (e.clickable) add("可点")
-                    if (e.editable) add("可输入")
-                    if (e.scrollable) add("可滚")
-                    if (e.checked) add("已选")
-                    if (!e.enabled) add("禁用")
-                    if (e.password) add("密码")
-                }.joinToString(",")
-                val label = e.name.ifBlank { "(无文字)" }.take(48)
-                sb.appendLine("  ${e.ref} ${e.role} \"$label\" @(${e.centerX},${e.centerY}) ${e.bounds}${if (flags.isEmpty()) "" else " [$flags]"}")
-            }
-            if (elements.size > maxElements) sb.appendLine("  …还有 ${elements.size - maxElements} 个未列出")
-        }
-        if (texts.isNotEmpty()) {
-            sb.appendLine("界面文字：" + texts.take(TEXT_LIMIT).joinToString(" | ").take(1500))
-        }
-        return sb.toString().trim()
-    }
-
-    private companion object {
-        const val ELEMENT_LIMIT = 60
-        const val TEXT_LIMIT = 40
-    }
-}
+)
 
 object BgScreenReader {
 
@@ -171,6 +155,9 @@ object BgScreenReader {
 
     private const val MIN_SIZE = 5
     private const val MAX_DEPTH = 80
+
+    /** 无名字容器聚合子节点文字时的上限（字符）。 */
+    private const val AGGREGATE_MAX = 60
 
     /** 输入法与无障碍浮层不属于被操作的 App。 */
     private val SKIPPED_TYPES = setOf(
@@ -263,6 +250,15 @@ object BgScreenReader {
                                 checked = node.isChecked,
                                 enabled = node.isEnabled,
                                 password = node.isPassword,
+                                // 输入框总带上 ID：回车前要靠它认出搜索框（名字常常只是推荐词）
+                                resourceId = if (label.isEmpty() || node.isEditable) readableResourceId(node.viewIdResourceName) else null,
+                                hint = own != null && showingHint(node),
+                                focused = node.isFocused,
+                                placeholder = if (node.isEditable) {
+                                    node.hintText?.toString()?.trim()?.ifEmpty { null }
+                                } else {
+                                    null
+                                },
                             )
                         )
                     }
@@ -308,17 +304,47 @@ object BgScreenReader {
         return n.hintText?.toString()?.trim()?.ifEmpty { null }
     }
 
-    /** 自己没文字时，从子节点里捞一个有文字的（图标按钮常见）。 */
+    /** 自己没文字时，从子节点里捞文字（图标按钮常见）。多个子文字拼起来，比只取第一个更像个名字。 */
     private fun descendantLabel(n: AccessibilityNodeInfo): String {
+        val parts = mutableListOf<String>()
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         for (i in 0 until n.childCount) n.getChild(i)?.let { queue.add(it) }
         var guard = 0
-        while (queue.isNotEmpty() && guard++ < 30) {
+        var total = 0
+        while (queue.isNotEmpty() && guard++ < 40 && total < AGGREGATE_MAX) {
             val c = queue.removeFirst()
-            ownLabel(c)?.let { return it.take(60) }
+            ownLabel(c)?.let { label ->
+                if (label !in parts) {
+                    parts += label
+                    total += label.length + 1
+                }
+            }
             for (i in 0 until c.childCount) c.getChild(i)?.let { queue.add(it) }
         }
-        return ""
+        val joined = parts.joinToString(" ")
+        return if (joined.length > AGGREGATE_MAX) joined.take(AGGREGATE_MAX) + "…" else joined
+    }
+
+    /** `com.tencent.mm:id/search_src_text` → `search_src_text`；混淆过的短名认不出用途，不给。 */
+    private fun readableResourceId(id: String?): String? {
+        val short = id?.substringAfterLast('/') ?: return null
+        return short.takeIf {
+            Regex("^[A-Za-z0-9_]{4,}$").matches(it) && Regex("[A-Za-z]{3}").containsMatchIn(it)
+        }
+    }
+
+    /**
+     * 节点上显示的是提示语（占位文字），而不是用户输入的内容。
+     *
+     * 三判据，缺一不可地叠加：系统标了 `showingHintText`；或没有实际文字、名字来自提示语；
+     * 或报出的文字就是提示语本身（有的输入框不设那个标记）。
+     */
+    private fun showingHint(n: AccessibilityNodeInfo): Boolean {
+        if (n.isShowingHintText) return true
+        val hint = n.hintText?.toString()?.trim()
+        if (hint.isNullOrEmpty()) return false
+        val text = n.text?.toString()?.trim()
+        return if (text.isNullOrEmpty()) n.contentDescription.isNullOrBlank() else text == hint
     }
 
     private fun states(n: AccessibilityNodeInfo): String =

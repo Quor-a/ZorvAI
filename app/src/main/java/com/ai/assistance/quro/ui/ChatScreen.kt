@@ -33,6 +33,7 @@ import com.ai.assistance.quro.core.tools.LaunchAppTool
 import com.ai.assistance.quro.core.tools.QuroSkillTool
 import com.ai.assistance.quro.BuildConfig
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.camera.QuroCameraUtil
 import com.ai.assistance.quro.core.terminal.QuroTerminalPrefs
 import com.ai.assistance.quro.core.terminal.QuroTerminalBridge
 import com.ai.assistance.quro.terminal.TerminalManager
@@ -48,6 +49,18 @@ import com.ai.assistance.quro.ui.VisualPopupDialog
 import com.ai.assistance.quro.ui.VisualCustomPopupDialog
 import com.ai.assistance.quro.core.cards.CardAction
 import com.ai.assistance.quro.core.cards.CardActionRouter
+import com.ai.assistance.quro.core.chat.BusySendMode
+import com.ai.assistance.quro.core.chat.ApprovalDecision
+import com.ai.assistance.quro.core.chat.TurnOutcome
+import com.ai.assistance.quro.ui.chat.TurnOutcomeBar
+import com.ai.assistance.quro.ui.chat.ApprovalCard
+import com.ai.assistance.quro.ui.chat.ContextWindowSheet
+import com.ai.assistance.quro.ui.chat.ActivityStream
+import com.ai.assistance.quro.ui.chat.formatDurationMs
+import com.ai.assistance.quro.core.chat.ActivityCategory
+import com.ai.assistance.quro.core.chat.ActivityEntry
+import com.ai.assistance.quro.core.chat.ActivityTitleResolver
+import com.ai.assistance.quro.ui.chat.VoiceNoteBubble
 import com.ai.assistance.quro.core.cards.CardFence
 import com.ai.assistance.quro.core.cards.CardPatch
 import com.ai.assistance.quro.core.cards.CardPatchBridge
@@ -101,6 +114,7 @@ import com.canhub.cropper.CropImageContractOptions
 import com.canhub.cropper.CropImageOptions
 import com.canhub.cropper.CropImageView
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -108,6 +122,8 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.animateFloat
@@ -118,7 +134,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -145,6 +163,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -196,6 +215,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
@@ -205,6 +225,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
@@ -225,17 +247,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.ai.assistance.quro.core.QuroAttachment
+import com.ai.assistance.quro.core.QuroComposerDraft
+import com.ai.assistance.quro.core.QuroMediaSliceHelper
 import com.ai.assistance.quro.core.QuroMessage
 import com.ai.assistance.quro.ui.data.Attachment
 import com.ai.assistance.quro.ui.data.ChatModel
+import com.ai.assistance.quro.ui.data.CitationUi
 import com.ai.assistance.quro.ui.data.HistoryItem
 import com.ai.assistance.quro.ui.data.Message
+import com.ai.assistance.quro.ui.data.parseCitationsFromToolResults
 import com.ai.assistance.quro.ui.data.ModelGroup
 import com.ai.assistance.quro.ui.data.Persona
 import com.ai.assistance.quro.ui.data.SAMPLE_MESSAGES
 import com.ai.assistance.quro.ui.data.SAMPLE_PERSONAS
 import com.ai.assistance.quro.ui.data.ThinkBlock
 import com.ai.assistance.quro.ui.data.ToolCallUi
+import com.ai.assistance.quro.ui.data.VoiceNoteUi
 import com.ai.assistance.quro.ui.data.ZxInlineSpec
 import com.ai.assistance.quro.ui.icons.LucideIcon
 import com.ai.assistance.quro.ui.chat.ChatPermissionModeBar
@@ -276,6 +303,7 @@ import com.ai.assistance.quro.core.media.QuroMusicLauncher
 import com.ai.assistance.quro.core.media.QuroDocLauncher
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
 import com.ai.assistance.quro.ui.QuroModelConfigViewModel
+import com.ai.assistance.quro.core.network.QuroLlmClient
 import com.ai.assistance.quro.core.network.QuroModelListResult
 import com.ai.assistance.quro.core.model.QuroSavedProfile
 import com.ai.assistance.quro.core.model.QuroSavedProfileRepository
@@ -300,6 +328,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextDecoration
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import org.json.JSONObject
 import com.ai.assistance.quro.core.websearch.IntentRouter
 import com.ai.assistance.quro.core.websearch.IntentType
@@ -317,9 +347,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.core.content.FileProvider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
@@ -338,6 +371,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Hub
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Movie
@@ -423,6 +457,8 @@ fun ChatScreen(
     onToggleVoiceBall: (Boolean) -> Unit = {},
     darkMode: Boolean = false,
     onToggleDark: () -> Unit = {},
+    darkModeTri: String = "system",
+    onSetDarkModeTri: (String) -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     // ── 外部指令落地（Breeno TEXT_DIRECTIVE 范式，2026-10-30）──
@@ -458,6 +494,16 @@ fun ChatScreen(
     val generatingIds by vm.generatingIds.collectAsState()
     val conversations by vm.conversations.collectAsState()
     val currentId by vm.currentId.collectAsState()
+    // 按会话取本轮归因：切回旧会话仍能看到「上一轮为什么没答上来」，重试即清除。
+    val turnOutcomeMap by vm.turnOutcome.collectAsState()
+    // 上下文占用：发送时算一次，临近上限才主动提示，平时不打扰。
+    val ctxUsageMap by vm.contextUsage.collectAsState()
+    val compactionMap by vm.compaction.collectAsState()
+    val turnUsageMap by vm.turnUsage.collectAsState()
+    var showContextSheet by remember { mutableStateOf(false) }
+    // 修改消息的状态放在这一层：MessageRow 只发「我要改这条」的意图，弹窗与落库由对话框统一管。
+    var editingMsg by remember { mutableStateOf<Message?>(null) }
+    var editingText by remember { mutableStateOf("") }
     val thinking by vm.thinking.collectAsState()
     val autoSaveMemory by vm.autoSaveMemory.collectAsState()
     val subAgentEnabled by vm.subAgentEnabled.collectAsState()
@@ -503,6 +549,27 @@ fun ChatScreen(
         prevBusy = busy
     }
     val attachments = remember { mutableStateListOf<QuroAttachment>() }
+    // 附件逐项处理进度：uri → 进度（0..1）。处理中的附件显示进度圆环，处理完移除。
+    val attachmentProgress = remember { mutableStateMapOf<String, Float>() }
+    val attachScope = rememberCoroutineScope()
+    // 视频切片对话框：非空时弹窗（存视频路径 + 时长）
+    var sliceVideoTarget by remember { mutableStateOf<String?>(null) }
+    // PDF 选页对话框：非空时弹窗（存 PDF 路径）
+    var pdfSelectTarget by remember { mutableStateOf<String?>(null) }
+    // 异步添加附件（带进度），完成后加入附件列表
+    fun addAttachmentAsync(c: Context, uri: Uri, mime: String) {
+        val key = uri.toString()
+        attachmentProgress[key] = 0f
+        attachScope.launch {
+            val att = QuroAttachmentKit.fromUriWithProgress(c, uri, mime) { p ->
+                attachmentProgress[key] = p
+            }
+            if (att != null) {
+                attachments.add(att)
+            }
+            attachmentProgress.remove(key)
+        }
+    }
 
     // 选中模型：直接用 cfg.model 合成（真实配置的模型，不再反查示例假数据）
     val selectedModel: ChatModel = remember(cfg.model) {
@@ -536,6 +603,8 @@ fun ChatScreen(
         var aggTime = ""
         var hasAgg = false
         val aggThinkLines = mutableListOf<String>()
+        // 本聚合段思考耗时（毫秒）：段内各 assistant 消息取最大；0 = 未知（回退「N 步」口径）。
+        var aggThinkDur = 0L
         val aggTools = mutableListOf<ToolCallUi>()
         val aggText = StringBuilder()
         val aggCards = mutableListOf<QuroChatCard>()
@@ -552,13 +621,17 @@ fun ChatScreen(
         // 🔴 当前聚合段的发言人（集群/子智能体的角色名）。null = 普通助手消息。
         // 见下方 else 分支：**发言人不同就 flush**，绝不把不同角色的话并进同一个气泡。
         var aggSpeaker: String? = null
+        // 语音条：本聚合段内 AI 用 speak 工具发出的语音内容（可回放）。
+        var aggVoiceNote: VoiceNoteUi? = null
+        // 可溯源引用（web_search/read_url 返回的来源），本聚合段内累积，消息底部渲染来源胶囊。
+        val aggCitations = mutableListOf<CitationUi>()
 
         fun flushAgg() {
             if (!hasAgg) return
-            val think = if (aggThinkLines.isNotEmpty()) ThinkBlock(aggThinkLines.toList()) else null
+            val think = if (aggThinkLines.isNotEmpty()) ThinkBlock(aggThinkLines.toList(), aggThinkDur) else null
             val text = aggText.toString().takeIf { it.isNotBlank() }
             if (think != null || aggTools.isNotEmpty() || text != null || aggCards.isNotEmpty() ||
-                aggAttach.isNotEmpty() || aggZx.isNotEmpty()
+                aggAttach.isNotEmpty() || aggZx.isNotEmpty() || aggVoiceNote != null
             ) {
                 // 🔴 发言人优先用聚合段自己的 senderName（集群/子智能体按角色分段后才非空），
                 // 没有才回退人格名。头像同理：集群角色用首字符当头像，
@@ -580,13 +653,18 @@ fun ChatScreen(
                         tools = if (aggTools.isEmpty()) null else aggTools.toList(),
                         cards = aggCards.toList(),
                         zxWidgets = aggZx.toList(),
+                        voiceNote = aggVoiceNote,
+                        citations = aggCitations.distinctBy { it.url }.sortedBy { it.index },
                     )
                 )
             }
             hasAgg = false
             aggThinkLines.clear(); aggTools.clear(); aggText.clear(); aggCards.clear(); aggAttach.clear(); aggIds.clear()
+            aggThinkDur = 0L
             aggZx.clear()
             aggSpeaker = null
+            aggVoiceNote = null
+            aggCitations.clear()
         }
 
         for (m in messages) {
@@ -626,18 +704,71 @@ fun ChatScreen(
                             aggTools.add(ToolCallUi(lbl, args, "（集群角色 $sp 调用）", 0L))
                         }
                     }
+                    // 🔴 相邻重复行去重：多轮工具循环里模型会反复吐同一句思考
+                    //   （「好的，让我执行。」×N），旧实现原样并入，是「219 步」膨胀的主力。
+                    //   只去相邻重复，跨段不合并，不丢信息。
                     m.reasoning?.takeIf { it.isNotBlank() }?.lineSequence()
-                        ?.filter { it.isNotBlank() }?.forEach { aggThinkLines.add(it) }
+                        ?.filter { it.isNotBlank() }?.forEach { line ->
+                            if (aggThinkLines.lastOrNull() != line.trim()) aggThinkLines.add(line.trim())
+                        }
+                    // 思考耗时：段内取最大（可能多轮 assistant 各带自己的 reasoning 段）。
+                    if (m.thinkDurationMs > aggThinkDur) aggThinkDur = m.thinkDurationMs
                     m.toolCalls?.forEach { c ->
                         // zxwidget：这不是「一次工具调用」，而是用户要看到的一块**动态交互界面**。
                         // 抽成内联规格后就地渲染（撑满宽度、长在消息流里），
                         // 并且**不再**往工具列表里塞一行原始 JSON —— 那正是「卡片方式」的残留观感。
+                        // 🔴 参数非法时的兜底：旧实现 zxSpecOf 失败就 return@forEach，
+                        //   可视化卡片**凭空消失**（既无内联块也无工具行，用户不知道 AI 干过什么）。
+                        //   现在降级为一条工具行（卡片名 + 参数摘要），宁可丑也不能凭空蒸发。
                         if (c.name == "zx_web_card") {
-                            zxSpecOf(c.arguments)?.let { aggZx.add(it) }
-                            return@forEach
+                            val spec = zxSpecOf(c.arguments)
+                            if (spec != null) {
+                                aggZx.add(spec)
+                                return@forEach
+                            }
+                            // fallthrough：当普通工具调用进列表，用户至少看得到这次调用
+                        }
+                        // 🔴 可视化小卡（2026-11-04 统一骨架）：工具调用 → 内联 VisualMiniCard
+                        //    （Widget Lab 卡壳 + AI 自由 HTML 卡体）。不进工具列表/计数
+                        //    —— 与 zx_web_card 同款「抽卡不记行」口径，避免三重表示。
+                        if (c.name == "visual_card") {
+                            runCatching {
+                                val o = org.json.JSONObject(c.arguments)
+                                val html = o.optString("html", "").trim()
+                                if (html.isNotEmpty()) {
+                                    aggCards.add(
+                                        QuroChatCard.VisualMiniCard(
+                                            id = "vc_" + (c.id ?: o.optString("title", "card").hashCode().toString()),
+                                            title = o.optString("title", "可视化小卡"),
+                                            subtitle = o.optString("subtitle", ""),
+                                            emoji = o.optString("emoji", ""),
+                                            accent = o.optString("accent", ""),
+                                            html = html,
+                                            height = o.optInt("height", 0),
+                                        )
+                                    )
+                                    return@forEach
+                                }
+                                // html 缺失 → fallthrough 留一条工具行，用户至少知道调用过
+                            }
+                        }
+                        // 语音条：speak 工具的文字内容 → 可回放语音消息（音频已由 SpeakTool 落盘，按文本哈希反查）。
+                        if (c.name == "speak") {
+                            val speakText = runCatching {
+                                org.json.JSONObject(c.arguments).optString("text", "")
+                            }.getOrDefault("").takeIf { it.isNotBlank() }
+                            if (speakText != null) {
+                                val audioPath = com.ai.assistance.quro.core.media.VoiceNoteStore.get(speakText).orEmpty()
+                                aggVoiceNote = VoiceNoteUi(speakText, audioPath, generating = audioPath.isEmpty())
+                                return@forEach
+                            }
                         }
                         val r = (c.result ?: fallbackMap[c.id])?.takeIf { !isGarbageToolResult(it) }
                         aggTools.add(ToolCallUi(c.name, c.arguments, r, c.durationMs))
+                        // 引用溯源：web_search / read_url 的结果里带「[n] 标题 — url」清单，解析成可点击来源胶囊。
+                        if ((c.name == "web_search" || c.name == "read_url") && r != null) {
+                            aggCitations.addAll(parseCitationsFromToolResults(listOf(r)))
+                        }
                         // v1057：run_code 的 html 产物 → 对话框内联实时网页预览卡片
                         //（AI 写网页 → AI 运行 → 网页直接长在气泡里，把手机 AI IDE 的产出物真正融入对话内容区）
                         if (c.name == "run_code" && r != null) {
@@ -857,6 +988,32 @@ fun ChatScreen(
     var showTerminal by remember { mutableStateOf(false) }
     var showBrowser by remember { mutableStateOf(false) }
     var showMcp by remember { mutableStateOf(false) }
+    var showExternalAccess by remember { mutableStateOf(false) }
+    // 应用中心（与 MCP 并列的「应用」入口，参考 ZorvAI）
+    var showAppCenter by remember { mutableStateOf(false) }
+    // 上下文窗口明细弹窗（点输入栏的占用圆环打开；分段 token 构成 + 压缩上下文入口）
+    var showContextWindow by remember { mutableStateOf(false) }
+    var showFindBar by remember { mutableStateOf(false) }
+    var findQuery by remember { mutableStateOf("") }
+    // 当前会话的上下文窗口用量（按会话记账，取当前会话那一份）。
+    val contextUsage: com.ai.assistance.quro.core.chat.ContextWindowUsage? =
+        remember(ctxUsageMap, currentId) { ctxUsageMap[currentId] }
+    // 「思考过程」弹层：点消息上的思考胶囊打开，全量展示一轮回复的推理过程。
+    var thinkSheet by remember { mutableStateOf<ThinkBlock?>(null) }
+    // 🔴 流式期间点开全量过程后，生成结束必须自动收起：旧实现只靠手动 dismiss，
+    //    弹层会一直盖着消息流，与「思考显示不会收起来」是同一类观感问题。
+    //    只在 busy 的 true→false 边沿清理，用户结束后主动打开的不受影响。
+    var lastBusy by remember { mutableStateOf(busy) }
+    LaunchedEffect(busy) {
+        if (lastBusy && !busy) thinkSheet = null
+        lastBusy = busy
+    }
+    // 宠物完整设置页（形象/互动动作/行为/大小/间隔）
+    var showPetSettings by remember { mutableStateOf(false) }
+    // 后台进程管理页：常驻服务一览（运行状态/启停控制）
+    var showBgProcess by remember { mutableStateOf(false) }
+    // 搜索服务设置屏：从设置「搜索服务」进入，配置联网总开关 / 各提供方 API key / 结果条数
+    var showWebSearch by remember { mutableStateOf(false) }
     // 多角色集群设置（招人 / 绑模型 / 主持熔断 / 发起任务）
     var showClusterSettings by remember { mutableStateOf(false) }
     // 聚合式「系统状态」浏览界面（设备 / 权限 / 模块运行态 / 人格心跳）
@@ -870,6 +1027,43 @@ fun ChatScreen(
     var showEditor by remember { mutableStateOf(false) }
     // 输入框文本（提升到本层，便于编辑器结果回填）
     var inputText by remember { mutableStateOf(TextFieldValue("")) }
+    // ── 输入框草稿持久化：按会话 id 保存文字 + 附件，切会话/退出重进可恢复 ──
+    val draftCtx = LocalContext.current
+    // 当前草稿归属的会话 id（防止「切换瞬间把旧文字串写到新会话」）
+    var draftOwnerId by remember { mutableStateOf(currentId) }
+    // 会话切换：先把旧会话草稿落盘，再加载新会话草稿
+    LaunchedEffect(currentId) {
+        if (draftOwnerId != currentId) {
+            // 保存上一个会话的草稿
+            QuroComposerDraft.save(draftCtx, draftOwnerId, inputText.text, attachments.toList())
+            draftOwnerId = currentId
+            // 加载新会话草稿
+            inputText = TextFieldValue(QuroComposerDraft.loadText(draftCtx, currentId))
+            val restored = QuroComposerDraft.loadAttachments(draftCtx, currentId)
+            attachments.clear()
+            attachments.addAll(restored)
+        }
+    }
+    // 🔴 思考过程弹层跨会话残留清理：独立挂在 currentId 上，不再塞在
+    //   `draftOwnerId != currentId` 分支里 —— 那个分支依赖草稿归属判断，
+    //   草稿 id 恰好相等（或 store 被整体替换）时不会执行，弹层会挂着
+    //   上一段会话的 ThinkBlock 不消失，被当成「思考显示收不起来」。
+    LaunchedEffect(currentId) { thinkSheet = null }
+    // 输入文字 300ms 防抖落盘（附件变化立即落盘，避免文字防抖期间附件丢失）
+    LaunchedEffect(currentId) {
+        snapshotFlow { inputText.text }
+            .collectLatest {
+                delay(300)
+                QuroComposerDraft.save(draftCtx, currentId, it, attachments.toList())
+            }
+    }
+    LaunchedEffect(currentId) {
+        snapshotFlow { attachments.toList() }
+            .drop(1) // 跳过加载草稿触发的那次，避免覆盖刚恢复的附件
+            .collectLatest {
+                QuroComposerDraft.save(draftCtx, currentId, inputText.text, it)
+            }
+    }
     // 系统分享桥：其它 App 分享进来的文本/链接预填到输入框；图片/文件作为附件（用户在对话框确认后发送）
     val shareCtx = LocalContext.current
     LaunchedEffect(Unit) {
@@ -882,7 +1076,7 @@ fun ChatScreen(
                 if (uris.isNotEmpty()) {
                     uris.forEach { uri ->
                         val mime = shareCtx.contentResolver.getType(uri) ?: "*/*"
-                        QuroAttachmentKit.fromUri(shareCtx, uri, mime)?.let { a -> attachments.add(a) }
+                        addAttachmentAsync(shareCtx, uri, mime)
                     }
                 }
                 QuroShareBridge.consume()
@@ -969,11 +1163,14 @@ fun ChatScreen(
             "ui_open_knowledge" -> showKnowledge = true
             "ui_open_terminal" -> showTerminal = true
             "ui_open_editor" -> showEditor = true
+            "ui_open_code_workspace" -> showCodeWorkspace = true
             "ui_open_toolbox" -> showToolbox = true
             "ui_open_kaleidobox" -> { toolCenterInitial = "kaleidobox"; showToolCenter = true }
             "ui_open_build" -> showBuild = true
             "ui_open_plugins" -> showPlugins = true
             "ui_open_skills" -> showSkills = true
+            "ui_open_appcenter" -> showAppCenter = true
+            "ui_open_bg_process" -> showBgProcess = true
             "ui_open_schedule" -> showSchedule = true
             "ui_open_bots" -> showBots = true
             "ui_open_cms" -> showCms = true
@@ -1035,7 +1232,7 @@ fun ChatScreen(
         }
     }
 
-    // 媒体启动事件桥：把工具 / 卡片发出的「打开视频 / 音乐播放器」请求落到应用内渲染屏
+    // 媒体启动事件桥：把工具 / 卡片 / 活动详情弹层发出的「打开图片 / 视频 / 音乐播放器」请求落到应用内渲染屏
     LaunchedEffect(Unit) {
         launch {
             QuroVideoLauncher.event.collect { req ->
@@ -1044,6 +1241,16 @@ fun ChatScreen(
                     videoPlayerTitle = req.title
                     showVideoPlayer = true
                     QuroVideoLauncher.consume()
+                }
+            }
+        }
+        launch {
+            com.ai.assistance.quro.core.media.QuroImageLauncher.event.collect { req ->
+                if (req != null) {
+                    imageViewerPath = req.path
+                    imageViewerName = req.title
+                    showImageViewer = true
+                    com.ai.assistance.quro.core.media.QuroImageLauncher.consume()
                 }
             }
         }
@@ -1416,10 +1623,38 @@ fun ChatScreen(
     var currentWorkspace by remember { mutableStateOf(com.ai.assistance.quro.core.tools.WorkspacePreferences.getCurrentWorkspace(ctx)) }
     // 当前选择的 ACI 应用名称（从持久化存储初始化，用于上下文标识栏）
     var currentAciName by remember { mutableStateOf(com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultAppName(ctx)) }
-    // 已启用的技能数量（用于上下文标识栏）
-    var enabledSkillsCount by remember { mutableStateOf(
-        com.ai.assistance.quro.core.skill.QuroSkillStore.load(ctx).count { it.enabled }
-    ) }
+    // 本条消息附加的技能（对话框「选择技能」选中后挂在这里，发送即清空）。
+    // 不再保存「已启用技能数」这种全局状态：开关不是发送方式，AI 感知不到，
+    // 只有跟着消息一起发出去的技能正文才是 AI 真正能用的东西。
+    var attachedSkills by remember {
+        mutableStateOf<List<com.ai.assistance.quro.core.skill.QuroSkill>>(emptyList())
+    }
+
+    // 桌面宠物：独立于语音球的常驻 AI 伙伴悬浮窗（QuroDesktopPetService）。
+    // 开关持久化在 QuroVoiceFeaturePrefs，形象/气泡由 PetPrefs 管理，状态经 QuroPetStateBus 随对话变化。
+    var petEnabled by remember { mutableStateOf(com.ai.assistance.quro.core.tools.QuroVoiceFeaturePrefs.getDesktopPet(ctx)) }
+    fun toggleDesktopPet(on: Boolean) {
+        petEnabled = on
+        if (on) {
+            val ok = com.ai.assistance.quro.service.QuroDesktopPetService.start(ctx)
+            if (!ok) {
+                // 悬浮窗权限缺失：回落开关并引导去系统设置
+                petEnabled = false
+                com.ai.assistance.quro.core.tools.QuroVoiceFeaturePrefs.setDesktopPet(ctx, false)
+                Toast.makeText(ctx, qstr(R.string.qk_04592), Toast.LENGTH_LONG).show()
+                runCatching {
+                    ctx.startActivity(android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        android.net.Uri.parse("package:${ctx.packageName}"),
+                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            } else {
+                Toast.makeText(ctx, qstr(R.string.qk_04591), Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            com.ai.assistance.quro.service.QuroDesktopPetService.stop(ctx)
+        }
+    }
 
     // ───────── 结构化动作协议（core/cards/CardAction） ─────────
     //
@@ -1570,7 +1805,7 @@ fun ChatScreen(
     val pickLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
         for (uri in uris) {
             val mime = ctx.contentResolver.getType(uri) ?: "*/*"
-            QuroAttachmentKit.fromUri(ctx, uri, mime)?.let { a -> attachments.add(a) }
+            addAttachmentAsync(ctx, uri, mime)
         }
     }
 
@@ -1668,17 +1903,29 @@ fun ChatScreen(
             ctxParts.add(qstr(R.string.qk_04069))
             pendingZxWebCard.value = false
         }
-        if (enabledSkillsCount > 0) {
-            val enabledSkills = com.ai.assistance.quro.core.skill.QuroSkillStore.load(ctx)
-                .filter { it.enabled }
-                .map { it.name }
-            ctxParts.add("已启用技能(${enabledSkillsCount}个): ${enabledSkills.joinToString("、")}")
-        }
+        // 🔴 旧实现在这里塞一句「已启用技能(N个): 名字列表」——AI 只看到名字，
+        //    既不知道正文，也不知道用户这条消息想用哪个。这条误导性文本已删除：
+        //    技能全文改由 attachedSkills 走隐藏 user 消息，跟着这一条消息一起发出。
         val contextStr = ctxParts.joinToString("\n").ifBlank { null }
 
-        vm.send(t, attachments.toList(), cfg, contextMessage = contextStr)
+        val skillsForThisMessage = attachedSkills
+        vm.dispatchSend(t, attachments.toList(), cfg, contextStr, attachedSkills = skillsForThisMessage)
+        // 发送完立刻清空：技能只属于这一条消息，不会偷偷影响下一句。
+        attachedSkills = emptyList()
         attachments.clear()
+        // 发送成功后清除该会话草稿，避免切回来时残留已发送的文字/附件
+        QuroComposerDraft.clear(ctx, currentId)
+    }    // 🔴 桌宠点击等入口的直接发送消费（2026-11-05）：计数递增 → 自动 send，不经输入框
+    LaunchedEffect(QuroShareBridge.pendingAutoSend.value) {
+        val n = QuroShareBridge.pendingAutoSend.value
+        if (n > 0 && !busy) {
+            QuroShareBridge.pendingText.value?.let { txt ->
+                QuroShareBridge.consume()
+                send(txt)
+            }
+        }
     }
+
 
     // 🔴 回填 send 引用（供 [UI_REPLY_PREFIX] 分支使用）。
     // 必须在 send 定义之后赋值：Kotlin 局部函数不能前向引用，
@@ -1858,7 +2105,16 @@ fun ChatScreen(
             onFetchModels = { modelVm.fetchModels() },
             personaList = personaList,
             selectedPersona = selectedPersona,
-            onSelectPersona = { p -> if (p.id.isNotBlank()) personaVm.setActive(p.id); sheet = null },
+            onSelectPersona = {
+                p ->
+                if (p.id.isNotBlank()) {
+                    personaVm.setActive(p.id)
+                    // 🔴 会话↔人格绑定（2026-11-04）：对话内选人格 = 同时绑定到当前会话，
+                    //    每个对话记住自己的人格（身份/灵魂/记忆/技能/默认模型按会话隔离）。
+                    vm.bindConversationPersona(p.id)
+                }
+                sheet = null
+            },
             onAddPersona = { _, _ ->
                 sheet = null
                 personaToEdit = QuroPersona(
@@ -1907,6 +2163,7 @@ fun ChatScreen(
             onOpenPlugins = { showPlugins = true },
             onOpenSkills = { showSkills = true },
             onOpenBots = { showBots = true },
+            onPhotoCaptured = { uri -> addAttachmentAsync(ctx, uri, "image/jpeg") },
             onOpenSchedule = { showSchedule = true },
             onManagePersona = { sheet = null; showSoulSheet = true },
             onOpenVoice = { showVoice = true },
@@ -1927,7 +2184,11 @@ fun ChatScreen(
             onOpenFileManager = { showFileManager = true },
             onOpenAci = { showAci = true },
             onOpenMcp = { showMcp = true },
+            onOpenExternalAccess = { showExternalAccess = true },
+            onOpenAppCenter = { showAppCenter = true },
+            onOpenBgProcess = { showBgProcess = true },
             onOpenCluster = { showClusterSettings = true },
+            onOpenWebSearch = { showWebSearch = true },
             onOpenSystemStatus = { showSystemStatus = true },
             onOpenBgScreen = { showBgScreen = true },
             onOpenDesktop = {
@@ -1945,6 +2206,72 @@ fun ChatScreen(
             onOpenGitHub = { showGitHub = true },
             onOpenModelHub = { showModelHub = true },
         )
+        // 此前 ContextWindowSheet 写好了但**全工程无任何调用点** = 死代码，
+        // 用户所以找不到“上下文窗口卡片”。现在接上顶栏入口。
+        if (showContextWindow) {
+            val usage = contextUsage
+            if (usage != null) {
+                // 🔴 修复「压缩按钮点了没反应」（2026-11-04 用户实测）：调用点此前只传了
+                //    usage/onDismiss —— ContextWindowSheet 的 onCompact 默认 {}，按钮点了
+                //    什么也不发生。现在接上 vm.compactContext / stopCompaction，
+                //    压缩进行中按钮自动变「停止压缩」；错误经 _error 横幅可见。
+                val compactionRecord = vm.compactionOf(vm.currentId.value ?: "")
+                val compacting = compactionRecord != null &&
+                    compactionRecord.status == com.ai.assistance.quro.core.chat.CompactionStatus.RUNNING
+                // 🔴 2026-11-06：终态反馈补全——此前 COMPLETED 无 Toast、FAILED 只写被弹窗
+                //    盖住的横幅，用户点完看不到任何变化，判定「压缩不起作用」。
+                LaunchedEffect(compactionRecord?.status, compactionRecord?.id) {
+                    when (compactionRecord?.status) {
+                        com.ai.assistance.quro.core.chat.CompactionStatus.COMPLETED -> {
+                            android.widget.Toast.makeText(
+                                ctx,
+                                qstr(R.string.qk_04522) + "（" + compactionRecord.tokensBefore + " → " +
+                                    compactionRecord.tokensAfter + " tokens）",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                            vm.clearCompactionRecord()
+                        }
+                        com.ai.assistance.quro.core.chat.CompactionStatus.FAILED,
+                        com.ai.assistance.quro.core.chat.CompactionStatus.INVALIDATED -> {
+                            android.widget.Toast.makeText(
+                                ctx,
+                                compactionRecord.reason ?: qstr(R.string.qk_04519),
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                            vm.clearCompactionRecord()
+                        }
+                        else -> {}
+                    }
+                }
+                ContextWindowSheet(
+                    usage = usage,
+                    compactionRunning = compacting,
+                    onCompact = {
+                        if (compacting) {
+                            vm.stopCompaction()
+                        } else {
+                            // 🔴 压缩反馈直显（2026-11-04）：错误走 Toast（弹窗之上可见），
+                            //    成功无 Toast——列表里会出现「以上内容已压缩」分隔线。
+                            vm.compactContext()?.let { err ->
+                                android.widget.Toast.makeText(ctx, err, android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    onDismiss = { showContextWindow = false },
+                )
+            } else {
+                // 还没有用量数据（首轮未请求过或上游未返回）。
+                // 不白幕——只给一句说明，不弹空卡片。
+                com.ai.assistance.quro.ui.chat.ContextWindowUnavailableDialog(onDismiss = { showContextWindow = false })
+            }
+        }
+
+        // 思考过程弹层：点活动流里的思考行 / 「思考了 N秒 ›」行打开。
+        thinkSheet?.let { tk ->
+            ThinkProcessSheet(think = tk, onDismiss = { thinkSheet = null })
+        }
+
+
 
         // 权限管理页：全屏覆盖层（从设置底部弹层入口进入，返回关页回对话）
         if (showPermission) {
@@ -2035,11 +2362,9 @@ fun ChatScreen(
         if (showSkills) {
             BackHandler { showSkills = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(Color(0xFFF2F2F7))) {
-                QuroSkillsScreen(onClose = {
-                    showSkills = false
-                    // 技能页关闭后刷新已启用技能数量
-                    enabledSkillsCount = com.ai.assistance.quro.core.skill.QuroSkillStore.load(ctx).count { it.enabled }
-                })
+                // 技能页只负责「库里有哪些技能」，不再回写启用数量：
+                // 用不用由用户在对话框选择后随消息发送决定。
+                QuroSkillsScreen(onClose = { showSkills = false })
             }
         }
 
@@ -2183,6 +2508,45 @@ fun ChatScreen(
             }
         }
 
+        // 外部连接 / 应用中心 / 后台进程 / 宠物设置：统一抽到 QuroUtilityOverlays，
+        // 避免 ChatOverlays 编译后方法体超过 JVM 64KB 上限（Method too large）。
+        QuroUtilityOverlays(
+            showExternalAccess = showExternalAccess,
+            onCloseExternalAccess = { showExternalAccess = false },
+            showAppCenter = showAppCenter,
+            onCloseAppCenter = { showAppCenter = false },
+            showBgProcess = showBgProcess,
+            onCloseBgProcess = { showBgProcess = false },
+            showPetSettings = showPetSettings,
+            onClosePetSettings = { showPetSettings = false },
+        )
+
+        // 应用中心：全屏覆盖层（从设置「应用中心」进入，与 MCP 并列）
+        if (showAppCenter) {
+            BackHandler { showAppCenter = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
+                QuroAppCenterScreen(
+                    onClose = { showAppCenter = false },
+                )
+            }
+        }
+
+        // 后台进程管理页：全屏覆盖层（从设置「后台进程」进入，常驻服务一览 + 启停）
+        if (showBgProcess) {
+            BackHandler { showBgProcess = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
+                QuroBackgroundProcessScreen(onClose = { showBgProcess = false })
+            }
+        }
+
+        // 搜索服务设置页：全屏覆盖层（从设置「搜索服务」进入）
+        if (showWebSearch) {
+            BackHandler { showWebSearch = false }
+            Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
+                QuroWebSearchSettingsScreen(onBack = { showWebSearch = false })
+            }
+        }
+
         // 多角色集群设置页：全屏覆盖层（从设置「多角色集群」进入）
         if (showClusterSettings) {
             BackHandler { showClusterSettings = false }
@@ -2263,8 +2627,9 @@ fun ChatScreen(
         // 技能选择对话框（从输入框工具菜单 / 上下文标识栏进入）
         if (showSkillSelector) {
             SkillSelectionDialog(
+                initial = attachedSkills,
                 onDismiss = { showSkillSelector = false },
-                onSkillsChanged = { count -> enabledSkillsCount = count },
+                onConfirm = { picked -> attachedSkills = picked },
             )
         }
 
@@ -2404,6 +2769,26 @@ fun ChatScreen(
             )
         }
 
+        // ── 工具审批卡：危险工具执行前弹出，等用户拍板 ──
+        val approvalReq by vm.approvalRequest.collectAsState()
+        if (approvalReq != null) {
+            Dialog(
+                onDismissRequest = { /* 不可点外部关闭，必须显式决策 */ },
+                properties = DialogProperties(usePlatformDefaultWidth = false),
+            ) {
+                ApprovalCard(
+                    request = approvalReq!!,
+                    scaled = { scaled(it) },
+                    onAllow = { req, scope ->
+                        vm.resolveApproval(ApprovalDecision.Allow(scope))
+                    },
+                    onDeny = { req, note ->
+                        vm.resolveApproval(ApprovalDecision.Deny(note))
+                    },
+                )
+            }
+        }
+
         // Web UI 的**设置**（用户 2026-10-13 拍板：「ZorvAI 内的 web UI 只是设置，
         // 通过外部打开」）。
         // 🔴 这里刻意**不再**嵌 WebView：
@@ -2419,6 +2804,62 @@ fun ChatScreen(
                 modelName = modelLabel,
                 personaName = selectedPersona.name,
                 onDismiss = { showWebUiPanel = false },
+            )
+        }
+
+        // 视频切片对话框：确认后把抽出的帧作为图片附件加入
+        sliceVideoTarget?.let { videoPath ->
+            val duration = remember(videoPath) { QuroMediaSliceHelper.videoDurationMs(videoPath) }
+            VideoSliceDialog(
+                videoUri = videoPath,
+                durationMs = duration,
+                onConfirm = { result ->
+                    attachScope.launch {
+                        val frames = QuroMediaSliceHelper.extractVideoFrames(ctx, result.uri, result.frameCount)
+                        frames.forEach { fp ->
+                            attachments.add(
+                                QuroAttachment(type = "image", uri = fp, name = fp.substringAfterLast('/'), mime = "image/jpeg", size = java.io.File(fp).length())
+                            )
+                        }
+                        if (frames.isEmpty()) {
+                            Toast.makeText(ctx, "视频切片失败，请检查视频格式", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    sliceVideoTarget = null
+                },
+                onDismiss = { sliceVideoTarget = null },
+            )
+        }
+
+        // PDF 选页对话框：确认后把选中的页（整页仍作为 PDF 附件 + 页范围提示）加入
+        pdfSelectTarget?.let { pdfPath ->
+            val totalPages = remember(pdfPath) { QuroMediaSliceHelper.pdfPageCount(ctx, pdfPath) }
+            var selectedPages by remember(pdfPath) { mutableStateOf(setOf<Int>()) }
+            PdfPageSelectDialog(
+                totalPages = totalPages,
+                selectedPages = selectedPages,
+                onTogglePage = { idx ->
+                    selectedPages = if (idx in selectedPages) selectedPages - idx else selectedPages + idx
+                },
+                onSelectAll = { all ->
+                    selectedPages = if (all) (0 until totalPages).toSet() else emptySet()
+                },
+                onConfirm = { sel ->
+                    // 把选页结果作为带页范围提示的 PDF 附件（复用原 PDF，页范围通过名称提示）
+                    if (sel.selectedPages.isNotEmpty()) {
+                        val pages = sel.selectedPages.sorted().map { it + 1 }
+                        val label = "（已选第 ${pages.joinToString(",")} 页）"
+                        val baseName = pdfPath.substringAfterLast('/')
+                        attachments.add(
+                            QuroAttachment(
+                                type = "file", uri = pdfPath, name = baseName + label,
+                                mime = "application/pdf", size = java.io.File(pdfPath).length(),
+                            )
+                        )
+                    }
+                    pdfSelectTarget = null
+                },
+                onDismiss = { pdfSelectTarget = null },
             )
         }
 
@@ -2582,10 +3023,13 @@ fun ChatScreen(
             Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
                 QuroAppearanceSettingsScreen(
                     darkMode = darkMode, onToggleDark = onToggleDark,
+                    darkModeTri = darkModeTri, onSetDarkModeTri = onSetDarkModeTri,
                     soundOn = soundOn, onToggleSound = { vm.setSoundOn(!soundOn) },
                     enterSend = enterSend, onToggleEnter = { vm.setEnterSend(!enterSend) },
                     fontName = fontNames[fontTier], onCycleFont = { vm.setFontTier((fontTier + 1) % 3) },
                     voiceBallEnabled = voiceBallEnabled, onToggleVoiceBall = onToggleVoiceBall,
+                    petEnabled = petEnabled, onTogglePet = { toggleDesktopPet(it) },
+                    onOpenPetSettings = { showPetSettings = true },
                     followSystemLang = followSystemLang,
                     onToggleFollowSystemLang = { vm.setFollowSystemLang(!followSystemLang) },
                     appLanguage = vm.appLanguagePref.collectAsState().value,
@@ -2595,6 +3039,8 @@ fun ChatScreen(
                     userProfile = liveProfile,
                     onSaveProfile = { vm.saveProfile(it) },
                     onClose = { showAppearance = false },
+                    accentHex = vm.accentColorPref.collectAsState().value,
+                    onSetAccent = { vm.setAccentColor(it) },
                     scaled = { scaled(it) }
                 )
             }
@@ -2824,6 +3270,8 @@ fun ChatScreen(
                     history = history,
                     onClose = { scope.launch { drawerState.close() } },
                     onNew = { vm.newConversation(); scope.launch { drawerState.close() } },
+                    onNewTemporary = { vm.newTemporaryConversation(); scope.launch { drawerState.close() } },
+                    onVideoCall = openVideoCall,
                     onNewGenUi = {
                         // 旧行为：新建一个 genui 类型会话（渲染面是已删除的 QuroGenUiApp）。
                         // 新行为：拉起**内置的 GenUI-Agent 独立应用**（AI 产出 GenUI JSON DSL →
@@ -2859,6 +3307,8 @@ fun ChatScreen(
                         onModel = { sheet = SheetType.Model },
                         onSettings = { sheet = SheetType.Settings },
                         onToolCenter = { showToolCenter = true },
+                        // 🔴 上下文窗口入口（此前无任何入口 = 卡片找不到）。
+                        onContextWindow = { showContextWindow = true },
                         onVideoCall = openVideoCall,
                         onMinimize = { chatMinimized = true },
                         persona = selectedPersona,
@@ -2891,8 +3341,48 @@ fun ChatScreen(
                             }
                         }
                     }
+                    // 通知岛：只提醒「其它会话后台生成中」；当前会话的思考/工具状态
+                    // 由消息流内表达（等待圆点 / 工作指示 / 思考折叠行），不再重复上岛。
+                    val activeWorkMsg = uiMessages.lastOrNull { it.isWorking }
+                    val islandTool = activeWorkMsg?.workingTools?.firstOrNull()
+                    val islandBgCount = generatingIds.count { it != currentId }
+                    NotificationIsland(
+                        backgroundCount = islandBgCount,
+                        scaled = { scaled(it) },
+                    )
+                    // 桌面宠物状态投影：思考 / 工具 / 生成 / 回复完成四态 + 庆祝气泡。
+                    // 🔴 旧版只投影 THINKING/TOOL_CALLING，GENERATING/DONE 永远不可达，
+                    //    且 QuroPetStateBus.onReplyComplete 写了却没有任何生产者。
+                    var petPrevBusy by remember { mutableStateOf(false) }
+                    LaunchedEffect(busy, islandTool, thinking) {
+                        val bus = com.ai.assistance.quro.core.pet.QuroPetStateBus
+                        when {
+                            busy && islandTool != null -> bus.onBusy(islandTool)
+                            busy && thinking -> bus.onBusy(null)
+                            busy -> bus.onGenerating()
+                            petPrevBusy -> bus.onReplyComplete(null)
+                            else -> bus.onIdle()
+                        }
+                        petPrevBusy = busy
+                    }
+                    if (showFindBar) {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = findQuery,
+                                onValueChange = { findQuery = it },
+                                placeholder = { Text("在对话中查找…", fontSize = 13.sp) },
+                                singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
+                                modifier = Modifier.weight(1f),
+                            )
+                            IconButton(onClick = { findQuery = ""; showFindBar = false }) {
+                                Icon(Icons.Filled.Clear, null, Modifier.size(18.dp), tint = Muted)
+                            }
+                        }
+                    }
                     MessageList(
                         messages = uiMessages,
+                        findQuery = findQuery,
                         scaled = { scaled(it) },
                         currentId = currentId,
                         busy = busy,
@@ -2900,6 +3390,51 @@ fun ChatScreen(
                         onOpenLink = { browserUrl = it },
                         onCommand = { handleCardCommand(it) },
                         onSend = { send(it) },
+                        onEditRequest = { m ->
+                            if (busy) {
+                                Toast.makeText(ctx, qstr(R.string.qk_04471), Toast.LENGTH_SHORT).show()
+                            } else {
+                                editingText = m.text ?: ""
+                                editingMsg = m
+                            }
+                        },
+                        onSpeak = { txt ->
+                            // 🔴 朗读对接补全（2026-11-04）：旧实现播报中再点=「入队串行」，
+                            //    同一条文本会听两遍且没法停——观感就是「朗读不完整/不受控」。
+                            //    现改为切换语义：播报中点它=立即停止并清队列；空闲则开始朗读。
+                            if (QuroTtsHolder.speaking) {
+                                QuroTtsHolder.stop()
+                                Toast.makeText(ctx, "已停止朗读", Toast.LENGTH_SHORT).show()
+                            } else {
+                                // 🔴 2026-11-06 修复「对话框朗读根本用不了」：
+                                //    全局 TTS 能用的每条链（设置页/语音球/自动朗读/SpeakTool）都先
+                                //    ensure/prepare 初始化引擎，唯独这个按钮直接 speakAsync——而
+                                //    speakAsync 第一行就要求 appCtx 非空（只在 ensure/prepare 里赋值），
+                                //    冷启动直接 return false → 永远弹「语音未就绪」。现在对齐
+                                //    SpeakTool（QuroTtsHolder.kt:614）的正确姿势：先 prepare 再发起。
+                                QuroTtsHolder.prepare(ctx)
+                                val started = QuroTtsHolder.speakAsync(txt) { rc ->
+                                    // 结果反馈切主线程：失败不再静默（旧实现云端异常被两层吞掉，
+                                    // 用户点了没声也没提示，误以为「只接了云模型」）。
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                        if (rc != 0) Toast.makeText(
+                                            ctx, qstr(R.string.qk_04472), Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                                if (!started) {
+                                    // appCtx 缺失等同步失败：prepare 已兜底，这里再试一次仍失败才提示
+                                    Toast.makeText(ctx, qstr(R.string.qk_04472), Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        onCreateBranch = { uids ->
+                            if (busy) {
+                                Toast.makeText(ctx, qstr(R.string.qk_04471), Toast.LENGTH_SHORT).show()
+                            } else {
+                                vm.createBranchFromMessage(uids)
+                            }
+                        },
                         onAskFollowup = { txt ->
                             inputText = TextFieldValue(
                                 qstr(R.string.qk_00066) + txt.take(200).replace("\n", "\n> ") + "\n\n"
@@ -2911,6 +3446,7 @@ fun ChatScreen(
                             if (!lastUser.isNullOrBlank()) send(lastUser)
                         },
                         onDelete = { vm.deleteMessage(it) },
+                        onOpenThink = { thinkSheet = it },
                         // 上下文超限错误气泡的「新建对话」一键入口（issue #11 问题6 第3步）
                         onNewConversation = { vm.newConversation() },
                         onAttachmentActivate = { att ->
@@ -2951,11 +3487,94 @@ fun ChatScreen(
                             }
                         },
                         onAttachmentDownload = { downloadAttachment(ctx, it) },
+                        turnOutcome = turnOutcomeMap[currentId],
+                        turnUsageLabel = turnUsageMap[currentId]?.let { formatTurnUsage(it) },
+                        onRetryTurn = {
+                            // 重试 = 用上一条用户消息再发一次；同时清掉状态条（否则会与新结果叠在一起）。
+                            vm.clearTurnOutcome(currentId)
+                            val lastUser = uiMessages.lastOrNull { it.mine }?.text
+                            if (!lastUser.isNullOrBlank()) send(lastUser)
+                        },
+                        onContinueTurn = {
+                            vm.clearTurnOutcome(currentId)
+                            send(qstr(R.string.qk_04449))
+                        },
+                        onDismissTurn = { vm.clearTurnOutcome(currentId) },
                         modifier = Modifier.weight(1f)
                     )
-                    // 交互组件卡片栏（可视化小卡片兜底）：UI 桥未就绪时 AI 下发的 ui_widget/ui_card
-                    // 富卡片回落 QuroChatCardStore，在此渲染——此前只有 import 没有调用，兜底链路断的。
+                    // ── 修改消息：只改正文，不重新生成 ──
+                    // 聚合气泡可能含多条底层消息（uids），改正文只认第一条 —— 后续那份是工具结果。
+                    editingMsg?.let { m ->
+                        val targetId = m.uids.firstOrNull()
+                        AlertDialog(
+                            onDismissRequest = { editingMsg = null },
+                            title = { Text(qstr(R.string.qk_04470), fontSize = 15.sp) },
+                            text = {
+                                OutlinedTextField(
+                                    value = editingText,
+                                    onValueChange = { editingText = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    minLines = 5,
+                                    maxLines = 12,
+                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, lineHeight = 19.sp),
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    if (targetId != null) vm.editMessage(targetId, editingText)
+                                    editingMsg = null
+                                }) { Text(qstr(R.string.qk_04469)) }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { editingMsg = null }) { Text(qstr(R.string.qk_04465)) }
+                            },
+                        )
+                    }
+                    // 交互组件卡片栏（**富组件** ui_widget/ui_card 的兜底，不是可视化小卡片）：
+                    // UI 桥未就绪时富卡片回落 QuroChatCardStore，在此渲染。
+                    // 🔴 可视化小卡片是独立分类，走 visual_card 工具 → VisualMiniCard 内联渲染，
+                    //    与本卡片栏无关，别再把它叫作「小卡片兜底」。
                     QuroChatCardTray(onCommand = { handleCardCommand(it) })
+                    // 上下文将满时的提示条：只在「剩余空间不够再聊一轮」时出现，
+                    // 点开看是谁占的（系统提示词 / 工具定义 / 历史）。平时完全不占位。
+                    ctxUsageMap[currentId]?.takeIf { it.shouldCompact }?.let { u ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 2.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFFF59E0B).copy(alpha = 0.08f))
+                                .clickable { showContextSheet = true }
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            LucideIcon("qic_warn", null, Modifier.size(12.dp), tint = Color(0xFFF59E0B))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                qstr(R.string.qk_04464, "${(u.usedRatio * 100).toInt()}%"),
+                                fontSize = 11.sp,
+                                color = Color(0xFFF59E0B),
+                                modifier = Modifier.weight(1f),
+                            )
+                            LucideIcon("chevron-right", null, Modifier.size(12.dp), tint = Color(0xFFF59E0B))
+                        }
+                    }
+                    if (showContextSheet) {
+                        ctxUsageMap[currentId]?.let { u ->
+                            val running = compactionMap[currentId]?.status == com.ai.assistance.quro.core.chat.CompactionStatus.RUNNING
+                            ContextWindowSheet(
+                                usage = u,
+                                compactionRunning = running,
+                                onDismiss = { showContextSheet = false },
+                                onCompact = {
+                                    if (running) vm.stopCompaction()
+                                    else vm.compactContext()?.let { err ->
+                                        android.widget.Toast.makeText(ctx, err, android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                },
+                            )
+                        }
+                    }
                     // 语音：对话框语音输入按钮（受「语音设置 · 对话框按钮」开关控制）
                     val voiceInputEnabled = remember { QuroVoiceFeaturePrefs.getDialogVoiceButton(ctx) }
                     fun startDialogStt() {
@@ -3012,12 +3631,19 @@ fun ChatScreen(
                     }
 
                     val visionOn by vm.visionEnabled.collectAsState()
+                    // 生成中发送：模式开关（打断/排队/引导）与排队提示条
+                    val busyMode by vm.busySendMode.collectAsState()
+                    val queuedMap by vm.queuedSends.collectAsState()
+                    val queuedList = queuedMap[currentId].orEmpty()
                     Composer(
                         deepThink = thinking,
                         onToggleThink = { vm.setThinking(!thinking) },
                         attachments = attachments,
                         onRemoveAttach = { attachments.remove(it) },
                         onAttach = { sheet = SheetType.Upload },
+                        attachmentProgress = attachmentProgress,
+                        onSliceVideo = { path -> sliceVideoTarget = path },
+                        onSelectPdfPages = { path -> pdfSelectTarget = path },
                         autoSaveMemory = autoSaveMemory, onToggleAutoSave = { vm.setAutoSaveMemory(!autoSaveMemory) },
                         subAgentEnabled = subAgentEnabled,
                         onToggleSubAgent = { vm.setSubAgentEnabled(!subAgentEnabled) },
@@ -3027,6 +3653,11 @@ fun ChatScreen(
                         enterSend = enterSend,
                         busy = busy,
                         onStop = { vm.stop() },
+                        busySendMode = busyMode,
+                        onBusySendModeChange = { vm.setBusySendMode(it) },
+                        queuedCount = queuedList.size,
+                        queuedPreview = queuedList.firstOrNull()?.text,
+                        onCancelQueued = { vm.clearQueuedSends(currentId) },
                         onOpenMusicPlayer = { showMusicPlayer = true },
                         autoRead = autoRead,
                         onToggleAutoRead = { toggleAutoRead() },
@@ -3038,6 +3669,7 @@ fun ChatScreen(
                         onOpenSkills = { showSkillSelector = true },
                         onOpenAciSelector = { showAciSelector = true },
                         onOpenEditor = { showEditor = true },
+                        onWarmUp = { runCatching<Unit> { QuroLlmClient.warmUp(vm.currentConfig().baseUrl) } },
                         onSelectVisualPopup = {
                             pendingVisualPopup.value = !pendingVisualPopup.value
                             if (pendingVisualPopup.value) {
@@ -3086,7 +3718,10 @@ fun ChatScreen(
                         onOpenWorkspaceSelector = { showWorkspaceSelector = true },
                         onOpenCodeBrowser = { showCodeWorkspace = true },
                         currentAciName = currentAciName,
-                        enabledSkillsCount = enabledSkillsCount,
+                        attachedSkills = attachedSkills,
+                        onRemoveAttachedSkill = { s -> attachedSkills = attachedSkills - s },
+                        contextUsage = ctxUsageMap[currentId],
+                        onOpenContextWindow = { showContextWindow = true },
                         scaled = { scaled(it) }
                     )
                 }
@@ -3176,13 +3811,32 @@ private fun MessageList(
     onAttachmentActivate: (Attachment) -> Unit = {},
     onAttachmentDownload: (Attachment) -> Unit = {},
     onSend: (String) -> Unit = {},
+    onEditRequest: (Message) -> Unit = {},
+    onSpeak: (String) -> Unit = {},
+    /** 从某条消息派生分支（复制该消息及之前历史到新会话）。 */
+    onCreateBranch: (List<String>) -> Unit = {},
+    /** 打开「思考过程」弹层（消息流 → ChatScreen 统一持有弹层状态）。 */
+    onOpenThink: (ThinkBlock) -> Unit = {},
     currentId: String,
     busy: Boolean = false,
+    /**
+     * 当前会话「最近一轮」的收尾归因（失败类）。非空时在消息流末尾挂一条状态条，
+     * 告诉用户「为什么没答上来」以及「下一步能做什么」。正常收尾传 null。
+     */
+    turnOutcome: TurnOutcome? = null,
+    /** 本轮用量（耗时 + token）。只在「上一轮确实跑完了」时显示，不显示空壳。 */
+    turnUsageLabel: String? = null,
+    onRetryTurn: () -> Unit = {},
+    onContinueTurn: () -> Unit = {},
+    onDismissTurn: () -> Unit = {},
+    /** 聊天内查找：非空时跳到第一条命中的消息 */
+    findQuery: String = "",
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
     val narrow = LocalConfiguration.current.screenWidthDp < 400
     val listState = rememberLazyListState()
+    var pendingDeleteUids by remember { mutableStateOf<List<String>?>(null) }
     val scope = rememberCoroutineScope()
     val lastMsg = messages.lastOrNull()
     // 是否贴底（仅用于「回到底部」按钮可见性判定：列表还能继续向下滚 = 不在底部）。
@@ -3281,36 +3935,77 @@ private fun MessageList(
             val dateLabel = today.format(java.time.format.DateTimeFormatter.ofPattern(stringResource(R.string.qk_00080)))
             Text(dateLabel, fontSize = scaled(12), color = Muted, modifier = Modifier.padding(start = 2.dp, bottom = 2.dp))
         }
-        // 执行轨迹已「融和升级」进工具调用输出：
-        // 轨迹不再作为底部独立面板，而是内嵌到最近一次助手工具调用卡内（见 ToolCallGroup）。
-        // 纯文本（无工具卡可融）回复不再渲染独立追踪卡，避免与工具卡重复 /「旧 UI 重显」。
-        val visibleTraces = traceLines.filter { it.kind != QuroAgentTrace.TraceKind.STATUS }
+        // 🔴 旧「逐条轨迹平铺」链路已删除：visibleTraces 算完后只喂给一个从未被读取的
+        //    embeddedTrace 形参（ToolCallGroup 早在 11-04 就移除了）。留着会让每帧
+        //    白跑一次 200 条轨迹的 filter，也让后来者误以为轨迹还在消息流里渲染。
+        //    traceLines 本身仍由顶层订阅维护，供系统状态页等消费者使用。
         // 稳定 key：每条消息的 Message.id 来自 QuroMessage.id（UUID）的 hashCode，唯一且流式更新时不变，
         // 避免流式增量刷新时按 index 重组导致的整段闪烁/错位。
+        // animateItem：新消息入场 fade+slide（比外层 AnimatedVisibility 更贴合 LazyColumn 的增删）。
+        // 🔴 流式/操作行的目标消息判定：
+        //   旧判定 `index == messages.lastIndex` 会被末尾的 -1/-2 等待/工作**占位行**抢走 lastIndex，
+        //   多轮工具循环里思考块因此在「展开-折叠」间反复横跳（工具开跑占位追加 → 折叠；
+        //   token 再到占位移除 → 又展开），这正是「思考显示不会收起来」观感的成因之一。
+        //   这里一律取**最后一条真实消息**（占位行自带 isWaiting/isWorking 标记，予以排除）。
+        val lastRealIdx = messages.indexOfLast { !it.isWaiting && !it.isWorking }
         itemsIndexed(messages, key = { _, msg -> msg.id }) { index, msg ->
-            AnimatedVisibility(
-                visible = true,
-                enter = fadeIn(initialAlpha = 0.35f) + slideInVertically(initialOffsetY = { it / 10 }),
-            ) {
+            Box(Modifier.animateItem(fadeInSpec = tween(220), fadeOutSpec = tween(180), placementSpec = spring(stiffness = Spring.StiffnessMediumLow))) {
                 MessageRow(
                     msg, scaled, onOpenLink,
-                    embeddedTrace = if (!msg.tools.isNullOrEmpty()) visibleTraces else emptyList(),
                     onCommand = { onCommand(it) },
                         onAskFollowup = onAskFollowup,
                         onShare = onShare,
                         onRegenerate = onRegenerate,
-                        onDelete = onDelete,
+                        onDelete = { uids -> pendingDeleteUids = uids },
                         onNewConversation = onNewConversation,
                         narrow = narrow,
                         onAttachmentActivate = onAttachmentActivate,
                         onAttachmentDownload = onAttachmentDownload,
                         // 🔧 Bug修复「思考没有修复」：生成中的最后一条消息默认展开思考内容，
                         // 让流式 reasoning 实时可见（此前思考只藏在 9sp 收起胶囊后，等于看不见）。
-                        streamingThink = busy && index == messages.lastIndex,
+                        streamingThink = busy && index == lastRealIdx,
+                        // 🔴 操作行收敛（「顶部堆一堆重试/重新规划」的根治）：
+                        //   完整操作行只挂在**最后一条 AI 消息**上；生成中一律隐藏（防止对正在
+                        //   流式刷新的消息点重试/朗读/追问）。历史消息走名字行长按菜单
+                        //   （MessageHeaderMenu：分支/修改/删除），不再每条都平铺 8 个按钮。
+                        showActions = !busy && index == lastRealIdx && !msg.mine,
                         onSend = onSend,
+                        onEditRequest = onEditRequest,
+                        onSpeak = onSpeak,
+                        onCreateBranch = { onCreateBranch(it.uids) },
+                        onOpenThink = onOpenThink,
                     )
             }
         }
+        // 🔴 「本轮用量」一行已删除（2026-11-04 用户裁定：多余的显示，截图实证）。
+        //    用量数据仍在 VM（turnUsage），后续若要展示收进消息长按菜单，不再平铺在消息流。
+        // ── 轮次状态条：只在「这一轮没正常结束」时出现 ──
+        // 放在列表末尾（而不是气泡里）有三个理由：不污染历史、不喂回模型、重试即消失。
+        // 不跟 busy 联动：生成中被清空、结束后才由 ViewModel 结算出来。
+        if (turnOutcome != null) {
+            item(key = "__turn_outcome__") {
+                TurnOutcomeBar(
+                    outcome = turnOutcome,
+                    onRetry = onRetryTurn,
+                    onContinue = onContinueTurn,
+                    onDismiss = onDismissTurn,
+                    modifier = Modifier.padding(horizontal = 2.dp, vertical = 4.dp),
+                )
+            }
+        }
+    }
+    // 🔴 删除消息确认弹窗（防误触）
+    pendingDeleteUids?.let { uids ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingDeleteUids = null },
+            containerColor = cs.surface,
+            title = { Text("删除这条消息？", fontWeight = FontWeight.SemiBold) },
+            text = { Text("删除后无法恢复。", fontSize = 13.sp) },
+            confirmButton = {
+                TextButton(onClick = { onDelete(uids); pendingDeleteUids = null }) { Text("删除", color = cs.error) }
+            },
+            dismissButton = { TextButton(onClick = { pendingDeleteUids = null }) { Text("取消") } },
+        )
     }
     // ── 互动条：回到底部（紧凑悬浮按钮，右下角贴边，不遮挡内容）──
     AnimatedVisibility(
@@ -3432,11 +4127,11 @@ private fun isCompactQuroCard(card: QuroChatCard): Boolean = when (card) {
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun MessageRow(
     msg: Message,
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
     onOpenLink: (String) -> Unit,
-    embeddedTrace: List<QuroAgentTrace.AgentTraceEvent> = emptyList(),
     onCommand: (String) -> Unit = {},
     onAskFollowup: (String) -> Unit = {},
     onShare: (String) -> Unit = {},
@@ -3450,12 +4145,30 @@ private fun MessageRow(
     onAttachmentDownload: (Attachment) -> Unit = {},
     /** 该消息是否为「正在生成中的最后一条」：是则默认展开思考内容（流式 reasoning 实时可见）。 */
     streamingThink: Boolean = false,
+    /**
+     * 是否渲染气泡下方的操作按钮行（复制/修改/朗读/追问/分支/分享/删除/重试）。
+     * 🔴 只在「最后一条 AI 消息且本轮已结束」时为 true（由 MessageList 统一判定）——
+     * 旧实现每条 AI 消息都无条件平铺 8 个按钮，窄屏 FlowRow 换行堆 2-3 行，
+     * 历史消息越多堆得越多，正是用户报的「对话框顶部放太多重新规划」。
+     * 历史消息的操作收进名字行长按菜单（MessageHeaderMenu）。
+     */
+    showActions: Boolean = true,
     /** 代码块自动修复：发送错误信息给 AI 分析修复 */
     onSend: (String) -> Unit = {},
+    /** 请求修改这条消息（弹编辑框由 ChatScreen 统一持状态，MessageRow 只发意图）。 */
+    onEditRequest: (Message) -> Unit = {},
+    /** 朗读这条消息（TTS 在 ChatScreen 侧统一入口，便于复用语音设置）。 */
+    onSpeak: (String) -> Unit = {},
+    /** 从这条消息派生分支（把该消息及之前历史复制到新会话）。 */
+    onCreateBranch: (Message) -> Unit = {},
+    onOpenThink: (ThinkBlock) -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
+    val headerHaptic = LocalHapticFeedback.current
     val avatarSize = if (narrow) 28 else 34
+    // 头部（名字·时间）长按菜单：在新对话中创建分支 / 编辑此消息 / 删除此消息
+    var headerMenu by remember { mutableStateOf(false) }
     // 「动态 UI 组件」开关是提示词级（灵魂注入编辑里控制 AI 主动/被动），渲染管线常开：
     // 关 = AI 不主动输出，但用户提醒后 AI 写出的 ```quro-ui 围栏仍要能正常渲染。
     // 动态 UI 区块：从消息文本解析出所有 ```quro-ui 围栏，单独拎出来在气泡下方「全宽内联」渲染。
@@ -3528,12 +4241,28 @@ private fun MessageRow(
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.fillMaxWidth()) {
-                    // 名字+时间（紧凑小字）
-                    Text(
-                        "${msg.author} · ${msg.time}",
-                        fontSize = scaled(11), color = Muted,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
-                    )
+                    Box {
+                        Text(
+                            "${msg.author} · ${msg.time}",
+                            fontSize = scaled(11), color = Muted,
+                            modifier = Modifier
+                                .padding(start = 4.dp, bottom = 4.dp)
+                                .combinedClickable(
+                                    onClick = {},
+                                    onLongClick = {
+                                        headerHaptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        headerMenu = true
+                                    },
+                                ),
+                        )
+                        MessageHeaderMenu(
+                            expanded = headerMenu,
+                            onDismiss = { headerMenu = false },
+                            onBranch = { headerMenu = false; onCreateBranch(msg) },
+                            onEdit = { headerMenu = false; onEditRequest(msg) },
+                            onDelete = { headerMenu = false; onDelete(msg.uids) },
+                        )
+                    }
                     // 动态UI直接渲染：全宽、无气泡、无卡片背景，UI本身就是对话框
                     dynamicUiBlocks.forEach { blk ->
                         DynamicUiBlock(source = blk.source, onCommand = onCommand, onOpenLink = onOpenLink)
@@ -3546,10 +4275,18 @@ private fun MessageRow(
                         }
                     }
                     // 操作按钮（复制/追问/分享/删除/重试）—— 与气泡消息一致的动作栏
+                    // 🔴 showActions 门控：只在最后一条 AI 消息（且本轮已结束）平铺操作行，
+                    //    历史动态 UI 消息同样收进长按菜单，不再条条堆按钮。
+                    if (showActions) {
                     Spacer(Modifier.height(6.dp))
                     val bubbleActions: @Composable () -> Unit = {
                         BubbleActionButton(stringResource(R.string.qk_00088), Muted) { copyToClipboard(displayText) }
+                        // 🔴 修改语义修正（2026-11-04 用户拍板）：修改=改**自己的**内容，不是改 AI 的。
+                        //    AI 消息行的「修改」删除（AI 的话不该被用户手改；要引导就追问）。
+                        // 朗读：单条朗读，走全局 TTS 设置（音色/语速与「自动朗读」同一套）。
+                        BubbleActionButton(stringResource(R.string.qk_04468), Muted) { onSpeak(displayText) }
                         BubbleActionButton(stringResource(R.string.qk_00089), cs.primary) { onAskFollowup(msg.text ?: "") }
+                        BubbleActionButton(stringResource(R.string.qk_04533), Muted) { onCreateBranch(msg) }
                         BubbleActionButton(stringResource(R.string.qk_00090), Muted) { onShare(msg.text ?: "") }
                         BubbleActionButton(stringResource(R.string.qk_00091), Muted) { onDelete(msg.uids) }
                         BubbleActionButton(stringResource(R.string.qk_00092), Muted) { onRegenerate() }
@@ -3567,6 +4304,7 @@ private fun MessageRow(
                             verticalAlignment = Alignment.CenterVertically,
                         ) { bubbleActions() }
                     }
+                    }
                 }
             }
         } else {
@@ -3582,6 +4320,15 @@ private fun MessageRow(
         //
         // 改成Box 后：内容列占满整宽（可用 337.7dp，每行多约 3 字），头像叠在左上角，
         // 名字行用 `avatarIndentDp` 给它留出避让位，视觉上头像仍"挂在名字前面"但不挤压正文。
+        //
+        // 🔴 活动流状态必须声明在 **Box 之外**（本函数作用域）：
+        //   活动详情弹层挂在消息**末尾**（Box / if-else 之外），
+        //   声明在 if-else 分支里作用域够不着 → "Unresolved reference"。
+        //   旧实现默认收起、只留一枚「· N 工具」小胶囊 —— 工具明细一层都看不见，
+        //   违背「工具调用的可读性决定信任」的基线（docs/chat-experience-baseline.md §C）。
+        var showActivity by remember { mutableStateOf(true) }
+        // 当前打开的活动详情弹层对象（null = 未打开）。
+        var activityDetail by remember { mutableStateOf<ActivityEntry?>(null) }
         Box(Modifier.fillMaxWidth()) {
         var aiAvatarMenu by remember { mutableStateOf(false) }
         if (msg.mine) {
@@ -3647,15 +4394,32 @@ private fun MessageRow(
         ).dp
         // 内容列占满整宽（父已是 Box，不再需要 weight）；widthIn 只保留"宽屏行长封顶"这一个职责。
         Column(Modifier.fillMaxWidth().widthIn(max = contentMaxWidth)) {
-            // ── 名字行 + 思考/工具小按钮 ──────────────────────────────
-            // 状态提升到 Column 作用域（展开内容在 Row 外渲染）
-            // 🔧 用户诉求（toolfix8 修正）：思考过程默认【折叠】，不手动点永远不展开。
-            //   即使生成中最后一条也保持折叠；点击下方「思考过程 · N步」胶囊才展开。
-            var showThink by remember { mutableStateOf(false) }
-            // 🔧 用户诉求（toolfix8 修正）：工具调用默认【折叠】，不手动点永远不展开。
-            //   点击「· N 工具」胶囊才展开；内层每个工具卡默认折叠（见 ToolCallRichCard defaultExpanded=false）。
-            var showTools by remember { mutableStateOf(false) }
+            // ── 名字行 + 活动流入口 ─────────────────────────────
             val hasThinkOrTools = !msg.mine && (msg.think != null || !msg.tools.isNullOrEmpty())
+
+            // 活动流条目：工具一条一条。
+            // 🔴 思考不再进活动流 —— 它有自己的「思考了 N秒 ›」折叠行（ThinkFoldRow）+
+            //   「思考过程」弹层，再塞进活动流就是同一段推理在一屏里出现两遍
+            //   （旧实现：折叠行一条 + 活动流一条 + 流式内联一块，三重表示）。
+            val activityEntries: List<com.ai.assistance.quro.core.chat.ActivityEntry> = remember(msg.tools) {
+                val out = mutableListOf<com.ai.assistance.quro.core.chat.ActivityEntry>()
+                msg.tools?.forEach { t ->
+                    // 🔴 可视化弹窗已在气泡下方单独渲染成一张可点击小卡，这里再列一行
+                    //    就是同一次工具调用出现两遍（点开活动流还以为执行了两次）。
+                    if (isInlineRenderedTool(t.name)) return@forEach
+                    val cat = com.ai.assistance.quro.core.chat.ActivityCategory.ofTool(t.name)
+                    out += com.ai.assistance.quro.core.chat.ActivityEntry(
+                        category = cat,
+                        title = com.ai.assistance.quro.core.chat.ActivityTitleResolver.resolve(cat, t.name, t.args),
+                        toolName = t.name,
+                        args = t.args,
+                        result = t.result,
+                        durationMs = t.durationMs,
+                        failed = isFailedToolResult(t),
+                    )
+                }
+                out
+            }
 
             Row(
                 // 🔴 两侧统一靠左：头像、名称、消息全部对齐到左边，与用户诉求一致
@@ -3672,7 +4436,7 @@ private fun MessageRow(
                         end = 0.dp,
                         // 把名字压到与头像同一条中线上（28dp 头像 → 3dp）
                         top = nameRowCenterOffset,
-                        bottom = if (hasThinkOrTools && (showThink || showTools)) 2.dp else 4.dp,
+                        bottom = if (hasThinkOrTools && showActivity) 2.dp else 4.dp,
                     ),
             ) {
                 // 🔴 集群 / 子智能体的角色名加「集群 · 」前缀并换强调色：
@@ -3680,52 +4444,53 @@ private fun MessageRow(
                 // 这里再标注归属，用户才能确认「这是集群里某个角色在说话」，
                 // 而不是主助手自言自语 —— 这正是「集群要能在对话框里被看见和参与」的前提。
                 val isClusterSpeaker = msg.isClusterSpeaker
-                Text(
-                    text = if (isClusterSpeaker) {
-                        "${qstr(R.string.qk_04061, (msg.author).toString())} · ${msg.time}"
-                    } else {
-                        "${msg.author} · ${msg.time}"
-                    },
-                    fontSize = scaled(11),
-                    color = if (isClusterSpeaker) Accent else Muted,
-                )
-                // 仅 AI 消息且含有思考/工具数据时显示小按钮
+                Box {
+                    Text(
+                        text = if (isClusterSpeaker) {
+                            "${qstr(R.string.qk_04061, (msg.author).toString())} · ${msg.time}"
+                        } else {
+                            "${msg.author} · ${msg.time}"
+                        },
+                        fontSize = scaled(11),
+                        color = if (isClusterSpeaker) Accent else Muted,
+                        modifier = Modifier.combinedClickable(
+                            onClick = {},
+                            onLongClick = {
+                                headerHaptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                headerMenu = true
+                            },
+                        ),
+                    )
+                    MessageHeaderMenu(
+                        expanded = headerMenu,
+                        onDismiss = { headerMenu = false },
+                        onBranch = { headerMenu = false; onCreateBranch(msg) },
+                        onEdit = { headerMenu = false; onEditRequest(msg) },
+                        onDelete = { headerMenu = false; onDelete(msg.uids) },
+                    )
+                }
+                // 仅 AI 消息且含有思考/工具数据时显示入口
                 if (hasThinkOrTools) {
                     Spacer(Modifier.width(6.dp))
-                    // 思考中按钮（紧凑胶囊）
-                    if (msg.think != null) {
+                    //   名字行右侧**不再**放「思考中 / · N 工具」两个胶囊，
+                    //   改为正文里一条**活动流**（汇总行 + 逐条明细，默认展开）。
+                    //   胶囊只做活动流的展开/收起开关。
+                    //   计数口径修正：**只数工具调用** —— 旧实现把思考步数也算进「· N 工具」
+                    //   （真机出现「219 步思考 + 31 个工具 = · 250 工具」的荒唐徽章，
+                    //   纯思考回合也会显示「· N 工具」）。思考有自己的「思考了 N秒 ›」行。
+                    // 与活动流同一口径：已在气泡下方单独成卡的调用不再计数，
+                    // 否则名字行「· 31 工具」和活动流实际列出的条目数对不上。
+                    val toolCount = msg.tools?.count { !isInlineRenderedTool(it.name) } ?: 0
+                    if (toolCount > 0) {
                         TinyChip(
-                            onClick = { showThink = !showThink },
+                            onClick = { showActivity = !showActivity },
                             containerColor = Accent.copy(alpha = 0.12f),
                         ) {
-                            LucideIcon("sparkles", null, Modifier.size(10.dp), tint = Accent)
-                            Spacer(Modifier.width(3.dp))
-                            // 生成中显示「思考中」，完成后显示「思考过程 · N 步」（此前恒为「思考中」，完成后文案误导）
-                            Text(if (streamingThink) stringResource(R.string.qk_00093) else stringResource(R.string.qk_00094, (msg.think.steps.size).toString()), fontSize = 9.sp, color = Accent)
-                        }
-                    }
-                    // 工具调用按钮（紧凑胶囊）
-                    if (!msg.tools.isNullOrEmpty()) {
-                        Spacer(Modifier.width(4.dp))
-                        // 🔴 执行中（结果尚未回填）时胶囊高亮，让用户知道 AI 还在动手
-                        val toolsRunning = msg.tools.any { it.result.isNullOrBlank() }
-                        TinyChip(
-                            onClick = { showTools = !showTools },
-                            containerColor = if (toolsRunning) Color(0xFF3B82F6).copy(alpha = 0.14f)
-                            else cs.primary.copy(alpha = 0.1f),
-                        ) {
-                            // 🔴 旧图标名 "wrench" 在本仓 drawable 里不存在 → 一直显示成 X
-                            LucideIcon(
-                                if (toolsRunning) "qic_running" else "qic_other",
-                                null,
-                                Modifier.size(10.dp),
-                                tint = if (toolsRunning) Color(0xFF3B82F6) else cs.primary.copy(alpha = 0.7f),
-                            )
+                            LucideIcon(if (showActivity) "chevron_up" else "chevron_down", null, Modifier.size(10.dp), tint = Accent)
                             Spacer(Modifier.width(3.dp))
                             Text(
-                                stringResource(R.string.qk_00095, msg.tools.size.toString()),
-                                fontSize = 9.sp,
-                                color = if (toolsRunning) Color(0xFF3B82F6) else cs.primary.copy(alpha = 0.7f),
+                                stringResource(R.string.qk_00095, toolCount.toString()),
+                                fontSize = 9.sp, color = Accent,
                             )
                         }
                     }
@@ -3748,29 +4513,32 @@ private fun MessageRow(
                 WorkingIndicator(msg.workingTools, intentLabel)
                 Spacer(Modifier.height(4.dp))
             }
-            // 展开的思考内容（在名字行下方，正文上方）
-            if (showThink && msg.think != null) {
-                ThinkInlineContent(msg.think, scaled)
+            //   汇总行「思考、运行了 N 条命令、…」+ 逐条明细（图标 + 一句话），
+            //   失败行染红，点某条打开底部详情弹层。
+            //   此前是「思考胶囊 + 工具胶囊」两个独立折叠块，用户看不到过程。
+            if (showActivity && activityEntries.isNotEmpty()) {
+                ActivityStream(
+                    entries = activityEntries,
+                    onOpenEntry = { activityDetail = it },
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+            // 流式期间（AI 正在想）内联显示实时思考 —— 只挂**最近几步**（见 ThinkInlineContent），
+            // 完成后整块收起，折叠为一行「思考了 N秒 ›」。
+            // 🔴 旧实现流式全量渲染所有步骤（多轮工具循环里膨胀到 219 步整块展开数分钟不收），
+            //   既把正文顶出屏幕，又造成「思考不会收起来」的观感。
+            if (streamingThink && msg.think != null && msg.think.steps.isNotEmpty()) {
+                ThinkInlineContent(msg.think, scaled, onOpenAll = { onOpenThink(msg.think) })
                 Spacer(Modifier.height(6.dp))
             }
-            // 展开的工具卡片
-            if (showTools && !msg.tools.isNullOrEmpty()) {
-                // 🔴 走新版 [ToolCallGroup]：族图标 + 目标物副标题 + 指标徽标 + 耗时 + 状态，
-                //    展开给全文。旧的 ToolsInlineContent 只显示 57 字符截断 JSON（已下线）。
-                ToolCallGroup(msg.tools) {
-                    // 执行轨迹沿用旧组件，保持行为不变
-                    if (embeddedTrace.isNotEmpty()) {
-                        Spacer(Modifier.height(6.dp))
-                        HorizontalDivider(color = Line.copy(alpha = 0.25f))
-                        Spacer(Modifier.height(4.dp))
-                        Column {
-                            embeddedTrace.forEach { ev ->
-                                TraceRow(ev)
-                                Spacer(Modifier.height(2.dp))
-                            }
-                        }
-                    }
-                }
+            // 🔴 修复「思考过程 · 0步」：调用点一直漏传 steps，凡耗时未知（工具轮/重启回放）
+            //   的思考一律显示「0步」——这正是「旧思考显示混乱」的最直接可见项。
+            if (!streamingThink && msg.think != null && msg.think.steps.isNotEmpty()) {
+                ThinkFoldRow(
+                    durationMs = msg.think.durationMs,
+                    steps = msg.think.steps.size,
+                    onClick = { onOpenThink(msg.think) },
+                )
                 Spacer(Modifier.height(6.dp))
             }
             // ═══ 可视化弹窗/自定义弹窗小卡片：独立于工具区域显示 ═══
@@ -3920,6 +4688,15 @@ private fun MessageRow(
                 }
                 Spacer(Modifier.height(6.dp))
             }
+            // ── 语音条（AI 主动发的可回放语音消息，优先于正文展示）─────────────
+            if (msg.voiceNote != null) {
+                VoiceNoteBubble(
+                    msg.voiceNote,
+                    Modifier.padding(top = 4.dp, bottom = 6.dp),
+                    onCopyText = { copyToClipboard(msg.voiceNote.text) },
+                    onDelete = { onDelete(msg.uids) },
+                )
+            }
             // AIP 排版引擎（B 通道）解析前置：气泡内不再渲染 AIP，改在消息底部全宽内联
             // （与动态 UI / 生成式 UI 同源机制，避免 280dp 气泡压窄、文字重叠一个盖一个），
             // 故在此统一解析一次，供气泡过滤与内联渲染共用（blocks 声明已上提到消息 else 块作用域，见上方）。
@@ -3987,8 +4764,9 @@ private fun MessageRow(
                                         1 -> scaled(22); 2 -> scaled(19); 3 -> scaled(17)
                                         4 -> scaled(16); 5 -> scaled(15); else -> scaled(14)
                                     }
+                                    val boldColor = if (msg.mine) AccentPress else cs.primary
                                     val rich = remember(blk.text, textColor) { buildRich(blk.text, TextStyle(fontSize = size, fontWeight = FontWeight.Bold, color = textColor, lineHeight = size),
-                                        boldColor = if (msg.mine) AccentPress else cs.primary, linkColor = cs.primary,
+                                        boldColor = boldColor, linkColor = cs.primary,
                                         codeBackground = cs.surfaceVariant.copy(alpha = 0.5f)) }
                                     ClickableText(text = rich, style = TextStyle(fontSize = size, color = textColor, lineHeight = size),
                                         onClick = { offset -> rich.getStringAnnotations("link", offset, offset).firstOrNull()?.item?.let { onOpenLink(it) } },
@@ -4000,8 +4778,9 @@ private fun MessageRow(
                                         shape = RoundedCornerShape(8.dp),
                                         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                                     ) {
+                                        val quoteBold = if (msg.mine) AccentPress else cs.primary
                                         val rich = remember(blk.text, textColor) { buildRich(blk.text, TextStyle(fontSize = scaled(15), color = textColor, lineHeight = scaled(23), fontStyle = FontStyle.Italic),
-                                            boldColor = if (msg.mine) AccentPress else cs.primary, linkColor = cs.primary,
+                                            boldColor = quoteBold, linkColor = cs.primary,
                                             codeBackground = cs.surfaceVariant.copy(alpha = 0.5f)) }
                                         ClickableText(text = rich, style = TextStyle(fontSize = scaled(15), color = textColor, lineHeight = scaled(23), fontStyle = FontStyle.Italic),
                                             onClick = { offset -> rich.getStringAnnotations("link", offset, offset).firstOrNull()?.item?.let { onOpenLink(it) } },
@@ -4074,8 +4853,36 @@ private fun MessageRow(
                         }
                     }
                 }
+                // 🔴 用户消息操作行（2026-11-04 修改语义修正）：**修改=改自己的内容**。
+                //    旧实现「修改」挂在 AI 消息上（用户手改 AI 的话，语义错误）；
+                //    现在移到用户消息：复制 / 修改（只改正文不重发）/ 删除。
+                //    同样受 showActions 门控：只挂最后一条真实消息、生成中隐藏。
+                if (msg.mine && showActions && !msg.text.isNullOrBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    val userActions: @Composable () -> Unit = {
+                        BubbleActionButton(stringResource(R.string.qk_00088), Muted) { copyToClipboard(msg.text ?: "") }
+                        BubbleActionButton(stringResource(R.string.qk_04467), Muted) { onEditRequest(msg) }
+                        BubbleActionButton(stringResource(R.string.qk_00091), Muted) { onDelete(msg.uids) }
+                    }
+                    if (narrow) {
+                        FlowRow(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) { userActions() }
+                    } else {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) { userActions() }
+                    }
+                }
                 // 气泡操作任务栏（仅 AI 消息）：复制 / 追问 / 分享 / 重试
-                if (!msg.mine) {
+                // 🔴 showActions 门控：只挂最后一条 AI 消息且本轮已结束；生成中一律隐藏
+                //    （旧实现生成中也照常显示，AI 思考中胶囊下方就顶着一排「分享/删除/重试」，
+                //    点重试还会对正在流式刷新的消息重复触发）。
+                if (!msg.mine && showActions) {
                     Spacer(Modifier.height(6.dp))
                     // 上下文超限错误气泡（issue #11 问题6）：识别稳定前缀，给「新建对话」一键入口——
                     // 旧行为只有一句「请求失败」，用户既不知道原因、也没有自救办法。
@@ -4083,7 +4890,11 @@ private fun MessageRow(
                         ?.startsWith(com.ai.assistance.quro.core.network.QuroLlmErrors.CONTEXT_LIMIT_MESSAGE_PREFIX) == true
                     val bubbleActions: @Composable () -> Unit = {
                         BubbleActionButton(stringResource(R.string.qk_00088), Muted) { copyToClipboard(displayText) }
+                        // 🔴 修改语义修正（2026-11-04）：修改=改自己的内容；AI 行不再放修改。
+                        // 朗读：单条朗读，走全局 TTS 设置（音色/语速与「自动朗读」同一套）。
+                        BubbleActionButton(stringResource(R.string.qk_04468), Muted) { onSpeak(displayText) }
                         BubbleActionButton(stringResource(R.string.qk_00089), cs.primary) { onAskFollowup(msg.text ?: "") }
+                        BubbleActionButton(stringResource(R.string.qk_04533), Muted) { onCreateBranch(msg) }
                         BubbleActionButton(stringResource(R.string.qk_00090), Muted) { onShare(msg.text ?: "") }
                         BubbleActionButton(stringResource(R.string.qk_00091), Muted) { onDelete(msg.uids) }
                         if (isContextLimitError) {
@@ -4157,10 +4968,46 @@ private fun MessageRow(
             ) {
                 msg.zxWidgets.forEachIndexed { i, zx ->
                     key("zxw_${msg.id}_$i") {
-                        ZxWidgetInline(
-                            component = zx.component,
-                            dsl = zx.dsl,
-                            dark = zxDark,
+                        // 🔴 骨架重写第一层（2026-11-04）：zxwidget 套统一 Widget Lab 卡壳
+                        //    （圆角 20 / 头部 emoji+组件名 / 亮暗自适应）——与 VisualMiniCard
+                        //    同一观感；内部交互桥/高度自适应机制不变。
+                        androidx.compose.material3.Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            shape = RoundedCornerShape(20.dp),
+                            tonalElevation = 1.dp,
+                            shadowElevation = 2.dp,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(Modifier.fillMaxWidth()) {
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.06f))
+                                        .padding(horizontal = 18.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text("🧩", fontSize = 16.sp)
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            zx.component,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = cs.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            "动态交互界面 · 点按直接操作",
+                                            fontSize = 11.sp,
+                                            color = cs.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                                ZxWidgetInline(
+                                    component = zx.component,
+                                    dsl = zx.dsl,
+                                    dark = zxDark,
                             onInteract = { json ->
                                 // 交互即对话：把「用户做了什么」结构化喂回模型接着推理。
                                 // 两条回路必须分开，否则模型收到重复内容：
@@ -4175,10 +5022,44 @@ private fun MessageRow(
                                 if (!ZxWebCardQueue.submitByComponent(zx.component, text)) onSend(text)
                             },
                         )
+                            }
+                        }
                     }
                 }
             }
         }
+        // 🔴 活动详情弹层：点活动流里某一条 → 弹层看该次的完整细节。
+        // 按类别分派：命令类显示工作目录+exit 徽标+等宽命令+输出；
+        // 写文件类显示路径+大小+内容；搜索类显示关键词+结果；
+        // 思考类显示完整推理文本；其它显示 参数 / 结果 / 错误 三段。
+        // 动作区按工具深度适配：命令→终端、文件→工作区、图片/视频产物→对应查看器，
+        // 不再是旧实现「所有工具都弹同一个 IDE」。
+        // MessageRow 访问不到 ChatScreen 状态，全部走全局通道：
+        // 终端/工作区 → onCommand(ui_open_*)；图片 → QuroImageLauncher；视频 → QuroVideoLauncher。
+        activityDetail?.let { e ->
+            com.ai.assistance.quro.ui.chat.ActivityDetailSheet(
+                entry = e,
+                onDismiss = { activityDetail = null },
+                onOpenEditor = { onCommand("ui_open_editor") },
+                onOpenTerminal = { onCommand("ui_open_terminal") },
+                onOpenWorkspace = { _ -> onCommand("ui_open_code_workspace") },
+                onOpenImage = { p ->
+                    activityDetail = null
+                    com.ai.assistance.quro.core.media.QuroImageLauncher.open(
+                        p,
+                        p.substringAfterLast('/'),
+                    )
+                },
+                onOpenVideo = { p ->
+                    activityDetail = null
+                    com.ai.assistance.quro.core.media.QuroVideoLauncher.open(
+                        p,
+                        p.substringAfterLast('/'),
+                    )
+                },
+            )
+        }
+
         // ── AIP 排版引擎（B 通道）全宽内联：已移出 280dp 内容列，撑满对话框宽度渲染，
         //    与动态 UI / 生成式 UI / 富组件同源机制，避免 280dp 气泡压窄与"文字被覆盖一个盖一个"。
         if (!msg.mine && blocks.any { it is MsgBlock.Aip }) {
@@ -4290,6 +5171,15 @@ private fun MessageRow(
                     }
                 }
             }
+        }
+        // ── 引用溯源：web_search/read_url 返回的来源，消息底部渲染可点击来源胶囊 ──
+        if (msg.citations.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            CitationCapsules(
+                citations = msg.citations,
+                onOpenUrl = onOpenLink,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
         // ── 动态 UI：全宽内联渲染进对话框（原生、自适应屏幕、完整可见、不弹窗、不点卡片）──
         // 仅在「非纯动态UI消息」时渲染（纯动态UI消息已在上面的 if 分支内作为对话框本身直接渲染）。
@@ -4622,7 +5512,6 @@ private fun FullScreenImageViewer(path: String, name: String, onClose: () -> Uni
         }
     }
 }
-
 /** 用系统查看器打开文档 / 视频（FileProvider 共享，无需写权限）。 */
 private fun openFileWithSystemViewer(ctx: Context, att: Attachment) {
     val file = att.path?.let { File(it) }?.takeIf { it.exists() } ?: run {
@@ -4660,178 +5549,11 @@ private fun fileMimeByExt(ext: String): String = when (ext.lowercase()) {
     else -> "*/*"
 }
 
-private fun formatJsonValue(v: String): String = when {
-    v.length > 60 -> "${v.take(57)}\u2026"
-    v.isEmpty() -> "\"\""
-    else -> v
-}
-
-@Composable
-private fun ThinkBubble(think: ThinkBlock, scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
-    val cs = MaterialTheme.colorScheme
-    var expanded by remember { mutableStateOf(false) }
-    // 🛡️ 过滤 reasoning 中的 HTML 标签（MiMO 等模型思考过程常输出 HTML 片段），
-    //   避免原始 <div style=...> 直接显示在思考气泡里。保留纯文本语义。
-    val cleanSteps = remember(think.steps) {
-        think.steps.map { s ->
-            // 去除 HTML 标签但保留文本内容；再将连续空白压缩为单空格
-            s.replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim()
-        }.filter { it.isNotBlank() }
-    }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(android.graphics.Color.parseColor("#FBF8F2")))
-            .border(1.dp, Line2, RoundedCornerShape(14.dp))
-            .then(
-                if (expanded) Modifier.padding(12.dp)
-                else Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
-            )
-    ) {
-        // 标题栏：始终可见，点击切换展开/收起
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { expanded = !expanded },
-        ) {
-            LucideIcon("sparkles", stringResource(R.string.qk_00082), Modifier.size(16.dp), tint = Accent)
-            Spacer(Modifier.width(6.dp))
-            Text(stringResource(R.string.qk_00093), fontSize = scaled(12), color = Accent, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.weight(1f))
-            LucideIcon(if (expanded) "chevron_up" else "chevron_down", null, Modifier.size(15.dp), tint = Muted)
-        }
-        // 思考步骤（展开时显示，带 AnimatedVisibility 动画）
-        androidx.compose.animation.AnimatedVisibility(visible = expanded,
-            enter = androidx.compose.animation.expandVertically() + fadeIn(),
-            exit = androidx.compose.animation.shrinkVertically() + fadeOut()) {
-            Column {
-                Spacer(Modifier.height(8.dp))
-                HorizontalDivider(color = Line2.copy(alpha = 0.5f))
-                Spacer(Modifier.height(6.dp))
-                cleanSteps.forEachIndexed { i, s ->
-                    Row(Modifier.padding(vertical = 2.dp)) {
-                        Text("${i + 1}. ", fontSize = scaled(13), color = InkSoft)
-                        Text(s, fontSize = scaled(13), color = InkSoft)
-                    }
-                }
-            }
-        }
-    }
-}
 
 /**
- * 合体气泡：思考中 + 调用工具合并为单个卡片（解决"思考中/调用工具拆成两个独立气泡"的问题）。
- * 外观与 ThinkBubble 一致（暖色背景 + 思考中标题），展开后先列思考步骤，再列工具调用。
- */
-@Composable
-private fun ThinkingWithToolsBubble(
-    think: ThinkBlock,
-    tools: List<ToolCallUi>,
-    scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
-    withTrace: Boolean = false,
-    traceLines: SnapshotStateList<QuroAgentTrace.AgentTraceEvent> = mutableStateListOf(),
-) {
-    val cs = MaterialTheme.colorScheme
-    var expanded by remember { mutableStateOf(false) }
-    val cleanSteps = remember(think.steps) {
-        think.steps.map { s ->
-            s.replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim()
-        }.filter { it.isNotBlank() }
-    }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(android.graphics.Color.parseColor("#FBF8F2")))
-            .border(1.dp, Line2, RoundedCornerShape(14.dp))
-            .then(
-                if (expanded) Modifier.padding(12.dp)
-                else Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
-            )
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { expanded = !expanded },
-        ) {
-            LucideIcon("sparkles", stringResource(R.string.qk_00082), Modifier.size(16.dp), tint = Accent)
-            Spacer(Modifier.width(6.dp))
-            Text(stringResource(R.string.qk_00093), fontSize = scaled(12), color = Accent, fontWeight = FontWeight.SemiBold)
-            if (tools.isNotEmpty()) {
-                Spacer(Modifier.width(6.dp))
-                // 工具调用计数角标
-                Box(
-                    Modifier
-                        .clip(CircleShape)
-                        .background(cs.primary.copy(alpha = 0.12f))
-                        .padding(horizontal = 5.dp, vertical = 1.dp)
-                ) {
-                    Text(stringResource(R.string.qk_00151, (tools.size).toString()), fontSize = 9.sp, color = cs.primary.copy(alpha = 0.7f))
-                }
-            }
-            Spacer(Modifier.weight(1f))
-            LucideIcon(if (expanded) "chevron_up" else "chevron_down", null, Modifier.size(15.dp), tint = Muted)
-        }
-        AnimatedVisibility(visible = expanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()) {
-            Column {
-                Spacer(Modifier.height(8.dp))
-                HorizontalDivider(color = Line2.copy(alpha = 0.5f))
-                Spacer(Modifier.height(6.dp))
-                // 思考步骤
-                cleanSteps.forEachIndexed { i, s ->
-                    Row(Modifier.padding(vertical = 2.dp)) {
-                        Text("${i + 1}. ", fontSize = scaled(13), color = InkSoft)
-                        Text(s, fontSize = scaled(13), color = InkSoft)
-                    }
-                }
-                // 工具调用（合体在思考步骤下方）
-                if (tools.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    HorizontalDivider(color = Line2.copy(alpha = 0.3f))
-                    Spacer(Modifier.height(6.dp))
-                    // 🔴 走新版 [ToolCallGroup]（族图标 + 目标物 + 指标 + 耗时 + 状态）
-                    tools.forEach { t ->
-                        ToolCallRichCard(t, defaultExpanded = false)
-                        Spacer(Modifier.height(4.dp))
-                    }
-                    // 执行轨迹（如果启用）
-                    if (withTrace) {
-                        Spacer(Modifier.height(8.dp))
-                        HorizontalDivider(color = Line2.copy(alpha = 0.25f))
-                        Spacer(Modifier.height(6.dp))
-                        var traceExpanded by remember { mutableStateOf(true) }
-                        Row(verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable { traceExpanded = !traceExpanded }) {
-                            Text(stringResource(R.string.qk_00152), fontSize = scaled(10), color = Muted)
-                            Spacer(Modifier.weight(1f))
-                            LucideIcon(if (traceExpanded) "chevron_up" else "chevron_down", null,
-                                Modifier.size(12.dp), tint = Muted)
-                        }
-                        AnimatedVisibility(traceExpanded) {
-                            Column {
-                                traceLines.takeLast(30).forEach { ev ->
-                                    Text("  · [${ev.kind}] ${ev.tag}: ${ev.summary}",
-                                        fontSize = scaled(9), color = InkSoft.copy(alpha = 0.6f),
-                                        fontFamily = FontFamily.Monospace)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ── 思考/工具内联展开组件（名字行小按钮点击后显示）───────────────────
-
-/**
- * AI 尚未产出首条内容时的内容区 loading 指示（「等等」动态小组件）。
- * 仅渲染三个跳动圆点，独立于头像/人格名字（头像名字由 MessageRow 的 persona 渲染，不在此处）。
- * 使用 rememberInfiniteTransition 做错相位弹跳，纯 Compose 动画、无 emoji、无图片。
- * 注：此前静态的「等等」文字已移除，保留动态跳动圆点；AI 消息上的「删除」按钮是独立的
- * 气泡操作项（BubbleActionButton），不在本组件内，不受影响。
+ * 「等等」动态指示：三个依次跳动的圆点。
+ *
+ * 用于 AI 尚未产出首条内容时的等待反馈（与 [WorkingIndicator] 的执行中反馈配对）。
  */
 @Composable
 private fun WaitingDots() {
@@ -4895,12 +5617,91 @@ private fun WorkingIndicator(tools: List<String>, label: String? = null) {
 }
 
 /**
+ * 通知岛：对话页顶部的紧凑状态胶囊，**只**反映「其它会话后台续跑」——
+ *   · 其它会话后台生成 → 显示「N 个对话后台生成中」
+ *
+ * 🔴 当前会话的生成状态不再上岛（用户拍板：截图里那颗「AI 思考中…」胶囊是多余的）：
+ *   消息流里已经有完整的进行中表达 —— 等待圆点（isWaiting）、「AI 正在执行工具…」
+ *   （isWorking）、流式思考块与「思考了 N秒 ›」，顶部胶囊是同信息第二遍，还把日期
+ *   和最新消息顶下去。空闲自动收起（AnimatedVisibility），不占用静态空间。
+ */
+@Composable
+private fun NotificationIsland(
+    backgroundCount: Int,
+    scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val visible = backgroundCount > 0
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+        exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+    ) {
+        val label = stringResource(R.string.qk_04544, backgroundCount)
+        Box(
+            Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Surface(
+                color = cs.primaryContainer,
+                contentColor = cs.onPrimaryContainer,
+                shape = RoundedCornerShape(999.dp),
+                tonalElevation = 6.dp,
+                shadowElevation = 2.dp,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val transition = rememberInfiniteTransition()
+                    val dotAlpha by transition.animateFloat(
+                        initialValue = 0.35f, targetValue = 1f,
+                        animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
+                    )
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(cs.primary.copy(alpha = dotAlpha)))
+                    Spacer(Modifier.width(8.dp))
+                    Text(label, fontSize = scaled(13), fontWeight = FontWeight.Medium, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+private fun friendlyToolName(tool: String): String {
+    val t = tool.lowercase()
+    return when {
+        t.contains("web_search") || t.contains("search") -> "联网搜索"
+        t.contains("read_url") || t.contains("fetch") || t.contains("browser") -> "读取网页"
+        t.contains("terminal") || t.contains("shell") || t.contains("exec") -> "终端命令"
+        t.contains("file") || t.contains("read") -> "读取文件"
+        t.contains("write") || t.contains("edit") -> "写入文件"
+        t.contains("image") || t.contains("vision") || t.contains("photo") -> "图像识别"
+        t.contains("speak") || t.contains("tts") -> "语音合成"
+        t.contains("calendar") || t.contains("schedule") -> "日程"
+        t.contains("memory") || t.contains("rag") || t.contains("recall") -> "记忆检索"
+        else -> tool
+    }
+}
+
+private fun friendlyIntent(intent: String): String {
+    return when {
+        intent == "hot" -> "获取今日热点"
+        intent.startsWith("entity:") -> "查询 ${intent.removePrefix("entity:")}"
+        else -> intent
+    }
+}
+
+/**
  * 名字行的超紧凑胶囊按钮（思考中 / 工具），高度 ~20dp、9sp，替代默认 32dp 的 AssistChip。
+ *
+ * [onLongClick] 可选：思考胶囊用它打开全屏思考弹层（点按仍走内联展开）。
  */
 @Composable
 private fun TinyChip(
     onClick: () -> Unit,
     containerColor: Color,
+    onLongClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     Box(
@@ -4908,7 +5709,11 @@ private fun TinyChip(
             .height(20.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(containerColor)
-            .clickable(onClick = onClick)
+            .then(
+                if (onLongClick != null)
+                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                else Modifier.clickable(onClick = onClick)
+            )
             .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -4917,27 +5722,137 @@ private fun TinyChip(
 }
 
 /**
- * 紧凑型思考内容展开区：点击名字行「✦思考中」按钮后显示在按钮下方。
- * 比 ThinkBubble 更紧凑，适合嵌入消息头部区域。
+ * 紧凑型思考内容展开区：点击名字行「✦思考过程 · N步」胶囊后显示在按钮下方。
+ *
+ * 两处与参考不同的**修正**：
+ * 1. 底色/边框跟随主题（参考里硬编码 `#FBF8F2` 米白，深色模式下是一块刺眼白）；
+ * 2. 顶部多一行「步骤数 + 耗时」——耗时是我们额外能拿到的信息，
+ *    放在展开区而不是胶囊上，保证胶囊文案与参考完全一致。
  */
 @Composable
-private fun ThinkInlineContent(think: ThinkBlock, scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
+private fun ThinkFoldRow(
+    durationMs: Long,
+    onClick: () -> Unit,
+    steps: Int = 0,
+) {
+    val cs = MaterialTheme.colorScheme
+    //   有耗时 →「思考了 Ns」；无耗时（工具轮 / 老会话回放）→「思考过程」。
+    //   旧实现回退成「思考过程 · 219步」，把无意义的步骤计数当徽章挂出来，
+    //   既是「旧思考显示混乱」最扎眼的一项，也把状栏撑得很长。
+    val label = if (durationMs > 0) "思考了 ${formatDurationMs(durationMs)}"
+    else "思考过程"
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LucideIcon("sparkles", null, Modifier.size(13.dp), tint = cs.onSurface.copy(alpha = 0.55f))
+        Spacer(Modifier.width(7.dp))
+        Text(
+            label,
+            fontSize = 13.sp,
+            color = cs.onSurface.copy(alpha = 0.72f),
+        )
+        Spacer(Modifier.width(3.dp))
+        LucideIcon("chevron_right", null, Modifier.size(12.dp), tint = cs.onSurface.copy(alpha = 0.45f))
+    }
+}
+
+@Composable
+/**
+ * 思考折叠行：「思考了 N秒 ›」。
+ *
+ * 点开是底部「思考过程」弹层（显示完整推理文本）。
+ * 此前我们只有「思考过程 · N步」胶囊 + 内联展开，与参考观感差别很大。
+ *
+ * @param durationMs 思考耗时（0 = 未知，改显示步骤数）。
+ * @param onClick 点开 → 打开思考过程弹层。
+ */
+
+private fun ThinkInlineContent(
+    think: ThinkBlock,
+    scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
+    /** 点头部打开「思考过程」全量弹层（流式期间也能看完整过程）。 */
+    onOpenAll: (() -> Unit)? = null,
+) {
+    val cs = MaterialTheme.colorScheme
     val cleanSteps = remember(think.steps) {
+        val seen = mutableListOf<String>()
         think.steps.map { s ->
             s.replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim()
-        }.filter { it.isNotBlank() }
+        }.filter { it.isNotBlank() }.filter { step ->
+            // 🔴 连续重复步骤去重：多轮工具循环里模型会反复输出同一句
+            //   「好的，让我执行。」式短句，旧实现原样堆进行号列表（219 步大半是它）。
+            //   只去**相邻**重复，不打乱原有顺序与语义。
+            if (seen.lastOrNull() == step) false else { seen.add(step); true }
+        }
     }
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(Color(android.graphics.Color.parseColor("#FBF8F2")))
-            .border(1.dp, Line2, RoundedCornerShape(10.dp))
+            .background(cs.surfaceVariant.copy(alpha = 0.5f))
+            .border(1.dp, Line.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
             .padding(10.dp, 8.dp)
     ) {
-        cleanSteps.forEachIndexed { i, s ->
+        // ── 头部：步骤数（+ 耗时）；可点开全量弹层 ──
+        Row(
+            Modifier.fillMaxWidth()
+                .then(if (onOpenAll != null) Modifier.clickable(onClick = onOpenAll) else Modifier),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LucideIcon("sparkles", null, Modifier.size(12.dp), tint = Accent)
+            Spacer(Modifier.width(4.dp))
+            Text(
+                stringResource(R.string.qk_00094, cleanSteps.size.toString()),
+                fontSize = scaled(10),
+                color = cs.primary,
+                fontWeight = FontWeight.Medium,
+            )
+            if (onOpenAll != null) {
+                Spacer(Modifier.width(3.dp))
+                LucideIcon("chevron_right", null, Modifier.size(11.dp), tint = cs.primary.copy(alpha = 0.6f))
+            }
+            if (think.durationMs > 0) {
+                Spacer(Modifier.weight(1f))
+                val secs = think.durationMs / 1000.0
+                Text(
+                    stringResource(
+                        R.string.qk_04707,
+                        if (secs >= 10) secs.toInt().toString()
+                        else String.format(java.util.Locale.US, "%.1f", secs),
+                    ),
+                    fontSize = 9.sp,
+                    color = Muted,
+                )
+            }
+        }
+        if (cleanSteps.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            HorizontalDivider(color = Line.copy(alpha = 0.2f))
+            Spacer(Modifier.height(4.dp))
+        }
+        // 🔴 流式内联只渲染**最近 3 步**：完整过程点头部弹层看。
+        //   旧实现全量内联（真机 219 步整块展开、越写越长、正文被顶走）。
+        val maxInline = 3
+        val hidden = (cleanSteps.size - maxInline).coerceAtLeast(0)
+        if (hidden > 0) {
+            Text(
+                "⋯ 已展开 ${cleanSteps.size} 步，点此查看全部",
+                fontSize = scaled(10),
+                color = Muted,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (onOpenAll != null) Modifier.clickable(onClick = onOpenAll) else Modifier)
+                    .padding(vertical = 2.dp),
+            )
+        }
+        cleanSteps.drop(hidden).forEachIndexed { i, s ->
             Row(Modifier.padding(vertical = 1.dp)) {
-                Text("${i + 1}. ", fontSize = scaled(11), color = InkSoft)
+                Text("${hidden + i + 1}. ", fontSize = scaled(11), color = InkSoft)
                 Text(s, fontSize = scaled(11), color = InkSoft, lineHeight = scaled(16))
             }
         }
@@ -4991,6 +5906,68 @@ private fun QuroMusicPlayerCard(
     Spacer(Modifier.height(8.dp))
 }
 
+/** 生成中发送模式的短标签（打断 / 排队 / 引导）。 */
+@Composable
+private fun busyModeLabel(mode: BusySendMode): String = when (mode) {
+    BusySendMode.INTERRUPT -> stringResource(R.string.qk_04480)
+    BusySendMode.QUEUE -> stringResource(R.string.qk_04481)
+    BusySendMode.STEER -> stringResource(R.string.qk_04482)
+}
+
+/** 生成中发送模式的行为说明，下拉菜单里逐项解释。 */
+@Composable
+private fun busyModeDesc(mode: BusySendMode): String = when (mode) {
+    BusySendMode.INTERRUPT -> stringResource(R.string.qk_04483)
+    BusySendMode.QUEUE -> stringResource(R.string.qk_04484)
+    BusySendMode.STEER -> stringResource(R.string.qk_04485)
+}
+
+/**
+ * 生成中的发送方式开关：一枚小胶囊，点开三选一。
+ *
+ * 不做成长按发送之类的手势——三种方式的差别用户必须能**看见并理解**，
+ * 否则「排队了却以为发了」「引导了却以为打断了」这类误会只会更难排查。
+ */
+@Composable
+private fun BusySendModeSwitch(
+    mode: BusySendMode,
+    onSelect: (BusySendMode) -> Unit,
+    scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
+) {
+    val cs = MaterialTheme.colorScheme
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(cs.primaryContainer.copy(alpha = 0.5f))
+                .clickable { open = true }
+                .padding(horizontal = 9.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(busyModeLabel(mode), fontSize = scaled(12), color = cs.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(3.dp))
+            LucideIcon("chevron_down", null, Modifier.size(12.dp), tint = cs.primary)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            BusySendMode.values().forEach { m ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(busyModeLabel(m), fontSize = scaled(14), fontWeight = if (m == mode) FontWeight.SemiBold else FontWeight.Normal)
+                            Text(busyModeDesc(m), fontSize = scaled(11), color = Muted, maxLines = 2)
+                        }
+                    },
+                    onClick = { onSelect(m); open = false },
+                    trailingIcon = if (m == mode) {
+                        { Icon(Icons.Filled.Check, null, Modifier.size(14.dp), tint = cs.primary) }
+                    } else null,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun Composer(
     deepThink: Boolean,
@@ -4998,6 +5975,11 @@ private fun Composer(
     attachments: List<QuroAttachment>,
     onRemoveAttach: (QuroAttachment) -> Unit,
     onAttach: () -> Unit,
+    attachmentProgress: Map<String, Float> = emptyMap(),
+    /** 视频切片：用户点视频附件的「切片」按钮，传入视频文件路径。 */
+    onSliceVideo: (String) -> Unit = {},
+    /** PDF 选页：用户点 PDF 附件的「选页」按钮，传入 PDF 文件路径。 */
+    onSelectPdfPages: (String) -> Unit = {},
     onSend: (String) -> Unit,
     autoSaveMemory: Boolean = true,
     onToggleAutoSave: () -> Unit = {},
@@ -5008,6 +5990,13 @@ private fun Composer(
     enterSend: Boolean,
     busy: Boolean,
     onStop: () -> Unit,
+    /** 生成中再发一条消息时怎么处理（打断 / 排队 / 引导），生成中输入框有字时显示切换开关 */
+    busySendMode: BusySendMode = BusySendMode.INTERRUPT,
+    onBusySendModeChange: (BusySendMode) -> Unit = {},
+    /** 排队中的消息条数（>0 时输入框上方显示排队提示条） */
+    queuedCount: Int = 0,
+    queuedPreview: String? = null,
+    onCancelQueued: () -> Unit = {},
     onOpenMusicPlayer: () -> Unit = {},
     autoRead: Boolean = false,
     onToggleAutoRead: () -> Unit = {},
@@ -5036,6 +6025,12 @@ private fun Composer(
     currentWorkspace: String? = null,
     onOpenWorkspaceSelector: () -> Unit = {},
     onOpenCodeBrowser: () -> Unit = {},
+    /**
+     * 输入框获得焦点时触发：趁用户还在构思、把「DNS + TCP + TLS」握手提前做完，
+     * 等真正点发送时连接已在池里，只剩上传 + 服务端 prefill——消除「发消息后很久才动」的体感。
+     * （[com.ai.assistance.quro.core.network.QuroLlmClient.warmUp] 自行后台线程执行、失败无副作用。）
+     */
+    onWarmUp: () -> Unit = {},
     /** 打开多角色集群面板（主持编排 + 多角色分工）。 */
     /** 🔴 集群模式是否开启（对话框的一种模式，与「深度思考」平级）。 */
     clusterMode: Boolean = false,
@@ -5048,7 +6043,14 @@ private fun Composer(
     /** 集群配置面板（角色/工具/授权），纯配置。 */
     onOpenClusterConfig: () -> Unit = {},
     currentAciName: String? = null,
-    enabledSkillsCount: Int = 0,
+    /** 本条消息附加的技能（用户显式选择；发送后由上层清空）。 */
+    attachedSkills: List<com.ai.assistance.quro.core.skill.QuroSkill> = emptyList(),
+    /** 点技能标签上的 × 撤销该项选择。 */
+    onRemoveAttachedSkill: (com.ai.assistance.quro.core.skill.QuroSkill) -> Unit = {},
+    /** 上下文占用（token 用量），非空时在发送键旁显示常驻进度圆环，临上限变红。 */
+    contextUsage: com.ai.assistance.quro.core.chat.ContextWindowUsage? = null,
+    /** 点击上下文占用圆环 → 打开「上下文窗口」明细弹窗（分段 token 构成 + 压缩入口）。 */
+    onOpenContextWindow: () -> Unit = {},
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -5059,12 +6061,48 @@ private fun Composer(
             .background(cs.background)
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
-        // 正在播放（内联指示卡）：当前有音乐在后台播放时显示，点击打开全屏播放器
+        // 正在播放（内嵌指示卡）：当前有音乐在后台播放时显示，点击打开全屏播放器
         QuroMusicPlayerCard(onOpen = onOpenMusicPlayer, scaled = scaled)
-        // 附件预览
-        if (attachments.isNotEmpty()) {
+        // ═══ 排队提示条：生成中还有消息在排队等着发 ═══
+        // 必须可见、可撤销——排队是「后台里替你记了一句话」，用户看不见就等于没排。
+        if (queuedCount > 0) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(cs.primaryContainer.copy(alpha = 0.45f))
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                LucideIcon("bookmark", null, Modifier.size(14.dp), tint = cs.primary)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (queuedPreview.isNullOrBlank()) stringResource(R.string.qk_04487, queuedCount)
+                    else stringResource(R.string.qk_04490, queuedCount, queuedPreview.take(40)),
+                    fontSize = scaled(12),
+                    color = cs.onPrimaryContainer,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    stringResource(R.string.qk_04488),
+                    fontSize = scaled(12),
+                    color = cs.primary,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onCancelQueued() }
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+        }
+        // 附件处理中进度（大文件/视频复制时逐项显示进度圆环）
+        if (attachmentProgress.isNotEmpty()) {
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                attachments.forEach { att ->
+                val processingKeys = attachmentProgress.keys.toList()
+                for (k in processingKeys) {
+                    val p = attachmentProgress[k] ?: 0f
                     Row(
                         Modifier
                             .clip(RoundedCornerShape(10.dp))
@@ -5073,12 +6111,70 @@ private fun Composer(
                             .padding(8.dp, 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        LucideIcon("file_text", null, Modifier.size(15.dp), tint = cs.primary)
+                        CircularProgressIndicator(
+                            progress = { p },
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = cs.primary,
+                            trackColor = cs.surfaceVariant,
+                        )
                         Spacer(Modifier.width(6.dp))
-                        Text(att.name, fontSize = scaled(12), color = cs.onSurface, maxLines = 1)
-                        Spacer(Modifier.width(6.dp))
-                        Box(Modifier.clickable { onRemoveAttach(att) }) {
-                            LucideIcon("x", qstr(R.string.qk_00159), Modifier.size(14.dp), tint = Muted)
+                        Text("处理中…", fontSize = scaled(12), color = cs.onSurfaceVariant, maxLines = 1)
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        // 附件预览
+        if (attachments.isNotEmpty()) {
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                attachments.forEach { att ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Row(
+                            Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(cs.surfaceVariant)
+                                .border(1.dp, Line, RoundedCornerShape(10.dp))
+                                .padding(8.dp, 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            LucideIcon("file_text", null, Modifier.size(15.dp), tint = cs.primary)
+                            Spacer(Modifier.width(6.dp))
+                            Text(att.name, fontSize = scaled(12), color = cs.onSurface, maxLines = 1)
+                            Spacer(Modifier.width(6.dp))
+                            // 视频切片入口
+                            if (att.type == "video") {
+                                Text(
+                                    "切片",
+                                    fontSize = scaled(11),
+                                    color = cs.primary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(cs.primaryContainer.copy(alpha = 0.4f))
+                                        .clickable { onSliceVideo(att.uri) }
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                            }
+                            // PDF 选页入口
+                            if (att.type == "file" && (att.mime.contains("pdf") || att.name.endsWith(".pdf"))) {
+                                Text(
+                                    "选页",
+                                    fontSize = scaled(11),
+                                    color = cs.primary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(cs.primaryContainer.copy(alpha = 0.4f))
+                                        .clickable { onSelectPdfPages(att.uri) }
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                            }
+                            Box(Modifier.clickable { onRemoveAttach(att) }) {
+                                LucideIcon("x", qstr(R.string.qk_00159), Modifier.size(14.dp), tint = Muted)
+                            }
                         }
                     }
                 }
@@ -5086,7 +6182,7 @@ private fun Composer(
             Spacer(Modifier.height(8.dp))
         }
         // ═══ 上下文标识栏：显示当前工作区 / ACI / 技能，让用户一眼看到 AI 能读到什么 ═══
-        val hasCtx = currentWorkspace != null || currentAciName != null || enabledSkillsCount > 0
+        val hasCtx = currentWorkspace != null || currentAciName != null || attachedSkills.isNotEmpty()
         if (hasCtx) {
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 6.dp),
@@ -5122,18 +6218,40 @@ private fun Composer(
                         Text("🔗 $currentAciName", fontSize = scaled(11), color = cs.onSecondaryContainer, maxLines = 1)
                     }
                 }
-                if (enabledSkillsCount > 0) {
+                // 本条消息附加的技能：每个一个可点掉的标签，末尾「+」继续选。
+                // 只有真的选了才占这一行 —— 不额外叠一层常驻条（工具菜单里已有入口）。
+                if (attachedSkills.isNotEmpty()) {
                     Row(
-                        Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(cs.tertiaryContainer.copy(alpha = 0.5f))
-                            .clickable { onOpenSkills() }
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        LucideIcon("sparkles", null, Modifier.size(12.dp), tint = cs.tertiary)
-                        Spacer(Modifier.width(4.dp))
-                        Text(stringResource(R.string.qk_00160, (enabledSkillsCount).toString()), fontSize = scaled(11), color = cs.onTertiaryContainer)
+                        attachedSkills.forEach { s ->
+                            Row(
+                                Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(cs.primaryContainer.copy(alpha = 0.7f))
+                                    .clickable { onRemoveAttachedSkill(s) }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                LucideIcon("sparkles", null, Modifier.size(12.dp), tint = cs.primary)
+                                Spacer(Modifier.width(4.dp))
+                                Text(s.name, fontSize = scaled(11), color = cs.onPrimaryContainer, maxLines = 1)
+                                Spacer(Modifier.width(4.dp))
+                                Text("×", fontSize = scaled(12), color = cs.onPrimaryContainer)
+                            }
+                        }
+                        Row(
+                            Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(cs.tertiaryContainer.copy(alpha = 0.5f))
+                                .clickable { onOpenSkills() }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("+", fontSize = scaled(12), color = cs.onTertiaryContainer)
+                        }
                     }
                 }
             }
@@ -5229,7 +6347,8 @@ private fun Composer(
                     .weight(1f)
                     .heightIn(min = 24.dp, max = 110.dp)
                     .verticalScroll(rememberScrollState())
-                    .padding(vertical = 9.dp, horizontal = 4.dp),
+                    .padding(vertical = 9.dp, horizontal = 4.dp)
+                    .onFocusChanged { if (it.isFocused) onWarmUp() },
                 textStyle = TextStyle(fontSize = scaled(15), color = cs.onSurface),
                 keyboardOptions = KeyboardOptions(imeAction = if (enterSend) ImeAction.Done else ImeAction.Default),
                 keyboardActions = KeyboardActions(
@@ -5248,7 +6367,20 @@ private fun Composer(
                 cursorBrush = SolidColor(cs.primary)
             )
             if (busy) {
-                // 生成中：发送按钮变身「停止生成」（红色实心方块），点击打断当前回复
+                // 生成中：停止键常驻。输入框里有字时额外给一个「发送」键——
+                // 这条消息会按旁边开关选定的方式处理（打断 / 排队 / 引导），
+                // 用户不必再在「干等它写完」和「打断重来」之间二选一。
+                val canSendWhileBusy = text.text.isNotBlank() || attachments.isNotEmpty()
+                if (canSendWhileBusy) {
+                    BusySendModeSwitch(mode = busySendMode, onSelect = onBusySendModeChange, scaled = scaled)
+                    IconButton(
+                        onClick = { onSend(text.text); onTextChange(TextFieldValue("")) },
+                        modifier = Modifier.size(44.dp).padding(2.dp),
+                    ) {
+                        LucideIcon("arrow_up", stringResource(R.string.qk_04486), Modifier.size(22.dp), tint = cs.primary)
+                    }
+                }
+                // 生成中：停止生成（红色实心方块），点击打断当前回复
                 IconButton(
                     onClick = onStop,
                     modifier = Modifier.size(44.dp).padding(2.dp)
@@ -5256,13 +6388,56 @@ private fun Composer(
                     LucideIcon("square", stringResource(R.string.qk_00164), Modifier.size(22.dp), tint = cs.error)
                 }
             } else {
+                // 发送键颜色随可用性平滑过渡（enabled→primary / disabled→muted，不用硬切）。
+                val canSend = text.text.isNotBlank() || attachments.isNotEmpty()
+                val sendTint by animateColorAsState(
+                    targetValue = if (canSend) cs.primary else Muted,
+                    animationSpec = tween(180),
+                    label = "sendTint",
+                )
                 IconButton(
                     onClick = { onSend(text.text); onTextChange(TextFieldValue("")) },
                     modifier = Modifier.size(44.dp).padding(2.dp),
-                    enabled = text.text.isNotBlank() || attachments.isNotEmpty()
+                    enabled = canSend
                 ) {
                     LucideIcon("arrow_up", stringResource(R.string.qk_00165), Modifier.size(22.dp),
-                        tint = if (text.text.isNotBlank() || attachments.isNotEmpty()) cs.primary else Muted)
+                        tint = sendTint)
+                }
+            }
+            // 上下文占用常驻圆环：窗口已知时显示，临上限变红（点开无弹层，仅视觉提示）
+            val usage = contextUsage
+            if (usage != null && usage.window > 0) {
+                val ratio = usage.usedRatio
+                // 占用档位色随输入增长平滑过渡（primary→tertiary→error），不做硬切。
+                val ringColor by animateColorAsState(
+                    targetValue = when {
+                        usage.isCritical -> cs.error
+                        usage.shouldCompact -> cs.tertiary
+                        else -> cs.primary
+                    },
+                    animationSpec = tween(300),
+                    label = "ctxRing",
+                )
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .padding(10.dp)
+                        .clickable { onOpenContextWindow() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(
+                        progress = { ratio },
+                        modifier = Modifier.fillMaxSize(),
+                        strokeWidth = 2.5.dp,
+                        color = ringColor,
+                        trackColor = cs.surfaceVariant,
+                    )
+                    Text(
+                        text = "${(ratio * 100).toInt()}",
+                        fontSize = scaled(8),
+                        color = ringColor,
+                        maxLines = 1,
+                    )
                 }
             }
         }
@@ -5489,6 +6664,10 @@ fun HistoryDrawer(
     onClose: () -> Unit,
     onNew: () -> Unit,
     onNewGenUi: () -> Unit,
+    /** 新建临时对话：不落盘、退出即消失。 */
+    onNewTemporary: () -> Unit = {},
+    /** 视频通话入口（2026-11-04 从顶栏挪进侧边栏）。 */
+    onVideoCall: () -> Unit = {},
     onPick: (String) -> Unit,
     onCopyAll: () -> Unit = {},
     onDelete: (String) -> Unit,
@@ -5501,6 +6680,7 @@ fun HistoryDrawer(
     val context = androidx.compose.ui.platform.LocalContext.current
     var lastGroup by remember { mutableStateOf("") }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
     var showDeleteAllConfirm by remember { mutableStateOf(false) }
     Column(
         Modifier
@@ -5544,6 +6724,32 @@ fun HistoryDrawer(
                 LucideIcon("square_pen", null, Modifier.size(18.dp), tint = Accent)
                 Spacer(Modifier.width(10.dp))
                 Text(stringResource(R.string.qk_00062), fontSize = scaled(14), color = AccentPress, fontWeight = FontWeight.SemiBold)
+            }
+            // 临时对话：与「新建对话」并排 —— 位置本身就是语义（同一次动作的两种模式：留下 / 不留下）。
+            // 内容永不落盘，切走即消失，所以不需要「退出临时对话」这种额外动作。
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(cs.surfaceVariant.copy(alpha = 0.55f))
+                    .clickable(onClick = onNewTemporary)
+                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LucideIcon("clock", null, Modifier.size(15.dp), tint = cs.onSurfaceVariant)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    stringResource(R.string.qk_04477),
+                    fontSize = scaled(13),
+                    color = cs.onSurface,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    stringResource(R.string.qk_04478),
+                    fontSize = scaled(10),
+                    color = cs.onSurfaceVariant.copy(alpha = 0.75f),
+                )
             }
             // 内置 GenUI Agent 入口：拉起独立的生成式界面智能体应用
             // （完整内置开源项目 GenUI-Agent，AI 产出 GenUI JSON DSL → 原生 Compose 组件）。
@@ -5623,10 +6829,52 @@ fun HistoryDrawer(
                     modifier = Modifier.size(18.dp),
                 )
             }
+            // 🔴 视频通话入口（2026-11-04 顶栏重新规划：从顶栏挪进侧边栏）。
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable {
+                        onClose()
+                        onVideoCall()
+                    }
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Filled.Videocam,
+                    contentDescription = null,
+                    tint = cs.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    stringResource(R.string.qk_00183),
+                    fontSize = scaled(14),
+                    color = cs.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.weight(1f))
+                Icon(
+                    Icons.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = Muted,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("搜索对话标题", fontSize = 13.sp) },
+            singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        )
         Spacer(Modifier.height(8.dp))
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-            history.forEach { item ->
+            val filtered = if (searchQuery.isBlank()) history else history.filter { it.title.contains(searchQuery, ignoreCase = true) }
+            filtered.forEach { item ->
                 if (item.group != lastGroup) {
                     lastGroup = item.group
                     Text(item.group, fontSize = scaled(12), color = Muted,
@@ -5745,6 +6993,7 @@ private fun SheetOverlay(
     onOpenPlugins: () -> Unit,
     onOpenSkills: () -> Unit,
     onOpenBots: () -> Unit,
+    onPhotoCaptured: (Uri) -> Unit = {},
     onManagePersona: () -> Unit,
     onOpenVoice: () -> Unit,
     onOpenTts: () -> Unit,
@@ -5764,7 +7013,11 @@ private fun SheetOverlay(
     onOpenFileManager: () -> Unit,
     onOpenAci: () -> Unit,
     onOpenMcp: () -> Unit,
+    onOpenAppCenter: () -> Unit,
+    onOpenBgProcess: () -> Unit,
+    onOpenExternalAccess: () -> Unit = {},
     onOpenCluster: () -> Unit,
+    onOpenWebSearch: () -> Unit = {},
     onOpenSystemStatus: () -> Unit,
     onOpenBgScreen: () -> Unit,
     onOpenDesktop: () -> Unit,
@@ -5828,7 +7081,8 @@ private fun SheetOverlay(
                         { q -> onSendText(q) },
                         scaled,
                         onOpenSchedule = onOpenSchedule,
-                        onOpenBots = onOpenBots
+                        onOpenBots = onOpenBots,
+                        onPhotoCaptured = onPhotoCaptured
                     )
                     SheetType.Voice -> VoiceSheetContent(onOpenTts, onOpenStt, onOpenVoice, scaled)
                     SheetType.Settings -> SettingsSheetContent(
@@ -5840,8 +7094,8 @@ private fun SheetOverlay(
                         onManagePersona, onOpenVoiceService,
                         onClearChat, settingsVoiceBallEnabled, onSettingsToggleVoiceBall,
                     settingsAiReplyNotify, onSettingsToggleAiReplyNotify,
-                        onOpenAbout, onOpenAci, onOpenMcp, onOpenCluster, onOpenSystemStatus, onOpenBgScreen, onOpenDesktop, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenHarnessHotUpdate, onOpenHarnessNotify, onOpenPhoneControl, onOpenFileManager,
-                        onOpenGitHub = onOpenGitHub, onOpenModelHub = onOpenModelHub, scaled
+                        onOpenAbout, onOpenAci, onOpenMcp, onOpenCluster, onOpenWebSearch, onOpenSystemStatus, onOpenBgScreen, onOpenDesktop, onOpenComponentGallery, onOpenAppearance, onExport, onClear, onOpenCleanup, onOpenHarnessHotUpdate, onOpenHarnessNotify, onOpenPhoneControl, onOpenFileManager,
+                        onOpenGitHub = onOpenGitHub, onOpenModelHub = onOpenModelHub, onOpenBots = onOpenBots, onOpenAppCenter = onOpenAppCenter, onOpenBgProcess = onOpenBgProcess, onOpenExternalAccess = onOpenExternalAccess, scaled
                     )
                     else -> {}
                 }
@@ -5892,6 +7146,7 @@ private fun SettingsSheetContent(
     onOpenAci: () -> Unit,
     onOpenMcp: () -> Unit,
     onOpenCluster: () -> Unit,
+    onOpenWebSearch: () -> Unit = {},
     onOpenSystemStatus: () -> Unit,
     onOpenBgScreen: () -> Unit,
     onOpenDesktop: () -> Unit,
@@ -5905,6 +7160,10 @@ private fun SettingsSheetContent(
     onOpenFileManager: () -> Unit,
     onOpenGitHub: () -> Unit,
     onOpenModelHub: () -> Unit,
+    onOpenBots: () -> Unit,
+    onOpenAppCenter: () -> Unit = {},
+    onOpenBgProcess: () -> Unit = {},
+    onOpenExternalAccess: () -> Unit = {},
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -5921,13 +7180,28 @@ private fun SettingsSheetContent(
         SetGroup {
             SetRowClickable(Icons.Filled.VolumeUp, stringResource(R.string.qk_03057), stringResource(R.string.qk_03846), "", onOpenVoiceService, scaled)
         }
-        GroupCaption(stringResource(R.string.qk_03831))
+        GroupCaption("模型服务")
         SetGroup {
             SetRowClickable(Icons.Filled.Tune, stringResource(R.string.qk_02103), stringResource(R.string.qk_03847), "", onOpenModelConfig, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.AutoAwesome, stringResource(R.string.qk_03835), stringResource(R.string.qk_03863), "", onOpenSkills, scaled)
-            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Build, stringResource(R.string.qk_03764), stringResource(R.string.qk_03862), "", onOpenFeatureModelConfig, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRowClickable(Icons.Filled.Hub, "外部连接", "本机 OpenAI 兼容端点（Base URL · API 密钥 · 调用记录），供外部工具把本应用当作模型服务", "", onOpenExternalAccess, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRowClickable(Icons.Filled.Extension, "MCP 与应用", "MCP 服务器 + 应用目录：扩展 AI 可调用的工具与资料源", "", onOpenMcp, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRowClickable(Icons.Filled.Memory, "后台进程", "查看与管理常驻服务（语音球 / 宠物 / Web UI / 机器人…）", "", onOpenBgProcess, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            // 🔴 「搜索服务」设置项删除（2026-11-04 用户裁定：界面乱搞）。
+            //    联网搜索的开关与 Key 配置仍由 QuroWebSearchSettingsScreen 保留在代码中，
+            //    后续重写后再挂回；web_search 工具的运行时开关不受影响。
+            SetRowClickable(Icons.Filled.Person, stringResource(R.string.qk_02449), stringResource(R.string.qk_03854), "", onManagePersona, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRowClickable(Icons.Filled.Download, stringResource(R.string.qk_03841), stringResource(R.string.qk_03861), "", onOpenModelHub, scaled)
+        }
+        GroupCaption(stringResource(R.string.qk_03831))
+        SetGroup {
+            SetRowClickable(Icons.Filled.AutoAwesome, stringResource(R.string.qk_03835), stringResource(R.string.qk_03863), "", onOpenSkills, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Security, stringResource(R.string.qk_03833), stringResource(R.string.qk_03867), "", onOpenPermission, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
@@ -5942,14 +7216,10 @@ private fun SettingsSheetContent(
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Public, stringResource(R.string.qk_03844), stringResource(R.string.qk_03870), "", onOpenGitHub, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Download, stringResource(R.string.qk_03841), stringResource(R.string.qk_03861), "", onOpenModelHub, scaled)
-            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Info, stringResource(R.string.qk_02642), stringResource(R.string.qk_03859), "", onOpenSystemStatus, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            // 后台虚拟屏/悬浮窗（移植 Mika）：统一入口——设置页只有「后台屏悬浮窗（跨 App）」
-            // 这一项。它同时承担 App 内画中画 + 跨 App 悬浮窗 + 宠物球形态。
-            // 点开关自动建屏 + 显示宠物球；× 释放虚拟屏 + 停止悬浮窗。
-            BgOverlayRow(scaled)
+            // 后台虚拟屏/悬浮窗（移植 Mika）：统一入口。
+            // 🔴 「虚拟屏默认宽度比例」滑块已挪到「外观与对话」（2026-11-04，属外观类偏好）。
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             // 桌面模式（libtaskbar）：官方唯一「当库引入」的 Android 10 桌面模式实现
             SetRowClickable(
@@ -5965,10 +7235,6 @@ private fun SettingsSheetContent(
             SetRowClickable(Icons.Filled.Info, stringResource(R.string.qk_03837), stringResource(R.string.qk_03865), "", onOpenComponentGallery, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Extension, stringResource(R.string.qk_00491), stringResource(R.string.qk_03851), "", onOpenPlugins, scaled)
-            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Person, stringResource(R.string.qk_02449), stringResource(R.string.qk_03854), "", onManagePersona, scaled)
-            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Hub, stringResource(R.string.qk_02058), stringResource(R.string.qk_03858), "", onOpenMcp, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.AccountTree, stringResource(R.string.qk_03946), stringResource(R.string.qk_04065), "", onOpenCluster, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
@@ -6018,6 +7284,7 @@ private fun SettingsSheetContent(
 @Composable
 private fun QuroAppearanceSettingsScreen(
     darkMode: Boolean, onToggleDark: () -> Unit,
+    darkModeTri: String, onSetDarkModeTri: (String) -> Unit,
     soundOn: Boolean, onToggleSound: () -> Unit,
     enterSend: Boolean, onToggleEnter: () -> Unit,
     fontName: String, onCycleFont: () -> Unit,
@@ -6028,9 +7295,14 @@ private fun QuroAppearanceSettingsScreen(
     userProfile: QuroChatViewModel.UserProfile,
     onSaveProfile: (QuroChatViewModel.UserProfile) -> Unit,
     onClose: () -> Unit,
+    accentHex: String = "C25A38",
+    onSetAccent: (String) -> Unit = {},
+    petEnabled: Boolean = false, onTogglePet: (Boolean) -> Unit = {},
+    onOpenPetSettings: () -> Unit = {},
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
 ) {
     val cs = MaterialTheme.colorScheme
+    var showDarkModePicker by remember { mutableStateOf(false) }
     // 视频通话入口需要 context 启动前台服务
     val vcCtx = LocalContext.current
     // 视频通话权限 launcher：与本页入口同一套（先授权 → 检查悬浮窗 → 拉起服务）
@@ -6058,9 +7330,87 @@ private fun QuroAppearanceSettingsScreen(
         ) {
             GroupCaption(stringResource(R.string.appearance_group_appearance))
             SetGroup {
-                SetRow(Icons.Filled.DarkMode, stringResource(R.string.appearance_dark_mode), stringResource(R.string.appearance_dark_mode_desc), darkMode, onToggleDark, scaled)
+                // 🔴 虚拟屏默认宽度比例（2026-11-04 从设置页挪进来：属「外观」类偏好）
+                BgOverlayRow(scaled)
+                // 深色模式三态：浅色 / 深色 / 跟随系统（点击弹出三选一）
+                val darkModeLabel = when (darkModeTri) {
+                    "dark" -> stringResource(R.string.appearance_dark_mode)
+                    "light" -> "浅色"
+                    else -> stringResource(R.string.qk_03872)
+                }
+                SetRowClickable(
+                    Icons.Filled.DarkMode,
+                    stringResource(R.string.appearance_dark_mode),
+                    stringResource(R.string.appearance_dark_mode_desc),
+                    darkModeLabel,
+                    { showDarkModePicker = true },
+                    scaled,
+                )
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 SetRowClickable(Icons.Filled.FormatSize, stringResource(R.string.appearance_font_size), "", fontName, onCycleFont, scaled)
+            }
+            if (showDarkModePicker) {
+                val options = listOf(
+                    "light" to "浅色",
+                    "dark" to stringResource(R.string.appearance_dark_mode),
+                    "system" to stringResource(R.string.qk_03872),
+                )
+                AlertDialog(
+                    onDismissRequest = { showDarkModePicker = false },
+                    title = { Text(stringResource(R.string.appearance_dark_mode)) },
+                    text = {
+                        Column {
+                            options.forEach { (mode, label) ->
+                                val selected = darkModeTri == mode
+                                Row(
+                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                                        .clickable { onSetDarkModeTri(mode); showDarkModePicker = false }
+                                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(label, Modifier.weight(1f), color = cs.onSurface, fontSize = scaled(15))
+                                    if (selected) Icon(Icons.Filled.Check, null, Modifier.size(18.dp), tint = Accent)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                )
+            }
+            // 主题强调色：点击色板切换，运行时注入 QuroTheme 立即生效（修复「换色无效」）。
+            GroupCaption("主题色")
+            SetGroup {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val cur = accentHex.uppercase()
+                    com.ai.assistance.quro.ui.theme.QuroAccentPresets.forEach { p ->
+                        val sel = p.hex.equals(cur, ignoreCase = true)
+                        Box(
+                            Modifier.size(30.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(com.ai.assistance.quro.ui.theme.parseQuroAccent(p.hex))
+                                .then(
+                                    if (sel) Modifier.border(
+                                        2.5.dp,
+                                        com.ai.assistance.quro.ui.theme.Accent,
+                                        androidx.compose.foundation.shape.CircleShape,
+                                    ) else Modifier
+                                )
+                                .clickable { onSetAccent(p.hex) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (sel) Icon(
+                                Icons.Filled.Check, null, Modifier.size(17.dp),
+                                tint = com.ai.assistance.quro.ui.theme.onAccent(
+                                    com.ai.assistance.quro.ui.theme.parseQuroAccent(p.hex),
+                                ),
+                            )
+                        }
+                    }
+                }
             }
             GroupCaption(stringResource(R.string.appearance_group_conversation))
             SetGroup {
@@ -6069,6 +7419,8 @@ private fun QuroAppearanceSettingsScreen(
                 SetRow(Icons.Filled.Keyboard, stringResource(R.string.appearance_enter_send), stringResource(R.string.appearance_enter_send_desc), enterSend, onToggleEnter, scaled)
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 SetRow(Icons.Filled.Mic, stringResource(R.string.appearance_voice_ball), stringResource(R.string.appearance_voice_ball_desc), voiceBallEnabled, { onToggleVoiceBall(!voiceBallEnabled) }, scaled)
+                SetRow(Icons.Filled.Favorite, stringResource(R.string.qk_04590), stringResource(R.string.qk_04591), petEnabled, { onTogglePet(!petEnabled) }, scaled)
+                SetRowClickable(Icons.Filled.Favorite, stringResource(R.string.qk_04735), stringResource(R.string.qk_04736), "", onOpenPetSettings, scaled)
                 HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 // 视频通话入口：拉起 QuroVideoCallService（相机 + 麦克风前台服务，
                 // 叠加「实时画面注入当前多模态模型」与 VIDEO_RECOGNITION 两层理解）。
@@ -6467,11 +7819,44 @@ private fun UploadSheetContent(
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit,
     onOpenSchedule: () -> Unit = {},
     onOpenBots: () -> Unit = {},
+    onPhotoCaptured: (Uri) -> Unit = {},
 ) {
     val ctx = LocalContext.current
     val cs = MaterialTheme.colorScheme
     var showUploadChooser by remember { mutableStateOf(false) }
     var showAiSearch by remember { mutableStateOf(false) }
+
+    // 拍照 → 对话框（多模态）：调系统相机，存私有目录并作为图片附件注入当前对话框。
+    var pendingCamUri by remember { mutableStateOf<Uri?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture(),
+    ) { ok ->
+        val uri = pendingCamUri
+        if (ok && uri != null) onPhotoCaptured(uri)
+        pendingCamUri = null
+    }
+    val camPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { res ->
+        if (res[android.Manifest.permission.CAMERA] == true) {
+            val uri = QuroCameraUtil.createOutputUri(ctx)
+            pendingCamUri = uri
+            cameraLauncher.launch(uri)
+        } else {
+            Toast.makeText(ctx, qstr(R.string.qk_04535), Toast.LENGTH_LONG).show()
+        }
+    }
+    fun launchCamera() {
+        val cam = ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+        if (cam) {
+            val uri = QuroCameraUtil.createOutputUri(ctx)
+            pendingCamUri = uri
+            cameraLauncher.launch(uri)
+        } else {
+            camPermLauncher.launch(arrayOf(android.Manifest.permission.CAMERA))
+        }
+    }
 
     // 应用内媒体浏览器（QuroMediaBrowser）覆盖层状态
     var showMediaBrowser by remember { mutableStateOf<String?>(null) }
@@ -6523,6 +7908,12 @@ private fun UploadSheetContent(
             title = { Text(stringResource(R.string.qk_00221), color = cs.onSurface) },
             text = {
                 Column(Modifier.fillMaxWidth()) {
+                    TextButton(
+                        onClick = { showUploadChooser = false; launchCamera() },
+                        Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.qk_04534), color = Accent, fontSize = scaled(14), fontWeight = FontWeight.SemiBold)
+                    }
                     listOf("图片" to "image/*", "文件" to "*/*", "视频" to "video/*").forEach { (label, mime) ->
                         TextButton(onClick = { showUploadChooser = false; onPickFile(mime) }, Modifier.fillMaxWidth()) {
                             Text(label, color = cs.onSurface, fontSize = scaled(14))
@@ -7235,7 +8626,7 @@ private fun extractSelfCardSpecs(text: String): List<CardSpec> {
 /**
  * 自研卡片挂载点（feat_self_card 唯一渲染入口，两处 selfCardBlocks 渲染都走这里）：
  *
- *  1) type 命中 [CardRegistry] 白名单（7 种）→ [CardSurface]（Canvas 自绘）；
+ *  1) type 命中 [CardRegistry] 白名单（7 种）→ [CardSurface]（Compose 合成）；
  *  2) 白名单外但组件库认识（weather/keyvalue/todo/pie…）→ 路由到富卡片渲染层
  *     （parseComponentSpec → CardSdk.parseObj → QuroChatCardView）。
  *     修复 2026-10-30 实测 bug：AI 把 ui_card 名册里的类型误写进 ```quro-card 围栏，
@@ -7254,7 +8645,11 @@ private fun SelfCardMount(spec: CardSpec, onCommand: (String) -> Unit, modifier:
     }
     if (card != null) {
         QuroChatCardView(card, onCommand = onCommand, modifier = modifier)
+        return
     }
+    // ③ 组件库也不认识这个 type → 回落到自研渲染层，由它按 data 形状推断（resolveOrInfer）。
+    //    这样「AI 自造了一个 type」时仍然能画出来，而不是整卡消失（旧版这里直接静默跳过）。
+    CardSurface(spec = spec, modifier = modifier)
 }
 
 /**
@@ -8146,7 +9541,13 @@ private fun CodeBlock(lang: String, code: String, scaled: (Int) -> androidx.comp
                                                 return true
                                             }
                                         }
-                                        loadDataWithBaseURL("https://localhost/", result, "text/html", "UTF-8", null)
+                                        loadDataWithBaseURL(
+                                            com.ai.assistance.quro.ui.chat.CardHtmlCompat.BASE_URL,
+                                            com.ai.assistance.quro.ui.chat.CardHtmlCompat.inject(result),
+                                            "text/html",
+                                            "UTF-8",
+                                            null,
+                                        )
                                     }
                                 }, modifier = Modifier.fillMaxSize())
                             }
@@ -8406,7 +9807,9 @@ private fun buildPreviewHtml(code: String, isHtml: Boolean, lang: String = ""): 
     }
 
     return if (isFullDoc || isHtml) {
-        if (isFullDoc) code else buildString {
+        // 🔴 完整 AI 文档也过兼容层（2026-11-04）：AI 写的页面常漏 viewport meta +
+        //    超宽元素，WebView 默认 980px 虚拟宽度渲染 → 组件「超出屏幕」。
+        if (isFullDoc) com.ai.assistance.quro.ui.chat.CardHtmlCompat.inject(code) else buildString {
             append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">")
             append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
             append("<base href=\"https://localhost/\">")
@@ -8689,6 +10092,15 @@ private fun exportConversation(ctx: Context, messages: List<Message>): String? {
 private fun fallbackPersona() = QuroPersona(name = "Zorv", description = qstr(R.string.qk_00280), avatarEmoji = "🤖")
 
 /** QuroMessage → MoWen Message（mine 由 role 决定）。 */
+/**
+ * 该工具是否已在气泡下方**单独渲染成卡片**，不应再进活动流（同一次调用出现两遍）。
+ * 注意只含这两个：zx_web_card / visual_card / speak 解析成功时聚合阶段已
+ * `return@forEach` 不进工具列表，只有解析失败的降级行才进 —— 那些必须保留，
+ * 否则卡片凭空消失又不在列表里，用户完全不知道 AI 干过什么。
+ */
+private fun isInlineRenderedTool(name: String): Boolean =
+    name == "visual_popup" || name == "visual_custom_popup"
+
 /** 判断工具结果是否为已知的垃圾值（旧版 bug 残留 / 异常调用）。渲染期与持久化迁移共用。 */
 private fun isGarbageToolResult(c: String): Boolean {
     if (c.isBlank() || c == "?" || c == "OK") return true
@@ -8696,6 +10108,21 @@ private fun isGarbageToolResult(c: String): Boolean {
     if (c.startsWith("33.")) return true
     return false
 }
+
+/**
+ * 判断一次工具调用是否**失败**（决定活动流里这一行是否染红）。
+ *
+ * 判定顺序（先看明确信号，再看文本特征）：
+ * 1. 结果为空 → 视为**还在执行**（不是失败）——流式期间结果未回填是常态。
+ * 2. 结果 JSON 里 `success=false` / `ok=false` / `error` 非空 → 失败。
+ * 3. 结果文本以错误特征开头（Error / error: / Traceback / … not found）→ 失败。
+ *
+ * 注意：不能只看「结果非空」就判失败 —— 大量工具成功时返回的是普通文本。
+ */
+private fun isFailedToolResult(t: com.ai.assistance.quro.ui.data.ToolCallUi): Boolean =
+    // 🔴 统一口径：此前这里与 QuroToolSummary.statusOf 各判一套，同一条结果
+    //    气泡染红、轮次归因却算成功。现在两者共用 core 层唯一实现。
+    com.ai.assistance.quro.core.model.QuroToolSummary.isFailedResult(t.result)
 
 private fun QuroMessage.toMessage(
     assistantName: String,
@@ -8785,12 +10212,194 @@ private fun formatChatTime(ts: Long): String {
     return f.format(Date(ts))
 }
 
+/**
+ * 一轮用量的展示文案：`3.2s · ↑1.2k ↓340 ⚡800`。
+ *
+ * 口径说明（写在这里，免得以后被当成 bug）：
+ * - `↑` 输入、`↓` 输出、`⚡` 命中缓存的输入 —— 都取自上游 `usage`，
+ *   `-1` 表示上游没给（此时整段省略，不显示 0，避免「这轮免费」的误解）；
+ * - 耗时是本轮墙钟时间（含工具执行），不是纯模型推理时间。
+ */
+private fun formatTurnUsage(u: QuroChatViewModel.TurnUsage): String? {
+    if (u.durationMs <= 0) return null
+    val parts = mutableListOf<String>()
+    val secs = u.durationMs / 1000.0
+    parts += if (secs >= 10) "${secs.toInt()}s" else String.format(Locale.getDefault(), "%.1fs", secs)
+    if (u.promptTokens >= 0) parts += "↑" + fmtTokens(u.promptTokens)
+    if (u.outputTokens >= 0) parts += "↓" + fmtTokens(u.outputTokens)
+    if (u.cachedTokens > 0) parts += "⚡" + fmtTokens(u.cachedTokens)
+    return qstr(R.string.qk_04476, parts.joinToString(" · "))
+}
+
+private fun fmtTokens(n: Int): String = when {
+    n < 0 -> "?"
+    n >= 1_000_000 -> String.format(Locale.getDefault(), "%.1fM", n / 1_000_000.0)
+    n >= 1_000 -> String.format(Locale.getDefault(), "%.1fk", n / 1000.0)
+    else -> n.toString()
+}
+
+/**
+ * 消息头部（名字·时间）长按菜单：在新对话中创建分支 / 编辑此消息 / 删除此消息。
+ * 挂在头部而不是正文 —— 正文长按必须留给自由选择文本（此前为此专门移除过父级长按）。
+ */
+@Composable
+private fun MessageHeaderMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onBranch: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.qk_04709), fontSize = 14.sp, color = cs.onSurface) },
+            leadingIcon = { Icon(Icons.Filled.AccountTree, null, Modifier.size(18.dp), tint = cs.onSurfaceVariant) },
+            onClick = onBranch,
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.qk_04710), fontSize = 14.sp, color = cs.onSurface) },
+            leadingIcon = { Icon(Icons.Filled.Edit, null, Modifier.size(18.dp), tint = cs.onSurfaceVariant) },
+            onClick = onEdit,
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.qk_04711), fontSize = 14.sp, color = cs.error) },
+            leadingIcon = { Icon(Icons.Filled.Delete, null, Modifier.size(18.dp), tint = cs.error) },
+            onClick = onDelete,
+        )
+    }
+}
+
+/**
+ * 「思考过程」弹层：全量展示一轮回复的推理过程。
+ *
+ * 触发：思考完成后点消息上的「思考了 N 秒 ›」胶囊。
+ * 流式期间的实时思考仍走消息内联展开区，两条路互不打断。
+ */
+@Composable
+private fun ThinkProcessSheet(think: ThinkBlock, onDismiss: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    // 入场动画：遮淡入 + 面板从底部滑入（与 ModalBottomSheet 的观感一致）。
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.35f))
+                .clickable(onClick = onDismiss, indication = null, interactionSource = remember { MutableInteractionSource() }),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(tween(180)) + slideInVertically(tween(260)) { it / 3 },
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                    color = cs.surface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.72f)
+                        .clickable(enabled = false, onClick = {}, indication = null, interactionSource = remember { MutableInteractionSource() }),
+                ) {
+                    Column(Modifier.fillMaxSize()) {
+                        // 拖动指示条
+                        Box(
+                            Modifier
+                                .padding(top = 10.dp)
+                                .size(width = 36.dp, height = 4.dp)
+                                .background(Muted.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
+                                .align(Alignment.CenterHorizontally),
+                        )
+                        Text(
+                            stringResource(R.string.qk_04708),
+                            fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface,
+                            modifier = Modifier.padding(top = 12.dp, start = 18.dp),
+                        )
+                        if (think.durationMs > 0) {
+                            val secs = think.durationMs / 1000.0
+                            Text(
+                                stringResource(
+                                    R.string.qk_04707,
+                                    if (secs >= 10) secs.toInt().toString()
+                                    else String.format(java.util.Locale.US, "%.1f", secs),
+                                ),
+                                fontSize = 12.sp, color = Muted,
+                                modifier = Modifier.padding(top = 2.dp, start = 18.dp),
+                            )
+                        }
+                        HorizontalDivider(color = Line.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 8.dp))
+                        // 🔴 弹层不再把 219 行原样平铺：先做相邻去重（多轮工具循环里
+                        //    「好的，让我执行。」会重复几十次），默认只给最近 40 步，
+                        //    更早的过程点「查看全部」再展开。旧实现一次性组合 219 个
+                        //    Text，既卡又把「思考过程」变成一堵墙。
+                        val cleanSteps = remember(think.steps) {
+                            val out = mutableListOf<String>()
+                            think.steps.forEach { raw ->
+                                val s = raw.replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim()
+                                if (s.isNotBlank() && out.lastOrNull() != s) out += s
+                            }
+                            out
+                        }
+                        var showAll by remember(think.steps) { mutableStateOf(false) }
+                        val collapsed = !showAll && cleanSteps.size > 40
+                        val visibleSteps = if (collapsed) cleanSteps.takeLast(40) else cleanSteps
+                        val hiddenCount = cleanSteps.size - visibleSteps.size
+                        if (hiddenCount > 0) {
+                            Text(
+                                "⋯ 已折叠较早的 $hiddenCount 步 · 点此查看全部（共 ${cleanSteps.size} 步）",
+                                fontSize = 11.sp,
+                                color = cs.primary,
+                                modifier = Modifier
+                                    .padding(horizontal = 18.dp, vertical = 4.dp)
+                                    .clickable { showAll = true },
+                            )
+                        }
+                        SelectionContainer {
+                            Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).padding(bottom = 24.dp)) {
+                                visibleSteps.forEach { step ->
+                                    Text(
+                                        step,
+                                        fontSize = 13.sp,
+                                        lineHeight = 20.sp,
+                                        color = cs.onSurface.copy(alpha = 0.88f),
+                                        modifier = Modifier.padding(bottom = 8.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 会话列表的时间分档：今天 / 昨天 / 近 7 天 / 近 30 天 / 更早。
+ *
+ * 🔴 按**日历日**算，不按 24 小时差值。旧实现用 `(now - ts) / 86400000`，
+ * 于是凌晨 1 点聊的会话，当天下午再看就被归进「本周」——
+ * 用户眼里的「昨天」和分档给出的「本周」永远对不上。
+ * 跨天判断必须落到 LocalDate 上，跟用户在系统相册、微信里看到的口径一致。
+ *
+ * 为什么分五档：三档（今天/本周/更早）在真实使用里退化严重 ——
+ * 「更早」会堆掉几百条，用户翻不到，也看不出自己最近在用哪个。
+ */
 private fun formatGroup(ts: Long): String {
-    val diffDays = ((System.currentTimeMillis() - ts) / 86_400_000L).toInt()
+    val zone = java.time.ZoneId.systemDefault()
+    val today = java.time.LocalDate.now(zone)
+    val day = java.time.Instant.ofEpochMilli(ts).atZone(zone).toLocalDate()
+    val days = java.time.temporal.ChronoUnit.DAYS.between(day, today).toInt()
     return when {
-        diffDays < 1 -> qstr(R.string.qk_00284)
-        diffDays < 7 -> qstr(R.string.qk_00285)
-        else -> qstr(R.string.qk_00286)
+        days <= 0 -> qstr(R.string.qk_00284)   // 今天（含未来时间的脏数据）
+        days == 1 -> qstr(R.string.qk_04473)   // 昨天
+        days < 7 -> qstr(R.string.qk_04474)    // 近 7 天
+        days < 30 -> qstr(R.string.qk_04475)   // 近 30 天
+        else -> qstr(R.string.qk_00286)        // 更早
     }
 }
 
@@ -10707,4 +12316,164 @@ private fun BgOverlayRow(scaled: (Int) -> androidx.compose.ui.unit.TextUnit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/**
+ * 上下文窗口明细弹窗。
+ *
+ * 回答三个最常问的问题：
+ * 1. 「我明明只说了两句话，为什么吃掉半个窗口？」—— 分段构成直接给出答案；
+ * 2. 「是什么把它挤爆的？」—— 消息/系统工具/技能/系统提示词/记忆文件 各占多少一目了然；
+ * 3. 「现在还剩多少？」—— 剩余空间与自动压缩预留，直接决定「还能聊几轮」。
+ *
+ * 数据全部来自 ContextWindowCalculator 的离线估算（±10% 量级），足够做结构判断。
+ */
+@Composable
+fun ContextWindowDialog(
+    usage: com.ai.assistance.quro.core.chat.ContextWindowUsage?,
+    onDismiss: () -> Unit,
+    onCompact: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = cs.surface,
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Text(stringResource(R.string.qk_04700), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = cs.onSurface)
+        },
+        text = {
+            if (usage == null || usage.window <= 0) {
+                Text(stringResource(R.string.qk_04701), fontSize = 13.sp, color = Muted)
+            } else {
+                Column {
+                    // ── 总览：大百分比 + 已用/窗口 ──
+                    val pct = usage.usedRatio * 100
+                    val pctText = if (pct >= 10) "${pct.toInt()}" else String.format(java.util.Locale.US, "%.1f", pct)
+                    Text(
+                        stringResource(R.string.qk_04702, pctText),
+                        fontSize = 22.sp, fontWeight = FontWeight.Bold, color = cs.onSurface,
+                    )
+                    Text(
+                        "${fmtTokens(usage.used)} / ${fmtTokens(usage.window)}",
+                        fontSize = 12.sp, color = Muted,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                    Spacer(Modifier.height(10.dp))
+
+                    // ── 分段彩色条：每段一种颜色，与下方明细一一对应 ──
+                    val segEntries = usage.segments.filter { it.tokens > 0 }
+                    val totalTok = usage.used.coerceAtLeast(1)
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                    ) {
+                        segEntries.forEach { seg ->
+                            Box(
+                                Modifier
+                                    .weight(seg.tokens.toFloat() / totalTok)
+                                    .fillMaxHeight()
+                                    .background(contextSegmentColor(seg.kind, cs))
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+
+                    // ── 分段明细（顺序：从「你改不了」到「你能改」）──
+                    segEntries.forEach { seg ->
+                        ContextSegmentRow(
+                            label = contextSegmentLabel(seg.kind),
+                            tokens = seg.tokens,
+                            ratio = seg.tokens.toFloat() / totalTok,
+                            color = contextSegmentColor(seg.kind, cs),
+                        )
+                    }
+                    HorizontalDivider(color = Line.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 8.dp))
+
+                    // ── 自动压缩预留 / 剩余空间 ──
+                    ContextSegmentRow(
+                        label = stringResource(R.string.qk_04704),
+                        tokens = usage.reservedForReply,
+                        ratio = usage.reservedForReply.toFloat() / usage.window,
+                        color = cs.tertiary.copy(alpha = 0.75f),
+                    )
+                    ContextSegmentRow(
+                        label = stringResource(R.string.qk_04705),
+                        tokens = usage.free,
+                        ratio = usage.free.toFloat() / usage.window,
+                        color = cs.surfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            // 压缩上下文：手动触发摘要压缩（忙时 VM 会拒绝并提示）
+            TextButton(
+                onClick = onCompact,
+                enabled = usage != null && usage.window > 0,
+            ) {
+                Text(stringResource(R.string.qk_04706), color = cs.primary, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.qk_00030), color = Muted)
+            }
+        },
+    )
+}
+
+/** 单行分段明细：色点 + 名称 + token 数 + 百分比。 */
+@Composable
+private fun ContextSegmentRow(label: String, tokens: Int, ratio: Float, color: Color) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(10.dp).background(color, CircleShape))
+        Spacer(Modifier.width(8.dp))
+        Text(label, fontSize = 13.sp, color = cs.onSurface, modifier = Modifier.weight(1f))
+        Text(
+            fmtTokens(tokens),
+            fontSize = 13.sp, color = cs.onSurface.copy(alpha = 0.85f),
+            textAlign = TextAlign.End, modifier = Modifier.width(64.dp),
+        )
+        Text(
+            "${Math.round(ratio * 1000) / 10.0}%",
+            fontSize = 11.sp, color = Muted,
+            textAlign = TextAlign.End, modifier = Modifier.width(52.dp),
+        )
+    }
+}
+
+/** 分段 → 中文标签（与截图口径一致：消息/系统工具/技能/系统提示词/记忆文件…）。 */
+private fun contextSegmentLabel(kind: com.ai.assistance.quro.core.chat.ContextSegmentKind): String = when (kind) {
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.MESSAGES -> "消息"
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.SYSTEM_TOOLS,
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.MCP_TOOLS -> "系统工具"
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.SKILLS -> "技能"
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.SYSTEM_PROMPT -> "系统提示词"
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.MEMORY -> "记忆文件"
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.INJECTED -> "本轮注入"
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.OTHER -> "其他"
+}
+
+/** 分段 → 颜色（蓝/橙/黄/灰/紫/红，一眼区分来源）。 */
+private fun contextSegmentColor(
+    kind: com.ai.assistance.quro.core.chat.ContextSegmentKind,
+    cs: androidx.compose.material3.ColorScheme,
+): Color = when (kind) {
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.MESSAGES -> Color(0xFF3B82F6)
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.SYSTEM_TOOLS,
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.MCP_TOOLS -> Color(0xFFF97316)
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.SKILLS -> Color(0xFFEAB308)
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.SYSTEM_PROMPT -> Color(0xFF9CA3AF)
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.MEMORY -> Color(0xFF8B5CF6)
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.INJECTED -> Color(0xFFEC4899)
+    com.ai.assistance.quro.core.chat.ContextSegmentKind.OTHER -> Color(0xFF6B7280)
 }

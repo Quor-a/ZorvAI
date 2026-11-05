@@ -30,7 +30,7 @@
     <string name="qk_00027">ACI应用: %1$s (包名: %2$s)</string>
     <string name="qk_00028" formatted="false">用户选择了：可视化弹窗，请立即调用visual_popup工具创建一个可视化弹窗</string>
     <string name="qk_00029" formatted="false">用户选择了：可视化询问，请立即调用visual_question工具创建一个可视化询问</string>
-    <string name="qk_00030" formatted="false">用户选择了：可视化小卡片，请立即在回复中用 ```quro-card 围栏输出一张自研可视化小卡片（指标/进度/结构化单块结果），纯文字回复禁止</string>
+    <string name="qk_00030" formatted="false">用户选择了：可视化小卡片（独立分类）。请立即调用 visual_card_skeleton(kind 按内容选) 取回 HTML 骨架，把 {{数据位}} 换成真实内容，再调用 visual_card(title, html=...) 输出一张内联小卡片。禁止用动态UI组件 / 富组件 / 可视化弹窗 / 网页预览 / quro-card 围栏顶替，纯文字回复禁止</string>
     <string name="qk_00031" formatted="false">用户选择了：动态UI组件，请立即在回复中用 ```quro-ui 围栏输出原生可交互界面（表单/面板/工具入口等），纯文字回复禁止</string>
     <string name="qk_00032" formatted="false">用户选择了：AIP文档排版，请用 ```aip 围栏（或 aip_compose 工具）输出整篇排版的文档/PPT/报告（doc/deck/mindmap），不要只回纯文本</string>
     <string name="qk_00033" formatted="false">已启用技能(${enabledSkillsCount}个): ${enabledSkills.joinToString(</string>
@@ -2403,7 +2403,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_02477" formatted="false">两项独立控制，互不影响。开 = 百分百主动使用；关 = 用户提醒才使用。</string>
     <string name="qk_02478" formatted="false">动态 UI 组件</string>
     <string name="qk_02479" formatted="false">开：AI 主动用 ```quro-ui 输出原生交互界面；关：仅用户要求时输出。</string>
-    <string name="qk_02480" formatted="false">开：AI 主动用 ```quro-card 输出自研小卡片；关：仅用户要求时输出。</string>
+    <string name="qk_02480" formatted="false">开：AI 主动调用 visual_card 工具输出可视化小卡片（可先用 visual_card_skeleton 取骨架）；关：仅用户要求时输出。</string>
     <string name="qk_02481" formatted="false">保存灵魂卡</string>
     <string name="qk_02482" formatted="false">标签管理</string>
     <string name="qk_02483" formatted="false">还没有标签，点右上角 + 新建。</string>

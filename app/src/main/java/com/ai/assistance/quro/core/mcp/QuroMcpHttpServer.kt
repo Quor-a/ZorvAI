@@ -32,7 +32,7 @@ import com.ai.assistance.quro.core.tools.toMcpTool
  * - `initialize`            → 返回协议能力 / serverInfo
  * - `notifications/initialized` 等通知类方法 → 202 空响应（通知，无 id）
  * - `ping`                  → {result:{}}
- * - `tools/list`            → 复用 [DroidMcp.listToolsJson]（47 个工具）
+ * - `tools/list`            → 复用 [DroidMcp.listToolsJson]（全量注册表），并映射成规范 `inputSchema`
  * - `tools/call`            → 复用 [DroidMcp.callTool]（经原创 QuroTool 引擎派发）
  *
  * 工具实现与「AI 默认动作空间」100% 同源：本 Server 与对话内的工具调用走同一份
@@ -47,6 +47,9 @@ class QuroMcpHttpServer(private val appContext: Context) {
 
     private var serverSocket: ServerSocket? = null
     private var acceptThread: Thread? = null
+
+    /** `initialize` 响应头下发的会话 ID；客户端后续请求应回带 `Mcp-Session-Id`。 */
+    private val sessionId: String = java.util.UUID.randomUUID().toString()
 
     @Volatile var port: Int = 0
         private set
@@ -100,12 +103,15 @@ class QuroMcpHttpServer(private val appContext: Context) {
             val method = parts[0]
             // 跳过其余请求头直到空行
             var contentLength = 0
+            var authHeader: String? = null
             while (true) {
                 val line = input.readLine() ?: break
                 if (line.isEmpty()) break
                 val lower = line.lowercase()
                 if (lower.startsWith("content-length:")) {
                     contentLength = lower.substringAfter(":").trim().toIntOrNull() ?: 0
+                } else if (lower.startsWith("authorization:")) {
+                    authHeader = line.substringAfter(":").trim()
                 }
             }
             val body = if (contentLength > 0) {
@@ -120,12 +126,15 @@ class QuroMcpHttpServer(private val appContext: Context) {
             } else ""
 
             when (method) {
-                "POST" -> dispatchRpc(sock, body)
+                // 🔴 /v1/* OpenAI 兼容端点已迁出：外部连接是独立服务（QuroExternalServer +
+                // QuroExternalAccessService，绑 0.0.0.0 局域网可达），与 MCP 暴露工具是两回事，
+                // 不能寄生在 MCP 服务的端口上——这里回归纯 MCP JSON-RPC。
                 "OPTIONS" -> send(sock, 204, "text/plain", "", mapOf(
                     "Access-Control-Allow-Origin" to "*",
                     "Access-Control-Allow-Methods" to "POST, OPTIONS",
                     "Access-Control-Allow-Headers" to "*"
                 ))
+                "POST" -> dispatchRpc(sock, body)
                 else -> send(sock, 405, "text/plain", "Method Not Allowed")
             }
         } catch (e: Throwable) {
@@ -162,7 +171,21 @@ class QuroMcpHttpServer(private val appContext: Context) {
                     .put("capabilities", JSONObject().put("tools", JSONObject()))
                     .put("serverInfo", JSONObject().put("name", "Zorv AI").put("version", BuildConfig.VERSION_NAME))
                 "ping" -> JSONObject()
-                "tools/list" -> JSONObject().put("tools", JSONArray(droidMcp.listToolsJson()))
+                // 🔴 MCP 规范要求每条工具带 `inputSchema`（JSON Schema 对象）。
+                //    InProcessTransport 内部用的是 `parameters`，直接透传会让严格 SDK 客户端
+                //    在 ["tools",0,"inputSchema"] 校验失败（QuroLocalMcpServer 早已修过，这里漏了）。
+                "tools/list" -> JSONObject().put("tools", JSONArray().apply {
+                    val raw = JSONArray(droidMcp.listToolsJson())
+                    for (i in 0 until raw.length()) {
+                        val t = raw.optJSONObject(i) ?: continue
+                        put(
+                            JSONObject()
+                                .put("name", t.optString("name", ""))
+                                .put("description", t.optString("description", ""))
+                                .put("inputSchema", mcpInputSchema(t)),
+                        )
+                    }
+                })
                 "tools/call" -> {
                     val name = params?.optString("name", "") ?: ""
                     val argsObj = params?.optJSONObject("arguments") ?: JSONObject()
@@ -180,7 +203,12 @@ class QuroMcpHttpServer(private val appContext: Context) {
 
             if (result != null) {
                 val resp = JSONObject().put("jsonrpc", "2.0").put("id", id).put("result", result)
-                send(sock, 200, "application/json", resp.toString(), mapOf("Access-Control-Allow-Origin" to "*"))
+                val headers = mutableMapOf("Access-Control-Allow-Origin" to "*")
+                if (method == "initialize") {
+                    headers["Mcp-Session-Id"] = sessionId
+                    headers["MCP-Protocol-Version"] = "2025-03-26"
+                }
+                send(sock, 200, "application/json", resp.toString(), headers)
             } else {
                 send(sock, 200, "application/json", jsonRpcError(id, -32601, "Method not found: $method"),
                     mapOf("Access-Control-Allow-Origin" to "*"))

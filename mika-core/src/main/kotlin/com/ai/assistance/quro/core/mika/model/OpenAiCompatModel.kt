@@ -17,10 +17,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * OpenAI Chat Completions 兼容端点(DeepSeek/Qwen/Kimi/GLM/OpenRouter/本地服务等)。差异只放在 [capabilities]。
@@ -30,6 +28,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
  * 有的服务商要求工具调用前后的思考接着回传,不回传就拒绝。只回传从这个地址收到的,别家给的思考不发
  * (不认这个字段的服务商不会收到它)。[reasoningField] 是模型列表里写明的思考字段(`reasoning_content` 或
  * `reasoning`):写明了的,来历不明的思考(旧版本存下的历史)也按它回传。
+ * 选了思考强度时另发 `reasoning_effort`;服务商没在列表里写档位的,这里不会收到值。
  */
 class OpenAiCompatModel(
     baseUrl: String,
@@ -40,6 +39,8 @@ class OpenAiCompatModel(
     reasoningField: String? = null,
     /** 每个请求都带的头(客户端标识、服务商要的会话号等,见 [ClientHeaders]);Key 的头由适配器自己加。 */
     private val headers: Map<String, String> = emptyMap(),
+    /** 用户选的思考强度(`reasoning_effort`);null 不发。 */
+    private val reasoningEffort: String? = null,
 ) : StreamingChatModel {
     override val name: String get() = model
     private val endpoint = baseUrl.trimEnd('/') + "/chat/completions"
@@ -54,12 +55,13 @@ class OpenAiCompatModel(
     }
 
     override suspend fun complete(system: String, messages: List<Message>, tools: List<ToolSpec>): ModelReply {
-        val (status, retryAfter, text) = HttpSupport.execute(http, request(system, messages, tools, stream = false))
+        val response = HttpSupport.execute(http, request(system, messages, tools, stream = false))
+        val (status, retryAfter, text) = response
         if (status !in 200..299) throw mapError(status, retryAfter, text)
         // 有的兼容端点不守 OpenAI 的默认值:没让流式也照样回 SSE(本地、局域网上的自建服务常见)。按流读完再拼,别把 `data:` 当成坏 JSON。
         if (!looksLikeEvents(text)) return parse(text)
         val stream = OpenAiStream({}, ::parseUsage, ::thinking)
-        eventsOf(text).forEach(stream::accept)
+        response.replay(eventsOf(text), stream::accept)
         return stream.finish()
     }
 
@@ -87,9 +89,10 @@ class OpenAiCompatModel(
         return stream.finish()
     }
 
-    private fun request(system: String, messages: List<Message>, tools: List<ToolSpec>, stream: Boolean, includeUsage: Boolean = true): Request {
+    private suspend fun request(system: String, messages: List<Message>, tools: List<ToolSpec>, stream: Boolean, includeUsage: Boolean = true): Request {
         val payload = buildJsonObject {
             put("model", model)
+            reasoningEffort?.let { put("reasoning_effort", it) }
             // 思考只在带工具的请求里回传(工具调用一步接一步时要接着想);不带工具的旁路调用不需要
             val replayReasoning = tools.isNotEmpty()
             val wire = listOf(buildJsonObject { put("role", "system"); put("content", system) }) +
@@ -108,7 +111,7 @@ class OpenAiCompatModel(
             .withHeaders(headers)
             .header("Accept", if (stream) "text/event-stream" else "application/json")
             .apply { if (!apiKey.isNullOrEmpty()) header("Authorization", "Bearer $apiKey") }
-            .post(payload.toString().toRequestBody("application/json".toMediaType()))
+            .postInference(InferenceProtocol.Chat, payload)
             .build()
     }
 
@@ -133,16 +136,7 @@ class OpenAiCompatModel(
         return JsonObject(m + ("content" to JsonArray(withMark)))
     }
 
-    private fun mapError(status: Int, retryAfter: String?, body: String): ModelError = ModelAccessErrors.of(status, body, model) ?: when {
-        status == 401 -> ModelError.Auth()
-        status == 402 || body.contains("insufficient_quota") -> ModelError.QuotaExceeded()
-        status == 429 -> ModelError.RateLimited(HttpSupport.retryAfterMs(retryAfter))
-        status == 400 && (body.contains("context_length") || body.contains("maximum context")) -> ModelError.ContextTooLong()
-        status == 404 -> ModelError.ModelNotFound(model)
-        status in 500..599 -> ModelError.Server(status)
-        status == 403 -> ModelError.Auth()
-        else -> ModelError.BadResponse("HTTP $status ${body.take(200)}")
-    }
+    private fun mapError(status: Int, retryAfter: String?, body: String): ModelError = ModelHttp.openAiError(status, retryAfter, body, model)
 
     private fun toolJson(t: ToolSpec): JsonObject = buildJsonObject {
         put("type", "function")
@@ -320,7 +314,9 @@ class OpenAiCompatModel(
         val inT = int(u, "prompt_tokens") ?: if (hit != null && miss != null) hit + miss else return null
         val outT = int(u, "completion_tokens") ?: 0
         val cached = maxOf(int(u["prompt_tokens_details"] as? JsonObject, "cached_tokens") ?: 0, hit ?: 0).coerceAtMost(inT)
-        return Usage(inT, outT, cached)
+        // completion_tokens 含思考;有的服务商在 completion_tokens_details.reasoning_tokens 里单独报
+        val reasoning = (int(u["completion_tokens_details"] as? JsonObject, "reasoning_tokens") ?: 0).coerceIn(0, outT)
+        return Usage(inT, outT, cached, reasoning)
     }
 }
 

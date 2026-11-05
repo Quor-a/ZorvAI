@@ -253,6 +253,21 @@ class QuroPersonaViewModel(context: Context) : ViewModel() {
             heartbeatScope.launch {
                 _incubatingStates.value = _incubatingStates.value + (p.id to true)
                 try {
+                    // 🔴 孵化/进化合体（2026-11-04，学习进步导向）：
+                    //  - 已在使用的人格（有 Soul 或记忆）→ 走**学习契约**（BotEvolution）：
+                    //    以记忆条目为素材产出 Soul 增量 + 关键事实 + 待学清单（openItems），
+                    //    合体后心跳孵化=「列作业+跟进」，不再重生成设定。
+                    //  - 全新人格（无 Soul 无记忆）→ 保留原 distill 生成初始设定（合理且必要）。
+                    val materialPersona = hbRepo.loadAll().firstOrNull { it.id == p.id } ?: p
+                    val memoryRepo = com.ai.assistance.quro.core.memory.QuroMemoryRepository(hbContext)
+                    val memories = materialPersona.memoryEnabled.let {
+                        runCatching { memoryRepo.loadForPersona(materialPersona.id) }.getOrDefault(emptyList())
+                    }
+                    val isEstablished = materialPersona.soul.isNotBlank() || memories.isNotEmpty()
+                    if (isEstablished) {
+                        runHeartbeatEvolution(materialPersona, memories, memoryRepo)
+                        return@launch
+                    }
                     val r = withTimeout(INCUBATE_TIMEOUT_MS) {
                         distill(p.name, p.description, hbTagRepo.resolve(p.tags))
                     }
@@ -328,6 +343,62 @@ class QuroPersonaViewModel(context: Context) : ViewModel() {
                 }
             }
             return lastError!!
+        }
+
+        /**
+         * 🔴 心跳孵化的**学习契约**（2026-11-04 孵化/进化合体）：
+         * 已在使用的人格不再重生成设定，而是跑 BotEvolution 学习管线——
+         * 以记忆条目为素材产出 Soul 增量 + 关键事实 + 待学清单（openItems），
+         * 非破坏性回写（mergeSoul/记忆入库/学习计划追加进孵化备忘）。
+         * 失败静默记 lastError，不打断心跳循环。
+         */
+        private suspend fun runHeartbeatEvolution(
+            persona: com.ai.assistance.quro.core.QuroPersona,
+            memories: List<com.ai.assistance.quro.core.memory.QuroMemoryEntry>,
+            memoryRepo: com.ai.assistance.quro.core.memory.QuroMemoryRepository,
+        ) {
+            try {
+                val transcript = memories.joinToString("\n") { "已知: ${it.content.take(200)}" }
+                    .ifBlank { "（暂无记忆条目，仅根据现有设定自我审视）" }
+                val prompt = com.ai.assistance.quro.core.soul.BotEvolution.buildPrompt(persona, transcript)
+                val cfg = hbModelRepo.load()
+                val effModel = com.ai.assistance.quro.core.model.QuroFunctionModelConfigRepository(hbContext)
+                    .resolveConfig(com.ai.assistance.quro.core.model.QuroFunctionType.PERSONA_INCUBATE, cfg).model
+                val res = hbClient.chat(
+                    cfg.baseUrl, cfg.apiKey, effModel,
+                    listOf(QuroChatMessage("user", prompt)),
+                    cfg.temperature, 1600, emptyList(),
+                )
+                val output = (res as? QuroLlmResult.Text)
+                    ?.let { com.ai.assistance.quro.core.soul.BotEvolution.parseOutput(it.content) }
+                    ?: run { writeIncubationDiag(persona, "学习契约输出不可解析"); return }
+                val latest = hbRepo.loadAll().firstOrNull { it.id == persona.id } ?: persona
+                val mergedSoul = com.ai.assistance.quro.core.soul.BotEvolution.mergeSoul(latest.soul, output.soulDelta)
+                var next = latest.copy(
+                    soul = mergedSoul,
+                    soulUpdatedAt = System.currentTimeMillis(),
+                    openItems = if (output.openItems.isNotEmpty()) output.openItems.joinToString("\n") { "- $it" } else latest.openItems,
+                )
+                if (output.openItems.isNotEmpty()) {
+                    val ts = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date())
+                    val memo = "📚 学习计划（自我进化 $ts）\n" + output.openItems.joinToString("\n") { "- $it" }
+                    next = next.copy(incubation = if (next.incubation.isBlank()) memo else "${next.incubation}\n$memo")
+                }
+                hbRepo.upsert(next)
+                output.memoryFacts.forEach { fact ->
+                    memoryRepo.add(
+                        com.ai.assistance.quro.core.memory.QuroMemoryEntry(
+                            personaId = persona.id,
+                            group = "进化沉淀",
+                            title = fact.take(40),
+                            content = fact,
+                            kind = com.ai.assistance.quro.core.memory.QuroMemoryKind.SEMANTIC.key,
+                        ),
+                    )
+                }
+            } catch (e: Exception) {
+                runCatching { writeIncubationDiag(persona, "学习契约失败: ${e.message}") }
+            }
         }
 
         private fun buildIncubatePrompt(name: String, description: String, tags: List<QuroTag>): String {

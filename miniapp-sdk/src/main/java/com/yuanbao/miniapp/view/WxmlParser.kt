@@ -101,8 +101,19 @@ class WxmlParser {
                     // 否则会让外层容器的 close 匹配失败、整段子内容被丢弃（AI 常写自闭合标签）。
                     i = gt + 1
                 } else {
-                    depth++
-                    i = nextOpen + openTag.length
+                    // 🔴 前缀误匹配修复（2026-11-04）：indexOf("<text") 会把 `<textarea>`
+                    //    也计成 `<text>` 的开标签（"view"/"viewx" 同理）→ 嵌套深度错乱、
+                    //    树结构损坏。开标签后一个字符必须是空白 / `>` / `/` 才算同名标签。
+                    val isSameTag = gt != -1 && gt > nextOpen &&
+                        (src[nextOpen + openTag.length] == '>' ||
+                            src[nextOpen + openTag.length] == '/' ||
+                            src[nextOpen + openTag.length].isWhitespace())
+                    if (isSameTag) {
+                        depth++
+                        i = nextOpen + openTag.length
+                    } else {
+                        i = nextOpen + openTag.length
+                    }
                 }
             } else {
                 if (depth == 0) return nextClose

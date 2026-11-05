@@ -29,8 +29,8 @@ internal class RunAssembler(private val providers: List<CapabilityProvider>) {
             (!child || it.id in setOf("web", "sandbox")) }
             .mapNotNull { it.open(spec) }
         val general = GeneralGroup.tools.filterNot { spec.provenance.attendance == Attendance.Unattended &&
-            it.verb in setOf(Verb.AskUser, Verb.RequestConfirmation, Verb.HandToUser, Verb.ScheduleTask, Verb.ProfileEdit) }
-            .filterNot { spec.provenance.origin == RunOrigin.Child && it.verb in setOf(Verb.SpawnAgent, Verb.MemorySave, Verb.ProfileEdit, Verb.ScheduleTask,
+            it.verb in setOf(Verb.AskUser, Verb.RequestConfirmation, Verb.HandToUser, Verb.ScheduleTask, Verb.ProfileEdit, Verb.SkillSave) }
+            .filterNot { spec.provenance.origin == RunOrigin.Child && it.verb in setOf(Verb.SpawnAgent, Verb.MemorySave, Verb.ProfileEdit, Verb.ScheduleTask, Verb.SkillSave,
                 Verb.AskUser, Verb.RequestConfirmation, Verb.HandToUser) }
             .filter { !readOnly || it.risk == Risk.Read }
         val capabilityTools = capabilities.flatMap { it.tools() }.filter { !readOnly || it.risk == Risk.Read ||

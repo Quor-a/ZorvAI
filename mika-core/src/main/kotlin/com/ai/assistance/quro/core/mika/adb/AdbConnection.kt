@@ -232,11 +232,12 @@ class AdbConnection private constructor(
                         throw AdbConnectionException(AdbConnectionException.Reason.TLS_FAILED, "TLS handshake failed", e)
                     }
                     val input = DataInputStream(ssl.inputStream)
-                    // TLS 1.3 里设备拒绝客户端证书发生在握手之后,表现为读第一个包时出错或断开
+                    // TLS 1.3 里设备拒绝客户端证书发生在握手之后,表现为读第一个包时出错或断开。
+                    // 客户端分不清是 adbd 不认这把钥匙,还是另一个服务接住了这次握手,由调用方再试(见 AdbConnectPort)
                     val cnxn = try {
                         AdbMessage.read(input)
                     } catch (e: SSLException) {
-                        throw AdbConnectionException(AdbConnectionException.Reason.UNAUTHORIZED, "device rejected our key", e)
+                        throw AdbConnectionException(AdbConnectionException.Reason.UNAUTHORIZED, "TLS rejected our certificate (key not paired, or another service took the handshake)", e)
                     } catch (e: IOException) {
                         if (e is java.net.SocketTimeoutException) throw AdbConnectionException(AdbConnectionException.Reason.PROTOCOL, "no CNXN from device", e)
                         null

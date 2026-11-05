@@ -41,6 +41,9 @@ class QuroLocalMcpServer(private val toolDefsJson: String) {
     private var serverSocket: ServerSocket? = null
     private var acceptThread: Thread? = null
 
+    /** 与 [QuroMcpHttpServer] 一致：initialize 下发会话 ID，供严格客户端回带。 */
+    private val sessionId: String = java.util.UUID.randomUUID().toString()
+
     @Volatile var port: Int = 0
         private set
     @Volatile var running: Boolean = false
@@ -217,7 +220,12 @@ class QuroLocalMcpServer(private val toolDefsJson: String) {
             }
             if (result != null) {
                 val resp = JSONObject().put("jsonrpc", "2.0").put("id", id).put("result", result)
-                send(sock, 200, "application/json", resp.toString(), mapOf("Access-Control-Allow-Origin" to "*"))
+                val headers = mutableMapOf("Access-Control-Allow-Origin" to "*")
+                if (method == "initialize") {
+                    headers["Mcp-Session-Id"] = sessionId
+                    headers["MCP-Protocol-Version"] = "2025-03-26"
+                }
+                send(sock, 200, "application/json", resp.toString(), headers)
             } else {
                 send(sock, 200, "application/json", jsonRpcError(id, -32601, "Method not found: $method"),
                     mapOf("Access-Control-Allow-Origin" to "*"))

@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.ui.dialog
 
+import com.ai.assistance.quro.ui.LatexMathText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -228,13 +229,58 @@ private fun splitTableRow(line: String): List<String> =
     line.trim().removePrefix("|").removeSuffix("|").split('|').map { it.trim() }
 
 /**
+ * 流式尾部定界符补全。
+ *
+ * 模型是一段一段吐字的：写到 `**加粗刚开头`、`$$` 公式还没收尾、行内代码只
+ * 打了半个反引号时，解析器会把「半个标记」当普通文本，下一帧补齐后整段又
+ * 重排 —— 表现就是对话框里的文字边生成边跳。
+ *
+ * 规则刻意保守，避免误伤终态文本：
+ *   1. 只扫描尾部 4096 字符，且**只在成对标记数为奇数、且最后一个 opener
+ *      紧贴文末（后面不超过 24 字符）**时补闭合串；正常闭合文本永远不动；
+ *   2. 围栏行（``` / ~~~）整行剔除后再数，代码块里的反引号不算；
+ *   3. 单个 `$` **不补**：中文语境里「$5」「价格 $ 起」太常见，误补会把
+ *      正文变成公式；只补成对的 `$$` 块级公式。
+ */
+private fun completeStreamingTail(src: String): String {
+    if (src.isEmpty()) return src
+    val tail = src.takeLast(4096)
+    val fenceFree = tail.replace(Regex("""(?m)^ {0,3}(```|~~~).*$"""), "")
+    fun occurrences(s: String, token: String): Int {
+        var n = 0
+        var i = 0
+        while (true) {
+            i = s.indexOf(token, i)
+            if (i < 0) break
+            n++
+            i += token.length
+        }
+        return n
+    }
+    fun unclosed(token: String): Boolean {
+        if (occurrences(fenceFree, token) % 2 == 0) return false
+        val last = fenceFree.lastIndexOf(token)
+        return fenceFree.length - (last + token.length) <= 24
+    }
+    var out = src
+    if (unclosed("**")) out += "**"
+    if (unclosed("~~")) out += "~~"
+    if (fenceFree.count { it == '`' } % 2 == 1 &&
+        fenceFree.length - (fenceFree.lastIndexOf('`') + 1) <= 24
+    ) out += "`"
+    if (unclosed("$$")) out += "\n$$"
+    return out
+}
+
+/**
  * 块级 Markdown 解析（纯函数）。
  *
  * 优先级：围栏代码 → 表格 → 标题 → 分隔线 → 引用 → 列表 → 段落。
  * 段落聚合规则遵循 CommonMark：**空行断段，行内换行不断段**。
  */
 fun parseMarkdown(src: String): List<MdBlock> {
-    val lines = src.replace("\r\n", "\n").replace('\r', '\n').split("\n")
+    val normalized = completeStreamingTail(src)
+    val lines = normalized.replace("\r\n", "\n").replace('\r', '\n').split("\n")
     val out = mutableListOf<MdBlock>()
     val footnotes = mutableListOf<FootnoteItem>()
     var i = 0
@@ -1236,10 +1282,12 @@ fun CodeSourceView(
 }
 
 /**
- * 块级数学公式：等宽居中展示 LaTeX 原文。
+ * 块级数学公式：**位图渲染**（公式走 Bitmap、不走气泡内 WebView）。
  *
- * 不做真 KaTeX 渲染 —— 气泡里每来一个公式就塞一个 WebView，长回答会直接卡死滚动。
- * 保证的是「公式不被 Markdown 拆烂」+「视觉上明确是公式」，可读性够用。
+ * 离屏渲染方案：KaTeX/Web 跑公式 → draw 成 Bitmap → Compose Image 嵌入；
+ * 本仓已有等价能力的 `LatexMathText`（jlatexmath 纯 Java 位图 + (latex,color) LRU
+ * 缓存 + 渲染失败回退源码），直接复用即可：既不在气泡里塞 WebView 拖慢长回答
+ * 滚动，也不会像旧实现那样只把 `E = mc^2` 当等宽文本摆着。
  */
 @Composable
 private fun MdMath(
@@ -1247,23 +1295,20 @@ private fun MdMath(
     cs: androidx.compose.material3.ColorScheme,
     base: TextStyle,
 ) {
-    Column(
+    Box(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(cs.surfaceVariant.copy(alpha = 0.4f))
+            // 宽公式由 Compose 侧横向滚动承载，不让它把整条消息顶宽。
+            .horizontalScroll(rememberScrollState())
             .padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = b.tex,
-            style = base.copy(
-                fontFamily = FontFamily.Monospace,
-                fontSize = 14.sp,
-                color = cs.primary,
-                lineHeight = 20.sp,
-            ),
-            textAlign = TextAlign.Center,
+        LatexMathText(
+            text = "$$" + b.tex + "$$",
+            color = cs.onSurface,
+            textSize = base.fontSize.value.coerceIn(16f, 22f),
         )
     }
 }

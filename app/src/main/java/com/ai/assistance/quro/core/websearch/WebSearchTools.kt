@@ -59,6 +59,10 @@ class WebSearchTool(private val toolName: String) : QuroTool {
         }
 
     override fun run(context: Context, arguments: String): String {
+        // 联网总开关：用户在「设置 → 搜索服务」关闭后，AI 调用联网工具时明确反馈，而非静默。
+        if (!WebSearchProvider.enabled()) {
+            return "联网搜索已被关闭。请在「设置 → 搜索服务」中打开「联网搜索」总开关后重试。"
+        }
         val orchestrator = WebSearchProvider.build(buildCompleter(context))
         return runBlocking {
             try {

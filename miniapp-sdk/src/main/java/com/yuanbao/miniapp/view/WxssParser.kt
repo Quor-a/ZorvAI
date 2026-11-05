@@ -78,9 +78,17 @@ class WxssParser {
             if (brace == -1) break
             val selectorText = css.substring(i, brace).trim()
             val close = css.indexOf('}', brace)
-            if (close == -1) break
-            val body = css.substring(brace + 1, close)
-            i = close + 1
+            // 🔴 容错修复（2026-11-04）：AI 常漏写右花括号 —— 旧实现直接 break，
+            //    「其后所有规则静默丢弃」（整页样式消失的来源之一）。改为把剩余部分
+            //    当作本条规则体继续解析，然后结束。
+            val body: String
+            if (close == -1) {
+                body = css.substring(brace + 1)
+                i = css.length
+            } else {
+                body = css.substring(brace + 1, close)
+                i = close + 1
+            }
             if (selectorText.isEmpty() || selectorText.startsWith("@")) continue
             val decls = parseDeclarations(body)
             for (sel in selectorText.split(",")) {
@@ -107,7 +115,17 @@ class WxssParser {
 
     private fun parseSelector(sel: String): Selector? {
         val parts = ArrayList<Selector.Part>()
-        for (raw in sel.split(Regex("\\s+"))) {
+        // 🔴 选择器容错（2026-11-04）：
+        //  1. 伪类/伪元素（:hover / ::after / :first-child）此前把 `:` 连同前缀吸进
+        //     tag buffer → `.card::after` 变成 tag "card::after"，规则永不匹配、静默丢弃。
+        //     现在把伪类段剥掉、只留基础选择器（不支持伪类渲染，但规则能匹配）。
+        //  2. 子代选择器 `>` 此前混进 tag（".a>.b" 变 tag "a>.b"）→ 同样永不匹配。
+        //     现在把 `>` 当空白（后代）分隔符处理。
+        val cleaned = sel
+            .replace(Regex("::?[A-Za-z-]+"), " ")   // 剥伪类/伪元素
+            .replace(">", " ")                       // 子代组合子 → 后代（近似）
+            .replace(Regex("\\[[^\\]]*\\]"), " ")    // 属性选择器剥掉（不支持）
+        for (raw in cleaned.split(Regex("\\s+"))) {
             val token = raw.trim()
             if (token.isEmpty()) continue
             var tag: String? = null

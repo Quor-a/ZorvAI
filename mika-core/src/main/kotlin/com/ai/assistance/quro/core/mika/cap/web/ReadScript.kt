@@ -22,7 +22,9 @@ const val READ_SLEEP_MAX_MS = 5_000
  *   函数只有登记过的只读方法(查找、读属性、量位置、迭代)能调,别的(点、聚焦、提交、改 DOM、开窗、跳转)都报 read_only。
  *   原生函数只拿到原件,模型拿到的永远是包装;模型能碰到的内置对象先冻住、全局名设成只读,改不了它们来截原件或换掉检查要用的函数。
  * - 密码、隐藏字段、验证码、银行卡一类输入框的值读出来是 `***`,输入框自己接口上只有 [SECRET_FIELD_PROPS] 能照读;
- *   同源 iframe、shadow root、template 里的也一样(认节点用原生 getter,不用 instanceof)。innerHTML 一类在不属于任何窗口的副本上打码,不跑页面代码。
+ *   同源 iframe、shadow root、template 里的也一样(认节点用原生 getter,不用 instanceof)。innerHTML 一类在不属于任何窗口的副本上打码,不跑页面代码;
+ *   外层元素里有带字的秘密 textarea 时,textContent 一类也在副本上取。秘密 textarea 的子文本节点、秘密输入框的 value 属性节点读出来是 `***`,
+ *   拿到以后脱离了页面也是。
  *   按 value 属性选元素不行(能逐位猜出值),选择器先照 CSS 的规矩还原再判断([SelectorPolicy])。
  *   选择器、属性名参数先变成字符串、只变一次:检查的就是交给浏览器的那一个。
  * - 读脚本不碰网络:fetch 调用就报 blocked_network([NETWORK_MESSAGE]);XMLHttpRequest、sendBeacon、WebSocket、EventSource、
@@ -175,7 +177,16 @@ ${SelectorPolicy.JS}  const DENIED = new Set(${js(DENIED_PROPS)});
   const getterOf = (C, k) => { const d = C && getDesc(C.prototype, k); return d && d.get; };
   const nodeTypeOf = getterOf(G.Node, 'nodeType'), localNameOf = getterOf(Elem, 'localName'), shadowHostOf = getterOf(G.ShadowRoot, 'host');
   const native = (g, x) => { if (!g || x === null || typeof x !== 'object') return undefined; try { return apply(g, x, []); } catch (e) { return undefined; } };
-  const tagOf = (x) => (native(nodeTypeOf, x) === 1 ? native(localNameOf, x) : undefined);
+  // 节点类型按对象记下来(同一个对象的类型不会变):读属性前多半要先认一次类型,不是节点的对象(集合、矩形、样式一类)上
+  // nodeType 的原生 getter 每次都抛错,同一个对象只认一次
+  const kinds = new WeakMap();
+  const typeOf = (x) => {
+    if (x === null || typeof x !== 'object') return undefined;
+    let t = kinds.get(x);
+    if (t === undefined) { t = native(nodeTypeOf, x) || 0; kinds.set(x, t); }
+    return t || undefined;
+  };
+  const tagOf = (x) => (typeOf(x) === 1 ? native(localNameOf, x) : undefined);
   const secretNow = (el) => {
     const tag = tagOf(el);
     if (tag === 'input') {
@@ -209,7 +220,7 @@ ${SelectorPolicy.JS}  const DENIED = new Set(${js(DENIED_PROPS)});
     const todo = [node];
     const inner = (t) => { const c = tagOf(t) === 'template' && native(contentOf, t); if (c) todo.push(c); };
     for (let i = 0; i < todo.length; i++) {
-      const n = todo[i], find = QSA[native(nodeTypeOf, n)];
+      const n = todo[i], find = QSA[typeOf(n)];
       inner(n);
       if (find) for (const x of apply(find, n, ['input, textarea, template'])) { if (tagOf(x) === 'template') inner(x); else out.push(x); }
     }
@@ -219,12 +230,13 @@ ${SelectorPolicy.JS}  const DENIED = new Set(${js(DENIED_PROPS)});
   // 副本放在一份不属于任何窗口的空文档里(建一次,以后接着用):自定义元素不构造,页面代码不跑,资源不加载。ShadowRoot 不能复制,把它的子节点放进一个 div。
   // 这样写出来的格式和页面自己的有两处不同,不影响打码:noscript 里的内容会转义;XHTML 页面写成 HTML 的格式
   let inert = null;
-  const html = (v, k) => {
-    const root = native(nodeTypeOf, v) !== 1;
+  // 打好码的副本;v 里没有秘密输入框时为 null,副本和原件对不上时为 MASK
+  const masked = (v) => {
+    const root = typeOf(v) !== 1;
     const orig = fields(v, root ? [] : [v]);
     let hit = false;
     for (const x of orig) if (secret(x)) { hit = true; break; }
-    if (!hit) return rget(v, k, v);
+    if (!hit) return null;
     const d = inert || (inert = doc.implementation.createHTMLDocument(''));
     let c;
     if (root) { c = d.createElement('div'); for (const n of v.childNodes) c.appendChild(d.importNode(n, true)); } else c = d.importNode(v, true);
@@ -236,16 +248,64 @@ ${SelectorPolicy.JS}  const DENIED = new Set(${js(DENIED_PROPS)});
       if (x.hasAttribute('value')) x.setAttribute('value', MASK);
       if (tagOf(x) === 'textarea' && x.textContent) x.textContent = MASK;
     }
-    return rget(c, k, c);
+    return c;
+  };
+  const html = (v, k) => { const c = masked(v); return c === null ? rget(v, k, v) : c === MASK ? MASK : rget(c, k, c); };
+  // 秘密 textarea 里的字就是它的初始值(页面把打进去的字写回初始值时也在这里)。外层元素、shadow root 的 textContent 带得出来;
+  // 没渲染出来的外层元素的 innerText 也是(这时 innerText 就是 textContent);textarea 在 option 里时,渲染出来的 innerText 也带
+  // (option 按它的 text 写出来);a、option 的 text,option 的 label、value,output 的 value、defaultValue 也按子孙的文字算。
+  // 这几样改在副本上打码再取。渲染出来的别的元素的 innerText 不含 textarea 里的字,照原样给
+  const textOf = getterOf(G.Node, 'textContent'), parentOf = getterOf(G.Node, 'parentNode'), closest = Elem && Elem.prototype.closest;
+  // 用 Map:属性名可以是 constructor、__proto__ 一类
+  const DESC = new Map([['text', new Set(['a', 'option'])], ['label', new Set(['option'])], ['value', new Set(['option', 'output'])], ['defaultValue', new Set(['output'])]]);
+  // v 里带字的秘密 textarea:没有为 0,有为 1,有在 option 里的为 2
+  const areasIn = (v) => {
+    const find = QSA[typeOf(v)];
+    let hit = 0;
+    if (find) for (const a of apply(find, v, ['textarea'])) if (secret(a) && native(textOf, a)) { hit = 1; if (closest && apply(closest, a, ['option'])) return 2; }
+    return hit;
+  };
+  const text = (v, k) => {
+    const x = rget(v, k, v);
+    if (!x || typeof x !== 'string') return x;
+    const hit = areasIn(v), shown = k === 'innerText' || k === 'outerText';
+    if (!hit || (shown && hit === 1 && x !== native(textOf, v))) return x;
+    const c = masked(v);
+    return c === null ? x : c === MASK ? MASK : DESC.has(k) ? rget(c, k, c) : native(textOf, c);
+  };
+  // 拿到过的秘密文字节点记下来,之后一直按秘密算:秘密 textarea 的子文本节点(XML 页面里也可能是 CDATA 段,它也是文本节点,也算在值里)、
+  // 秘密输入框的 value 属性节点。页面换掉 textarea 的字(把打进去的字写回初始值)、删掉 value 属性时,旧节点脱离文档,字还在上面。
+  // 节点在哪个框里也记下:交给模型时框还不是秘密的,后来变成秘密、字写进同一个节点、节点已不在那个框里(脱离了文档或被挪到
+  // 别的元素里)时,按那个框算
+  const held = new WeakSet(), ownerOf = new WeakMap();
+  const HELD_TEXT = new Set(['data', 'nodeValue', 'textContent', 'wholeText', 'length', 'value']);
+  const substringData = G.CharacterData && G.CharacterData.prototype.substringData;
+  const holds = (v) => {
+    if (held.has(v)) return true;
+    const t = typeOf(v);
+    let p;
+    if (t === 3 || t === 4) { p = native(parentOf, v); if (tagOf(p) !== 'textarea') p = undefined; }
+    else if (t === 2) { if (String(v.name).toLowerCase() !== 'value') return false; p = v.ownerElement; }
+    else return false;
+    if (p) ownerOf.set(v, p); else p = ownerOf.get(v);
+    if (!p || !secret(p)) return false;
+    held.add(v);
+    return true;
   };
   const readProp = (v, k) => {
     if (typeof k === 'string') {
       if (DENIED.has(k)) deny('reading ' + k);
-      if ((k === 'outerHTML' || k === 'innerHTML') && (native(nodeTypeOf, v) === 1 || (k === 'innerHTML' && native(shadowHostOf, v) !== undefined))) return html(v, k);
+      if ((k === 'outerHTML' || k === 'innerHTML') && (typeOf(v) === 1 || (k === 'innerHTML' && native(shadowHostOf, v) !== undefined))) return html(v, k);
       if (SECRET_TEXT.has(k) && secret(v)) { const x = rget(v, k, v); return x ? MASK : x; }
       if (!FIELD_SAFE.has(k) && fieldApi(v, k) && secret(v)) { const x = rget(v, k, v); return typeof x === 'function' ? x : MASK; }
-      if (native(nodeTypeOf, v) === 2 && SECRET_TEXT.has(k) && String(v.name).toLowerCase() === 'value' && v.ownerElement && secret(v.ownerElement)) {
-        const x = rget(v, k, v); return x ? MASK : x;
+      if (HELD_TEXT.has(k) && holds(v)) { const x = rget(v, k, v); return x ? MASK : x; }
+      if (k === 'textContent' || k === 'innerText' || k === 'outerText') return text(v, k);
+      const tags = DESC.get(k);
+      if (tags !== undefined) {
+        const tag = tagOf(v);
+        // select 的 value 是页面上选中的那个 option 的 value(副本里选中的不一定是它)
+        if (tag === 'select' && k === 'value' && areasIn(v)) { const i = rget(v, 'selectedIndex', v); return i < 0 ? '' : readProp(rget(v, 'options', v)[i], k); }
+        if (tags.has(tag)) return text(v, k);
       }
     }
     return rget(v, k, v);
@@ -267,7 +327,7 @@ ${SelectorPolicy.JS}  const DENIED = new Set(${js(DENIED_PROPS)});
       }
     }
     let p = toProxy.get(v);
-    if (!p) { p = makeProxy(v); toProxy.set(v, p); toReal.set(p, v); }
+    if (!p) { holds(v); p = makeProxy(v); toProxy.set(v, p); toReal.set(p, v); }
     return p;
   };
   const toNative = (a) => {
@@ -283,6 +343,7 @@ ${SelectorPolicy.JS}  const DENIED = new Set(${js(DENIED_PROPS)});
   const call = (f, self, xs) => {
     if (!SAFE.has(f)) { if (NETWORK.has(nameOf(f))) offline(); deny('calling ' + (nameOf(f) || 'this function')); }
     const t = toNative(self);
+    if (f === substringData && holds(t)) return MASK;
     const args = [];
     for (const x of xs) args.push(toNative(x));
     // 选择器、属性名先变成字符串、只变一次:对象的 toString 每次可以给不一样的,检查的必须就是交给浏览器的那一个

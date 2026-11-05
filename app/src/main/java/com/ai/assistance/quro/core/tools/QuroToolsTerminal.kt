@@ -149,6 +149,7 @@ class TerminalStatusTool : QuroTool {
         val interactiveBackend = when {
             QuroTerminalController.session?.mode == ShellMode.VM -> "proot/VM Linux"
             QuroTerminalController.session?.mode == ShellMode.LINUX -> "proot/Linux (Ubuntu)"
+            QuroTerminalController.session?.mode == ShellMode.TERMUX -> "termux 原生 (pkg)"
             QuroTerminalController.session?.mode == ShellMode.DEVICE -> "/system/bin/sh (Toybox)"
             else -> "none"
         }
@@ -174,6 +175,7 @@ class TerminalStatusTool : QuroTool {
             put("mode", when {
                 session == null -> "none"
                 session.mode == com.ai.assistance.quro.core.terminal.ShellMode.LINUX -> "linux"
+                session.mode == com.ai.assistance.quro.core.terminal.ShellMode.TERMUX -> "termux"
                 else -> "device"
             })
             put("busy", session?.busy ?: false)
@@ -191,7 +193,12 @@ class TerminalStatusTool : QuroTool {
                 QuroTerminalSessionManager.listSessions().find { it.isDefault }?.id ?: "default"
             } ?: "none")
             put("sessions", sessions)
-            put("note", "交互式终端(shell=$interactiveBackend) 与 terminal_exec(exec_source=$execSource) 共用同一套 Ubuntu rootfs；Ubuntu 用 apt 包管理。")
+            put(
+                "note",
+                "双环境：交互式终端(shell=$interactiveBackend) 与 terminal_exec(exec_source=$execSource) " +
+                    "现在分属两套 Linux。termux 侧用 pkg，沙箱侧用 apt，命令不通用；" +
+                    "在终端里用 zorv 切换、zorv which <命令> 查某条命令属于哪一侧、zorv status 看两套环境状态。",
+            )
         }.toString()
     }
 }

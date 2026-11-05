@@ -1,6 +1,17 @@
 package com.ai.assistance.quro.genui.sdk.components
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.ai.assistance.quro.genui.sdk.dsl.ComponentTypes
+import com.ai.assistance.quro.genui.sdk.render.ComponentRenderer
 import com.ai.assistance.quro.genui.sdk.render.ComponentRegistry
 import com.ai.assistance.quro.genui.sdk.components.patterns.InfoCardPattern
 import com.ai.assistance.quro.genui.sdk.components.patterns.StatCardPattern
@@ -636,6 +647,46 @@ object BuiltinComponents {
         registry.register(ComponentTypes.PAGER_DOTS) { c, ctx -> PagerDotsRenderer(c, ctx) }
         registry.register(ComponentTypes.LONG_PRESS_HINT) { c, ctx -> LongPressHintRenderer(c, ctx) }
         registry.register(ComponentTypes.DICE_DISPLAY) { c, ctx -> DiceDisplayRenderer(c, ctx) }
+
+        // ═══════════ Pattern 兜底注册（2026-11-04）═══════════
+        // ALL_TYPES 里声明、GenUISkill 模板也会输出，却一直没有 renderer 的 18 个
+        // pattern 类型 —— AI 一写就落「⚠ 未知组件」警示卡（用户看到的「渲染不完整」）。
+        // 先统一注册 PatternCardRenderer：类型名 overline + 卡片容器 + 尽力渲染
+        // children —— 视觉成立、内容不丢；后续再逐个升级为富渲染。
+        val patternFallback: ComponentRenderer = { c, ctx -> PatternCardRenderer(c, ctx) }
+        listOf(
+            "action_sheet_pattern", "bottom_tabs", "chat_bubble", "dashboard",
+            "data_row", "detail_page", "feature_grid", "form_page", "list_page",
+            "metric_group", "order_card", "post_card", "price_tag", "product_card",
+            "profile_page", "settings_group", "story_ring", "timeline_item",
+        ).forEach { registry.register(it, patternFallback) }
     }
 
+}
+
+/**
+ * Pattern 兜底渲染器（2026-11-04）：给 18 个无渲染分支的 pattern 类型一个
+ * 「视觉成立 + 内容不丢」的最小实现 —— 类型名做大写 overline、children 渲染进
+ * 卡片容器。比 FallbackRenderer 的警示卡好看，也不抢戏。
+ */
+@Composable
+fun PatternCardRenderer(component: com.ai.assistance.quro.genui.sdk.dsl.UIComponent, ctx: com.ai.assistance.quro.genui.sdk.render.RenderContext) {
+    val scheme = androidx.compose.material3.MaterialTheme.colorScheme
+    androidx.compose.material3.Surface(
+        color = scheme.surface,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = component.type.uppercase().replace('_', ' '),
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                color = scheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (component.children.isNotEmpty()) {
+                com.ai.assistance.quro.genui.sdk.render.RenderChildren(component.children, ctx)
+            }
+        }
+    }
 }

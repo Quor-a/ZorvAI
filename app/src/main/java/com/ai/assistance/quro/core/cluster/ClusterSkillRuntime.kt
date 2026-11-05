@@ -211,7 +211,11 @@ object ClusterSkillRuntime {
         // 为什么集群不要它：全局技能的激活工具读的是**全局库**正文，
         // 而集群技能是独立库里的规程。一旦放进来，集群角色就能绕过集群技能体系，
         // 直接抽全局技能正文 ——隔离弱了一半，而且它还恰好命中关键词被强得分优先下发。
-        val isolated = picked.filterNot { it.name.startsWith(GLOBAL_SKILL_TOOL_PREFIX) }
+        // 🔴 S2 修复（2026-11-06）：集群内部工具（cluster_*）对角色同样隔离 —— 调度权只归主持/用户，
+        // 否则执行角色能 cluster_start 递归开集群、cluster_remove_role 删别的角色、cluster_host_config 改熔断。
+        val isolated = picked.filterNot {
+            it.name.startsWith(GLOBAL_SKILL_TOOL_PREFIX) || it.name.startsWith("cluster_")
+        }
         return if (role.role.isVerifier) isolated.filterNot { it.name in MUTATING_TOOLS } else isolated
     }
 

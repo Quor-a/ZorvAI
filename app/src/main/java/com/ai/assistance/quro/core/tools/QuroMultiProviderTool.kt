@@ -282,9 +282,16 @@ class QuroMultiProviderTool(private val context: Context) : QuroTool {
         val config = repository.getConfigById(providerId)
             ?: return QuroToolResult.Error("找不到提供商: $providerId")
         
-        // 这里需要与 QuroFailoverManager 集成
-        // val failoverManager = QuroFailoverManager(repository, ...)
-        // failoverManager.switchToProvider(providerId)
+        // 直接落地「切换当前提供商」：改写故障转移状态里的 currentProviderId，
+        // 并重置失败计数/断路器（等价于 QuroFailoverManager.switchToProvider 的纯状态逻辑，
+        // 无需为切换状态拉起 LLM 网络栈）。
+        val state = repository.getFailoverState()
+        repository.saveFailoverState(state.copy(
+            currentProviderId = providerId,
+            consecutiveFailures = 0,
+            isCircuitOpen = false,
+            circuitOpenUntil = 0L,
+        ))
         
         return QuroToolResult.Success("已切换到提供商: ${config.name}")
     }

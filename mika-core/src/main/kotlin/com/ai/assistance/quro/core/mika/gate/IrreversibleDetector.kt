@@ -5,6 +5,7 @@ import com.ai.assistance.quro.core.mika.uistate.KeyCombo
 import com.ai.assistance.quro.core.mika.uistate.KeyModifier
 import com.ai.assistance.quro.core.mika.uistate.ScreenDiagnosis
 import com.ai.assistance.quro.core.mika.uistate.ElementContext
+import com.ai.assistance.quro.core.mika.uistate.Hant
 import com.ai.assistance.quro.core.mika.uistate.ScreenSnapshot
 import com.ai.assistance.quro.core.mika.uistate.UiElement
 import com.ai.assistance.quro.core.mika.risk.GateTarget
@@ -41,7 +42,7 @@ object IrreversibleDetector {
     val STRONG: Map<String, IrrevAction> = linkedMapOf(
         "支付" to IrrevAction.pay, "付款" to IrrevAction.pay, "转账" to IrrevAction.pay,
         "删除" to IrrevAction.delete, "撤回" to IrrevAction.delete,
-        "下单" to IrrevAction.order, "购买" to IrrevAction.order, "结算" to IrrevAction.order,
+        "下单" to IrrevAction.order, "购买" to IrrevAction.order, "结算" to IrrevAction.order, "结账" to IrrevAction.order,
         "取消订单" to IrrevAction.order, "确认收货" to IrrevAction.order, "退款" to IrrevAction.order,
         "转发" to IrrevAction.send,
     )
@@ -50,7 +51,7 @@ object IrreversibleDetector {
     val STATUS_SUFFIXES = listOf("成功", "记录", "售后", "明细", "方式", "列表", "中心", "入口", "码")
 
     /** 这些付款词只认按钮本身,或前面是「立即」「确认」「去」(「充值中心」「话费充值」「优惠买单」是入口,不算)。 */
-    val EXACT_PAY = listOf("收银台", "买单", "充值", "提现", "转出", "打赏", "缴费")
+    val EXACT_PAY = listOf("收银台", "买单", "充值", "储值", "提现", "转出", "打赏", "缴费")
     private val EXACT_PAY_PREFIXES = listOf("", "立即", "确认", "去")
 
     /** 红包只认按钮上的这几种说法(「微信红包」一类是聊天里的气泡)。 */
@@ -58,7 +59,7 @@ object IrreversibleDetector {
 
     /** 中文:等于词,或以词开头且只多出几个字(如「发送(1)」)。 */
     val PREFIX_WORDS: Map<IrrevAction, List<String>> = linkedMapOf(
-        IrrevAction.send to listOf("发送", "发布", "发表"),
+        IrrevAction.send to listOf("发送", "传送", "发布", "发表"),
         IrrevAction.delete to listOf("清空", "移除", "注销", "退出群聊"),
         IrrevAction.order to listOf("提交订单"),
     )
@@ -72,7 +73,7 @@ object IrreversibleDetector {
     private val BOOKING_PREFIXES = listOf("", "立即", "确认")
 
     /** 只认完全相等:「提交搜索」一类不拦。 */
-    val SUBMIT_WORDS = listOf("提交", "确认提交", "submit")
+    val SUBMIT_WORDS = listOf("提交", "确认提交", "送出", "submit")
 
     /**
      * 一点就替用户联系别人、投出申请的按钮(点下去网站就把招呼语、简历发给对方),按提交算:
@@ -104,7 +105,7 @@ object IrreversibleDetector {
 
     /** 弹窗、底部面板上的通用确认:同一屏上有强词或金额时才算。 */
     val GENERIC = listOf("确认", "确定", "ok", "完成", "confirm")
-    private val AMOUNT = Regex("[¥￥]\\s*\\d|\\d+(\\.\\d+)?\\s*元")
+    private val AMOUNT = Regex("[¥￥$＄]\\s*\\d|\\d+(\\.\\d+)?\\s*元")
     /** 带这些字的金额是合计,不论在不在可滚动区里都算上下文。 */
     val TOTAL_LABELS = listOf("合计", "实付", "应付", "总计")
     /** 同屏有金额时,这些字说明是付款面板(付款方式、收银台、验密)。 */
@@ -131,8 +132,8 @@ object IrreversibleDetector {
     )
 
     /** 输入框明确是搜索框才不算发送:其余输入框里回车一律按发送拦。提示语里找这些字,资源 ID 里按单词找 search。 */
-    private val SEARCH_FIELD = listOf("search", "搜索")
-    private val SEARCH_BUTTONS = setOf("搜索", "search")
+    private val SEARCH_FIELD = listOf("search", "搜索", "搜寻")
+    private val SEARCH_BUTTONS = setOf("搜索", "搜寻", "search")
 
     private const val KEY_ENTER = 66
     private const val KEY_NUMPAD_ENTER = 160
@@ -291,7 +292,7 @@ object IrreversibleDetector {
     fun paymentPage(s: ScreenSnapshot): String? {
         ScreenDiagnosis.paymentText(s.elements.map { it.name })?.let { return it }
         val shown = s.elements.filter { !it.editable && !it.hint }
-        val amount = shown.any { e -> TOTAL_LABELS.any { it in e.name } || AMOUNT.containsMatchIn(rowText(e, shown)) }
+        val amount = shown.any { e -> TOTAL_LABELS.any { it in Hant.fold(e.name) } || AMOUNT.containsMatchIn(rowText(e, shown)) }
         return if (amount && paySheet(shown)) "payment sheet with an amount" else null
     }
 
@@ -304,7 +305,7 @@ object IrreversibleDetector {
      * [hit] 是被点的元素(知道时):可滚动区里的金额只在被点的元素不在那个区里时才不算。
      */
     fun matchName(name: String, screen: ScreenSnapshot? = null, hit: UiElement? = null): IrrevAction? {
-        val raw = name.trim()
+        val raw = Hant.fold(name).trim()
         if (raw.isEmpty()) return null
         val n = raw.filterNot(Char::isWhitespace).lowercase()
         if (n in SUBMIT_WORDS) return IrrevAction.submit
@@ -337,7 +338,8 @@ object IrreversibleDetector {
 
     /** 短名字整体、或拼起来的名字的每一段里出现强词;先去掉付款方式一类的词。 */
     private fun strong(label: String): IrrevAction? {
-        for (p in listOf(label) + label.split(Regex("\\s+"))) {
+        val folded = Hant.fold(label)
+        for (p in listOf(folded) + folded.split(Regex("\\s+"))) {
             var t = p.filterNot(Char::isWhitespace).replace(PAYMENT_ADS, "")
             EXCLUDED.forEach { t = t.replace(it, "") }
             if (t.isEmpty() || t.length > STRONG_MAX_LEN) continue
@@ -369,7 +371,7 @@ object IrreversibleDetector {
         val scrollables = screen.elements.filter { it.scrollable }
         val amount = shown.any { e ->
             // 合计一类字样总算(金额可能拆在后面几段里,也可能还没加载出数);别的按整行拼起来认金额
-            TOTAL_LABELS.any { it in e.name } ||
+            TOTAL_LABELS.any { it in Hant.fold(e.name) } ||
                 (AMOUNT.containsMatchIn(rowText(e, shown)) && scrollables.none { s -> inside(e, s) && hit != null && !inside(hit, s) })
         }
         if (amount && paySheet(shown)) return IrrevAction.pay
@@ -382,14 +384,14 @@ object IrreversibleDetector {
      * 余额、密码、指纹、零钱只在下半屏、且下半屏有确认/支付一类按钮时才算。
      */
     private fun paySheet(shown: List<UiElement>): Boolean {
-        if (shown.any { e -> ORDER_CONTEXT.any { it in e.name.filterNot(Char::isWhitespace) } }) return false
+        if (shown.any { e -> ORDER_CONTEXT.any { it in Hant.fold(e.name).filterNot(Char::isWhitespace) } }) return false
         val bottomButton = shown.any { b ->
-            b.clickable && top(b) >= BOTTOM_REGION && b.name.filterNot(Char::isWhitespace).lowercase().let { n ->
+            b.clickable && top(b) >= BOTTOM_REGION && Hant.fold(b.name).filterNot(Char::isWhitespace).lowercase().let { n ->
                 n.trimEnd { !it.isLetterOrDigit() } in GENERIC || "支付" in n || "付款" in n
             }
         }
         return shown.any { e ->
-            val t = e.name.filterNot(Char::isWhitespace).replace(PAYMENT_ADS, "")
+            val t = Hant.fold(e.name).filterNot(Char::isWhitespace).replace(PAYMENT_ADS, "")
             PAY_SHEET_WORDS.any { it in t } || PAY_SHEET_ENGLISH.containsMatchIn(e.name) ||
                 listOf("支付", "付款").any { w -> occurrences(t, w).any { actionAt(t, w, it) } } ||
                 (bottomButton && top(e) >= BOTTOM_REGION && WEAK_PAY_SHEET_WORDS.any { it in t })
@@ -426,7 +428,7 @@ object IrreversibleDetector {
         if (e.editable) return true
         if (e.bounds.size != 4) return false
         val fields = s.elements.filter { it.editable && it.bounds.size == 4 && it !== e }
-        val n = e.name.filterNot(Char::isWhitespace).lowercase()
+        val n = Hant.fold(e.name).filterNot(Char::isWhitespace).lowercase()
         val clears = n in FIELD_CLEAR_WORDS || e.resourceId?.let { r -> "clear" in resourceWords(r) } == true
         // 框里没名字的小图标(清空 ×、语音):资源 ID 也说不出是发送一类时才算编辑;有名字的按钮(网页编辑区里的「发送」)照常判
         val bareIcon = n.isEmpty() && e.resourceId?.let(::matchResource) == null
@@ -531,19 +533,19 @@ object IrreversibleDetector {
         // 同一行有发送一类的按钮:是发消息的框(「搜索或提问」的聊天框),提示语说搜索也照样按发送判
         if (s != null && ElementContext.row(e, s).any { b -> b.clickable && !b.editable && sendLike(b.name) }) return false
         if (e.searchField || "search" in e.role.lowercase()) return true
-        val hint = listOfNotNull(e.name.takeIf { e.hint }, e.placeholder).joinToString(" ").lowercase()
+        val hint = Hant.fold(listOfNotNull(e.name.takeIf { e.hint }, e.placeholder).joinToString(" ")).lowercase()
         if (SEARCH_FIELD.any { it in hint } || e.resourceId?.let { "search" in resourceWords(it) } == true) return true
         if (s == null || e.bounds.size != 4) return false
         return s.elements.any { b ->
             b !== e && b.clickable && !b.editable && b.bounds.size == 4 &&
-                b.name.filterNot(Char::isWhitespace).lowercase() in SEARCH_BUTTONS &&
+                Hant.fold(b.name).filterNot(Char::isWhitespace).lowercase() in SEARCH_BUTTONS &&
                 (b.bounds[1] + b.bounds[3]) / 2 in e.bounds[1]..e.bounds[3]
         }
     }
 
     /** 按钮上是发送一类的字(发送、发布、发表、send)。 */
     private fun sendLike(name: String): Boolean {
-        val n = name.filterNot(Char::isWhitespace).lowercase()
+        val n = Hant.fold(name).filterNot(Char::isWhitespace).lowercase()
         if (n.isEmpty()) return false
         return PREFIX_WORDS.getValue(IrrevAction.send).any { n.startsWith(it) && n.length <= it.length + PREFIX_SLACK } || n == "send" || n == "post"
     }

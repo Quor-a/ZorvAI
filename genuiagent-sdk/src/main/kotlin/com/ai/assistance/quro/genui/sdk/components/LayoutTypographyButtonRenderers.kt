@@ -35,6 +35,9 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -535,7 +538,10 @@ fun ColumnRowRenderer(
                         is Dimension.Match -> Box(Modifier.weight(1f)) { RenderNode(child, ctx) }
                         is Dimension.Weight ->
                             Box(Modifier.weight(w.fraction.coerceIn(0.01f, 1f))) { RenderNode(child, ctx) }
-                        else -> RenderNode(child, ctx)
+                        // 🔴 根因1-②（2026-11-06）：固定宽/wrap 子节点在行尾被挤到 ≈0 宽时，
+                        //    内部 Text 逐字换行=竖排（真机截图「东南风 2 级」）。给 48dp 最小份额，
+                        //    内容再按 Ellipsis 收尾，行尾子节点永远可用。
+                        else -> Box(Modifier.weight(1f, fill = false).widthIn(min = 48.dp)) { RenderNode(child, ctx) }
                     }
                 }
                 }
@@ -543,8 +549,17 @@ fun ColumnRowRenderer(
         }
     } else {
         Column(
-            modifier = modifier.fillMaxWidth(),
-            verticalArrangement = ltbVerticalArrangement(component.style.arrangement, spacing),
+            modifier = modifier.fillMaxWidth().then(
+                // 🔴 固定高度 column：内容可滚不裁剪，钳回均匀排布（2026-11-06）
+                run {
+                    val fh = (component.style.height as? com.ai.assistance.quro.genui.sdk.dsl.Dimension.Fixed)?.dp
+                    if (fh != null && fh > 0f) Modifier.heightIn(max = fh.dp).verticalScroll(rememberScrollState()) else Modifier
+                }
+            ),
+            verticalArrangement = ltbVerticalArrangement(
+                if ((component.style.height as? com.ai.assistance.quro.genui.sdk.dsl.Dimension.Fixed) != null &&
+                    (component.style.height as com.ai.assistance.quro.genui.sdk.dsl.Dimension.Fixed).dp > 0f
+                ) "start" else component.style.arrangement, spacing),
             horizontalAlignment = ltbHorizontalAlign(component.style.crossAlignment)
         ) {
             // 纵向不做同样的处理：Column 高度常常是 wrap_content / 无限约束（页面层已滚动），
@@ -1021,8 +1036,12 @@ fun PositionedRenderer(
     ctx: RenderContext,
     modifier: Modifier = Modifier
 ) {
-    val x = component.propFloat("x", 0f)
-    val y = component.propFloat("y", 0f)
+    // 🔴 offset 钳制（2026-11-04）：x/y 此前裸读 props（完全绕过 GenUILayoutGuard），
+    //    AI 写 x:400,y:800 组件直接飞出屏。钳到 ±1.5×页面可用宽内。
+    val pageMax = com.ai.assistance.quro.genui.sdk.render.GenUILayoutGuard.LocalPageMaxWidth.current
+    val limit = pageMax * 1.5f
+    val x = component.propFloat("x", 0f).coerceIn(-limit, limit)
+    val y = component.propFloat("y", 0f).coerceIn(-limit, limit * 2f)
 
     Box(
         modifier = modifier

@@ -287,13 +287,42 @@ object QuroToolSummary {
 
     // ---------------- 状态判定 ----------------
 
+    /**
+     * 🔴 **唯一的工具失败判定口径**（渲染层与轮次归因共用）。
+     *
+     * 此前存在四套互不相干的判断：`isFailedToolResult`（ChatScreen，先 JSON 后 startsWith）、
+     * `QuroToolSummary.statusOf`（归因，contains）、`detectResultStatus`（死代码）、
+     * `looksLikeErrorOutput`（详情页，只看输出文本）。同一条
+     * `{"success":false,"message":"denied"}` 会在气泡里染红、却在归因里算成功。
+     *
+     * 顺序：显式结构化信号 → 停止标记 → 文本特征。结果为空 = 执行中（不是失败）。
+     */
+    fun isFailedResult(result: String?): Boolean {
+        val raw = result?.trim().orEmpty()
+        if (raw.isEmpty()) return false
+        runCatching {
+            val o = JSONObject(raw)
+            if (o.has("success") && !o.optBoolean("success", true)) return true
+            if (o.has("ok") && !o.optBoolean("ok", true)) return true
+            if (o.optString("error", "").isNotBlank()) return true
+            val code = o.optInt("exit_code", Int.MIN_VALUE)
+            if (code != Int.MIN_VALUE && code != 0) return true
+        }
+        val head = raw.take(300).lowercase()
+        return head.startsWith("error") || head.startsWith("失败") ||
+            head.contains("traceback") || head.contains("not found") ||
+            head.startsWith("exception") || head.contains("❌")
+    }
+
     fun statusOf(result: String, fam: Family): Status {
         val head = result.take(200)
-        // 🔴 终端类优先看退出码，比关键词可靠
+        // 🔴 终端类优先看退出码，比关键词可靠（exit 0 的输出里出现 "error" 字样仍是成功）
         if (fam == Family.TERMINAL) {
             val ec = detectExitCode(result)
             if (ec != null) return if (ec == 0) Status.SUCCESS else Status.ERROR
         }
+        // 结构化失败信号优先于关键词猜测，保证与 isFailedResult 结论一致。
+        if (isFailedResult(result)) return Status.ERROR
         return when {
             head.contains("❌") || head.contains("✗") || head.contains("Traceback") -> Status.ERROR
             head.contains("⚠") || head.contains("警告") || head.contains("warning") -> Status.WARNING

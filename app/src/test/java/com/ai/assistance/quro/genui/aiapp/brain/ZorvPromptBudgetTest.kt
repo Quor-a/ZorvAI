@@ -248,6 +248,57 @@ class ZorvPromptBudgetTest {
 
     // ── helpers ──────────────────────────────────────────────────────────
 
+    /**
+     * 优先名单是手写字符串，工具改名后会**静默失效**（不崩、不报错，只是不再优先）。
+     *
+     * 上一版把 `terminal_run` / `terminal_exec` / `terminal_write` / `terminal_status`
+     * 当成工具名写进了名单 —— 那四个其实是 `terminal` 工具的 action 值，注册表里没有，
+     * 于是「终端一族优先」从来没生效过；预算一紧，AI 的 tools 字段里一个终端工具都没有。
+     */
+    @Test
+    fun `priority names must all exist in the registry`() {
+        val real = ZorvPromptBudget.PRIORITY_TOOLS.map { spec(it, 10) }
+        assertTrue(
+            "名单自身应能全部对应上",
+            ZorvPromptBudget.missingPriorityNames(real).isEmpty(),
+        )
+        // 抽掉一个 → 必须被点出来，而不是继续静默
+        assertEquals(
+            listOf("termux"),
+            ZorvPromptBudget.missingPriorityNames(real.filter { it.name != "termux" }),
+        )
+    }
+
+    /** action 值不能当工具名：这是上一版真实踩过的坑，钉住防回归。 */
+    @Test
+    fun `action values are not tool names`() {
+        for (bogus in listOf("terminal_run", "terminal_exec", "terminal_write", "terminal_status")) {
+            assertFalse("$bogus 是 terminal 的 action，不是工具名", bogus in ZorvPromptBudget.PRIORITY_TOOLS)
+        }
+        for (real in listOf("termux", "terminal", "linux_run", "linux_pkg", "linux_status")) {
+            assertTrue("$real 是真实工具名，必须在优先名单里", real in ZorvPromptBudget.PRIORITY_TOOLS)
+        }
+    }
+
+    /**
+     * 优先**顺序**必须按名单声明顺序，而不是注册顺序。
+     *
+     * 否则「优先集」只保证成员身份、不保证先后，排在注册表末尾的关键工具照样被挤掉。
+     */
+    @Test
+    fun `priority order beats registration order`() {
+        // 每个约 7,030 字符，16K 窗口的额度（≈12,533）只放得下**一个**。
+        // 注册顺序里 termux 在前；声明顺序里 get_device_info 在前（它在名单首位）。
+        val all = listOf(spec("termux", 7_000), spec("get_device_info", 7_000))
+        val fit = ZorvPromptBudget.fitTools(
+            all,
+            budgetTokens = QuroModelContextBudgetTokens.SMALL_16K,
+            alreadyUsedChars = 0,
+        )
+        assertTrue("额度只够一个，应标记被裁剪", fit.truncated)
+        assertEquals(listOf("get_device_info"), fit.specs.map { it.name })
+    }
+
     private fun spec(name: String, chars: Int, desc: String = "说明".repeat(chars / 2)) =
         QuroToolSpec(
             name = name,

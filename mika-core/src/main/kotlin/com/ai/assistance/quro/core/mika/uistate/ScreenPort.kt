@@ -176,8 +176,28 @@ sealed interface ActionResult {
     data class Failed(val reason: String, val hint: String? = null) : ActionResult
 }
 
+/** 打开 App 时这个 App 正被另一个任务用着(同一个 App 同时只能在一块屏上)。 */
+const val APP_IN_USE_BY_OTHER_TASK = "app_in_use_by_other_task"
+
+/** [ScreenPort.awaitAppFree] 的结果。 */
+enum class AppWait {
+    /** 放开了,可以打开了。 */
+    Free,
+    /** 等到时限仍被占着。 */
+    TimedOut,
+    /** 占着它的任务正在等这个任务手里的 App:等下去谁也等不到,没有等。 */
+    WouldDeadlock,
+    /** 这个端口不和别的任务争 App,没什么可等。 */
+    Unsupported,
+}
+
 /** Agent 观察和操作手机屏幕的唯一入口,由 Android 模块实现。 */
 interface ScreenPort {
+    val appAccess: com.ai.assistance.quro.core.mika.access.AppAccessPolicy get() = com.ai.assistance.quro.core.mika.access.AppAccessPolicy.ALLOW
+
+    /** 仅核对窗口归属,不读取屏幕内容。空屏可用;有窗口但归属未知时拒绝。 */
+    suspend fun checkAppAccess() {}
+
     suspend fun snapshot(): ScreenSnapshot
 
     /** 读一屏但不登记编号(模型手里的 ref 不受影响);不可逆判定用。 */
@@ -226,6 +246,13 @@ interface ScreenPort {
     suspend fun openAppCopy(packageName: String, userId: Int, cold: Boolean = false): ActionResult = ActionResult.Failed("unsupported")
 
     /**
+     * [packageName](另一份用户 [userId] 里的那份;null 是本来那份)正被另一个任务用着时([APP_IN_USE_BY_OTHER_TASK]),
+     * 最多等 [timeoutMs] 到它放开。只是等,不打开:等到了调用方再打开一次。占着它的任务自己正在等这个任务手里的
+     * App(互相等,谁也等不到)时不等,当场返回 [AppWait.WouldDeadlock]。不和别的任务争 App 的端口返回 [AppWait.Unsupported]。
+     */
+    suspend fun awaitAppFree(packageName: String, userId: Int?, timeoutMs: Long): AppWait = AppWait.Unsupported
+
+    /**
      * 在 Agent 的屏上打开一个链接或安卓设置页([action] 为 null 时按 VIEW 打开 [uri]);[packageName] 限定由哪个 App 打开。
      * 失败原因:link_unresolved(没有 App 能打开)、invalid_link、app_in_use_by_user。不支持的端口返回 unsupported。
      */
@@ -271,6 +298,11 @@ interface ScreenPort {
 
     /** 能打开的另一份 App(装在分身、工作资料一类的另一份用户里,规则见 [AppCopies]);查不到或不支持时为空。 */
     suspend fun appCopies(): List<AppCopy> = emptyList()
+
+    /**
+     * 任务结束时这份 App 怎么办(见 [AfterTaskMarks]):只记下,此刻什么也不动。不支持的端口(没有任务结束时的去留)为 null。
+     */
+    val afterTask: AfterTaskMarks? get() = null
 
     /** 屏幕诊断;端口不支持时为 null,由调用方按元素列表粗判。 */
     suspend fun checkScreen(): ScreenCheck? = null

@@ -13,6 +13,8 @@ data class Capabilities(
     val promptCaching: PromptCaching = PromptCaching.Implicit,
     /** 服务商明确公布的一次请求图片上限;未知时不猜。 */
     val maxImages: Int = Int.MAX_VALUE,
+    /** 可选的本地压缩触发点，按整份请求的 token 数计。 */
+    val compactionTriggerTokens: Int? = null,
 )
 
 /**

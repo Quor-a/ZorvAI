@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Mic
@@ -60,6 +61,7 @@ fun QuroVoiceSettingsScreen(
 
     var emotionEnabled by remember { mutableStateOf(QuroVoiceFeaturePrefs.getEmotionTagsEnabled(ctx)) }
     var voiceColorRouting by remember { mutableStateOf(QuroVoiceFeaturePrefs.getVoiceColorRoutingEnabled(ctx)) }
+    var petMode by remember { mutableStateOf(QuroVoiceFeaturePrefs.getVoiceBallPet(ctx)) }
 
     val cs = MaterialTheme.colorScheme
 
@@ -319,6 +321,28 @@ fun QuroVoiceSettingsScreen(
             }
 
             Spacer(Modifier.height(12.dp))
+
+            // ── 08 桌面宠物 ────────────────────────────────────────────────
+            ChapterLabel("08", "桌面宠物")
+            SetGroup {
+                Column {
+                    SetRow(
+                        icon = Icons.Filled.Favorite,
+                        name = "桌面宠物模式",
+                        sub = "悬浮语音球以所选宠物形象显示，随思考/工具调用/回复切换表情与气泡",
+                        checked = petMode,
+                        onToggle = { petMode = !petMode; QuroVoiceFeaturePrefs.setVoiceBallPet(ctx, petMode) },
+                    )
+                    if (petMode) {
+                        HorizontalDivider()
+                        Text(
+                            "开启后，语音球将渲染为「宠物设置」页所选的宠物形象。请在设置 → 宠物里选择并开启宠物显示。",
+                            style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }

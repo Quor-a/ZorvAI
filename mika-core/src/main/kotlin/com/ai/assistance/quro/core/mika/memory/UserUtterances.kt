@@ -3,7 +3,8 @@ package com.ai.assistance.quro.core.mika.memory
 import java.text.Normalizer
 
 /**
- * 用户本人在这次任务里说的话:目标原文、追问的回答、接管交回时的备注。
+ * 用户本人在这次任务里说的话:开局、插话和追问的回答里他自己的话(带的屏幕、浏览器页的页面说明、引的 ZorvAI 的回答和附件行不算,
+ * 引的他自己说过的话算)、接管交回时的备注。
  * 记忆的 `quote` 必须是其中某句的子串(全半角统一、去首尾空白后比较)——屏幕、网页、工具结果里的字不算。
  */
 class UserUtterances {

@@ -2482,7 +2482,10 @@ private fun SheetBaseRenderer(
         SheetSide.END -> RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)
     }
     val sizing = when (side) {
-        SheetSide.START, SheetSide.END -> Modifier.width(280.dp).fillMaxHeight()
+        // 🔴 移动端适配修复（2026-11-04）：280dp 定宽 + fillMaxHeight 内联渲染时
+        //    占掉版心 80% 且高度无界。侧开改为满宽纵向收起态语义（真正的抽屉
+        //    定位由外层 Box 覆盖层决定时仍可用 widthIn 收窄）。
+        SheetSide.START, SheetSide.END -> Modifier.fillMaxWidth()
         SheetSide.TOP, SheetSide.BOTTOM -> Modifier.fillMaxWidth()
     }
     Surface(

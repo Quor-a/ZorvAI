@@ -3,6 +3,7 @@ import com.ai.assistance.quro.R
 import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
+import com.ai.assistance.quro.core.mcp.QuroMcpClientPrefs
 import org.json.JSONArray
 import com.ai.assistance.quro.core.tools.QuroToolSpecGuard
 import org.json.JSONObject
@@ -16,8 +17,8 @@ internal const val DEFAULT_SKILL_PARAMS =
  * 用户自定义「技能 / SKILL」数据模型。
  *
  * 与已有的 QuickJS 插件运行时（小程序式 UI 插件）、CMS v2 能力模块（系统级能力）互相独立：
- * - 技能更轻量：本质是一段「注入系统提示词的指令 + 简介」，让 AI 真正"拥有"某项能力/行为约束。
- * - 不做 UI 渲染、不跑 JS、不需要权限；开启后由 [QuroChatViewModel.buildSystemPrompt] 注入。
+ * - 技能更轻量：本质是一段「工作指令 + 简介」。
+ * - 不做 UI 渲染、不跑 JS、不需要权限；用户在对话框选中后，全文随那一条消息发给 AI。
  */
 data class QuroSkill(
     val id: String,
@@ -27,7 +28,14 @@ data class QuroSkill(
     val descriptionZh: String = "",
     /** 技能指令正文：注入系统提示词，作为 AI 的额外行为约束 / 能力说明。 */
     val prompt: String = "",
-    /** 是否启用（仅启用的技能注入系统提示词）。 */
+    /**
+     * 是否留在技能库列表里（归档位），**不再决定 AI 能不能用**。
+     *
+     * 2026-11-05 改造：旧语义是「开启=注入系统提示词」，可 AI 只能收到一句技能名列表，
+     * 根本不知道用户开了什么、更看不到正文 —— 开关不是一种发送方式。现在技能的生效路径
+     * 只有一条：用户在对话框选中 → 随该条消息发送全文（见 [QuroSkillStore.attachedBlock]）。
+     * 此字段仅保留给导入/导出、备份、旧数据兼容，并由一次性迁移统一置 true。
+     */
     val enabled: Boolean = true,
     /** 触发关键词（可选，仅作说明/将来自动匹配用，不参与注入）。 */
     val trigger: String = "",
@@ -52,6 +60,11 @@ data class QuroSkill(
      * - "unsigned" 随包未携带签名（旧版/外部导入）
      */
     val signState: String = "unknown",
+    /**
+     * 技能归属的 Bot（personaId）。空 = 全局共享（所有 Bot 可见）；
+     * 非空 = 仅该人格卡（Bot）注入/可调用，按人格卡隔离 Skills。
+     */
+    val personaId: String = "",
 ) {
     /** 导出为应用内 JSON 格式（与 parseSkillJson 互为反向，可被本 App 重新导入）。 */
     fun toExportJson(): JSONObject = JSONObject().apply {
@@ -62,6 +75,7 @@ data class QuroSkill(
         put("callable", callable); put("alwaysOn", alwaysOn)
         if (suite.isNotBlank()) put("suite", suite)
         if (signState != "unknown") put("signState", signState)
+        if (personaId.isNotBlank()) put("personaId", personaId)
     }
 
     /** 导出为开放标准 SKILL.md 文本（与 anthropics/skills 等生态兼容，可被其它技能系统识别）。 */
@@ -159,6 +173,7 @@ data class QuroSkill(
                 alwaysOn = o.optBoolean("alwaysOn", true),
                 suite = o.optString("suite", "").trim(),
                 signState = o.optString("signState", "unknown").trim(),
+                personaId = o.optString("personaId", "").trim(),
                 updatedAt = System.currentTimeMillis(),
             )
         }
@@ -304,6 +319,7 @@ object QuroSkillStore {
                         alwaysOn = o.optBoolean("alwaysOn", true),
                         suite = o.optString("suite", ""),
                         signState = o.optString("signState", "unknown").takeIf { it.isNotBlank() } ?: "unknown",
+                        personaId = o.optString("personaId", ""),
                     )
                 )
             }
@@ -583,12 +599,33 @@ object QuroSkillStore {
         }.getOrDefault(emptyList())
     }
 
+    /**
+     * 一次性迁移：把历史「被关掉」的技能全部放回技能库（enabled=true）。
+     *
+     * 背景：旧版把 enabled 当作「AI 能不能用」的总闸，用户关掉的技能既进不了目录、
+     * 也无法被 `skill` 工具加载，而 AI 完全无从知晓这个状态。现在 enabled 只表示
+     * 「是否留在库列表里」，且技能必须由用户在对话框选择后随消息发送，所以没有任何
+     * 理由让历史关停状态继续把技能藏起来。幂等（守卫 key），不影响用户自建技能。
+     */
+    private const val KEY_ENABLED_VISIBILITY_FIX = "quro_skill_enabled_visibility_v1"
+
+    fun migrateEnabledToLibraryVisibility(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_ENABLED_VISIBILITY_FIX, false)) return
+        prefs.edit().putBoolean(KEY_ENABLED_VISIBILITY_FIX, true).apply()
+        val list = loadRaw(context)
+        if (list.none { !it.enabled }) return
+        save(context, list.map { if (it.enabled) it else it.copy(enabled = true) })
+    }
+
     fun load(context: Context): List<QuroSkill> {
         clearBuiltinSkillsOnce(context)
         seedBuiltinZorvSkills(context)
         migrateBuiltinSkillsOff(context)
         migrateDesignSkillsOn(context)
         seedClusterV2Skills(context)
+        // 必须放在上面几个「把内置技能关掉」的迁移之后，否则老设备会立刻又被翻回 false。
+        migrateEnabledToLibraryVisibility(context)
         val out = mutableListOf<QuroSkill>()
         runCatching {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -610,6 +647,7 @@ object QuroSkillStore {
                         alwaysOn = o.optBoolean("alwaysOn", true),
                         suite = o.optString("suite", ""),
                         signState = o.optString("signState", "unknown").takeIf { it.isNotBlank() } ?: "unknown",
+                        personaId = o.optString("personaId", ""),
                     )
                 )
             }
@@ -655,6 +693,105 @@ object QuroSkillStore {
         return SkillVerifyReport(arr.length(), verified, failed, unsigned, failedNames)
     }
 
+    /**
+     * 🔴 从 GitHub 导入技能（2026-11-04）：仓库链接或 /tree/<分支>/<路径>。
+     * 下载 zipball → 内存解压 → 扫描所有 SKILL.md（subPath 过滤）→ parseSkillMd 逐个入库。
+     * 同名技能已存在则覆盖更新（保留原 id 与 enabled），否则新增。
+     * 返回 Pair(新增数, 更新数)；网络/解析异常向上抛由 UI Toast。
+     */
+    fun importFromGitHub(context: Context, url: String, personaId: String): Pair<Int, Int> {
+        // 解析 URL：仓库链接 / /tree/<分支>/<路径>
+        val m = Regex("^https?://github\\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)(?:/tree/([^/]+)((?:/[^/]+)*))?$")
+            .find(url.trim()) ?: throw IllegalArgumentException("无法识别的 GitHub 链接：支持仓库链接或 /tree/<分支>/<路径>")
+        val owner = m.groupValues[1]
+        val repo = m.groupValues[2].removeSuffix(".git")
+        val ref = m.groupValues[3].ifBlank { "main" }
+        val subPath = m.groupValues[4].trimStart('/').trimEnd('/')
+
+        val zipUrl = "https://codeload.github.com/$owner/$repo/zip/refs/heads/$ref"
+        val conn = (java.net.URL(zipUrl).openConnection() as java.net.HttpURLConnection).apply {
+            connectTimeout = 15_000; readTimeout = 30_000
+            instanceFollowRedirects = true
+        }
+        val bytes = if (conn.responseCode in 200..299) {
+            conn.inputStream.use { it.readBytes() }
+        } else {
+            // main 不存在时试 master（老仓库）
+            val fallback = "https://codeload.github.com/$owner/$repo/zip/refs/heads/master"
+            val c2 = (java.net.URL(fallback).openConnection() as java.net.HttpURLConnection).apply {
+                connectTimeout = 15_000; readTimeout = 30_000; instanceFollowRedirects = true
+            }
+            if (c2.responseCode !in 200..299) throw java.io.IOException("GitHub 下载失败 HTTP ${conn.responseCode}")
+            c2.inputStream.use { it.readBytes() }
+        }
+
+        return importZipBytes(context, bytes, personaId, subPath, requireSkill = true)
+    }
+
+    /**
+     * 🔴 技能包/ZIP 导入核心（2026-11-05）：扫描压缩包内全部 SKILL.md 逐个入库（同名覆盖），
+     * 并识别 .claude-plugin/plugin.json 的 mcpServers（url 型）自动注册为 MCP 服务器
+     * @return Pair(新增技能数, 更新技能数)
+     */
+    fun importZipBytes(context: Context, bytes: ByteArray, personaId: String, subPath: String = "", requireSkill: Boolean = false): Pair<Int, Int> {
+        val entries = LinkedHashMap<String, ByteArray>()
+        java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(bytes)).use { zin ->
+            while (true) {
+                val e = zin.nextEntry ?: break
+                if (!e.isDirectory) entries[e.name] = zin.readBytes()
+                zin.closeEntry()
+            }
+        }
+        val rootPrefix = entries.keys.map { it.substringBefore('/') }.minByOrNull { it.length } ?: ""
+        val skillMdPaths = entries.keys.filter {
+            (it.endsWith("/SKILL.md") || it == "SKILL.md")
+        }.filter { p ->
+            val rel = p.removePrefix("$rootPrefix/").removeSuffix("SKILL.md").trimEnd('/')
+            subPath.isBlank() || rel == subPath || rel.startsWith("$subPath/")
+        }
+        if (skillMdPaths.isEmpty() && requireSkill) throw java.io.IOException("压缩包内没找到 SKILL.md（分支/路径不对？）")
+        val existing = load(context).toMutableList()
+        var added = 0
+        var updated = 0
+        for (p in skillMdPaths) {
+            val md = String(entries[p] ?: continue, Charsets.UTF_8)
+            val parsed = parseSkillMd(md).firstOrNull() ?: continue
+            val idx = existing.indexOfFirst { it.name == parsed.name }
+            if (idx >= 0) {
+                existing[idx] = parsed.copy(id = existing[idx].id, enabled = existing[idx].enabled)
+                updated++
+            } else {
+                existing.add(parsed.copy(personaId = personaId))
+                added++
+            }
+        }
+        // ── .claude-plugin/plugin.json 的 mcpServers（url 型）→ 注册 MCP ──
+        val pluginJsonPath = entries.keys.firstOrNull { it.endsWith(".claude-plugin/plugin.json") }
+        if (pluginJsonPath != null) {
+            runCatching {
+                val pj = JSONObject(String(entries[pluginJsonPath] ?: return@runCatching, Charsets.UTF_8))
+                val servers = pj.optJSONObject("mcpServers") ?: return@runCatching
+                val keys = servers.keys()
+                while (keys.hasNext()) {
+                    val name = keys.next()
+                    val so = servers.optJSONObject(name) ?: continue
+                    val u = so.optString("url", "")
+                    if (u.isNotBlank()) {
+                        QuroMcpClientPrefs.add(context, com.ai.assistance.quro.core.mcp.QuroMcpClient.McpServerConfig(
+                            alias = name, url = u, kind = "remote", handshake = true,
+                        ))
+                    }
+                }
+            }
+        }
+        if (added + updated > 0) save(context, existing)
+        return added to updated
+    }
+
+    /** 从本地 ZIP/.skill 包导入（文件选择器路径）。 */
+    fun importSkillPackage(context: Context, bytes: ByteArray, personaId: String): Pair<Int, Int> =
+        importZipBytes(context, bytes, personaId, "", requireSkill = false)
+
     fun save(context: Context, list: List<QuroSkill>) {
         runCatching {
             val arr = JSONArray()
@@ -674,6 +811,7 @@ object QuroSkillStore {
                         put("alwaysOn", s.alwaysOn)
                         if (s.suite.isNotBlank()) put("suite", s.suite)
                         if (s.signState != "unknown") put("signState", s.signState)
+                        if (s.personaId.isNotBlank()) put("personaId", s.personaId)
                     }
                 )
             }
@@ -693,18 +831,139 @@ object QuroSkillStore {
         save(context, load(context).filter { it.id != id })
     }
 
-    /** 当前启用且含指令正文的技能（注入系统提示词用）。 */
+    /**
+     * 库内可用技能（含指令正文）。
+     * `enabled` 经 [migrateEnabledToLibraryVisibility] 统一为 true，这里只按「有没有正文」过滤；
+     * 它决定的是「目录里有哪些技能」，**不是** AI 能不能用 —— 能不能用由用户在对话框的选择决定。
+     */
     fun enabledList(context: Context): List<QuroSkill> =
         load(context).filter { it.enabled && it.prompt.isNotBlank() }
 
-    /** 当前「可调用」技能（启用 + callable + 含指令正文），用于注册为 AI 工具函数。 */
+    /** 注册为 function-calling 工具的技能（[QuroTool] 侧使用，与「随消息发送」是两条独立通道）。 */
     fun callableList(context: Context): List<QuroSkill> =
         load(context).filter { it.enabled && it.callable && it.prompt.isNotBlank() }
 
-    /** 按触发词匹配当前启用的技能（用于 send / voiceBallTurn 的按需预注入）。 */
+    /**
+     * 按 Bot 隔离过滤：只保留「全局技能（personaId 空）」或「归属该 personaId」的技能。
+     * personaId 为空 = 只取全局技能（无 Bot 上下文时兜底，避免把别的 Bot 专属技能串进来）。
+     */
+    fun scopedTo(list: List<QuroSkill>, personaId: String): List<QuroSkill> =
+        list.filter { it.personaId.isBlank() || it.personaId == personaId }
+
+    /** 当前 Bot 可见的库内技能（拼元数据目录用）。personaId 为空=仅全局技能。 */
+    fun enabledListFor(context: Context, personaId: String): List<QuroSkill> =
+        scopedTo(enabledList(context), personaId)
+
+    /**
+     * Skills Catalog：只注入元数据，每条一行、最多 64 条、描述超 240 字符截断。
+     *
+     * 技能全文有两条下发路径，都不依赖「开关」：
+     *  1. 用户在对话框选中 → [attachedBlock] 生成全文，作为隐藏 user 消息随那条消息发送（优先）；
+     *  2. AI 自行在目录里发现相关技能 → 调 skill 工具 → 全文作为 tool result 进当轮。
+     *
+     * 旧版把「启用」当闸门，可 AI 只收到名字列表，根本感知不到用户开了什么 —— 已废除。
+     * 目录每行格式：- [id=xxx] 名称: 描述。
+     */
+    fun skillsCatalog(context: Context, personaId: String): String {
+        val skills = enabledListFor(context, personaId)
+            .filter { it.name.isNotBlank() || it.description.isNotBlank() }
+            .take(64)
+        if (skills.isEmpty()) return ""
+        val header = "## Skills Catalog\n" +
+            "Only skill metadata is listed here. When a skill is relevant, call tool `skill` with `name` set to its id " +
+            "to load its full instructions before solving the task.（技能目录：按需调 `skill` 工具加载全文，不要凭目录臆测内容）\n" +
+            "If the user explicitly attached skills to their message, those full instructions are sent with that message " +
+            "and take priority over this catalog.（用户为某条消息选中的技能会随该消息下发全文，优先级高于本目录）"
+        val lines = skills.map { s ->
+            val id = s.id.ifBlank { s.name }
+            val name = s.name.ifBlank { id }
+            val desc = s.description.ifBlank { "（no description）" }
+                .let { if (it.length > 240) it.take(240) + "..." else it }
+            "- [id=$id] $name: $desc"
+        }.sorted()
+        val overflow = enabledListFor(context, personaId).size - skills.size
+        val more = if (overflow > 0)
+            "\n$overflow more skills are available but not listed here. If none of the listed skills fits, " +
+                "ask the user to pick the exact skill from the chat composer's skill picker — its full instructions " +
+                "will then be sent together with their message.（让用户到对话框「选择技能」里精确挑选，全文会随消息发给你）"
+        else ""
+        return header + "\n" + lines.joinToString("\n") + more
+    }
+
+    /** skill 工具执行：按 id 或名称在技能库中匹配，找不到返回提示。 */
+    fun findForTool(context: Context, idOrName: String, personaId: String): QuroSkill? {
+        val key = idOrName.trim()
+        if (key.isEmpty()) return null
+        val enabled = enabledListFor(context, personaId)
+        return enabled.firstOrNull { it.id.equals(key, ignoreCase = true) }
+            ?: enabled.firstOrNull { it.name.equals(key, ignoreCase = true) }
+            ?: enabled.firstOrNull { it.name.contains(key, ignoreCase = true) }
+    }
+
+    /**
+     * 按轮加载块：`skill` 工具的 tool result —— 全文 + 补充说明。
+     * 「for this turn」语义：指令随本次 tool result 存在于当轮上下文，下轮不自动续。
+     */
+    fun loadedBlock(skill: QuroSkill): String =
+        buildString {
+            append("## Skill loaded for this turn: ").append(skill.name).append('\n')
+            append(skill.prompt)
+            if (skill.trigger.isNotBlank()) {
+                append("\n\nTrigger words（用户消息命中这些词时也应优先使用本技能）: ").append(skill.trigger)
+            }
+        }
+
+    /**
+     * 隐藏消息固定前缀。发送链路靠它在构造本轮上下文时清掉上一轮的
+     * 附加技能块，保证「用户选的技能只对那一条消息生效」，不会在历史里越攒越多。
+     */
+    const val ATTACHED_MARKER = "[用户为本条消息附加了技能]"
+
+    /**
+     * 按 id 取回用户为本次消息选中的技能（按技能库顺序，去重）。
+     *
+     * 不做 `enabled` / `personaId` 过滤：用户**显式选中**就是最高优先级，
+     * 不能出现「选了却发不出去」这种又一种 AI 看不见的隐性状态。
+     */
+    fun byIds(context: Context, ids: List<String>, personaId: String = ""): List<QuroSkill> {
+        if (ids.isEmpty()) return emptyList()
+        val want = ids.toSet()
+        return load(context).filter { it.id in want && it.prompt.isNotBlank() }
+    }
+
+    /**
+     * 「选择 → 发给 AI → AI 使用」这条链路的载荷：**技能全文**，不是名字、不是开关状态。
+     *
+     * 作为隐藏 user 消息插在用户本条消息之前下发，措辞上明确告诉模型：
+     * 这是用户为**这一条**消息指定的工作指令，必须直接执行，且只对本轮有效。
+     */
+    fun attachedBlock(skills: List<QuroSkill>): String {
+        val list = skills.filter { it.prompt.isNotBlank() }
+        if (list.isEmpty()) return ""
+        return buildString {
+            append(ATTACHED_MARKER).append('\n')
+            append("用户为**紧随其后的这一条消息**明确选择了 ${list.size} 个技能。").append('\n')
+            append("这些不是背景资料，而是你本轮必须执行的工作指令：\n")
+            append("1. 直接按下面每个技能的步骤、约束与输出格式完成本条请求；不要只复述技能内容，也不要说「我没有加载该技能」。\n")
+            append("2. 多个技能冲突时按列出顺序优先；与用户本条消息冲突时，以用户本条消息为准。\n")
+            append("3. 这些技能只对这一条消息生效，之后的对话不要继续沿用。\n")
+            append("4. 全文已经在下面给出，不要再调用 skill 工具重复加载它们。\n")
+            list.forEachIndexed { i, s ->
+                append('\n').append("### 技能 ").append(i + 1).append("：").append(s.name).append('\n')
+                append(s.prompt.trim()).append('\n')
+            }
+            append("\n（以上技能仅对本条消息生效；现在请处理用户的下一条消息。）")
+        }
+    }
+
+    /**
+     * 按触发词匹配技能（用于 send / voiceBallTurn 的按需预注入）。
+     * 匹配**所有**技能（不限 enabled）：调用方自行决定「未开启但命中触发词」是否要按需兜底注入，
+     * 已开启的技能由常驻系统提示词负责，不需要这里再补。
+     */
     fun matchTriggerSkills(userText: String, context: Context): List<QuroSkill> {
         val t = userText.lowercase()
-        return enabledList(context).filter { s ->
+        return load(context).filter { s ->
             s.trigger.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
                 .any { t.contains(it) }
         }

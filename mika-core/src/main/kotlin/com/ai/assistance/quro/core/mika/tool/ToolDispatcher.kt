@@ -101,6 +101,9 @@ class ToolDispatcher internal constructor(
     fun preload(task: String, previous: Collection<String>): List<String> =
         capabilities.filter { it.folds && (it.id in previous || it.preload(task)) }.map { it.id }.filter(::expand)
 
+    /** 用户这句话去掉各能力的说明(见 [Capability.userWords]);他这次打的字还要再去掉引用和附件行,见 [com.ai.assistance.quro.core.mika.agent.UserWords.typed]。 */
+    fun userWords(text: String): String = capabilities.fold(text) { t, c -> c.userWords(t) }
+
     private fun openSet(): Set<String> = expanded.let { e -> if (e.any { it in screenGroups }) e + ToolGroups.SCREENS else e }
 
     /**
@@ -277,6 +280,8 @@ class ToolDispatcher internal constructor(
             try {
                 if (!tool.yieldsToSteer) tool.execute(args, ctx)
                 else waitOrSteer { tool.execute(args, ctx) } ?: failCode(SKIPPED_FOR_NEW_MESSAGE)
+            } catch (e: com.ai.assistance.quro.core.mika.access.AppAccessDenied) {
+                throw e
             } catch (e: ArgError) {
                 invalid(e)
             } catch (e: CancellationException) {

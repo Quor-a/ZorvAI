@@ -40,7 +40,7 @@ object ToolCapabilityDirectory {
         MEDIA("媒体", "音乐、视频、图片、音频处理"),
         UI_CARDS("UI/卡片", "对话框UI组件、可视化图表"),
         DYNAMIC_UI("动态UI", "quro-ui 原生组件：可交互原生界面、富媒体、可视化渲染"),
-        GENUI("生成式UI", "生成式 UI 画布（GenUI）：把「画界面」的活派给整屏画布，以及 Web 应用工程（HTML）与原生小程序工程（WXML）"),
+        GENUI("生成式UI", "生成式 UI 画布（GenUI）：把「画界面」的活派给整屏画布，以及 Web 应用工程（miniapp，HTML+WebView）与原生小程序工程（miniapp_sdk，WXML/WXSS）——Web 应用不是小程序，两套引擎别混"),
         KNOWLEDGE_MEMORY("知识/记忆", "记忆库、知识库、经验库"),
         WORKSPACE(qstr(R.string.qk_00025), "工作区文件管理"),
         ACCESSIBILITY("无障碍", "屏幕读取、点击、滑动等"),
@@ -54,6 +54,23 @@ object ToolCapabilityDirectory {
          * 混在一起会让 AI 在「别打扰用户」的场景下错误地选用无障碍工具。
          */
         VIRTUAL_SCREEN("后台虚拟屏", "在不打扰用户主屏的独立虚拟屏上启动/操作 App、截图"),
+        /**
+         * 看屏 / 屏幕操作（核心能力全家桶）。
+         *
+         * 🔴 为什么单列这一类：之前所有「看屏」相关工具被拆进 ACCESSIBILITY / VISUAL_INTERACT /
+         * AI_CAPABILITIES / ADB_DEBUG 四五个分类，AI 在「操控虚拟屏 / 读屏 / 截图 / 视觉分析」时
+         * 根本不知道自己还有哪些屏相关工具，只能凭记忆瞎用，用户反馈「AI 操控虚拟屏时不知道已有的
+         * 全部看屏工具」。这一类把**全部屏感知与屏操作能力**聚到一起，让 tool_router 的
+         * `list_tools(category="看屏/屏幕操作")` 一次列全。
+         *
+         * 与 [VIRTUAL_SCREEN] 的边界：`bg_screen`（后台虚拟屏）**仍单列** [VIRTUAL_SCREEN]，
+         * 因为它操作的是用户看不见的独立屏、不抢焦点（见 [ToolTaxonomyTest] 的硬断言）；
+         * 本类收的是「看/操作**用户正在看的那块屏**」以及「理解屏幕画面」的能力（read_screen /
+         * screenshot / tap_screen / ui_tree / visual_analysis / image_recognition …），
+         * 这些是会抢焦点、打断用户的主屏操作。`bg_screen` 通过 [getScreenTools] 全家桶与它们互链，
+         * 既保证 AI 操控虚拟屏时能发现全部看屏工具，又不破坏「别去抢用户主屏」的语义边界。
+         */
+        SCREEN_PERCEPTION("看屏/屏幕操作", "读取/理解/操作屏幕：读屏、截图、点击滑动、UI控件树、视觉分析、图像识别（含后台虚拟屏的全家桶互链）"),
         APP_MANAGEMENT("应用管理", "应用启动、安装、冻结等"),
         COMMUNICATION(qstr(R.string.qk_03313), "短信、联系人、日历等"),
         AI_CAPABILITIES("AI能力", "图像生成、视频生成、文档处理"),
@@ -73,7 +90,7 @@ object ToolCapabilityDirectory {
          * zxwidget 动态交互界面。
          *
          * 🔴 必须单列一类，不能并进 UI_CARDS / DYNAMIC_UI：
-         *  - `UI_CARDS` 是**气泡内富卡片**（ui_card / ui_widget，**就是用户说的「可视化小卡片」**，原生 Compose 渲染）；
+         *  - `UI_CARDS` 是**气泡内富组件**（ui_card / ui_widget，预制组件名册；🔴 它**不是**用户说的「可视化小卡片」，小卡片是独立的 WIDGET_CARD 分类）；
          *  - `DYNAMIC_UI` 是 `quro-ui` 原生组件；
          *  - 本类是 **zxwidget**：477 个 zx 组件，由 `assets/zx/zxwidget.js` 编译，
          *    **直接渲染在对话框的消息流里**（不弹窗、不进卡片栏），两个对话框都支持它。
@@ -88,6 +105,18 @@ object ToolCapabilityDirectory {
          * 避免 tool_discovery / tool_router 把"该用哪个"讲混（issue #12）。
          */
         VISUAL_INTERACT("可视化交互", "对话框内可视化询问/弹窗/确认：visual_question/visual_action/visual_popup/visual_custom_popup"),
+        /**
+         * 可视化小卡片 —— 🔴 独立分类（用户拍板 2026-11-05）。
+         *
+         * 必须单列，不能并进 UI_CARDS / DYNAMIC_UI / VISUAL_INTERACT：
+         *  - `UI_CARDS` 是气泡内**富组件**（ui_card / ui_widget 预制组件名册）；
+         *  - `DYNAMIC_UI` 是 ```quro-ui 原生可交互组件；
+         *  - `VISUAL_INTERACT` 是盖在屏幕上的弹窗/询问；
+         *  - 本类是**单块、只读、内联在消息流**的仪表盘小组件（visual_card 自由写 + 样板检索参考）。
+         * 历史 bug：visual_card 因 `visual_` 前缀被归进「可视化交互/弹窗」，而 RAG 又把
+         * 「小卡片」映射到富组件 ui_card/ui_widget，模型因此永远用别的组件顶替小卡片。
+         */
+        WIDGET_CARD("可视化小卡片", "独立分类：visual_card / visual_card_skeleton —— AI 自由 HTML 小卡（天气/新闻/日程/行情/时钟…），统一卡壳内联渲染；不是动态UI、不是富组件、不是弹窗"),
         /**
          * 工作流 / 定时自动化。
          *
@@ -128,6 +157,31 @@ object ToolCapabilityDirectory {
      * 工具能力目录（增强元数据层）：手写的高质量条目（useCases/examples/tips/relatedTools）。
      * 真实注册表里不在本层的工具，会在 [install] 时用 description 兜底合成，分类走命名推断。
      */
+
+    /**
+     * 「看屏 / 屏幕操作」能力全家桶：AI 操控虚拟屏或读屏/截图时，需要一次性知道的全部屏相关工具。
+     *
+     * 🔴 为什么要有这份清单：用户实测反馈「AI 操控虚拟屏时不知道已有的全部看屏工具」。
+     * 这些工具原本散在 ACCESSIBILITY / VISUAL_INTERACT / AI_CAPABILITIES / ADB_DEBUG / VIRTUAL_SCREEN
+     * 多个分类，靠分类检索列不全。这里把**用户主屏的屏感知/屏操作**（read_screen / screenshot /
+     * ui_tree / tap_screen …）、**屏幕画面理解**（visual_analysis / image_recognition）、
+     * **后台虚拟屏**（bg_screen，本身单列 VIRTUAL_SCREEN）、**ADB 截屏/投屏**（adb_dev / adb_term）
+     * 一次性聚齐，供 [getScreenTools] 与 tool_router 的「看屏」别名统一暴露。
+     */
+    val SCREEN_TOOL_FAMILY: List<String> = listOf(
+        // 后台虚拟屏（非 intrusive，单列 VIRTUAL_SCREEN，是这套能力的入口/锚点）
+        "bg_screen",
+        // 读取 / 理解屏幕（用户主屏）
+        "read_screen", "screenshot", "screenshot_base64", "ui_tree", "visual_analysis", "image_recognition",
+        // 操控屏幕（用户主屏）
+        "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen", "input_text",
+        "global_action", "ai_type_text", "ai_press_enter", "ai_press_send",
+        // 屏幕状态 / 录制 / 拍照
+        "get_foreground_app", "get_screen_state", "enable_screen_capture", "screen_record", "take_photo",
+        // ADB 截屏 / 投屏 / 输入（屏幕操作的可选通道）
+        "adb_dev", "adb_term",
+    )
+
     private val handbook = mapOf(
         // ═══════════════ Web 应用工程（HTML + Page() + native.* 桥）═══════════════
         "miniapp" to ToolInfo(
@@ -135,7 +189,8 @@ object ToolCapabilityDirectory {
             category = ToolCategory.GENUI,
             description = "Web 应用：创建/写入/读取/运行 Web 应用工程（app.json 多页面路由 + HTML + Page() 运行时 + native.* 原生桥），产物就地渲染成对话内 Web 应用卡；也支持 save（整段 HTML 存成工程）、wrap（js/python/css 包装成可渲染页面）",
             useCases = listOf(
-                "做个 Web 应用", "在这儿做个 Web 应用", "建一个 Web 应用工程", "要能存数据的 Web 应用",
+                "做个 Web 应用", "做个网页应用", "做个网站", "做个网页工具", "做个 HTML 应用", "做个轻应用", "做个应用",
+                "在这儿做个 Web 应用", "建一个 Web 应用工程", "要能存数据的 Web 应用",
                 "要能调本地能力的 Web 应用", "Web 应用怎么跑起来", "改一下这个 Web 应用", "Web 应用手册",
                 "把这个页面存成 Web 应用", "写个 Python 小工具跑起来", "导入一个 HTML 应用"
             ),
@@ -155,7 +210,8 @@ object ToolCapabilityDirectory {
                 "topic" to "manual 主题：compare/studio/native/errors"
             ),
             tips = listOf(
-                "用户说「做个 Web 应用 / 在这儿做个 Web 应用」→ **就用它**，ZorvAI 自己会写 Web 应用。",
+                "用户说「做个 Web 应用 / 网页应用 / 网站 / 网页工具 / 轻应用 / 做个应用」→ **就用它**，ZorvAI 自己会写 Web 应用。",
+                "🔴 **Web 应用不是小程序**：本工具 = HTML + WebView（bridge.js 运行时）。用户说「Web 应用」时**严禁**改用 miniapp_sdk（那是 WXML/WXSS 原生小程序引擎，只在用户明确要微信小程序时才用）。",
                 "**create 之后必须再 run 一次**，否则界面根本没交付（用户什么都看不到）。",
                 "run 的结果会自动内嵌进对话流渲染；**run 完不要再自己写一份 HTML**（那是第二块画布）。",
                 "动手前先读手册：miniapp(action=\"manual\") 或 topic=\"studio\""
@@ -167,6 +223,38 @@ object ToolCapabilityDirectory {
                 "本轮只交付一件：本工具 run 完就收尾，不要再补 HTML 或再调别的画型工具。"
             ),
             relatedTools = listOf("genui_agent_open", "workspace_write", "ui_dsl_spec"),
+            priority = 4
+        ),
+
+        // ═══════════════ 原生小程序引擎（WXML/WXSS，与 Web 应用是两套东西）═══════════════
+        // 2026-11-06 补录：此前 handbook 里没有 miniapp_sdk 条目，tool_router 检索「小程序」
+        // 永远命不中它；而 miniapp（Web 应用）反而因 RagConcept 映射吃到「小程序」触发词，
+        // 结果用户说「小程序」全被推到 WebView 版、说「Web 应用」也偶尔被带偏到小程序。
+        "miniapp_sdk" to ToolInfo(
+            name = "miniapp_sdk",
+            category = ToolCategory.GENUI,
+            description = "原生小程序引擎：AI 直接创建/列出/删除 WXML + WXSS + JS 小程序工程（微信标准范式，自研 C++ 原生引擎渲染，不经过 WebView）。**仅当用户明确要「小程序（原生引擎）/ 微信小程序 / 原生小程序 / WXML」时才用**；用户说「Web 应用 / 网页应用 / 网站」时必须用 miniapp，严禁用本工具",
+            useCases = listOf(
+                "做个微信小程序", "写个原生小程序", "用 WXML 写个小程序", "小程序（原生引擎）",
+                "列一下有哪些小程序", "删掉这个小程序工程"
+            ),
+            examples = listOf(
+                "miniapp_sdk(action=\"list\")",
+                "miniapp_sdk(action=\"create\", appId=\"demo\", files={\"app.json\":\"{\\\"pages\\\":[\\\"pages/index/index\\\"]}\", \"pages/index/index.wxml\":\"<view>…</view>\", \"pages/index/index.wxss\":\"…\", \"pages/index/index.js\":\"Page({…})\"})",
+                "miniapp_sdk(action=\"delete\", appId=\"demo\")"
+            ),
+            parameters = mapOf(
+                "action" to "list/create/delete",
+                "appId" to "小程序 id（create/delete 必填）",
+                "files" to "文件映射（create）：相对路径 -> 内容，或数组 [{path,content}]",
+                "srcDir" to "（files 备选）工作区内已写好的工程目录，create 时整体拷入"
+            ),
+            tips = listOf(
+                "🔴 **触发边界（最重要）**：用户说「小程序（原生引擎）/ 原生小程序 / 微信小程序 / 用 WXML/WXSS 写个小程序」→ 用它；用户说「Web 应用 / 网页应用 / 网站 / 网页工具」→ **严禁用它**，那是 miniapp（HTML + WebView）的活。",
+                "WXML/WXSS/JS 走微信范式，但引擎能力远小于真微信：只支持列出的 wx.* 接口与 ES5 语法，详见工具 description。",
+                "创建后会自动渲染在对话框气泡（原生引擎），也可在工具中心「小程序（原生引擎）」面板打开。"
+            ),
+            relatedTools = listOf("miniapp", "genui_agent_open"),
             priority = 4
         ),
 
@@ -190,7 +278,7 @@ object ToolCapabilityDirectory {
             tips = listOf(
                 "交付的是**原生控件**（不是网页、不是 HTML），这是它和 Web 应用的本质区别。",
                 "它是**独立全屏应用**，有自己的对话页/历史/宠物与右侧抽屉；模型配置、人格灵魂、工具集全部沿用 ZorvAI 主设置。",
-                "用户说「Web 应用 / 网页 / HTML」→ 用 `miniapp` 或 ```html 围栏，不要开它。",
+                "用户说「Web 应用 / 网页 / HTML」→ 用 `miniapp` 或 ```html 围栏，不要开它；用户明确要「微信小程序」→ 用 miniapp_sdk，也不要开它。",
                 "prompt 要写清「做什么 + 要哪些功能 + 有哪些数据」，写成「做那个」等于没写。",
                 "调用后本轮立即收尾，不要再补 HTML 或调别的画型工具。"
             ),
@@ -375,7 +463,7 @@ object ToolCapabilityDirectory {
         "termux" to ToolInfo(
             name = "termux",
             category = ToolCategory.TERMUX,
-            description = "Termux 终端（应用内完整移植的官方宿主）：管理多个终端会话，或在 Termux 的 Ubuntu 环境里执行命令、装包、查状态、拉起界面。",
+            description = "Termux 终端（应用内完整移植的官方宿主）：管理多个终端会话，或在 Termux 官方 bootstrap（PREFIX/pkg）里执行命令、装包、查状态、拉起界面。",
             useCases = listOf(
                 "打开终端", "在终端里跑个命令", "用 Termux 装个包", "开个新终端窗口",
                 "看看有哪几个终端", "切到另一个终端", "在终端里输入这个", "中断一下这个命令",
@@ -392,8 +480,8 @@ object ToolCapabilityDirectory {
                 "termux(action=\"open\")"
             ),
             parameters = mapOf(
-                "action" to "run / session_new / sessions / session_switch / session_kill / write / interrupt / kill / pkg / status / open",
-                "command" to "run 用的 shell 命令（Termux 的 Ubuntu 内执行）",
+                "action" to "run / session_new / sessions / session_switch / session_kill / write / interrupt / kill / pkg / status / repair / open",
+                "command" to "run 用的 shell 命令（Termux 官方 bootstrap 内执行）",
                 "text" to "write 写进当前会话的一行输入",
                 "id" to "session_switch / session_kill 的目标会话 id",
                 "name" to "session_new 的会话名",
@@ -405,7 +493,9 @@ object ToolCapabilityDirectory {
                 "**Termux 有多个终端会话**：要「开一个新窗口」→ session_new；要「看看有哪几个」→ sessions；要「切过去」→ session_switch。",
                 "一次性执行（装包+跑）用 run / pkg 最省事，能一次拿到完整 stdout/stderr + 退出码。",
                 "交互式程序（python REPL、vim、top）用 session_new 建会话后再 write 逐行输入，用 interrupt 发 Ctrl-C。",
-                "命令跑在 Termux 的 Ubuntu 里，**不是** Android /system/bin/sh；Android 命令走 shizuku_exec。",
+                "命令跑在 **Termux 官方 bootstrap** 里（PREFIX / pkg / Termux 源），**不是** Android /system/bin/sh，也**不是** proot Ubuntu（后者走 linux_*）。",
+                "🔴 Android 10+ 的 SELinux 禁止应用 exec 私有目录里的 ELF，所以 run/pkg 走的是官方 system_linker_exec（/system/bin/linker64）。看到 Permission denied **不要**去 repair —— 那是策略限制，repair 修不了，只会空转。",
+                "只有 bootstrap 半套/缺库（CANNOT LINK 之类）才用 repair。",
                 "环境未解压时会自动后台安装并返回提示，稍后重试即可，**不要反复触发**。"
             ),
             relatedTools = listOf("terminal", "linux_run", "linux_pkg", "bg_screen"),
@@ -460,7 +550,16 @@ object ToolCapabilityDirectory {
                 "任务结束调 `release` 释放屏，别长期占着（占着会一直消耗内存与电量）。",
                 "谁在干活：开屏靠 Shizuku（uid 2000），点击/滑动优先走无障碍手势、失败才回退 Shizuku 注入 —— 所以「Shizuku 在线但点不动」时先查无障碍是否被系统停用。",
             ),
-            relatedTools = listOf("read_screen", "tap_screen", "screenshot", "shizuku_status"),
+            // 🔴 全家桶互链：AI 操控虚拟屏时，必须能发现「全部看屏工具」，而不只是一两个。
+            // 这里把整套屏感知/屏操作能力列全（详见 [SCREEN_TOOL_FAMILY] / [getScreenTools]）。
+            relatedTools = listOf(
+                "read_screen", "screenshot", "screenshot_base64", "ui_tree",
+                "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen", "input_text",
+                "global_action", "get_foreground_app", "get_screen_state",
+                "enable_screen_capture", "screen_record", "take_photo",
+                "ai_type_text", "ai_press_enter", "ai_press_send",
+                "visual_analysis", "image_recognition", "adb_dev", "adb_term", "shizuku_status",
+            ),
             priority = 5
         ),
 
@@ -796,7 +895,7 @@ object ToolCapabilityDirectory {
         
         "image_recognition" to ToolInfo(
             name = "image_recognition",
-            category = ToolCategory.MEDIA,
+            category = ToolCategory.SCREEN_PERCEPTION,
             description = qstr(R.string.qk_03443),
             useCases = listOf("识别这张图片", "看看图片里是什么", "分析这个图片"),
             examples = listOf("image_recognition(image_path=\"/sdcard/photo.jpg\")"),
@@ -1122,11 +1221,165 @@ object ToolCapabilityDirectory {
             relatedTools = listOf("workspace_write", "workspace_read"),
             priority = 4
         ),
-        
+
+        // ═══════════════ 看屏 / 屏幕操作（SCREEN_PERCEPTION 全家桶的补充条目）═══════════════
+        // 这些工具原本没有手写条目，靠命名规则兜底归类；现补齐高质量元数据并统一归到 SCREEN_PERCEPTION，
+        // 让 tool_router 的 list_tools(category="看屏/屏幕操作") 一次列全，AI 操控虚拟屏时不再漏掉它们。
+        "screenshot_base64" to ToolInfo(
+            name = "screenshot_base64",
+            category = ToolCategory.SCREEN_PERCEPTION,
+            description = "截图并返回 base64 编码（适合直接塞进多模态模型的上下文，无需落盘文件）。",
+            useCases = listOf("截个图给模型看", "把当前界面转成 base64 投喂视觉模型", "需要图片而非文件路径时"),
+            examples = listOf("screenshot_base64()"),
+            parameters = emptyMap(),
+            tips = listOf("与 screenshot 的区别：本工具返回 base64 字符串而非文件路径", "适合紧接着 visual_analysis / image_recognition 使用"),
+            relatedTools = listOf("screenshot", "visual_analysis", "image_recognition"),
+            priority = 4
+        ),
+
+        "get_foreground_app" to ToolInfo(
+            name = "get_foreground_app",
+            category = ToolCategory.SCREEN_PERCEPTION,
+            description = "获取当前前台应用（包名 + Activity），判断用户此刻正在用哪个 App。",
+            useCases = listOf("现在前台是哪个 App", "用户在看什么", "确认目标 App 是否已打开"),
+            examples = listOf("get_foreground_app()"),
+            parameters = emptyMap(),
+            tips = listOf("常在操控屏幕前确认目标 App 已在前台", "配合 screenshot / read_screen 定位界面"),
+            relatedTools = listOf("get_screen_state", "screenshot", "read_screen", "bg_screen"),
+            priority = 3
+        ),
+
+        "get_screen_state" to ToolInfo(
+            name = "get_screen_state",
+            category = ToolCategory.SCREEN_PERCEPTION,
+            description = "获取屏幕状态（亮灭屏、锁屏、方向、分辨率等），判断当前屏幕是否可操作。",
+            useCases = listOf("屏幕是亮还是灭", "现在锁屏了吗", "屏幕朝向/分辨率多少"),
+            examples = listOf("get_screen_state()"),
+            parameters = emptyMap(),
+            tips = listOf("操作屏幕前先确认屏幕亮着、未锁屏，否则点击/读屏会失败", "灭屏/锁屏时先唤醒（wake_device）再操作"),
+            relatedTools = listOf("get_foreground_app", "wake_device", "read_screen", "bg_screen"),
+            priority = 3
+        ),
+
+        "global_action" to ToolInfo(
+            name = "global_action",
+            category = ToolCategory.SCREEN_PERCEPTION,
+            description = "执行系统级全局动作（返回桌面、最近任务、下拉通知栏、截屏、锁屏等），等价于无障碍全局手势。",
+            useCases = listOf("回桌面", "打开最近任务", "下拉通知栏", "锁屏", "系统级截屏"),
+            examples = listOf("global_action(action=\"home\")", "global_action(action=\"recents\")", "global_action(action=\"notifications\")"),
+            parameters = mapOf("action" to "home / back / recents / notifications / quick_settings / screenshot / lock / split_screen"),
+            tips = listOf("这是「系统级」动作，比在单个 App 里点更稳", "action=screenshot 走系统截屏通道"),
+            relatedTools = listOf("screenshot", "get_screen_state", "tap_screen"),
+            priority = 3
+        ),
+
+        "screen_record" to ToolInfo(
+            name = "screen_record",
+            category = ToolCategory.SCREEN_PERCEPTION,
+            description = "录屏：把屏幕操作过程录成视频，用于演示、复现问题或留存证据。",
+            useCases = listOf("帮我录屏", "录一下这个操作流程", "把报错过程录下来"),
+            examples = listOf("screen_record(action=\"start\")", "screen_record(action=\"stop\")"),
+            parameters = mapOf("action" to "start / stop / status", "duration_sec" to "自动停止时长（可选）"),
+            tips = listOf("录屏需要用户授权「录制屏幕」", "录完用 stop 取回文件；与 screenshot 互补（动态 vs 静态）"),
+            relatedTools = listOf("screenshot", "enable_screen_capture", "take_photo"),
+            priority = 3
+        ),
+
+        "take_photo" to ToolInfo(
+            name = "take_photo",
+            category = ToolCategory.SCREEN_PERCEPTION,
+            description = "调用相机拍照（后置/前置），把现实世界拍下来给 AI 看，区别于截屏（截的是屏幕内容）。",
+            useCases = listOf("拍张照给我看", "识别一下这个实物", "拍个文档/白板", "扫一下二维码"),
+            examples = listOf("take_photo(camera=\"back\")", "take_photo(camera=\"front\")"),
+            parameters = mapOf("camera" to "back / front（默认 back）"),
+            tips = listOf("拍的是真实世界，不是屏幕；要截屏幕请用 screenshot", "拍完常接 image_recognition / visual_analysis 理解内容"),
+            relatedTools = listOf("screenshot", "image_recognition", "visual_analysis"),
+            priority = 3
+        ),
+
+        "long_press_screen" to ToolInfo(
+            name = "long_press_screen",
+            category = ToolCategory.SCREEN_PERCEPTION,
+            description = "长按屏幕坐标/控件（无障碍），用于触发长按菜单、拖拽起点等。",
+            useCases = listOf("长按这个图标", "长按弹出菜单", "长按选中", "拖拽前先长按"),
+            examples = listOf("long_press_screen(x=500, y=800)", "long_press_screen(resource_id=\"item\")"),
+            parameters = mapOf("x" to "X坐标", "y" to "Y坐标", "resource_id" to "控件ID", "duration_ms" to "时长，默认 600"),
+            tips = listOf("优先用 resource_id 比坐标稳", "是 tap_screen 的长按版"),
+            relatedTools = listOf("tap_screen", "swipe_screen", "scroll_screen"),
+            priority = 3
+        ),
+
+        "scroll_screen" to ToolInfo(
+            name = "scroll_screen",
+            category = ToolCategory.SCREEN_PERCEPTION,
+            description = "在控件/区域内滚动（无障碍），用于翻看长列表、加载更多内容后再读屏。",
+            useCases = listOf("往下滚一下", "翻看这个列表", "滚到顶部/底部", "加载更多"),
+            examples = listOf("scroll_screen(direction=\"down\")", "scroll_screen(resource_id=\"list\", direction=\"up\")"),
+            parameters = mapOf("direction" to "up / down / left / right", "resource_id" to "滚动容器ID（可选）", "distance" to "滚动距离（可选）"),
+            tips = listOf("滚完再 read_screen 才能读到新内容", "是 swipe_screen 的精准滚动版（认控件而非坐标）"),
+            relatedTools = listOf("swipe_screen", "tap_screen", "read_screen"),
+            priority = 3
+        ),
+
+        "ai_type_text" to ToolInfo(
+            name = "ai_type_text",
+            category = ToolCategory.SCREEN_PERCEPTION,
+            description = "AI 主动在屏幕焦点输入框里打字（无障碍输入，不弹系统输入法、不打断用户当前输入法状态）。",
+            useCases = listOf("在搜索框里输入XX", "帮我把这段文字填进去", "AI 替我打字"),
+            examples = listOf("ai_type_text(text=\"你好世界\")"),
+            parameters = mapOf("text" to "要输入的文字"),
+            tips = listOf("依赖当前有焦点输入框；无焦点时先 tap_screen 点一下输入框", "与 bg_screen 的 input_text 同理，但作用于用户主屏"),
+            relatedTools = listOf("tap_screen", "input_text", "ai_press_enter", "ai_press_send"),
+            priority = 3
+        ),
+
+        "ai_press_enter" to ToolInfo(
+            name = "ai_press_enter",
+            category = ToolCategory.SCREEN_PERCEPTION,
+            description = "AI 主动触发「回车/确认」（无障碍），用于提交输入、发送前确认、确认对话框。",
+            useCases = listOf("输完按回车", "确认提交", "触发搜索"),
+            examples = listOf("ai_press_enter()"),
+            parameters = emptyMap(),
+            tips = listOf("常在 ai_type_text 之后调用", "等价于按键盘回车键"),
+            relatedTools = listOf("ai_type_text", "ai_press_send", "tap_screen"),
+            priority = 3
+        ),
+
+        "ai_press_send" to ToolInfo(
+            name = "ai_press_send",
+            category = ToolCategory.SCREEN_PERCEPTION,
+            description = "AI 主动触发「发送」（无障碍点击发送按钮 / 模拟发送），用于聊天、评论等场景提交。",
+            useCases = listOf("帮我发消息", "把这段发出去", "点发送"),
+            examples = listOf("ai_press_send()"),
+            parameters = emptyMap(),
+            tips = listOf("优先认发送按钮；找不到时回退 ai_press_enter", "发送前确认内容无误"),
+            relatedTools = listOf("ai_type_text", "ai_press_enter", "tap_screen"),
+            priority = 3
+        ),
+
+        "ui_tree" to ToolInfo(
+            name = "ui_tree",
+            category = ToolCategory.SCREEN_PERCEPTION,
+            description = "导出当前界面的无障碍控件树（UI dump）：每个控件的文本、ID、坐标、可点/可输属性，供 AI 精确定位并点按/输入。支持指定虚拟显示器（display）参数，可在后台虚拟屏上 dump。",
+            useCases = listOf("把这个界面控件列出来", "我要精确点那个按钮", "读一下界面结构", "在后台屏 dump 控件树"),
+            examples = listOf("ui_tree()", "ui_tree(display=2)", "ui_tree(action=\"dump\")"),
+            parameters = mapOf(
+                "action" to "dump（默认）",
+                "display" to "显示器 id（默认主屏；后台虚拟屏用对应 display，如 2）",
+            ),
+            tips = listOf(
+                "比 screenshot 更省 token、坐标更准：拿到 ref 后配合 tap_screen(ref) / input_text 定点操作",
+                "界面自绘（游戏/WebView/Flutter）可能读不到控件 → 退回 screenshot + visual_analysis",
+                "支持 display 参数：bg_screen 的 read 底层就是它，跨屏 dump 不用切来切去",
+            ),
+            relatedTools = listOf("read_screen", "screenshot", "visual_analysis", "tap_screen", "bg_screen"),
+            priority = 5
+        ),
+
         // ═══════════════ 无障碍控屏 ═══════════════
         "read_screen" to ToolInfo(
             name = "read_screen",
-            category = ToolCategory.ACCESSIBILITY,
+            category = ToolCategory.SCREEN_PERCEPTION,
             description = qstr(R.string.qk_03536),
             useCases = listOf("看看现在屏幕上是啥", "读一下当前界面", "这个App现在显示啥"),
             examples = listOf("read_screen()"),
@@ -1138,7 +1391,7 @@ object ToolCapabilityDirectory {
         
         "tap_screen" to ToolInfo(
             name = "tap_screen",
-            category = ToolCategory.ACCESSIBILITY,
+            category = ToolCategory.SCREEN_PERCEPTION,
             description = qstr(R.string.qk_03591),
             useCases = listOf("点一下屏幕上的XX按钮", "帮我戳那个位置", "点击确认"),
             examples = listOf("tap_screen(x=500, y=800)", "tap_screen(resource_id=\"btn_confirm\")"),
@@ -1150,7 +1403,7 @@ object ToolCapabilityDirectory {
         
         "swipe_screen" to ToolInfo(
             name = "swipe_screen",
-            category = ToolCategory.ACCESSIBILITY,
+            category = ToolCategory.SCREEN_PERCEPTION,
             description = qstr(R.string.qk_03556),
             useCases = listOf("往上滑", "左滑翻页", "划一下", "在(x1,y1)→(x2,y2)划"),
             examples = listOf("swipe_screen(x1=500, y1=1000, x2=500, y2=500)", "swipe_screen(direction=\"up\")"),
@@ -1162,7 +1415,7 @@ object ToolCapabilityDirectory {
 
         "enable_screen_capture" to ToolInfo(
             name = "enable_screen_capture",
-            category = ToolCategory.ACCESSIBILITY,
+            category = ToolCategory.SCREEN_PERCEPTION,
             description = qstr(R.string.qk_03711),
             useCases = listOf("看懂现在屏幕", "截图看下当前界面", "看看屏幕在干嘛", "需要读屏/视觉理解时"),
             examples = listOf("enable_screen_capture()"),
@@ -1262,6 +1515,30 @@ object ToolCapabilityDirectory {
             priority = 4
         ),
         
+        // ═══════════════ Skills（渐进式披露：目录给元数据，全文靠本工具） ═══════════════
+        // 🔴 2026-11-05：SkillLoadTool 早已注册进 QuroBuiltInTools，系统提示词也注入了
+        //    Skills Catalog（≤64 条元数据），但本目录与 ALWAYS_ON 都没登记 `skill`——
+        //    模型 discovery 查不到它，于是永远不读技能全文，表现为「技能开关没用」。
+        "skill" to ToolInfo(
+            name = "skill",
+            category = ToolCategory.KNOWLEDGE_MEMORY,
+            description = "按 id 加载技能全文（Skills Catalog 只给元数据，全文必须调本工具获取）",
+            useCases = listOf(
+                "按某个技能的方法来做这件事",
+                "Skills Catalog 里有相关技能，先读它的完整说明",
+                "用技能/方法论/工作流完成当前任务",
+            ),
+            examples = listOf("skill(name=\"frontend-design\")", "skill(name=\"code-review\")"),
+            parameters = mapOf("name" to "技能 id（Skills Catalog 行里 [id=...] 的值）"),
+            tips = listOf(
+                "只在 Skills Catalog 里看到相关技能时调用，不要凭空猜 id",
+                "全文只在本轮生效，下一轮需要再调一次",
+                "若用户已为当前消息选了技能，全文会随消息直接下发，无需再调本工具",
+            ),
+            relatedTools = listOf("skill_list", "rag_search"),
+            priority = 5,
+        ),
+
         // ═══════════════ MCP ═══════════════
         "mcp_servers" to ToolInfo(
             name = "mcp_servers",
@@ -1415,7 +1692,7 @@ object ToolCapabilityDirectory {
         // ═══════════════ 视觉分析 ═══════════════
         "screenshot" to ToolInfo(
             name = "screenshot",
-            category = ToolCategory.ACCESSIBILITY,
+            category = ToolCategory.SCREEN_PERCEPTION,
             description = qstr(R.string.qk_03542),
             useCases = listOf("截个图", "截图保存", "把屏幕截下来"),
             examples = listOf("screenshot()"),
@@ -1427,7 +1704,7 @@ object ToolCapabilityDirectory {
         
         "visual_analysis" to ToolInfo(
             name = "visual_analysis",
-            category = ToolCategory.ACCESSIBILITY,
+            category = ToolCategory.SCREEN_PERCEPTION,
             description = qstr(R.string.qk_03497),
             useCases = listOf("看看屏幕上是什么", "分析这个页面/App/游戏界面", "屏幕上有什么按钮/文字/图标", "定位某个元素并操作", "OCR 提取截图文字", "辅助点击/操作"),
             examples = listOf("visual_analysis()", "visual_analysis(question=\"这个按钮是做什么的\", mode=\"ui\")"),
@@ -1556,7 +1833,7 @@ object ToolCapabilityDirectory {
             tips = listOf(
                 "🔴 **它是「直接渲染在对话框里」，不是弹窗、也不是气泡内卡片栏**——调完就在当前对话流里长出一块可交互界面。",
                 "动笔前先用 `zx_catalog` 确认组件名与字段（可传 component 拿契约 + 示例 DSL），别凭印象拼。",
-                "用于「要用户动手操作」的场景；纯展示用 `visual_popup`，气泡内小卡片用 `ui_card` / `ui_widget`。",
+                "用于「要用户动手操作」的场景；屏幕弹窗用 `visual_popup`；单块只读的**可视化小卡片是独立分类**，用 `visual_card`（html 自由写任意场景），不要用富组件 `ui_card`/`ui_widget` 顶替。",
                 "用户点完之后交互会作为**本工具的结果**回来，你据此继续推理——不要重复再画一遍同一块界面。",
                 "一块界面只画一次；需要多块就多次调用，它们会依次内联在消息流里。"
             ),
@@ -1772,6 +2049,17 @@ object ToolCapabilityDirectory {
     fun getToolInfo(toolName: String): ToolInfo? {
         return directory[toolName]
     }
+
+    /**
+     * 返回「看屏 / 屏幕操作」能力全家桶（[SCREEN_TOOL_FAMILY]）。
+     *
+     * 用于：AI 操控虚拟屏 / 读屏 / 截图时，一次拿到全部屏相关工具的 [ToolInfo]，
+     * 解决「不知道已有的全部看屏工具」问题。只返回注册表里真实存在的（不存在的会被过滤，
+     * 例如某个设备未启用 ADB 时 adb_dev/adb_term 仍可安全缺省）。
+     */
+    fun getScreenTools(): List<ToolInfo> {
+        return SCREEN_TOOL_FAMILY.mapNotNull { directory[it] }
+    }
     
     /**
      * 获取所有分类
@@ -1828,10 +2116,11 @@ object ToolCapabilityDirectory {
             "UI展示" to listOf("ui_control"),
             "原生交互界面/动态UI" to listOf("ui_dsl_spec", "ui_validate"),
             "富组件/数据卡片（ui_widget / ui_card，禁止裸 JSON）" to listOf("ui_widget", "ui_card"),
-            // 🔴 术语铁律（用户拍板 2026-11-01）：「可视化小卡片」= **```quro-card 正文围栏**
-            // （CardModule 自研渲染，7 种预设 + custom 自由布局），**不是** ui_widget/ui_card 富卡片。
-            // ui_widget/ui_card 是「富卡片」另一功能；围栏被关闭时才用它们兜底。
-            "可视化小卡片 / 小卡片（**在回复正文写 ```quro-card 围栏**，非工具调用；schema 见最佳实践 1；围栏被关闭时才用下列工具兜底）" to listOf("ui_widget", "ui_card"),
+            // 🔴 术语铁律（2026-11-05 重写）：「可视化小卡片」= **独立分类 WIDGET_CARD**，
+            // 唯一出口 `visual_card` 工具（html 自由写任意场景；13 份样板仅供参考，2026-11-06）。
+            // 旧 ```quro-card Canvas 围栏是 legacy，不再作为小卡片；ui_widget/ui_card 是富组件另一分类，
+            // 动态UI/弹窗/网页预览同理——均严禁顶替。旧映射曾把「小卡片」指到富组件，是 AI 用错通道的根因。
+            "可视化小卡片 / 小卡片（**独立分类：调 `visual_card` 工具，html 自由写任意场景**；不是动态UI/富组件/弹窗）" to listOf("visual_card", "visual_card_skeleton"),
             "可视化弹窗（visual_popup，独立功能，≠小卡片）" to listOf("visual_popup"),
             "待办/进度/统计/评分/告警卡片" to listOf("ui_widget(type=\"list\")", "ui_widget(type=\"progress\")", "ui_widget(type=\"stat\")", "ui_widget(type=\"rating\")", "ui_widget(type=\"alert\")"),
             "列表/表格/饼图卡片" to listOf("ui_widget(type=\"list\")", "ui_widget(type=\"table\")", "ui_widget(type=\"pie\")"),
@@ -1845,12 +2134,18 @@ object ToolCapabilityDirectory {
             "发短信" to listOf("send_sms"),
             "读联系人" to listOf("read_contacts"),
             "代码执行" to listOf("run_code", "miniapp"),
+            // 🔴 2026-11-06 术语边界：Web 应用 ≠ 小程序。用户说 Web 应用/网页应用/网站 → miniapp（HTML+WebView）；
+            // 用户明确说微信小程序/原生小程序/WXML → miniapp_sdk。两者渲染引擎不同，严禁互替。
+            "Web 应用 / 网页应用 / 网站 / 网页工具（HTML，不是小程序）" to listOf("miniapp"),
+            "微信小程序 / 原生小程序 / WXML 工程（仅用户明确要小程序时）" to listOf("miniapp_sdk"),
             "文档生成（可下载）" to listOf("aiwps_create", "enhanced_doc_create"),
             "对话框写文档" to listOf("aip_compose", "chat_doc"),
             "对话框显示文档" to listOf("aip_compose", "chat_doc"),
             "定时任务" to listOf("schedule_task"),
             "语音朗读" to listOf("speak"),
             "MCP工具" to listOf("mcp_call", "mcp_list_tools"),
+            "技能 / 加载技能全文 / 按技能方法做" to listOf("skill", "skill_list"),
+            "查看技能 / 有哪些技能" to listOf("skill_list"),
             "CMS模块" to listOf("cms_toolbox", "cms_call", "cms_list"),
             "开发环境安装" to listOf("dev_env(action=install)", "dev_env(action=install, execute=true)"),
             "开发环境检查" to listOf("dev_env(action=check)"),
@@ -1899,109 +2194,28 @@ object ToolCapabilityDirectory {
 你「没听说过」某个工具，通常只是因为它没常驻，不代表它不存在。
 说「做不到」之前没查过分类，就是在骗用户。
 
-- 用户提到**「小卡片 / 可视化小卡片」**，或要**轻量状态/指标/折线/按钮组/表格**卡片 → **在回复正文写 ```quro-card 围栏**（自研小卡片，端上 Canvas 自绘，共 7 种预设）。**这不是工具调用**。
-- 用户要**更重的可视化**（饼图/雷达/热力图/甘特图/看板/流程图/二维码/迷你应用…103 种）→ 调 `ui_widget` 或 `ui_card` 工具（富卡片，另一功能）。
-- **可视化弹窗 `visual_popup` 与可视化询问 `visual_question` 是独立功能，不是小卡片**。所有卡片 JSON 都严禁当普通文本或代码块发出。
+- 用户提到**「小卡片 / 可视化小卡片 / 来张天气卡」** → **调 `visual_card` 工具**（独立分类）。**html 直接自由写**——任何场景都能写，没有白名单；结构没把握时才 `visual_card_skeleton(kind=...)` 取参考样板改造。禁止用 quro-card 围栏 / 动态UI / 富组件 / 弹窗 / 网页预览顶替。
+- 用户要**更重的可视化**（饼图/雷达/热力图/甘特图/看板/流程图/二维码/迷你应用…103 种）→ 调 `ui_widget` 或 `ui_card` 工具（富组件，另一分类）。
+- **动态 UI（quro-ui）、可视化弹窗（visual_popup）、可视化询问（visual_question）都是别的分类**，不是小卡片。
 
-### ```quro-card 围栏 schema（必须严格按这个写）
+### 可视化小卡片（独立分类，必须走工具通道；自由生成为主）
 
-外层骨架：
-```json
-{"id":"可选","type":"必填","version":1,"renderHint":"canvas","data":{...按 type 区分},"actions":[{"type":"callback","name":"按钮文字"}],"style":{"bg":"surface","fg":"onSurface","cornerDp":12,"fontSizeSp":14}}
+「可视化小卡片」= 单块、只读、看完即走、内联在消息流里的仪表盘小组件。它**不属于**动态UI组件 / 富组件 / 可视化弹窗 / 网页预览。唯一出口：
+
+```
+visual_card(title="...", emoji="📍", accent="#4B7CF6", html="<div>…直接写这个场景的卡体…</div>")
 ```
 
-7 种 type 与对应 `data` 写法（`data.kind` 必须匹配）：
+**自由写是主路**：html 参数就是完整创作空间，任何场景都能写——天气/新闻/日程之外，收件箱、番茄钟、会议倒计时、项目进度、心率、温控、门锁、物流、打车、登机牌、汇率、预算、自选股、订阅、战绩、直播……用户要什么场景就写什么场景，**没有「不在清单里就不能做」这回事**。
 
-| type | data.kind | data 字段 |
-|---|---|---|
-| `metric` 指标卡 | `chart` | `series:[{"name":"指标名","points":[数值],"labels":["单位"]}]`（取 series[0]） |
-| `line_chart` 折线图 | `chart` | `chartType:"line"`、`series:[{"name":"系列名","color":"primary","points":[3,5,8],"labels":["一","二","三"]}]`、`axis:{"showX":true,"showY":true}` |
-| `button_group` 按钮组 | `form` | `formType:"button_group"`、`buttons:[{"type":"callback","name":"确定"},{"type":"callback","name":"取消"}]` |
-| `table` 表格 | `media` | `mediaType:"table"`、`headers:["列1","列2"]`、`rows:[["a","b"],["c","d"]]` |
-| `status` 状态卡 | `status` | `statusType:"progress"(或 skeleton/error/tool)`、`text:"正在下载模型…"`、`progress:0.6`(0~1)、`retryable:true`、`reason:"失败原因"` |
-| `skeleton` 加载占位 | 任意 | 无需 data（流式输出时的占位） |
-| `custom` 自由布局 | 任意 | `layout:{"type":"column","children":[...]}` 自描述布局树（渐变/大数字/环形进度/进度条自由组合） |
+写作规则（保证观感统一）：
+1. 只写卡体：圆角 20 / 头部标题栏 / 亮暗主题 / viewport 由宿主卡壳给，不要重复画卡片边框。
+2. 主文字 `color:CanvasText`（亮暗自适应）；线/底用 `rgba(128,138,160,.x)` 或主题 token（--card/--border/--muted 已注入）；强调色用固定 hex（蓝 #4f6bff / 青 #18b89a / 橙 #ff9a4c / 红 #ff5f6d；行情涨红跌绿）。
+3. 布局一律 flex/grid + 百分比（容器约 340dp）；图表/环形/折线/二维码/路线用内联 SVG；零外部依赖，不引 CDN、不写 <script>。
+4. 没把握时用 `visual_card_skeleton(kind=...)` 取 13 份参考样板（weather/news/calendar/terminal/music/market/todo/monitor/location/battery/shortcuts/clock/quote）改造或组合——样板是参考，不是白名单。
+5. 一工具一卡；一次回复要出多张卡就调多次 `visual_card`。
 
-两个**可直接照抄**的完整示例：
-
-状态卡（正在下载，60%）：
-````
-```quro-card
-{"type":"status","data":{"kind":"status","statusType":"progress","text":"正在下载模型 612MB","progress":0.6}}
-```
-````
-
-指标卡（在线用户 1.2k）：
-````
-```quro-card
-{"type":"metric","data":{"kind":"chart","series":[{"name":"在线用户","points":[1230],"labels":["人"]}]}}
-```
-````
-
-### `custom` 自由布局的节点清单（**只能写这些，写了别的会被兜底成纯文字**）
-
-`layout` 树里每个节点：`{"type":"节点名", ...属性平铺, "children":[...]}`。
-🔴 **属性直接写在节点上，不要包进 `props` 子对象**（端上两种都认，但平铺最稳）。
-
-| 节点 | 用途 | 常用属性 |
-|---|---|---|
-| `column` 竖排容器 / `row` 横排容器 | 布局骨架 | `gap`(子间距dp) `padding` `weight`(row 里占宽比，>0 才生效) |
-| `card` / `box` 卡片底板 | 画背景+圆角 | `bg`("#hex") 或 `gradient`(["#hex","#hex"]) `angle` `radius` `padding` `gap` |
-| `text` 文本 | 所有文案/数字 | `text` `fontSize`(sp) `color`("#hex") `fontWeight`(400/600/700) |
-| `ring` 环形进度 | 百分比圆环 | `value`(0-100) `size`(dp) `stroke` `color` `text`(中心文字) `textSize` |
-| `bar` 进度条 | 线性进度 | `value`(0-100) `h`(dp) `radius` `color` 或 `gradient` |
-| `badge` / `chip` / `tag` 胶囊标签 | 小标签 | `text` `bg` `color` `fontSize` `paddingX` `paddingY` |
-| `button` 按钮 | 视觉按钮 | `text` `bg` `color` `fontSize` `paddingY` `width` |
-| `icon` / `image` / `avatar` 图标位 | 方形占位 | `size`(dp) `bg` `radius` `text`(格内短文字) |
-| `divider` 分隔线 / `spacer` 占位 | 间距控制 | `divider` 无属性；`spacer` 用 `h`(dp) `w`(dp) |
-| `list` / `items` 列表 | 竖排条目 | `items:["行1","行2"]` 或 用 `children` |
-
-渐变 + 大数字的完整示例（照抄改数字即可）：
-````
-```quro-card
-{"type":"custom","layout":{"type":"card","gradient":["#C25A38","#B8902F"],"angle":135,"radius":16,"padding":16,"gap":10,"children":[{"type":"text","text":"热门指数","fontSize":13,"color":"#F4F1EA"},{"type":"text","text":"86","fontSize":40,"color":"#FFFFFF","fontWeight":700},{"type":"bar","value":86,"h":8,"radius":4,"gradient":["#F4F1EA","#FFFFFF"]}]}}
-```
-````
-
-### 🔴 小卡片的标准形态：渐变底 + 左环形 + 右大数字（左右布局）
-
-**用户认可的「小卡片」就是这个样子**。要出小卡片时优先套这个骨架，只换文案、颜色和数值：
-
-````
-```quro-card
-{"type":"custom","layout":{"type":"card","gradient":["#F98A8A","#F973C0"],"angle":90,"radius":20,"padding":18,"gap":14,"children":[
-  {"type":"text","text":"🔥 热门指数","fontSize":15,"color":"#FFFFFF","fontWeight":600},
-  {"type":"row","gap":18,"children":[
-    {"type":"ring","value":86,"size":92,"stroke":10,"text":"86%","textSize":20,"color":"#FFFFFF"},
-    {"type":"column","gap":6,"weight":1,"children":[
-      {"type":"text","text":"实时热度","fontSize":13,"color":"#FFE9E9"},
-      {"type":"text","text":"9,527","fontSize":40,"color":"#FFFFFF","fontWeight":700},
-      {"type":"text","text":"条讨论中","fontSize":13,"color":"#FFE9E9"}
-    ]}
-  ]}
-]}}
-```
-````
-
-写这个骨架的三个要点（写错就画不出来）：
-1. **左右布局必须用 `row` 包起来**，右侧那列要给 `"weight":1`（占满剩余宽度）。
-   不给 weight 的话右侧只按文字宽占位，数字会被挤出去。
-2. `ring` 的 `size` 别给太大（92 左右合适）。给 200 会把右边整列挤没。
-3. 渐变色给两到三个 hex，`angle` 控制方向（90 = 左右渐变，135 = 斜向）。
-
-### ⚠️ 小卡片 ≠ 富卡片，别用错通道
-
-- **小卡片 → 正文写 ```quro-card 围栏**（`type:"custom"` 自写布局，端上 Canvas 自绘）
-- **富卡片 → `ui_widget` / `ui_card` 工具**（103 种现成组件：表格/看板/甘特/雷达…）
-
-这两条是**不同的功能**。用户说「小卡片」时不要调 `ui_widget`——
-富卡片会渲染成表格/列表那种规范组件样式，出不来上面这种渐变 + 环形的自由设计。
-反过来，要一张复杂表格时也别硬用 custom 手搭，直接用 `ui_widget` 的 table。
-
-🔴 **常见错误（都会渲染成「未识别组件：xxx」）**：把 `status`/`metric`/`line_chart`/`custom` 写进 `ui_widget` 工具（那是富卡片名册，没有这些 type）；或围栏里写名册类型 `stat`/`chart`（围栏不认）。两套名字**不通用**：围栏只认上表 7 种。
-- 用户需要流程图 → mermaid（`ui_widget(type="mermaid")` 或 `ui_control(action="widget", type="mermaid")`）。
-- 用户需要完整原生交互界面 → `quro-ui` DSL。
-- **ui_widget/ui_card、ui_control、quro-ui、visual_popup、visual_question 是相互独立的功能，严禁混用。**
+⚠️ 历史通道 quro-card 围栏（Canvas DSL）是 legacy，字段名与 HTML 不通用，**不再用于可视化小卡片**。写它用户看到的是裸 JSON 或降级块，等于「写不出来小卡片」。
 
 ## 2. 把多个工具编排成一条链（这是「干成一件事」的关键）
 

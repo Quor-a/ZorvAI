@@ -86,15 +86,55 @@ class ClusterEngine(
                 return name + " 需要用户授权但未获批准：" + perms.joinToString(", ")
             }
         }
+        // 🔴 S1 修复（2026-11-06）：集群角色执行危险工具必须过主链路审批闸门。
+        //    旧实现直接 tool.run —— 主对话会弹审批卡的危险工具（shell/写文件/操作手机…），
+        //    集群角色执行时静默直接跑，用户完全不知情。
+        val channel = com.ai.assistance.quro.core.chat.ApprovalPolicy.channelFor(name)
+        val channelAllows = when (channel) {
+            com.ai.assistance.quro.core.chat.ApprovalChannel.CMS ->
+                com.ai.assistance.quro.core.policy.QuroPolicyStore.getCms(context) == com.ai.assistance.quro.core.policy.QuroPolicy.ALLOW
+            com.ai.assistance.quro.core.chat.ApprovalChannel.PRIV ->
+                com.ai.assistance.quro.core.policy.QuroPolicyStore.getPriv(context) == com.ai.assistance.quro.core.policy.QuroPolicy.ALLOW
+            null -> false
+        }
+        val channelDenies = when (channel) {
+            com.ai.assistance.quro.core.chat.ApprovalChannel.CMS ->
+                com.ai.assistance.quro.core.policy.QuroPolicyStore.getCms(context) == com.ai.assistance.quro.core.policy.QuroPolicy.DENY
+            com.ai.assistance.quro.core.chat.ApprovalChannel.PRIV ->
+                com.ai.assistance.quro.core.policy.QuroPolicyStore.getPriv(context) == com.ai.assistance.quro.core.policy.QuroPolicy.DENY
+            null -> false
+        }
+        if (channelDenies) return "工具已被执行通道策略禁止（权限面板）：" + name
+        val declared = tool.requiresApproval
+        if (!channelAllows &&
+            com.ai.assistance.quro.core.chat.ApprovalPolicy.needsApproval(name, call.arguments, declared) &&
+            !com.ai.assistance.quro.core.chat.ApprovalMemory.isAllowed(name)
+        ) {
+            val request = com.ai.assistance.quro.core.chat.ApprovalRequest(
+                id = "cluster_" + System.currentTimeMillis() + "_" + name.hashCode(),
+                toolName = name,
+                toolLabel = com.ai.assistance.quro.core.chat.ApprovalPolicy.labelFor(name),
+                summary = "集群角色即将执行「" + com.ai.assistance.quro.core.chat.ApprovalPolicy.labelFor(name) + "」",
+                reason = null,
+                facts = com.ai.assistance.quro.core.chat.ApprovalPolicy.factsFor(name, call.arguments),
+                risk = tool.risk,
+            )
+            val denial = com.ai.assistance.quro.core.chat.ApprovalGate.awaitDecision(request)
+            if (denial != null) return "审批未通过：" + denial
+            com.ai.assistance.quro.core.chat.ApprovalMemory.remember(
+                name,
+                com.ai.assistance.quro.core.chat.AllowScope.SESSION,
+            )
+        }
         // 危险工具硬超时：60s，防止一个工具卡住吃满整个任务预算
         return withTimeoutOrNull(60_000L) {
             tool.run(context, call.arguments)
         } ?: name + " 执行超时（超过 60 秒仍未返回）"
     }
 
-    private val tasks = LinkedHashMap<String, ClusterTask>()
-    private val spend = HashMap<String, Int>()          // personaId|taskId → tokens
-    private val profiles = HashMap<String, Pair<Int, Int>>()  // personaId → (成功, 失败)
+    private val tasks = java.util.Collections.synchronizedMap(LinkedHashMap<String, ClusterTask>())
+    private val spend = java.util.concurrent.ConcurrentHashMap<String, Int>()          // personaId|taskId → tokens
+    private val profiles = java.util.concurrent.ConcurrentHashMap<String, Pair<Int, Int>>()  // personaId → (成功, 失败)
 
     /**
      * #217：集群云端角色共用的 [QuroToolRouter] —— 工具调用获取走 ZorvAI 主通道。
@@ -427,6 +467,9 @@ ${if (vocab.isNotBlank()) vocab else "(技能库为空)"}
             node.lastError = "所有被点名角色都未能给出方案"
             node.attempt++
             t.replanCount++
+            // 🔴 S3 修复（2026-11-06）：失败必须置 FAILED —— 否则节点永久卡在 PROPOSING，
+            //    replanning 只救 FAILED 节点，ready() 只认 PENDING，任务空转到熔断。
+            node.state = NodeState.FAILED
             t.state = if (t.replanCount > cluster.budget.maxReplan) ClusterTaskState.ESCALATED else ClusterTaskState.REPLANNING
             return
         }
@@ -628,6 +671,8 @@ $revise""".trimIndent()
             node.attempt++
             t.replanCount++
             emit(ClusterEvent.Error(t.id, role.personaId, "执行失败"))
+            // 🔴 S3 修复：失败必须置 FAILED，否则节点卡在 EXECUTING 永久搁浅
+            node.state = NodeState.FAILED
             t.state = if (t.replanCount > cluster.budget.maxReplan) ClusterTaskState.ESCALATED else ClusterTaskState.REPLANNING
             return
         }
@@ -764,7 +809,21 @@ $revise""".trimIndent()
         // 而产物字节没变，重做 100 次还是同样的解析失败。这就是用户实测里
         // 「⚠ 验收未通过：验收方未给出有效结论」+「❌ 裁决不通过：验收方未给出有效结论」
         // 两条同时出现、14 轮空转的直接原因。
-        val v = ClusterVerdictProtocol.verdictOf(out?.text)
+        // 🔴 S4 修复（2026-11-06）：验收方调用本身失败（网络断/模型不可用，out==null）
+        //    是可重试的环境问题，与「输出解析不出」是两回事 —— 旧实现把 null 也当
+        //    UNPARSABLE，重试用尽后降级放行**从未被判定过的产物**（假验收）。
+        if (out == null) {
+            if (node.attempt < cluster.budget.maxNodeAttempts) {
+                node.attempt++
+                emit(ClusterEvent.Error(t.id, node.assignee, "验收方调用失败（网络/模型不可用），正在重试第 " + node.attempt + " 次"))
+                t.state = ClusterTaskState.VERIFYING
+                return
+            }
+            emit(ClusterEvent.Verdict(t.id, node.id, false, "验收方连续调用失败，任务升级人工处理", "系统"))
+            t.state = ClusterTaskState.ESCALATED
+            return
+        }
+        val v = ClusterVerdictProtocol.verdictOf(out.text)
         val pass = v == ClusterVerdictProtocol.ClusterVerdict.PASS
         // 验收方身份：评审角色，还是主持代验？（用户直接问过「关键是谁验收？」）
         val verifierName = critic?.let { c ->

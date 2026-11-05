@@ -4,7 +4,9 @@ import com.ai.assistance.quro.genui.sdk.style.ZorvPalette
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -180,8 +182,23 @@ fun DesktopWindowRenderer(c: UIComponent, ctx: RenderContext) {
 @Composable
 fun TaskbarDockRenderer(c: UIComponent, ctx: RenderContext) {
     val icons = c.properties.a9("icons")
-    Row(Modifier.clip(RoundedCornerShape(14.dp)).background(ctx.theme.colorScheme.onSurface.copy(alpha = 0.9f)).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        icons.forEach { Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(ctx.theme.colorScheme.onSurface), contentAlignment = Alignment.Center) { Text(it, fontSize = 18.sp) } }
+    // 🔴 移动端适配修复（2026-11-04）：N×40dp 图标 + 间距，≥7 个即溢出 360dp 屏。
+    //    套横向滚动（任务栏本就是可滚的 dock 语义）。
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(ctx.theme.colorScheme.onSurface.copy(alpha = 0.9f))
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        icons.forEach {
+            Box(
+                Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(ctx.theme.colorScheme.onSurface),
+                contentAlignment = Alignment.Center,
+            ) { Text(it, fontSize = 18.sp) }
+        }
     }
 }
 
