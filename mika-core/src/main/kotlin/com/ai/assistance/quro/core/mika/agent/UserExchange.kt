@@ -108,7 +108,7 @@ internal class UserExchange(
         } finally {
             inputReply = null
             resolve(ask)
-        }.also { if (it == null) emit(RunEvent.State(now(), "no_answer", detail(prompt))) else utterances()?.add(com.ai.assistance.quro.core.mika.userscreen.UserScreenMessage.parse(it).words) }?.let { answerText(it) }
+        }.also { if (it == null) emit(RunEvent.State(now(), "no_answer", detail(prompt))) else utterances()?.add(UserWords.said(com.ai.assistance.quro.core.mika.userscreen.UserScreenMessage.parse(it).words, tools)) }?.let { answerText(it) }
     }
 
     suspend fun input(o: Outcome.Input, running: TaskState): ToolExecution {

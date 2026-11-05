@@ -57,6 +57,58 @@ data class QuroPersona(
     val voiceSetting: String = "",  // 语音设定：推荐音色/语速（自然语言，供 TTS 使用，不进系统提示词）
     val incubation: String = "",    // AI 人格孵化：孵化灵感与备忘
     val lastIncubatedAt: Long = 0,  // 每卡独立心跳时间戳：最近一次（心跳/手动）孵化完成时刻，0=未孵化
+    /**
+     * Soul：这只人格卡跟你长期相处沉淀下来的「人格画像」（Markdown）。
+     *
+     * 与 [roleSetting]（静态角色设定，用户手写）不同，Soul 是**动态沉淀**的——
+     * 由自动进化从对话里总结、也可手动编辑，是「它已经长成了什么样」的记录。
+     * 可留空（尚未形成 Soul）。注入系统提示词时优先级：身份认知 > roleSetting > Soul > 语气标签。
+     */
+    val soul: String = "",          // Soul 人格画像（Markdown，自动沉淀 + 可手动编辑）
+    val soulUpdatedAt: Long = 0,    // Soul 最近一次更新时刻，0=未形成
+    /**
+     * 🔴 待学清单（2026-11-04 孵化/进化合体，学习进步导向）：
+     * 自我进化引擎产出的「下一阶段学习计划」，每条 `待办|待学 :: 标题 :: 建议`。
+     * 每次进化时回喂给引擎检查完成情况——孵化=给自己列作业，而不是改设定。
+     */
+    val openItems: String = "",
+    /**
+     * 作为「人格卡 → 模型调用」的覆盖层，仅在开关打开时生效，否则跟随全局模型配置。
+     * - temperature / topP：采样值（1.0 = 跟随模型默认）。
+     * - temperatureEnabled / topPEnabled：是否显式覆盖（关闭 = 用模型/全局默认）。
+     * - reasoningLevel：推理档位（low/medium/high），空 = 跟随全局。
+     */
+    val temperature: Float = 1.0f,
+    val topP: Float = 1.0f,
+    val temperatureEnabled: Boolean = false,
+    val topPEnabled: Boolean = false,
+    val reasoningLevel: String = "",  // "low" | "medium" | "high" | ""（空=跟随全局）
+    /**
+     * 空字符串 = 跟随全局模型配置（旧行为）；非空 = 该人格卡（Bot）绑定指定模型名，
+     * 发送时覆盖 cfg.model（provider/baseUrl/apiKey 仍跟随全局）。这是
+     * 「Bot = 模型 + 提示词 + Soul + Memory + 工具开关」按 Bot 隔离的最后一块拼图。
+     */
+    val defaultModelId: String = "",
+    /**
+     * 空 = 全部工具可用（默认，保持旧行为零迁移）；非空 = 只下发这些类别内的工具。
+     * 类别清单见 [com.ai.assistance.quro.core.tools.ToolCategory]。
+     */
+    val enabledToolCategories: List<String> = emptyList(),
+    /**
+     * - evolutionEnabled：自动进化（对话若干轮后自动沉淀 Soul）；
+     * - memoryEnabled：记忆注入（关闭后该 Bot 的系统提示词不带记忆/经验段）；
+     * - proactiveMode：主动模式（该 Bot 允许被心跳/事件触发主动发消息）。
+     */
+    val evolutionEnabled: Boolean = true,
+    val memoryEnabled: Boolean = true,
+    /**
+     * - 最小间隔小时数（0–168，默认 8；0 = 不限间隔，只按轮数触发）；
+     * - 触发检查的最小完成轮数（1–50，默认 10）。
+     * 两者同时满足才进入检查（此前 ZorvAI 写死固定值，无法按 Bot 调节）。
+     */
+    val evolutionMinIntervalHours: Int = 8,
+    val evolutionTurnsPerCheck: Int = 10,
+    val proactiveMode: Boolean = false,
     val tags: List<String> = emptyList(),  // 仅存全局标签名称（见 QuroTagRepository）
     val voiceProfile: QuroVoiceProfile? = null, // 结构化语音组合（B1）；空=跟随全局 TTS 设置
     val createdAt: Long = System.currentTimeMillis(),
@@ -251,6 +303,21 @@ class QuroPersonaRepository(val context: Context) {
             voiceSetting = o.optString("voiceSetting", ""),
             incubation = o.optString("incubation", ""),
             lastIncubatedAt = o.optLong("lastIncubatedAt", 0),
+            soul = o.optString("soul", ""),
+            soulUpdatedAt = o.optLong("soulUpdatedAt", 0),
+            openItems = o.optString("openItems", ""),
+            temperature = o.optDouble("temperature", 1.0).toFloat(),
+            topP = o.optDouble("topP", 1.0).toFloat(),
+            temperatureEnabled = o.optBoolean("temperatureEnabled", false),
+            topPEnabled = o.optBoolean("topPEnabled", false),
+            reasoningLevel = o.optString("reasoningLevel", ""),
+            defaultModelId = o.optString("defaultModelId", ""),
+            evolutionMinIntervalHours = o.optInt("evolutionMinIntervalHours", 8).coerceIn(0, 168),
+            evolutionTurnsPerCheck = o.optInt("evolutionTurnsPerCheck", 10).coerceIn(1, 50),
+            enabledToolCategories = parseStringList(o.optJSONArray("enabledToolCategories")),
+            evolutionEnabled = o.optBoolean("evolutionEnabled", true),
+            memoryEnabled = o.optBoolean("memoryEnabled", true),
+            proactiveMode = o.optBoolean("proactiveMode", false),
             tags = tags,
             voiceProfile = voiceProfile,
             createdAt = o.optLong("createdAt", System.currentTimeMillis()),
@@ -274,6 +341,21 @@ class QuroPersonaRepository(val context: Context) {
             put("voiceSetting", p.voiceSetting)
             put("incubation", p.incubation)
             put("lastIncubatedAt", p.lastIncubatedAt)
+            put("soul", p.soul)
+            put("soulUpdatedAt", p.soulUpdatedAt)
+            if (p.openItems.isNotBlank()) put("openItems", p.openItems)
+            put("temperature", p.temperature)
+            put("topP", p.topP)
+            put("temperatureEnabled", p.temperatureEnabled)
+            put("topPEnabled", p.topPEnabled)
+            put("reasoningLevel", p.reasoningLevel)
+            put("defaultModelId", p.defaultModelId)
+            put("evolutionMinIntervalHours", p.evolutionMinIntervalHours)
+            put("evolutionTurnsPerCheck", p.evolutionTurnsPerCheck)
+            put("enabledToolCategories", JSONArray().apply { p.enabledToolCategories.forEach { put(it) } })
+            put("evolutionEnabled", p.evolutionEnabled)
+            put("memoryEnabled", p.memoryEnabled)
+            put("proactiveMode", p.proactiveMode)
             if (p.voiceProfile != null) {
                 put("voiceProfile", JSONObject().apply {
                     put("providerId", p.voiceProfile.providerId)
@@ -286,6 +368,24 @@ class QuroPersonaRepository(val context: Context) {
             put("tags", tagsArr)
             put("createdAt", p.createdAt)
             put("updatedAt", p.updatedAt)
+        }
+    }
+
+    /**
+     * 当前激活人格之外**其它人格卡**的 name + description 清单，注入系统提示词——
+     * AI 知道「本机还有谁、各自擅长什么」，配合 `ask_persona` 工具实现人格互问。
+     */
+    fun personaDirectorySection(context: Context, excludePersonaId: String): String {
+        val others = loadAll().filter {
+            it.id != excludePersonaId && it.name.isNotBlank() && it.description.isNotBlank()
+        }
+        if (others.isEmpty()) return ""
+        return buildString {
+            append("## 人格目录（本机的其它人格卡）\n")
+            append("以下是本机其它的 AI 人格。需要另一个视角/专长时，用 `ask_persona` 工具（persona 传它的 id）向它提问：\n")
+            others.forEach { p ->
+                append("- [id=${p.id}] ${p.name}: ${p.description.take(160)}\n")
+            }
         }
     }
 

@@ -177,7 +177,7 @@ class ZxWebCardTool : QuroTool {
   不要凭印象拼组件名或字段名——名册外的名字会落到通用渲染，效果差。
 字段词汇约定：n=名称, v=数值, d=描述, t=文本, k=键, s/e=起止, at=时间, st=状态, who=人, u=单位。
 返回：用户在界面上的交互（组件名 + 动作 + 被操作对象明细），或 cancelled/timeout。
-⚠ 纯展示用 visual_popup；气泡内小卡片用 ui_card/ui_widget；本工具用于「要用户动手操作」的动态交互界面。
+⚠ 纯展示的单块只读小卡片属于独立分类，用 visual_card（html 自由写任意场景）；屏幕弹窗用 visual_popup；现成组件标准件用 ui_card/ui_widget（富组件）；本工具仅用于「要用户动手操作」的动态交互界面，严禁互相顶替。
 ⚠ 一块界面只画一次；需要多块就多次调用，它们会依次内联在消息流里。"""
 
     override val parametersJson = """{

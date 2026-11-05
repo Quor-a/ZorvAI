@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import com.ai.assistance.quro.core.tools.QuroVoiceFeaturePrefs
 import com.ai.assistance.quro.service.QuroBotBootstrapService
+import com.ai.assistance.quro.service.QuroDesktopPetService
 import com.ai.assistance.quro.service.QuroVoiceBallService
 
 /**
@@ -39,5 +40,12 @@ class QuroBootReceiver : BroadcastReceiver() {
 
         // 3) 应用内闹钟重建排程（开机后 AlarmManager 已清空，需按持久化数据重排）
         com.ai.assistance.quro.permissions.QuroAlarmScheduler(context).scheduleAll()
+
+        // 4) 桌面宠物自恢复（2026-11-05 自启动模块）：
+        //    开关持久化了却从不开机拉起，用户重启手机后桌宠必须手动再开一次。
+        //    start() 内部会检查悬浮窗权限，缺失时安静返回 false。
+        if (QuroVoiceFeaturePrefs.getDesktopPet(context)) {
+            runCatching { QuroDesktopPetService.start(context) }
+        }
     }
 }

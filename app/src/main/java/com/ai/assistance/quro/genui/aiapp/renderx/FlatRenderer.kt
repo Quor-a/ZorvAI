@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -134,6 +135,38 @@ private fun renderNode(doc: FlatDoc, id: String, onAction: (String) -> Unit, mod
         }
         "input" -> Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(10.dp), modifier = modifier.then(outer).fillMaxWidth()) {
             Text(text.ifBlank { n.props["hint"] ?: qstr(R.string.qk_03706) }, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(10.dp))
+        }
+        // 🔴 头/尾栏分支（2026-11-04）：A2uiProtocol 的 TYPE_MAP 会产出 header_bar/footer，
+        //    此前没有对应分支 —— 走到兜底退化成一行普通文字（页面头尾"消失"）。
+        "header_bar" -> Surface(
+            color = colorOf(n.props["bg"], MaterialTheme.colorScheme.surfaceContainer),
+            shape = RoundedCornerShape(14.dp),
+            modifier = modifier.then(outer).fillMaxWidth()
+        ) {
+            Row(
+                Modifier.padding(horizontal = 14.dp, vertical = 12.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text, fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                    color = colorOf(n.props["color"], MaterialTheme.colorScheme.onSurface),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                n.kids.forEach { renderNode(doc, it, onAction) }
+            }
+        }
+        "footer" -> Surface(
+            color = colorOf(n.props["bg"], MaterialTheme.colorScheme.surfaceContainer),
+            shape = RoundedCornerShape(14.dp),
+            modifier = modifier.then(outer).fillMaxWidth()
+        ) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (text.isNotBlank()) Text(text, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    n.kids.forEach { renderNode(doc, it, onAction) }
+                }
+            }
         }
         else -> Text(text.ifBlank { n.type }, modifier = modifier.then(outer))
     }

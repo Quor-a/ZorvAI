@@ -36,13 +36,15 @@ enum class BuiltinShellFailure(val defaultFix: BuiltinShellFix, val duringPairin
     ConnectFailed(BuiltinShellFix.Retry, duringPairing = false),
     /** 已配对的授权不认了(太久没用被系统撤销,或用户在系统里删了)。 */
     AuthorizationRevoked(BuiltinShellFix.RePair, duringPairing = false),
+    /** 配对用的钥匙存着却读不出来了:设备只认那一把,不能悄悄换,要重新配对(配对时才换新钥匙)。 */
+    KeyUnreadable(BuiltinShellFix.RePair, duringPairing = false),
     /** 连上了,助手却没能启动或交接。 */
     HelperStartFailed(BuiltinShellFix.Retry, duringPairing = false),
     /**
-     * 电脑经 USB 起的助手停了(多半是手机重启过),又没配对过无线调试,ZorvAI 自己起不来:
-     * 再在电脑上跑一次命令,或去配对无线调试(之后就能自动恢复)。
+     * 经 USB 启动命令起的助手停了(多半是手机重启过),又没配对过无线调试,ZorvAI 自己起不来:
+     * 再运行一次启动命令。不往无线调试引:有的手机根本没有能用的无线调试。
      */
-    UsbHelperStopped(BuiltinShellFix.RePair, duringPairing = false),
+    UsbHelperStopped(BuiltinShellFix.RunUsbCommand, duringPairing = false),
     Unknown(BuiltinShellFix.Retry, duringPairing = false),
 }
 
@@ -55,6 +57,23 @@ enum class BuiltinShellFix {
     OpenWifi,
     /** 去开发者选项里亲手打开无线调试。 */
     OpenWirelessDebugging,
+    /** 再运行一次 USB 启动命令(界面给出命令和复制按钮)。 */
+    RunUsbCommand,
+}
+
+/**
+ * 助手停了以后靠什么再起来,取决于它上次是怎么起的。停了时往哪儿引用户、成功页和设置页怎么说,都看它。
+ */
+enum class HelperRestart {
+    /** 还没设置过。 */
+    None,
+    /** 配对过无线调试:ZorvAI 自己经它再起;手机重启后打开无线调试就行(能替用户打开时连这一步也不用)。 */
+    Wireless,
+    /**
+     * 只用 USB 启动命令起过、没配对过无线调试:ZorvAI 自己起不来,停了(比如手机重启后)要再运行一次命令。
+     * 有的手机没有能用的无线调试,只能走这条路,所以这时不提示去打开无线调试。
+     */
+    UsbCommand,
 }
 
 /** 找「使用配对码配对设备」窗口公布的配对端口(本机 mDNS)的结果。 */
@@ -75,7 +94,14 @@ interface BuiltinShellControl {
     /** 配对过无线调试(ZorvAI 能自己经它起助手、跑命令)。助手也可能是电脑经 USB 起的,所以在运行不等于配对过。 */
     val paired: Boolean get() = status.value != BuiltinShellStatus.NotPaired
 
-    /** 开始找配对端口(用户正在去打开配对窗口)。重复调用无害。 */
+    /** 助手停了以后靠什么再起来(见 [HelperRestart])。 */
+    val restart: HelperRestart get() = when {
+        status.value == BuiltinShellStatus.Failed(BuiltinShellFailure.UsbHelperStopped) -> HelperRestart.UsbCommand
+        paired -> HelperRestart.Wireless
+        else -> HelperRestart.None
+    }
+
+    /** 开始找配对端口(用户正在去打开配对窗口)。重复调用无害:还在找就从这时起重新计时。 */
     fun startDiscovery()
     fun stopDiscovery()
 

@@ -32,6 +32,8 @@ object QuroVoiceFeaturePrefs {
     private const val K_EMOTION_TAGS_ENABLED = "emotion_tags_enabled"
     private const val K_EMOTION_PROVIDER_ID = "emotion_provider_id"
     private const val K_VOICE_COLOR_ROUTING = "voice_color_routing"
+    private const val K_VOICE_BALL_PET = "voice_ball_pet"
+    private const val K_DESKTOP_PET = "desktop_pet"
 
     private fun prefs(ctx: Context): SharedPreferences =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -104,4 +106,21 @@ object QuroVoiceFeaturePrefs {
     fun getVoiceColorRoutingEnabled(ctx: Context) = prefs(ctx).getBoolean(K_VOICE_COLOR_ROUTING, true)
     fun setVoiceColorRoutingEnabled(ctx: Context, v: Boolean) =
         prefs(ctx).edit().putBoolean(K_VOICE_COLOR_ROUTING, v).apply()
+
+    /**
+     * 语音球「桌面宠物」模式：开启后悬浮球以所选宠物形象（PetSprite）渲染，
+     * 随语音/思考/工具调用状态切换表情与气泡，而非默认的粒子球。
+     * 依赖 [PetPrefs.petVisible]（宠物总开关）同时开启才生效。
+     */
+    fun getVoiceBallPet(ctx: Context) = prefs(ctx).getBoolean(K_VOICE_BALL_PET, false)
+    fun setVoiceBallPet(ctx: Context, v: Boolean) =
+        prefs(ctx).edit().putBoolean(K_VOICE_BALL_PET, v).apply()
+
+    /**
+     * 桌面宠物总开关：独立于语音球的常驻宠物悬浮窗（[com.ai.assistance.quro.service.QuroDesktopPetService]），
+     * 形象同样来自 PetPrefs，状态实时跟随对话生成（QuroPetStateBus）。
+     */
+    fun getDesktopPet(ctx: Context) = prefs(ctx).getBoolean(K_DESKTOP_PET, false)
+    fun setDesktopPet(ctx: Context, v: Boolean) =
+        prefs(ctx).edit().putBoolean(K_DESKTOP_PET, v).apply()
 }

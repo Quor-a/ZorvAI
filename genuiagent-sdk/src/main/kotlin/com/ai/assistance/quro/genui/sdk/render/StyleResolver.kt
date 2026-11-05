@@ -266,9 +266,18 @@ object StyleResolver {
         val shape = resolveShape(style)
         var modifier: Modifier = Modifier
 
-        // 宽度（独立上限：720dp，与 PageCanvas 阅读宽度一致）
+        // 🔴 宽度钳制（2026-11-04 修复「组件超出屏幕」根因）：固定宽度此前只钳到
+        //    720dp（平板阅读宽），手机 360dp 屏上 AI 写 width:700 会被"合法"放行并
+        //    横向溢出约一倍屏宽。现在统一取 min(值, 页面可用宽) —— 超屏值收敛为
+        //    满宽组件（LocalPageMaxWidth 由 PageCanvas 下发，缺省 360dp）。
+        val pageMaxWidth = GenUILayoutGuard.LocalPageMaxWidth.current
+
+        // 宽度（独立上限：min(720dp 阅读宽, 页面可用宽)）
         resolveDp(style.width, GenUILayoutGuard.MAX_WIDTH_DP)
-            ?.let { modifier = modifier.then(Modifier.width(it)) }
+            ?.let {
+                val w = minOf(it.value, pageMaxWidth)
+                modifier = modifier.then(Modifier.width(w.dp))
+            }
         // 高度（独立上限：900dp）
         resolveDp(style.height, GenUILayoutGuard.MAX_HEIGHT_DP)
             ?.let { modifier = modifier.then(Modifier.height(it)) }

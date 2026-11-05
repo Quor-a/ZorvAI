@@ -796,8 +796,32 @@ class SetTimerTool : QuroTool {
                 putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
                 addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(intent)
-            "✅ 倒计时已设置: ${minutes}分钟 $label"
+            val resolved = intent.resolveActivity(context.packageManager) != null
+            if (resolved) {
+                context.startActivity(intent)
+                return "✅ 倒计时已设置: ${minutes}分钟 $label"
+            }
+            // 无系统时钟 App 时，退化为应用内倒计时（复用闹钟排程，到点弹通知）。
+            val scheduler = com.ai.assistance.quro.permissions.QuroAlarmScheduler(context)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S &&
+                !scheduler.canScheduleExact()) {
+                scheduler.openExactAlarmSettings()
+                return "⚠️ 未找到系统时钟 App，且精确闹钟权限未授予（Android 12+ 需 SCHEDULE_EXACT_ALARM）。已打开系统设置页，请开启后重试。"
+            }
+            val fireAt = System.currentTimeMillis() + seconds * 1000L
+            val cal = java.util.Calendar.getInstance().apply { timeInMillis = fireAt }
+            scheduler.add(
+                com.ai.assistance.quro.permissions.QuroAlarmScheduler.ZorvAlarm(
+                    id = "timer_${System.currentTimeMillis()}",
+                    hour = cal.get(java.util.Calendar.HOUR_OF_DAY),
+                    minute = cal.get(java.util.Calendar.MINUTE),
+                    label = if (label.isNotBlank()) "倒计时：$label" else "倒计时",
+                    days = emptyList(),
+                    enabled = true,
+                    createdAt = System.currentTimeMillis(),
+                )
+            )
+            "✅ 已设置应用内倒计时（无系统时钟可用）：${minutes}分钟 $label，到点提醒"
         } catch (e: Exception) {
             "❌ 设置倒计时失败: ${e.message}"
         }

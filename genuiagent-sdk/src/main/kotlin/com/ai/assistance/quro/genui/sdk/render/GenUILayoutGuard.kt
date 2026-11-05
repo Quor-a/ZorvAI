@@ -36,6 +36,18 @@ import com.ai.assistance.quro.genui.sdk.dsl.EdgeInsets
  */
 object GenUILayoutGuard {
 
+    // ── 页面可用宽度（手机屏钳制，2026-11-04）─────────────────────────────
+
+    /**
+     * 当前页面**实际可用宽度**(dp),由 [GenUIRenderer.PageCanvas] 用 CompositionLocal 下发。
+     *
+     * 🔴 修复「组件超出屏幕」的根因:旧实现固定宽度只钳到 [MAX_WIDTH_DP]=720dp
+     * (平板阅读宽),手机 360dp 屏上 AI 写 `width:700` 会"合法"放行并横向溢出约一倍屏宽。
+     * 现在固定宽度统一取 `min(值, 页面可用宽)` —— 超屏值收敛为满宽组件,
+     * 语义仍是「AI 想要一个宽块」,而不是丢成 wrap。
+     */
+    val LocalPageMaxWidth = androidx.compose.runtime.staticCompositionLocalOf { 360f }
+
     // ── 间距（8pt 网格，Apple HIG）───────────────────────────────
 
     /** 间距上限：超过 64dp 的间距在手机上就是一整屏空白，属于排版事故。 */

@@ -11,6 +11,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ai.assistance.quro.core.linux.CommandTranslator
 import com.ai.assistance.quro.core.linux.QuroLinuxEnv
+import com.ai.assistance.quro.core.termux.TermuxEnvironment
+import com.ai.assistance.quro.core.termux.ZorvSwitch
 import com.ai.assistance.quro.core.privilege.QuroShellQuote
 import com.ai.assistance.quro.terminal.vt.TerminalScreen
 import com.ai.assistance.quro.terminal.vt.TerminalSnapshot
@@ -238,6 +240,10 @@ class QuroShellSession private constructor(
         when (mode) {
             ShellMode.VM -> emit("— Zorv AI 终端（VM · 完整 Linux 内核）已启动 —")
             ShellMode.LINUX -> emit("— Zorv AI 终端已启动 (proot/Linux · Ubuntu 24.04) —")
+            ShellMode.TERMUX -> {
+                emit("— Zorv AI 终端已启动 (termux 原生 · 包管理器 pkg) —")
+                emit("  输入 zorv 进入 zorvAI 沙箱(Ubuntu)；zorv status 看两套环境；zorv which <命令> 查命令归属")
+            }
             ShellMode.DEVICE -> {
                 emit("— Zorv AI 终端已启动 (设备 · Toybox sh) —")
                 // 设备模式 = proot 未启用，所有 Linux 命令都不可用——原因直接打进终端缓冲区。
@@ -898,6 +904,9 @@ class QuroShellSession private constructor(
     private fun promptPrefix(): String =
         when (mode) {
             ShellMode.LINUX -> "quro@linux:$cwdState\$ "
+            // 提示符本身就把「现在在哪套环境」写在脸上：两套环境命令不通用，
+            // 光靠记忆判断极易敲错（pkg/apt 互相找不到就是这么来的）。
+            ShellMode.TERMUX -> "zorv@termux:$cwdState\$ "
             ShellMode.VM -> "" // guest shell 自行回显提示符
             ShellMode.DEVICE -> "$cwdState\$ "
         }
@@ -925,6 +934,25 @@ class QuroShellSession private constructor(
         }
 
         fun create(context: Context): QuroShellSession {
+        // ★ 双路径：默认进 Termux 原生（包管理器 pkg），敲 `zorv` 进 zorvAI 沙箱（Ubuntu）。
+        // 两条路径的失败都逐级降级，绝不把终端开成「打不开」：
+        //   Termux → 沙箱(PTY) → 沙箱(管道) → 设备 sh
+        //
+        // 🔴 `zorv` 切换命令**必须无条件安装**，不能只在 createTermux 里装：
+        //   ① 默认环境还停在 ubuntu 的老用户（偏好是旧版本写下的）永远走不到 createTermux；
+        //   ② Termux 通道不通回落沙箱时，同样走不到；
+        //   ③ 用户就在沙箱里敲 `zorv`（想看状态 / 查命令归属）也是常态。
+        //   三种情况下命令都得在，否则表现就是「新功能根本不存在 / command not found」。
+        //   ensureCommands 内部是幂等的，失败只记日志，不影响终端启动。
+        ZorvSwitch.ensureCommands(context)?.let { Log.w(TAG, "zorv 命令安装失败：$it") }
+        if (QuroTerminalPrefs.defaultEnv == ZorvSwitch.ENV_TERMUX) {
+            val termux = runCatching { createTermux(context) }.getOrElse { t ->
+                diag(context, "create: Termux 会话异常：${t.message}")
+                null
+            }
+            if (termux != null) return termux
+            diag(context, "create: Termux 不可用，回落 zorvAI 沙箱")
+        }
         // 真实 PTY 模式（设置「功能 → 真实 PTY 终端」可开，默认关）：
         // 经 libtermux-terminal 把 shell 挂到伪终端，vim/top/python REPL 等可真正交互、SIGINT 正常投递。
         // 任何异常都回退管道会话（绝不抛、永不为 null），保证终端永不开不了。
@@ -943,6 +971,30 @@ class QuroShellSession private constructor(
             createDevice(context)
         }
     }
+
+        /**
+         * Termux 原生会话（默认路径）。
+         *
+         * 能不能起得来取决于 Termux 通道（`system_linker_exec`）是否通；
+         * 返回 null 表示不可用，由 [create] 回落沙箱，绝不抛。
+         */
+        private fun createTermux(context: Context): QuroShellSession? {
+            val launch = TermuxEnvironment.shellLaunch(context) ?: return null
+            // 切换命令随会话一起刷新（幂等、几 KB）：保证 zorv 里的 rootfs / proot 参数
+            // 永远与本次终端一致，不会出现「终端进的是 A 沙箱、zorv 进的是 B 沙箱」。
+            ZorvSwitch.ensureCommands(context)?.let { Log.w(TAG, "zorv 命令安装失败：$it") }
+            val home = TermuxEnvironment.homeDir(context).absolutePath
+            val usePty = QuroTerminalPrefs.usePty
+            val command = if (usePty) {
+                // createSubprocess 把 args 原样当 argv（不补 argv[0]），所以整串给全
+                listOf(launch.cmd) + launch.argv
+            } else {
+                // ProcessBuilder 把首项当程序、并自动把它设为 argv[0]
+                listOf(launch.cmd) + launch.argv.drop(1)
+            }
+            diag(context, "createTermux: cmd=${launch.cmd} mode=${launch.mode.id} pty=$usePty")
+            return QuroShellSession(context, ShellMode.TERMUX, command, launch.envp, home, usePty = usePty)
+        }
 
         /**
          * 强制本地 proot/设备终端（不尝试 VM 后端）。
@@ -1020,7 +1072,7 @@ class QuroShellSession private constructor(
     }
 }
 
-enum class ShellMode { DEVICE, LINUX, VM }
+enum class ShellMode { DEVICE, LINUX, TERMUX, VM }
 
 /** 去掉 ANSI 转义序列（\x1b[...m 等），让管道模式下的输出干净可读。 */
 private fun stripAnsi(s: String): String {

@@ -1,48 +1,27 @@
 package com.ai.assistance.quro.core.ui.card.host
 
-import android.graphics.Bitmap
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.Dp
+import com.ai.assistance.quro.core.ui.card.compose.CardExtractors
 import com.ai.assistance.quro.core.ui.card.registry.CardRegistry
-import com.ai.assistance.quro.core.ui.card.registry.CardRenderer
-import com.ai.assistance.quro.core.ui.card.registry.CardState
-import com.ai.assistance.quro.core.ui.card.render.BackendKind
-import com.ai.assistance.quro.core.ui.card.render.CanvasBackend
 import com.ai.assistance.quro.core.ui.card.spec.Action
-import com.ai.assistance.quro.core.ui.card.spec.CardData
 import com.ai.assistance.quro.core.ui.card.spec.CardSpec
 import com.ai.assistance.quro.core.ui.card.spec.ColorToken
 
 /**
- * 宿主层：主题 Token · 事件总线 · 生命周期 · 缓存 · 复用。
+ * 宿主层：主题令牌解析 · 事件总线。
  *
- * 与对话框消息流对接（RecyclerView / LazyColumn）时最容易翻车的点都在这里统一处理：
- * 复用池、高度缓存、局部刷新、滚动策略、主题解析。
+ * 与对话框消息流对接（RecyclerView / LazyColumn）时最容易翻车的点——复用池、高度缓存、
+ * 局部刷新、滚动策略、主题解析——在 Compose 世界里由布局引擎与 MaterialTheme 自动处理，
+ * 无需再手写 HeightCache / BitmapCache / CardPool。
  */
 
-/** 主题令牌解析器：把 [ColorToken] 解析成具体 Color（暗色/字体缩放自动生效）。 */
-object StyleTokenResolver {
-    lateinit var resolveToken: (ColorToken) -> Color
-
-    fun resolve(token: ColorToken): Color = if (::resolveToken.isInitialized) resolveToken(token) else Color.Gray
-}
-
-/** 事件总线：卡片点击 → ActionBus → CardHost → 宿主决策（发消息/调工具/开二级页/本地变更）。 */
+/** 事件总线：卡片点击 → ActionBus → 宿主决策（发消息 / 调工具 / 开二级页 / 本地变更）。 */
 object ActionBus {
     /** 宿主注入的处理器；返回 true 表示已消费。 */
     var handler: ((action: Action, card: CardSpec) -> Boolean)? = null
@@ -52,37 +31,33 @@ object ActionBus {
     }
 }
 
-/** 高度缓存：测量完的高度写进来，流式重绘只走 payload 局部刷新，不 notifyDataSetChanged。 */
-object HeightCache {
-    private val map = LinkedHashMap<String, Int>() // cardId -> heightPx
-
-    fun get(cardId: String): Int? = map[cardId]
-    fun put(cardId: String, h: Int) { map[cardId] = h }
-    fun clear(cardId: String) = map.remove(cardId)
-}
-
-/** 离屏 Bitmap 缓存：按 cardId 存图表位图，滑出即释放。 */
-object BitmapCache {
-    private val map = LinkedHashMap<String, Bitmap>()
-
-    fun get(cardId: String): Bitmap? = map[cardId]
-    fun put(cardId: String, b: Bitmap) { map[cardId] = b }
-    fun release(cardId: String) = map.remove(cardId)?.recycle()
-}
-
-/** 卡片气泡复用池标识（与消息流 RecycledViewPool 对接时使用）。 */
-object CardPool {
-    const val VIEW_TYPE = 9001
+/** 纯函数：ColorToken → 当前主题下的具体 Color（暗色 / 字体缩放自动生效）。 */
+fun resolveToken(token: ColorToken, cs: ColorScheme): Color = when (token) {
+    ColorToken.Primary -> cs.primary
+    ColorToken.OnPrimary -> cs.onPrimary
+    ColorToken.Secondary -> cs.secondary
+    ColorToken.OnSecondary -> cs.onSecondary
+    ColorToken.Surface -> cs.surface
+    ColorToken.OnSurface -> cs.onSurface
+    ColorToken.SurfaceVariant -> cs.surfaceVariant
+    ColorToken.OnSurfaceVariant -> cs.onSurfaceVariant
+    ColorToken.Background -> cs.background
+    ColorToken.OnBackground -> cs.onBackground
+    ColorToken.Outline -> cs.outline
+    ColorToken.Success -> Color(0xFF4CAF50)
+    ColorToken.Warning -> Color(0xFFFF9800)
+    ColorToken.Danger -> Color(0xFFF44336)
+    ColorToken.Info -> cs.primary
 }
 
 /**
  * Compose 挂载点：把一张 [CardSpec] 渲染进对话框。
- * 上层只传 spec，底层底座（canvas/view/gl）由这里按 renderHint 选，编排层无感。
+ * 上层只传 spec，底层渲染器（Compose 原语 + 局部 Canvas 几何）由注册表分发，编排层无感。
  *
- * 渲染流程（完全自研，不依赖任何内置/三方成品卡片控件）：
+ * 渲染流程（Server-Driven UI 标准范式，不再有任何 Canvas 像素排版）：
  *   1) 按 type 取白名单渲染器；取不到 → 降级 Markdown 气泡（绝不崩对话框）。
- *   2) 渲染器自写 measure → layout。
- *   3) 用 Compose Canvas + 自写 CanvasBackend 走渲染器的 render()，自己下绘制指令。
+ *   2) 渲染器内部用 Compose 原语自动排版，仅连续几何走局部 Canvas。
+ *   3) 主题令牌由 [resolveToken] 基于当前 MaterialTheme 实时解析，暗色 / 字体缩放自动生效。
  *
  * 注意：本挂载点与已有的 DynamicUiBlock / SurfaceHost 完全独立，是两个功能，不合并。
  */
@@ -92,106 +67,52 @@ fun CardSurface(
     modifier: Modifier = Modifier,
     onAction: (Action, CardSpec) -> Unit = { a, c -> ActionBus.post(a, c) },
 ) {
-    val renderer = remember(spec.type) { CardRegistry.resolveOrNull(spec.type) }
-    if (renderer == null) {
+    // 三级解析：type → 别名 → 按 data 形状推断（见 CardRegistry.resolveOrInfer）。
+    // key 里带上 data/layout，避免同一个卡片 id 换了内容后仍复用旧渲染器。
+    val resolved = remember(spec.type, spec.data, spec.layout) { CardRegistry.resolveOrInfer(spec) }
+    if (resolved == null) {
         MarkdownFallback(spec, modifier)
         return
     }
-    // 受控强转：state 由同一 renderer.createInitialState() 产生，类型一致，安全。
-    @Suppress("UNCHECKED_CAST")
-    val r = renderer as CardRenderer<CardState>
-    val measurer = rememberTextMeasurer()
-    val state = remember(spec.id) { r.createInitialState() }
-
-    // 入场动画驱动：state 实现 AnimateAware（如 custom 自定义卡）时逐帧推进 0→1，
-    // 渲染器按相位画数字滚动/进度生长；progress 是 mutableStateOf，draw 读取后自动逐帧重绘。
-    val anim = state as? com.ai.assistance.quro.core.ui.card.registry.AnimateAware
-    if (anim != null) {
-        LaunchedEffect(spec.id) {
-            val t0 = withFrameNanos { it }
-            while (true) {
-                val now = withFrameNanos { it }
-                val p = ((now - t0) / 1_400_000_000f).coerceIn(0f, 1f)
-                anim.onFrame(p)
-                if (p >= 1f) break
-            }
-        }
-    }
-
-    // 主题令牌：把语义色映射到当前 Material 主题（暗色 / 字体缩放自动生效）。
-    // 端上自写绘制，不依赖任何内置/三方成品卡片控件。
+    val renderer = resolved.second
     val cs = MaterialTheme.colorScheme
-    StyleTokenResolver.resolveToken = { token ->
-        when (token) {
-            ColorToken.Primary -> cs.primary
-            ColorToken.OnPrimary -> cs.onPrimary
-            ColorToken.Secondary -> cs.secondary
-            ColorToken.OnSecondary -> cs.onSecondary
-            ColorToken.Surface -> cs.surface
-            ColorToken.OnSurface -> cs.onSurface
-            ColorToken.SurfaceVariant -> cs.surfaceVariant
-            ColorToken.OnSurfaceVariant -> cs.onSurfaceVariant
-            ColorToken.Background -> cs.background
-            ColorToken.OnBackground -> cs.onBackground
-            ColorToken.Outline -> cs.outline
-            ColorToken.Success -> Color(0xFF4CAF50)
-            ColorToken.Warning -> Color(0xFFFF9800)
-            ColorToken.Danger -> Color(0xFFF44336)
-            ColorToken.Info -> cs.primary
-        }
-    }
-
-    BoxWithConstraints(modifier.fillMaxWidth()) {
-        // 预测量：用可用宽度算出卡片高度，否则 Canvas 默认 0 高不显示。
-        // 注意本环境 BOM 2026.01.01 的 Dp↔px 扩展（roundToPx/toDp）在此作用域不可见，
-        // 直接手算：px = dpValue × density（density 是 Float 密度因子）。
-        val densityFactor = LocalDensity.current.density
-        val maxWidthPx = (maxWidth.value * densityFactor).coerceAtLeast(1f)
-        val measured = r.measure(spec, state, maxWidthPx, densityFactor)
-        val layout = r.layout(spec, state, measured, densityFactor)
-        val heightDp = Dp(measured.height / densityFactor)
-        Canvas(
-            Modifier
-                .fillMaxWidth()
-                .height(heightDp)
-                // 防御性裁剪：AI 给的 layout 树若有节点超 allocW（如 ring size 过大），
-                // drawRect/drawArc 不受 Compose 默认 clip 影响，会画到 CardSurface 之外；
-                // 显式 clipToBounds 强制所有绘制指令不出 CardSurface 边界，杜绝溢出屏幕。
-                .clipToBounds()
-                .pointerInput(Unit) {
-                    // 点击命中：交给渲染器做 hitTest，命中则回传对应 Action（按钮组经 onAction→ActionBus→消息流）。
-                    detectTapGestures { offset ->
-                        val hit = r.hitTest(offset, layout, state)
-                        if (hit != null) {
-                            val action = (spec.data as? CardData.Form)?.buttons?.getOrNull(hit.actionIndex)?.action
-                                ?: spec.actions.getOrNull(hit.actionIndex)
-                            if (action != null) onAction(action, spec)
-                        }
-                    }
-                }
-        ) {
-            val backend = CanvasBackend(
-                scope = this,
-                tokenResolver = { StyleTokenResolver.resolve(it) },
-                textMeasurer = measurer,
-            )
-            r.render(backend, spec, layout, state)
-        }
-    }
+    // 主题令牌解析器：随主题色板变化重建（纯函数，无 lateinit 全局状态）。
+    val resolver: (ColorToken) -> Color = remember(cs) { { resolveToken(it, cs) } }
+    val fire: (Action) -> Unit = { action -> onAction(action, spec) }
+    renderer(spec, modifier, fire, resolver)
 }
 
 /**
- * 未注册类型的降级渲染。
- * 注意：对话框路径已在 ChatScreen.SelfCardMount 预过滤（白名单→CardSurface，
- * 组件库类型→富卡片渲染层），能走到这里说明两边都不认识。用中性小灰字提示，
- * 绝不把「[不支持的卡片类型：X]」这种协议报错样式吐进对话框（2026-10-30 用户截图实证）。
+ * 连「按 data 推断」都失败的降级渲染。
+ *
+ * 绝不吐「[不支持的卡片类型：X]」这种协议报错样式（2026-10-30 用户截图实证：
+ * 对话框里出现协议原文，用户会认为「小卡片彻底坏了」）。这里改为**把能读到的内容原样列出来**：
+ * 标题、布局树里的所有文字、表格首列 —— 至少信息不丢，只是没有排版。
  */
 @Composable
 private fun MarkdownFallback(spec: CardSpec, modifier: Modifier) {
-    androidx.compose.material3.Text(
-        text = "该卡片类型暂不支持（${spec.type}）",
-        modifier = modifier,
-        color = Color.Gray,
-        style = MaterialTheme.typography.bodySmall,
-    )
+    val cs = MaterialTheme.colorScheme
+    val resolver = remember(cs) { { t: ColorToken -> resolveToken(t, cs) } }
+    val texts = buildList {
+        if (spec.title.isNotBlank()) add(spec.title)
+        if (spec.subtitle.isNotBlank()) add(spec.subtitle)
+        addAll(CardExtractors.collectTexts(spec.layout))
+    }
+    androidx.compose.foundation.layout.Column(modifier.fillMaxWidth()) {
+        if (texts.isEmpty()) {
+            androidx.compose.material3.Text(
+                text = "（这张小卡片的内容没能解析出来）",
+                color = resolver(ColorToken.OnSurfaceVariant),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        } else {
+            texts.distinct().take(12).forEach { t ->
+                androidx.compose.material3.Text(
+                    text = t,
+                    color = resolver(ColorToken.OnSurface),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+    }
 }

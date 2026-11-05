@@ -102,6 +102,24 @@ internal class ScreenSession(
 
     fun clearLocated() { located.clear(); locatedInfo.clear(); described = false }
 
+    private var accessRevision = screen.appAccess.current().revision
+
+    suspend fun checkAppAccess(current: Boolean = true) {
+        val state = screen.appAccess.current()
+        if (state.revision != accessRevision) {
+            clearLocated()
+            clearPrimed()
+            lastSnapshot = null
+            recentSnapshots.clear()
+            readAt.clear()
+            shown = null
+            chain.clear()
+            stale = true
+            accessRevision = state.revision
+        }
+        if (current) screen.checkAppAccess()
+    }
+
     /** 这个 snapshotId(读屏的,或看图找到的点的)是这块屏发出的。 */
     fun owns(snapshotId: String): Boolean = snapshotId in issued || located.has(snapshotId)
 
@@ -135,7 +153,7 @@ internal class ScreenSession(
     }
 
     /** 此刻重新读一屏,不登记编号、不改模型手里的读屏;读不到为 null。 */
-    suspend fun peek(): ScreenSnapshot? = try { screen.peek() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+    suspend fun peek(): ScreenSnapshot? = screenAttempt { screen.peek() }
 
     suspend fun observe(withImage: Boolean, adaptiveImage: Boolean = false, recordFrame: Boolean = true): ToolExecution {
         val s = snapshot()
@@ -187,12 +205,10 @@ internal class ScreenSession(
      */
     suspend fun currentFrame(): Pair<ByteArray, Int>? {
         if (!visionEnabled) return null
-        val s = try { screen.peek() } catch (e: CancellationException) { throw e } catch (e: Exception) { return null }
+        val s = screenAttempt { screen.peek() } ?: return null
         if (s.protected) return null
         if (s.packageName == null && s.elements.isEmpty() && !s.hasWindow) return null
-        val png = try {
-            if (screen.isProtected()) null else screen.screenshotPng()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { null } ?: return null
+        val png = screenAttempt { if (screen.isProtected()) null else screen.screenshotPng() } ?: return null
         val shotId = shots.next()
         shots.remember(Recall(shotId, shots.step, s.packageName, png, screenText(s)))
         return png to shotId
@@ -204,27 +220,23 @@ internal class ScreenSession(
      */
     suspend fun currentView(): ToolDispatcher.Glance? {
         if (!visionEnabled && !adaptiveVision) return null
-        val peeked = try { screen.peek() } catch (e: CancellationException) { throw e } catch (e: Exception) { return null }
+        val peeked = screenAttempt { screen.peek() } ?: return null
         if (peeked.packageName == null && peeked.elements.isEmpty() && !peeked.hasWindow) return null
         if (textOnlyDepth > 0) {
-            val obs = try { observe(withImage = false, recordFrame = false) }
-            catch (e: CancellationException) { throw e } catch (e: Exception) { return null }
+            val obs = screenAttempt { observe(withImage = false, recordFrame = false) } ?: return null
             val shotId = (obs.content["screenshotId"] as? JsonPrimitive)?.content?.toIntOrNull() ?: return null
             return ToolDispatcher.Glance(JsonObject(obs.content - "ok"), null, shotId, obs.observations)
         }
         if (adaptiveVision) {
-            val obs = try { observe(withImage = false, adaptiveImage = visionEnabled) }
-            catch (e: CancellationException) { throw e } catch (e: Exception) { return null }
+            val obs = screenAttempt { observe(withImage = false, adaptiveImage = visionEnabled) } ?: return null
             val shotId = (obs.content["screenshotId"] as? JsonPrimitive)?.content?.toIntOrNull() ?: return null
             return ToolDispatcher.Glance(JsonObject(obs.content - "ok"), obs.image, shotId, obs.observations)
         }
         // 先读元素表(登记 snapshotId),再按这一屏判能不能截:受保护页面不截
-        val obs = try { observe(withImage = false) } catch (e: CancellationException) { throw e } catch (e: Exception) { return null }
+        val obs = screenAttempt { observe(withImage = false) } ?: return null
         val s = lastSnapshot ?: return null
         val shotId = (obs.content["screenshotId"] as? JsonPrimitive)?.content?.toIntOrNull() ?: return null
-        val png = if (s.protected) null else try {
-            obs.frame ?: if (screen.isProtected()) null else screen.screenshotPng()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+        val png = if (s.protected) null else screenAttempt { obs.frame ?: if (screen.isProtected()) null else screen.screenshotPng() }
         // 回看里这一张补上画面
         val recalls = shots.recalls
         if (png != null) recalls.indexOfLast { it.id == shotId }.takeIf { it >= 0 }?.let { i ->
@@ -253,6 +265,8 @@ internal class ScreenSession(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            e.rethrowAppAccess()
+
             return r
         }
         val v = visible
@@ -292,7 +306,7 @@ internal class ScreenSession(
         val imageReason = if (adaptiveVision && visionEnabled && tree.poor) tree.reason else null
         val sendImage = visionEnabled && (!adaptiveVision || imageReason != null)
         val png = if ((recordFrames || sendImage) && textOnlyDepth == 0 && !s.protected) {
-            try { screen.screenshotPng() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+            screenAttempt { screen.screenshotPng() }
         } else null
         val kept = png?.takeIf { visionEnabled }
         shots.remember(Recall(shotId, shots.step, s.packageName, kept, text))
@@ -351,7 +365,7 @@ internal class ScreenSession(
         return EffectProbe(before, frame).also { pendingProbe = it }
     }
 
-    private suspend fun grid(): FrameGrid? = try { screen.frameGrid() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+    private suspend fun grid(): FrameGrid? = screenAttempt { screen.frameGrid() }
 
     /**
      * 动作成功之后判它对界面状态的实际效果(见 [ActionEffect]),写进结果的 effect 字段,并按效果给提示;结果的 changed 跟着效果走。
@@ -425,7 +439,7 @@ internal class ScreenSession(
         (TreeAdequacy.ofTree(s).quality ?: lastTree?.quality).let { it == TreeQuality.Partial || it == TreeQuality.Unusable }
 
     private suspend fun settle(ms: Long) {
-        try { screen.waitStable(ms) } catch (e: CancellationException) { throw e } catch (e: Exception) { }
+        screenAttempt { screen.waitStable(ms) }
     }
 
     /** 读屏前刚从用户主屏挪回来的 App:和动作结果里的 opened 同样的字段,另带那句说明。 */
@@ -474,7 +488,7 @@ internal class ScreenSession(
         var timedOut = true
         val raw = try {
             withTimeoutOrNull(waitMs) { screen.readVisibleText().also { timedOut = false } }
-        } catch (e: CancellationException) { throw e } catch (_: Exception) { return null to "failed" }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { e.rethrowAppAccess(); return null to "failed" }
         if (raw == null) return null to if (timedOut) "timeout" else "unavailable"
         if (raw.isEmpty()) return raw to "empty"
         val legible = VisibleText.legible(raw)
@@ -499,9 +513,9 @@ internal class ScreenSession(
      * 读到了时再加上能力另给的 [extra](网页正文的开头:读屏只有视口里的元素)。读不到也照样返回(没有观察)。
      */
     suspend fun freshLook(withImage: Boolean, extra: (suspend () -> Observation?)? = null): Look {
-        val s = try { screen.snapshot() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+        val s = screenAttempt { screen.snapshot() }
         val png = if (withImage && s != null && !s.protected) {
-            try { screen.screenshotPng() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+            screenAttempt { screen.screenshotPng() }
         } else null
         // 树不够用时照样读屏上文字:核查要看的是屏上写着什么
         val seen = s?.let { interfaceRead(it, readTree(it).ocr.orEmpty()) }?.takeIf { it.text.isNotEmpty() }

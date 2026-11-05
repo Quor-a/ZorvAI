@@ -79,7 +79,9 @@ internal object RagConcept {
         // 工具与插件
         "插件" to "扩展能力", "扩展" to "扩展能力", "装个能力" to "插件",
         // 界面组件
-        "小卡片" to "ui_card", "卡片" to "ui_card", "小控件" to "ui_widget",
+        // 🔴 可视化小卡片是**独立分类**（visual_card 工具），不是富组件 ui_card/ui_widget。
+        //    旧映射把「小卡片」指到 ui_card，正是「AI 老用富组件顶替小卡片」的直接来源。
+        "小卡片" to "visual_card", "可视化小卡片" to "visual_card", "卡片" to "ui_card", "小控件" to "ui_widget",
         "动态组件" to "ui_control", "活组件" to "ui_control",
     )
 
@@ -129,11 +131,14 @@ internal object RagConcept {
         "send_sms" to listOf("发短信", "发信息", "短信", "回信息"),
         "memory_save" to listOf("记住", "记一下", "记着", "存记忆", "别忘了"),
         "memory_search" to listOf("想不起来", "之前说的", "查记忆", "回忆", "记的什么"),
-        "ui_card" to listOf("小卡片", "卡片", "ui_card", "富卡片", "小卡片组件"),
+        "visual_card" to listOf("小卡片", "可视化小卡片", "小卡片组件", "来张卡", "天气卡", "日程卡", "时钟卡"),
+        "visual_card_skeleton" to listOf("小卡片骨架", "卡片骨架", "widget skeleton"),
+        "ui_card" to listOf("卡片", "ui_card", "富卡片", "富组件"),
         "ui_widget" to listOf("小控件", "ui_widget", "控件", "浮层组件"),
         "ui_control" to listOf("动态组件", "ui_control", "活组件", "交互组件"),
         "genui_draw" to listOf("画界面", "生成界面", "做界面", "整个界面", "ui 界面", "全屏界面"),
-        "miniapp" to listOf("小程序", "网页应用", "web 应用", "做个应用", "轻应用"),
+        "miniapp" to listOf("Web 应用", "网页应用", "web 应用", "做个应用", "做个网站", "轻应用", "网页工具"),
+        "miniapp_sdk" to listOf("小程序", "微信小程序", "原生小程序", "WXML", "WXSS"),
         "quroterm_exec" to listOf("终端", "命令行", "shell", "cmd", "执行命令", "跑命令"),
         "linux_run" to listOf("linux", "linux 环境", "子系统", "跑 linux"),
         "http_request" to listOf("接口", "api", "请求", "http", "调接口"),

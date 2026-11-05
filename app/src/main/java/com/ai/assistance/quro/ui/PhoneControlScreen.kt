@@ -964,11 +964,12 @@ private fun HarnessDomainCard(
     index: String,
     title: String,
     subtitle: String? = null,
-    accent: Color = Accent,
+    accent: Color = Color.Unspecified,
     scaled: (Int) -> TextUnit,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val accentColor = if (accent == Color.Unspecified) Accent else accent
     Column(
         Modifier
             .fillMaxWidth()
@@ -981,7 +982,7 @@ private fun HarnessDomainCard(
         Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 index,
-                fontSize = scaled(11), color = accent,
+                fontSize = scaled(11), color = accentColor,
                 fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.width(8.dp))

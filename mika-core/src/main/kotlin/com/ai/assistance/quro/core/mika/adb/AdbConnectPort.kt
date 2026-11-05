@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.mika.adb
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 
 /** 上次连上的无线调试端口(App 私有存储)。 */
 interface PortCache {
@@ -29,7 +30,10 @@ data class ConnectCandidates(
  * 只靠 mDNS 不行:adbd 只在打开无线调试时登记一次服务,mDNS 守护进程重启后登记就没了,有的网络还拦着组播;
  * mDNS 也可能同时查到已经失效的旧端口,所以查到几个试几个。缓存的端口失效时被拒得很快,所以排第一。
  * 用户填了端口就不再扫(之前就是扫不到才让填的),直接试它。
- * 钥匙不被认(UNAUTHORIZED)是真失败,不再换端口试;连不上、握手出错才试下一个。
+ * TLS 上被拒(UNAUTHORIZED、TLS_FAILED)不一定是钥匙不对:有的系统让另一个服务先接住同一端口的第一次 TLS 握手,
+ * 对谁的证书都拒,紧接着再连才落到 adbd。所以同一端口隔 [tlsRetryDelayMs] 再试一次,还不行就接着试其余候选;
+ * 只有试遍都连不上、且有端口这样拒了我们,才报 UNAUTHORIZED(要重新配对)。已经有端口拒了我们就不再扫本机端口:
+ * adbd 找到了,扫出来的也只会是它。
  */
 class AdbConnectPort(
     private val property: () -> Int?,
@@ -44,12 +48,14 @@ class AdbConnectPort(
     /** 开始、结束扫本机端口时各报一次(界面显示「正在本机查找…」)。 */
     private val scanning: (Boolean) -> Unit = {},
     private val localHost: String = LOCALHOST,
+    private val tlsRetryDelayMs: Long = 300,
 ) {
-    /** 用 [open] 依次试候选,返回第一个连上的结果;一个都连不上时抛 CONNECT_FAILED。 */
+    /** 用 [open] 依次试候选,返回第一个连上的结果;一个都连不上时抛有端口拒了我们的 UNAUTHORIZED,否则抛最后一个错。 */
     suspend fun <T> connect(open: (host: String, port: Int) -> T): T {
         val tried = HashSet<AdbEndpoint>()
         val triedPorts = HashSet<Int>()
         var last: AdbConnectionException? = null
+        var rejected: AdbConnectionException? = null
         val manualPort = manual()?.takeIf { it in 1..65535 }
         var scanResult: ScanResult? = null
         fun local(vararg ports: Int?) = ports.filterNotNull().map { AdbEndpoint(localHost, it) }
@@ -58,7 +64,7 @@ class AdbConnectPort(
             { local(property()) },
             { finder.findPorts(AdbServiceTypes.CONNECT, mdnsTimeoutMs).map { AdbEndpoint(localHost, it) } },
             {
-                if (scan == null || manualPort != null) emptyList() else {
+                if (scan == null || manualPort != null || rejected != null) emptyList() else {
                     scanning(true)
                     try {
                         scan.scan(triedPorts).also { scanResult = it }.endpoints
@@ -85,15 +91,26 @@ class AdbConnectPort(
                 for (ep in endpoints) {
                     if (ep.port !in 1..65535 || !tried.add(ep)) continue
                     triedPorts += ep.port
-                    try {
-                        return open(ep.host, ep.port).also { cache.save(ep.port); connected = true }
-                    } catch (e: AdbConnectionException) {
-                        if (e.reason == AdbConnectionException.Reason.UNAUTHORIZED) throw e
-                        last = e
+                    var retried = false
+                    while (true) {
+                        try {
+                            return open(ep.host, ep.port).also { cache.save(ep.port); connected = true }
+                        } catch (e: AdbConnectionException) {
+                            val tls = e.reason == AdbConnectionException.Reason.UNAUTHORIZED ||
+                                e.reason == AdbConnectionException.Reason.TLS_FAILED
+                            if (tls && !retried) {
+                                retried = true
+                                delay(tlsRetryDelayMs)
+                                continue
+                            }
+                            if (e.reason == AdbConnectionException.Reason.UNAUTHORIZED) rejected = e
+                            last = e
+                            break
+                        }
                     }
                 }
             }
-            throw last ?: AdbConnectionException(AdbConnectionException.Reason.CONNECT_FAILED, "no wireless debugging port found")
+            throw rejected ?: last ?: AdbConnectionException(AdbConnectionException.Reason.CONNECT_FAILED, "no wireless debugging port found")
         } finally {
             val s = scanResult
             report(

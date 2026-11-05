@@ -158,7 +158,7 @@ fun SetRowClickable(
     danger: Boolean = false,
     enabled: Boolean = true,
 ) {
-    val dangerColor = Color(android.graphics.Color.parseColor("#C0432F"))
+    val dangerColor = MaterialTheme.colorScheme.error
     val cs = MaterialTheme.colorScheme
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
@@ -205,10 +205,11 @@ fun SettingsSelectorRow(
     title: String,
     subtitle: String,
     value: String,
-    color: Color = Accent,
+    color: Color = Color.Unspecified,
     onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val valueColor = if (color == Color.Unspecified) Accent else color
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(cs.surface)
             .border(1.dp, if (value.isNotBlank()) Accent else Line, RoundedCornerShape(14.dp))
@@ -224,7 +225,7 @@ fun SettingsSelectorRow(
             Text(subtitle, fontSize = 11.sp, color = Muted, modifier = Modifier.padding(top = 2.dp))
         }
         if (value.isNotBlank()) {
-            Text(value, fontSize = 14.sp, color = color, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(end = 8.dp))
+            Text(value, fontSize = 14.sp, color = valueColor, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(end = 8.dp))
         }
         Icon(Icons.Filled.ChevronRight, null, Modifier.size(16.dp), tint = Muted)
     }
@@ -375,14 +376,15 @@ fun StepperField(
 @Composable
 fun InfoBox(
     text: String,
-    tone: Color = Sage,
+    tone: Color = Color.Unspecified,
 ) {
+    val textColor = if (tone == Color.Unspecified) Sage else tone
     Box(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
             .background(AccentSoft.copy(alpha = 0.5f)).padding(12.dp),
     ) {
         SelectionContainer {
-            Text(text, fontSize = 13.sp, color = tone, lineHeight = 18.sp)
+            Text(text, fontSize = 13.sp, color = textColor, lineHeight = 18.sp)
         }
     }
 }

@@ -25,8 +25,8 @@ object ClassifiedRisk : RiskJudge {
     /** 这个动作会改界面上的东西(不只是在界面间移动);不可逆、对外的动作也都是这几种动作做出来的。 */
     fun changesState(verb: Verb?): Boolean = verb in CHANGE_VERBS
 
-    /** 屏上带币种的金额:这时提交、删除一类的动作按花钱算(结算页上的「确认」「去支付」);发消息不花钱,不算。 */
-    private val AMOUNT = Regex("[¥￥]\\s*\\d|\\d+(\\.\\d+)?\\s*元")
+    /** 屏上带币种(¥、元、$)的金额:这时提交、删除一类的动作按花钱算(结算页上的「确认」「去支付」);发消息不花钱,不算。 */
+    private val AMOUNT = Regex("[¥￥$＄]\\s*\\d|\\d+(\\.\\d+)?\\s*元")
 
     override fun assess(verb: Verb?, hit: Irreversible?, screen: () -> ScreenSnapshot?): Risk {
         val level = when (hit?.action) {

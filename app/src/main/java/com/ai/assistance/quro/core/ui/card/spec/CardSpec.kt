@@ -154,6 +154,10 @@ data class CardSpec(
     /** 围栏 JSON 原文：白名单外类型（AI 把组件库名册类型误写进 quro-card）路由到
      *  富卡片渲染层（parseComponentSpec → CardSdk.parseObj）时要用，见 ChatScreen.SelfCardMount。 */
     val rawJson: String = "",
+    /** 卡片标题：渲染层统一画在卡头（渲染器不再各画各的，避免有的卡有标题有的没有）。 */
+    val title: String = "",
+    /** 卡片副标题 / 说明：卡头第二行小字。 */
+    val subtitle: String = "",
 )
 
 /** 协议版本迁移器：旧会话里的老卡片也能渲染。 */

@@ -38,7 +38,24 @@ data class QuroPersistedConversation(
     val historyRounds: Int? = null,
     /** 本对话框类型：normal = 普通对话框（正常聊天）；genui = GenUI 对话框（强制 AI 用原生 quro-ui 生成界面）。按会话隔离，切换/新建各自记忆。 */
     val genUiType: String = "normal",
+    /**
+     * 🔴 会话绑定的**人格卡 id**（2026-11-04 会话↔人格绑定）：
+     * 空 = 跟随全局激活人格（旧行为）；非空 = 本会话固定用这张人格卡
+     * 对话内人格选择器选人格时同时写绑定，实现「每个对话一个固定人格」。
+     */
+    val personaId: String = "",
     val messages: List<QuroMessage>,
+    /**
+     * 临时对话：只在内存里存在，**永不落盘**。
+     *
+     * 用途是「问一句就走」的场景（试一个模型、贴一段敏感文本、临时算个数）——
+     * 这些内容不该进历史列表，也不该留在磁盘上等下次被翻出来。
+     *
+     * 实现方式是写入时过滤（见 `QuroChatViewModel.persistConversations`），
+     * 而不是打标记后延时删除：延时删除要处理「应用被杀」的窗口，过滤则天然没有窗口。
+     * 这个字段不参与序列化 —— 磁盘上出现的 ephemeral 会话本身就是 bug。
+     */
+    val ephemeral: Boolean = false,
 )
 
 class QuroConversationRepository(context: Context) {
@@ -169,6 +186,7 @@ class QuroConversationRepository(context: Context) {
             put("updatedAt", c.updatedAt)
             put("historyRounds", c.historyRounds ?: JSONObject.NULL)
             put("genUiType", c.genUiType)
+            if (c.personaId.isNotBlank()) put("personaId", c.personaId)
             put("messages", msgs)
         }
     }
@@ -189,6 +207,9 @@ class QuroConversationRepository(context: Context) {
                             put("name", call.name)
                             put("arguments", call.arguments)
                             put("result", call.result ?: JSONObject.NULL)
+                            // 🔴 工具耗时要落盘：旧实现漏了这个字段，重启回放后
+                            //    所有工具 durationMs=0，活动流永远不显耗时。
+                            if (call.durationMs > 0) put("durationMs", call.durationMs)
                         },
                     )
                 }
@@ -217,6 +238,12 @@ class QuroConversationRepository(context: Context) {
             put("toolCallId", m.toolCallId ?: JSONObject.NULL)
             put("toolLabel", m.toolLabel ?: JSONObject.NULL)
             put("reasoning", m.reasoning ?: JSONObject.NULL)
+            // 🔴 思考耗时落盘：此前 thinkDurationMs 不序列化，重启后所有历史思考的
+            //   「思考了 N秒」口径永久丢失，折叠行只能回退「思考过程 · N步」，
+            //   而调用点又漏传 steps → 全部显示「0步」（旧思考显示混乱的组成部分）。
+            //   发言人昵称同理（集群角色名重启后丢失，气泡全顶成人格名）。
+            if (m.thinkDurationMs > 0) put("thinkMs", m.thinkDurationMs)
+            m.senderName?.takeIf { it.isNotBlank() }?.let { put("senderName", it) }
             put("createdAt", m.createdAt)
             put("hidden", m.hidden)
             calls?.let { put("toolCalls", it) }
@@ -239,6 +266,8 @@ class QuroConversationRepository(context: Context) {
         val historyRounds = if (o.has("historyRounds") && !o.isNull("historyRounds")) o.optInt("historyRounds", -1).let { if (it < 0) null else it } else null
         // 旧 JSON 无 genUiType 字段 → "normal"（默认普通对话框，向后兼容）
         val genUiType = if (o.has("genUiType") && !o.isNull("genUiType")) o.optString("genUiType", "normal") else "normal"
+        // 旧 JSON 无 personaId → ""（跟随全局激活人格，向后兼容）
+        val boundPersonaId = o.optString("personaId", "")
         return QuroPersistedConversation(
             id = o.optString("id", UUID.randomUUID().toString()),
             title = o.optString("title", qstr(R.string.qk_00282)),
@@ -246,6 +275,7 @@ class QuroConversationRepository(context: Context) {
             updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
             historyRounds = historyRounds,
             genUiType = genUiType,
+            personaId = boundPersonaId,
             messages = msgs,
         )
     }
@@ -262,6 +292,7 @@ class QuroConversationRepository(context: Context) {
                         name = c.optString("name", ""),
                         arguments = c.optString("arguments", ""),
                         result = if (c.has("result") && !c.isNull("result")) c.optString("result") else null,
+                        durationMs = c.optLong("durationMs", 0L),
                     ),
                 )
             }
@@ -318,6 +349,9 @@ class QuroConversationRepository(context: Context) {
             toolCalls = calls,
             toolLabel = toolLabel,
             reasoning = reasoning,
+            // 旧 JSON 无这些字段 → 走默认值（向后兼容）
+            thinkDurationMs = o.optLong("thinkMs", 0L),
+            senderName = if (o.has("senderName") && !o.isNull("senderName")) o.optString("senderName") else null,
             attachments = atts,
             cards = cards,
             hidden = hidden,

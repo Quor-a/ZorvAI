@@ -17,6 +17,8 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import android.util.Base64
+import org.json.JSONArray
+import org.json.JSONObject
 import java.security.SecureRandom
 
 private const val TAG = "QuroDataManager"
@@ -86,6 +88,14 @@ class QuroDataManager(private val context: Context) {
                 // 导出工具配置
                 if (includeTools) {
                     exportTools(zipOut)
+                }
+
+                // 🔴 技能 / MCP / 桌宠配置不落在 quro_data 目录下（在 SharedPreferences 与
+                //    filesDir/cluster_skills.json），旧版备份四大目录完全漏掉它们：换机后
+                //    81 个内置技能的用户启停状态、MCP 服务器与 OAuth token、桌宠形象全丢。
+                //    备份结构：`account/mcp/mcp.json` + skills 目录。
+                if (includeSettings || includeTools) {
+                    exportExtensions(zipOut)
                 }
                 
                 // 导出元数据
@@ -168,6 +178,9 @@ class QuroDataManager(private val context: Context) {
                         }
                         entryName.startsWith("tools/") -> {
                             importTool(zipIn, entryName, overwrite)
+                        }
+                        entryName.startsWith("extensions/") -> {
+                            importExtension(zipIn, overwrite)
                         }
                         entryName == "metadata.json" -> {
                             // 元数据处理
@@ -379,6 +392,68 @@ class QuroDataManager(private val context: Context) {
         }
     }
     
+    /** 技能 / MCP / 桌宠配置所在的 SharedPreferences 名。 */
+    private val extensionPrefs = listOf(
+        "quro_skills", "quro_mcp_client", "quro_mcp_oauth", "pet_prefs", "quro_voice_features",
+    )
+
+    /** 把目录之外的配置打包成一个 JSON 条目。 */
+    private fun exportExtensions(zipOut: ZipOutputStream) {
+        val root = JSONObject()
+        extensionPrefs.forEach { name ->
+            val o = JSONObject()
+            runCatching {
+                context.getSharedPreferences(name, Context.MODE_PRIVATE).all.forEach { (k, v) ->
+                    when (v) {
+                        null -> o.put(k, "")
+                        is Set<*> -> o.put(k, JSONArray(v.toList()))
+                        else -> o.put(k, v)
+                    }
+                }
+            }
+            root.put(name, o)
+        }
+        runCatching {
+            val f = File(context.filesDir, "cluster_skills.json")
+            if (f.isFile) root.put("cluster_skills", f.readText())
+        }
+        zipOut.putNextEntry(ZipEntry("extensions/skills_mcp.json"))
+        zipOut.write(root.toString().toByteArray(Charsets.UTF_8))
+        zipOut.closeEntry()
+    }
+
+    /** 恢复目录之外的配置；overwrite=false 时只补缺失的键，不覆盖本机现有配置。 */
+    private fun importExtension(zipIn: ZipInputStream, overwrite: Boolean) {
+        // 只读取当前 entry 的字节，不能关闭 zipIn（后面还要 closeEntry / nextEntry）。
+        val raw = runCatching { String(zipIn.readBytes(), Charsets.UTF_8) }
+            .getOrElse { return }
+        val root = runCatching { JSONObject(raw) }.getOrElse { return }
+        extensionPrefs.forEach { name ->
+            val o = root.optJSONObject(name) ?: return@forEach
+            val sp = context.getSharedPreferences(name, Context.MODE_PRIVATE)
+            val ed = sp.edit()
+            o.keys().forEach { k ->
+                if (!overwrite && sp.contains(k)) return@forEach
+                when (val v = o.opt(k)) {
+                    is Boolean -> ed.putBoolean(k, v)
+                    is Int -> ed.putInt(k, v)
+                    is Long -> ed.putLong(k, v)
+                    is Float -> ed.putFloat(k, v)
+                    is Double -> ed.putFloat(k, v.toFloat())
+                    is JSONArray -> Unit // 本仓这些配置不用 Set，忽略即可
+                    null -> Unit
+                    else -> ed.putString(k, v.toString())
+                }
+            }
+            ed.apply()
+        }
+        val cluster = root.optString("cluster_skills", "")
+        if (cluster.isNotBlank()) {
+            val f = File(context.filesDir, "cluster_skills.json")
+            if (overwrite || !f.exists()) runCatching { f.writeText(cluster) }
+        }
+    }
+
     /**
      * 导出元数据
      */

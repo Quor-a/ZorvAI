@@ -23,6 +23,7 @@ sealed class RemoteTaskError(val code: Code, message: String) : Exception(messag
 
 data class RemoteWait(val task: RemoteTask, val changed: Boolean)
 data class RemoteCancellation(val taskId: String, val accepted: Boolean, val status: String? = null)
+data class RemoteSteerReceipt(val taskId: String, val messageId: String)
 
 /**
  * CLI API 与 MCP 共用的任务用例。没有 HTTP、JSON-RPC、工具名或命令行参数。
@@ -81,6 +82,19 @@ class RemoteTaskService(private val tasks: RemoteTasks, private val pollMs: Long
         return task.id
     }
 
+    /** 仅向运行中的任务追加;回答、审批、接管和恢复仍走各自入口。宿主再次核对状态和收件箱。 */
+    fun steer(id: String, text: String): RemoteSteerReceipt {
+        val task = get(id)
+        val clean = required(text, "text", MAX_STEER)
+        val status = RemoteStatus.of(task.state)
+        if (status == RemoteStatus.WAITING_ON_PHONE) throw RemoteTaskError.NeedsPhone()
+        if (status != RemoteStatus.RUNNING) conflict("Task ${task.id} is not running (status $status). " +
+            "Answer an open question or wait for it to run; steering does not start or resume a task.")
+        val messageId = tasks.steer(task.id, clean)
+            ?: conflict("The task no longer accepts instructions; check its status. No new task was started.")
+        return RemoteSteerReceipt(task.id, messageId)
+    }
+
     /** accepted 只表示已交给任务服务,是否到 cancelled 终态仍以状态查询为准。 */
     fun cancel(id: String): RemoteCancellation {
         val task = get(id)
@@ -106,6 +120,7 @@ class RemoteTaskService(private val tasks: RemoteTasks, private val pollMs: Long
         const val MAX_LIST = 50
         const val MAX_GOAL = 4_000
         const val MAX_ANSWER = 2_000
+        const val MAX_STEER = 4_000
         // 保留已发出的对话编号,让新 CLI 与原 MCP 可以继续同一个远程对话。
         private const val CONVERSATION_PREFIX = "mcp-"
         fun newConversation(): String = CONVERSATION_PREFIX + UUID.randomUUID()

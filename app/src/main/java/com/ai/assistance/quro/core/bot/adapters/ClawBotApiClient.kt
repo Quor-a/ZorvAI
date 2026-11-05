@@ -50,9 +50,8 @@ class ClawBotApiClient(
     }
 
     /**
-     * 登录专用头：BotHub 的扫码登录 HTTP 客户端（Luua）额外带
-     * `User-Agent: Bothub-Android/iLink`，其 iLink 业务调用（Liwa）则不带。
-     * 对齐 BotHub 登录链路，仅在 get_bot_qrcode / get_qrcode_status 上使用。
+     * 登录专用头：扫码登录 HTTP 客户端额外带 `User-Agent`，
+     * iLink 业务调用则不带。仅在 get_bot_qrcode / get_qrcode_status 上使用。
      */
     fun loginHeaders(botToken: String?): okhttp3.Headers {
         return buildHeaders(botToken).newBuilder()

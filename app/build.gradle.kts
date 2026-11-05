@@ -220,6 +220,8 @@ dependencies {
     implementation(libs.androidsvg)
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.serialization.json)
+    // LaTeX 公式渲染（纯 Java 移植，无 native 依赖；用于 AI 回答中的数学公式显示）
+    implementation(libs.jlatexmath.android)
 
     // 构建台端侧签名（issue #14）：Android 平台自带的 org.bouncycastle 从 API 28 起被
     // 命名空间化为 com.android.org.bouncycastle，应用侧 Class.forName / 反射全摸不到

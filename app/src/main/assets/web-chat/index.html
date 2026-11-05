@@ -12,6 +12,10 @@
 <!-- 品牌标识：陶土圆点 + 纸环（内联 data URI，离线可用） -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23F4F1EA' stroke='%23C25A38' stroke-width='5'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23C25A38'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
+<!-- KaTeX：文档排版里的 $$块级$$ / $行内$ 公式。离线资源走 /libs/ 路由，
+     字体在 /libs/fonts/ 下；与原生对话框的 jlatexmath 位图渲染是同一契约的两种实现。 -->
+<link rel="stylesheet" href="/libs/katex.min.css">
+<script defer src="/libs/katex.min.js"></script>
 </head>
 <body>
 

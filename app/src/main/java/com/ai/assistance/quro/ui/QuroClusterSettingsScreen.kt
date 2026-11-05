@@ -180,6 +180,7 @@ fun QuroClusterSettingsScreen(onBack: () -> Unit = {}) {
                 HostConfigSection(
                     models = models,
                     budget = ClusterRuntime.defaultCluster().budget,
+                    hostModelId = host?.modelProfileId ?: "",
                     onApply = { budget, modelId ->
                         scope.launch {
                             val cur = RoleRegistry.get(ctx, RoleRegistry.HOST_PERSONA_ID)
@@ -357,12 +358,15 @@ private fun RoleCard(
 private fun HostConfigSection(
     models: List<ModelProfile>,
     budget: ClusterBudget,
+    hostModelId: String = "",
     onApply: (ClusterBudget, String) -> Unit,
 ) {
     var maxTurns by remember { mutableStateOf(budget.maxTurns.toString()) }
     var maxReplan by remember { mutableStateOf(budget.maxReplan.toString()) }
     var fanout by remember { mutableStateOf(budget.proposeFanout.toString()) }
-    var modelId by remember { mutableStateOf(models.firstOrNull()?.id ?: "cloud:current") }
+    // 🔴 G5 修复（2026-11-06）：初始值取主持当前绑定，而不是列表第一个——
+    // 否则不碰下拉直接点保存，会把主持模型静默改成第一个。
+    var modelId by remember { mutableStateOf(hostModelId.ifBlank { models.firstOrNull()?.id ?: "cloud:current" }) }
     var modelOpen by remember { mutableStateOf(false) }
 
     Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {

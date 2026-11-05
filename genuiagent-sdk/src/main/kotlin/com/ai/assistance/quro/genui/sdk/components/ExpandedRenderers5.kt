@@ -5,6 +5,7 @@ import com.ai.assistance.quro.genui.sdk.style.ZorvPalette
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -110,12 +111,14 @@ fun MemeLargeRenderer(c: UIComponent, ctx: RenderContext) {
 
 @Composable
 fun PhoneMockupRenderer(c: UIComponent, ctx: RenderContext) {
+    // 🔴 移动端适配修复（2026-11-04）：内屏固定 400dp 高 > 一屏内容区的 60% 且不可缩放。
+    //    改用 9:19 宽高比随宽度自适应（手机样机本就该按比例缩放）。
     Column(
         Modifier.padding(14.dp).width(230.dp).clip(RoundedCornerShape(28.dp))
             .background(ctx.theme.colorScheme.onSurface).padding(8.dp)
     ) {
         Box(
-            Modifier.fillMaxWidth().height(400.dp).clip(RoundedCornerShape(20.dp))
+            Modifier.fillMaxWidth().aspectRatio(9f / 19f).clip(RoundedCornerShape(20.dp))
                 .background(MaterialTheme.colorScheme.surface)
         ) {
             Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.Center) {

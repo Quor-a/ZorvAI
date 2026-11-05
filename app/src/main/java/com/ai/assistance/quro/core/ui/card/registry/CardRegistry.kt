@@ -1,92 +1,88 @@
 package com.ai.assistance.quro.core.ui.card.registry
 
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import com.ai.assistance.quro.core.ui.card.render.RenderBackend
+import com.ai.assistance.quro.core.ui.card.spec.Action
 import com.ai.assistance.quro.core.ui.card.spec.CardSpec
+import com.ai.assistance.quro.core.ui.card.spec.CardTypes
+import com.ai.assistance.quro.core.ui.card.spec.ColorToken
 
 /**
- * 编排层：注册表 + 自写渲染器。
+ * 编排层：类型化注册表 → Composable 渲染函数（Server-Driven UI 标准范式）。
  *
- * 每个卡片类型一组 [CardRenderer] 实现，全部自写测量/排版/绘制/命中测试，
- * 不依赖任何内置/三方成品卡片控件。
- */
-interface CardRenderer<S : CardState> {
-    /** 创建该渲染器的初始状态（供宿主持有）。 */
-    fun createInitialState(): S
-
-    /** 自写测量：给定约束返回期望尺寸（px）。`density` 是 sp→px 比率（约 2.75），
-     *  measure 必须用它把 sp 字号换算成真实占的 px 行高，否则会被 Canvas 裁切（v1.0.82 cardfix6）。 */
-    fun measure(spec: CardSpec, state: S, maxWidthPx: Float, density: Float): Size
-
-    /** 自写排版：把子节点摆到坐标（px）。`density` 用于按钮/控件类按字号算 box 高度。 */
-    fun layout(spec: CardSpec, state: S, size: Size, density: Float): LayoutResult
-
-    /** 自写绘制：用 RenderBackend 自己下绘制指令。 */
-    fun render(backend: RenderBackend, spec: CardSpec, result: LayoutResult, state: S)
-
-    /** 自写命中测试：返回命中的可交互目标（按钮/链接等）。 */
-    fun hitTest(p: Offset, result: LayoutResult, state: S): HitTarget?
-}
-
-/** 渲染器自身持有的可变状态（如流式进度、动画相位）。 */
-interface CardState {
-    /** 同一 id 的多次 patch 是否可增量合并。 */
-    fun canMerge(other: CardState): Boolean = false
-}
-
-/**
- * 入场动画感知：实现此接口的渲染器状态由 [com.ai.assistance.quro.core.ui.card.host.CardSurface]
- * 逐帧驱动 0→1（约 1.4s），渲染器按相位画数字滚动/进度生长等入场动效。
- * progress 必须用 mutableStateOf 存储，Canvas 绘制读取后自动逐帧重绘。
- */
-interface AnimateAware {
-    fun onFrame(progress: Float)
-}
-
-/** 排版结果：记录每个可交互/可绘制元素的最终坐标框。 */
-data class LayoutResult(
-    val width: Float,
-    val height: Float,
-    val boxes: List<HitBox> = emptyList(),
-    val extra: Map<String, Any?> = emptyMap(),
-)
-
-data class HitBox(
-    val id: String,
-    val left: Float, val top: Float, val right: Float, val bottom: Float,
-    val actionIndex: Int = -1,
-)
-
-data class HitTarget(
-    val box: HitBox,
-    val actionIndex: Int,
-)
-
-/**
- * type → CardRenderer 注册表 + 白名单 + 降级。
+ * 每个卡片类型注册一个 `@Composable (CardSpec, Modifier, onAction, resolveToken) -> Unit`，
+ * 编排层只做分发，不做任何像素测量/排版/绘制。
  *
- * - 未注册类型：降级为 Markdown 气泡，绝不崩对话框。
- * - version 不匹配：先过 [com.ai.assistance.quro.core.ui.card.spec.CardMigrator] 再渲染。
+ * 离散元素（文字 / 按钮 / 容器）一律交给 Compose 原语（Column / Row / Text / Button）
+ * 自动排版——彻底消除旧版「在单个 Canvas 上手绘整棵布局树」的架构反模式：
+ * 文字宽度错估、右侧内容消失、行溢出、未知节点塌陷等一连串打补丁式 bug 全部消失。
+ * 仅连续几何（折线 / 柱 / 饼 / 环形 / 进度条）才用局部 Canvas。
+ *
+ * ## 三级解析（这是「小卡片不完整」的根治点）
+ * 1. `type` 直接命中 → 用它的渲染器；
+ * 2. `type` 归一后命中别名（`bar` → `bar_chart`）→ 用别名指向的渲染器；
+ * 3. 都没命中 → [resolveOrInfer] 按 **data 的形状**推断等价渲染器（截断 JSON / 模型自造类型都救得回来）。
+ * 三级都落空才算「真不认识」，由宿主降级（绝不崩对话框）。
  */
+typealias CardRendererFn = @Composable (
+    spec: CardSpec,
+    modifier: Modifier,
+    onAction: (Action) -> Unit,
+    resolveToken: (ColorToken) -> Color,
+) -> Unit
+
 object CardRegistry {
-    private val renderers = LinkedHashMap<String, CardRenderer<out CardState>>()
-    private val whitelist = LinkedHashSet<String>()
+    private val renderers = LinkedHashMap<String, CardRendererFn>()
+    private val aliases = LinkedHashMap<String, String>()
 
-    fun register(type: String, renderer: CardRenderer<out CardState>) {
-        renderers[type] = renderer
-        whitelist.add(type)
+    /** 注册渲染器（type 自动归一，`Bar-Chart` / `barchart` 都能命中）。 */
+    fun register(type: String, renderer: CardRendererFn) {
+        renderers[CardTypes.canonical(type)] = renderer
     }
 
-    fun isWhitelisted(type: String) = type in whitelist
+    /**
+     * 注册别名（`bar` → `bar_chart`）。
+     *
+     * 只允许指向已注册的自有类型；指向不存在类型的别名会被忽略，
+     * 避免「白名单说认识、渲染器却取不到」的半残状态。
+     */
+    fun registerAlias(alias: String, canonical: String) {
+        val target = CardTypes.canonical(canonical)
+        if (target !in renderers) return
+        val key = CardTypes.canonical(alias)
+        if (key in renderers) return // 真实类型优先，别名不得遮蔽
+        aliases[key] = target
+    }
 
-    @Suppress("UNCHECKED_CAST")
-    fun <S : CardState> get(type: String): CardRenderer<S>? =
-        renderers[type] as? CardRenderer<S>
+    /** 是否属于本通道（决定 ChatScreen 走 CardSurface 还是富卡片层）。 */
+    fun isWhitelisted(type: String): Boolean {
+        val k = CardTypes.canonical(type)
+        return k in renderers || k in aliases
+    }
 
-    /** 取渲染器；拿不到说明不在白名单，调用方应降级为 Markdown。 */
-    fun resolveOrNull(type: String): CardRenderer<out CardState>? = renderers[type]
+    /** 取渲染函数（含别名）；拿不到返回 null。 */
+    fun resolveOrNull(type: String): CardRendererFn? {
+        val k = CardTypes.canonical(type)
+        renderers[k]?.let { return it }
+        return aliases[k]?.let { renderers[it] }
+    }
 
-    fun registeredTypes(): Set<String> = LinkedHashSet(whitelist)
+    /**
+     * 三级解析的最后一级：type 不认识时按 data 形状推断。
+     *
+     * @return 实际使用的类型名 → 渲染器；连推断都失败返回 null
+     */
+    fun resolveOrInfer(spec: CardSpec): Pair<String, CardRendererFn>? {
+        resolveOrNull(spec.type)?.let { return CardTypes.canonical(spec.type) to it }
+        val inferred = CardTypes.inferType(spec) ?: return null
+        val fn = renderers[inferred] ?: return null
+        return inferred to fn
+    }
+
+    /** 已注册的自有类型（不含别名）。给文档 / 提示词 / 单测用。 */
+    fun registeredTypes(): Set<String> = LinkedHashSet(renderers.keys)
+
+    /** 已注册别名（便于调试与单测核对）。 */
+    fun registeredAliases(): Map<String, String> = LinkedHashMap(aliases)
 }

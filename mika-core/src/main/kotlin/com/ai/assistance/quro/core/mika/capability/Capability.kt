@@ -68,6 +68,9 @@ internal interface Capability : PromptSections {
     /** 按这次的话([task])开局就展开这一组(一定用得上时);默认不展开。 */
     fun preload(task: String): Boolean = false
 
+    /** 用户的一句话([text])去掉和本能力有关的说明(浏览器页的页面说明这类)后,用户自己打的字;没有这类说明的原样返回。 */
+    fun userWords(text: String): String = text
+
     /** 本能力可能提供的全部工具;本任务能不能用由各工具自己看上下文。 */
     fun tools(): List<AgentTool>
 

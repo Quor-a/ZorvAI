@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.mika.gate
 
 import com.ai.assistance.quro.core.mika.action.ConfirmChoice
 import com.ai.assistance.quro.core.mika.risk.IrrevAction
+import com.ai.assistance.quro.core.mika.uistate.Hant
 import com.ai.assistance.quro.core.mika.uistate.ScreenSnapshot
 import com.ai.assistance.quro.core.mika.uistate.UiElement
 import java.math.BigDecimal
@@ -142,7 +143,7 @@ class ConfirmationGate {
     }
 
     /**
-     * 申报的金额只和屏上带币种(¥/￥、元)的数比:「已售25件」「满25减3」不算;输入框和提示语里的不算;
+     * 申报的金额只和屏上带币种(¥/￥、元、$)的数比:「已售25件」「满25减3」不算;输入框和提示语里的不算;
      * 紧挨着优惠、减、抵扣、运费、券、红包、已省(或带负号)的金额不算。
      * 有合计/实付/应付/总计时:可滚动区外的每个合计都要等于申报的金额;都在滚动区里时看离按钮最近的那个;
      * 合计字样在、金额读不出(同一行后面几段拼起来也读不出)时不放行。
@@ -154,7 +155,7 @@ class ConfirmationGate {
         val shown = s.elements.filter { !it.editable && !it.hint }
         val scrollables = s.elements.filter { it.scrollable }
         fun outside(e: UiElement) = scrollables.none { inside(e, it) }
-        val labels = shown.filter { e -> TOTAL_LABELS.any { it in e.name } }
+        val labels = shown.filter { e -> TOTAL_LABELS.any { it in Hant.fold(e.name) } }
         if (labels.isNotEmpty()) {
             val totals = labels.map { it to totalOf(it, shown) }
             if (totals.any { it.second == null }) return false
@@ -172,14 +173,14 @@ class ConfirmationGate {
     private fun totalOf(label: UiElement, shown: List<UiElement>): BigDecimal? {
         fun after(text: String) = TOTAL_LABELS.mapNotNull { w -> text.indexOf(w).takeIf { it >= 0 }?.let { text.substring(it + w.length) } }
             .firstNotNullOfOrNull { amounts(it).firstOrNull() }
-        return after(label.name) ?: after(IrreversibleDetector.rowText(label, shown))
+        return after(Hant.fold(label.name)) ?: after(Hant.fold(IrreversibleDetector.rowText(label, shown)))
     }
 
     private fun currencyFree(t: String) = t.replace(THOUSANDS, "")
 
     /** 带币种的金额,去掉紧挨着优惠一类字样或带负号的。 */
     private fun amounts(name: String): List<BigDecimal> {
-        val t = currencyFree(name)
+        val t = currencyFree(Hant.fold(name))
         return CURRENCY.findAll(t).filter { m ->
             val before = t.substring(maxOf(0, m.range.first - DISCOUNT_WINDOW), m.range.first)
             DISCOUNTS.none { it in before } && !before.trimEnd().endsWith("-")
@@ -204,7 +205,7 @@ class ConfirmationGate {
         /** 发送对象要在这条线(0–999)以上:屏幕顶部约 15% 的标题栏。 */
         const val TITLE_BAND = 150
         private val NUMBER = Regex("\\d+(\\.\\d+)?")
-        private val CURRENCY = Regex("[¥￥]\\s*(\\d+(?:\\.\\d+)?)|(\\d+(?:\\.\\d+)?)\\s*元")
+        private val CURRENCY = Regex("[¥￥$＄]\\s*(\\d+(?:\\.\\d+)?)|(\\d+(?:\\.\\d+)?)\\s*元")
         private val THOUSANDS = Regex("(?<=\\d),(?=\\d{3}(?!\\d))")
         private val TOTAL_LABELS = IrreversibleDetector.TOTAL_LABELS
         private val DISCOUNTS = listOf("优惠", "减", "抵扣", "运费", "券", "红包", "已省")

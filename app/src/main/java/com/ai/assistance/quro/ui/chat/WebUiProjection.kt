@@ -3,6 +3,7 @@ package com.ai.assistance.quro.ui.chat
 import com.ai.assistance.quro.core.QuroMessage
 import com.ai.assistance.quro.core.canvas.Aip
 import com.ai.assistance.quro.core.cards.CardFence
+import com.ai.assistance.quro.core.cards.QuroChatCard
 import com.ai.assistance.quro.core.cards.serializeCard
 import com.ai.assistance.quro.core.policy.QuroPolicy
 import com.ai.assistance.quro.core.tools.QuroVoiceStyle
@@ -146,7 +147,11 @@ object WebUiProjection {
             .put("timeText", chatTimeText(m.createdAt))
 
         // ── 思考 ──
+        // 🔴 补齐耗时投影：WebUI 的状态行要显示「思考了 Ns」
+        //    （reasoning_done_for 事件名）。此前只投 reasoning、不投 thinkMs，前端永远
+        //    拿不到时长，只能退化成「思考过程 · N步」这种无意义计数徽章。
         m.reasoning?.takeIf { it.isNotBlank() }?.let { o.put("reasoning", it) }
+        if (m.thinkDurationMs > 0) o.put("thinkMs", m.thinkDurationMs)
 
         // ── 正文块 + 富组件卡片：与原生同一个解析入口，不重写 ──
         val raw = m.content.takeIf { it.isNotBlank() }
@@ -158,7 +163,26 @@ object WebUiProjection {
         val extracted = clean?.let { runCatching { extractInlineComponents(it) }.getOrNull() }
         blockList(extracted?.first ?: clean).let { if (it.length() > 0) o.put("blocks", it) }
         val inlineCards = extracted?.second.orEmpty()
-        val allCards = m.cards + inlineCards
+        // 🔴 可视化小卡片（独立分类）：原生侧把 `visual_card` 工具调用抽成内联 VisualMiniCard，
+        //    投影必须同样抽成卡片，否则网页端只会看到一坨工具参数 JSON（旧版「小卡片写不出来」的表现之一）。
+        val widgetCards = m.toolCalls.orEmpty().mapNotNull { tc ->
+            if (tc.name != "visual_card") return@mapNotNull null
+            val o = runCatching { JSONObject(tc.arguments) }.getOrNull() ?: return@mapNotNull null
+            val html = o.optString("html", "").trim()
+            if (html.isEmpty()) return@mapNotNull null
+            runCatching {
+                QuroChatCard.VisualMiniCard(
+                    id = "vc_" + (tc.id ?: o.optString("title", "card").hashCode().toString()),
+                    title = o.optString("title", "可视化小卡").ifBlank { "可视化小卡" },
+                    subtitle = o.optString("subtitle", ""),
+                    emoji = o.optString("emoji", ""),
+                    accent = o.optString("accent", ""),
+                    html = html,
+                    height = o.optInt("height", 0),
+                )
+            }.getOrNull()
+        }
+        val allCards = m.cards + inlineCards + widgetCards
         if (allCards.isNotEmpty()) {
             val arr = JSONArray()
             allCards.forEach { c -> runCatching { arr.put(serializeCard(c)) } }
@@ -173,6 +197,8 @@ object WebUiProjection {
                 //   投影必须同样处理，否则网页会多出一行原始 JSON 参数
                 //   —— 那正是「卡片方式」的残留观感，用户已明确否定。
                 if (tc.name == ZX_TOOL) return@forEach
+                // 可视化小卡片已在上面抽成内联卡片，不再重复算作一行工具调用。
+                if (tc.name == "visual_card") return@forEach
                 arr.put(
                     JSONObject()
                         .put("name", tc.name)

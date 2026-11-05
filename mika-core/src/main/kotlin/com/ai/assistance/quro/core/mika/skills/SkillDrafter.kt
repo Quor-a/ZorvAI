@@ -48,6 +48,8 @@ object Eligibility {
         return when {
             ended?.outcome != "succeeded" -> "not_succeeded"
             !done -> "not_done"
+            // 这次用户已经让 ZorvAI 照他的意思写下了技能,不再另起一份草稿
+            events.any { it is RunEvent.ToolResult && tools.verb(it.tool) == Verb.SkillSave && it.resultJson.contains("\"ok\":true") } -> "skill_saved"
             // 出错的动作不算步数(结果可能被截短,按原文判)
             events.count { it is RunEvent.ToolResult && tools.verb(it.tool) in ACTION_VERBS && !it.resultJson.contains("\"ok\":false") } < MIN_ACTIONS -> "too_few_actions"
             else -> interrupted(events) ?: "followed_personal_skill".takeIf { followedPersonalSkill != null }

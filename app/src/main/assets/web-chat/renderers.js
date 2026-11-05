@@ -1382,6 +1382,75 @@
     box.appendChild(frame);
     return box;
   }
+  /** 可视化小卡片（独立分类 / visual_card）：统一卡壳 + iframe 卡体，与原生 VisualMiniCardView 对齐。 */
+  function widgetCompatHtml(html){
+    var s=String(html||"");
+    var dark=document.documentElement.classList.contains("dark");
+    var bg=dark?"#161c28":"#FFFFFF",fg=dark?"#EDE6DA":"#211E1A";
+    var root=getComputedStyle(document.documentElement);
+    function tk(n,f){var v=root.getPropertyValue(n);return (v&&v.trim())||f;}
+    /* 主题 token 下发：对齐参考实现 show_widget 的 setGlobals(colorScheme+tokens)。
+       骨架用 color:CanvasText 与中性灰，但模型自由写的卡片常引用 --card / --border
+       这类设计系统变量；这里从当前 WebUI 主题取值注入，不让卡片自己猜颜色。 */
+    var tokens=':root{color-scheme:'+(dark?"dark":"light")+';'+
+      '--background:'+tk('--bg',bg)+';--foreground:'+tk('--fg',fg)+';'+
+      '--card:'+tk('--surface',bg)+';--card-foreground:'+tk('--fg',fg)+';'+
+      '--border:'+tk('--line','#E3DDD0')+';--muted:'+tk('--bg2','#ECE7DC')+';'+
+      '--muted-foreground:'+tk('--muted','#938A7E')+';--primary:'+tk('--primary','#C25A38')+';'+
+      '--radius-sm:4px;--radius-md:6px;--radius-lg:8px;--radius-xl:12px;'+
+      '--font-sans:'+tk('--font-body','system-ui,sans-serif')+';'+
+      '--font-mono:'+tk('--font-mono','monospace')+'}';
+    var vp='<meta name="viewport" content="width=device-width, initial-scale=1" />';
+    var st='<style>'+tokens+
+           'html,body{background:'+bg+'!important;color:'+fg+'!important}.wc{color:'+fg+'!important}'+
+           'html,body{max-width:100%!important;overflow-x:hidden!important;word-wrap:break-word}'+
+           'img,video{max-width:100%!important;height:auto!important}'+
+           'canvas,svg,iframe,embed,object{max-width:100%!important}'+
+           'table{max-width:100%!important;display:block;overflow-x:auto}'+
+           'pre,code{white-space:pre-wrap!important;word-break:break-word!important}'+
+           '*{box-sizing:border-box}</style>';
+    /* 尺寸协议：内容高度经 postMessage 回传父页（chat.js 监听 __wcard），
+       对应参考实现 runtime.js 的 rendered / size 消息。ResizeObserver 覆盖
+       图片、字体、动画带来的后续高度变化；父页按 contentWindow 匹配 iframe。 */
+    var bridge='<script>(function(){'+
+      'function report(){try{'+
+        'var h=Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0);'+
+        'parent.postMessage({__wcard:1,h:h},"*");'+
+      '}catch(e){}}'+
+      'window.addEventListener("load",report);'+
+      'setTimeout(report,60);setTimeout(report,300);'+
+      'if(window.ResizeObserver){try{new ResizeObserver(report).observe(document.documentElement);}catch(e){}}'+
+      'else{setInterval(report,800);}'+
+      '})();<\/script>';
+    var add=(/viewport/i.test(s)?"":vp)+st;
+    function withBridge(doc){
+      if(/<\/body>/i.test(doc))return doc.replace(/<\/body>/i,bridge+"</body>");
+      return doc+bridge;
+    }
+    if(/<\/head>/i.test(s))return withBridge(s.replace(/<\/head>/i,add+"</head>"));
+    return withBridge(add+s);
+  }
+  function renderVisualMiniCard(card){
+    var box=div("wcard");
+    var accent=/^#[0-9a-fA-F]{6}$/.test(card.accent||"")?card.accent:"var(--primary,#4f6bff)";
+    if(card.emoji||card.title||card.subtitle){
+      var hd=div("wcard-hd");
+      if(card.emoji){var em=el("span","wcard-emoji");em.textContent=card.emoji;hd.appendChild(em);}
+      var tx=div("wcard-tx");
+      if(card.title){var t=el("div","wcard-t");t.textContent=card.title;tx.appendChild(t);}
+      if(card.subtitle){var sub=el("div","wcard-s");sub.textContent=card.subtitle;tx.appendChild(sub);}
+      hd.appendChild(tx);
+      var dot=el("i","wcard-dot");dot.style.background=accent;hd.appendChild(dot);
+      box.appendChild(hd);
+    }
+    var frame=el("iframe","wcard-frame");
+    frame.setAttribute("srcdoc",widgetCompatHtml(card.html));
+    frame.setAttribute("sandbox","allow-scripts allow-same-origin allow-forms allow-popups");
+    var h=Number(card.height||0);
+    frame.style.height=(h>0?Math.min(Math.max(h,140),620):220)+"px";
+    box.appendChild(frame);
+    return box;
+  }
   function renderCompositeCard(card){
     var box=div("qcomposite");
     if(card.description)box.appendChild(div("qcomposite-desc",card.description));
@@ -2344,6 +2413,7 @@
       case "avatargroup": body.appendChild(renderAvatarGroupCard(card)); break;
       case "mermaid": body.appendChild(renderMermaidCard(card)); break;
       case "htmlpreview": body.appendChild(renderHtmlPreviewCard(card)); break;
+      case "visualmini": body.appendChild(renderVisualMiniCard(card)); break;
       case "miniapp": body.appendChild(renderMiniAppCard(card)); break;
       case "composite": body.appendChild(renderCompositeCard(card)); break;
       case "actions": body.appendChild(renderActionCard(card)); break;

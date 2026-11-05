@@ -43,6 +43,21 @@ class QuroTurnController {
         turns[id] = Turn(State.INTERRUPTED, gen)
     }
 
+    /**
+     * 收尾归位：把该会话的轮次置回 IDLE，但**不自增代际**。
+     *
+     * 用途只有一个——队列续跑。上一轮已经彻底结束（complete / interrupt 都走完了），
+     * 只是它停在了 INTERRUPTED 之类的非 IDLE 终态；此时如果直接开始下一轮，
+     * `send()` 的打断分支会误判「还有一轮在跑」，去同步一个已经废弃的缓冲并 cancel 一个已死的 job。
+     * settle 明确表达「这一轮已经交账，可以开新的了」，且不影响任何仍存活的旧协程
+     * （它们的 finally 依旧按 gen 匹配，不会被误置 IDLE）。
+     */
+    @Synchronized
+    fun settle(id: String) {
+        val cur = turns[id] ?: return
+        turns[id] = Turn(State.IDLE, cur.gen)
+    }
+
     @Synchronized
     fun stateOf(id: String): State = turns[id]?.state ?: State.IDLE
 }

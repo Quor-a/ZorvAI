@@ -18,6 +18,8 @@ object SelfCheckReport {
         if (f != null) {
             appendLine("Device: ${f.modelName}, Android ${f.androidRelease} (SDK ${f.sdk}), ${f.abis.firstOrNull() ?: "unknown ABI"}, RAM ${gb(f.ramBytes)}, ${f.screenWidth}x${f.screenHeight}")
             appendLine("Wireless debugging: ${when (f.wirelessDebugging) { true -> "present"; false -> "missing"; null -> "unknown" }}")
+            f.developerOptionsPage?.let { appendLine("Developer options page: ${if (it) "present" else "missing"}") }
+            if (f.phoneControlUnavailable) appendLine("Phone control: unavailable in this environment")
         } else {
             appendLine("Device: unknown")
         }

@@ -5,6 +5,7 @@ import com.ai.assistance.quro.util.qstr
 import android.app.KeyguardManager
 import android.content.Context
 import android.accessibilityservice.AccessibilityService
+import android.graphics.Bitmap
 import android.graphics.Path
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
@@ -16,8 +17,11 @@ import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Display
 import android.view.accessibility.AccessibilityNodeInfo
+import com.ai.assistance.quro.core.ScreenOcrBridge
 import com.ai.assistance.quro.core.privilege.QuroLsposeBridgeReceiver
 import com.ai.assistance.quro.service.QuroAccessibilityService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -59,10 +63,67 @@ class ReadScreenTool : QuroTool {
                 "\n\n## 可交互元素索引（clickable/editable/scrollable，共 ${interactive.size}）\n" +
                     interactive.joinToString("\n")
             else ""
-            cappedTree + inter
+            val base = cappedTree + inter
+            // ── 本地 OCR 兜底 ──
+            // 无障碍节点树读不到自绘 UI / Flutter / 游戏 / WebView / 控件没名字的文字；
+            // 这里直接截一张主屏图、用本机 ML Kit 双识别器补读，给出文字 + 像素坐标（不消耗 token、不联网）。
+            base + ocrFallbackSection(svc)
         } catch (e: Exception) {
             "❌ 读取屏幕失败: ${e.message}"
         }
+    }
+
+    /** 截主屏图 → 本地 OCR → 拼一段「补充文字」；失败时如实说明，不伪装成「没有字」。 */
+    private fun ocrFallbackSection(svc: QuroAccessibilityService): String {
+        val bmp = captureMainBitmap(svc) ?: return ""
+        val res = runCatching { runBlocking(Dispatchers.IO) { ScreenOcrBridge.read(bmp) } }.getOrNull()
+            ?: return "\n\n## 本地 OCR\n❌ 调用失败（OCR 不可用）。这不代表屏上没有文字。"
+        if (res.status != ScreenOcrBridge.Status.OK) {
+            // 旧实现把「识别失败」也当成「没字」，模型于是以为界面是空的
+            val why = when (res.status) {
+                ScreenOcrBridge.Status.FAILED -> "识别器出错（${res.reason}）"
+                ScreenOcrBridge.Status.UNAVAILABLE -> "本机缺少识别器（${res.reason}）"
+                else -> return "" // EMPTY：确实没字，不必多嘴
+            }
+            return "\n\n## 本地 OCR\n❌ $why。这不代表屏上没有文字，请改用截图看画面。"
+        }
+        val lines = res.lines
+        val sb = StringBuilder(
+            "\n\n## 本地 OCR 补充文字（无障碍读不到的自绘/游戏/WebView 界面；坐标为屏幕像素）\n" +
+                "（以下文字由手机端 ML Kit 在本地识别，无需上传、不耗 token；可据此定位「看不清名字的按钮」）\n",
+        )
+        lines.forEachIndexed { i, l ->
+            sb.appendLine("  · ${l.text.take(80)} @(${l.centerX},${l.centerY})")
+            if (i >= 60) { sb.appendLine("  …还有 ${lines.size - 61} 行"); return@forEachIndexed }
+        }
+        return sb.toString().trimEnd()
+    }
+
+    /** 用无障碍服务的 [AccessibilityService.takeScreenshot] 截一张主屏软件位图（API 30+）。 */
+    private fun captureMainBitmap(svc: QuroAccessibilityService): Bitmap? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        val done = CountDownLatch(1)
+        val holder = arrayOf<Bitmap?>(null)
+        runCatching {
+            svc.takeScreenshot(Display.DEFAULT_DISPLAY, svc.mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
+                override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
+                    runCatching {
+                        result.hardwareBuffer?.use { buf ->
+                            holder[0] = Bitmap.wrapHardwareBuffer(buf, result.colorSpace)
+                                ?.copy(Bitmap.Config.ARGB_8888, false)
+                        }
+                    }
+                    done.countDown()
+                }
+
+                override fun onFailure(errorCode: Int) {
+                    Log.w(TAG, "read_screen 主屏截图失败 code=$errorCode")
+                    done.countDown()
+                }
+            })
+        }.onFailure { Log.w(TAG, "read_screen takeScreenshot 调用失败: ${it.message}") ; done.countDown() }
+        runCatching { done.await(5, TimeUnit.SECONDS) }
+        return holder[0]
     }
 
     /** 收集可交互节点（点击/编辑/滚动），输出带坐标的紧凑索引，便于 AI 直接定位「发送」按钮或输入框。 */

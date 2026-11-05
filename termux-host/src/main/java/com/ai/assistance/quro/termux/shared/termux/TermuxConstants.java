@@ -593,8 +593,18 @@ public final class TermuxConstants {
 
 
 
-    /** Termux app $PREFIX directory path */
-    public static final String TERMUX_PREFIX_DIR_PATH = TERMUX_FILES_DIR_PATH + "/usr"; // Default: "/data/data/com.ai.assistance.quro.termux/files/usr"
+    /**
+     * Termux app $PREFIX directory path.
+     *
+     * 🔴 前缀对齐（docs/termux_bootstrap_fixes.md §4.1）：宿主侧 bootstrap 实际安装在
+     * `filesDir/termux/usr`（app 模块 TermuxEnvironment.termuxRoot()），本常量此前指向
+     * `filesDir/usr` —— 两套路径各说各话，`termux(open)` 拉起的界面与 `termux run`
+     * 跑的根本不是同一套文件。统一到 `/termux/usr` 后，App 侧装好即界面就绪，
+     * setupBootstrapIfNeeded 走「前缀已存在」直达会话，不再触发缺失的 bootstrap so。
+     * proot Ubuntu 的 rootfs（filesDir/usr/var/lib/proot-distro）由 terminal-core 自行
+     * 计算路径、不依赖本常量，不受影响。
+     */
+    public static final String TERMUX_PREFIX_DIR_PATH = TERMUX_FILES_DIR_PATH + "/termux/usr"; // Default: "/data/data/com.ai.assistance.quro/files/termux/usr"
     /** Termux app $PREFIX directory */
     public static final File TERMUX_PREFIX_DIR = new File(TERMUX_PREFIX_DIR_PATH);
 
@@ -656,7 +666,7 @@ public final class TermuxConstants {
 
 
     /** Termux app $HOME directory path */
-    public static final String TERMUX_HOME_DIR_PATH = TERMUX_FILES_DIR_PATH + "/home"; // Default: "/data/data/com.ai.assistance.quro.termux/files/home"
+    public static final String TERMUX_HOME_DIR_PATH = TERMUX_FILES_DIR_PATH + "/termux/home"; // Default: "/data/data/com.ai.assistance.quro/files/termux/home"（与 $PREFIX 同移入 /termux，对齐 app 侧 TermuxEnvironment）
     /** Termux app $HOME directory */
     public static final File TERMUX_HOME_DIR = new File(TERMUX_HOME_DIR_PATH);
 

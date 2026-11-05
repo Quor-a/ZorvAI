@@ -99,9 +99,9 @@ class ClosedLoopCorrectionChannelTest {
         val policy = FailurePolicyRegistry.policyFor("tool")
         // PERMISSION 首档即 ESCALATE：重试无用
         assertEquals(RecoveryAction.ESCALATE, policy.decide(FailureType.PERMISSION, 1))
-        // TIMEOUT 先重试两次
-        assertEquals(RecoveryAction.RETRY, policy.decide(FailureType.TIMEOUT, 1))
-        assertEquals(RecoveryAction.RETRY, policy.decide(FailureType.TIMEOUT, 2))
+        // TIMEOUT 首档即升级（重试同参数只会再超时一次，把「卡」放大成「长时间卡」）
+        assertEquals(RecoveryAction.ESCALATE, policy.decide(FailureType.TIMEOUT, 1))
+        assertEquals(RecoveryAction.ESCALATE, policy.decide(FailureType.TIMEOUT, 2))
         assertEquals(RecoveryAction.ESCALATE, policy.decide(FailureType.TIMEOUT, 3))
         // PARSE 首档即 CORRECT（修正参数后重试有意义）
         assertEquals(RecoveryAction.CORRECT, policy.decide(FailureType.PARSE, 1))

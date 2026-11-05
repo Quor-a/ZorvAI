@@ -57,6 +57,8 @@ internal fun ChatTopBar(
     onModel: () -> Unit,
     onSettings: () -> Unit,
     onToolCenter: () -> Unit = {},
+    /** 上下文窗口入口：点开看 token 占用明细（消息 / 工具 / 技能 / 系统提示词…）。 */
+    onContextWindow: () -> Unit = {},
     /** 视频通话入口：拉起 QuroVideoCallService（相机 + 麦克风前台服务，通话界面在悬浮窗）。 */
     onVideoCall: () -> Unit = {},
     onMinimize: () -> Unit = {},
@@ -100,14 +102,15 @@ internal fun ChatTopBar(
                 modifier = Modifier.weight(1f, fill = false),
             )
         }
-        // ③ 右侧固定：终端 + 视频通话 + 设置 + 最小化。无 weight → 与 ① 同批被测量，
+        // ③ 右侧固定：工具中心 + 设置 + 最小化。无 weight → 与 ① 同批被测量，
         //    长模型名/长人格名都挤不掉它们
+        // 🔴 顶部重新规划（2026-11-04 用户拍板）：
+        //  - 上下文窗口入口从顶栏删除（输入区已有同一入口，重复占位）；
+        //  - 视频通话从顶栏挪进侧边栏（顶栏图标太多）。
+        //    [onContextWindow] / [onVideoCall] 参数保留（侧边栏复用），顶栏不再放。
         Spacer(Modifier.width(4.dp))
         IconButton(onClick = onToolCenter, modifier = Modifier.size(TOP_BAR_TOUCH)) {
             LucideIcon("blocks", stringResource(R.string.qk_02772), Modifier.size(21.dp), tint = cs.onBackground)
-        }
-        IconButton(onClick = onVideoCall, modifier = Modifier.size(TOP_BAR_TOUCH)) {
-            LucideIcon("video", stringResource(R.string.qk_00183), Modifier.size(21.dp), tint = cs.onBackground)
         }
         IconButton(onClick = onSettings, modifier = Modifier.size(TOP_BAR_TOUCH)) {
             LucideIcon("settings", stringResource(R.string.qk_01760), Modifier.size(21.dp), tint = cs.onBackground)

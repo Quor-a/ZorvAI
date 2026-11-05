@@ -1,8 +1,10 @@
 package com.ai.assistance.quro.core.websearch.net
 
 import okhttp3.FormBody
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 /**
@@ -146,6 +148,37 @@ object HttpStack {
                     .readTimeout(timeoutMs, TimeUnit.MILLISECONDS)
                     .build()
             } else if (forHtml) fetchClient else client
+            c.newCall(b.build()).execute().use { resp ->
+                if (!resp.isSuccessful) null else resp.body?.string()
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 带自定义请求头的 POST（JSON body），用于需要鉴权的搜索 API
+     * （Serper 的 X-API-KEY、Tavily 的 Bearer 等）。
+     * 失败返回 null，不抛异常，便于上层按「引擎不可用」处理。
+     */
+    fun postJson(
+        url: String,
+        jsonBody: String,
+        headers: Map<String, String>,
+        timeoutMs: Long = 0
+    ): String? {
+        return try {
+            val body = jsonBody.toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+            val b = Request.Builder().url(url).post(body)
+            b.header("User-Agent", UA)
+            b.header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+            headers.forEach { (k, v) -> b.header(k, v) }
+            val c = if (timeoutMs > 0) {
+                client.newBuilder()
+                    .callTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+                    .readTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+                    .build()
+            } else client
             c.newCall(b.build()).execute().use { resp ->
                 if (!resp.isSuccessful) null else resp.body?.string()
             }

@@ -47,6 +47,15 @@ object QuroSoulPromptEngine {
             sb.append("### 身份设定（这就是你，照此成为 ${persona.name}）\n")
                 .append(persona.roleSetting).append("\n\n")
         }
+
+        // ── 第二优先级：Soul（长期相处沉淀的人格画像，自动总结 + 可手动编辑）──
+        // 与 roleSetting（用户手写的静态设定）不同，Soul 是「它已经长成了什么样」的动态画像，
+        // 代表这段时间与用户相处后 AI 自我沉淀下来的说话方式、关系亲疏、默契约定等。
+        if (persona.soul.isNotBlank()) {
+            sb.append("### 你的人格画像（长期相处沉淀，这就是你现在的样子）\n")
+                .append(persona.soul.trim()).append("\n\n")
+        }
+
         if (persona.chatSetting.isNotBlank()) {
             sb.append("### 聊天风格约束\n").append(persona.chatSetting).append("\n")
         }

@@ -1,5 +1,10 @@
 package com.ai.assistance.quro.core.mika.shell
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import java.security.MessageDigest
 import java.security.SecureRandom
 
@@ -62,7 +67,7 @@ object HelperHandoff {
 
     /**
      * 电脑经 USB 调试跑的启动脚本:起的是和 [command] 同一个助手、同样的参数,口令换成 [nonce](写在脚本里,见 [HandoffNonces.usbNonce])。
-     * adb shell 的会话一结束(命令跑完、拔线),adbd 就把它那一组进程杀掉:助手用 setsid 另起会话,放到后台的子 shell 里起
+     * adb shell 的会话一结束(命令跑完、拔线),adbd 就把它那一组进程杀掉:助手用 nohup 忽略挂断信号,再用 setsid 另起会话,放到后台的子 shell 里起
      * (子 shell 退出后它归 init 管),标准输出和错误丢掉,不再连着 adb 的流;脚本再等一会儿让 setsid 生效,
      * 看助手进程还在就说一句「正在启动」,不在(多半是口令过期或 ZorvAI 不认)就请用户打开 ZorvAI 再跑一次。
      * 只用安卓原版 sh 和 toybox 里有的命令。不是 shell 身份(没经 adb 跑)时不起:ZorvAI 只收 shell 交来的助手。
@@ -82,7 +87,7 @@ object HelperHandoff {
             |  exit 1
             |fi
             |n=${quote(nonce)}
-            |(echo "${'$'}n" | CLASSPATH=${quote(apkPath)} setsid app_process /system/bin --nice-name=$name $HELPER_CLASS ${quote(packageName)} $appUid ${quote(certPin)} >/dev/null 2>&1 &)
+            |(echo "${'$'}n" | CLASSPATH=${quote(apkPath)} nohup setsid app_process /system/bin --nice-name=$name $HELPER_CLASS ${quote(packageName)} $appUid ${quote(certPin)} >/dev/null 2>&1 &)
             |sleep 2
             |if pidof $name >/dev/null 2>&1; then
             |  echo "ZorvAI helper starting... Open ZorvAI to confirm phone control is ready."
@@ -93,6 +98,12 @@ object HelperHandoff {
             |fi
             |""".trimMargin()
     }
+
+    /**
+     * 什么时候重写「用电脑启动」脚本:助手来了或走了,以及口令被整体作废([HandoffNonces.resets],如解除配对)时;
+     * 发出的值是此刻助手在不在。后一种助手可能一直不在,不跟着它重写的话脚本里留的就是作废的口令。
+     */
+    fun usbScriptWrites(helper: Flow<Any?>, resets: Flow<Int>): Flow<Boolean> = combine(helper, resets) { h, _ -> h != null }
 
     /**
      * 此刻该写的脚本:助手连着([connected])就写不带口令的 [usbStub],也不去要口令;否则写带新口令的 [usbScript]。
@@ -214,8 +225,15 @@ class HandoffNonces(
         return random().also { store.save(NonceSlots(resume = it)) }
     }
 
+    private val _resets = MutableStateFlow(0)
+    /** 口令被整体作废([clear])的次数:变了就说明写出去的口令(如脚本里那枚)都不能用了。 */
+    val resets: StateFlow<Int> = _resets.asStateFlow()
+
     @Synchronized
-    fun clear() = store.save(NonceSlots())
+    fun clear() {
+        store.save(NonceSlots())
+        _resets.value++
+    }
 
     private fun same(a: String, b: String?) =
         b != null && MessageDigest.isEqual(a.toByteArray(Charsets.UTF_8), b.toByteArray(Charsets.UTF_8))

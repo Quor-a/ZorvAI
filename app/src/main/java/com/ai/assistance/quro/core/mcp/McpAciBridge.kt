@@ -206,22 +206,12 @@ object McpAciBridge {
         return if (capabilities.isNotEmpty()) {
             capabilities.first()
         } else {
-            // 兜底：从 JSON 手动创建 Capability
+            // 🔴 死分支清理（2026-11-05）：外层已判定 capabilities.isEmpty()，
+            //    这里再判一次 isNotEmpty() 恒为 false，最终必然抛异常。
+            //    直接给出明确失败原因，不再留一段永远不会执行的「虚拟能力」代码。
             val id = capJson.optString("id", mapping.toolName)
-            val description = capJson.optString("description", "MCP 工具: ${mapping.toolDescription}")
-            val requireUserConfirm = capJson.optBoolean("requireUserConfirm", false)
-            
-            // 使用反射或工厂方法创建 Capability
-            // 由于 Capability 构造函数不可用，我们返回一个虚拟能力
-            // 实际使用中，getMcpCapabilities() 应该返回 fromJSONArray 解析成功的列表
-            Log.w(TAG, "无法创建 Capability 对象，使用虚拟能力: $id")
-            
-            // 返回第一个能力（如果有的话），否则抛出异常
-            if (capabilities.isNotEmpty()) {
-                capabilities.first()
-            } else {
-                throw IllegalStateException("无法创建 MCP 工具的 ACI 能力: $id")
-            }
+            Log.w(TAG, "无法从 JSON 创建 Capability 对象: $id")
+            throw IllegalStateException("无法创建 MCP 工具的 ACI 能力: $id（fromJSONArray 解析结果为空）")
         }
     }
     

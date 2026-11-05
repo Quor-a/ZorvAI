@@ -43,6 +43,10 @@ class ZorvBrain(private val context: Context) {
     private val tagRepo = QuroTagRepository(appCtx)
     private val uiPrefs = appCtx.getSharedPreferences("quro_ui", Context.MODE_PRIVATE)
 
+    /** [systemPrompt] 的短时缓存；见该函数的注释。 */
+    @Volatile
+    private var promptCache: PromptCache? = null
+
     // ─────────────────────────── 模型配置（宿主的） ───────────────────────────
 
     /** 当前生效的模型配置（ZorvAI 主对话同一份）。 */
@@ -79,6 +83,28 @@ class ZorvBrain(private val context: Context) {
      *   整体下线，换成该通道的输出指令）。修「不管选什么通道都只走 GenUI SDK」。
      */
     fun systemPrompt(forced: String? = null): String {
+        // 🔴 短时缓存（本轮复用）：这个函数会读技能库文件、记忆库、人格库，再拼 38K 字符。
+        // 此前 `toolSpecs()` 每轮都直接调它一次、`buildSystemContent()` 又各自缓存一份 →
+        // 同一轮里同一份提示词被重建两遍，且调用方常常在**主线程**上（GenUI 的
+        // viewModelScope.launch 默认就是 Main）→ 用户侧表现是「点发送后先卡一下才出字」。
+        // TTL 取 2s：足够覆盖「同一轮请求内的多次取用」，又不会让人格/模型改动长时间不生效。
+        val now = System.currentTimeMillis()
+        promptCache?.let { c ->
+            if (c.forced == forced && now - c.at < PROMPT_TTL_MS) return c.text
+        }
+        val text = buildSystemPrompt(forced)
+        promptCache = PromptCache(forced, now, text)
+        return text
+    }
+
+    /** 作废提示词缓存（人格 / 模型 / 记忆 / 技能变更后由调用方显式调用）。 */
+    fun invalidateSystemPrompt() {
+        promptCache = null
+    }
+
+    private class PromptCache(val forced: String?, val at: Long, val text: String)
+
+    private fun buildSystemPrompt(forced: String? = null): String {
         // 本次请求的输入预算（token）。三层（记忆 / 设计技能 / 工具）共用它，
         // 否则每层各算一遍「窗口的百分之几」，加起来必然超窗。
         val budgetTokens = inputBudgetTokens()
@@ -157,6 +183,20 @@ class ZorvBrain(private val context: Context) {
         }
 
         // 语言指令结尾复述（近因强化）：设计技能层篇幅很长，必须压在最末尾。
+        sb.append(QuroReplyLanguage.tailReminder(appCtx))
+
+        // 🔴 工具纪律段（2026-11-04）：主对话链路有「工具菜单与下发严格一致 / 串台防御」，
+        //    本通道此前没有 —— 38K 表达层把工具使用纪律淹没，模型调工具时选错/编造参数，
+        //    用户实测「zorvAI 调完整准确，GenUI Agent 调就不准确」。与主链路同口径补齐，
+        //    压在最末尾（近因优先）：
+        sb.append("""
+
+## 工具使用纪律（最高优先级）
+- 只能调用本次请求 tools 字段里**实际下发**的工具；清单里没有的工具绝不凭记忆编造名字或参数。
+- 调用前先读该工具的 parametersJson，按 schema 逐字段传参；不确定就先用只读工具探查，不要猜。
+- 针对【最新一条用户消息】作答，不要重复/延续历史轮次的任务。
+- 需要终端用 termux（官方 bootstrap）或 linux_run（Ubuntu 沙箱）；查资料用 web_search/read_url。
+""")
         sb.append(QuroReplyLanguage.tailReminder(appCtx))
 
         return sb.toString().trimEnd()
@@ -258,7 +298,7 @@ class ZorvBrain(private val context: Context) {
      * 保留优先级：GenUI 画界面真正需要的（设备信息 / 时间 / 计算 / 文件只读 / 联网检索 /
      * 终端 / 技能与插件管理）→ 其余按注册顺序补足预算。
      */
-    fun toolSpecs(cfg: QuroModelConfig): List<QuroToolSpec> {
+    fun toolSpecs(cfg: QuroModelConfig, systemChars: Int = -1): List<QuroToolSpec> {
         val reg = registry()
         val all = runCatching {
             if (cfg.useFullTools) reg.fullSpecs() else reg.coreSpecs()
@@ -267,7 +307,14 @@ class ZorvBrain(private val context: Context) {
         // 实测（32K 小窗口模型）：system 固定部分就有 44,589 字符 ≈ 26K token（占整窗 80%），
         // 若按总窗口算工具份额，收敛后单轮输入仍是 64,068 字符 > 55,705 字符的整窗
         // → 上游照样 400，预算等于没兜住。
-        return budgetToolSpecs(all, inputBudgetTokens(cfg), systemPrompt().length)
+        //
+        // @param systemChars 调用方**已经拿到的** system 实际字符数。
+        // 为什么必须传：本函数此前自己调 `systemPrompt()` 重量一遍，而那次是 `forced = null`
+        // 的基线版（38K GenUI 表达层在内）。用户在 markdown / html 通道下，真实 system 很短，
+        // 却按 38K 去算「已用」→ 剩余额度被低估 → 工具被裁到只剩一两个 →
+        // 表现就是「这个通道下 AI 什么工具都调不了」。传真实长度才是对的。
+        val used = if (systemChars >= 0) systemChars else systemPrompt().length
+        return budgetToolSpecs(all, inputBudgetTokens(cfg), used)
     }
 
     /**
@@ -284,6 +331,19 @@ class ZorvBrain(private val context: Context) {
         budgetTokens: Int,
         alreadyUsedChars: Int = 0,
     ): List<QuroToolSpec> {
+        // 自检：优先名单是手写字符串，工具改名后会静默失效（上次 `terminal_run` 就是这样，
+        // 导致预算一紧 AI 的 tools 里连一个终端工具都没有）。只提示一次，不刷屏。
+        if (!priorityNamesChecked) {
+            priorityNamesChecked = true
+            val missing = ZorvPromptBudget.missingPriorityNames(all)
+            if (missing.isNotEmpty()) {
+                android.util.Log.w(
+                    "ZorvBrain",
+                    "工具优先名单里有 ${missing.size} 个名字在注册表中不存在：$missing " +
+                        "—— 这几条优先级不会生效（写错名字或工具已改名，请对照 override val name 修正）。",
+                )
+            }
+        }
         val fit = ZorvPromptBudget.fitTools(all, budgetTokens, alreadyUsedChars)
         if (!fit.truncated) return fit.specs
         android.util.Log.w(
@@ -350,6 +410,9 @@ class ZorvBrain(private val context: Context) {
     private companion object {
         private val LOCK = Any()
 
+        /** [systemPrompt] 缓存的存活时间：覆盖同一轮请求内的重复取用，又不至于让改动迟迟不生效。 */
+        private const val PROMPT_TTL_MS = 2_000L
+
         // 预算的所有参数（份额 / 最小值 / 优先工具名单）都搬到了 ZorvPromptBudget ——
         // 那个对象是纯逻辑、可 JVM 单测，而这里 companion 里的常量单测够不着，
         // 「预算到底怎么算」就只能靠人肉推演，正是这次踩坑的根源。
@@ -357,5 +420,8 @@ class ZorvBrain(private val context: Context) {
 
         @Volatile private var cachedRegistry: QuroToolRegistry? = null
         @Volatile private var cachedEngine: QuroToolEngine? = null
+
+        /** 优先名单自检只做一次（名字是静态的，不必每轮比对 258 个工具）。 */
+        @Volatile private var priorityNamesChecked = false
     }
 }

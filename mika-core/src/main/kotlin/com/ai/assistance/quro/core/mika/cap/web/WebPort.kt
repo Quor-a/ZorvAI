@@ -48,6 +48,23 @@ data class PageText(
 /** [file] 为沙箱路径 /workspace/downloads/<名字>;[status] 为 done|failed|running。 */
 data class DownloadInfo(val file: String, val bytes: Long, val mime: String?, val status: String, val error: String?)
 
+/**
+ * web_keep_open 的结果:[keep] 为 true 时这一页([tabId]、[url]、[title]、站点 [host])在任务结束后留在后台接着运行,
+ * 至多 [hours] 小时;[replaces] 是此刻留着的另一页的站点(任务结束时它会被关掉),没有为 null。[keep] 为 false 时撤销了这个任务里的留页。
+ */
+data class KeepOpenResult(
+    val keep: Boolean,
+    val tabId: String?,
+    val url: String?,
+    val title: String?,
+    val host: String?,
+    val hours: Int,
+    val replaces: String? = null,
+)
+
+/** 当前标签是用户自己在 ZorvAI 浏览器里看着的那一页(借来的):它本来就不随任务关,用不着留。 */
+class WebTabIsUsers(val tabId: String) : Exception("tab $tabId is the user's own page")
+
 /** web_site_mode 的结果:[host] 当前页面的站点,[mobile] 现在用手机版,[reloaded] 当前页已按新版本重新加载。 */
 data class SiteModeResult(val host: String, val mobile: Boolean, val reloaded: Boolean)
 
@@ -107,6 +124,13 @@ interface WebPort : ScreenPort {
      * 没有打开的网页为 null;不支持时抛 [UnsupportedOperationException]。
      */
     suspend fun setSiteMode(mobile: Boolean): SiteModeResult? = throw UnsupportedOperationException("site mode is not available")
+
+    /**
+     * 任务结束后留下当前标签接着运行([keep] 为 false 时撤销这个任务里的留页)。默认任务结束时关掉全部标签;留下的那一页至多留
+     * [KeepOpenResult.hours] 小时,全局只留一页。没有打开的网页为 null;当前标签是用户自己的页面时抛 [WebTabIsUsers];
+     * 不支持时抛 [UnsupportedOperationException]。
+     */
+    suspend fun keepOpen(keep: Boolean, reason: String): KeepOpenResult? = throw UnsupportedOperationException("keeping a page open is not available")
 
     /** 当前标签此刻用的版本:`mobile` 或 `desktop`;没有打开的网页或不知道为 null。 */
     suspend fun siteMode(): String? = null

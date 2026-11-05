@@ -14,12 +14,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Verified
@@ -30,6 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import com.ai.assistance.quro.core.skill.QuroSkill
 import com.ai.assistance.quro.core.skill.QuroSkillStore
 import com.ai.assistance.quro.core.skill.QuroSkillSuites
@@ -44,7 +48,7 @@ import org.json.JSONObject
  * 「如何添加技能」说明（开发者文档，可一键下载到本地）。
  */
 private val SKILL_AUTHOR_GUIDE = """
-技能（SKILL）让你的 AI 多出可注入系统提示词的指令，或注册成 AI 可调用函数。
+技能（SKILL）是一段工作指令。它不会自动生效：在对话框「选择技能」里选中后，全文会跟那一条消息一起发给 AI，AI 直接照着做。
 
 一、最小可用技能（SKILL.md 风格）：
 ---
@@ -57,13 +61,13 @@ description: 一句话说清这个技能做什么，AI 据此决定是否启用
 二、应用内字段对照：
 • 名称（必填）：技能的 key，建议小写蛇形。
 • 简介：对应 description，影响 AI 自动匹配。
-• 技能指令：注入系统提示词的正文（留空则启用也不生效）。
-• 触发词：逗号分隔，未来用于自动匹配（如「订票,买火车票」）。
+• 技能指令：技能的正文（留空则选了也没有内容可发给 AI）。
+• 触发词：逗号分隔，供搜索与将来自动匹配（如「订票,买火车票」）。
 • 参数 Schema (JSON)：当「可作为工具调用」开启时，这是 function calling 的入参定义，必须是标准 JSON Schema：
   {"type":"object","properties":{"city":{"type":"string","description":"城市名"}},"required":["city"]}
-• 可作为工具调用：开启后 AI 能直接调用该技能（注册为函数）；关闭则只注入提示词。
-• 常驻系统提示词：开启则始终注入；关闭则仅触发词命中时注入。
-• 启用：总开关，关闭则不注入。
+• 可作为工具调用：开启后 AI 能直接调用该技能（注册为函数），这是另一条独立通道。
+• 常驻系统提示词：是否常驻目录（元数据），不决定本次消息用不用这个技能。
+• 没有「启用」开关：技能库只是素材库，用不用由你在对话框选择。
 
 三、参数怎么写（JSON Schema 要点）：
 • 根必须是 {"type":"object","properties":{...},"required":[...]}。
@@ -77,11 +81,13 @@ description: 一句话说清这个技能做什么，AI 据此决定是否启用
 """
 
 /**
- * 技能 SKILL 管理页。
+ * 技能 SKILL 管理页（= 技能素材库）。
  *
- * - 列出用户所有技能，支持启用开关 / 编辑 / 删除。
- * - 右下角 + 新增技能（名称 + 简介 + 指令正文 + 启用）。
- * - 启用的技能由 [com.ai.assistance.quro.ui.QuroChatViewModel.buildSystemPrompt] 注入系统提示词。
+ * - 列出所有技能，支持编辑 / 导出 / 删除；**没有启用/禁用开关**。
+ * - 技能在这里只管「库里有什么」，用哪个由用户在对话框「选择技能」里挑选，
+ *   选中后全文随那一条消息发给 AI（见 `QuroSkillStore.attachedBlock`）。
+ * - 系统提示词里只放一行一条的元数据目录，供 AI 自行按需调 `skill` 工具，
+ *   与「用户显式选择」是两条独立通道，后者优先级更高。
  */
 @Composable
 fun QuroSkillsScreen(onClose: () -> Unit) {
@@ -92,8 +98,21 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
     var editing by remember { mutableStateOf<QuroSkill?>(null) }
     var showExportPicker by remember { mutableStateOf(false) }
     var pendingExport by remember { mutableStateOf<List<QuroSkill>>(emptyList()) }
+    var showGithubImport by remember { mutableStateOf(false) }
+    val skillsScope = androidx.compose.runtime.rememberCoroutineScope()
 
     fun refresh() { skills = QuroSkillStore.load(ctx) }
+
+    var query by remember { mutableStateOf("") }
+    val visibleSkills = remember(skills, query) {
+        val q = query.trim()
+        if (q.isEmpty()) skills
+        else skills.filter {
+            it.name.contains(q, true) || it.description.contains(q, true) ||
+                it.descriptionZh.contains(q, true) || it.id.contains(q, true) ||
+                it.suite.contains(q, true) || it.trigger.contains(q, true)
+        }
+    }
 
     // ═══ 导入技能（从 JSON 文件） ═══
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -177,7 +196,7 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
                         Icon(Icons.Filled.Verified, contentDescription = stringResource(R.string.qk_02425), tint = MaterialTheme.colorScheme.primary)
                     }
                     Text(
-                        "${skills.count { it.enabled }} 启用 / ${skills.size} 共",
+                        "共 ${skills.size} 个 · 在对话框选择后发送",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(end = 8.dp),
@@ -185,15 +204,24 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
                 }
             }
 
-            if (skills.isEmpty()) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = { Text("搜索技能名称、描述、触发词或套件") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+
+            if (visibleSkills.isEmpty()) {
                 Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.qk_02427),
+                    Text(
+                        if (query.isBlank()) stringResource(R.string.qk_02427) else "没有匹配「$query」的技能",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else {
-                val grouped = remember(skills) { QuroSkillSuites.group(skills) }
+                val grouped = remember(visibleSkills) { QuroSkillSuites.group(visibleSkills) }
                 LazyColumn(
                     Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
@@ -204,10 +232,6 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
                         items(groupSkills, key = { it.id }) { s ->
                             SkillRow(
                                 skill = s,
-                                onToggle = { enabled ->
-                                    QuroSkillStore.addOrUpdate(ctx, s.copy(enabled = enabled, updatedAt = System.currentTimeMillis()))
-                                    refresh()
-                                },
                                 onEdit = { editing = s; showEditor = true },
                                 onExport = { pendingSkill = s; exportMdLauncher.launch("${s.name}.skill.md") },
                                 onDelete = {
@@ -230,6 +254,86 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
         ) {
             Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.qk_02428), tint = MaterialTheme.colorScheme.onPrimary)
         }
+        androidx.compose.material3.SmallFloatingActionButton(
+            onClick = { showGithubImport = true },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 92.dp),
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ) {
+            Icon(Icons.Filled.FileDownload, "从 GitHub 导入技能", tint = MaterialTheme.colorScheme.onSecondaryContainer)
+        }
+        val packageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            skillsScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val result = runCatching {
+                    val bytes = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        ?: throw IllegalStateException("读不到文件")
+                    val (a, u) = QuroSkillStore.importSkillPackage(ctx, bytes, "")
+                    "导入成功：新增 $a 个，更新 $u 个"
+                }.getOrElse { "导入失败：${it.message}" }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    Toast.makeText(ctx, result, Toast.LENGTH_LONG).show()
+                    if (result.startsWith("导入成功")) refresh()
+                }
+            }
+        }
+        androidx.compose.material3.SmallFloatingActionButton(
+            onClick = { packageLauncher.launch(arrayOf("application/zip", "application/octet-stream")) },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 152.dp),
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ) {
+            Icon(Icons.Filled.FileUpload, "导入技能包（ZIP/.skill）", tint = MaterialTheme.colorScheme.onSecondaryContainer)
+        }
+    }
+
+    if (showGithubImport) {
+        var ghUrl by remember { mutableStateOf("") }
+        var importing by remember { mutableStateOf(false) }
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        AlertDialog(
+            onDismissRequest = { if (!importing) showGithubImport = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("从 GitHub 导入技能", fontWeight = FontWeight.SemiBold) },
+            text = {
+                Column {
+                    Text(
+                        "支持仓库链接或 /tree/<分支>/<路径> 链接。\n自动扫描包内全部 SKILL.md，同名技能覆盖更新。",
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = ghUrl,
+                        onValueChange = { ghUrl = it },
+                        placeholder = { Text("https://github.com/owner/repo", fontSize = 13.sp) },
+                        singleLine = true,
+                        enabled = !importing,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (importing) {
+                        Spacer(Modifier.height(8.dp))
+                        Text("正在读取…", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !importing && ghUrl.isNotBlank(),
+                    onClick = {
+                        importing = true
+                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            val result = runCatching { QuroSkillStore.importFromGitHub(ctx, ghUrl.trim(), "") }
+                                .fold({ (a, u) -> "导入成功：新增 $a 个，更新 $u 个" },
+                                    { "导入失败：${it.message}" })
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                importing = false
+                                Toast.makeText(ctx, result, Toast.LENGTH_LONG).show()
+                                if (result.startsWith("导入成功")) { showGithubImport = false; refresh() }
+                            }
+                        }
+                    },
+                ) { Text("导入") }
+            },
+            dismissButton = { TextButton(onClick = { showGithubImport = false }) { Text("取消") } },
+        )
     }
 
     if (showExportPicker) {
@@ -281,7 +385,7 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
         SkillEditorDialog(
             initial = editing,
             onDismiss = { showEditor = false; editing = null },
-            onSave = { name, description, descriptionZh, prompt, enabled, trigger, parametersJson, callable, alwaysOn ->
+            onSave = { name, description, descriptionZh, prompt, _, trigger, parametersJson, callable, alwaysOn ->
                 val base = editing ?: QuroSkill(id = UUID.randomUUID().toString(), name = "")
                 QuroSkillStore.addOrUpdate(
                     ctx,
@@ -290,7 +394,7 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
                         description = description,
                         descriptionZh = descriptionZh,
                         prompt = prompt,
-                        enabled = enabled,
+                        enabled = true,
                         trigger = trigger,
                         parametersJson = parametersJson,
                         callable = callable,
@@ -322,7 +426,6 @@ fun QuroSkillsScreen(onClose: () -> Unit) {
 @Composable
 private fun SkillRow(
     skill: QuroSkill,
-    onToggle: (Boolean) -> Unit,
     onEdit: () -> Unit,
     onExport: () -> Unit,
     onDelete: () -> Unit,
@@ -359,7 +462,12 @@ private fun SkillRow(
         IconButton(onClick = onExport) { Icon(Icons.Filled.FileDownload, contentDescription = stringResource(R.string.qk_02438), tint = cs.primary) }
         IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.qk_00299), tint = cs.primary) }
         IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.qk_00091), tint = cs.error) }
-        Switch(checked = skill.enabled, onCheckedChange = onToggle)
+        // 这里没有「启用」开关：技能是否生效由用户在对话框选择后随消息发送决定。
+        Text(
+            if (skill.prompt.isBlank()) "待补正文" else "对话框可选",
+            style = MaterialTheme.typography.labelSmall,
+            color = if (skill.prompt.isBlank()) cs.error else cs.primary,
+        )
     }
 }
 
@@ -403,7 +511,6 @@ private fun SkillEditorDialog(
     var parametersJson by remember { mutableStateOf(TextFieldValue(initial?.parametersJson ?: DEFAULT_SKILL_PARAMS)) }
     var callable by remember { mutableStateOf(initial?.callable ?: true) }
     var alwaysOn by remember { mutableStateOf(initial?.alwaysOn ?: true) }
-    var enabled by remember { mutableStateOf(initial?.enabled ?: true) }
     val cs = MaterialTheme.colorScheme
 
     AlertDialog(
@@ -411,7 +518,8 @@ private fun SkillEditorDialog(
         confirmButton = {
             Button(onClick = {
                 val n = name.text.trim()
-                if (n.isNotEmpty()) onSave(n, description.text.trim(), descriptionZh.text.trim(), prompt.text, enabled, trigger.text.trim(), parametersJson.text.ifBlank { DEFAULT_SKILL_PARAMS }, callable, alwaysOn)
+                // enabled 恒为 true：库内条目一律可选，不再有「关掉就 AI 不知道」的隐性状态。
+                if (n.isNotEmpty()) onSave(n, description.text.trim(), descriptionZh.text.trim(), prompt.text, true, trigger.text.trim(), parametersJson.text.ifBlank { DEFAULT_SKILL_PARAMS }, callable, alwaysOn)
             }) { Text(qstr(R.string.qk_00198)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.qk_00011)) } },
@@ -467,10 +575,11 @@ private fun SkillEditorDialog(
                     Switch(checked = alwaysOn, onCheckedChange = { alwaysOn = it })
                 }
                 Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.qk_02448), modifier = Modifier.weight(1f))
-                    Switch(checked = enabled, onCheckedChange = { enabled = it })
-                }
+                Text(
+                    "保存后到对话框「选择技能」里选中它，才会随那一条消息发给 AI。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         },
     )
@@ -485,7 +594,7 @@ private fun SkillEditorDialog(
  * - 单个对象：{"name":"...","prompt":"...","description":"...","enabled":true}
  * - 数组：[{"name":"...","prompt":"..."}, ...]
  *
- * 导入时自动生成新 UUID（避免 id 冲突），保留原有 enabled 状态。
+ * 导入时自动生成新 UUID（避免 id 冲突），并统一置为库内可选（不再保留旧的启用状态）。
  */
 private fun parseSkillJson(json: String): List<QuroSkill> {
     val raw = json.trim()
@@ -502,7 +611,7 @@ private fun parseSkillJson(json: String): List<QuroSkill> {
                 description = o.optString("description", "").trim(),
                 descriptionZh = o.optString("description_zh", "").trim(),
                 prompt = o.optString("prompt", "").trim(),
-                enabled = o.optBoolean("enabled", true),
+                enabled = true,
                 trigger = o.optString("trigger", "").trim(),
                 parametersJson = o.optString("parametersJson", DEFAULT_SKILL_PARAMS),
                 callable = o.optBoolean("callable", true),

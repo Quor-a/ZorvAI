@@ -2,6 +2,7 @@ package com.ai.assistance.quro.genui.sdk.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +26,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ai.assistance.quro.genui.sdk.dsl.UIComponent
@@ -106,16 +109,35 @@ fun ComplianceCheckRenderer(c: UIComponent, ctx: RenderContext) {
 fun DataTableRenderer(c: UIComponent, ctx: RenderContext) {
     val headers = c.properties.a6str("headers")
     val rows = c.properties["rows"] as? JsonArray
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))) {
-        if (headers.isNotEmpty()) {
-            Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(vertical = 9.dp)) {
-                headers.forEach { h -> Text(h, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(horizontal = 10.dp)) }
+    val rowList = (rows?.mapNotNull { r -> (r as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content } }) ?: emptyList()
+    val colCount = maxOf(headers.size, rowList.maxOfOrNull { it.size } ?: 0)
+    // 🔴 移动端适配修复（2026-11-04）：每列 weight(1f) 在 8+ 列时每列只剩 ~40dp，
+    //    中文竖排成一字一行（与天气卡同型）。列数 > 4 时套横向滚动逃生门。
+    val scroll = if (colCount > 4) Modifier.horizontalScroll(rememberScrollState()) else Modifier
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
+    ) {
+        Column(scroll) {
+            if (headers.isNotEmpty()) {
+                Row(Modifier.background(MaterialTheme.colorScheme.surfaceVariant).padding(vertical = 9.dp)) {
+                    headers.forEach { h ->
+                        Text(
+                            h, fontWeight = FontWeight.Bold, fontSize = 12.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
+                        )
+                    }
+                }
             }
-        }
-        val rowList = (rows?.mapNotNull { r -> (r as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content } }) ?: emptyList()
-        rowList.forEachIndexed { ri, row ->
-            Row(Modifier.fillMaxWidth().background(if (ri % 2 == 1) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f) else Color.Transparent).padding(vertical = 9.dp)) {
-                row.forEach { cell -> Text(cell, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(horizontal = 10.dp)) }
+            rowList.forEachIndexed { ri, row ->
+                Row(Modifier.background(if (ri % 2 == 1) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f) else Color.Transparent).padding(vertical = 9.dp)) {
+                    row.forEach { cell ->
+                        Text(cell, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 10.dp))
+                    }
+                }
             }
         }
     }
@@ -151,12 +173,32 @@ fun HourlyForecastRenderer(c: UIComponent, ctx: RenderContext) {
     val hours = c.properties.a6str("hours")
     val temps = c.properties.a6str("temps")
     val emojis = c.properties.a6str("emojis")
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)).padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-        hours.forEachIndexed { i, h ->
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(h, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(emojis.getOrNull(i) ?: "☀️", fontSize = 20.sp)
-                Text(temps.getOrNull(i) ?: "--", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    // 🔴 移动端适配修复（2026-11-04）：AI 传 24 小时 → 每列约 40dp × 24 ≈ 960dp，
+    //    Row 一行放不下直接横向溢出近 3 屏。改成每行最多 6 列的网格分行 + 权重均分。
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+            .padding(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        val perRow = 6
+        hours.indices.chunked(perRow).forEach { rowIdx ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                rowIdx.forEach { i ->
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            hours[i], fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(emojis.getOrNull(i) ?: "☀️", fontSize = 20.sp)
+                        Text(temps.getOrNull(i) ?: "--", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
     }
@@ -288,12 +330,25 @@ fun MoodTrackerWeekRenderer(c: UIComponent, ctx: RenderContext) {
 fun TagCloudRenderer(c: UIComponent, ctx: RenderContext) {
     val tags = c.properties.a6str("tags")
     val colors = listOf(ctx.theme.colorScheme.info, ctx.theme.colorScheme.success, ctx.theme.colorScheme.primary, ctx.theme.colorScheme.error, ctx.theme.colorScheme.primary, ctx.theme.colorScheme.info)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // 🔴 移动端适配修复（2026-11-04）：旧实现 Row 无 fillMaxWidth/weight、Text 无
+    //    maxLines —— 3 个长标签整行溢出且被静默裁切。每格 weight(1f) + 省略号。
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         tags.chunked(3).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEachIndexed { i, t ->
-                    Box(Modifier.clip(RoundedCornerShape(50.dp)).background(colors[(tags.indexOf(t)) % colors.size].copy(alpha = 0.16f)).padding(horizontal = 14.dp, vertical = 6.dp)) {
-                        Text("#$t", fontSize = 12.sp, color = colors[(tags.indexOf(t)) % colors.size], fontWeight = FontWeight.Bold)
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(50.dp))
+                            .background(colors[(tags.indexOf(t)).coerceAtLeast(0) % colors.size].copy(alpha = 0.16f))
+                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                    ) {
+                        Text(
+                            "#$t", fontSize = 12.sp,
+                            color = colors[(tags.indexOf(t)).coerceAtLeast(0) % colors.size],
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }

@@ -60,12 +60,12 @@ object ScreenDiagnosis {
 
     /** 屏上文字里第一个付款字样(确认支付、支付密码一类);没有为 null。 */
     fun paymentText(texts: List<String>): String? {
-        val text = texts.joinToString("\n").lowercase()
+        val text = Hant.fold(texts.joinToString("\n")).lowercase()
         return PAYMENT.firstOrNull { it in text }
     }
 
     fun classify(f: ScreenFacts): ScreenCheck {
-        val text = f.texts.joinToString("\n").lowercase()
+        val text = Hant.fold(f.texts.joinToString("\n")).lowercase()
         fun hit(words: List<String>) = words.firstOrNull { it in text }
         fun human(reason: String, cause: String) = ScreenCheck(ScreenState.NEEDS_HUMAN, f.currentApp, true, reason, cause)
 

@@ -29,19 +29,99 @@ function el(tag,cls,text){
   return n;
 }
 
+/* ── 公式渲染（KaTeX 离线）─────────────────────────────────────────────
+   与原生对话框的 jlatexmath 位图渲染是同一份契约的两种实现：
+     · 结果按公式文本缓存，流式每帧不重复渲染；
+     · 半截公式（katex-error）不算渲染成功，继续显示源码，避免边写边闪；
+     · 行内代码 / 代码块里的 $ 不参与公式解析。
+   katex.min.js 用 defer 加载，首帧可能还没就绪 → 先输出带 data-tex 的容器，
+   由 enhanceDom() 在库可用时补渲染（MutationObserver 覆盖流式新增节点）。 */
+var MATH_CACHE={},MATH_CACHE_N=0;
+function katexHtml(tex,display){
+  if(!window.katex||!window.katex.renderToString)return null;
+  var key=(display?"B|":"I|")+tex;
+  if(MATH_CACHE[key]!==undefined)return MATH_CACHE[key];
+  var html=null;
+  try{
+    var s=window.katex.renderToString(tex,{
+      displayMode:!!display,throwOnError:false,strict:"ignore",output:"html"
+    });
+    if(s&&s.indexOf("katex-error")<0)html=s;
+  }catch(_){}
+  if(MATH_CACHE_N>200){MATH_CACHE={};MATH_CACHE_N=0;}
+  if(html!==null){MATH_CACHE[key]=html;MATH_CACHE_N++;}
+  return html;
+}
+function mathNode(tex,display){
+  var t=String(tex||""),h=katexHtml(t,display);
+  return '<span class="md-math'+(display?" md-math-block":"")+'" data-tex="'+esc(t)+
+    '" data-display="'+(display?1:0)+'">'+(h!==null?h:"<code>"+esc(t)+"</code>")+"</span>";
+}
+function enhanceMath(root){
+  if(!window.katex)return;
+  var ns=(root||document).querySelectorAll(".md-math[data-tex]");
+  for(var i=0;i<ns.length;i++){
+    var n=ns[i];
+    if(n.getAttribute("data-done")==="1")continue;
+    var h=katexHtml(n.getAttribute("data-tex")||"",n.getAttribute("data-display")==="1");
+    if(h!==null){n.innerHTML=h;n.setAttribute("data-done","1");}
+  }
+}
+
 /**
  * 正文的**行内**格式化 —— 表格单元格 / 标题 / 引用等行内场景用它。
- * 块级渲染（列表 / 代码围栏 / 表格）见 [mdHtml]。
+ * 块级渲染（列表 / 代码围栏 / 表格 / 块级公式）见 [mdHtml]。
+ * 🔴 公式必须在 esc() 之前抽成占位符：KaTeX 输出的 <span>/<math> 若先被
+ *    转义或再被后续行内正则扫一遍，会被拆成裸标签；占位符在最后统一回填。
  */
 function inline(s){
-  var t=esc(s);
+  var parts=String(s===undefined||s===null?"":s).split(/(`[^`\n]+`)/g),slots=[];
+  function slot(tex,disp){ slots.push(mathNode(tex,disp)); return "\u0001"+(slots.length-1)+"\u0002"; }
+  for(var pi=0;pi<parts.length;pi+=2){ /* 奇数段是行内代码，原样跳过 */
+    parts[pi]=parts[pi]
+      .replace(/\$\$([\s\S]+?)\$\$/g,function(_,t){return slot(t,true);})
+      .replace(/(^|[^\\$])\$([^$\n]+?)\$/g,function(_,p,t){return p+slot(t,false);});
+  }
+  var t=esc(parts.join(""));
   t=t.replace(/`([^`\n]+)`/g,function(_,c){return "<code>"+c+"</code>";});
   t=t.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
   t=t.replace(/\*\*([^*\n]+)\*\*/g,"<b>$1</b>");
   t=t.replace(/(^|[^*])\*([^*\n]+)\*/g,"$1<i>$2</i>");
   t=t.replace(/~~([^~\n]+)~~/g,"<s>$1</s>");
+  t=t.replace(/\u0001(\d+)\u0002/g,function(_,i){return slots[Number(i)]||"";});
   return t;
 }
+
+/* ── 代码块增强（离线 highlight.js 11.9.0 /runtimes/highlight.min.js）────
+   原生 CodeBlock 有语言头 + 行号 + 18 行折叠 + 全屏 + 自写高亮；
+   WebUI 此前只有浮动「复制」+ 语言标签。这里补齐同一套，避免投影端掉档。
+   不用 github-dark.css 整包（会覆盖 .code 的卡壳背景），token 配色写在 style.css。 */
+var HLJS_LOADING=false;
+function loadHljs(cb){
+  if(window.hljs){cb();return;}
+  if(HLJS_LOADING){setTimeout(function(){loadHljs(cb);},80);return;}
+  HLJS_LOADING=true;
+  var s=document.createElement("script");
+  s.src="/runtimes/highlight.min.js";
+  s.onload=function(){HLJS_LOADING=false;cb();};
+  s.onerror=function(){HLJS_LOADING=false;};
+  document.head.appendChild(s);
+}
+function enhanceCode(root){
+  var all=(root||document).querySelectorAll(".code code"),todo=[];
+  for(var i=0;i<all.length;i++)if(all[i].getAttribute("data-hl")!=="1")todo.push(all[i]);
+  if(!todo.length)return;
+  for(var k=0;k<todo.length;k++)todo[k].setAttribute("data-hl","1");
+  loadHljs(function(){
+    try{
+      for(var j=0;j<todo.length;j++){
+        var n=todo[j],m=/language-([A-Za-z0-9+#_-]+)/.exec(n.className||"");
+        if(m&&window.hljs.getLanguage(m[1]))window.hljs.highlightElement(n);
+      }
+    }catch(_){}
+  });
+}
+function enhanceDom(root){ enhanceMath(root); enhanceCode(root); }
 
 /**
  * mini-markdown：**文本块与流式缓冲**的富文本渲染。
@@ -59,10 +139,45 @@ function inline(s){
  *    未闭合的只画一个「生成中」占位；闭合的直接跳过（块马上到）。
  */
 function codeBoxHtml(lang,code){
-  return '<div class="code">'+
-    '<button type="button" class="code-c" data-code="'+esc(code)+'">复制</button>'+
-    (lang?'<span class="code-l">'+esc(lang)+'</span>':'')+
-    '<pre><code>'+esc(code)+'</code></pre></div>';
+  var c=String(code===undefined||code===null?"":code), L=String(lang||"").trim();
+  var n=c.split("\n").length, fold=n>18, gut="";
+  for(var i=1;i<=n;i++)gut+=i+(i<n?"\n":"");
+  /* 头部是真正的 flex 行，不再靠 absolute 浮在 pre 上（旧版语言标签与复制
+     按钮会随代码横向滚动错位）；行号列与代码列共用同一 line-height。 */
+  return '<div class="code'+(fold?" folded":"")+'" data-lang="'+esc(L)+'">'+
+    '<div class="code-hd">'+
+      '<span class="code-l">'+esc(L||"text")+'</span>'+
+      '<span class="code-n">'+n+' 行</span>'+
+      '<span class="code-sp"></span>'+
+      '<button type="button" class="code-a code-fs" title="全屏查看">全屏</button>'+
+      '<button type="button" class="code-a code-c" data-code="'+esc(c)+'">复制</button>'+
+    '</div>'+
+    '<div class="code-body">'+
+      '<pre class="code-g" aria-hidden="true">'+esc(gut)+'</pre>'+
+      '<pre><code class="language-'+esc(L.replace(/[^A-Za-z0-9+#_-]/g,""))+'">'+esc(c)+'</code></pre>'+
+    '</div>'+
+    (fold?'<button type="button" class="code-more">展开全部 '+n+' 行</button>':'')+
+  '</div>';
+}
+function openCodeFullscreen(box){
+  var ov=document.createElement("div");ov.className="code-fs-overlay";
+  var bar=document.createElement("div");bar.className="code-fs-bar";
+  var btn=document.createElement("button");btn.type="button";btn.textContent="关闭 ✕";
+  btn.onclick=function(){if(ov.parentNode)ov.parentNode.removeChild(ov);};
+  bar.appendChild(btn);ov.appendChild(bar);
+  var clone=box.cloneNode(true);clone.classList.remove("folded");
+  var more=clone.querySelector(".code-more");if(more&&more.parentNode)more.parentNode.removeChild(more);
+  /* 全屏层挂在 body 上，不经过消息流的事件委托 —— 这里的复制按钮得自己接。 */
+  ov.addEventListener("click",function(e){
+    var t=e.target;
+    while(t&&t!==ov){
+      if(t.classList&&t.classList.contains("code-c")){
+        copyText(t.getAttribute("data-code")||"",t);return;
+      }
+      t=t.parentNode;
+    }
+  });
+  ov.appendChild(clone);document.body.appendChild(ov);
 }
 
 /* ── 原生专属围栏（语言标签 → 占位文案）─────────────────────────────
@@ -144,6 +259,24 @@ function mdHtml(src,streaming){
     }
     var raw=ln.replace(/^\s+/,"").replace(/\s+$/,"");
     if(raw===""){ flushAll(); continue; }
+    /* 块级公式 $$…$$：独占一行或跨多行。
+       流式半截（找不到闭合行）时只渲染已到的部分，不吞掉后面的正文；
+       半截必然命中 katex-error → mathNode 回退显示源码，收尾后自动补渲。 */
+    if(/^\$\$/.test(raw)){
+      flushAll();
+      var one=/^\$\$([\s\S]+)\$\$\s*$/.exec(raw);
+      if(one){ out.push(mathNode(one[1].trim(),true)); continue; }
+      var j=i+1,endIdx=-1;
+      while(j<lines.length){ if(/\$\$\s*$/.test(lines[j].replace(/^\s+|\s+$/g,""))){endIdx=j;break;} j++; }
+      var tex=[raw.replace(/^\$\$/,"").trim()];
+      if(endIdx>=0){
+        for(var k=i+1;k<endIdx;k++)tex.push(lines[k]);
+        tex.push(lines[endIdx].replace(/^\s+|\s+$/g,"").replace(/\$\$\s*$/,""));
+        i=endIdx;
+      }
+      out.push(mathNode(tex.join("\n").trim(),true));
+      continue;
+    }
     var hm=/^(#{1,6})\s+(.*)$/.exec(raw);
     if(hm){ flushAll(); var lv=Math.min(hm[1].length,4); out.push("<h"+lv+">"+inline(hm[2])+"</h"+lv+">"); continue; }
     if(/^(-{3,}|\*{3,}|_{3,})$/.test(raw)){ flushAll(); out.push("<hr>"); continue; }
@@ -447,8 +580,9 @@ function blockNode(b){
      · **名字行**：`作者 · 时间`（11sp muted）+ 思考/工具 TinyChip 胶囊
        （20dp 高、9sp 字、10dp 圆角；思考胶囊 Accent 底，工具胶囊 primary 底，
        执行中蓝色 #3B82F6 高亮）；
-     · **思考胶囊**默认折叠，点「思考过程 · N步」展开（编号步骤列表，
-       #FBF8F2 底）；流式中显示「思考中」；
+     · **思考状态行**默认折叠，文案「思考了 Ns」（有耗时）/「思考过程」；
+       点开只给最近 3 步 + 相邻去重，「查看全部」才展开全文；
+       生成结束自动收起；不写「思考中 / N步」（多余指示 + 无意义计数）；
      · **工具胶囊**默认折叠，「· N 工具」；展开是工具卡列表；
      · **WaitingDots**：7dp 三点、primary 色、正弦相位跳动（900ms 循环）；
      · **WorkingIndicator**：工具执行中显示「AI 正在执行工具…」；
@@ -502,20 +636,34 @@ function shareText(t){
   copyText(t,null);
 }
 
-/** 思考展开内容：编号步骤列表（原生 ThinkInlineContent：去标签、11sp、#FBF8F2 底）。 */
-function thinkStepsHtml(r){
-  var steps=String(r||"").split("\n").map(function(s){
-    return s.replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim();
-  }).filter(function(s){return s;});
+/**
+ * 思考展开内容（对齐 Bothub 参考实现 + 原生 ThinkInlineContent）：
+ *  - 相邻重复行去重（多轮工具循环里模型会反复吐「好的，让我执行。」，219 步大半是它）；
+ *  - 默认只渲染**最近 3 步**，完整过程点「查看全部」再展开，绝不把 219 行平铺进消息流；
+ *  - 胶囊文案不再暴露「N 步」这种无意义计数（见 renderThink）。
+ */
+function thinkCleanSteps(r){
+  var out=[];
+  String(r||"").split("\n").forEach(function(s){
+    var t=s.replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim();
+    if(t&&out[out.length-1]!==t)out.push(t);
+  });
+  return out;
+}
+function thinkStepsHtml(r,showAll){
+  var steps=thinkCleanSteps(r);
+  var maxInline=3;
+  var hidden=showAll?0:Math.max(0,steps.length-maxInline);
   var h="";
-  steps.forEach(function(s,i){
-    h+='<div class="ts"><span class="ts-n">'+(i+1)+'.</span><span class="ts-t">'+esc(s)+'</span></div>';
+  if(hidden>0){
+    h+='<div class="ts-more" data-think-all="1">⋯ 共 '+steps.length+' 步 · 查看全部</div>';
+  }
+  steps.slice(hidden).forEach(function(s,i){
+    h+='<div class="ts"><span class="ts-n">'+(hidden+i+1)+'.</span><span class="ts-t">'+esc(s)+'</span></div>';
   });
   return h;
 }
-function countThinkSteps(r){
-  return String(r||"").split("\n").filter(function(s){return s.trim();}).length;
-}
+function countThinkSteps(r){ return thinkCleanSteps(r).length; }
 
 /** 工具展开内容：每个工具一张卡（原生 ToolCallGroup 的网页对等实现）。 */
 function toolsHtml(calls){
@@ -673,13 +821,33 @@ function syncFullHidden(nd){
              f.cardBox.children.length||f.tailBox.children.length);
 }
 
-/** 思考胶囊（原生 TinyChip：默认折叠，点「思考过程 · N步」展开）。
-    [forceStreaming] 供流式重绘用：那边手里只有增量文本，没有完整消息对象。 */
+/**
+ * 思考状态行（对齐 Bothub 参考实现：一条默认折叠的状态行，永不平铺全文）。
+ *
+ * 🔴 旧实现三宗罪（用户报的「思考显示不会收起来 / 旧的思考显示混乱」）：
+ *   ① 完成后显示「思考过程 · 219步」，把无意义计数当徽章挂满名字行；
+ *   ② 点开就把 219 行编号步骤全量平铺进消息流，把正文顶出屏幕；
+ *   ③ showThink 只在 reasoning 为空时复位 → 生成结束后展开区**永不收起**。
+ * 现在：进行中只高亮不换文字 / 完成有耗时「思考了 Ns」/ 否则「思考过程」，
+ * 生成结束的**边沿**自动收起，点开只给最近 3 步，全文需再点「查看全部」。
+ * [forceStreaming] 供流式重绘用：那边手里只有增量文本，没有完整消息对象。
+ */
 function renderThink(nd,m,forceStreaming){
   var r=m.reasoning||"";
+  var streaming=forceStreaming||!!(state.composer.busy&&isLastMsg(m));
+
+  /* 生成结束边沿：无条件收起。流式期间用户手动点开看思路，结束后不应继续占屏。 */
+  if(nd.wasStreaming&&!streaming&&nd.showThink){
+    nd.showThink=false; nd.showThinkAll=false;
+    nd.thinkbox.hidden=true; nd.thinkbox.innerHTML=""; nd.thinkSrc="";
+    if(nd.thinkChip)nd.thinkChip.classList.remove("on");
+  }
+  nd.wasStreaming=streaming;
+
   if(!r){
     if(nd.thinkChip){nd.thinkChip.remove();nd.thinkChip=null;}
     nd.thinkbox.hidden=true; nd.thinkbox.innerHTML=""; nd.thinkSrc="";
+    nd.showThink=false; nd.showThinkAll=false;
     return;
   }
   if(!nd.thinkChip){
@@ -689,22 +857,39 @@ function renderThink(nd,m,forceStreaming){
     chip.appendChild(el("span","nc-t"));
     chip.addEventListener("click",function(){
       nd.showThink=!nd.showThink;
+      if(!nd.showThink)nd.showThinkAll=false;
       nd.thinkbox.hidden=!nd.showThink;
       chip.classList.toggle("on",nd.showThink);
-      if(nd.showThink&&nd.thinkSrc!==(nd.cur&&nd.cur.reasoning||"")){
-        nd.thinkbox.innerHTML=thinkStepsHtml(nd.cur&&nd.cur.reasoning); nd.thinkSrc=nd.cur&&nd.cur.reasoning;
+      if(nd.showThink){
+        var src=nd.cur&&nd.cur.reasoning||"";
+        nd.thinkbox.innerHTML=thinkStepsHtml(src,nd.showThinkAll); nd.thinkSrc=src;
       }
     });
     nd.chips.appendChild(chip);
     nd.thinkChip=chip;
+    /* 「查看全部」委托：只在这颗胶囊所属的 thinkbox 内生效，不污染别条消息。 */
+    nd.thinkbox.addEventListener("click",function(e){
+      var t=e.target&&e.target.closest?e.target.closest("[data-think-all]"):null;
+      if(!t)return;
+      nd.showThinkAll=true;
+      var src=nd.cur&&nd.cur.reasoning||"";
+      nd.thinkbox.innerHTML=thinkStepsHtml(src,true); nd.thinkSrc=src;
+    });
   }
-  /* 生成中显示「思考中」，完成后显示「思考过程 · N步」（原生 qk_00093/94 同规则） */
-  var streaming=forceStreaming||!!(state.composer.busy&&isLastMsg(m));
-  nd.thinkChip.querySelector(".nc-t").textContent=
-    streaming?"思考中":("思考过程 · "+countThinkSteps(r)+"步");
+  /* 状态化文案（参考实现 reasoning_done_for / reasoning_process 两态）。
+     🔴 不再写「思考中 / 正在思考…」：这颗胶囊**本身就是**状态行，
+     消息流里已有 WaitingDots 与「AI 正在执行工具…」，再叠一层文字就是
+     用户说的「截图这个思考中是多余的」。进行中只靠高亮 class 表达，不换文案。 */
+  var ms=Number(m.thinkMs||m.thinkDurationMs||0);
+  var label;
+  if(ms>=1000&&!streaming){
+    var secs=ms/1000;
+    label="思考了 "+(secs>=10?Math.round(secs):secs.toFixed(1))+"s";
+  }else label="思考过程";
+  nd.thinkChip.querySelector(".nc-t").textContent=label;
   nd.thinkChip.classList.toggle("run",streaming);
   if(nd.showThink&&nd.thinkSrc!==r){
-    nd.thinkbox.innerHTML=thinkStepsHtml(r); nd.thinkSrc=r;
+    nd.thinkbox.innerHTML=thinkStepsHtml(r,nd.showThinkAll); nd.thinkSrc=r;
   }
 }
 
@@ -854,13 +1039,15 @@ function renderMessage(m){
   renderUi(nd,m);
   renderAttachments(nd,m);
   renderActs(nd,m);
-  /* 等待态 / 执行态指示（原生 WaitingDots / WorkingIndicator） */
+  /* 等待态 / 执行态指示（原生 WaitingDots / WorkingIndicator）。
+     🔴 三者互斥：参考实现的状态行是「spinner ↔ 完成态」同一个位置二选一，
+     旧实现 waiting / working / 思考胶囊各算各的，最多三种「进行中」提示同屏。 */
   var busyLast=!!(state.composer.busy&&isLastMsg(m));
   var hasText=(m.blocks||[]).some(function(b){return b&&b.t==="text"&&(b.text||"").trim();});
-  nd.waiting.hidden=!(busyLast&&!m.mine&&!hasText&&!(m.reasoning||""));
   var calls=m.tools||[];
-  var working=calls.some(function(t){return t.result===null||t.result===undefined||t.result==="";});
-  nd.working.hidden=!(busyLast&&working);
+  var working=busyLast&&calls.some(function(t){return t.result===null||t.result===undefined||t.result==="";});
+  nd.waiting.hidden=!(busyLast&&!m.mine&&!working&&!hasText&&!(m.reasoning||""));
+  nd.working.hidden=!working;
   if(nd.md){
     if(busyLast)nd.md.classList.add("streaming"); else nd.md.classList.remove("streaming");
   }
@@ -913,7 +1100,7 @@ function ensureNode(m){
   nd={root:root,av:av,avTxt:null,avUrl:null,mcol:mcol,nrow:nrow,nname:nname,chips:chips,
       waiting:waiting,working:working,
       thinkbox:thinkbox,toolsbox:toolsbox,thinkChip:null,toolsChip:null,thinkSrc:"",
-      showThink:false,showTools:false,toolSig:"",
+      showThink:false,showThinkAll:false,wasStreaming:false,showTools:false,toolSig:"",
       md:md,mdSig:null,atts:atts,attsDone:false,acts:acts,actsDone:false,
       full:full,fenceSig:null,tailSig:null,cardsSig:null,uiSig:null};
   nodes[m.id]=nd;
@@ -1157,7 +1344,7 @@ function scheduleStreamRender(){
     if(!nd)return;
     /* 流式期间胶囊回调读这份「增量快照」 */
     nd.cur={reasoning:stream.reason,tools:[]};
-    /* 思考：流式期间也走名字行胶囊（「思考中」），内容默认折叠 */
+    /* 思考：流式期间也走名字行状态行（进行中只高亮、不叠「思考中」文字） */
     if(stream.reason){
       renderThink(nd,{reasoning:stream.reason},true);
     }
@@ -1288,7 +1475,15 @@ function onStreamEvent(ev){
         ensureNode(fm); renderMessage(fm);
         var fnd=nodes[fm.id];
         if(fnd&&fnd.md)fnd.md.classList.remove("streaming");
-        if(fnd){ fnd.waiting.hidden=true; fnd.working.hidden=true; }
+        if(fnd){
+          fnd.waiting.hidden=true; fnd.working.hidden=true;
+          /* 🔴 生成收尾：思考展开区一律收起（不再有「点开后 219 步常驻不收」）。
+             终态快照会用完整 reasoning 重绘，若此处不清，renderThink 只会把
+             展开区内容换成更长的全文，视觉上就是「收不起来」。 */
+          fnd.showThink=false; fnd.showThinkAll=false; fnd.wasStreaming=false;
+          fnd.thinkbox.hidden=true; fnd.thinkbox.innerHTML=""; fnd.thinkSrc="";
+          if(fnd.thinkChip)fnd.thinkChip.classList.remove("on");
+        }
       }
       stream.segId=null; stream.text=""; stream.reason=""; stream.node=null; stream.blocks=[];
       if(stream.localAid&&nodes[stream.localAid]){ nodes[stream.localAid].root.remove(); delete nodes[stream.localAid]; stream.localAid=null; }
@@ -1851,6 +2046,21 @@ $stream.addEventListener("click",function(e){
       copyText(code,b);
       return;
     }
+    /* 代码块：18 行折叠 / 全屏（与原生 CodeBlock 同一套交互） */
+    if(cls.indexOf("code-more")>=0){
+      var cbox=b.parentNode,num=cbox&&cbox.querySelector(".code-n");
+      if(cbox){
+        var isFold=cbox.classList.toggle("folded");
+        b.textContent=isFold?"展开全部 "+(num?num.textContent.replace(" 行",""):"")+" 行":"收起";
+      }
+      return;
+    }
+    if(cls.indexOf("code-fs")>=0){
+      var fbox=b.parentNode;
+      while(fbox&&fbox!==$stream&&!(fbox.classList&&fbox.classList.contains("code")))fbox=fbox.parentNode;
+      if(fbox&&fbox!==$stream)openCodeFullscreen(fbox);
+      return;
+    }
     /* 操作栏：复制/追问/分享/删除/重试（原生 BubbleActionButton 五按钮） */
     if(cls.indexOf("ab")>=0&&b.getAttribute("data-act")){
       var msgEl=b;
@@ -1871,6 +2081,43 @@ $stream.addEventListener("click",function(e){
       return;
     }
     b=b.parentNode;
+  }
+});
+
+/* ── 渲染增强统一入口 ──────────────────────────────────────────────────
+   流式 delta 会不断往消息流里塞新节点，不能指望某个渲染函数收尾时手工调一次。
+   MutationObserver 对新增节点补 KaTeX 公式与 hljs 高亮；data-done / data-hl
+   两个标记保证 innerHTML 回填自身不会造成递归增强。 */
+try{
+  var enhanceMo=new MutationObserver(function(recs){
+    for(var i=0;i<recs.length;i++){
+      var adds=recs[i].addedNodes;
+      for(var j=0;j<adds.length;j++){
+        var n=adds[j];
+        if(n.nodeType!==1)continue;
+        var self=n.matches&&(n.matches(".code")||n.matches(".md-math"));
+        enhanceDom(self?(n.parentNode||document):n);
+      }
+    }
+  });
+  enhanceMo.observe(document.getElementById("stream")||document.body,{childList:true,subtree:true});
+}catch(_){}
+window.addEventListener("load",function(){enhanceDom(document);});
+enhanceDom(document);
+
+/* 小卡片帧高度回传：对齐参考实现 show_widget 的 rendered/size 消息。
+   srcdoc 继承父页 origin，postMessage 可达；宿主只认 contentWindow 匹配，
+   避免其它 iframe（miniapp / zx）的无关消息误改卡片高度。 */
+window.addEventListener("message",function(e){
+  var d=e&&e.data;
+  if(!d||d.__wcard!==1)return;
+  var fs=document.querySelectorAll("iframe.wcard-frame");
+  for(var i=0;i<fs.length;i++){
+    if(fs[i].contentWindow===e.source){
+      var h=Math.min(Math.max(Number(d.h)||0,120),900);
+      if(h)fs[i].style.height=h+"px";
+      return;
+    }
   }
 });
 

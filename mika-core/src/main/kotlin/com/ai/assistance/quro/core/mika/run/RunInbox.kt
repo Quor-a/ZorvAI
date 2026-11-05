@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 /** 运行中的输入唯一入口;用户原话无限排队且逐字保留,停止信号直接送达。 */
 class RunInbox {
-    data class UserSteer(val messageId: String, val text: String)
+    data class UserSteer(val messageId: String, val text: String, val currentTaskOnly: Boolean = false)
 
     internal interface Handler {
         suspend fun answer(text: String, askId: String?): Boolean
@@ -36,15 +36,24 @@ class RunInbox {
     val wasCancelled: Boolean get() = stopRequested
 
     fun cancel(): InputReceipt {
-        if (closed) return InputReceipt.Closed
-        stopRequested = true
-        handler?.cancel()
+        val to = synchronized(lock) {
+            if (closed) return InputReceipt.Closed
+            stopRequested = true
+            handler
+        }
+        to?.cancel()
         return InputReceipt.Accepted
     }
 
+    /** 远程追加只属于当前任务;与关闭、取消互斥,拒绝时不转成下一任务。 */
+    fun steerCurrent(messageId: String, text: String): InputReceipt = synchronized(lock) {
+        if (closed || stopRequested) InputReceipt.Closed
+        else enqueue(UserSteer(messageId, text, currentTaskOnly = true))
+    }
+
     suspend fun send(input: RunInput): InputReceipt = when (input) {
-        is RunInput.Steer -> queue(input.messageId, input.text)
-        is RunInput.Redirect -> queue(input.messageId, input.text)
+        is RunInput.Steer -> steer(input.messageId, input.text)
+        is RunInput.Redirect -> steer(input.messageId, input.text)
         RunInput.Cancel -> cancel()
         is RunInput.Answer -> if (closed) InputReceipt.Closed else
             if (handler?.answer(input.text, input.askId) == true) InputReceipt.Accepted else InputReceipt.NoPendingInteraction
@@ -54,13 +63,25 @@ class RunInbox {
             if (handler?.handBack(input.result, input.askId) == true) InputReceipt.Accepted else InputReceipt.NoPendingInteraction
     }
 
-    private fun queue(id: String, text: String): InputReceipt = synchronized(lock) {
-        if (closed) InputReceipt.NextTask else {
-            steers += UserSteer(id, text)
-            pending.value = true
-            redirects.trySend(Unit)
-            InputReceipt.Accepted
-        }
+    fun steer(id: String, text: String): InputReceipt = synchronized(lock) {
+        if (closed) InputReceipt.NextTask else enqueue(UserSteer(id, text))
+    }
+
+    private fun enqueue(steer: UserSteer): InputReceipt {
+        steers += steer
+        pending.value = true
+        redirects.trySend(Unit)
+        return InputReceipt.Accepted
+    }
+
+    /** 只撤回还在收件箱里、手机上插的消息;和交给模型、收尾互斥。电脑追加的([UserSteer.currentTaskOnly])撤不回,由电脑那边定。 */
+    fun withdrawSteer(id: String): Boolean = synchronized(lock) {
+        val i = steers.indexOfFirst { it.messageId == id }
+        if (closed || i < 0 || steers[i].currentTaskOnly) return@synchronized false
+        steers.removeAt(i)
+        pending.value = steers.isNotEmpty()
+        if (steers.isEmpty()) while (redirects.tryReceive().isSuccess) Unit
+        true
     }
 
     /** 有没有还没交给模型的插话;只看不取(批量执行在子步之间据此停下)。 */

@@ -1,14 +1,7 @@
 package com.ai.assistance.quro.core.ui.card
 
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import com.ai.assistance.quro.core.ui.card.registry.CardState
-import com.ai.assistance.quro.core.ui.card.render.RenderBackend
-import com.ai.assistance.quro.core.ui.card.spec.ColorToken
+import com.ai.assistance.quro.core.ui.card.compose.CardExtractors
 import com.ai.assistance.quro.core.ui.card.spec.parseCardSpec
-import com.ai.assistance.quro.core.ui.card.widgets.CustomCardRenderer
-import com.ai.assistance.quro.core.ui.card.widgets.CustomCardState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -21,40 +14,22 @@ import org.junit.Test
  * `type:"custom"` 布局树时，字段是**平铺**在节点上的，而解析层原来只从 `props`
  * 子对象读 → text/color/fontSize/gradient/value 全部丢失 → 卡片只剩骨架、内容空白。
  *
- * 本测试覆盖四类曾导致「内容消失」的缺陷：
- *  ① 平铺字段必须并入 props（否则 text 为空、样式全默认）
- *  ② 节点 type 必须归一（AI 写 "Column"/"Text" 时原样比较匹配不上 when 分支）
- *  ③ 节点同义词必须映射（progress/badge 等落到 else 就整块消失）
- *  ④ layout 写成 JSON 字符串 / 直接给顶层 children 时也必须能建出布局
- *  ⑤ 未知节点不得返回 0 尺寸（返回 0 会让整块区域消失、兄弟节点错位）
+ * 本测试覆盖四类曾导致「内容消失」的缺陷（①②③④⑤），以及未知节点兜底、列表节点、fontWeight 等：
+ *  - ① 平铺字段必须并入 props（否则 text 为空、样式全默认）
+ *  - ② 节点 type 必须归一（AI 写 "Column"/"Text" 时原样比较匹配不上 when 分支）
+ *  - ③ 节点同义词必须映射（progress/badge 等落到 else 就整块消失）
+ *  - ④ layout 写成 JSON 字符串 / 直接给顶层 children 时也必须能建出布局
+ *  - ⑤ 未知节点不得返回 0 尺寸（返回 0 会让整块区域消失、兄弟节点错位）
+ *
+ * 渲染相关断言改用纯 JVM 的 [CardExtractors]（collectTexts / estimateHeightDp），
+ * 因为 Compose 渲染器无法在纯 JVM 回放像素——这些提取结果就是 Compose 实际画的内容。
  */
 class CardLayoutPayloadTest {
 
-    /** 录制型假 backend：只统计各类绘制指令次数，验证「真的画了东西」。 */
-    private class RecordingBackend : RenderBackend {
-        var rects = 0
-        var texts = 0
-        val drawnTexts = mutableListOf<String>()
-        override fun drawRect(l: Float, t: Float, r: Float, b: Float, c: Color, radiusDp: Float) { rects++ }
-        override fun drawText(text: String, x: Float, y: Float, c: Color, sizeSp: Float, weight: Int) {
-            texts++
-            drawnTexts.add(text)
-        }
-        override fun drawLine(x1: Float, y1: Float, x2: Float, y2: Float, c: Color, widthDp: Float) {}
-        override fun drawPath(p: Path, c: Color, widthDp: Float, fill: Boolean) {}
-        override fun drawImage(bitmap: Any?, l: Float, t: Float, w: Float, h: Float) {}
-        override fun saveLayer() {}
-        override fun restore() {}
-        override fun clip(l: Float, t: Float, r: Float, b: Float) {}
-        override fun resolve(token: ColorToken): Color = Color.Gray
-    }
-
-    private fun measureOf(json: String): Size {
+    private fun estimateOf(json: String): Float {
         val spec = parseCardSpec(json)
         assertNotNull("spec 应解析成功: $json", spec)
-        val r = CustomCardRenderer()
-        val st = r.createInitialState()
-        return r.measure(spec!!, st, 360f, 2.75f)
+        return CardExtractors.estimateHeightDp(spec!!.layout)
     }
 
     // ── ① 平铺字段并入 props ──
@@ -98,7 +73,7 @@ class CardLayoutPayloadTest {
         assertEquals("column", root.type)
         assertEquals("text", root.children[0].type)
         assertEquals("box", root.children[1].type)
-        assertTrue("大写 Text 节点也应能测出高度", measureOf(json).height > 0f)
+        assertTrue("大写 Text 节点也应能估算出正高度", estimateOf(json) > 0f)
     }
 
     // ── ③ 同义词映射 ──
@@ -148,45 +123,40 @@ class CardLayoutPayloadTest {
             {"type":"totally_unknown_node","text":"我是一段文字","fontSize":14},
             {"type":"another_unknown","h":30}
         ]}}"""
-        val size = measureOf(json)
-        assertTrue("未知节点不能返回 0 尺寸（会让整块区域消失），实际高度=${size.height}", size.height > 0f)
+        val h = estimateOf(json)
+        assertTrue("未知节点不能返回 0 尺寸（会让整块区域消失），实际高度=$h", h > 0f)
     }
 
     @Test
-    fun unknownNode_rendersItsText() {
+    fun unknownNode_textIsCollected() {
         val json = """{"type":"custom","layout":{"type":"column","children":[
             {"type":"mystery_widget","text":"不该消失的文字"}
         ]}}"""
         val spec = parseCardSpec(json)!!
-        val r = CustomCardRenderer()
-        val st = r.createInitialState() as CustomCardState
-        val size = r.measure(spec, st, 360f, 2.75f)
-        val be = RecordingBackend()
-        r.render(be, spec, r.layout(spec, st, size, 2.75f), st)
+        val texts = CardExtractors.collectTexts(spec.layout)
         assertTrue(
-            "未知节点的文字必须兜底画出来，实际画出=${be.drawnTexts}",
-            be.drawnTexts.any { it.contains("不该消失") },
+            "未知节点的文字必须兜底收集出来，实际收集=$texts",
+            texts.any { it.contains("不该消失") },
         )
     }
 
     // ── 新增节点类型真的会绘制 ──
 
     @Test
-    fun badgeButtonIcon_areDrawn() {
+    fun badgeButtonIcon_textsAreCollected() {
         val json = """{"type":"custom","layout":{"type":"column","gap":8,"children":[
             {"type":"badge","text":"进行中","bg":"#C25A38"},
             {"type":"button","text":"立即开始"},
             {"type":"icon","text":"★","size":20}
         ]}}"""
         val spec = parseCardSpec(json)!!
-        val r = CustomCardRenderer()
-        val st = r.createInitialState() as CustomCardState
-        val size = r.measure(spec, st, 360f, 2.75f)
-        assertTrue("三个节点都要占高度", size.height > 0f)
-        val be = RecordingBackend()
-        r.render(be, spec, r.layout(spec, st, size, 2.75f), st)
-        assertTrue("badge 要画背景矩形", be.rects >= 1)
-        assertTrue("badge/button/icon 的文字都要画出来", be.texts >= 3)
+        val h = CardExtractors.estimateHeightDp(spec.layout)
+        assertTrue("三个节点都要占高度", h > 0f)
+        val texts = CardExtractors.collectTexts(spec.layout)
+        assertTrue(
+            "badge / button / icon 的文字都要收集出来（实际=$texts）",
+            texts.any { it.contains("进行中") } && texts.any { it.contains("立即开始") } && texts.any { it.contains("★") },
+        )
     }
 
     @Test
@@ -204,14 +174,13 @@ class CardLayoutPayloadTest {
     // ── 列表节点 ──
 
     @Test
-    fun listNode_rendersItemsText() {
+    fun listNode_itemsTextAreCollected() {
         val json = """{"type":"custom","layout":{"type":"list","items":["第一行","第二行","第三行"]}}"""
         val spec = parseCardSpec(json)!!
-        val r = CustomCardRenderer()
-        val st = r.createInitialState() as CustomCardState
-        val size = r.measure(spec, st, 360f, 2.75f)
-        val be = RecordingBackend()
-        r.render(be, spec, r.layout(spec, st, size, 2.75f), st)
-        assertEquals("三条 items 都要画出来", 3, be.texts)
+        val h = CardExtractors.estimateHeightDp(spec.layout)
+        assertTrue("列表节点要占高度", h > 0f)
+        val texts = CardExtractors.collectTexts(spec.layout)
+        assertEquals("三条 items 都要收集出来", 3, texts.size)
+        assertTrue(texts.contains("第一行") && texts.contains("第二行") && texts.contains("第三行"))
     }
 }

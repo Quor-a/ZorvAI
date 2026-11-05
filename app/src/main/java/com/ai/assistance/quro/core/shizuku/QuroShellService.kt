@@ -95,6 +95,9 @@ class QuroShellService : IQuroShellService.Stub() {
         )
 
         private const val USER_CURRENT = -2
+
+        /** PowerManager.USER_ACTIVITY_EVENT_TOUCH：替屏报活动时用「触摸」这一种。 */
+        private const val USER_ACTIVITY_TOUCH = 2
         private const val INJECT_MODE_ASYNC = 0
         private const val VIRTUAL_KEYBOARD = -1
 
@@ -1189,6 +1192,59 @@ class QuroShellService : IQuroShellService.Stub() {
     override fun wakeDevice(): Boolean {
         val out = runCatching { exec("input keyevent KEYCODE_WAKEUP") }.getOrDefault("")
         return !out.contains("Error")
+    }
+
+    /**
+     * 替后台屏报一次用户活动（见 AIDL 注释）。
+     *
+     * 三道闸，任何一道不过都返回 false，让 App 侧停掉轮询而不是反复无效调用：
+     *  1. 只认本服务自建的屏（绝不替用户主屏报）；
+     *  2. 只有 Android 13+ 建屏时才带 OWN_DISPLAY_GROUP，才自成一组、才有独立息屏计时；
+     *     低于 13 报活动会报到默认组，等于让用户的主屏不灭 —— 不能做；
+     *  3. 系统必须真有 `userActivity(int displayId, long, int, int)` 这个按屏重载（安卓 12 起）。
+     *
+     * shell 身份对 power 服务通常有权限；没有时（部分 ROM 收紧）会抛 SecurityException，
+     * 这里吞掉并返回 false，上层据此放弃保活，屏照常用，只是可能自己睡。
+     */
+    @SuppressLint("PrivateApi")
+    override fun pokeUserActivity(displayId: Int): Boolean {
+        if (!ownDisplay(displayId)) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
+        return try {
+            val m = userActivityMethod ?: return false
+            m.invoke(powerManager, displayId, SystemClock.uptimeMillis(), USER_ACTIVITY_TOUCH, 0)
+            true
+        } catch (t: Throwable) {
+            if (!pokeWarned) {
+                pokeWarned = true
+                Log.w(TAG, "pokeUserActivity 不可用（屏可能自己息屏）：${t.message}")
+            }
+            false
+        }
+    }
+
+    /** 只警告一次，4 秒一条日志会把 logcat 刷爆。 */
+    private var pokeWarned = false
+
+    /** IPowerManager：shell 身份直接问 ServiceManager 要，不能走 App 的 getSystemService。 */
+    @Suppress("PrivateApi")
+    private val powerManager: Any by lazy {
+        val binder = Class.forName("android.os.ServiceManager")
+            .getMethod("getService", String::class.java)
+            .invoke(null, "power") as? android.os.IBinder
+            ?: throw IllegalStateException("power service not found")
+        Class.forName("android.os.IPowerManager\$Stub")
+            .getMethod("asInterface", android.os.IBinder::class.java)
+            .invoke(null, binder)!!
+    }
+
+    @Suppress("PrivateApi")
+    private val userActivityMethod: java.lang.reflect.Method? by lazy {
+        val perDisplay = arrayOf<Class<*>>(
+            Int::class.javaPrimitiveType!!, Long::class.javaPrimitiveType!!,
+            Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!,
+        )
+        runCatching { powerManager.javaClass.methods.firstOrNull { it.name == "userActivity" && it.parameterTypes.contentEquals(perDisplay) } }.getOrNull()
     }
 
     override fun dismissDeviceKeyguard(): Boolean {

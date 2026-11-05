@@ -80,10 +80,48 @@ class ActionExecutor(
             is GenUIAction.OpenHtml -> host.openHtml(action.html, action.title)
             is GenUIAction.Execute -> host.executeAction(action.action, action.params)
             is GenUIAction.SendMessage -> host.sendMessage(action.text)
+            // 调用宿主工具：**必须 launch**，不能在这里直接 await——
+            // executeOne 跑在 Compose 的点击回调（主线程）上，工具最慢能跑到 60s，
+            // 同步等就是一次 ANR。scope 由渲染层传入（与 CallApi 同一个）。
+            is GenUIAction.CallTool -> scope.launch {
+                val out = runCatching { host.callTool(action.name, action.argumentsJson) }
+                    .getOrElse { e -> """{"success":false,"error":"${e.message}"}""" }
+                if (action.showResult) {
+                    // 用户点了一下按钮，必须**当场**有可见反馈 —— 否则他会以为按钮坏了、
+                    // 连点三次，于是同一个工具被跑三遍（写操作就是三次真实副作用）。
+                    val failed = out.contains("\"success\":false")
+                    host.showToast(
+                        if (failed) "❌ ${action.name}：${out.take(120)}"
+                        else "✅ ${action.name} 已完成",
+                        duration = if (failed) "long" else "short",
+                        level = if (failed) "error" else "success",
+                    )
+                }
+                // 结果统一回抛给宿主（AiActionHost 会放进事件总线，界面可用 bind 取用）。
+                host.emit(
+                    TOOL_RESULT_EVENT,
+                    kotlinx.serialization.json.buildJsonObject {
+                        put("tool", kotlinx.serialization.json.JsonPrimitive(action.name))
+                        put("ok", kotlinx.serialization.json.JsonPrimitive(!out.contains("\"success\":false")))
+                        put("result", kotlinx.serialization.json.JsonPrimitive(out))
+                        put("show", kotlinx.serialization.json.JsonPrimitive(action.showResult))
+                    },
+                )
+            }
             // 页面控制类
             is GenUIAction.GoBack -> host.goBack()
             is GenUIAction.Refresh -> host.refresh(action.targetId)
             is GenUIAction.LoadMore -> host.loadMore(action.targetId)
         }
+    }
+
+    companion object {
+        /**
+         * `call_tool` 执行完毕后回抛的事件名。
+         *
+         * 界面侧可用 `events.on("tool_result")` / `bind` 拿结果做局部刷新，
+         * 不必让调用工具的按钮自己承担「拿到结果后怎么办」的全部逻辑。
+         */
+        const val TOOL_RESULT_EVENT: String = "tool_result"
     }
 }

@@ -23,10 +23,23 @@ object FluidCloudBridge {
     private const val METHOD = "shareIntent"
     private const val TAG = "FluidCloud"
 
-    // 任务唯一标识，每次调用重新生成
-    private fun generateId() = "zorv-ai-task-${System.currentTimeMillis()}"
+    /**
+     * 当前活动任务 id。修复「胶囊不更新 / 关不掉」的确定性 bug：
+     * 旧实现 [generateId] 每次调用都用 System.currentTimeMillis() 重新生成，
+     * 导致 create / update / finish 三者拿到**不同**的 identifier/entityId，
+     * update 作用不到最初 create 的胶囊、finish 也关不掉它 —— 每次都新建一个胶囊。
+     * 现在 create 固定 id，update/finish 复用同一个，finish 后清空。
+     */
+    @Volatile
+    private var activeTaskId: String? = null
+
+    // 任务唯一标识：create 时生成并缓存；update/finish 复用缓存值，保证作用到同一胶囊。
+    private fun currentTaskId(): String {
+        return activeTaskId ?: "zorv-ai-task-${System.currentTimeMillis()}".also { activeTaskId = it }
+    }
 
     fun create(context: Context, title: String, step: String, progress: Int): Boolean {
+        activeTaskId = "zorv-ai-task-${System.currentTimeMillis()}"
         return push(context, build(0, title, step, progress))
     }
 
@@ -35,7 +48,7 @@ object FluidCloudBridge {
     }
 
     fun finish(context: Context): Boolean {
-        val id = generateId()
+        val id = currentTaskId()
         val json = JSONObject().apply {
             put("intentName", "ZorvAI.AgentTask")
             put("identifier", id)
@@ -48,11 +61,12 @@ object FluidCloudBridge {
                 put("entityId", id)
             })
         }.toString()
+        activeTaskId = null
         return push(context, json)
     }
 
     private fun build(action: Int, title: String, step: String, progress: Int): String {
-        val id = generateId()
+        val id = currentTaskId()
         return JSONObject().apply {
             put("intentName", "ZorvAI.AgentTask")
             put("identifier", id)

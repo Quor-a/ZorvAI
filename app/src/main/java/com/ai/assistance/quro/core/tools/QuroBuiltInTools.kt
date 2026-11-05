@@ -182,6 +182,12 @@ object QuroMath {
 /** 注册全部原创工具（最大集，100% 自研，引擎来自 vendored droid-mcp Apache-2.0）。 */
 fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     val r = QuroToolRegistry()
+    //    全文由模型按需调本工具加载进当轮 —— 「skills 开关没用」的根治配套。
+    //    personaId 由调用方（主聊天 VM / bot 引擎）按需创建带绑定的实例覆盖，此处空=全局兜底。
+    r.register(SkillLoadTool())
+    r.register(PetControlTool())
+    //    配合系统提示词「人格目录」段，AI 可向本机其它人格卡提问（同步单轮）。
+    r.register(AskPersonaTool())
     // ══════════════ 工具分类架构（能力域 → 代表工具）══════════════
     //  · 基础/系统/设备   : clock, device_info, battery, wifi, sensors, clipboard, apps, notifications, bluetooth, flashlight
     //  · 通信/日历        : sms, contacts, calendar
@@ -225,6 +231,9 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(GetNotificationsTool())
     r.register(GetBluetoothTool())
     r.register(ToggleFlashlightTool())
+    // 相机能力补充（能力查询/录像；拍照 take_photo 已有实现，见下方 QuroScreenshotTools）
+    r.register(GetCameraCapabilitiesTool())
+    r.register(CaptureVideoTool())
     // 通信
     r.register(ReadSmsTool())
     r.register(SendSmsTool())
@@ -283,10 +292,9 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(FileReadTool())
     r.register(OpenWebTool())
     r.register(RunCodeTool())
-    // 宿主技能库管理：让 AI 可列举 / 启用 / 禁用用户技能（issue #17 问题 3）
+    // 宿主技能库管理：AI 只可列举技能。用哪个技能由用户在对话框选择后随消息发送，
+    // 不再注册「启用/禁用」——那只是本地布尔值，AI 根本感知不到，是错误的作用方式。
     r.register(SkillListTool())
-    r.register(SkillEnableTool())
-    r.register(SkillDisableTool())
     // SandboxPackage 完整脚本运行时：code_runner（JS/TS + Tools.* 宿主 API + CommonJS）+ ToolPkg 脚本包 + 项目模板
     r.register(CodeRunnerTool())
     r.register(ToolPkgListTool())
@@ -531,9 +539,9 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // ⚠️ 此前此行被误注释，导致 ui_open_* 既没进可执行 map、又因 coreSpecs 从 map 过滤而未下发 → 整个 UI 动作体系对 AI 失效。
     // 恢复注册后，ui_open_build 等全部 ui_open_*/ui_toggle_* 既下发给 LLM、又能被 engine 真正执行。
     allUiActionTools.forEach { r.register(it) }
-    // 对话框富卡片工具（ui_card）：可视化组件库（独立功能；小卡片=```quro-card 围栏，与此互不相关）
+    // 对话框富组件工具（ui_card）：预制组件名册（独立分类；🔴 可视化小卡片是 WIDGET_CARD 分类、走 visual_card 工具，与本工具互不相关）
     r.register(UiCardTool())
-    // 对话框富卡片工具（ui_widget）：可视化组件库（与 ui_control / quro-ui / visual_popup / 小卡片围栏互不相关）
+    // 对话框富组件工具（ui_widget）：预制组件名册（与 ui_control / quro-ui / visual_popup / visual_card 互不相关）
     r.register(UiWidgetTool())
     // 可视化组件目录查询（card_catalog）：全量组件的常驻清单在两个下发工具的描述里，
     // 完整样例按需来此拉 —— 避免把十几 KB 样例常驻进系统提示词。
@@ -549,6 +557,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(McpServersTool())
     r.register(McpListToolsTool())
     r.register(McpCallTool())
+    r.register(McpCapabilitiesTool())
     // MCP-ACI 桥接工具：让 AI 通过 ACI 调用外部 MCP 服务器的工具
     r.register(McpAciListTool())
     r.register(McpAciCallTool())
@@ -567,6 +576,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(VisualQuestionTool())   // 可视化问答弹窗
     r.register(VisualActionTool())     // 可视化操作弹窗
     r.register(VisualPopupTool())      // 自由可视化弹窗（固定UI组件）
+    r.register(VisualCardTool())       // 🔴 可视化小卡片（独立分类唯一出口：AI 自由写 HTML 卡体，Widget Lab 卡壳内联渲染）
+    r.register(VisualCardSkeletonTool()) // 🔴 13 份参考样板检索（visual_card 的 html 本可自由写任意场景，样板仅供没把握时参考）
     r.register(ZxWebCardTool())        // zxwidget 卡片（动态交互界面，477 个 zx 组件）
     r.register(ZxCatalogTool())        // zx 组件名册与字段契约（做卡片前先查）
     r.register(VisualCustomPopupTool()) // AI自写UI可视化弹窗（完全自定义HTML）
@@ -616,7 +627,9 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
         r.register(QuroMultiProviderTool(ctx))   // multi_provider  ：多提供商配置 / 故障转移 / 健康检查
         r.register(QuroHeartbeatTool(ctx))       // heartbeat       ：自主心跳与系统自检报告
         r.register(QuroLocalModelTool(ctx))      // local_model     ：本地模型下载 / 加载 / 推理
-        r.register(QuroVirtualDisplayTool(ctx))  // virtual_display ：虚拟显示器与后台自动化
+        // virtual_display 已去注册：它创建的 VirtualDisplay 没有挂载 Surface（surface=null），
+        // takeScreenshot() 实际返回 null，是与 bg_screen（真正可用的后台虚拟屏）重复的坏桩。
+        // 统一以 bg_screen 作为虚拟屏入口，避免 AI 在「两个虚拟屏工具」间混淆。源码保留可随时恢复。
         r.register(QuroTaskSchedulerTool(ctx))   // task_scheduler  ：定时任务调度（Cron）
         r.register(QuroDataManagerTool(ctx))     // data_manager    ：数据导出 / 导入 / 加密备份
     }

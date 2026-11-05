@@ -15,6 +15,17 @@ object QuroShareBridge {
     private val _pendingText = mutableStateOf<String?>(null)
     val pendingText: State<String?> = _pendingText
 
+    // 🔴 自动发送计数（2026-11-05）：>0 时对话框直接发送对应文本，不经输入框预填
+    // —— 供桌宠点击等「要产生真实聊天回合」的入口使用（对齐 chat_turn_trigger_pet_tap）。
+    private val _pendingAutoSend = mutableStateOf(0)
+    val pendingAutoSend: State<Int> = _pendingAutoSend
+
+    /** 写入一条**直接发送**的文本（跳过预填，进对话框即发送）。 */
+    fun emitAutoSend(text: String) {
+        _pendingText.value = text
+        _pendingAutoSend.value = _pendingAutoSend.value + 1
+    }
+
     private val _pendingUris = mutableStateOf<List<Uri>>(emptyList())
     val pendingUris: State<List<Uri>> = _pendingUris
 

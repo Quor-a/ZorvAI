@@ -825,15 +825,22 @@ fun ChipRowPattern(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // 🔴 移动端适配修复（2026-11-04 真机截图：天气卡「东南风 2 级」chip 竖排成一字一行）：
+        //    3+ 个 chip 无 weight 时最后一个被挤到剩余宽度不足，文字换行成竖排。
+        //    每 chip weight(1f) 均分 + 单行居中省略。
         chips.take(5).forEach { chipText ->
             Surface(
                 color = scheme.primaryContainer.copy(alpha = 0.4f),
-                shape = RoundedCornerShape(6.dp)
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier.weight(1f),
             ) {
                 Text(
                     text = chipText as String,
                     style = MaterialTheme.typography.labelSmall,
                     color = scheme.primary,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     fontWeight = FontWeight.Medium
                 )

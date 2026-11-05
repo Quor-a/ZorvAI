@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.core.mika.agent
 
+import com.ai.assistance.quro.core.mika.net.ProxyFailure
 import com.ai.assistance.quro.core.mika.model.ModelError
 import kotlin.random.Random
 
@@ -46,6 +47,8 @@ class RetryPolicy(
         fun transient(e: Throwable): Boolean = when (e) {
             is ModelError.RateLimited, is ModelError.Network, is ModelError.StreamCut -> true
             is ModelError.Server -> e.status in 500..599
+            // 代理一时没起来、刚重启:过一会儿可能就通了;账号密码不对重试没用
+            is ModelError.Proxy -> e.failure == ProxyFailure.Unreachable
             else -> false
         }
 
@@ -55,6 +58,7 @@ class RetryPolicy(
             is ModelError.Network -> "network"
             is ModelError.StreamCut -> "stream_cut"
             is ModelError.Server -> "server_${e.status}"
+            is ModelError.Proxy -> if (e.failure == ProxyFailure.Unreachable) "proxy_unreachable" else "proxy_auth"
             else -> e::class.simpleName.orEmpty()
         }
     }

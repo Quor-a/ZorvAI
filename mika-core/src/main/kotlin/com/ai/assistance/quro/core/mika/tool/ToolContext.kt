@@ -38,6 +38,12 @@ internal class ToolConfig(
     val childHost: ChildRunHost? = null,
     /** 这个对话里用户发来的屏幕;没有时不提供 view_user_screen。 */
     val userScreens: com.ai.assistance.quro.core.mika.userscreen.UserScreenSource? = null,
+    /** 用户的个人技能;给了(且有技能目录、用户本次说的话)才提供 skill_save。 */
+    val personalSkills: com.ai.assistance.quro.core.mika.skills.PersonalSkills? = null,
+    /** 改 ZorvAI 自己设置的白名单入口;为空(用户没允许)时不提供 settings_list、settings_set。 */
+    val selfConfig: com.ai.assistance.quro.core.mika.settings.SelfConfig? = null,
+    /** 存下的运行记录;给了、而这个对话之前有记过运行的轮次时提供 history_read。 */
+    val runRecords: com.ai.assistance.quro.core.mika.record.RunRecords? = null,
 )
 
 /**

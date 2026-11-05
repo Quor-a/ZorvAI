@@ -12,6 +12,7 @@ import com.ai.assistance.quro.activity.QuroApplication
 object QuroTerminalPrefs {
     private const val NAME = "quro_terminal_prefs"
     private const val KEY_USE_PTY = "use_pty"
+    private const val KEY_DEFAULT_ENV = "default_env"
     private const val KEY_WARN_DESTRUCTIVE = "warn_destructive"
     private const val KEY_REQUIRE_DESTRUCTIVE_CONFIRM = "require_destructive_confirm"
 
@@ -28,6 +29,20 @@ object QuroTerminalPrefs {
     var usePty: Boolean
         get() = sp?.getBoolean(KEY_USE_PTY, false) ?: false
         set(v) { sp?.edit()?.putBoolean(KEY_USE_PTY, v)?.apply() }
+
+    /**
+     * 默认进入哪套环境（双路径开关）。
+     *
+     * - `termux`（默认）：Termux 官方 bootstrap，包管理器 `pkg`，面向 Android 原生；
+     * - `ubuntu`：zorvAI 沙箱（proot + Ubuntu 24.04），包管理器 `apt`，桌面工具链齐全。
+     *
+     * 无论选哪个，终端里随时可以用 `zorv` 切到另一侧。选 `termux` 但 Termux 通道不可用
+     * （bootstrap 没装 / linker 通道不通）时，[com.ai.assistance.quro.core.terminal.QuroShellSession.create]
+     * 会自动回落沙箱，不会把终端开成空白。
+     */
+    var defaultEnv: String
+        get() = sp?.getString(KEY_DEFAULT_ENV, "termux") ?: "termux"
+        set(v) { sp?.edit()?.putString(KEY_DEFAULT_ENV, v)?.apply() }
 
     /** 交互终端执行破坏性命令前打印醒目警告（默认开）。 */
     var warnDestructive: Boolean

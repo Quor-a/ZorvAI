@@ -2,7 +2,10 @@ package com.ai.assistance.quro.core.tools
 
 import android.content.Context
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
+import com.ai.assistance.quro.core.display.DisplayAwake
 import com.ai.assistance.quro.core.display.QuroVirtualScreen
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
@@ -33,20 +36,27 @@ class BackgroundScreenTool : QuroTool {
 action：
 - open：把某个 App 启动到后台屏（需 packageName；可选 userId=分身编号、cold=true 冷启动）
 - app_users：列出应用分身（双开/手机分身/工作资料）。**双开的 App 开不起来时先调它**
-- read：**读界面结构**（控件树：ref / 类型 / 文字 / 中心坐标 / 是否可点可输）—— 优先用它，别靠截图猜坐标
+- read：**读界面**（控件树 ref/类型/文字/坐标 + 必要时自动补端侧 OCR）—— 优先用它，别靠截图猜坐标
 - input_text：在当前输入框里写入文字（走无障碍 ACTION_SET_TEXT，**不弹系统输入法**，主屏不会冒键盘）
 - tap_element：按 read 返回的 ref 精确点击（如 ref="@e3"）
-- screenshot：截取后台屏当前画面，返回图片文件路径（read 读不到结构时再用）
+- screenshot：截取后台屏当前画面，返回图片文件路径（read 已经带 OCR 了，一般不需要）
 - tap：盲点一个坐标（需 x / y）
 - swipe：滑动（需 x1/y1/x2/y2）
 - back：按返回键
 - top：查当前最上层 Activity（判断走到哪一步）
-- status：查屏是否就绪 / displayId
+- status：查屏是否就绪 / displayId / 保活 / 无障碍 / OCR 状态
 - release：**释放整块后台屏**。⚠️ 日常任务结束时**不要**调它 —— 默认把 App 留在原页面，
   用户切后台能看到、下次任务接着做。只有「用户明确要求关掉/释放」或「屏坏了要重建」时才用。
 
-**推荐流程**：status → open → read（拿到元素表）→ tap_element 或 tap → **read 确认界面真的变了** → 继续下一步。
+**read 会自动做三件事**（不用你去判断）：
+1. 等画面停稳（避免读到启动图/白屏/骨架屏）；
+2. 控件树读到的太少时，用本机 ML Kit 补一层 OCR 文字（自绘 UI / Flutter / 游戏 / WebView）；
+3. 给出诊断：**画面全黑 = 该界面禁止截屏**、**画面一直在变 = 还在加载**、**无障碍未开 = 只能按坐标点**。
+   看到这些提示就按它说的做，不要当没看见、更不要原地重试同一个动作。
+
+**推荐流程**：status → open → read → tap_element 或 tap → **read 确认界面真的变了** → 继续下一步。
 每一步动作之后都要再 read 一次；没变就是没点中，同一动作**不要原样重试**。
+read 提示「还在加载」时，等 1 秒再 read 一次即可，不要重复 open。
 
 **打开软件**：知道包名就直接 open，不要先 list_installed_apps。
 刚建好的屏是空的，这是正常的（那是你自己的屏），空屏不等于失败。
@@ -103,18 +113,27 @@ action：
             "app_users" -> QuroVirtualScreen.listAppCopies(context, obj.optString("packageName", "").trim())
 
             "read" -> {
-                val snap = QuroVirtualScreen.readScreen()
-                    ?: return "读不到界面结构：无障碍服务未开启，或后台屏还没有界面。请开启无障碍（设置 → 无障碍 → ZorvAI），或改用 screenshot 看画面。"
-                QuroAgentTrace.result("bg_screen", "读界面", "${snap.elements.size} 个元素")
-                snap.toPromptText()
+                // 🔴 旧实现在这里「无障碍读不到就直接返回错误」，于是自绘 UI / 无障碍没开 /
+                //    防截屏界面全都表现为「读不到界面结构」，OCR 根本没机会跑——
+                //    这正是「AI 看屏有问题」最主要的成因。现在统一走 readForAi：
+                //    结构为主，结构稀薄时自动等画面停稳 + 端侧 OCR，并把诊断结论一起给模型。
+                val reading = runBlocking(Dispatchers.IO) { QuroVirtualScreen.readForAi(context) }
+                QuroAgentTrace.result(
+                    "bg_screen",
+                    "读界面",
+                    "${reading.snapshot?.elements?.size ?: 0} 个元素" +
+                        (reading.ocr?.lines?.size?.let { " + OCR $it 行" } ?: ""),
+                )
+                reading.toPromptText()
             }
 
             "tap_element" -> {
                 val ref = obj.optString("ref", "").trim()
                 if (ref.isBlank()) return "缺少 ref（先用 read 拿到元素表）"
                 QuroAgentTrace.action("bg_screen", "按 ref 点击", ref)
+                val before = QuroVirtualScreen.frameSignature()
                 if (QuroVirtualScreen.tapElement(context, ref)) {
-                    "已点击 $ref"
+                    "已点击 $ref" + changeHint(context, before)
                 } else {
                     "点击 $ref 失败：该 ref 不在最近一次 read 的结果里（界面可能已变，请重新 read）"
                 }
@@ -143,7 +162,12 @@ action：
                 val y = obj.optInt("y", -1)
                 if (x < 0 || y < 0) return "缺少有效的 x / y"
                 QuroAgentTrace.action("bg_screen", "后台屏点击", "($x, $y)")
-                if (QuroVirtualScreen.tapAt(context, x, y)) "已点击 ($x, $y)" else tapFailed()
+                val before = QuroVirtualScreen.frameSignature()
+                if (QuroVirtualScreen.tapAt(context, x, y)) {
+                    "已点击 ($x, $y)" + changeHint(context, before)
+                } else {
+                    tapFailed()
+                }
             }
 
             "swipe" -> {
@@ -183,8 +207,10 @@ action：
     }
 
     private fun screenshot(context: Context): String {
-        val png = QuroVirtualScreen.screenshotPng(context)
-            ?: return "截图失败：${QuroVirtualScreen.lastError ?: "后台屏还没有画面（先 open 一个 App，等界面出来再截）"}"
+        val png = QuroVirtualScreen.captureDisplay(context)
+            ?: return "截图失败：${QuroVirtualScreen.lastError ?: "后台屏还没有画面（先 open 一个 App，等界面出来再截）"}" +
+                "。通道：优先 Shizuku ImageReader，失败退回 Shizuku/无线调试 ADB 的 screencap；" +
+                "若都不可用，请确认 Shizuku 已授权或无线调试已连接。"
 
         return runCatching {
             val dir = File(context.cacheDir, "bg_screen").apply { mkdirs() }
@@ -192,19 +218,62 @@ action：
             val f = File(dir, "bg_$ts.png")
             f.writeBytes(png)
             QuroAgentTrace.result("bg_screen", "截图", f.absolutePath)
-            "✅ 后台屏截图：${f.absolutePath}\ndisplayId=${QuroVirtualScreen.displayId}"
+            "✅ 后台屏截图：${f.absolutePath}\ndisplayId=${QuroVirtualScreen.displayId}（Shizuku 或无线调试 ADB 任一通道出图）"
         }.getOrElse { "保存截图失败：${it.message}" }
     }
 
     private fun statusMessage(context: Context): String {
         val sb = StringBuilder()
         sb.appendLine(if (QuroVirtualScreen.isReady) "后台屏：✅ 已就绪（displayId=${QuroVirtualScreen.displayId}）" else "后台屏：❌ 未创建")
+        // 🔴 「看屏到底看的是哪块屏」必须显式写出来。
+        // 这条此前没有任何地方说明，用户/AI 都只能猜：究竟是看虚拟屏，还是看用户手机当前屏幕？
+        // 三路数据源全部锁定在**本 App 建的虚拟屏**上，主屏内容不会出现在这里：
+        //  · 结构：a11y 的 windowsOn(displayId) —— 只取该 displayId 的窗口，取不到就返回空，
+        //    绝不用 rootInActiveWindow 退回主屏（那会把用户屏幕当成后台界面）；
+        //  · 图像：该虚拟屏自己的 ImageReader 帧（VirtualDisplay 的 Surface）；
+        //  · 兜底：shell `screencap -d <displayId>`，同样是指定屏。
+        sb.appendLine(
+            "读屏目标：虚拟屏 displayId=${QuroVirtualScreen.displayId}" +
+                "（结构=无障碍 windowsOn 该屏 · 图像=VirtualDisplay 帧 · 兜底=screencap -d 该屏）" +
+                "；**不是用户手机主屏**",
+        )
         QuroVirtualScreen.lastError?.let { sb.appendLine("最近错误：$it") }
         sb.appendLine("Shizuku AIDL 通道：${if (com.ai.assistance.quro.core.shizuku.QuroShizuku.isAidlAvailable) "✅ 可用" else "❌ 不可用"}")
+        // 保活状态：这条很关键——屏自己息屏时，截图不变、点按无效，看起来像三个不同的 bug
+        sb.appendLine("屏保活（防息屏）：${if (QuroVirtualScreen.isAwake) "✅ 每 ${DisplayAwake.PERIOD_MS / 1000}s 报一次用户活动" else "⚠️ 未启用（该屏可能自己息屏）"}")
+        sb.appendLine("无障碍读树：${if (QuroVirtualScreen.isA11yAvailable) "✅ 可用（能给出 ref）" else "❌ 未开启（只能 OCR + 坐标点击）"}")
+        sb.appendLine("端侧 OCR：${if (QuroVirtualScreen.isOcrReady) "✅ 可用（ML Kit 中文+拉丁）" else "⚠️ 未预热（首次读屏会慢约 1s）"}")
+        QuroVirtualScreen.lastReading()?.let { r ->
+            sb.appendLine("最近一次读屏：元素 ${r.snapshot?.elements?.size ?: 0} 个" +
+                (r.ocr?.lines?.size?.let { "，OCR $it 行" } ?: "") +
+                (if (r.probe?.black == true) "，⚠️ 画面全黑" else ""))
+        }
         QuroVirtualScreen.topActivity(context)?.let { sb.appendLine("当前 Activity：$it") }
         return sb.toString().trim()
     }
 
     private fun tapFailed(): String =
         "操作失败：${QuroVirtualScreen.lastError ?: "后台屏未就绪，或注入被系统拒绝（检查 Shizuku 权限）"}"
+
+    /**
+     * 点完之后的一句话补充：界面到底变没变。
+     *
+     * 为什么要多这一步：以前点完只回「已点击」，模型得再 read 一次、自己比对才能判断是否生效；
+     * 而它常常懒得比对，于是对同一个控件连点三四次。这里直接给出结论，
+     * 变了就让它继续下一步，没变就明确提示「可能没点中或该控件不改界面」。
+     *
+     * 措辞必须留余地：有些控件点了只改焦点/弹键盘，画面签名可能不变，不能一口咬定「失败」。
+     */
+    private fun changeHint(context: Context, before: Long): String {
+        if (before == 0L) return ""
+        // 目标 App 本来就没在画（屏睡着了/还没画），比对没有意义
+        val changed = runCatching {
+            runBlocking(Dispatchers.Default) { QuroVirtualScreen.awaitFrameChange(before, 1_200L) }
+        }.getOrDefault(false)
+        return if (changed) {
+            "；界面已变化"
+        } else {
+            "；界面看起来没变（可能没点中，也可能该控件只改焦点/弹输入法）。下一步请 read 确认，别原地重试。"
+        }
+    }
 }

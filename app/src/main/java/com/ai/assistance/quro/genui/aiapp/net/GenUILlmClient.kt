@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.genui.aiapp.net
 
+import com.ai.assistance.quro.core.network.ReasoningLoopGuard
 import android.util.Log
 import com.ai.assistance.quro.genui.aiapp.core.GenUIChatMessage
 import com.ai.assistance.quro.genui.aiapp.core.GenUILlmResult
@@ -27,6 +28,15 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.coroutineContext
+
+/**
+ * 历史回传 reasoning 时的截断长度。
+ *
+ * 只保留「上次判断了什么」，不把整段推演喂回去 —— 完整回传会让模型顺着自己的思考
+ * 继续推演（死循环思考）。2000 字符足够覆盖结论与关键约束，又能砍掉绝大部分过程。
+ */
+private const val REASONING_ECHO_MAX_CHARS = 2000
+
 
 private const val TAG = "GenUILlm"
 
@@ -364,6 +374,11 @@ class GenUILlmClient(
             val toolAcc = StreamToolAcc()
             var isReasoning = false
             var totalBytes = 0L
+            // 🔴 推理打转的主动掐断：模型在 reasoning 里复读时，这条流会一路吐到 token 上限，
+            // 上层几十分钟拿不到返回、界面永远「思考中」。轮次级检测对它无效（压根没到下一轮），
+            // 只能在**接收过程中**判定并 break。
+            val reasoningGuard = ReasoningLoopGuard()
+            var stallReason: String? = null
             // 🔴 记住上游停止原因：`length` = 被 max_tokens 腰斩。
             // 旧实现拿到就 break 且丢弃，上层无从判断是否需要续写。
             var lastFinishReason: String? = null
@@ -399,6 +414,11 @@ class GenUILlmClient(
                                     if (!isReasoning) isReasoning = true
                                     reasoningAcc.append(reasoningContent)
                                     onThinking?.invoke(reasoningAcc.toString())
+                                    // 判定打转 → 立刻断流，不再等模型自己收尾
+                                    if (reasoningGuard.onReasoning(reasoningAcc)) {
+                                        stallReason = reasoningGuard.stallReason
+                                        break
+                                    }
                                     // ⚠️ 这里**不能** continue。
                                     // 部分模型（混思考的推理型网关、以及 reasoning 结束时与正文
                                     // 交接的那一帧）会在**同一个 delta 里同时**给 reasoning_content 和
@@ -464,6 +484,14 @@ class GenUILlmClient(
                 Log.w(TAG, "Stream read error: ${e.message}")
             }
 
+            if (stallReason != null) {
+                Log.w(TAG, ">>> 推理打转，已主动断流：$stallReason")
+                // 一个字正文都没产出 → 这轮等于失败，明确告诉用户，别塞一张空界面
+                if (contentAcc.isEmpty() && !toolAcc.hasValidCalls()) {
+                    return GenUILlmResult.Error(ReasoningLoopGuard.STALL_NOTE)
+                }
+                return buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc, lastFinishReason)
+            }
             return buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc, lastFinishReason)
         }
     }
@@ -584,18 +612,19 @@ class GenUILlmClient(
                 toolCallsArray.put(tcObj)
             }
             obj.put("tool_calls", toolCallsArray)
-            // reasoning 模型不发送 reasoning
+            // 🔴 只回传「带 tool_calls」的消息，且截断（原因见 QuroLlmClient 的同类注释）：
+            // 完整回传历史 reasoning 会让模型接续自己上一轮的思考，形成「死循环思考」。
+            // 带 tool_calls 的消息不能省 —— MiMo 等严格上游缺 reasoning_content 会拒收。
             if (emitReasoning && msg.reasoning != null) {
-                obj.put("reasoning_content", msg.reasoning)
+                obj.put("reasoning_content", msg.reasoning.take(REASONING_ECHO_MAX_CHARS))
             }
         } else if (msg.role == "tool") {
             obj.put("tool_call_id", msg.toolCallId ?: "")
             obj.put("content", msg.content)
         } else {
             obj.put("content", msg.content)
-            if (emitReasoning && msg.reasoning != null) {
-                obj.put("reasoning_content", msg.reasoning)
-            }
+            // 普通 assistant 消息**不**回传 reasoning：那是模型自己的草稿，
+            // 喂回去只会让它继续沿着上一轮的思路推演，越推越长。
         }
 
         return obj
@@ -608,17 +637,15 @@ class GenUILlmClient(
      * 剔除 UI 进度占位气泡（role=assistant、无 toolCalls 的空消息）
      * 这类消息在 assistant[tool_calls] 与 tool 结果之间会触发 DeepSeek 400
      */
-    private fun normalizeToolCallMessages(input: List<GenUIChatMessage>): List<GenUIChatMessage> {
-        val result = mutableListOf<GenUIChatMessage>()
-        for (msg in input) {
-            // 剔除空 assistant 占位（仅 role=assistant 且 content 为空且无 tool_calls）
-            if (msg.role == "assistant" && msg.content.isBlank() && msg.toolCalls.isNullOrEmpty()) {
-                continue
-            }
-            result.add(msg)
-        }
-        return result
-    }
+    /**
+     * 发请求前的消息修正 —— 全部委托 [ChatHistory.normalizeToolMessages]。
+     *
+     * 为什么不在这里就地实现：那段逻辑（空占位剔除 + tool 配对修复）是**纯数据变换**，
+     * 是「工具调用莫名失效」的高频事故点，必须能被 JVM 单测直接覆盖。
+     * 放在 client 的 private 方法里，单测就只能靠反射或者起一堆网络桩，实际结果是没人测。
+     */
+    private fun normalizeToolCallMessages(input: List<GenUIChatMessage>): List<GenUIChatMessage> =
+        com.ai.assistance.quro.genui.aiapp.viewmodel.ChatHistory.normalizeToolMessages(input)
 
     // ==================== 工具参数清理 ====================
 

@@ -36,9 +36,11 @@ data class RepairOutcome(val restarted: Boolean, val atMillis: Long, val attempt
  * ZorvAI 的无障碍服务没在运行时自动打开:内置助手在运行时,用它把 ZorvAI 的服务写回系统列表
  * ([RecoveryPermissions.restartAccessibility]:列表里有就去掉再加回让系统重新绑定,没有就直接加上)。
  * App 自己有修改系统设置的授权时([direct])直接写,不用等助手(无线调试关着也能修)。
- * 只看两路状态:服务([A11yObservation])和内置助手;任一变化都重新判断,不轮询。
+ * 只看三路状态:服务([A11yObservation])、内置助手和用户是否已解锁;任一变化都重新判断,不轮询。
  *
  * - 只要没在运行就修;只有用户在 ZorvAI 里关掉了「替我打开无障碍」才不管。
+ * - 开机后用户还没解锁过一次时(凭据加密的存储还没解开),不支持直接启动的服务本来就绑不上:这时不修,
+ *   等用户解锁([watch] 的 unlocked 变为 true)后再判断一次,该修照样修。
  * - 刚卡住时先等 [GRACE_MS]:进程刚起来时系统通常马上会连上,不必动手。
  * - 每次卡住最多试 [MAX_ATTEMPTS] 次,间隔逐次拉长;还是没连上就停下,留给界面上手动处理的提示。
  *   服务连上了才算这一次过去,之后再断开重新计数。
@@ -58,37 +60,48 @@ class AccessibilityRepair(
 
     private enum class Result { Restored, GaveUp, Interrupted }
 
-    /** 一直看着,直到被取消。修的过程中状态的变化(包括自己去掉又加回)按最新的一份再判断一次。 */
-    suspend fun watch(service: StateFlow<A11yObservation>, helper: StateFlow<BuiltinShellStatus>) {
+    /**
+     * 一直看着,直到被取消。修的过程中状态的变化(包括自己去掉又加回)按最新的一份再判断一次。
+     * [unlocked] 是开机后用户解锁过没有;没解锁时不修,解锁时它的变化让这里再判断一次。
+     */
+    suspend fun watch(
+        service: StateFlow<A11yObservation>,
+        helper: StateFlow<BuiltinShellStatus>,
+        unlocked: StateFlow<Boolean> = MutableStateFlow(true),
+    ) {
         var exhausted = false
-        combine(service, helper, ::Pair).conflate().collect { (s, h) ->
+        combine(service, helper, unlocked, ::Triple).conflate().collect { (s, h, u) ->
             if (s.connected) {
                 exhausted = false
                 return@collect
             }
-            if (exhausted || !eligible(s, h)) return@collect
+            if (exhausted || !eligible(s, h, u)) return@collect
             try {
                 _phase.value = RepairPhase.Pending
                 delay(GRACE_MS)
-                if (!eligible(service.value, helper.value)) return@collect
+                if (!eligible(service.value, helper.value, unlocked.value)) return@collect
                 _phase.value = RepairPhase.Repairing
-                exhausted = repair(service, helper) == Result.GaveUp
+                exhausted = repair(service, helper, unlocked) == Result.GaveUp
             } finally {
                 _phase.value = RepairPhase.Idle
             }
         }
     }
 
-    private fun eligible(s: A11yObservation, h: BuiltinShellStatus) =
-        s.stuck && (direct() || h == BuiltinShellStatus.Running) && consent().wants(RecoveryCapability.Accessibility)
+    private fun eligible(s: A11yObservation, h: BuiltinShellStatus, unlocked: Boolean) =
+        s.stuck && unlocked && (direct() || h == BuiltinShellStatus.Running) && consent().wants(RecoveryCapability.Accessibility)
 
-    private suspend fun repair(service: StateFlow<A11yObservation>, helper: StateFlow<BuiltinShellStatus>): Result {
+    private suspend fun repair(
+        service: StateFlow<A11yObservation>,
+        helper: StateFlow<BuiltinShellStatus>,
+        unlocked: StateFlow<Boolean>,
+    ): Result {
         for (attempt in 1..MAX_ATTEMPTS) {
             if (attempt > 1) {
                 delay(BACKOFF_MS * (attempt - 1))
                 val s = service.value
                 if (s.connected) return Result.Restored.also { record(true, attempt - 1) }
-                if (!eligible(s, helper.value)) return Result.Interrupted
+                if (!eligible(s, helper.value, unlocked.value)) return Result.Interrupted
             }
             if (restart(GAP_MS * attempt) == PermissionResult.Done &&
                 withTimeoutOrNull(CONNECT_TIMEOUT_MS) { service.first { it.connected } } != null

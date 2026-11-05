@@ -1,4 +1,5 @@
 package com.ai.assistance.quro.genui.aiapp.viewmodel
+import com.ai.assistance.quro.core.agent.loop.LoopGuard
 import com.ai.assistance.quro.R
 import com.ai.assistance.quro.util.qstr
 
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlin.text.Regex
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -923,8 +925,23 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         // 🔴 锁定非 genui 通道时**不挂** register_component：模型看着工具列表就会想调，
         // 一调就跑回 GenUI 管线（用户选了 markdown/html/a2ui 却被无视的一半现场）。
         val genuiAllowed = forcedChannel == null || forcedChannel == "genui"
-        val tools = brain.toolSpecs(config).map {
-            GenUIToolSpec(name = it.name, description = it.description, parametersJson = it.parametersJson)
+        // 🔴 工具集构造必须切 IO：`brain.toolSpecs()` 内部要读技能库文件 / 记忆库 / 人格库，
+        // 再拼一次 system 提示词（实测 38K 字符）。而本函数跑在 `viewModelScope.launch`
+        // 的**主线程**上 —— 用户侧看到的就是「点发送之后先卡一下才出字」。
+        // 顺带把 system 的真实字符数传下去：之前工具层自己按基线版（38K）算「已用」，
+        // 在 markdown / html 通道下真实 system 很短，却按 38K 扣预算 → 工具被裁到只剩一两个。
+        val tools = withContext(Dispatchers.IO) {
+            val sysChars = buildSystemContent(forcedChannel).length
+            val hostSpecs = brain.toolSpecs(config, sysChars)
+            android.util.Log.i(
+                "GenUITool",
+                "工具集下发：${hostSpecs.size} 个 / " +
+                    "${hostSpecs.sumOf { it.description.length + it.parametersJson.length }} 字符" +
+                    "（system $sysChars 字符，通道 ${forcedChannel ?: "genui"}）"
+            )
+            hostSpecs.map {
+                GenUIToolSpec(name = it.name, description = it.description, parametersJson = it.parametersJson)
+            }
         } + if (genuiAllowed) GenUIToolRegistry.getAllSpecs() else emptyList()
         // 给自校验返修预留轮次额度，避免修到一半被轮次上限掐断
         val maxRounds = getMaxToolCallRounds() + MAX_VERIFY_ITERATIONS
@@ -932,7 +949,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         // 断流续写：genui 输出被截断时自动请求续写，而不是直接落入兜底卡片
         var continuationCount = 0
         var pendingText = ""
-        verifyIteration = 0 // 自校验返修计数：每轮生成重置""
+        verifyIteration = 0 // 自校验返修计数：每轮生成重置
+        // 打转检测：只靠轮次上限兜底（默认 100 + 5 轮）等于「让它转到天荒地老」，
+        // 用户看到的就是「一直在思考、几分钟不动」。这里按「调用签名是否重复」精确识别并当场收尾。
+        val loopGuard = LoopGuard()
 
         while (round < maxRounds) {
             round++
@@ -1050,7 +1070,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
                 is GenUILlmResult.ToolCalls -> {
                     // 工具调用 — 执行工具并继续循环
-                    val shouldContinue = handleToolCallsResult(result)
+                    val shouldContinue = handleToolCallsResult(result, loopGuard)
                     if (!shouldContinue) {
                         return
                     }
@@ -1084,6 +1104,16 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
+        /**
+         * 界面按钮直接调工具的超时（毫秒）。
+         *
+         * 取 60s，与宿主 `QuroToolEngine` 的单工具预算保持一致：
+         *  · 界面点按不像对话，用户**正在**等这一个动作的结果，超过一分钟还转圈，
+         *    他只会再点几次 → 写类工具被重复执行（真实副作用）；
+         *  · 也不能太短 —— `web_search` / `bg_screen open` 正常就要 3~15s。
+         */
+        const val UI_TOOL_TIMEOUT_MS = 60_000L
+
         /**
          * 断流续写的最大次数。
          *
@@ -1648,8 +1678,23 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
      *
      * @return 是否继续循环（true=继续，false=停止）
      */
-    private suspend fun handleToolCallsResult(result: GenUILlmResult.ToolCalls): Boolean {
+    private suspend fun handleToolCallsResult(result: GenUILlmResult.ToolCalls, guard: LoopGuard): Boolean {
         val content = result.content ?: ""
+
+        // 0. 打转检测：模型反复发起完全相同的调用时，重跑只会烧 token，
+        //    用户侧表现是「一直思考、不出结果」。到阈值就收尾，别让它跑到 100 轮上限。
+        val decision = guard.onRound(result.calls.map { "${it.name}|${it.arguments}" })
+        if (decision == LoopGuard.Decision.Stop) {
+            _state.update {
+                it.copy(
+                    conversationHistory = it.conversationHistory + GenUIChatMessage(
+                        role = "assistant",
+                        content = LoopGuard.STOP_NOTE,
+                    )
+                )
+            }
+            return false
+        }
 
         // 1. 将 assistant 消息加入历史（包含 tool_calls）
         _state.update {
@@ -1665,6 +1710,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
         // 2. 逐个执行工具并添加结果消息
         for (toolCall in result.calls) {
+            // 先落占位记录：界面据此显示「正在调用 <工具>」，否则整段执行期完全静默
+            markToolStarted(toolCall.name, toolCall.arguments)
             val toolResult = executeSingleTool(toolCall)
 
             // 判断是否成功（尝试从 JSON 结果中解析 success 字段）
@@ -1675,20 +1722,27 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 true // 非 JSON 结果默认视为成功
             }
 
-            // 记录工具调用到思考面板
+            // 记录工具调用到思考面板（替换占位，不重复追加）
+            markToolFinished(toolCall.name, toolCall.arguments, toolResult, isSuccess)
             _state.update {
                 it.copy(
-                    toolCallRecords = it.toolCallRecords + ToolCallRecord(
-                        name = toolCall.name,
-                        arguments = toolCall.arguments,
-                        result = toolResult,
-                        isSuccess = isSuccess
-                    ),
                     conversationHistory = it.conversationHistory + GenUIChatMessage(
                         role = "tool",
                         content = toolResult,
                         toolCallId = toolCall.id,
                         toolName = toolCall.name
+                    )
+                )
+            }
+        }
+
+        // 收尾提示放在本轮工具结果**之后**，模型才能读到（含 tool 消息的完整上下文）。
+        if (decision == LoopGuard.Decision.Nudge) {
+            _state.update {
+                it.copy(
+                    conversationHistory = it.conversationHistory + GenUIChatMessage(
+                        role = "system",
+                        content = LoopGuard.NUDGE_PROMPT,
                     )
                 )
             }
@@ -1720,6 +1774,95 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 put("error", "工具执行失败: ${e.message}")
                 put("tool", toolCall.name)
             }.toString()
+        }
+    }
+
+    /**
+     * **界面直接调用工具**（GenUI 的 `call_tool` 动作走这里）。
+     *
+     * 与 [executeSingleTool] 同一条分派（本地 GenUI 工具 → 宿主工具），差别只在收尾：
+     *  · 结果**不写进 conversationHistory**。界面按钮不该篡改对话上下文——
+     *    否则用户点五次「刷新」就凭空多出五轮 tool 消息，下一轮模型看到一堆工具结果却
+     *    不知道是谁让它查的，直接答非所问；
+     *  · 结果只进 [ToolCallRecord]，底部「工具调用」抽屉里能看见，行为可追溯。
+     *
+     * 线程：宿主工具内部已经 [Dispatchers.IO]，但本地工具（register_component）不是，
+     * 所以这里统一切 IO；超时与宿主一致（60s），避免一个卡住的工具把界面按钮
+     * 永远挂在「执行中」。
+     */
+    suspend fun runToolFromUi(name: String, argumentsJson: String): String {
+        if (name.isBlank()) return """{"success":false,"error":"工具名为空"}"""
+        markToolStarted(name, argumentsJson)
+        val result = withContext(Dispatchers.IO) {
+            runCatching {
+                withTimeout(UI_TOOL_TIMEOUT_MS) {
+                    executeSingleTool(GenUIToolCall(name = name, arguments = argumentsJson))
+                }
+            }.getOrElse { e ->
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                val why = if (e is kotlinx.coroutines.TimeoutCancellationException) {
+                    "工具执行超时（${UI_TOOL_TIMEOUT_MS / 1000}s）"
+                } else {
+                    "工具执行异常：${e.message}"
+                }
+                """{"success":false,"error":"$why","tool":"$name"}"""
+            }
+        }
+        val ok = !result.contains("\"success\":false")
+        markToolFinished(name, argumentsJson, result, ok)
+        return result
+    }
+
+    /**
+     * 工具执行**前**先落一条占位记录（`result` 为空）。
+     *
+     * 🔴 界面靠 `toolCallRecords.last().result.isBlank()` 判断「正在调用工具」
+     * （[ChatScreen] 的 `PetPhase.TOOL_CALLING`、思考面板的进行中态）。
+     * 此前记录只在执行**后**追加，那个判断永远为 false —— 于是工具跑多久，
+     * 界面就静默多久，用户看到的是「转圈 / 卡住」。这是「调用工具会卡」的体感来源之一，
+     * 与执行器超时策略无关，纯粹是没有进度反馈。
+     */
+    private fun markToolStarted(name: String, arguments: String) {
+        _state.update {
+            it.copy(
+                toolCallRecords = it.toolCallRecords + ToolCallRecord(
+                    name = name,
+                    arguments = arguments,
+                    result = "",
+                ),
+            )
+        }
+    }
+
+    /**
+     * 工具执行**后**把占位记录替换成真实结果。
+     *
+     * 找不到占位就追加（绝不丢结果）—— 并发/中断场景下占位可能已被别的更新覆盖。
+     * 用 `indexOfLast` 在 `update` 的 lambda 内定位，保证与替换是同一次原子更新。
+     */
+    private fun markToolFinished(name: String, arguments: String, result: String, isSuccess: Boolean) {
+        _state.update { st ->
+            val idx = st.toolCallRecords.indexOfLast { it.name == name && it.result.isBlank() }
+            if (idx < 0) {
+                st.copy(
+                    toolCallRecords = st.toolCallRecords + ToolCallRecord(
+                        name = name,
+                        arguments = arguments,
+                        result = result,
+                        isSuccess = isSuccess,
+                    ),
+                )
+            } else {
+                val list = st.toolCallRecords.toMutableList()
+                list[idx] = ToolCallRecord(
+                    name = name,
+                    arguments = arguments,
+                    result = result,
+                    timestamp = list[idx].timestamp,
+                    isSuccess = isSuccess,
+                )
+                st.copy(toolCallRecords = list)
+            }
         }
     }
 
@@ -2061,8 +2204,37 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 (m["animation"] as? kotlinx.serialization.json.JsonPrimitive)?.let { a ->
                     m["animation"] = kotlinx.serialization.json.JsonObject(mapOf("type" to kotlinx.serialization.json.JsonPrimitive(a.content)))
                 }
-                (m["children"] as? kotlinx.serialization.json.JsonArray)?.let { ch ->
-                    m["children"] = kotlinx.serialization.json.JsonArray(ch.filterIsInstance<kotlinx.serialization.json.JsonObject>().map { normalizeEl(it) })
+                // 🔴 children 归一（2026-11-06 根治「卡片空白/子内容丢失」）：
+                //    旧实现 filterIsInstance<JsonObject> 把字符串/数字子项**静默丢弃**，
+                //    「children":["多云","26℃",{...}]」的文字项全部消失 = 卡片大片空白。
+                //    现在全部归一：字符串/数字 → text 节点；对象 → 递归 normalize。
+                val rawChildren: List<kotlinx.serialization.json.JsonElement> = when {
+                    m["children"] is kotlinx.serialization.json.JsonArray ->
+                        (m["children"] as kotlinx.serialization.json.JsonArray).toList()
+                    // 模型写单数 child / 内容 content / 列表 items 时并入
+                    m["child"] is kotlinx.serialization.json.JsonArray ->
+                        (m["child"] as kotlinx.serialization.json.JsonArray).toList()
+                    m["children"] is kotlinx.serialization.json.JsonObject ->
+                        listOf(m["children"] as kotlinx.serialization.json.JsonObject)
+                    m["child"] is kotlinx.serialization.json.JsonObject ->
+                        listOf(m["child"] as kotlinx.serialization.json.JsonObject)
+                    else -> emptyList()
+                }
+                if (rawChildren.isNotEmpty()) {
+                    m.remove("child")
+                    val normalized = rawChildren.map { c ->
+                        when (c) {
+                            is kotlinx.serialization.json.JsonObject -> normalizeEl(c)
+                            is kotlinx.serialization.json.JsonPrimitive -> kotlinx.serialization.json.JsonObject(mapOf(
+                                "type" to kotlinx.serialization.json.JsonPrimitive("text"),
+                                "properties" to kotlinx.serialization.json.JsonObject(mapOf(
+                                    "text" to kotlinx.serialization.json.JsonPrimitive(c.content)
+                                ))
+                            ))
+                            else -> c
+                        }
+                    }
+                    m["children"] = kotlinx.serialization.json.JsonArray(normalized)
                 }
                 (m["events"] as? kotlinx.serialization.json.JsonObject)?.let { ev ->
                     val e2 = ev.toMutableMap()

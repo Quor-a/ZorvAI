@@ -245,7 +245,9 @@ class QuroBotManager(
             // 的真实耗时，避免「执行任务长」被过早掐断。
             val reply = try {
                 withTimeout(180_000) {
-                    replyEngine.reply(message.platform, message.userId, message.text)
+                    // 🔴 透传平台侧用户昵称：旧实现把 userId（openid，不透明串）当用户名
+                    //    写进提示词，AI 永远不知道用户叫什么（灵魂注入缺口 G12）。
+                    replyEngine.reply(message.platform, message.userId, message.text, message.userName)
                 }
             } catch (e: Exception) {
                 bd("E", "replyEngine.reply 超时/失败 platform=${message.platform} user=${message.userId}: ${e.message}")

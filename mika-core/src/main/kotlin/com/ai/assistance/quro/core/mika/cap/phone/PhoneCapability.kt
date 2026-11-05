@@ -56,10 +56,17 @@ internal class PhoneCapability(
         app
     }, targetNote = "the exact package name of the app")
 
-    /** 手机一段跟着打开、列出 App 的工具走;手机那一组收着时不给。 */
+    /**
+     * 手机一段跟着打开、列出 App 的工具走;手机那一组收着时不给。
+     * 应用访问的规则只在用户禁用了 App(或设置读不出来)时接在后面:名单为空时手机工具不会因它被拒,模型用不着这段。
+     */
     override fun sections(env: PromptEnv): List<String> {
         if (!env.isOpen(id) || tools.none { it.verb in SECTION_VERBS && it.name in env.offered }) return emptyList()
-        return listOf(env.gate(Prompts.capability(PHONE)))
+        val access = screen.appAccess.current()
+        return listOfNotNull(
+            env.gate(Prompts.capability(PHONE)),
+            Prompts.capability(APP_ACCESS).takeIf { !access.available || access.blocked.isNotEmpty() },
+        )
     }
 
     override fun onTaskStart(ctx: ToolContext) {
@@ -112,6 +119,9 @@ internal class PhoneCapability(
     companion object {
         val KEY = CapabilityKey<PhoneCapability>(PHONE)
         private val SECTION_VERBS = setOf(Verb.LaunchApp, Verb.ListApps)
+
+        /** 应用访问规则那一段(capabilities/app-access.md)。 */
+        private const val APP_ACCESS = "app-access"
 
         /** 在 App 里换屏的动作:受限制浏览快慢的 App 的屏数上限拦。 */
         private val BROWSES = setOf(Verb.Tap, Verb.Swipe, Verb.Back, Verb.PressKey, Verb.PhoneGesture)

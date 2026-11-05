@@ -1,5 +1,7 @@
 package com.ai.assistance.quro.core.mika.memory
 
+import com.ai.assistance.quro.core.mika.agent.TokenEstimate
+
 /** [message] 为 null 表示这次没有记忆可带;[usedIds] 是块里实际列出的条目,顺序同列表。 */
 data class MemoryBlock(val message: String?, val usedIds: List<String>)
 
@@ -7,18 +9,18 @@ data class MemoryBlock(val message: String?, val usedIds: List<String>)
  * 每个任务的记忆块:作为一条用户消息放在对话上文之后、任务原文之前。
  *
  * 两种给法:
- * - [Mode.Relevant]:置顶的 + 过阈值的检索结果(已批准的做法单列且有上限),总长受 [MAX_CHARS] 约束。记忆多的老做法。
- * - [Mode.Full]:一条不落全给(做法仍受 [MAX_PROCEDURES] 约束),总长受 [FULL_MAX_CHARS] 约束。
+ * - [Mode.Relevant]:置顶的 + 过阈值的检索结果(已批准的做法单列且有上限),总长受 [MAX_TOKENS] 约束。记忆多的老做法。
+ * - [Mode.Full]:一条不落全给(做法仍受 [MAX_PROCEDURES] 约束),总长受 [FULL_MAX_TOKENS] 约束。
  *
- * 产品的默认是 [Mode.Auto]:记忆加起来没超过 [FULL_MAX_CHARS] 就全量注入(做法也全给),超了才退回检索。
+ * 产品的默认是 [Mode.Auto]:记忆加起来没超过 [FULL_MAX_TOKENS] 就全量注入(做法也全给),超了才退回检索。
  * 记忆本来就不多(几十条、几千字),而现在的模型上下文动辄几十万;全量注入不会漏,
  * 前缀还固定,命中上下文缓存后比"每次检索出来的都不一样"更便宜。
  * 但记忆涨到几万字以后全塞会把上下文吃光,所以保留检索这条退路。
  */
 object MemoryContext {
-    const val MAX_CHARS = 1200
+    const val MAX_TOKENS = 800
     /** 全量注入的总上限;超过就说明该退回检索了(见 [Mode.Auto])。 */
-    const val FULL_MAX_CHARS = 6000
+    const val FULL_MAX_TOKENS = 4_000
     const val MAX_PINNED = 5
     const val MAX_RELEVANT = 8
     const val MAX_PROCEDURES = 3
@@ -75,7 +77,7 @@ object MemoryContext {
         val keep = (pinned + relevant).toMutableList()
         while (keep.isNotEmpty()) {
             val (message, ids) = render(keep, rewrite)
-            if (message.length <= MAX_CHARS) return MemoryBlock(message, ids)
+            if (TokenEstimate.of(message) <= MAX_TOKENS) return MemoryBlock(message, ids)
             keep.removeAt(keep.lastIndex)
         }
         return MemoryBlock(null, emptyList())
@@ -83,7 +85,7 @@ object MemoryContext {
 
     /**
      * 全量:置顶的在前,其余按更新时间倒序;做法最多 [MAX_PROCEDURES] 条。
-     * 超 [FULL_MAX_CHARS] 时先丢最旧的普通条目,再丢做法;全丢光了还超就返回 null(交给检索)。
+     * 超 [FULL_MAX_TOKENS] 时先丢最旧的普通条目,再丢做法;全丢光了还超就返回 null(交给检索)。
      */
     private fun full(active: List<MemoryItem>, rewrite: (String) -> String): MemoryBlock? {
         val (allFacts, allProcedures) = ordered(active)
@@ -91,7 +93,7 @@ object MemoryContext {
         val procedures = allProcedures.toMutableList()
         while (facts.isNotEmpty() || procedures.isNotEmpty()) {
             val (message, ids) = render(facts + procedures, rewrite)
-            if (message.length <= FULL_MAX_CHARS) return MemoryBlock(message, ids)
+            if (TokenEstimate.of(message) <= FULL_MAX_TOKENS) return MemoryBlock(message, ids)
             if (facts.isNotEmpty()) facts.removeAt(facts.lastIndex) else procedures.removeAt(procedures.lastIndex)
         }
         return null
@@ -104,7 +106,7 @@ object MemoryContext {
     private fun fullIfFits(active: List<MemoryItem>, rewrite: (String) -> String): MemoryBlock? {
         val (facts, procedures) = ordered(active, maxProcedures = Int.MAX_VALUE)
         val (message, ids) = render(facts + procedures, rewrite)
-        return if (message.length <= FULL_MAX_CHARS) MemoryBlock(message, ids) else null
+        return if (TokenEstimate.of(message) <= FULL_MAX_TOKENS) MemoryBlock(message, ids) else null
     }
 
     private fun ordered(active: List<MemoryItem>, maxProcedures: Int = MAX_PROCEDURES): Pair<List<MemoryItem>, List<MemoryItem>> {

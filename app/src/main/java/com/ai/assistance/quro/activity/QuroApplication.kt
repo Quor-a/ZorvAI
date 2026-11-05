@@ -223,6 +223,14 @@ class QuroApplication : Application(), Configuration.Provider {
             com.ai.assistance.quro.core.assistant.AssistantShortcuts.install(applicationContext)
             // 自动拉起 AI 部署的本地 MCP 服务器，使其随应用启动即恢复可用（界面自动拉取注册）
             QuroLocalMcpManager.startAll(applicationContext)
+            //    写进配置，过期即 401，且 bearerFor 刷新链路无人调用。这里注入后，每次请求
+            //    都会走「OAuth token 优先 + 过期自动用 refresh_token 换新」。
+            com.ai.assistance.quro.core.mcp.QuroMcpClient.tokenProvider = { alias, cfg ->
+                com.ai.assistance.quro.core.mcp.QuroMcpOAuth.bearerFor(applicationContext, alias, cfg)
+            }
+            // 🔴 审批「总是允许」持久化回填（2026-11-04 对接缺口修复）：启动时把
+            //    上次「总是允许」的工具集灌回 ApprovalMemory，重启后不再重复弹卡。
+            com.ai.assistance.quro.core.chat.ApprovalPersist.load(applicationContext)
             // 🔴 互控桥自愈（2026-10-26 真机事故）：桥原先**只在「引擎每次 spawn 前」**建一次，
             // 而引擎一次都没成功起来过时，它就一次都没建过 —— 实测后果：`<dshHome>/zorvai-tools.json`
             // 不存在、127.0.0.1 上没有任何 /tool 监听，harness 侧只剩元工具 zorvai_bridge，
@@ -270,6 +278,18 @@ class QuroApplication : Application(), Configuration.Provider {
             )
         } catch (e: Throwable) {
             android.util.Log.e("QuroApplication", "插件框架初始化失败（不影响主流程）", e)
+        }
+        // 外部连接（OpenAI 兼容端点）：绑定端口状态流 + 开关为开时自动把服务拉起来。
+        // 🔴 此前服务只在设置页拨开关那一刻启动；应用被杀/重启后端点直接消失，
+        // 外部客户端连不上 → 用户看到的就是"外部连接根本不能用"。现在随应用启动自愈。
+        try {
+            val extPrefs = com.ai.assistance.quro.core.external.QuroExternalAccessPrefs
+            extPrefs.attach(applicationContext)
+            if (extPrefs.isEnabled(applicationContext)) {
+                com.ai.assistance.quro.service.QuroExternalAccessService.start(applicationContext)
+            }
+        } catch (e: Throwable) {
+            android.util.Log.e("QuroApplication", "外部连接服务启动失败（不影响主流程）", e)
         }
         // 心跳孵化：偏好就绪后启动全局后台循环（AtomicBoolean 守卫避免重复启动；默认开启）
         QuroPersonaViewModel.initHeartbeat(applicationContext)

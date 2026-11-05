@@ -183,6 +183,9 @@ object QuroLinuxEnv {
 
     private fun sandboxDir(context: Context) = File(context.filesDir, "linux-sandbox")
 
+    /** 沙箱宿主侧根目录（`files/linux-sandbox`），供 zorv 切换命令拼 LD_LIBRARY_PATH。 */
+    fun sandboxDirPath(context: Context): String = sandboxDir(context).absolutePath
+
     /**
      * rootfs 根目录（宿主侧路径）。
      *
@@ -3404,8 +3407,9 @@ fi
         val libraries = mapOf(
             "libproot.so" to "proot",
             "libproot-loader.so" to "loader"
-            // ZorvAI 不包含 libbash.so、libbusybox.so、libtalloc.so
-            // bash 通过 apt-get install 安装，busybox/talloc 不需要
+            // libbash.so / libbusybox.so 不在 ZorvAI 内（bash 走 apt-get 装、busybox 不需要），故不进 usr/bin 软链。
+            // ⚠️ libtalloc.so 是 proot 的**运行期依赖**（SONAME=libtalloc.so.2），ZorvAI 已打包 libtalloc.so，
+            //   由 sandboxDir 里的 libtalloc.so.2 复制逻辑（见 installProot 段）提供，不是独立命令，无需进 usr/bin 软链。
         )
 
         libraries.forEach { (libName, linkName) ->

@@ -30,7 +30,7 @@
     <string name="qk_00027">ACI app: %1$s (package: %2$s)</string>
     <string name="qk_00028" formatted="false">User selected: Visual Popup. Please call the visual_popup tool to create a visual popup now.</string>
     <string name="qk_00029" formatted="false">User selected: Visual Question. Please call the visual_question tool to create a visual question now.</string>
-    <string name="qk_00030" formatted="false">User selected: Visual Card. Please output a self-developed visual card (metric/progress/structured block) using the ```quro-card fence. Plain text replies are forbidden.</string>
+    <string name="qk_00030" formatted="false">User selected: Widget Card (an independent category). Immediately call visual_card_skeleton(kind=...) to fetch an HTML skeleton, replace every {{placeholder}} with real data, then call visual_card(title, html=...) to render one inline widget card. Never substitute dynamic UI / rich components / popups / HTML page preview / quro-card fence. Plain text replies are forbidden.</string>
     <string name="qk_00031" formatted="false">User selected: Dynamic UI. Please output a native interactive UI (form/panel/tool entry) using the ```quro-ui fence. Plain text replies are forbidden.</string>
     <string name="qk_00032" formatted="false">User selected: AIP Layout. Please output a fully laid-out document/PPT/report (doc/deck/mindmap) using the ```aip fence (or aip_compose tool). Do not reply with plain text only.</string>
     <string name="qk_00033">Enabled skills (%1$s): ${enabledSkills.joinToString(</string>
@@ -2408,7 +2408,7 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02477" formatted="false">Two independent controls, no mutual influence. On = 100% proactive use; Off = only when the user reminds.</string>
     <string name="qk_02478" formatted="false">Dynamic UI components</string>
     <string name="qk_02479" formatted="false">On: AI proactively outputs native interactive UI via ```quro-ui; Off: only when the user asks.</string>
-    <string name="qk_02480" formatted="false">On: AI proactively outputs self-built small cards via ```quro-card; Off: only when the user asks.</string>
+    <string name="qk_02480" formatted="false">On: AI proactively calls the visual_card tool to render widget cards (optionally fetching a skeleton first); Off: only when the user asks.</string>
     <string name="qk_02481" formatted="false">Save soul card</string>
     <string name="qk_02482" formatted="false">Tag management</string>
     <string name="qk_02483" formatted="false">No tags yet, tap + at top right to create one.</string>
@@ -4343,4 +4343,91 @@ Your configured models were kept; you can also type a model name manually.</stri
     <string name="qk_04430" formatted="false">Paired. Connection will retry automatically</string>
     <string name="qk_04431" formatted="false">Pairing failed</string>
     <string name="qk_04432" formatted="false">No pairing service found within 90s. Open "Pair device with pairing code" and try again</string>
+    <string name="qk_04440" formatted="false">This turn did not finish normally</string>
+    <string name="qk_04441" formatted="false">The upstream content policy blocked this answer. Rephrase it or switch to another model.</string>
+    <string name="qk_04442" formatted="false">The reply hit the per-response length limit and stopped mid-way. Say continue and I will keep going.</string>
+    <string name="qk_04443" formatted="false">The model only produced reasoning, with no answer text. Retry once; if it keeps happening, switch to a model without forced long thinking.</string>
+    <string name="qk_04444" formatted="false">All tools finished, but the model did not continue. Sending continue usually picks it back up.</string>
+    <string name="qk_04445" formatted="false">A tool in this step failed to run (usually permissions or environment). Check the tool card above, then retry.</string>
+    <string name="qk_04446" formatted="false">The model returned nothing. Usually an upstream hiccup or a network drop — retrying once is enough.</string>
+    <string name="qk_04447" formatted="false">The model repeatedly produced unparsable tool calls. Switch models, or split the task into smaller pieces.</string>
+    <string name="qk_04448" formatted="false">Retry</string>
+    <string name="qk_04449" formatted="false">Continue</string>
+    <string name="qk_04450" formatted="false">Got it</string>
+    <string name="qk_04451" formatted="false">This turn completed but the text was truncated; you can ask me to continue.</string>
+    <string name="qk_04452" formatted="false">Context window</string>
+    <string name="qk_04452_used" formatted="false">used</string>
+    <string name="qk_04452_reserved" formatted="false">Auto-compact buffer</string>
+    <string name="qk_04452_free" formatted="false">Free space</string>
+    <string name="qk_04452_unavailable" formatted="false">No context window usage yet for this session. It will appear once the model or runtime reports token statistics.</string>
+    <string name="qk_04453" formatted="false">Used %1$s / %2$s</string>
+    <string name="qk_04454" formatted="false">%1$s left</string>
+    <string name="qk_04455" formatted="false">%1$s reserved for the reply</string>
+    <string name="qk_04456" formatted="false">System prompt</string>
+    <string name="qk_04457" formatted="false">Tool definitions</string>
+    <string name="qk_04458" formatted="false">MCP tools</string>
+    <string name="qk_04459" formatted="false">Skills</string>
+    <string name="qk_04460" formatted="false">Memory</string>
+    <string name="qk_04461" formatted="false">Conversation history</string>
+    <string name="qk_04462" formatted="false">Injected context</string>
+    <string name="qk_04463" formatted="false">Other</string>
+    <string name="qk_04464" formatted="false">Context is %1$s full — tap to see what is taking the space</string>
+    <string name="qk_04465" formatted="false">Close</string>
+    <string name="qk_04466" formatted="false">Estimated: one token per CJK character, one per four other characters. For share-of-window, not exact counts.</string>
+    <string name="qk_04467" formatted="false">Edit</string>
+    <string name="qk_04468" formatted="false">Read aloud</string>
+    <string name="qk_04469" formatted="false">Save</string>
+    <string name="qk_04470" formatted="false">Edit message</string>
+    <string name="qk_04471" formatted="false">Generating — try again after this turn</string>
+    <string name="qk_04472" formatted="false">Speech not ready. Prepare TTS in voice settings first.</string>
+    <string name="qk_04473" formatted="false">Yesterday</string>
+    <string name="qk_04474" formatted="false">Previous 7 days</string>
+    <string name="qk_04475" formatted="false">Previous 30 days</string>
+    <string name="qk_04476" formatted="false">This turn · %1$s</string>
+    <string name="qk_04477" formatted="false">Temporary chat</string>
+    <string name="qk_04478" formatted="false">Temporary chat, not saved to history</string>
+    <string name="qk_04480" formatted="false">Interrupt</string>
+    <string name="qk_04481" formatted="false">Queue</string>
+    <string name="qk_04482" formatted="false">Steer</string>
+    <string name="qk_04483" formatted="false">Stop the current reply and answer this new message instead</string>
+    <string name="qk_04484" formatted="false">Wait for this turn to finish, then handle queued messages in order</string>
+    <string name="qk_04485" formatted="false">Insert into the current turn; the AI reads it on its next step and adjusts</string>
+    <string name="qk_04486" formatted="false">Send (while generating)</string>
+    <string name="qk_04487" formatted="false">%1$d message(s) queued; they will be sent in order after this turn</string>
+    <string name="qk_04488" formatted="false">Cancel queue</string>
+    <string name="qk_04490" formatted="false">%1$d queued · next: %2$s</string>
+    <string name="qk_04500" formatted="false">Approval needed</string>
+    <string name="qk_04501" formatted="false">Allowed</string>
+    <string name="qk_04502" formatted="false">Denied</string>
+    <string name="qk_04503" formatted="false">Expired</string>
+    <string name="qk_04504" formatted="false">Just this once</string>
+    <string name="qk_04505" formatted="false">Allow this session</string>
+    <string name="qk_04506" formatted="false">Always allow</string>
+    <string name="qk_04507" formatted="false">Deny</string>
+    <string name="qk_04508" formatted="false">Allow</string>
+    <string name="qk_04509" formatted="false">The above is what the AI claims - trust the actual call below instead</string>
+    <string name="qk_04510" formatted="false">…and %1$d more argument(s)</string>
+    <string name="qk_04511" formatted="false">Review note (optional)</string>
+    <string name="qk_04512" formatted="false">Actual call</string>
+    <string name="qk_04513" formatted="false">Waiting for approval…</string>
+    <string name="qk_04514" formatted="false">Risk</string>
+    <string name="qk_04515" formatted="false">Generating a reply, try again later</string>
+    <string name="qk_04516" formatted="false">The previous compaction is still in progress</string>
+    <string name="qk_04517" formatted="false">This model cannot compact context (a cloud model and key are required)</string>
+    <string name="qk_04518" formatted="false">Nothing to compact in this conversation</string>
+    <string name="qk_04519" formatted="false">Compaction failed, please try again later</string>
+    <string name="qk_04520" formatted="false">The conversation changed during compaction, so this result was not applied</string>
+    <string name="qk_04521" formatted="false">Compaction stopped</string>
+    <string name="qk_04522" formatted="false">The above content has been compacted</string>
+    <string name="qk_04523" formatted="false">Compacting…</string>
+    <string name="qk_04524" formatted="false">Compact context</string>
+    <string name="qk_04525" formatted="false">Stop compacting</string>
+    <string name="qk_04526" formatted="false">Pause voice note</string>
+    <string name="qk_04527" formatted="false">Play voice note</string>
+    <string name="qk_04528" formatted="false">Voice note · collapse transcript</string>
+    <string name="qk_04529" formatted="false">Earpiece</string>
+    <string name="qk_04530" formatted="false">Speaker</string>
+    <string name="qk_04531" formatted="false">Transcript</string>
+    <string name="qk_04532" formatted="false">Branch</string>
+    <string name="qk_04533" formatted="false">Create branch</string>
 </resources>

@@ -2,6 +2,23 @@ package com.ai.assistance.quro.ui
 
 import com.ai.assistance.quro.core.cards.CardSdk
 import com.ai.assistance.quro.core.tools.VisualAnswerBridge
+import com.ai.assistance.quro.core.chat.AllowScope
+import com.ai.assistance.quro.core.chat.ApprovalDecision
+import com.ai.assistance.quro.core.chat.ApprovalGate
+import com.ai.assistance.quro.core.chat.ApprovalRequest
+import com.ai.assistance.quro.core.chat.BusySendMode
+import com.ai.assistance.quro.core.chat.SteerPolicy
+import com.ai.assistance.quro.core.chat.TurnOutcome
+import com.ai.assistance.quro.core.chat.TurnOutcomeResolver
+import com.ai.assistance.quro.core.chat.TurnSnapshot
+import com.ai.assistance.quro.core.chat.ContextSegmentKind
+import com.ai.assistance.quro.core.chat.ContextWindowCalculator
+import com.ai.assistance.quro.core.chat.ContextWindowUsage
+import com.ai.assistance.quro.core.chat.CompactionRecord
+import com.ai.assistance.quro.core.chat.CompactionStatus
+import com.ai.assistance.quro.core.chat.ContextCompactor
+import com.ai.assistance.quro.core.chat.QuroMessageLike
+import com.ai.assistance.quro.core.model.QuroToolSummary
 import com.ai.assistance.quro.R
 import com.ai.assistance.quro.util.qstr
 
@@ -26,6 +43,7 @@ import com.ai.assistance.quro.core.QuroConversationMeta
 import com.ai.assistance.quro.core.QuroConversationRepository
 import com.ai.assistance.quro.core.QuroConversationStore
 import com.ai.assistance.quro.core.memory.QuroMemoryEntry
+import com.ai.assistance.quro.core.memory.QuroMemoryKind
 import com.ai.assistance.quro.core.memory.QuroMemoryRepository
 import com.ai.assistance.quro.core.experience.QuroExperienceEngine
 import com.ai.assistance.quro.core.experience.QuroExperienceRepository
@@ -43,6 +61,9 @@ import com.ai.assistance.quro.core.rag.AgentRag
 import com.ai.assistance.quro.core.rag.PromptRagIndex
 import com.ai.assistance.quro.core.soul.QuroSoulPromptEngine
 import com.ai.assistance.quro.core.soul.SoulContext
+import com.ai.assistance.quro.core.soul.BotEvolution
+import com.ai.assistance.quro.core.soul.EvolutionState
+import com.ai.assistance.quro.core.soul.EvolutionFrequency
 import com.ai.assistance.quro.core.QuroPersonaRepository
 import com.ai.assistance.quro.core.QuroReplyNotifier
 import com.ai.assistance.quro.core.QuroReplyWidget
@@ -181,6 +202,12 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // 🔴 可视化工具答案回流桥：用户作答/操作可视化弹窗后，把答案作为新用户消息发回主对话，
         // 由 AI 在下一轮继续（非阻塞、非时间等待）。避免「AI 傻等 120 秒」的阻塞性工具行为。
         VisualAnswerBridge.onAnswer = { answer -> send(answer) }
+
+        // 🔴 工具审批桥：危险工具执行前，工具协程经 ApprovalGate 挂起等决策，
+        // 这里把请求投影到 UI 状态流，由 ChatScreen 弹出审批卡。
+        com.ai.assistance.quro.core.chat.ApprovalGate.listener = { request ->
+            _approvalRequest.value = request
+        }
     }
 
     /**
@@ -332,6 +359,273 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     // 现改为按 conversationId 记录，UI 仅对【当前可见会话】显示打断按钮�?
     private val _busyMap = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     fun isBusy(conversationId: String): Boolean = _busyMap.value[conversationId] == true
+
+    /**
+     * 每个会话「最近一轮」的收尾归因（[TurnOutcome]）。
+     *
+     * 只存**失败类**结论：正常收尾会从表里删掉，UI 据此决定消息流末尾要不要挂一条状态条。
+     * 与 [_error] 的分工：[_error] 是全局横幅（一次性、跨会话），这里是**按会话、按轮次**
+     * 的结论，切回旧会话时依然能看到「上一轮为什么没答上来」。
+     */
+    private val _turnOutcome = MutableStateFlow<Map<String, TurnOutcome>>(emptyMap())
+    val turnOutcome: StateFlow<Map<String, TurnOutcome>> = _turnOutcome.asStateFlow()
+    fun turnOutcomeOf(conversationId: String): TurnOutcome? = _turnOutcome.value[conversationId]
+
+    /**
+     * 待审批的工具请求：危险工具执行前，由 [ApprovalGate] 回调到这里，UI 弹出审批卡。
+     * 只有一个待处理请求（新请求作废旧的），所以用单个可空字段而非 Map。
+     */
+    private val _approvalRequest = MutableStateFlow<ApprovalRequest?>(null)
+    val approvalRequest: StateFlow<ApprovalRequest?> = _approvalRequest.asStateFlow()
+
+    /** 用户对审批卡拍板：允许（带粒度）或拒绝（带审查说明）。 */
+    fun resolveApproval(decision: ApprovalDecision) {
+        val req = _approvalRequest.value ?: return
+        ApprovalGate.resolve(decision, toolName = req.toolName)
+        _approvalRequest.value = null
+        // 🔴 「总是允许」对接（2026-11-04）：
+        //  ① 持久化 —— 旧实现 ALWAYS 只进内存且无人落盘，重启后同一个工具问一遍又一遍；
+        //  ② 联动通道开关 —— 审批卡之外还有 CMS broker / 特权管理器第二道关卡，
+        //     按工具所属通道把权限面板的 CMS / 特权开关同步置「允许」，两道关卡并成一道
+        //     （用户明确要求对接权限面板里那行「特权」开关）。
+        if (decision is ApprovalDecision.Allow && decision.scope == AllowScope.ALWAYS) {
+            com.ai.assistance.quro.core.chat.ApprovalPersist.save(appContext)
+            when (com.ai.assistance.quro.core.chat.ApprovalPolicy.channelFor(req.toolName)) {
+                com.ai.assistance.quro.core.chat.ApprovalChannel.CMS ->
+                    if (QuroPolicyStore.getCms(appContext) != QuroPolicy.ALLOW) {
+                        QuroPolicyStore.setCms(appContext, QuroPolicy.ALLOW)
+                        _error.value = "已同时把权限面板「CMS 能力模块」置为允许（可在 权限模式 面板改回）"
+                    }
+                com.ai.assistance.quro.core.chat.ApprovalChannel.PRIV ->
+                    if (QuroPolicyStore.getPriv(appContext) != QuroPolicy.ALLOW) {
+                        QuroPolicyStore.setPriv(appContext, QuroPolicy.ALLOW)
+                        _error.value = "已同时把权限面板「特权通道」置为允许（可在 权限模式 面板改回）"
+                    }
+                null -> Unit
+            }
+        }
+    }
+
+    /** 用户点了状态条上的「知道了」/ 重新发送时清掉，避免一直挂着。 */
+    fun clearTurnOutcome(conversationId: String) {
+        if (_turnOutcome.value.containsKey(conversationId)) {
+            _turnOutcome.value = _turnOutcome.value - conversationId
+        }
+    }
+
+    /**
+     * 每个会话最近一次发送时的**上下文占用快照**。
+     *
+     * 回答三个问题：系统提示词 / 工具 schema / 历史各占多少、还剩多少、什么时候该压缩。
+     * 只在发送时算一次（那时才知道本轮真实的 sysPrompt 与历史），不做后台轮询。
+     */
+    private val _contextUsage = MutableStateFlow<Map<String, ContextWindowUsage>>(emptyMap())
+    val contextUsage: StateFlow<Map<String, ContextWindowUsage>> = _contextUsage.asStateFlow()
+    fun contextUsageOf(conversationId: String): ContextWindowUsage? = _contextUsage.value[conversationId]
+
+    /**
+     * 摘要压缩的进行中状态（每个会话至多一个）。
+     *
+     * 放在会话粒度而不是全局：切到别的会话时，A 会话的压缩还在跑，B 会话不能因此
+     * 被挡住。完成 / 停止 / 作废后从 map 移除，UI 据此收起「压缩中」提示条。
+     */
+    private val _compaction = MutableStateFlow<Map<String, CompactionRecord>>(emptyMap())
+    val compaction: StateFlow<Map<String, CompactionRecord>> = _compaction.asStateFlow()
+    fun compactionOf(conversationId: String): CompactionRecord? = _compaction.value[conversationId]
+
+    /** 进行中的压缩任务（协程 Job），供停止。 */
+    private val compactionJobs = mutableMapOf<String, Job>()
+
+    /**
+     * 一轮的用量：耗时 + token 拆分。
+     *
+     * 放在会话上一份（不是每条消息一份），因为多轮工具循环里「哪一帧算这轮的钱」本身没有意义 ——
+     * 用户关心的是「我这句话花掉多少」，而不是「第 3 次工具调用花了多少」。
+     *
+     * @param promptTokens / outputTokens / cachedTokens 来自上游 `usage`；-1 = 上游没给（不是 0）。
+     */
+    data class TurnUsage(
+        val durationMs: Long,
+        val promptTokens: Int,
+        val outputTokens: Int,
+        val cachedTokens: Int,
+        val reasoningTokens: Int,
+    ) {
+        val hasTokenInfo: Boolean get() = promptTokens >= 0 || outputTokens >= 0
+    }
+
+    private val _turnUsage = MutableStateFlow<Map<String, TurnUsage>>(emptyMap())
+    val turnUsage: StateFlow<Map<String, TurnUsage>> = _turnUsage.asStateFlow()
+    fun turnUsageOf(conversationId: String): TurnUsage? = _turnUsage.value[conversationId]
+
+    /** 技能注入段的**唯一**格式化实现（2026-11-04 已改 Catalog 形态，见 QuroSkillStore.skillsCatalog）。 */
+
+    /**
+     * 估算一次请求的上下文构成。
+     *
+     * 系统提示词 / 内置工具 / 消息 三段，技能与记忆全埋进「系统提示词」里，
+     * MCP 工具跟内置工具混在一起 —— 用户看不出「为什么 30k 还没开始聊」。
+     * 现在拆成：系统提示词 / 系统工具 / MCP 工具 / 技能 / 记忆 / 消息。
+     * 技能与记忆的正文确实拼在系统提示词里下发，这里按 token 估算**从系统提示词里
+     * 减出去**单列（estimateTokens 近似线性，误差 ±几个 token，足够看结构占比）。
+     *
+     * @param sysPrompt 本轮真正下发的那一份（本地模型是被裁剪过的极简版，必须用它而不是原始版）。
+     * @param personaId 当前人格卡 id（技能/记忆按它取数；与注入时同一数据源）。
+     */
+    /**
+     * 🔴 打开会话/进 App 时**立即重算**上下文占用（2026-11-05 用户实测：退出重开后
+     *   占用数据消失，必须再聊一轮才出现）。send 时算的快照只存在内存，这里补上
+     *   「装载即算」：用与 send 完全同一口径（buildSystemPrompt + 全量历史）。
+     */
+    fun recomputeContextUsage(convId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val cfg = repo.load()
+                val sysPrompt = buildSystemPrompt(cfg)
+                val usage = computeContextUsage(cfg, sysPrompt, store.all(), chatPersonaId())
+                _contextUsage.value = _contextUsage.value + (convId to usage)
+            }
+        }
+    }
+    private fun computeContextUsage(
+        cfg: QuroModelConfig,
+        sysPrompt: String,
+        history: List<QuroMessage>,
+        personaId: String,
+    ): ContextWindowUsage {
+        val specs = runCatching { registry.specs() }.getOrDefault(emptyList())
+        // MCP 通道的元工具（mcp_call / mcp_list_tools / mcp_* / mcp__<server>__*）单列，
+        val (mcpSpecs, builtinSpecs) = specs.partition { it.name.startsWith("mcp") }
+        fun specChars(list: List<com.ai.assistance.quro.core.QuroToolSpec>): String =
+            if (list.isEmpty()) "" else list.joinToString("\n") {
+                "${it.name}:${it.description}${it.parametersJson}"
+            }
+        val msgChars = runCatching {
+            history.joinToString("\n") { m ->
+                buildString {
+                    append(m.content)
+                    m.reasoning?.let { append('\n').append(it) }
+                    m.toolCalls?.forEach { append('\n').append(it.name).append(' ').append(it.arguments) }
+                }
+            }
+        }.getOrDefault("")
+
+        // 技能段 / 记忆段：与注入同一数据源重算，再从系统提示词里减出去单列。
+        // 🔴 技能注入已改 Catalog 形态（2026-11-04），口径同步。
+        val persona = activePersona()
+        val skillsText = if (cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP") ""
+        else QuroSkillStore.skillsCatalog(appContext, personaId)
+        val memoryText = if (persona?.memoryEnabled != false) buildString {
+            persona?.soul?.trim()?.takeIf { it.isNotBlank() }?.let { append(it).append('\n') }
+            memoryRepo.loadForPersona(personaId).joinTo(this, "\n") { it.content }
+        }.toString() else ""
+
+        val usage = ContextWindowCalculator.build(
+            parts = mapOf(
+                ContextSegmentKind.SYSTEM_PROMPT to sysPrompt,
+                ContextSegmentKind.SYSTEM_TOOLS to specChars(builtinSpecs),
+                ContextSegmentKind.MCP_TOOLS to specChars(mcpSpecs),
+                ContextSegmentKind.SKILLS to skillsText,
+                ContextSegmentKind.MEMORY to memoryText,
+                ContextSegmentKind.MESSAGES to msgChars,
+            ),
+            window = cfg.contextWindow,
+        )
+        // 把技能/记忆从「系统提示词」段里减出去（近似线性，coerce 保底非负）。
+        val movedTokens = usage.segments
+            .filter { it.kind == ContextSegmentKind.SKILLS || it.kind == ContextSegmentKind.MEMORY }
+            .sumOf { it.tokens }
+        val movedChars = skillsText.length + memoryText.length
+        val adjusted = usage.segments.map { seg ->
+            if (seg.kind == ContextSegmentKind.SYSTEM_PROMPT) seg.copy(
+                chars = (seg.chars - movedChars).coerceAtLeast(0),
+                tokens = (seg.tokens - movedTokens).coerceAtLeast(0),
+            ) else seg
+        }
+        return usage.copy(segments = adjusted)
+    }
+
+    /**
+     * 结算本轮归因并落到 [_turnOutcome]。
+     *
+     * 统计口径（全部取自**已有数据**，不额外请求、不额外计时）：
+     * - 可见正文 = 本轮新增的、非 hidden 的 assistant 消息正文，**扣掉渲染占位符**
+     *   （`(已思考完毕)` 这类串是兜底文案，不是模型说的话，算进去会把「只思考没回答」洗成正常）；
+     * - 思考字符 = 同一条消息的 reasoning；
+     * - 工具条数 / 失败条数 = 本轮 toolCalls，失败判定直接复用 [QuroToolSummary] 的状态机，
+     *   保证「卡片上标红的」与「归因里算失败的」是同一套标准。
+     *
+     * @param baseCount ask 之前的 buf 长度，用来切出「本轮新增」。
+     */
+    private fun recordTurnOutcome(
+        conversationId: String,
+        buf: QuroConversationStore,
+        baseCount: Int,
+        stoppedByUser: Boolean,
+        errorMessage: String?,
+        meta: com.ai.assistance.quro.core.QuroLlmMeta,
+        malformedToolCalls: Int,
+        durationMs: Long,
+    ) {
+        val fresh = runCatching { buf.all().drop(baseCount) }.getOrDefault(emptyList())
+        var visibleChars = 0
+        var reasoningChars = 0
+        var toolCalls = 0
+        var toolFailures = 0
+
+        fresh.forEach { m ->
+            if (m.role == "assistant" && !m.hidden) {
+                val body = m.content.trim()
+                if (body.isNotEmpty() && body !in TurnOutcomeResolver.NO_CONTENT_PLACEHOLDERS) {
+                    visibleChars += body.length
+                }
+                reasoningChars += m.reasoning?.trim()?.length ?: 0
+            }
+            m.toolCalls?.forEach { c ->
+                toolCalls++
+                // 结果未回填 = 还在跑（本轮结束时仍未回填说明被打断），不计失败、不计成功。
+                if (!c.result.isNullOrBlank()) {
+                    val st = QuroToolSummary.of(c.name, c.arguments, c.result, c.durationMs).status
+                    if (st == QuroToolSummary.Status.ERROR) toolFailures++
+                }
+            }
+        }
+
+        val outcome = TurnOutcomeResolver.resolve(
+            TurnSnapshot(
+                stoppedByUser = stoppedByUser,
+                visibleChars = visibleChars,
+                reasoningChars = reasoningChars,
+                toolCalls = toolCalls,
+                toolFailures = toolFailures,
+                malformedToolCalls = malformedToolCalls,
+                finishReason = meta.finishReason,
+                errorMessage = errorMessage,
+            )
+        )
+        // 用量：耗时一定有，token 只在「上游回了 usage」时才有值（-1 表示未知，不当 0 用）。
+        _turnUsage.value = _turnUsage.value + (
+            conversationId to TurnUsage(
+                durationMs = durationMs,
+                promptTokens = meta.promptTokens,
+                outputTokens = meta.completionTokens,
+                cachedTokens = meta.cachedTokens,
+                reasoningTokens = meta.reasoningTokens,
+            )
+            )
+        // 正常收尾不留状态条：成功的一轮不该多一个「一切正常」的牌子。
+        _turnOutcome.value = if (outcome == TurnOutcome.OK) {
+            _turnOutcome.value - conversationId
+        } else {
+            _turnOutcome.value + (conversationId to outcome)
+        }
+        QuroDiag.log(
+            "TURN_OUTCOME",
+            "convId=$conversationId outcome=$outcome visible=$visibleChars reasoning=$reasoningChars " +
+                "tools=$toolCalls fail=$toolFailures finish=${meta.finishReason}",
+        )
+    }
+
     // [D5] 统一错误通道：ViewModel 捕获的异常经此暴露给 UI（错误横幅），并配合 Log.e 记录上下文�?
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
@@ -355,6 +649,40 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     var activeConversationId: String = ""
         private set
     private val uiPrefs = appContext.getSharedPreferences("quro_ui", Context.MODE_PRIVATE)
+
+    // ═══ 生成中再发送：打断 / 排队 / 引导 ═══
+    // 放在 uiPrefs 之后声明——Kotlin 属性按声明顺序初始化，提前引用会拿到未初始化实例。
+    private val _busySendMode = MutableStateFlow(
+        BusySendMode.fromKey(uiPrefs.getString("busy_send_mode", null))
+    )
+    val busySendMode: StateFlow<BusySendMode> = _busySendMode.asStateFlow()
+    fun setBusySendMode(mode: BusySendMode) {
+        if (_busySendMode.value == mode) return
+        _busySendMode.value = mode
+        uiPrefs.edit { putString("busy_send_mode", mode.key) }
+        QuroDiag.log("BUSYSEND", "mode=${mode.key}")
+    }
+
+    /** 排队中的一条消息。只存「要发什么」，不存会话状态——会话由 map 的 key 表达。
+     *  contextMessage 是发送时构建的隐藏上下文（工作区/ACI），attachedSkills 是本条消息
+     *  选中的技能，两者都必须跟着一起排队，轮到它时才不会丢（技能尤其不能丢）。 */
+    data class QueuedSend(
+        val text: String,
+        val attachments: List<QuroAttachment> = emptyList(),
+        val contextMessage: String? = null,
+        val attachedSkills: List<QuroSkill> = emptyList(),
+    )
+
+    private val _queuedSends = MutableStateFlow<Map<String, List<QueuedSend>>>(emptyMap())
+    /** 按会话的待发队列；供输入框上方那条「排队中」提示渲染。 */
+    val queuedSends: StateFlow<Map<String, List<QueuedSend>>> = _queuedSends.asStateFlow()
+    fun queuedOf(conversationId: String): List<QueuedSend> = _queuedSends.value[conversationId].orEmpty()
+
+    /**
+     * 已插入当前轮、但还没被模型读到的「引导消息」id（按会话）。
+     * 只用于收尾时判断要不要补跑一轮——不进历史、不落盘。
+     */
+    private val steerWaits = mutableMapOf<String, MutableList<String>>()
 
     // 注：原先这里维护 :genui 模块的「每会话 GenUiController / WebView 卡片池 / 自愈重写」
     // 一整套链路。该模块已随「删除全部旧 GenUI + 内置新 GenUI-Agent」一起移除，
@@ -403,11 +731,51 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         uiPrefs.edit { putBoolean("sub_agent_enabled", on) }
     }
 
-    // 外观与对话设置：深色模式（全局主题，需上提�? QuroApp 根部主题处生效）
-    private val _darkMode = MutableStateFlow(uiPrefs.getBoolean("dark_mode", false))
-    val darkModePref: StateFlow<Boolean> = _darkMode.asStateFlow()
-    fun isDarkMode(): Boolean = _darkMode.value
-    fun setDarkMode(on: Boolean) { _darkMode.value = on; uiPrefs.edit { putBoolean("dark_mode", on) } }
+    // 外观与对话设置：深色模式（全局主题，需上提到 QuroApp 根部主题处生效）
+    // 三态："light" 浅色 / "dark" 深色 / "system" 跟随系统（默认 system）。
+    // 向后兼容：旧版存的是布尔 dark_mode（true=深色 false=浅色），迁移时按值映射。
+    private val _darkMode = MutableStateFlow(migrateDarkModePref())
+    val darkModePref: StateFlow<String> = _darkMode.asStateFlow()
+    fun isDarkMode(): Boolean = when (_darkMode.value) {
+        "dark" -> true
+        "light" -> false
+        else -> isSystemDark()
+    }
+
+    /** 非 Composable 的系统深浅判断（ViewModel 里不能调 Compose 的 isSystemInDarkTheme）。 */
+    private fun isSystemDark(): Boolean {
+        val mode = appContext.resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK
+        return mode == android.content.res.Configuration.UI_MODE_NIGHT_YES
+    }
+    fun darkModeTriState(): String = _darkMode.value
+    fun setDarkModeTriState(mode: String) {
+        _darkMode.value = mode
+        uiPrefs.edit { putString("dark_mode", mode) }
+    }
+    fun setDarkMode(on: Boolean) = setDarkModeTriState(if (on) "dark" else "light")
+
+    /** 把旧布尔 dark_mode 迁移为三态字符串；无旧值则默认 "system"。 */
+    private fun migrateDarkModePref(): String {
+        val existing = uiPrefs.all["dark_mode"] ?: return "system"
+        return when (existing) {
+            is String -> existing
+            true -> "dark"
+            false -> "light"
+            else -> "system"
+        }
+    }
+
+    // 外观与对话设置：主题强调色（hex，不含 #，默认陶土 "C25A38"）。
+    // 运行时注入 QuroTheme，切换后全站（对话 + 设置）立即跟随。
+    private val _accentColor = MutableStateFlow(uiPrefs.getString("accent_color", "C25A38") ?: "C25A38")
+    val accentColorPref: StateFlow<String> = _accentColor.asStateFlow()
+    fun getAccentColor(): String = _accentColor.value
+    fun setAccentColor(hex: String) {
+        val h = hex.trim().removePrefix("#").takeIf { it.length == 6 } ?: return
+        _accentColor.value = h
+        uiPrefs.edit { putString("accent_color", h) }
+    }
 
     // 外观与对话设置：回复完成提示�?
     private val _soundOn = MutableStateFlow(uiPrefs.getBoolean("sound_on", true))
@@ -472,7 +840,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             _convs.value = _convs.value.toMutableList().also { list ->
                 list[idx] = list[idx].copy(genUiType = type)
             }
-            runCatching { convRepo.saveAll(_convs.value) }
+            runCatching { persistConversations() }
         }
     }
 
@@ -485,7 +853,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             _convs.value = _convs.value.toMutableList().also { list ->
                 list[idx] = list[idx].copy(historyRounds = n)
             }
-            runCatching { convRepo.saveAll(_convs.value) }
+            runCatching { persistConversations() }
         }
     }
 
@@ -645,7 +1013,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         )
         val conv = QuroPersistedConversation(id = id, title = "[${platform.label}] $userId", createdAt = now, updatedAt = now, messages = listOf(welcome))
         _convs.value = _convs.value + conv
-        convRepo.saveAll(_convs.value)
+        persistConversations()
         emitMeta()
         return id
     }
@@ -670,7 +1038,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         val newList = _convs.value.toMutableList()
         newList[idx] = updated
         _convs.value = newList
-        convRepo.saveAll(_convs.value)
+        persistConversations()
         emitMeta()
         // 如果追加的是当前可见会话，同步刷�? _messages
         if (_currentId.value == conversationId) {
@@ -694,12 +1062,78 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         activeConversationId = id
         _historyRounds.value = null
         _genUiType.value = conv.genUiType
+        // 🔴 新会话不绑定人格：跟随全局激活人格（用户在对话内选人格时才写入绑定）
+        _boundPersonaId.value = ""
         store.clear()
         store.add(welcome)
         _messages.value = store.all()
-        convRepo.saveAll(_convs.value)
+        persistConversations()
         emitMeta()
     }
+
+    private fun persistConversations() {
+        // 临时对话在写入前被剔除：磁盘上永远看不到它，也就没有「删不干净」的窗口
+        // （先落盘再删要处理应用被杀的时刻，过滤则天然没有这个窗口）。
+        runCatching { convRepo.saveAll(_convs.value.filterNot { it.ephemeral }) }
+    }
+
+    /**
+     * 新建一个**临时对话**：内容只在内存里，绝不落盘。
+     *
+     * 与普通新建的唯一差别是 `ephemeral = true`，写入时被
+     * [persistConversations] 过滤掉；其余行为（欢迎语、切会话、生成）完全一致，
+     * 这样临时对话不会变成「功能受限的残废版」。
+     *
+     * 退出方式就是普通地切到别的会话或再新建 —— 不需要额外的「退出临时对话」动作，
+     * 因为磁盘上从来没有它，切走即消失。
+     */
+    fun newTemporaryConversation() {
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        val welcome = QuroMessage(role = "assistant", content = defaultWelcome())
+        val conv = QuroPersistedConversation(
+            id = id,
+            title = qstr(R.string.qk_04477),
+            createdAt = now,
+            updatedAt = now,
+            genUiType = "normal",
+            messages = listOf(welcome),
+            ephemeral = true,
+        )
+        _convs.value = _convs.value + conv
+        _currentId.value = id
+        activeConversationId = id
+        _historyRounds.value = null
+        _genUiType.value = "normal"
+        store.clear()
+        store.add(welcome)
+        _messages.value = store.all()
+        emitMeta()
+    }
+
+    /**
+     * 空串 = 跟随全局激活人格（旧行为）；非空 = 本会话的身份/灵魂/记忆/技能/默认模型
+     * 全部按绑定的那张人格卡取（send/buildSystemPrompt/上下文窗口分段统一走它）。
+     */
+    private val _boundPersonaId = MutableStateFlow("")
+
+    /** 人格选择器选人格时同时绑定到当前会话（每个对话一个固定人格）。 */
+    fun bindConversationPersona(personaId: String) {
+        _boundPersonaId.value = personaId
+        val cid = _currentId.value ?: return
+        val convs = _convs.value.toMutableList()
+        val idx = convs.indexOfFirst { it.id == cid }
+        if (idx >= 0) {
+            convs[idx] = convs[idx].copy(personaId = personaId, updatedAt = System.currentTimeMillis())
+            _convs.value = convs
+            persistConversations()
+        }
+        // 绑定人格变化：buildSystemPrompt 每轮现算（无缓存），无需失效调用
+    }
+
+    /** 本会话应使用的 personaId（绑定优先，空则全局激活人格）。 */
+    private fun chatPersonaId(): String =
+        _boundPersonaId.value.ifBlank { personaRepo.getActiveId() }
 
     fun selectConversation(id: String) {
         val from = _currentId.value
@@ -710,6 +1144,10 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // 因此切走时旧协程继续写自己的 buf，不会污染新会话；切回时从持久化 reload 即可看到进度�?
         _currentId.value = id
         activeConversationId = id
+        // 🔴 载入该会话绑定的人格卡（空=跟随全局激活人格）
+        _boundPersonaId.value = conv.personaId
+        // 绑定人格变化：buildSystemPrompt 每轮现算（无缓存），无需失效调用
+        recomputeContextUsage(id)
         store.clear()
         // 载入该会话已保存的「保留对话轮数」设置（null=跟随模型默认�?
         _historyRounds.value = conv.historyRounds
@@ -726,6 +1164,9 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     fun deleteConversation(id: String) {
         sendJobs[id]?.cancel(); sendJobs.remove(id)
         liveBuffers.remove(id)
+        // 会话没了，排队中的消息与未读引导也一并作废——否则收尾续跑会往一个不存在的会话里发
+        _queuedSends.value = _queuedSends.value - id
+        steerWaits.remove(id)
         val remaining = _convs.value.filter { it.id != id }
         _convs.value = remaining
         if (_currentId.value == id) {
@@ -735,7 +1176,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             }
             selectConversation(remaining.maxByOrNull { it.updatedAt }!!.id)
         }
-        convRepo.saveAll(_convs.value)
+        persistConversations()
         emitMeta()
     }
 
@@ -811,16 +1252,352 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             convs[idx] = convs[idx].copy(messages = msgs, updatedAt = System.currentTimeMillis())
             _convs.value = convs
         }
-        convRepo.saveAll(_convs.value)
+        persistConversations()
         emitMeta()
+    }
+
+    /**
+     * 把「该消息及之前的所有可见消息」复制到一个**新会话**，原会话保持不变。
+     *
+     * 这样用户得到一条从该消息点分叉出的平行对话，可继续探索另一种走向，
+     * 而原对话历史不会被破坏。新会话标题标注「分支」以便在侧栏识别。
+     */
+    fun createBranchFromMessage(ids: List<String>) {
+        val cid = _currentId.value ?: return
+        if (ids.isEmpty()) return
+        val all = store.all()
+        // 定位这条消息（聚合气泡可能含多个 uid，取最早出现的一个作为分支起点）。
+        val startIdx = ids.mapNotNull { uid -> all.indexOfFirst { it.id == uid }.takeIf { i -> i >= 0 } }
+            .minOrNull() ?: return
+        // 复制该消息及之前的可见消息（排除隐藏管道消息，避免把工具原始结果带进新分支）。
+        val copied = all.take(startIdx + 1)
+            .filter { !it.hidden }
+            .map { it.copy(id = UUID.randomUUID().toString(), toolCallId = null) }
+
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        val title = "${qstr(R.string.qk_04532)} · ${_convs.value.firstOrNull { it.id == cid }?.title ?: ""}"
+        val conv = QuroPersistedConversation(
+            id = id,
+            title = title.take(30),
+            createdAt = now,
+            updatedAt = now,
+            genUiType = _genUiType.value,
+            messages = copied,
+        )
+        _convs.value = _convs.value + conv
+        _currentId.value = id
+        activeConversationId = id
+        _historyRounds.value = null
+        store.clear()
+        store.addAll(copied)
+        _messages.value = store.all()
+        persistConversations()
+        emitMeta()
+        QuroDiag.log("BRANCH", "from=$cid to=$id copied=${copied.size}")
+    }
+
+    /**
+     * 就地修改一条消息的正文。
+     *
+     * 只改内容、不重新生成 —— 「改完重发」是另一条路径（重新发送会新建一轮），
+     * 两者混在一起，用户会搞不清「我改的是历史，还是又发了一条」。
+     *
+     * 生成中直接拒绝：此时 store 正被流式写入反复覆盖，改了也会被下一帧写回，
+     * 表现为「改了没反应」。
+     */
+    fun editMessage(id: String, newText: String) {
+        val cid = _currentId.value ?: return
+        val text = newText.trim()
+        if (text.isEmpty()) return
+        if (sendJobs[cid]?.isActive == true) return
+        if (store.all().none { it.id == id }) return
+        store.update(id) { it.copy(content = text) }
+        val msgs = store.all()
+        _messages.value = msgs
+        val convs = _convs.value.toMutableList()
+        val idx = convs.indexOfFirst { it.id == cid }
+        if (idx >= 0) {
+            convs[idx] = convs[idx].copy(messages = msgs, updatedAt = System.currentTimeMillis())
+            _convs.value = convs
+        }
+        persistConversations()
+        emitMeta()
+    }
+
+    /**
+     * 手动触发摘要压缩。
+     *
+     *  1. 取当前会话的可见消息（system 与 hidden 不参与摘要，但 system 会原样保留）；
+     *  2. 记录发起时的内容指纹 [CompactionRecord.inputDigest]；
+     *  3. 用当前模型生成一段历史摘要（调用 LLM，非流式）；
+     *  4. 完成时复核指纹——若对话又变了，本次作废（[CompactionStatus.INVALIDATED]）；
+     *  5. 成功则：把「被摘要的那段」替换成摘要消息，并在位点插入一条
+     *     「以上内容已压缩」的分隔消息（用户可见，但不喂回模型）。
+     *
+     * 边界：
+     *  - 正在生成回复时拒绝（busy），避免与流式写回打架；
+     *  - 上一次压缩仍在进行时拒绝（每会话至多一个）；
+     *  - 消息太少（不足一轮）时拒绝，没东西可摘要。
+     */
+    /**
+     * 触发一次上下文压缩。**返回值即给用户的即时反馈**：
+     * - null = 已受理，真正开始（进行中状态见 [compaction]）；
+     * - 非 null = 没开始的原因（人话），调用方**必须**Toast 给用户 ——
+     *   🔴 2026-11-04 修复「点了没反应」：旧实现只写 _error 横幅，而横幅被
+     *   上下文弹窗盖住/4 秒自动消失，用户什么都看不见，等于静默失败。
+     */
+    fun compactContext(): String? {
+        val cid = _currentId.value ?: return "当前没有会话"
+        if (cid.isBlank()) return "当前没有会话"
+        if (isBusy(cid)) {
+            return qstr(R.string.qk_04515)
+        }
+        if (compactionJobs.containsKey(cid)) {
+            return qstr(R.string.qk_04516)
+        }
+        val cfg = repo.load()
+        // 本地离线模型（MNN / llama.cpp）没有可用的「生成摘要」的云端通道，且走本地推理。
+        val isLocalModel = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
+        if (isLocalModel) {
+            return qstr(R.string.qk_04517)
+        }
+        if (cfg.apiKey.isBlank()) {
+            return qstr(R.string.qk_04517)
+        }
+        val all = store.all()
+        // system 提示词不参与摘要（它是设定不是对话），但必须原样保留。
+        val system = all.filter { it.role.equals("system", true) }
+        val visible = all.filter { !it.hidden && !it.role.equals("system", true) }
+        // 至少一轮（一条 user + 一条 assistant）才有摘要价值。
+        if (visible.count { it.role == "user" } < 1 || visible.none { it.role == "assistant" }) {
+            return qstr(R.string.qk_04518)
+        }
+        // 最近 2 轮保留原文（保护近因），更早的才参与摘要。
+        val tail = ContextCompactor.preservedTail(visible, preserveRounds = 2)
+        val tailIds = tail.map { it.id }.toSet()
+        val toSummarize = visible.filter { it.id !in tailIds }
+        if (toSummarize.isEmpty()) {
+            return qstr(R.string.qk_04518)
+        }
+
+        val record = CompactionRecord(
+            id = UUID.randomUUID().toString(),
+            conversationId = cid,
+            inputMessageCount = toSummarize.size,
+            inputDigest = ContextCompactor.digest(toSummarize),
+            tokensBefore = ContextCompactor.estimateTokens(toSummarize),
+            summaryMethod = "llm_summary",
+        )
+        _compaction.value = _compaction.value + (cid to record)
+
+        val job = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // 🔴 2026-11-06：generateSummary 的失败原因不再被 runCatching 吞成空串——
+                //    异常直接落到下面的 catch，把真实原因（网络/密钥/厂商 400）展示给用户。
+                val summary = generateSummary(cfg, toSummarize)
+                if (summary.isBlank()) {
+                    finishCompaction(cid, record.copy(status = CompactionStatus.FAILED, reason = qstr(R.string.qk_04519)))
+                    _error.value = qstr(R.string.qk_04519)
+                    QuroDiag.log("COMPACT", "摘要为空：检查模型 " + cfg.model + " 是否可用")
+                    return@launch
+                }
+                // 完成复核指纹：压缩期间对话又变了 → 作废，不替换。
+                val nowVisible = store.all().filter { !it.hidden && !it.role.equals("system", true) }
+                val nowTail = ContextCompactor.preservedTail(nowVisible, preserveRounds = 2)
+                val nowTailIds = nowTail.map { it.id }.toSet()
+                val nowToSummarize = nowVisible.filter { it.id !in nowTailIds }
+                if (ContextCompactor.isStale(record, nowToSummarize)) {
+                    finishCompaction(cid, record.copy(status = CompactionStatus.INVALIDATED, reason = qstr(R.string.qk_04520)))
+                    return@launch
+                }
+                applyCompaction(cid, record, toSummarize, summary)
+                finishCompaction(cid, record.copy(status = CompactionStatus.COMPLETED, summary = summary))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                finishCompaction(cid, record.copy(status = CompactionStatus.CANCELLED, reason = qstr(R.string.qk_04521)))
+                throw e
+            } catch (e: Exception) {
+                finishCompaction(cid, record.copy(status = CompactionStatus.FAILED, reason = e.message ?: qstr(R.string.qk_04519)))
+                // 🔴 失败不再静默：横幅 + 用户下次点压缩按钮时也能拿到原因（stopCompaction 不清 FAILED 记录）。
+                _error.value = "压缩失败：${e.message ?: qstr(R.string.qk_04519)}"
+                QuroDiag.log("COMPACT", "generateSummary 异常: " + (e.message ?: "") + " model=" + cfg.model + " provider=" + cfg.provider)
+            }
+        }
+        compactionJobs[cid] = job
+        return null // 已受理
+    }
+
+    /** 停止当前会话正在进行的压缩。 */
+    fun stopCompaction() {
+        val cid = _currentId.value ?: return
+        compactionJobs.remove(cid)?.cancel()
+        // cancel 会在协程里走 CancellationException → finishCompaction 置 CANCELLED；
+        // 这里兜底立刻清一次，避免极端时序下状态残留。
+        _compaction.value[cid]?.let { r ->
+            if (r.status == CompactionStatus.RUNNING) {
+                _compaction.value = _compaction.value - cid
+            }
+        }
+    }
+
+    /**
+     * 自动压缩（2026-11-06 新增）——审计结论：此前全仓库**不存在**任何「超限 → 压缩」
+     * 的触发链，`shouldCompact` 只驱动 UI 提示条/圆环颜色，且 contextWindow 默认 1M
+     * 使判据恒为 false，所以「自动压缩根本不起作用」不是 bug 而是功能缺失。
+     *
+     * 触发时机：每轮回复收尾（send() finally）——此时缓冲刚同步回 store、无并发写。
+     * 触发条件（全部满足才压）：
+     *  1. 云端模型且已配 Key（与手动压缩同门槛，本地模型走 toLlmMessages 的裁剪兜底）；
+     *  2. 当前会话的 usage 已进入「该压缩」区间（free < 预留×2，即再聊一两轮就满）；
+     *  3. 该会话没有压缩/生成在进行；
+     *  4. 可压缩内容确实存在（≥3 轮，复用手动压缩的早退校验）。
+     * 手动压缩有完整的指纹/作废/状态机，这里**直接复用** compactContext()，不另起一套。
+     *
+     * @return 真正发起了自动压缩时返回 true（仅供日志）。
+     */
+    private fun maybeAutoCompact(cid: String): Boolean {
+        // 只对当前可见会话触发（compactContext 内部也取 _currentId，提前对齐防串台）。
+        if (cid != _currentId.value) return false
+        val usage = _contextUsage.value[cid] ?: return false
+        if (!usage.shouldCompact) return false
+        val cfg = repo.load()
+        if (cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP") return false
+        if (cfg.apiKey.isBlank()) return false
+        if (isBusy(cid)) return false
+        if (compactionJobs.containsKey(cid)) return false
+        // 自动压缩不打扰用户：失败只落 CompactionRecord + 诊断日志（compactContext 内部
+        // 会写 _error 横幅——自动压缩也应当让用户知道为什么历史突然变成了一条摘要）。
+        QuroDiag.log("COMPACT", "auto: 触发自动压缩 conv=$cid used=${usage.used} window=${usage.window}")
+        return compactContext() == null
+    }
+
+    /** 生成历史摘要：复用当前主模型，一次性非流式调用。
+     *  🔴 2026-11-06 修复：旧实现 (1) 未透传 provider——非 OpenAI 厂商走错思考参数计划
+     *  直接 400；(2) Error 结果被 `else -> ""` 吞成「摘要为空」，真实原因（密钥/端点/厂商）
+     *  用户永远看不到，表现就是「压缩失败/压缩不起作用」。现在把失败原因如实抛出。
+     *  同时抽成 manual/auto 共用：automatic=false 时失败不弹横幅只落诊断（避免自动压缩
+     *  频繁打扰），manual=true 保持原有 Toast/横幅反馈。 */
+    private suspend fun generateSummary(cfg: QuroModelConfig, messages: List<QuroMessageLike>): String {
+        val text = messages.joinToString("\n\n") { "${it.role}: ${it.textContent}" }
+        val prompt = buildString {
+            append("请把下面这段对话历史压缩成一段简洁的中文摘要，保留：关键事实、用户偏好、待办、以及尚未完成的结论。")
+            append("不要编造，不要新增信息，只压缩既有内容。直接输出摘要正文，不要任何解释或标记。\n\n")
+            append("对话历史：\n").append(text.take(24000))
+        }
+        val res = QuroLlmClient().chat(
+            cfg.baseUrl, cfg.apiKey, cfg.model,
+            listOf(QuroChatMessage("user", prompt)),
+            cfg.temperature, 1200, emptyList(),
+            provider = cfg.provider,
+        )
+        return when (res) {
+            is QuroLlmResult.Text -> res.content.trim()
+            is QuroLlmResult.Error ->
+                throw IllegalStateException(res.message.ifBlank { "模型返回错误" })
+            else -> ""
+        }
+    }
+
+    /** 把被摘要的消息替换成一条摘要消息，并在其后插入「以上内容已压缩」分隔消息。
+     *
+     * 🔴 2026-11-06 修复「压缩成功但下一轮被旧历史覆盖」：
+     *  1. 旧实现只改共享 store / _convs，不动 liveBuffers——而 send() 的种子优先取
+     *     liveBuffers[cid]，只要该会话在线缓冲还活着，压缩结果下一轮就被旧快照冲掉；
+     *  2. 旧实现把非 system 消息整体重排（hidden 工具消息被挪到末尾），破坏
+     *     assistant[tool_calls] ↔ role=tool 时序，pruneOrphanToolMessages 可能整组剔除。
+     *     现改为**原地保序删除**：只移除被摘要的消息、在正确位点插入摘要+分隔，
+     *     其余消息相对顺序逐字不动。
+     */
+    private fun applyCompaction(
+        cid: String,
+        record: CompactionRecord,
+        toSummarize: List<QuroMessage>,
+        summary: String,
+    ) {
+        val summarizedIds = toSummarize.map { it.id }.toSet()
+        val summaryMsg = QuroMessage(
+            role = "system",
+            content = "〔前文摘要〕\n$summary",
+            hidden = true, // 用户不逐字看摘要，看的是下方分隔线；但摘要要喂给模型。
+        )
+        val divider = QuroMessage(
+            role = "assistant",
+            content = qstr(R.string.qk_04522),
+            hidden = false,
+            excludeFromLlm = true, // 分隔线是给用户看的，不进模型。
+        )
+
+        // ── 1. 原地保序重建共享 store ──
+        val oldAll = store.all()
+        val rebuilt = mutableListOf<QuroMessage>()
+        var dividerInserted = false
+        for (m in oldAll) {
+            if (m.id in summarizedIds) {
+                // 在被压缩段的原位置插入摘要 + 分隔线（只插一次，取第一处位点）。
+                if (!dividerInserted) {
+                    rebuilt.add(summaryMsg)
+                    rebuilt.add(divider)
+                    dividerInserted = true
+                }
+                continue
+            }
+            rebuilt.add(m)
+        }
+        if (!dividerInserted) {
+            // 极端时序：被摘要消息已被并发清空 → 摘要仍要落位，否则白压。
+            rebuilt.add(0, divider)
+            rebuilt.add(0, summaryMsg)
+        }
+        store.loadSilently(rebuilt)
+
+        // ── 2. 同步该会话的在线缓冲（否则下一轮种子用旧快照，压缩被覆盖）──
+        liveBuffers[cid]?.loadSilently(rebuilt)
+
+        // ── 3. 回写内存与持久化 ──
+        _messages.value = store.all()
+        val convs = _convs.value.toMutableList()
+        val idx = convs.indexOfFirst { it.id == cid }
+        if (idx >= 0) {
+            convs[idx] = convs[idx].copy(messages = rebuilt, updatedAt = System.currentTimeMillis())
+            _convs.value = convs
+        }
+        persistConversations()
+        // ── 4. 立即重算上下文占用：旧实现压缩后圆环/明细停留在压缩前快照，
+        //       用户看一眼「数字没变」就判定压缩没用。 ──
+        val tokensAfter = ContextCompactor.estimateTokens(rebuilt)
+        recomputeContextUsage(cid)
+        emitMeta()
+        QuroDiag.log("COMPACT", "applyCompaction ok conv=$cid before=${record.tokensBefore} after≈$tokensAfter msgs=${oldAll.size}->${rebuilt.size}")
+    }
+
+    private fun finishCompaction(cid: String, record: CompactionRecord) {
+        _compaction.value = _compaction.value + (cid to record)
+        compactionJobs.remove(cid)
+    }
+
+    /**
+     * 清除当前会话的压缩终态记录（COMPLETED/FAILED/INVALIDATED）。
+     * 🔴 2026-11-06 新增：终态反馈（Toast）展示完就该清掉，否则这条记录会一直留在
+     * map 里——下次打开压缩面板时 `compactionOf()` 又返回旧终态，UI 再弹一次同样的
+     * Toast。RUNNING 状态不能清（那是进行中标记）。
+     */
+    fun clearCompactionRecord() {
+        val cid = _currentId.value ?: return
+        _compaction.value[cid]?.let { r ->
+            if (r.status != CompactionStatus.RUNNING) {
+                _compaction.value = _compaction.value - cid
+            }
+        }
     }
 
     fun deleteAllConversations() {
         sendJobs.values.forEach { it.cancel() }; sendJobs.clear()
         liveBuffers.clear()
+        _queuedSends.value = emptyMap()
+        steerWaits.clear()
         _convs.value = emptyList()
         newConversation()
-        convRepo.saveAll(_convs.value)
+        persistConversations()
         emitMeta()
     }
 
@@ -837,6 +1614,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     fun clear() {
         sendJobs[_currentId.value]?.cancel(); sendJobs.remove(_currentId.value)
         liveBuffers.remove(_currentId.value)
+        _queuedSends.value = _queuedSends.value - _currentId.value
+        steerWaits.remove(_currentId.value)
         store.clear()
         val welcome = QuroMessage(role = "assistant", content = qstr(R.string.qk_03820))
         store.add(welcome)
@@ -845,26 +1624,182 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 
     // ---- 发�? ----
 
+    // ═══ 用户可见入口：生成中再发消息（打断 / 排队 / 引导）═══
+
+    /**
+     * 发送一条消息，必要时按用户偏好处理「正在生成」这件事。UI 的发送键只走这一个方法。
+     *
+     * 空闲 → 正常发送；生成中 → 打断（默认）/ 排队 / 引导。
+     * 引导失败（缓冲已被收走、其实已空闲）时降级为排队，绝不把用户的话吞掉。
+     */
+    fun dispatchSend(
+        text: String,
+        attachments: List<QuroAttachment> = emptyList(),
+        cfg: QuroModelConfig = repo.load(),
+        contextMessage: String? = null,
+        /** 用户在对话框为**这一条消息**选中的技能；全文随本轮请求下发，用完即清。 */
+        attachedSkills: List<QuroSkill> = emptyList(),
+    ) {
+        val convId = _currentId.value
+        val body = text.trim()
+        if (body.isEmpty() && attachments.isEmpty()) return
+        val generating = isBusy(convId) ||
+            turn.stateOf(convId) != QuroTurnController.State.IDLE ||
+            sendJobs.containsKey(convId)
+        if (!generating) {
+            send(text, attachments, cfg, contextMessage = contextMessage, attachedSkills = attachedSkills)
+            return
+        }
+        when (_busySendMode.value) {
+            BusySendMode.INTERRUPT -> send(text, attachments, cfg, contextMessage = contextMessage, attachedSkills = attachedSkills)
+            BusySendMode.QUEUE -> enqueueSend(convId, body, attachments, contextMessage, attachedSkills)
+            BusySendMode.STEER -> if (!steer(convId, body, attachments, attachedSkills))
+                enqueueSend(convId, body, attachments, contextMessage, attachedSkills)
+        }
+    }
+
+    /**
+     * 引导：把这条消息插进**当前这一轮**的上下文，不重开一轮。
+     *
+     * 生效时机是「下一跳请求」——模型这一跳如果还在流式输出，它写完、
+     * 准备再调一次模型（多半是调完工具之后）时才会读到这句话。
+     * 这正是引导的语义：让模型跑到一半就能改方向，而不是等它跑完再说。
+     *
+     * @return false 表示当前没有可插入的活缓冲，调用方应降级为排队
+     */
+    fun steer(
+        conversationId: String,
+        text: String,
+        attachments: List<QuroAttachment> = emptyList(),
+        attachedSkills: List<QuroSkill> = emptyList(),
+    ): Boolean {
+        val body = text.trim()
+        if (body.isEmpty() && attachments.isEmpty()) return false
+        if (!isBusy(conversationId)) return false
+        val buf = liveBuffers[conversationId] ?: return false
+        // 引导消息同样带上它选中的技能全文，否则「引导」这条路径又会变成 AI 看不见技能。
+        QuroSkillStore.attachedBlock(attachedSkills).takeIf { it.isNotBlank() }?.let { block ->
+            buf.add(QuroMessage(role = "user", content = block, hidden = true))
+        }
+        val msg = QuroMessage(
+            role = "user",
+            content = body,
+            attachments = if (attachments.isNotEmpty()) attachments else null,
+            senderName = userProfile.value.name.takeIf { it.isNotBlank() },
+            avatarUrl = userProfile.value.avatarUri.takeIf { it.isNotBlank() },
+        )
+        buf.add(msg)
+        steerWaits.getOrPut(conversationId) { mutableListOf() }.add(msg.id)
+        commitCurrent(conversationId, buf)
+        QuroDiag.log("STEER", "convId=$conversationId len=${body.length} pending=${steerWaits[conversationId]?.size}")
+        return true
+    }
+
+    private fun enqueueSend(
+        conversationId: String,
+        text: String,
+        attachments: List<QuroAttachment>,
+        contextMessage: String? = null,
+        attachedSkills: List<QuroSkill> = emptyList(),
+    ) {
+        val q = _queuedSends.value[conversationId].orEmpty() +
+            QueuedSend(text, attachments, contextMessage, attachedSkills)
+        _queuedSends.value = _queuedSends.value + (conversationId to q)
+        QuroDiag.log("QUEUE", "convId=$conversationId size=${q.size}")
+    }
+
+    /** 撤回排队中的全部消息（用户点「取消排队」）。 */
+    fun clearQueuedSends(conversationId: String) {
+        if (_queuedSends.value.containsKey(conversationId)) {
+            _queuedSends.value = _queuedSends.value - conversationId
+            QuroDiag.log("QUEUE", "cleared convId=$conversationId")
+        }
+    }
+
+    /** 撤回排队中的第 index 条（用户逐条划掉）。 */
+    fun removeQueuedSend(conversationId: String, index: Int) {
+        val q = _queuedSends.value[conversationId].orEmpty()
+        if (index !in q.indices) return
+        val left = q.toMutableList().apply { removeAt(index) }
+        _queuedSends.value = if (left.isEmpty()) _queuedSends.value - conversationId
+        else _queuedSends.value + (conversationId to left)
+    }
+
+    /**
+     * 一轮结束后的接续：先把「插进去但没被读到」的引导补跑，再取排队中的下一条。
+     *
+     * 必须在移除在线缓冲**之前**调用——下一轮要拿本轮完整内容当种子，
+     * 缓冲一旦先被移除，种子就只能回落到可能落后的落盘快照。
+     *
+     * @return true 表示已经起了下一轮，调用方应保留在线缓冲交给新轮覆盖
+     */
+    private fun resumeAfterTurn(conversationId: String, buf: QuroConversationStore): Boolean {
+        // 已有新一轮在跑（典型是用户刚打断并发了新消息）：排队/引导交给那一轮收尾时再处理，
+        // 这里绝不能抢先起一轮，否则同一会话会并发出两个生成。
+        if (_busyMap.value[conversationId] == true || sendJobs.containsKey(conversationId)) return false
+        val waiting = steerWaits.remove(conversationId)
+        if (!waiting.isNullOrEmpty()) {
+            val all = buf.all()
+            val roles = all.map { it.role }
+            val pending = waiting.mapNotNull { id -> all.indexOfFirst { it.id == id }.takeIf { it >= 0 } }
+                .filter { SteerPolicy.needsResume(roles, it) }
+            if (pending.isNotEmpty()) {
+                turn.settle(conversationId)
+                QuroDiag.log("STEER_RESUME", "convId=$conversationId pending=${pending.size}")
+                send("", ownerConvId = conversationId, resumeConvId = conversationId)
+                return true
+            }
+        }
+        val q = _queuedSends.value[conversationId].orEmpty()
+        if (q.isEmpty()) return false
+        val next = q.first()
+        _queuedSends.value = if (q.size <= 1) _queuedSends.value - conversationId
+        else _queuedSends.value + (conversationId to q.drop(1))
+        turn.settle(conversationId)
+        QuroDiag.log("QUEUE_DRAIN", "convId=$conversationId left=${q.size - 1}")
+        send(
+            next.text,
+            next.attachments,
+            ownerConvId = conversationId,
+            contextMessage = next.contextMessage,
+            attachedSkills = next.attachedSkills,
+        )
+        return true
+    }
+
+
     fun send(
         text: String,
         attachments: List<QuroAttachment> = emptyList(),
         cfg: QuroModelConfig = repo.load(),
-        /** 用户在本轮对话框「选择技能」里显式选中的技能；非空时其指令仅作用于本轮消息�? */
-        skill: QuroSkill? = null,
+        /** 用户在对话框为本条消息选中的技能（可多个）：全文随本轮请求下发，只生效一轮。 */
+        attachedSkills: List<QuroSkill> = emptyList(),
         /** 上下文信息字符串（工作区路径/ACI应用/技能数量），作为隐藏消息注入，�? AI 本轮可用�? */
         contextMessage: String? = null,
         /** 生成式 UI 自愈：非空时把反馈作为【隐藏】用户消息注入，触发模型重写卡片（rev+1） */
         repairFeedback: String? = null,
         /** 生成式 UI 自愈/交互：强制把本轮归属到指定会话（否则取当前可见会话） */
         repairConvId: String? = null,
+        /** 队列续跑：把这一轮明确归属到排队的会话，即使它当前不可见 */
+        ownerConvId: String? = null,
+        /**
+         * 引导续跑：不为本轮新增用户消息，直接在会话现有内容上接着生成。
+         *
+         * 只在一个场景用：用户「引导」了一条消息，模型却恰好在读到它之前收尾了——
+         * 那条引导已经躺在缓冲里，缺的只是「有人接着说」。此时若再走普通 send，
+         * 会把同一句话当新消息重复插进历史（用户看到自己发了两遍），故必须走这条路径。
+         */
+        resumeConvId: String? = null,
     ) {
+        val resuming = resumeConvId != null
         val t = (repairFeedback ?: text).trim()
-        if (t.isEmpty() && attachments.isEmpty()) return
-        // 多会话切换修复：锁定本轮归属会话 convId，整个协程以内一律以 convId 记账�?
-        // 不再读实�? _currentId，避免切换会话后轮次/忙�?/落盘串台�?
-        // 生成式 UI 自愈轮：repairConvId 强制归属到出错的会话
-        val convId = repairConvId ?: _currentId.value
-        activeConversationId = convId
+        if (!resuming && t.isEmpty() && attachments.isEmpty()) return
+        // 锁定本轮归属会话 convId：协程内一律以 convId 记账，不再读实时 _currentId，
+        // 避免切换会话后轮次/忙态/落盘串台。顺序：引导续跑 > 队列续跑 > 自愈 > 当前可见。
+        val convId = resumeConvId ?: ownerConvId ?: repairConvId ?: _currentId.value
+        // activeConversationId 是「用户正在看哪个会话」的镜像，后台会话续跑不应改写它
+        // （否则 stop() 会打错目标）。仅在归属会话就是当前可见会话时才同步。
+        if (convId == _currentId.value) activeConversationId = convId
         // 新一轮生成开始：复位「AI �? speak 工具播报」标记，避免上一轮残留导致自动朗读误让位
         QuroTtsHolder.speakToolFiredThisTurn = false
         QuroDiag.log("SEND", "convId=$convId busyBefore=${isBusy(convId)} text=${t.take(80).replace("\n", " ")}")
@@ -915,16 +1850,29 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         //   再把本条用户消息追加其后（共�? store 仅用于即时显示，不作为种子来源，避免串台/缺失）�?
         val liveSeed = liveBuffers[convId]?.all()
         val persistedSeed = _convs.value.firstOrNull { it.id == convId }?.messages
-        val convBase = (liveSeed ?: persistedSeed ?: emptyList()).toList()
+        val convBase = (liveSeed ?: persistedSeed ?: emptyList())
+            // 附加技能严格「只活一轮」：把上一轮的技能块从本轮上下文里摘掉，
+            // 否则历史越攒越长，模型会把几轮前用户选的技能误当成当前约束。
+            .filterNot { it.hidden && it.content.startsWith(QuroSkillStore.ATTACHED_MARKER) }
         // �? 串台防御（v434+ 修复）：轮次信息通过【隐�? system 消息】传�? LLM�?
         //   不再注入 userMsg.content（旧方案会导�? seededUserMsg 进入 buf→liveBuffer→commitCurrent 刷屏�?
         //   使用�? UI 看到内部 [第N轮] 标记泄露）�?
         val firstUser = convBase.none { it.role == "user" }
-        val initialMessages = convBase + userMsg
-        store.add(userMsg)  // 仅用于即时显示（commitCurrent 默认�? store 刷屏/首存�?
-        QuroCrashLogger.logEvent(appContext, "USERMSG", "senderName=[${(userProfile.value.name ?: "").take(20)}] avatarUrl=[${(userProfile.value.avatarUri ?: "").take(60)}]")
-        QuroDiag.log("SEED", "convId=$convId seedMsgs=${initialMessages.size} hasAssistant=${initialMessages.any { it.role == "assistant" }} busyBefore=${isBusy(convId)} liveSeed=${liveSeed != null}")
-        commitCurrent(convId, updateTitle = firstUser)  // 外部立即显示（首条用户消息同步衍化对话标题）
+        // 技能块必须排在**用户消息之前**：它是「读完之后处理下面这条消息」的前置指令，
+        // 追加到用户消息之后会让模型读完用户请求才看到技能，语义完全倒挂。
+        val attachedSkillMsg = QuroSkillStore.attachedBlock(attachedSkills)
+            .takeIf { it.isNotBlank() }
+            ?.let { QuroMessage(role = "user", content = it, hidden = true) }
+        // 续跑轮不追加用户消息：那条引导已经躺在会话缓冲里，再拼一遍就会被当成新消息重复发送
+        // （用户会看到自己说了两遍，模型也会被同一句话问两次）。
+        val initialMessages = if (resuming) convBase
+        else convBase + listOfNotNull(attachedSkillMsg) + userMsg
+        if (!resuming) {
+            store.add(userMsg)  // 仅用于即时显示（commitCurrent 默认把 store 刷屏/首存）
+            QuroCrashLogger.logEvent(appContext, "USERMSG", "senderName=[${(userProfile.value.name ?: "").take(20)}] avatarUrl=[${(userProfile.value.avatarUri ?: "").take(60)}]")
+        }
+        QuroDiag.log("SEED", "convId=$convId seedMsgs=${initialMessages.size} hasAssistant=${initialMessages.any { it.role == "assistant" }} busyBefore=${isBusy(convId)} liveSeed=${liveSeed != null} resuming=$resuming")
+        if (!resuming) commitCurrent(convId, updateTitle = firstUser)  // 外部立即显示（首条用户消息同步衍化对话标题）
 
         // #864 修复：busy 标志必须�? launch 之前置位，使 ChatScreen 的「正在思考…」人格占位气�?
         // 在用户点击发送的那一帧就出现（带人格头像），否则会因 launch 调度晚一帧才显示头像�?
@@ -939,6 +1887,11 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             val store = buf
             liveBuffers[convId] = buf
             val genAssistant = QuroAssistant(QuroLlmClient(), registry, buf)
+            // 本轮归因的两个开关：ask 之前切出基准长度，收尾时用「新增了什么」反推结论。
+            val turnBaseCount = buf.all().size
+            val turnStartedAt = System.currentTimeMillis()
+            var turnStoppedByUser = false
+            var turnErrorMessage: String? = null
             try {
                 // 屏幕理解（MediaProjection 模式）：hidden user message 携带截屏附件注入 buf。
                 // 不展示给用户，只在 LLM 上下文中；多模态模型从 image_url 字段读图。
@@ -960,28 +1913,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 }
                 // 注意：用户消息已�? launch 外添加到共享 store �? commitCurrent（立即显示）�?
                 // buf 快照已包含该消息，此处无需重复添加�?
-                // 触发词自动激活：匹配到的非常驻（alwaysOn=false）技能按隐藏消息预注入，�? AI 本轮作答
-                val onDemand = QuroSkillStore.matchTriggerSkills(t, appContext).filter { !it.alwaysOn }
-                if (onDemand.isNotEmpty()) {
-                    val inject = onDemand.joinToString("\n\n") { "### ${it.name}\n${it.prompt}" }
-                    store.add(
-                        QuroMessage(
-                            role = "user",
-                            content = "[本轮已根据触发词自动激活以下技能，请按其对用户消息作答]\n$inject",
-                            hidden = true,
-                        ),
-                    )
-                }
-                // 用户显式选中的技能（对话框「选择技能」）：仅作用于本轮，指令作为隐藏消息预注�?
-                if (skill != null && skill.prompt.isNotBlank()) {
-                    store.add(
-                        QuroMessage(
-                            role = "user",
-                            content = "[用户已选择技能「${skill.name}」，请严格按以下指令处理其本条消息]\n### ${skill.name}\n${skill.prompt}",
-                            hidden = true,
-                        ),
-                    )
-                }
+                // 技能全文块已在 initialMessages 里排在用户消息之前（见上方 attachedSkillMsg），
+                // 这里不再重复 add 一次，否则同一份技能正文会被发给模型两遍。
                 // 上下文信息（工作�?/ACI/技能）：作为隐藏消息注入，�? AI 本轮知道用户选择了什�?
                 if (!contextMessage.isNullOrBlank()) {
                     store.add(
@@ -1012,7 +1945,18 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 } else {
                     // 功能模型配置：主对话 (CHAT) 恒用主模型（resolveConfig 默认跟随主模型，等效�? cfg），
                     // 此处经统一入口消费，便于后续子能力接入独立模型时复用同一机制�?
-                    val effectiveCfg = QuroFunctionModelConfigRepository(appContext).resolveConfig(QuroFunctionType.CHAT, cfg)
+                    var effectiveCfg = QuroFunctionModelConfigRepository(appContext).resolveConfig(QuroFunctionType.CHAT, cfg)
+                    //    人格卡绑定了模型或显式开启采样覆盖时，发送走 Bot 自己的配置——
+                    //    这是「Bot = 模型+提示词+Soul+Memory」按 Bot 隔离在主聊天链路的落点。
+                    //    （此前 persona.temperatureEnabled 等字段两条链路都无消费点，属于「有数据无出口」。）
+                    personaRepo.loadAll().firstOrNull { it.id == chatPersonaId() }?.let { p ->
+                        if (p.defaultModelId.isNotBlank()) {
+                            effectiveCfg = effectiveCfg.copy(model = p.defaultModelId)
+                        }
+                        if (p.temperatureEnabled) {
+                            effectiveCfg = effectiveCfg.copy(temperature = p.temperature)
+                        }
+                    }
                     // ask 内部已对每个环节兜底，这里再兜一层：任何意外都转成一条可见的错误消息�?
                     // �? finally 保证 _busy 一定复位，避免「卡死在思考中」导致此后永远无法回复�?
                     runCatching {
@@ -1020,11 +1964,18 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         // 原为 ask 的实参在 viewModelScope(主线�?) 上求�? �? 主线程重 I/O/计算 �? 触发系统 ANR 对话框�?
                         // 改为�? IO 线程先把提示词算好，再交�? ask（ask 自身仍切 IO 执行 ReAct 循环）�?
                         val spStart = System.currentTimeMillis()
-                        val sysPrompt = withContext(Dispatchers.IO) { buildSystemPrompt(effectiveCfg, t) + (screenCtx ?: "") }
+                        val sysPrompt = withContext(Dispatchers.IO) { buildSystemPrompt(effectiveCfg, t, chatPersonaId()) + (screenCtx ?: "") }
                         QuroDiag.log("GEN_SYSPROMPT_MS", "convId=$convId ms=${System.currentTimeMillis() - spStart}")
+                        // 上下文占用快照：此刻才知道本轮真实的 sysPrompt 与完整历史，
+                        // 早一步算不准、晚一步又用不上。失败绝不影响发送。
+                        runCatching {
+                            val usage = computeContextUsage(effectiveCfg, sysPrompt, buf.all(), chatPersonaId())
+                            _contextUsage.value = _contextUsage.value + (convId to usage)
+                            QuroDiag.log("CTX_USAGE", "convId=$convId used=${usage.used}/${usage.window} free=${usage.free} segs=${usage.segments.size}")
+                        }
                         val askStart = System.currentTimeMillis()
                         var firstTokenTs = 0L
-                        genAssistant.ask(appContext, effectiveCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, subAgentEnabled = subAgentEnabled.value, stream = true, historyRounds = _historyRounds.value ?: 0, deepThink = thinking.value) {
+                        genAssistant.ask(appContext, effectiveCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, subAgentEnabled = subAgentEnabled.value, stream = true, historyRounds = _historyRounds.value ?: 0, deepThink = thinking.value, enabledToolCategories = activePersona()?.enabledToolCategories ?: emptyList()) {
                         // 工具调用/结果产生、以及流�? token 到达时实时刷新并落盘（退出生效）�?
                         // 退出也能保留中间过程；commitCurrent 内部已对落盘�? �?1s 节流�?
                             if (firstTokenTs == 0L) { firstTokenTs = System.currentTimeMillis(); QuroDiag.log("GEN_FIRSTTOKEN", "convId=$convId ttfb=${firstTokenTs - askStart}ms") }
@@ -1035,10 +1986,13 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         if (e is CancellationException) {
                             // 用户主动打断生成：不报红错误，附一行明确反馈并保留已生成的部分内容
                             QuroDiag.log("SEND_CANCEL", "convId=$convId (job cancelled, 已停止生成。)")
+                            turnStoppedByUser = true
                             store.add(QuroMessage(role = "assistant", content = qstr(R.string.qk_03822)))
                             commitCurrent(convId, buf)
                             return@onFailure
                         }
+                        // 留下来源给轮次归因用：文案会给用户看，归因要判断「是链路问题还是模型问题」。
+                        turnErrorMessage = e.message ?: e.javaClass.simpleName
                         store.add(
                             QuroMessage(
                                 role = "assistant",
@@ -1048,8 +2002,23 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     }
                 }
                 commitCurrent(convId, buf, forceSave = true)
+                // 本轮结算：把「为什么是这样结束的」放进状态表，UI 在消息流末尾挂一条可操作的状态条。
+                // 失败归因必须在这里算 —— 此刻 buf 已含本轮全部新增（正文/思考/工具结果），
+                // 而 genAssistant 的 lastTurnMeta 仍是最后一次 LLM 调用的停止原因。
+                recordTurnOutcome(
+                    conversationId = convId,
+                    buf = buf,
+                    baseCount = turnBaseCount,
+                    stoppedByUser = turnStoppedByUser,
+                    errorMessage = turnErrorMessage,
+                    meta = genAssistant.lastTurnMeta,
+                    malformedToolCalls = genAssistant.malformedToolCalls,
+                    durationMs = System.currentTimeMillis() - turnStartedAt,
+                )
                 // 对话一轮完�? �? 触发人格自动孵化（按轮次累计，静默、不阻塞主对话）
                 maybeAutoIncubate()
+                // 自动进化：攒够 N 轮成功回复后，沉淀「人格画像(Soul)+关键事实(Memory)」直接注入系统提示词
+                maybeAutoEvolve()
                 // 回复完成 �? 统一触发通知（离开软件弹系统通知 + 刷新桌面卡片，受总开关控制）
                 runCatching {
                     store.all().lastOrNull { it.role == "assistant" && !it.hidden && it.content.isNotBlank() }
@@ -1061,6 +2030,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     // 原样上抛，走 finally 干净收尾（onFailure 分支已负责「⏹ 已停止生成」反馈）�?
                     if (e is CancellationException) throw e
                     Log.e(TAG, "生成回复异常 convId=$convId", e)
+                    turnErrorMessage = e.message ?: e.javaClass.simpleName
                     _error.value = qstr(R.string.qk_03824, e.message ?: qstr(R.string.qk_00503))
                     store.add(
                         QuroMessage(
@@ -1069,6 +2039,18 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         ),
                     )
                     commitCurrent(convId, buf)
+                    // 外层兜底路径同样要结算归因，否则「收尾段抛异常」这一轮在状态表里是空的，
+                    // 用户既看到红字又不知道结论。
+                    recordTurnOutcome(
+                        conversationId = convId,
+                        buf = buf,
+                        baseCount = turnBaseCount,
+                        stoppedByUser = false,
+                        errorMessage = turnErrorMessage,
+                        meta = genAssistant.lastTurnMeta,
+                        malformedToolCalls = genAssistant.malformedToolCalls,
+                        durationMs = System.currentTimeMillis() - turnStartedAt,
+                    )
                 } finally {
                 turn.complete(convId, myGen) // 仅当 gen 匹配才真正置 IDLE
                 // 只有当前轮确实结束（无更新轮在跑）才复位 busy，避免旧协程 finally 误清
@@ -1094,8 +2076,19 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         this@QuroChatViewModel.store.clear()
                         this@QuroChatViewModel.store.addAll(buf.all())
                     }
-                    liveBuffers.remove(convId)
-                    QuroDiag.log("SYNC", "convId=$convId syncedBufToStore visible=${convId == _currentId.value}")
+                    // 本轮收尾后的接续：先把「已插进上下文但没被读到」的引导补跑，
+                    // 再取下一条排队的消息。必须在移除在线缓冲之前发起——
+                    // 下一轮要拿本轮完整内容当种子，缓冲先没了就只能回落到可能落后的落盘快照。
+                    val continued = resumeAfterTurn(convId, buf)
+                    if (!continued) liveBuffers.remove(convId)
+                    QuroDiag.log("SYNC", "convId=$convId syncedBufToStore visible=${convId == _currentId.value} continued=$continued")
+                    // 🔴 自动压缩触发点（2026-11-06）：本轮结束后若上下文已进入「该压缩」
+                    //    区间就自动发起摘要压缩。放在同步完成之后——压缩读的是 store/缓冲
+                    //    的最新快照；放收尾最前面会被本轮内容算进「发起时指纹」之外。
+                    if (!continued && convId == _currentId.value) {
+                        runCatching { maybeAutoCompact(convId) }
+                            .onFailure { QuroDiag.log("COMPACT", "auto 判定异常: ${it.message}") }
+                    }
                 }
             }
         }
@@ -1138,8 +2131,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         if (targetId == _currentId.value) {
             activeConversationId = targetId
             store.add(QuroMessage(role = "user", content = text, senderName = userProfile.value.name.takeIf { it.isNotBlank() }, avatarUrl = userProfile.value.avatarUri.takeIf { it.isNotBlank() }))
-            // 触发词自动激活（当前可见会话路径）：�? send() 同源逻辑
-            val onDemand = QuroSkillStore.matchTriggerSkills(text, appContext).filter { !it.alwaysOn }
+            // 触发词自动激活（当前可见会话路径）：与 send() 同源逻辑，只注入「未开启」的技能
+            val onDemand = QuroSkillStore.scopedTo(QuroSkillStore.matchTriggerSkills(text, appContext), activePersona()?.id ?: "").filter { !it.enabled }
             if (onDemand.isNotEmpty()) {
                 val inject = onDemand.joinToString("\n\n") { "### ${it.name}\n${it.prompt}" }
                 store.add(
@@ -1164,8 +2157,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         return try {
             store.loadSilently(conv.messages)
             store.add(QuroMessage(role = "user", content = text, senderName = userProfile.value.name.takeIf { it.isNotBlank() }, avatarUrl = userProfile.value.avatarUri.takeIf { it.isNotBlank() }))
-            // 触发词自动激活（绑定其它会话路径）：�? send() 同源逻辑
-            val onDemand = QuroSkillStore.matchTriggerSkills(text, appContext).filter { !it.alwaysOn }
+            // 触发词自动激活（绑定其它会话路径）：与 send() 同源逻辑，只注入「未开启」的技能
+            val onDemand = QuroSkillStore.scopedTo(QuroSkillStore.matchTriggerSkills(text, appContext), activePersona()?.id ?: "").filter { !it.enabled }
             if (onDemand.isNotEmpty()) {
                 val inject = onDemand.joinToString("\n\n") { "### ${it.name}\n${it.prompt}" }
                 store.add(
@@ -1185,7 +2178,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     title = if (c.title == "新对话") deriveTitle(finalMsgs) else c.title,
                 ) else c
             }
-            convRepo.saveAll(_convs.value)
+            persistConversations()
             emitMeta()
             fireReplyNotification("Zorv AI", reply)
             reply
@@ -1213,7 +2206,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 var firstTokenTs = 0L
                 // #1110：语音球问答原默�? stream=false �? 整段回、不逐层；与主对话（stream=true）行为不一致，
                 // 表现为「部分返回不是一层一层返回、自己回到对话框」。云模型改为流式，与文本框主路径一致�?
-                val r = assistant.ask(appContext, effCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, subAgentEnabled = subAgentEnabled.value, stream = true, historyRounds = _historyRounds.value ?: 0, deepThink = thinking.value, onUpdate = {
+                val r = assistant.ask(appContext, effCfg, sysPrompt, autoSaveMemory = autoSaveMemory.value, subAgentEnabled = subAgentEnabled.value, stream = true, historyRounds = _historyRounds.value ?: 0, deepThink = thinking.value, enabledToolCategories = activePersona()?.enabledToolCategories ?: emptyList(), onUpdate = {
                     if (firstTokenTs == 0L) { firstTokenTs = System.currentTimeMillis(); QuroDiag.log("VB_FIRSTTOKEN", "ttfb=${firstTokenTs - askStart}ms") }
                     onTick()
                 })
@@ -1291,7 +2284,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 }
                 QuroDiag.log("SAVE", "convId=$id msgs=${msgs.size} activeBufSame=${liveBuffers[id] === buf} force=$forceSave")
                 emitMeta()
-                runCatching { convRepo.saveAll(_convs.value) }
+                runCatching { persistConversations() }
             }
         }
     }
@@ -1527,7 +2520,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
   - ✅ 有记忆库（可自动沉淀用户偏好和长期信息）
   - ✅ 有人格卡系统（每张卡是独立的真实身份，可切换；启用后你的身份 = 该卡）
   - ✅ 有 CMS v2 能力模块系统（可扩展的能力插件）
-  - ✅ 有端侧 Linux 终端（proot 承载完整 Ubuntu，可在里面执行真实 Linux 命令）
+  - ✅ 有端侧 Linux 终端（proot 承载完整 Ubuntu）+ Termux 原生环境（官方 bootstrap，PREFIX/pkg，能装 Termux 专属包）
   - ⚠️ 无直接联网能力（但可通过 open_web 在内置浏览器打开网址）
   - ❌ 不能访问其他设备或云端服务
   - ✅ 完全开源（源码与协议公开，欢迎参与共建）
@@ -1546,7 +2539,11 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 - **记忆库**：memory_save/list/search/delete（自动沉淀长期记忆）
 - **工作区工具**：workspace_write（写文件）、workspace_read（读文件）、workspace_list（列目录）、workspace_render（渲染预览）、workspace_doc（创建文档）、workspace_media（播放媒体）、workspace_doc_view（打开文档）
 - **文档工具**：enhanced_doc_create（增强版文档创建，支持20+格式）、aiwps_create（基础文档创建）、aiwps_read（读取文档）、aiwps_edit（编辑文档）
-- **终端**：terminal（统一终端工具：status 查 Linux 环境与会话状态、exec 在 Ubuntu 里执行命令、run 在应用沙盒内一次性执行；Ubuntu 用 apt 包管理）
+- **终端（两套环境，命令不通用，别混）**：
+  - `terminal` = **zorvAI 终端**（proot 承载 Ubuntu 24.04，装包用 `apt`）；action=status / exec / run / write / interrupt
+  - `termux` = **Termux 原生**（官方 bootstrap，`PREFIX` = 应用私有目录下的文件树，装包用 `pkg`）；action=run / pkg / status / session_new / open。**用户说「pkg 装个包」「用 termux 跑」就用它**
+  - 🔴 `pkg` 只在 termux 侧、`apt` 只在 zorvAI 侧 —— 用户报「command not found」时先想是不是用错了环境
+  - 用户在终端界面敲 `zorv` 可从 Termux 切进 zorvAI 终端，`exit` 切回；`zorv which <命令>` 查某条命令属于哪一侧
 
 ## 两条互控通道：Shizuku（系统层）+ ACI（应用层）
 - **Shizuku** → `shizuku` 工具（action=status/exec/shizuku_exec/grant）。以 ADB 级 shell(uid 2000) 权限执行系统命令，免 root；执行走 RootExecutor，自带 Shizuku → su 降级与审计。授权必须用户手动点（action=grant 给步骤），agent 不能代替。
@@ -1660,7 +2657,7 @@ moyu（action=setup 自动备好 Ubuntu 并解压落地 / compile 编译 .mo / b
 
 ## 可视化交互（问答与操作弹窗）
 
-**本章节定位（防认错对象）**：visual_question / visual_action / visual_popup / visual_custom_popup 是**屏幕弹窗**类工具——弹出的窗口盖在当前界面上，用户操作后你拿到结果继续执行。它们与对话内嵌的可视化通道完全不同：小卡片（```quro-card 围栏）、富卡片（`ui_widget`/`ui_card` 工具）、动态 UI（```quro-ui 围栏）、网页预览（```html 围栏）都是**嵌在对话消息流里**的展示。要「弹窗」才用本章节工具；要在对话内容里展示卡片/界面，走对应内嵌通道。
+**本章节定位（防认错对象）**：visual_question / visual_action / visual_popup / visual_custom_popup 是**屏幕弹窗**类工具——弹出的窗口盖在当前界面上，用户操作后你拿到结果继续执行。它们与对话内嵌的可视化通道完全不同：小卡片（`visual_card` 工具，独立分类）、富卡片（`ui_widget`/`ui_card` 工具）、动态 UI（```quro-ui 围栏）、网页预览（```html 围栏）都是**嵌在对话消息流里**的展示。要「弹窗」才用本章节工具；要在对话内容里展示卡片/界面，走对应内嵌通道。
 
 ### ⚠️ 可视化问答弹窗 (visual_question) —— 【最高优先级强制规则】
 
@@ -1885,6 +2882,162 @@ $recent
         return trimmed.joinToString("\n")
     }
 
+    // ══════════════ Bot 自动进化（沉淀 Soul 人格画像 + Memory 关键事实） ══════════════
+    // 自动进化直接产出「人格画像(Soul)」与「关键事实(Memory)」，前者立刻注入下一轮系统提示词，
+    // 让 AI 的人格随相处持续成长。默认频率 = 标准（每 10 轮、冷却 6 小时），静默执行不阻塞主对话。
+    private var _autoEvolving = false
+
+    /** 进化状态落盘用的轻量 prefs（按 personaId 分键）。 */
+    private val evolutionPrefs = appContext.getSharedPreferences("quro_bot_evolution", Context.MODE_PRIVATE)
+
+    private fun evolutionStateKey(personaId: String) = "ev_$personaId"
+
+    private fun loadEvolutionState(personaId: String): EvolutionState {
+        val key = evolutionStateKey(personaId)
+        return EvolutionState(
+            completedTurns = evolutionPrefs.getInt("${key}_turns", 0),
+            lastCheckedAt = evolutionPrefs.getLong("${key}_last", 0L),
+            lastFailure = evolutionPrefs.getString("${key}_fail", "") ?: "",
+            retryAfter = evolutionPrefs.getLong("${key}_retry", 0L),
+        )
+    }
+
+    private fun saveEvolutionState(personaId: String, state: EvolutionState) {
+        val key = evolutionStateKey(personaId)
+        evolutionPrefs.edit {
+            putInt("${key}_turns", state.completedTurns)
+            putLong("${key}_last", state.lastCheckedAt)
+            putString("${key}_fail", state.lastFailure)
+            putLong("${key}_retry", state.retryAfter)
+        }
+    }
+
+    /** {{location}} 模板变量的取值：最后已知位置（粗略到城市级描述），无权限/无数据返回 null。 */
+    private fun lastKnownLocationText(): String? {
+        val ctx = appContext
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                ctx, android.Manifest.permission.ACCESS_COARSE_LOCATION,
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) return null
+        val lm = ctx.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager ?: return null
+        val providers = listOf(android.location.LocationManager.NETWORK_PROVIDER, android.location.LocationManager.PASSIVE_PROVIDER, android.location.LocationManager.GPS_PROVIDER)
+        val last = providers.firstNotNullOfOrNull { p ->
+            runCatching { lm.getLastKnownLocation(p) }.getOrNull()
+        } ?: return null
+        return runCatching {
+            val geocoder = android.location.Geocoder(ctx, java.util.Locale.CHINA)
+            @Suppress("DEPRECATION")
+            val list = geocoder.getFromLocation(last.latitude, last.longitude, 1)
+            val a = list?.firstOrNull() ?: return null
+            listOfNotNull(a.locality ?: a.subAdminArea, a.adminArea).distinct().joinToString(" · ").ifBlank { null }
+        }.getOrNull()
+    }
+
+    private fun maybeAutoEvolve() {        val cfg = repo.load()
+        val isLocal = cfg.provider == "MNN" || cfg.provider == "LLAMA_CPP"
+        if (isLocal) return
+        val persona = activePersona() ?: return
+        if (persona.id.isBlank()) return
+        // Bot 级进化开关：关闭 = 该 Bot 不做自动进化沉淀（手动孵化仍可用）
+        if (!persona.evolutionEnabled) return
+        if (cfg.apiKey.isBlank()) return
+        if (_autoEvolving) return
+
+        val frequency = EvolutionFrequency.STANDARD
+        val state = BotEvolution.onTurnCompleted(loadEvolutionState(persona.id))
+        saveEvolutionState(persona.id, state)
+
+        // 🔴 Bot 级进化调度（2026-11-04）：按人格卡自己的「轮数 + 最小间隔」触发，
+        if (!BotEvolution.shouldCheck(
+                state,
+                persona.evolutionTurnsPerCheck.coerceIn(1, 50),
+                persona.evolutionMinIntervalHours.coerceIn(0, 168),
+            )
+        ) {
+            return
+        }
+        _autoEvolving = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // 取最近若干轮真实对话（排除 hidden / system），作为进化检查的素材。
+                val recent = store.all()
+                    .filter { !it.hidden && it.content.isNotBlank() && it.role != "system" }
+                    .takeLast(24)
+                    .joinToString("\n") { "${it.role}: ${it.content.take(400)}" }
+                if (recent.length < 80) {
+                    // 素材不足：不推进冷却，仅回退计数（下次回复再攒）。
+                    saveEvolutionState(persona.id, state.copy(completedTurns = state.completedTurns - 1))
+                    return@launch
+                }
+
+                val prompt = BotEvolution.buildPrompt(persona, recent)
+                val effModel = QuroFunctionModelConfigRepository(appContext)
+                    .resolveConfig(QuroFunctionType.PERSONA_INCUBATE, cfg).model
+                val res = QuroLlmClient().chat(
+                    cfg.baseUrl, cfg.apiKey, effModel,
+                    listOf(QuroChatMessage("user", prompt)),
+                    cfg.temperature, 1200, emptyList(),
+                )
+
+                when (res) {
+                    is QuroLlmResult.Text -> {
+                        val output = BotEvolution.parseOutput(res.content)
+                        if (output == null) {
+                            saveEvolutionState(persona.id, BotEvolution.onFailed(state, "unparsable"))
+                            return@launch
+                        }
+                        // 回填 Soul（人格画像）+ Memory（关键事实），用最新人格卡避免覆盖并发编辑。
+                        val latest = personaRepo.loadAll().firstOrNull { it.id == persona.id }
+                        if (latest != null) {
+                            val mergedSoul = BotEvolution.mergeSoul(latest.soul, output.soulDelta)
+                            val changed = mergedSoul != latest.soul || output.memoryFacts.isNotEmpty()
+                            if (changed) {
+                                personaRepo.upsert(latest.copy(soul = mergedSoul, soulUpdatedAt = System.currentTimeMillis()))
+                            }
+                            output.memoryFacts.forEach { fact ->
+                                memoryRepo.add(
+                                    QuroMemoryEntry(
+                                        personaId = persona.id,
+                                        group = "进化沉淀",
+                                        title = fact.take(40),
+                                        content = fact,
+                                        kind = QuroMemoryKind.SEMANTIC.key,
+                                    ),
+                                )
+                            }
+                            // 🔴 待学清单落卡（2026-11-04 孵化/进化合体，学习进步导向）：
+                            //    引擎产出的 [OPEN] 待学/待办写到 persona.openItems，下次进化回喂
+                            //    检查完成情况 —— 孵化=给自己列作业并跟进，而不是改设定文本。
+                            //    同时把学习计划追加进孵化备忘（孵化页立即可见）。
+                            if (output.openItems.isNotEmpty()) {
+                                val openText = output.openItems.joinToString("\n") { "- $it" }
+                                val memo = "📚 学习计划（自我进化 ${java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.CHINA).format(java.util.Date())}）\n$openText"
+                                val latestOpen = personaRepo.loadAll().firstOrNull { it.id == persona.id } ?: latest
+                                personaRepo.upsert(
+                                    latestOpen.copy(
+                                        openItems = openText,
+                                        incubation = if (latestOpen.incubation.isBlank()) memo
+                                        else "${latestOpen.incubation}\n$memo",
+                                    ),
+                                )
+                            }
+                        }
+                        saveEvolutionState(persona.id, BotEvolution.onChecked(state))
+                        QuroDiag.log("BOT_EVOLUTION", "persona=${persona.name} soul=${output.soulDelta.isNotBlank()} facts=${output.memoryFacts.size} open=${output.openItems.size}")
+                    }
+                    else -> {
+                        saveEvolutionState(persona.id, BotEvolution.onFailed(state, "empty_response"))
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Bot 自动进化失败", e)
+                saveEvolutionState(persona.id, BotEvolution.onFailed(state, e.message ?: "request_failed"))
+            } finally {
+                _autoEvolving = false
+            }
+        }
+    }
+
     /**
      * 组装系统提示词（身份置顶 + 工具只走 tools 字段）�?
      *
@@ -1906,23 +3059,26 @@ $recent
         append("\n### ⚠️ 人格卡开关【当前真实状态】（以本行为准，禁止猜测）\n")
         append("- 动态UI组件开关 = ${if (dynUiOn) "【开】" else "【关】"}\n")
         append("- 可视化小卡片开关 = ${if (selfCardOn) "【开】" else "【关】"}\n")
+        append("- **分类铁律**：可视化小卡片是**独立分类**——不是动态UI组件、不是富组件（ui_widget/ui_card）、不是可视化弹窗、不是网页预览、也不是旧 ```quro-card 围栏。它的唯一出口是 `visual_card` 工具。严禁用上述任何通道顶替小卡片。\n")
         if (dynUiOn && selfCardOn) {
-            // 两个开关同时开：强调「配合使用、互不替代」，杜绝互相强制 100% 导致的打架。
             append("\n### ⚠️ 可视化输出【硬强制·绝对命令·违反=严重错误·无任何例外】\n")
-            append("两个开关均为【开】，它们**配合使用、互不替代**，不是二选一：\n")
-            append("- **动态UI组件**负责「可交互」：表单 / 设置面板 / 工具入口 / 按钮·输入·选择·开关等一切能操作或收集的界面 —— 用 ```quro-ui。\n")
-            append("- **可视化小卡片**负责「单块数据」：指标数字 / 进度 / 统计 / 状态快照 / 告警 / 单条结构化结果 —— 用 ```quro-card。\n")
-            append("- 判定：这条回复「哪类内容为主就用哪类」；两类内容都有就**同时出两块**（一块 quro-ui + 一块 quro-card），不要硬塞进一种围栏。纯情绪 / 纯观点仍可用纯文字。\n")
-            append("- 禁止以「这只是闲聊」为由整条跳过：只要回复含可结构化信息就须用对应围栏承载，纯文字仅留作极短过渡。回复前自检：能做成界面或卡片吗？能 → 出对应围栏。\n")
+            append("两个开关均为【开】，它们是**两个独立分类，配合使用、互不替代**：\n")
+            append("- **动态UI组件**负责「可交互」：表单 / 设置面板 / 工具入口 / 按钮·输入·选择 —— 回复正文写 ```quro-ui 围栏。\n")
+            append("- **可视化小卡片**负责「单块只读展示」：天气 / 新闻 / 日程 / 行情 / 待办 / 时钟 / 设备状态 / 指标快照 —— **调 `visual_card` 工具**（结构先取 `visual_card_skeleton(kind=...)` 骨架，填 {{数据位}} 后作为 html 参数）。\n")
+            append("- 判定：这条回复「哪类内容为主就用哪类」；两类都有就**各出各的**（必要时一条 quro-ui + 一次 visual_card 调用），不要硬塞进一种通道。纯情绪 / 纯观点仍可用纯文字。\n")
+            append("- 禁止以「这只是闲聊」为由整条跳过：只要回复含可结构化信息就须用对应通道承载，纯文字仅留作极短过渡。写卡片前自检：取了骨架吗？没取就先取，别自己硬憋 HTML。\n")
         } else if (dynUiOn) {
             append("\n### ⚠️ 可视化输出【硬强制·绝对命令·违反=严重错误】\n")
             append("- 动态UI组件=开 → 只要用户需求能用界面/可交互控件表达，你**必须**在回复正文用 ```quro-ui 围栏输出真实原生控件；纯文字只作极短过渡。\n")
+            append("- 注意：用户要「小卡片」时属于**另一个独立分类**，仍须调 `visual_card` 工具，不要用 ```quro-ui 顶替。\n")
         } else if (selfCardOn) {
             append("\n### ⚠️ 可视化输出【硬强制·绝对命令·违反=严重错误】\n")
-            append("- 可视化小卡片=开 → 只要回复内容能做成单块卡片，你**必须**用 ```quro-card 围栏输出；纯文字只作极短过渡。\n")
+            append("- 可视化小卡片=开 → 只要回复内容能做成单块只读卡片，你**必须**调 `visual_card` 工具输出一张小卡片；纯文字只作极短过渡。\n")
+            append("- html 直接自由写任意场景；结构没把握才调 `visual_card_skeleton(kind=...)` 取参考样板改造——**禁止**因此改用动态UI/富组件/弹窗/纯文字。\n")
         } else {
             append("\n### 可视化输出（两个开关均为【关】→ 被动模式）\n")
-            append("- 动态UI组件 / 可视化小卡片 开关都关闭，你不主动输出 ```quro-ui / ```quro-card 围栏，用正常文字/富卡片（ui_widget/ui_card）回答即可；仅当用户明确要求「小卡片/动态UI/quro-card/quro-ui」时才输出对应围栏。\n")
+            append("- 动态UI组件 / 可视化小卡片 开关都关闭，你不主动输出 ```quro-ui 围栏、也不主动调 `visual_card`；用正常文字回答即可。\n")
+            append("- 仅当用户明确要求「小卡片 / 可视化小卡片」时才调 `visual_card`（html 自由写）；要求「动态UI」时才写 ```quro-ui 围栏。两者仍是独立分类，互不顶替。\n")
         }
     }
 
@@ -1930,8 +3086,12 @@ $recent
      * @param userQuery 本轮用户输入**原话**。仅供系统提示词 RAG 选段用；
      *   传空串时 RAG 只注基础段，行为与改动前一致。
      */
-    private fun buildSystemPrompt(cfg: QuroModelConfig, userQuery: String = ""): String {
-        val persona = activePersona()
+    private fun buildSystemPrompt(cfg: QuroModelConfig, userQuery: String = "", personaIdOverride: String = ""): String {
+        // 🔴 会话绑定人格优先（2026-11-04 会话↔人格绑定）：绑定非空时用绑定的那张人格卡
+        //    （身份/灵魂/记忆/技能全部按它取），空则跟随全局激活人格（旧行为）。
+        val persona = if (personaIdOverride.isNotBlank()) {
+            personaRepo.loadAll().firstOrNull { it.id == personaIdOverride } ?: activePersona()
+        } else activePersona()
         val sb = StringBuilder()
 
         // ══════════════ #1113：本地离线小模型走「极简提示词�? ══════════════
@@ -2014,14 +3174,41 @@ $recent
         // 修复 v339/v343/v344 反复翻车：之前对话框与语音球各自写一套、且忽略�? getEmotionProviderId 显式选择�?
         // 语音球还写死只认 SOURCE_CLOUD（选了 mimo/model 源就完全不注入情绪）。现统一函数彻底消除发散�?
         val voiceStyleHint = QuroVoiceStyle.hintForContext(appContext)
+        // {{current_datetime}} / {{device_info}} / {{location}} 在人格卡的
+        // 角色设定 / 聊天设定 / 简介 / 开场白里可用，发送前替换为真实值。
+        // 只作用于本次提示词，**不回写**存储——模板变量只活在发送那一刻。
+        val personaForPrompt = persona?.let { p ->
+            val dt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm (EEEE)", java.util.Locale.CHINA)
+                .format(java.util.Date())
+            val dev = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}"
+            val loc = runCatching { lastKnownLocationText() }.getOrNull().orEmpty()
+            fun sub(raw: String) = raw
+                .replace("{{current_datetime}}", dt)
+                .replace("{{device_info}}", dev)
+                .replace("{{location}}", loc)
+            p.copy(
+                roleSetting = sub(p.roleSetting),
+                chatSetting = sub(p.chatSetting),
+                description = sub(p.description),
+                opening = sub(p.opening),
+            )
+        }
+
         val soulCtx = SoulContext(
-            persona = persona,
+            persona = personaForPrompt,
             tags = if (persona != null) tagRepo.resolve(persona.tags) else emptyList(),
-            memories = memoryRepo.loadForPersona(persona?.id ?: ""),
-            autoSaveMemory = autoSaveMemory.value,
+            // Bot 级记忆开关：关闭 = 该 Bot 的提示词不带记忆条目（记忆文件仍在，随时可开回）
+            memories = if (persona?.memoryEnabled != false) memoryRepo.loadForPersona(persona?.id ?: "") else emptyList(),
+            autoSaveMemory = autoSaveMemory.value && persona?.memoryEnabled != false,
             voiceStyleHint = voiceStyleHint,
         )
         sb.append(QuroSoulPromptEngine.build(soulCtx)).append("\n")
+
+        // ══════════════ 应用中心：已连接的外部服务目录（DeepWiki/Context7/GitHub/Supabase…） ══════════════
+        // 用户在「应用中心」连接的服务 → AI 知道这些权威资料源可用，优先查文档而不是凭记忆硬答。
+        // 无已连接服务时返回空串，不浪费一个 token。
+        val svcSection = com.ai.assistance.quro.core.services.QuroServiceCatalog.promptSection(appContext)
+        if (svcSection.isNotBlank()) sb.append(svcSection).append("\n")
 
         // ══════════════ 第二优先级：自我认知 + 工具调用原则（不列工具清单） ══════════════
         // 平台/品牌基座（QuroPlatformManifest.SYSTEM）已声明「你�? Zorv AI」与「必须调用工具」，
@@ -2352,17 +3539,34 @@ $recent
             appendCapabilityAwareness(sb, activeSpecs)
         }
 
-        // ══════════════ 用户技�? SKILL（已启用的自定义指令注入系统提示词） ══════════════
-        // alwaysOn=false 的技能不再常驻系统提示词（改为触发词命中时按需注入，避免重复）
-        val skills = if (isLocal) emptyList() else QuroSkillStore.enabledList(appContext).filter { it.alwaysOn }
+        // ══════════════ 技能目录（只有元数据，不是「启用状态」） ══════════════
+        // 一行一条的目录，只让 AI 知道库里有什么、可自行调 `skill` 工具加载全文。
+        // 决定「本条消息用哪个技能」的是用户在对话框的选择：选中技能的**全文**由 send()
+        // 作为隐藏 user 消息随那条消息一起下发（QuroSkillStore.attachedBlock），
+        // 与本目录无关且优先级更高。开关不参与这条链路 —— AI 感知不到的状态就不该存在。
+        val skills = if (isLocal) emptyList() else QuroSkillStore.enabledListFor(appContext, persona?.id ?: "")
         if (skills.isNotEmpty()) {
-            sb.append("\n## 已启用技能（Skills）\n")
-            sb.append("以下是用户已启用的自定义技能，请将其指令作为额外的行为约束 / 能力说明，在合适时主动按技能行事：\n")
-            skills.forEach { s ->
-                sb.append("\n### ${s.name}\n")
-                if (s.description.isNotBlank()) sb.append("${s.description}\n")
-                if (s.prompt.isNotBlank()) sb.append(s.prompt).append("\n")
+            sb.append(QuroSkillStore.skillsCatalog(appContext, persona?.id ?: ""))
+        }
+
+        // 宠物可见时注入：宠物名 + 支持的互动动作 + pet 工具用法 —— 系统提示词完整写清楚。
+        runCatching {
+            val st = com.ai.assistance.quro.genui.aiapp.ui.PetPrefs.load(appContext)
+            if (st.petVisible) {
+                val acts = st.interactions.joinToString("、") { it.label + "(" + it.action + ")" }
+                sb.append("## 桌面宠物\n")
+                sb.append("用户屏幕上有一只桌面宠物「" + st.current.name + "」，可以控制它：\n")
+                sb.append("- 用 `pet` 工具（action=speak）让宠物说一句话（气泡显示，适合问候/轻提示）\n")
+                sb.append("- 用 `pet` 工具（action=act）让它做动作：" + acts + "\n")
+                sb.append("- action=hide/show 隐藏或显示宠物\n")
+                sb.append("用户提到「宠物/桌宠」时优先用它互动；回复完成后也可以让它说一句轻量总结。\n")
             }
+        }
+        // 其它人格卡的 name+description 元数据 + `ask_persona` 工具（已注册进 registry），
+        // AI 可向本机其它人格提问。无其它人格时零注入。
+        if (!isLocal) {
+            val dir = personaRepo.personaDirectorySection(appContext, persona?.id ?: "")
+            if (dir.isNotBlank()) sb.append(dir).append("\n")
         }
 
         // ══════════════ 用户身份（让用户知道如何称呼用户�? ══════════════
@@ -2590,7 +3794,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "### 何时必须调用工具（而非凭记忆作答）\n" +
             "- 任何依赖「实时/当前/外部/最新」信息的问题（天气、新闻、股价、汇率、实时交通、当前热点、某网站此刻内容、某人/某物最新状态等）→ 你必须主动调用工具获取真实数据；绝不凭训练知识编造过期答案。\n" +
             "- 需要执行任何**具体动作**（打开应用、查设备、设闹钟、读写文件、运行代码、联网、发消息、导览界面等）时，调用对应工具真正执行。\n" +
-            "- **聊天/创作/情感/闲聊/个性化表达**：纯情绪抒发、纯观点讨论等彻底无法结构化的内容可直接文字作答；但若人格卡「可视化小卡片 / 动态UI」开关开启、且回复含有可做成卡片/界面的信息，仍须按下方铁律用 ```quro-card / ```quro-ui 围栏承载（开关优先于本条）。涉及真实数据或真实动作的需求，一律用工具拿真实结果。\n" +
+            "- **聊天/创作/情感/闲聊/个性化表达**：纯情绪抒发、纯观点讨论等彻底无法结构化的内容可直接文字作答；但若人格卡「可视化小卡片 / 动态UI」开关开启、且回复含有可做成卡片/界面的信息，仍须按下方铁律调 `visual_card` 工具 / 写 ```quro-ui 围栏承载（开关优先于本条）。涉及真实数据或真实动作的需求，一律用工具拿真实结果。\n" +
             "### 如何组合「说话」与「用工具」\n" +
             "- 完全可以在同一条回复里先写一句过渡文字、再发起工具调用；也可「思考→调用→看结果→再思考→再调用」直到任务完成。\n" +
             "- 多个相互独立动作可在同一轮并行发起多个 tool_calls。\n"
@@ -2632,7 +3836,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "### 何时必须调用工具（而非凭记忆作答）\n" +
             "- **任何依赖「实时 / 当前 / 外部 / 最新」信息的问题**（天气、新闻、股价、汇率、实时交通、当前热点、某网站此刻的内容、某人/某物的最新状态等）——你**必须主动调用工具获取真实数据**（如 http_request 调公开 API、ai_browser / open_web 联网搜索或打开网页、get_* 查设备）→**绝不要凭训练截止前的旧知识瞎编一个过期答案**。用户问「今天 / 现在 / 最新」类问题，一律先想「这事会不会随时间变」，会变就调工具。\n" +
             "- 需要执行任何**具体动作**（打开应用、查设备、设闹钟、读写文件、运行代码、联网、朗读、导航界面等）时，调用对应工具真正执行。\n" +
-            "- **纯主观 / 创意 / 情感 / 闲聊 / 个人化表达**（聊心情、写诗、讲笑话、纯观点讨论）中**彻底无法结构化**的内容才可直接文字作答；但若人格卡「可视化小卡片 / 动态UI」开关开启、且回复含有可做成卡片/界面的信息，仍须按下方铁律用 ```quro-card / ```quro-ui 围栏承载（开关优先于本条）。但凡涉及真实数据或真实动作的需求，一律用工具拿真实结果——不要因为问题「看起来简单」就跳过本应调用的工具（天气、时间、设备状态、联网信息永远用工具取真实值，不凭记忆瞎编）。\n" +
+            "- **纯主观 / 创意 / 情感 / 闲聊 / 个人化表达**（聊心情、写诗、讲笑话、纯观点讨论）中**彻底无法结构化**的内容才可直接文字作答；但若人格卡「可视化小卡片 / 动态UI」开关开启、且回复含有可做成卡片/界面的信息，仍须按下方铁律调 `visual_card` 工具 / 写 ```quro-ui 围栏承载（开关优先于本条）。但凡涉及真实数据或真实动作的需求，一律用工具拿真实结果——不要因为问题「看起来简单」就跳过本应调用的工具（天气、时间、设备状态、联网信息永远用工具取真实值，不凭记忆瞎编）。\n" +
             "### 如何组合「说话」与「用工具」\n" +
             "- ✅**完全可以在同一条回复里先写一句过渡文字、再发起工具调用**（文字与 tool_calls 可以同一条消息混合出现，例如先说「好的，我查一下」再调工具）；也可以在回复里一边说、一边调、最后再总结。\n" +
             "- 你也可以多轮自由穿插**思考 → 调用工具 → 看到结果 → 再思考 → 再调用 / 再回复**，直到任务真正完成。不要把自己限制成「要么纯文字、要么纯工具」二选一；自然的助手会根据需要把「说一句话」和「做一件事」自由组合。\n" +
@@ -2649,7 +3853,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "- **节点编辑器**：用户要「画流程图/节点流/可视化编程」时，直接调 `node_editor` 读写 .qne 工程，不用打开界面也能编排。\n" +
             "- **端侧APK构建**：用户要「做个App/打包/出APK/自定义包名或图标或签名」时，主动用 `build_apk`（支持自定义包名、release签名生成、依赖JAR、自定义图标），产物用 `export_apk` 导出。\n" +
             "- **确定性出图（CodeCanvas）**：用户要「画一张海报/报表/代码卡/示意图」或强调排版必须精确时，主动用 `codecanvas_markup`（HTML→图）或 `codecanvas_script`（脚本→图）。它与 `image_gen` 分工：**image_gen 走厂商生图 API 画创意图；codecanvas_* 走确定性渲染，同样的输入永远出同样的图**。首次使用先调 `codecanvas_probe` 探活并用 `set_server_url` 配好服务地址。\n" +
-            "- **可视化小卡片 / 动态UI**：人格卡对应开关开启时（见下方「可视化输出」铁律），能做成卡片/界面的回复必须主动用 ```quro-card / ```quro-ui，不要默认回纯文字。\n"
+            "- **可视化小卡片 / 动态UI**：人格卡对应开关开启时（见下方「可视化输出」铁律），能做成卡片/界面的回复必须主动调 `visual_card` 工具 / 写 ```quro-ui 围栏，不要默认回纯文字。\n"
         )
         // ── 人格卡可视化开关「硬强制」规则已抽到 buildVisualSwitchEnforcement()，
         //    统一在系统提示词【末尾】（最高近因偏好）注入，本地/云端路径共用，避免埋在中段被小模型忽略。
@@ -2733,13 +3937,36 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "**适合场景**：计算器、待办事项、游戏、图表、表单、数据可视化、完整网站、工具应用\n" +
             "**优势**：多文件工程、会话持久化、native.* 原生桥调真·Android 能力、直接渲染在对话框（可交互）、无需外部部署\n"
         )
-        // ── 原生小程序（miniapp_sdk）：与上面的 Web 应用并列的第二套引擎（WXML/WXSS，不经过 WebView）──
+        // ── Web 应用与原生小程序是两个东西（2026-11-06 用户拍板）：Web 应用明确是 Web 应用，
+        // 绝不是小程序。此前触发词只写了「说小程序 → miniapp_sdk」，没写反向边界，
+        // 模型把用户要的 Web 应用全送进 WXML 引擎，产出微信小程序形态的错误交付。
+        // ── 原生小程序（miniapp_sdk）：与 Web 应用并列的第二套引擎（WXML/WXSS，不经过 WebView）──
         // 背景：此前系统提示词只讲 miniapp（WebView），AI 遇到「原生小程序」只能猜，常误用 WebView 版。
-        sb.append("\n### 🧩 原生小程序（miniapp_sdk 工具）—— WXML/WXSS 原生引擎（与 Web 应用并列，别搞混）\n")
+        sb.append("\n### 🚀 Web 应用 vs 🧩 原生小程序（两套引擎，先分清用户要的是哪个）\n")
         sb.append(
-            "除上面的「Web 应用」（`miniapp`，HTML + WebView）外，还有一套**并列的原生小程序引擎**——移植自上游 Quor-a/GenUI：" +
+            "**术语边界（最高优先级）**：**「Web 应用」就是 Web 应用，不是小程序**。\n" +
+            "- 用户说「Web 应用」「网页应用」「做个网站」「HTML 应用」「网页工具」→ **永远用 `miniapp`（Web 应用）**，**严禁**用 `miniapp_sdk`、严禁写成 WXML/WXSS。「Web 应用」这个词与小程序**零关系**，不要因为工具名叫 miniapp 就把 Web 应用理解成小程序。\n" +
+            "- 用户**明确**说「小程序（原生引擎）」「原生小程序」「微信小程序」「用 WXML/WXSS 写个小程序」→ 才用 `miniapp_sdk`。只是「小程序」三个字、上下文又没提微信/WXML 时，**先问一句用户要的是 Web 应用还是原生小程序**（`visual_question`），不要猜。\n" +
+            "- 两者渲染引擎不同：`miniapp` = HTML + WebView（bridge.js 运行时）；`miniapp_sdk` = 自研 C++ 原生引擎（WXML/WXSS + wx.*）。交付形态完全不同，用错=白干。\n\n" +
+            "### 🚀 Web 应用（miniapp 工具）——快速创建完整 Web 应用\n"
+        )
+        sb.append(
+            "当你需要**创建一个完整功能**（计算器、游戏、网站、工具、数据可视化、表单、图表等）时，使用 `miniapp` 工具：\n" +
+            "1. **创建工程**：miniapp(action=\"create\", name=\"项目名\", files=[{path:\"app.json\", content:\"{\\\"pages\\\":[\\\"pages/index/index\\\"]}\"}, {path:\"pages/index/index.html\", content:\"<!DOCTYPE html>…</html>\"}])\n" +
+            "2. **运行并渲染**：miniapp(action=\"run\", name=\"项目名\") → 返回自包含 HTML，直接渲染在对话框（可交互）\n" +
+            "3. **改单个文件后重跑**：miniapp(action=\"write\", name=\"项目名\", path=\"pages/index/index.html\", content=\"新代码\") → 再 run\n" +
+            "4. **把已有单页 HTML 固化成工程**：miniapp(action=\"save\", name=\"项目名\", html=\"<整段HTML>\")\n\n" +
+            "**支持的语言**：HTML/CSS/JS（自动合并到 HTML）、Python（Brython）、C/C++、Java 等\n" +
+            "**适合场景**：计算器、待办事项、游戏、图表、表单、数据可视化、完整网站、工具应用\n" +
+            "**优势**：多文件工程、会话持久化、native.* 原生桥调真·Android 能力、直接渲染在对话框（可交互）、无需外部部署\n"
+        )
+        sb.append(
+            "### 🧩 原生小程序（miniapp_sdk 工具）—— WXML/WXSS 原生引擎（仅在用户明确要小程序时用）\n"
+        )
+        sb.append(
+            "一套**并列的原生小程序引擎**——移植自上游 Quor-a/GenUI：" +
             "自研 C++ JS 引擎 + WXML/WXSS + 自研 Flex 布局 + Canvas/GLES 自绘渲染，走**微信标准范式**，**不经过 WebView、不是 HTML**。\n" +
-            "**触发词**：用户说「小程序（原生引擎）」「原生小程序」「用 WXML/WXSS 写个小程序」时**必须**用 `miniapp_sdk`（不要用 `miniapp`）。\n" +
+            "**触发词（严格）**：用户说「小程序（原生引擎）」「原生小程序」「微信小程序」「用 WXML/WXSS 写个小程序」时**必须**用 `miniapp_sdk`（不要用 `miniapp`）；用户只说「Web 应用」「网页应用」「做个网站/网页工具」时**严禁**用它。\n" +
             "用法：miniapp_sdk(action=create, appId=工程名, files={ \"app.json\": …, \"pages/index/index.wxml\": …, \"pages/index/index.wxss\": …, \"pages/index/index.js\": … })，files 是「相对路径 -> 内容」映射。\n" +
             "语法：WXML 用 {{data}} 绑定、wx:if/wx:else、wx:for=\"{{list}}\" wx:for-item=\"it\"、bindtap/bindinput、data-index；组件 view/text/button/input/image/scroll-view。\n" +
             "WXSS 用 rpx 单位 + Flex（flex-direction/align-items/justify-content）；JS 用 Page({data,方法}) + this.setData，**只支持 ES5**（var/function，别用箭头函数/模板字符串）。\n" +
@@ -2753,14 +3980,14 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         val overviewDynamicUiOn = PersonaFeatureToggles.isDynamicUiEnabled(appContext)
         sb.append("\n### 可视化输出功能总览（先分清对象，再选通道——所有可视化功能一张表）\n")
         sb.append(
-            "你有多条「把内容可视化给用户」的通道，**彼此独立、严禁混用、严禁互相替代**。用户的话术各有所指，先按这张表选对通道，再看下方各功能的详细章节：\n" +
+            "你有多条「把内容可视化给用户」的通道，**彼此独立、严禁混用、严禁互相替代**。其中「可视化小卡片」是一个**独立分类**：它不属于动态UI组件、不属于富组件、不属于可视化弹窗、不属于网页预览，也不再是旧 ```quro-card 围栏。用户的话术各有所指，先按这张表选对通道，再看下方各功能的详细章节：\n" +
             "| 通道 | 输出方式 | 渲染本质 | 用户常怎么说 | 什么时候用 |\n" +
             "|---|---|---|---|---|\n" +
             (
                 if (overviewSelfCardOn)
-                    "| **可视化小卡片** | 回复正文写 ```quro-card 围栏 | 自研 Canvas 自绘（AI 自写 layout 树自由设计，非 HTML、无 WebView） | 「小卡片」「可视化小卡片」 | **默认主动用**：任何适合单块卡片呈现的回复（指标/进度/结构化单块结果/数据快照）都主动写 ```quro-card，无需等用户要求（纯文字回复禁止，详见上方硬强制铁律） |\n"
+                    "| **可视化小卡片（独立分类）** | 调 `visual_card` 工具（结构先取 `visual_card_skeleton`） | 统一卡壳 + WebView 卡体（AI 自由写 HTML，13 份内置骨架） | 「小卡片」「可视化小卡片」「来张天气卡/日程卡」 | **默认主动用**：任何单块只读展示（天气/新闻/日程/行情/待办/时钟/设备/指标快照）都主动出一张小卡片，无需等用户要求（详见上方硬强制铁律） |\n"
                 else
-                    "| 可视化小卡片 | 被动模式：仅用户明确要求时才写 ```quro-card 围栏 | 自研 Canvas 自绘 | 「小卡片」 | 用户未提及时不要主动用，正常文字/富卡片回答 |\n"
+                    "| 可视化小卡片（独立分类） | 被动模式：仅用户明确要求时调 `visual_card` 工具 | 统一卡壳 + HTML 卡体 | 「小卡片」 | 用户未提及时不要主动用，正常文字回答 |\n"
             ) +
             "| **富卡片（可视化组件）** | 调 `ui_widget` / `ui_card` 工具 | 组件库（几十种预制类型） | 「可视化组件」「可视化组键」 | 结构化数据卡：表格/饼图/评分/标签/待办/看板/时间线/mermaid/Web 应用/composite |\n" +
             (
@@ -2774,25 +4001,25 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "| **网页预览** | 回复正文写 ```html 围栏 | WebView 渲染（代码 \\| 预览双标签） | 「做个网页看看」 | 完整网页/游戏/数据看板（HTML/CSS/JS 成品） |\n" +
             "| **排版引擎（AIP）** | 回复正文写 ```aip 围栏（或裸 AIP JSON 信封） | 原生排版引擎（16 种块型：文档流/横滑PPT/导图/图表） | 「排版一下」「做成PPT」「做份报告/长文档」 | 长文档、演示文稿、结构化报告的整篇排版 |\n" +
             "| **流程图/架构图** | ```mermaid 围栏 或 ui_widget type=mermaid | Mermaid.js 渲染成真图 | 「画个图」「流程图/架构图/脑图」 | 图形类可视化（flowchart/时序/状态/类图/思维导图等） |\n" +
-            "| **Web 应用** | ```miniapp 围栏 或 ui_widget type=miniapp | bridge.js 运行时渲染 | 「Web 应用」 | 可交互 Web 应用页面（data-bind/data-action） |\n" +
+            "| **Web 应用** | `miniapp` 工具 或 ```miniapp 围栏 或 ui_widget type=miniapp | bridge.js 运行时渲染（HTML + WebView） | 「Web 应用」「网页应用」「做个网站」「HTML 应用」 | 可交互 Web 应用页面（data-bind/data-action）。**Web 应用就是 Web 应用，不是小程序，严禁用 miniapp_sdk 顶替** |\n" +
             "| **完整项目** | `workbench` 工具 | 多文件工程 + 运行渲染 | 「做个计算器/游戏/工具」 | 多文件完整功能（HTML/CSS/JS/Python 组合工程） |\n" +
             "**路由口诀**：\n" +
             (
                 if (overviewSelfCardOn)
-                    "- 对话内嵌展示四选一：AI 自写单块卡 → 小卡片（```quro-card）；预制组件卡 → 富卡片（ui_widget/ui_card）；成体系交互界面 → 动态 UI（```quro-ui）；HTML 成品 → 网页预览（```html）。\n" +
-                    "- **可视化小卡片开关=开 → 主动默认用**：凡能做成单块卡片的回复你都**必须主动**用 ```quro-card 输出，纯文字回复一律禁止（仅作围栏前后极短点缀）。\n"
+                    "- 对话内嵌展示四选一：单块只读展示 → **可视化小卡片（调 `visual_card` 工具）**；现成标准件 → 富组件（ui_widget/ui_card）；可交互界面 → 动态 UI（```quro-ui）；完整网页 → 网页预览（```html）。\n" +
+                    "- **可视化小卡片开关=开 → 主动默认用**：凡能做成单块卡片的回复都**必须主动**调 `visual_card`，html 按场景自由写；结构没把握才 `visual_card_skeleton` 取参考样板。\n"
                 else
-                    "- 对话内嵌展示三选一：预制组件卡 → 富卡片（ui_widget/ui_card）；成体系交互界面 → 动态 UI（```quro-ui）；HTML 成品 → 网页预览（```html）。\n"
+                    "- 对话内嵌展示四选一：单块只读展示 → 可视化小卡片（`visual_card`，仅被动）；现成标准件 → 富组件（ui_widget/ui_card）；可交互界面 → 动态 UI（```quro-ui）；完整网页 → 网页预览（```html）。\n"
                 +
                 (if (overviewDynamicUiOn) "- **动态UI组件开关=开 → 主动默认用**：凡能做成界面/可交互控件的需求（表单/设置面板/带按钮输入选择的交互）你都**必须主动**用 ```quro-ui 输出，纯文字回复一律禁止（仅作围栏前后极短点缀）。\n" else "")
             ) +
             "- 屏幕弹窗 → visual_* 工具族（visual_question 问 / visual_action 选 / visual_popup 展示）。\n" +
-            "- 画图 → mermaid；做网页 → ```html；多文件工程 → miniapp；整篇排版长文档/PPT/报告 → ```aip 围栏（AIP 信封）。\n" +
+            "- 画图 → mermaid；做网页 → ```html；多文件工程 → miniapp（Web 应用，HTML/WebView，不是小程序）；整篇排版长文档/PPT/报告 → ```aip 围栏（AIP 信封）。\n" +
             (
                 if (overviewSelfCardOn)
-                    "- **最常见错误（严禁再犯）**：用户要「小卡片」时用成富卡片/弹窗/HTML——小卡片就是 ```quro-card 围栏，AI 自写、非 HTML；反过来要组件库卡片/弹窗/网页时也别写 quro-card。\n"
+                    "- **最常见错误（严禁再犯）**：用户要「小卡片」时用成动态UI/富组件/弹窗/网页预览/```quro-card 围栏——**可视化小卡片是独立分类，唯一出口是 `visual_card` 工具**。html 按场景自由写（任何场景都行），绝不许因此改用别的分类顶替。\n"
                 else
-                    "- **易错点**：各通道严禁混用——要组件库卡片就调 ui_widget/ui_card，要弹窗就调 visual_*，要网页就写 ```html 围栏，不要互相替代。\n"
+                    "- **易错点**：各通道严禁混用——要小卡片就调 `visual_card`，要标准件卡片就调 ui_widget/ui_card，要弹窗就调 visual_*，要网页就写 ```html 围栏。\n"
             )
         )
         sb.append("\n### 在对话框里「展示」UI（重要）\n")
@@ -2909,53 +4136,31 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "- **文档工具选择**：要生成真实可分享的 .docx/.xlsx/.pptx → `aiwps_create`（自研 OOXML，零依赖）；要生成 md/html/json/xml/yaml/css/js/svg/odt/epub/rtf 等文本/标记类文档 → `enhanced_doc_create`；整篇排版长文档/PPT/报告 → `aip_compose`（可带 export）。三者都本地生成、不上传服务器。\n"
         )
 
-        // ── 可视化小卡片术语铁律 ──
-        // 小卡片 = ```quro-card 自研卡片围栏（feat_self_card，7 层自研渲染：spec/registry/render/host/stream/widgets）。
-        // ui_widget/ui_card = 富卡片（组件库）；visual_popup=弹窗、visual_question=询问、quro-ui=动态 UI，均非小卡片。
-        // 开关关闭时不教 quro-card（围栏会降级成裸 JSON 代码块），回落用 ui_widget/ui_card 富卡片兜底。
+        // ── 可视化小卡片（独立分类，2026-11-05 重写）──
+        // 唯一出口 = visual_card 工具 + visual_card_skeleton 骨架库。
+        // 旧实现把「小卡片」绑到 ```quro-card Canvas DSL：字段多、示例少、与 HTML 设计稿正交，
+        // 模型写不出来就退回动态UI/富组件 —— 这正是「AI 永远不用可视化小卡片」的根因。
+        // 本段现在只教工具通道；quro-card 围栏保留为 legacy 渲染能力，但不再当作小卡片教给模型。
         val selfCardOn = PersonaFeatureToggles.isSelfCardEnabled(appContext)
         if (selfCardOn) {
-            sb.append("\n### 可视化小卡片（```quro-card 围栏）——独立功能，术语铁律\n")
+            sb.append("\n### 可视化小卡片（独立分类 · 工具通道 · 必备输出）\n")
             sb.append(
-                "- **可视化小卡片 = 你在回复正文里写的 ```quro-card 代码围栏**（不是工具调用）：围栏内容是一段卡片 JSON，客户端用自研渲染层（自写测量/排版/绘制，不依赖任何内置控件）把它渲染成小卡片，全宽内联在对话框里。\n" +
-                "- **围栏格式**：```quro-card 开头，中间一段 JSON，``` 结尾。JSON 结构：\n" +
-                "    ```json\n" +
-                "    {\"type\":\"卡片类型\",\"data\":{\"kind\":\"数据类别\",...},\"actions\":[...],\"style\":{...}}\n" +
-                "    ```\n" +
-                "- **支持的 7 种卡片类型**（type 白名单，超出的会降级不渲染）：\n" +
-                "  · `custom` 自由设计卡（**首选！小卡片就该用它**）→ 不用 data，用 `layout` 布局树自由设计，详见下方「custom 卡设计规范」\n" +
-                "  · `metric` 指标卡 → data.kind=\"chart\"、chartType=\"metric\"、series:[{name:\"指标名\",points:[数值],labels:[\"单位\"]}]（labels[0] 是单位）\n" +
-                "  · `line_chart` 折线图 → data.kind=\"chart\"、chartType=\"line\"、series:[{name:\"系列名\",points:[数值数组],labels:[\"x轴标签\"]}]（可多条 series）\n" +
-                "  · `table` 表格卡 → data.kind=\"media\"、mediaType=\"table\"、headers:[\"列1\",\"列2\"],rows:[[\"a\",\"b\"]]\n" +
-                "  · `button_group` 按钮组 → data.kind=\"form\"、formType=\"button_group\"、buttons:[{label:\"按钮文字\",action:{type:\"callback\",name:\"回传命令\"}}]（用户点按钮会把 name 回传给你）\n" +
-                "  · `status` 状态卡 → data.kind=\"status\"、statusType=\"progress\"|\"error\"、text、progress(0~1)、retryable\n" +
-                "  · `skeleton` 骨架占位 → 一般不用（流式内部状态）\n" +
-                "  · 🔴 围栏 type 只能用上述 7 种白名单；weather/keyvalue/todo/kanban/timeline/pie 等组件库卡片属于 `ui_card`/`ui_widget` 富卡片通道，**严禁写进 quro-card 围栏**（端上认不出，卡片直接不渲染）\n" +
-                "- **custom 卡设计规范（AI 自由设计，无内置模板）**：`{\"type\":\"custom\",\"layout\":<节点树>}`，客户端递归渲染布局树并带入场动效（数字滚动/环形扫角/进度条生长）。节点类型：\n" +
-                "  · `card`/`box` 容器：props={bg:\"#hex\" 或 gradient:[\"#hex\",...]、angle:135、radius:22、padding:18、gap:10}，children 竖排\n" +
-                "  · `column` 竖排 / `row` 横排（子节点 \"weight\":1 按比例分宽）\n" +
-                "  · `text` 文本：props={text:\"...\",fontSize:12,color:\"#hex\",weight:700}；**数字滚动**：{countTo:128460,prefix:\"¥\",suffix:\"\",fontSize:34,weight:800}\n" +
-                "  · `ring` 环形进度：{value:72,size:90,stroke:8,color:\"#hex\",text:\"72%\",textSize:20}（入场扫角动画）\n" +
-                "  · `bar` 进度条：{value:72,h:10,radius:6,color 或 gradient:[..]}（入场生长动画）\n" +
-                "  · `spacer`={h:12} / `divider` 分隔线\n" +
-                "  · 颜色支持 #rrggbb/#aarrggbb 及主题名（primary/surface/onSurface/outline）；**深色渐变背景上文字用 #ffffff / #ffffffcc**\n" +
-                "- **正确示例一（今日步数 metric 卡）**：\n" +
-                "  ```quro-card\n" +
-                "  {\"type\":\"metric\",\"data\":{\"kind\":\"chart\",\"chartType\":\"metric\",\"series\":[{\"name\":\"今日步数\",\"points\":[8432],\"labels\":[\"步\"]}]}}\n" +
-                "  ```\n" +
-                "- **正确示例二（custom 渐变大数字卡——自由设计风的样板）**：\n" +
-                "  ```quro-card\n" +
-                "  {\"type\":\"custom\",\"layout\":{\"type\":\"card\",\"props\":{\"gradient\":[\"#6a8cff\",\"#ff7ac8\"],\"angle\":135,\"radius\":22,\"padding\":18,\"gap\":10},\"children\":[{\"type\":\"text\",\"props\":{\"text\":\"AURORA · 本月营收\",\"fontSize\":11,\"color\":\"#ffffffcc\"}},{\"type\":\"text\",\"props\":{\"countTo\":128460,\"prefix\":\"¥\",\"fontSize\":34,\"weight\":800,\"color\":\"#ffffff\"}},{\"type\":\"bar\",\"props\":{\"value\":72,\"gradient\":[\"#3fd8c8\",\"#ffffff\"],\"h\":8,\"radius\":4}}]}}\n" +
-                "  ```\n" +
-                "- **术语边界（认对象，全量对照见上方「可视化输出功能总览」路由表）**：小卡片=```quro-card 围栏（本功能）；`ui_widget`/`ui_card`=富卡片（组件库）；`visual_popup`/`visual_action`=可视化弹窗；`visual_question`=可视化询问；```quro-ui=动态 UI；```html=网页预览；```mermaid=图形——彼此独立，用户说「小卡片」就是这个围栏，别用其他通道顶替。\n" +
-                "- **使用原则（开关已开启 → 主动默认、必须）**：「可视化小卡片」开关已开启（默认开），只要回复内容适合用单块卡片呈现——**指标/数字/进度/状态/结构化单块结果/数据快照**——你就**必须主动**用 ```quro-card 输出，**不要默认回纯文字**，也不要等用户说「小卡片」才用。具体：单块紧凑可视化结果 → **优先 `custom` 自由设计卡**（渐变背景+大数字+进度环/进度条+row/column 组合，每次按内容现场设计配色与结构，不要重复同一个样式）；单一指标/折线/表格/按钮这种标准件也可用 metric/line_chart/table/button_group 便捷预设。要更丰富的组件库卡片（待办/看板/时间线/饼图…）→ 调 `ui_widget`/`ui_card`。**开关=开时纯文字回复一律禁止**。JSON 只能出现在围栏里，严禁当普通文本发出；**小卡片不是 HTML、不用 ```html**。\n"
+                "- **定义**：可视化小卡片是**独立分类**，唯一出口是 `visual_card` 工具（不是回复正文里的围栏）。它**不是**动态UI组件（```quro-ui）、**不是**富组件（ui_card/ui_widget）、**不是**可视化弹窗（visual_*）、**不是**网页预览（```html）。\n" +
+                "- **渲染本质**：一工具一卡，`visual_card` 的 html 参数是一段自由 HTML 卡体；宿主统一提供卡壳（圆角 20 / emoji+标题+副标题头部 / 亮暗主题 / viewport / 防溢出），卡片全宽内联在消息流里，用户无需点开。\n" +
+                "- **自由写是主路**：`visual_card(title=..., subtitle=..., emoji=..., accent=..., html=...)` 的 html 参数直接写这个场景的卡体（任何场景都行，没有白名单）；结构没把握才调 `visual_card_skeleton(kind=...)` 取参考样板（13 种，见下方目录）改造或组合，但**不许**因为不会写就改用动态UI/富组件/弹窗/纯文字。\n" +
+                "- **参数**：title 必填、html 必填；subtitle / emoji / accent(#RRGGBB) / height(dp，140~620，缺省自适应) 可选。只写卡体，不要重复画卡片边框、不要写 `<html>` 外壳、不要引外部 CDN。\n" +
+                "- **卡体规则**：主文字 `color:CanvasText`（亮暗自适应），线/底用 `rgba(128,138,160,.x)` 中性灰，强调色用固定 hex；布局用 flex/grid + 百分比（容器约 340dp）；图表用内联 SVG，进度用 div 宽度或 SVG stroke-dasharray。\n" +
+                "- **适用**：天气 / 新闻 / 终端输出 / 日程 / 播放器 / 行情 / 待办 / 监控 / 位置 / 电量 / 快捷入口 / 世界时钟 / 摘录 / 指标快照 —— 一切「单块、只读、看完即走」的展示。\n" +
+                "- **使用原则（开关已开启 → 主动默认、必须）**：只要回复适合单块卡片呈现，就**必须主动**调 `visual_card`，不要等用户说「小卡片」、也不要默认回纯文字（正文只留极短过渡）。一次回复可出多张卡，每张一次工具调用。\n" +
+                "- **术语边界（全量对照见上方「可视化输出功能总览」路由表）**：要用户操作/输入 → 动态 UI；要现成标准件 → 富组件；要当场弹窗操作 → 可视化弹窗；要完整网页 → 网页预览。它们都是**别的分类**，严禁拿来顶替小卡片。\n"
             )
+            sb.append("\n" + com.ai.assistance.quro.core.cards.WidgetSkeletons.promptSection())
         } else {
-            sb.append("\n### 可视化小卡片——独立功能（当前为被动模式）\n")
+            sb.append("\n### 可视化小卡片（独立分类 · 被动模式）\n")
             sb.append(
-                "- **术语边界（全量对照见上方「可视化输出功能总览」路由表）**：小卡片=```quro-card 围栏（本功能）；`ui_widget`/`ui_card`=富卡片（组件库）；`visual_popup`=可视化弹窗；`visual_question`=可视化询问；quro-ui=动态 UI 组件——互相独立，严禁混用。\n" +
-                "- **被动模式（当前生效）**：用户未提及时**不要主动**输出 ```quro-card 围栏，正常用文字/富卡片回答；**仅当用户明确要求**（说「小卡片」「可视化小卡片」「用 quro-card」等）时才输出该围栏。\n" +
-                "- **用户要求时的围栏格式**：```quro-card 开头，中间一段卡片 JSON，``` 结尾。便捷预设：{\"type\":\"metric\"|\"line_chart\"|\"table\"|\"button_group\"|\"status\",\"data\":{...}}；或自由设计卡 {\"type\":\"custom\",\"layout\":<card/row/column/text/ring/bar 节点树>}。JSON 只能出现在围栏里，严禁当普通文本发出。\n"
+                "- **定义与边界**：可视化小卡片是独立分类，唯一出口是 `visual_card` 工具；不是动态UI组件、不是富组件、不是弹窗、不是网页预览，严禁互相顶替。\n" +
+                "- **被动模式（当前生效）**：用户未提及时不要主动出卡，正常用文字回答；**仅当用户明确说「小卡片 / 可视化小卡片 / 来张卡」**时才出卡：调 `visual_card`，html 按场景自由写；拿不准结构才取 `visual_card_skeleton` 样板参考。\n" +
+                "- 可用 kind：weather / news / calendar / terminal / music / market / todo / monitor / location / battery / shortcuts / clock / quote。\n"
             )
         }
         // 动态 UI 开关（提示词级）：开 = 百分百主动使用；关 = 仅用户明确要求时才输出（渲染管线常开）。
@@ -2970,7 +4175,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
                 else
                     "- **被动模式（当前生效）**：用户未提及时**不要主动**输出 ```quro-ui 围栏，正常用文字/富卡片回答；**仅当用户明确要求**（说「动态UI」「做个界面」「用 quro-ui」等）时才输出该围栏。\n"
             ) +
-            "  · **边界（全量对照见上方「可视化输出功能总览」路由表，这里只讲和动态 UI 的分界）**：动态 UI 只做「成体系的完整原生交互界面」（多区域组合、表单/富媒体成体系）；单块紧凑可视化结果→ 小卡片 ```quro-card 或富卡片 `ui_widget`/`ui_card`；屏幕弹窗 → `visual_*`；网页成品 → ```html。**不要**把小卡片塞进动态 UI 组件，也不要用 `ui_control(action=\"card\")` 纯文本卡片。\n" +
+            "  · **边界（全量对照见上方「可视化输出功能总览」路由表，这里只讲和动态 UI 的分界）**：动态 UI 只做「成体系的完整原生交互界面」（多区域组合、表单/富媒体成体系）；单块紧凑可视化结果 → **可视化小卡片（`visual_card` 工具，独立分类）**；现成标准件 → 富组件 `ui_widget`/`ui_card`；屏幕弹窗 → `visual_*`；网页成品 → ```html。**不要**把小卡片塞进动态 UI 组件（它不是 quro-ui 的一种），也不要用 `ui_control(action=\"card\")` 纯文本卡片顶替。\n" +
             "- **节点类型（节选，完整见 ui_dsl_spec 工具）**：\n" +
             "  · 布局：column / row / box / card\n" +
             "  · 内容：text / image / icon / badge / progress / divider / spacer\n" +
@@ -3120,12 +4325,12 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
 
         // ══════════════ 上下文元数据读取指令 ══════════════
         sb.append("\n### 用户消息中的上下文标记（必须读取）\n")
-        sb.append("- 用户发送的每条消息**开头**可能带有 `[上下文|...]` 标记，例如：`[上下文|工作区: /storage/.../MyProject | ACI应用: ZorvAI浏览器 | 已启用技能: 3个]`\n")
-        sb.append("- 这个标记告诉你用户当前选择的工作区路径、默认 ACI 应用名称、已启用技能数量——**你必须读取并使用这些信息**：\n")
+        sb.append("- 对话里可能出现一条隐藏的 `[上下文信息]` 说明（工作区路径、默认 ACI 应用）——**必须读取并使用**：\n")
         sb.append("  · 看到「工作区: xxx」→ 你的 workspace_write / workspace_read / workspace_list 的根目录就是这个路径；需要保存文件时直接用它。\n")
         sb.append("  · 看到「ACI应用: xxx」→ 调用 aci_call 时可以省略 target_package，系统会自动用这个应用。\n")
-        sb.append("  · 看到「已启用技能: N个」→ 你知道有 N 个技能可用，在合适场景下可以调用对应 skill__* 工具。\n")
-        sb.append("- 若消息没有 `[上下文]` 标记，则按系统提示词中的默认值执行。\n")
+        sb.append("- **技能不靠开关、也不靠上下文数量**：用户为某条消息选中的技能，其完整指令会以一条以 `[用户为本条消息附加了技能]` 开头的隐藏 user 消息直接发给你。\n")
+        sb.append("  看到它就直接按里面的步骤与约束完成紧随其后的那条消息；没有这条隐藏消息，就表示用户本次没有指定技能，不要臆测。\n")
+        sb.append("- 若没有工作区/ACI 上下文信息，则按系统提示词中的默认值执行。\n")
 
         sb.append("\n## CMS 权限模式（重要）\n")
         sb.append("- priv_status：查询 CMS v2 权限模式与已授权项；L1-L5 系统级通道已随工具集开放，运行时由系统授权与资产可用性把关，未授权工具会返回明确引导。\n")

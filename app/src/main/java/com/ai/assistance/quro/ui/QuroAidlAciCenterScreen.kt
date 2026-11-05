@@ -125,7 +125,7 @@ private val ACI_DEV_DOC = """
 ACI 被控方（第三方 App）开发手册
 ══════════════════════════════════════════
 📌 本文档是「通用被控方开发手册」，面向任何想接入 ZorvAI 的第三方 App 开发者，并非 ZorvAI 浏览器专属。
-   受控浏览器（com.ai.assistance.quro.browser）只是其中一个「官方参考实现示例」；其能力清单（第十节）仅供照抄声明范式，
+   受控浏览器（com.ai.assistance.quro.browser）只是其中一个官方示例被控方；其能力清单（第十节）仅供照抄声明范式，
    你完全可以用自己的业务后端照此接入，不必局限于浏览器。
 
 一、ACI 是什么
@@ -237,7 +237,7 @@ class MyAciService : BaseAidlAciService() {
 • 能力不出现：确认 onCreateCapabilities 用「参数式 caps.add(...)」正确填充，且 Service 已运行（stopped 态会被唤醒广播拉起）。
 • 绑定直接失败/秒拒：99% 是 Manifest 漏写 <permission> 定义（CALL / DISCOVER / CALL_DANGEROUS），补上即可。
 
-十、参考实现示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的能力（实际共 31 项，见仓库 docs/ACI_DEVELOPER_GUIDE.md §13；以下为要点示例，非浏览器专属手册；以 ACI 中心「已发现的第三方能力清单」实时刷新为准，二者应一致）
+十、示例：受控浏览器（com.ai.assistance.quro.browser）已暴露的能力（实际共 31 项，见仓库 docs/ACI_DEVELOPER_GUIDE.md §13；以下为要点示例，非浏览器专属手册；以 ACI 中心「已发现的第三方能力清单」实时刷新为准，二者应一致）
 （官方参考被控方。控制方 Zorv AI 经 ACI 调用它，第三方开发者可直接照抄这套能力声明范式（注意：这是示例，你的后端可声明任意能力，不必照搬此列表）：
  全部能力均在 onCreateCapabilities 用 Capability.create 参数式声明、onCall 内 when 分发。）
 

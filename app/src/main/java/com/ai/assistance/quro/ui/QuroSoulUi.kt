@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.ui
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import com.ai.assistance.quro.R
 import com.ai.assistance.quro.util.qstr
 
@@ -59,6 +60,7 @@ import com.ai.assistance.quro.core.tools.QuroTtsProviders
 import com.ai.assistance.quro.core.QuroTag
 import com.ai.assistance.quro.core.QuroTagRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -342,8 +344,37 @@ fun PersonaEditDialog(
     var selectedTags by remember { mutableStateOf(initial.tags) }   // 仅存全局标签名称
     var showTagManager by remember { mutableStateOf(false) }
 
+    var evolutionEnabled by remember { mutableStateOf(initial.evolutionEnabled) }
+    var memoryEnabled by remember { mutableStateOf(initial.memoryEnabled) }
+    var proactiveMode by remember { mutableStateOf(initial.proactiveMode) }
+    var soulText by remember { mutableStateOf(initial.soul) }
+    var showSoulViewer by remember { mutableStateOf(false) }
+    var tempEnabled by remember { mutableStateOf(initial.temperatureEnabled) }
+    var tempValue by remember { mutableStateOf(initial.temperature) }
+    var topPEnabled by remember { mutableStateOf(initial.topPEnabled) }
+    var topPValue by remember { mutableStateOf(initial.topP) }
+    var botModel by remember { mutableStateOf(initial.defaultModelId) }
+    var showToolPicker by remember { mutableStateOf(false) }
+    var toolCats by remember { mutableStateOf(initial.enabledToolCategories) }
+
     val ctx = LocalContext.current
     val tagRepo = remember { QuroTagRepository(ctx.applicationContext) }
+    val botImportScope = androidx.compose.runtime.rememberCoroutineScope()
+    val botExportScope = androidx.compose.runtime.rememberCoroutineScope()
+    val botImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        botImportScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val result = runCatching {
+                val bytes = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: throw IllegalStateException("读不到文件")
+                val imported = com.ai.assistance.quro.core.QuroBotPackage.import(ctx, bytes)
+                "已导入人格「${imported.name}」（含 Soul 与记忆）"
+            }.getOrElse { "导入失败：${it.message}" }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                android.widget.Toast.makeText(ctx, result, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     // 裁剪 → 复制到私有目录（先定义，供 imagePicker 调用）
     val cropLauncher = rememberLauncherForActivityResult(CropImageContract()) { result ->
@@ -514,6 +545,239 @@ fun PersonaEditDialog(
                             if (it) com.ai.assistance.quro.core.ui.card.CardModule.init()
                         },
                     )
+
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+
+                    // ── Bot Soul：长期人格画像（自动进化沉淀 + 可手动编辑）──
+                    Text(qstr(R.string.qk_04742), style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (soulText.isNotBlank()) qstr(R.string.qk_04743) else qstr(R.string.qk_04744),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (initial.soulUpdatedAt > 0 && soulText.isNotBlank()) {
+                                Text(
+                                    qstr(R.string.qk_04745, java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(initial.soulUpdatedAt))),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        TextButton(onClick = { showSoulViewer = true }) {
+                            Icon(Icons.Filled.Favorite, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(qstr(R.string.qk_04746))
+                        }
+                    }
+
+                    // 🔴 待学清单卡片（2026-11-04 孵化/进化合体，学习进步导向）：
+                    //    自我进化引擎产出的「下一阶段学习计划」直接可见——
+                    //    孵化=给自己列作业并跟进，而不是改设定文本。
+                    if (initial.openItems.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("📚 学习计划（自我进化产出，下次进化自动检查完成情况）", style = MaterialTheme.typography.labelMedium)
+                                initial.openItems.lines().filter { it.isNotBlank() }.forEach { item ->
+                                    Text(item, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+
+                    // ── 主设置：进化 / 记忆 / 主动模式 ──
+                    Text(qstr(R.string.qk_04747), style = MaterialTheme.typography.labelMedium)
+                    BotSettingToggle(qstr(R.string.qk_04748), qstr(R.string.qk_04749), evolutionEnabled) { evolutionEnabled = it }
+                    BotSettingToggle(qstr(R.string.qk_04750), qstr(R.string.qk_04751), memoryEnabled) { memoryEnabled = it }
+                    BotSettingToggle(qstr(R.string.qk_04752), qstr(R.string.qk_04753), proactiveMode) { proactiveMode = it }
+
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+
+                    Text("人格包（.bot.zip）", style = MaterialTheme.typography.labelMedium)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = {
+                            // 导出：写 Downloads/<name>.bot.zip
+                            botExportScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                val memories = runCatching {
+                                    com.ai.assistance.quro.core.memory.QuroMemoryRepository(ctx.applicationContext)
+                                        .loadForPersona(initial.id)
+                                }.getOrDefault(emptyList()).map { it.content }
+                                val bytes = com.ai.assistance.quro.core.QuroBotPackage.export(ctx, initial.copy(
+                                    roleSetting = roleSetting.trim(),
+                                    soul = soulText,
+                                    chatSetting = chatSetting.trim(),
+                                    defaultModelId = botModel.trim(),
+                                ), memories)
+                                val safeName = (initial.name.ifBlank { "bot" }).replace(Regex("[^\\w\\u4e00-\\u9fff-]+"), "_")
+                                val resolver = ctx.contentResolver
+                                val values = android.content.ContentValues().apply {
+                                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, "$safeName.bot.zip")
+                                    put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/zip")
+                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                        put(android.provider.MediaStore.Downloads.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+                                    }
+                                }
+                                val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                                uri?.let { resolver.openOutputStream(it)?.use { os -> os.write(bytes) } }
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    android.widget.Toast.makeText(ctx, "已导出到 Download/$safeName.bot.zip", android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }) {
+                            Icon(Icons.Filled.FileDownload, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("导出人格包")
+                        }
+                        TextButton(onClick = { botImportLauncher.launch(arrayOf("application/zip")) }) {
+                            Icon(Icons.Filled.FileUpload, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("导入人格包")
+                        }
+                    }
+
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+
+                    // ── 采样参数：温度 / TopP（仅开启时覆盖全局模型默认）──
+                    Text(qstr(R.string.qk_04754), style = MaterialTheme.typography.labelMedium)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(qstr(R.string.qk_04755), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Switch(checked = tempEnabled, onCheckedChange = { tempEnabled = it })
+                    }
+                    if (tempEnabled) {
+                        Text(
+                            qstr(R.string.qk_04756, Math.round(tempValue * 100) / 100.0),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Slider(
+                            value = tempValue,
+                            onValueChange = { tempValue = Math.round(it * 20) / 20.0f },
+                            valueRange = 0f..2f,
+                        )
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Top-P", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Switch(checked = topPEnabled, onCheckedChange = { topPEnabled = it })
+                    }
+                    if (topPEnabled) {
+                        Text(
+                            qstr(R.string.qk_04757, Math.round(topPValue * 100) / 100.0),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Slider(
+                            value = topPValue,
+                            onValueChange = { topPValue = Math.round(it * 20) / 20.0f },
+                            valueRange = 0.05f..1f,
+                        )
+                    }
+
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+
+                    // 🔴 改名：不叫「Bot」（用户裁定：灵魂注入体系是「人格」，不是机器人）。
+                    // 🔴 直接拉模型配置的可用模型列表（本地缓存 /models 结果）下拉选择，
+                    //    不再手动填 —— 当前全局模型恒在列表首位作为兜底。
+                    Text("人格默认模型", style = MaterialTheme.typography.labelMedium)
+                    val modelRepo = remember {
+                        com.ai.assistance.quro.core.model.QuroModelConfigRepository(ctx.applicationContext)
+                    }
+                    val cachedModels = remember {
+                        runCatching {
+                            val cfg0 = modelRepo.load()
+                            val ids = modelRepo.loadModelListCache(cfg0.baseUrl)
+                                .let { r -> (r as? com.ai.assistance.quro.core.network.QuroModelListResult.Success)?.models?.map { it.id } }
+                                .orEmpty()
+                            // 当前全局模型置顶 + 去重
+                            (listOf(cfg0.model) + ids.filter { it != cfg0.model }).distinct()
+                        }.getOrDefault(emptyList())
+                    }
+                    if (cachedModels.isNotEmpty()) {
+                        var dropdownOpen by remember { mutableStateOf(false) }
+                        Column {
+                            OutlinedButton(onClick = { dropdownOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    botModel.ifBlank { "跟随全局模型（${cachedModels.firstOrNull() ?: ""}）" },
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Icon(Icons.Filled.ArrowDropDown, null)
+                            }
+                            DropdownMenu(expanded = dropdownOpen, onDismissRequest = { dropdownOpen = false }) {
+                                cachedModels.forEach { m ->
+                                    DropdownMenuItem(
+                                        text = { Text(m, fontSize = 12.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
+                                        onClick = {
+                                            botModel = if (m == cachedModels.firstOrNull()) "" else m
+                                            dropdownOpen = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = botModel,
+                            onValueChange = { botModel = it },
+                            placeholder = { Text("留空 = 跟随全局模型（先到模型设置里拉取一次模型列表可改为下拉）") },
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    Text(
+                        "发送时用该模型覆盖全局配置（供应商 / API Key 仍跟随全局）；聊天内所有轮次生效。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+
+                    // ── 工具白名单（空 = 全部工具可用）──
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (toolCats.isEmpty()) qstr(R.string.qk_04758)
+                                else qstr(R.string.qk_04759, toolCats.size.toString()),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Text(qstr(R.string.qk_04760), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(onClick = { showToolPicker = true }) { Text(qstr(R.string.qk_04761)) }
+                    }
+
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+
+                    // ── 分享 Bot：导出 JSON（对方可用「本地导入」恢复）──
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(qstr(R.string.qk_04762), style = MaterialTheme.typography.bodySmall)
+                            Text(qstr(R.string.qk_04763), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(onClick = {
+                            val json = com.ai.assistance.quro.core.soul.QuroBotShare.export(initial)
+                            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_TEXT, json)
+                                putExtra(android.content.Intent.EXTRA_TITLE, "${initial.name}.bot.json")
+                            }
+                            ctx.startActivity(android.content.Intent.createChooser(intent, qstr(R.string.qk_04762)))
+                        }) {
+                            Icon(Icons.Filled.FileUpload, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(qstr(R.string.qk_04764))
+                        }
+                    }
                 }
 
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -531,6 +795,17 @@ fun PersonaEditDialog(
                                 chatSetting = chatSetting.trim(),
                                 voiceSetting = voiceSetting.trim(),
                                 tags = selectedTags,
+                                evolutionEnabled = evolutionEnabled,
+                                memoryEnabled = memoryEnabled,
+                                proactiveMode = proactiveMode,
+                                soul = soulText,
+                                soulUpdatedAt = if (soulText != initial.soul && soulText.isNotBlank()) System.currentTimeMillis() else initial.soulUpdatedAt,
+                                temperatureEnabled = tempEnabled,
+                                temperature = tempValue,
+                                topPEnabled = topPEnabled,
+                                topP = topPValue,
+                                defaultModelId = botModel.trim(),
+                                enabledToolCategories = toolCats,
                                 createdAt = if (isNew) now else initial.createdAt,
                                 updatedAt = now,
                             ),
@@ -551,6 +826,74 @@ fun PersonaEditDialog(
             onToggleSelect = { name ->
                 selectedTags = if (selectedTags.contains(name)) selectedTags - name else selectedTags + name
             },
+        )
+    }
+
+    if (showSoulViewer) {
+        Dialog(onDismissRequest = { showSoulViewer = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Column(Modifier.fillMaxSize()) {
+                    TopAppBar(
+                        title = { Text(qstr(R.string.qk_04742)) },
+                        navigationIcon = {
+                            IconButton(onClick = { showSoulViewer = false }) { Icon(Icons.Filled.ArrowBack, null) }
+                        },
+                    )
+                    OutlinedTextField(
+                        value = soulText,
+                        onValueChange = { soulText = it },
+                        modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp),
+                        placeholder = { Text(qstr(R.string.qk_04744)) },
+                    )
+                    Text(
+                        qstr(R.string.qk_04765),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                    Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showSoulViewer = false }) { Text(qstr(R.string.qk_04734)) }
+                        Spacer(Modifier.width(8.dp))
+                        Button(onClick = { showSoulViewer = false }) { Text(qstr(R.string.qk_02481)) }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── 工具类别白名单多选 ──
+    if (showToolPicker) {
+        val allCats = com.ai.assistance.quro.core.tools.allToolCategoryLabels()
+        AlertDialog(
+            onDismissRequest = { showToolPicker = false },
+            title = { Text(qstr(R.string.qk_04758), fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    allCats.forEach { (id, label) ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable {
+                                    toolCats = if (toolCats.contains(id)) toolCats - id else toolCats + id
+                                }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(checked = toolCats.contains(id), onCheckedChange = {
+                                toolCats = if (it) toolCats + id else toolCats - id
+                            })
+                            Spacer(Modifier.width(6.dp))
+                            Text(label, fontSize = 13.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        qstr(R.string.qk_04760),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { showToolPicker = false }) { Text(qstr(R.string.qk_04733)) } },
         )
     }
 }
@@ -889,6 +1232,16 @@ private fun SoulFeatureToggleRow(
             Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.width(8.dp))
+        Switch(checked = checked, onCheckedChange = onChanged)
+    }
+}
+@Composable
+private fun BotSettingToggle(title: String, sub: String, checked: Boolean, onChanged: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodySmall)
+            Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         Switch(checked = checked, onCheckedChange = onChanged)
     }
 }

@@ -50,6 +50,9 @@ internal class WebCapability(
     /** 这次的话是从浏览器页上对着一页问的(带着 [AttachedPage] 的说明):那一页已经是当前标签,开局就展开网页一组。 */
     override fun preload(task: String): Boolean = port != null && AttachedPage.has(task)
 
+    /** 页面说明里的标题、网址和选中的字来自网页,去掉后剩下用户打的字。 */
+    override fun userWords(text: String): String = AttachedPage.words(text)
+
     override val family = WEB_FAMILY
 
     override val surface = port?.let { p ->

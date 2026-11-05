@@ -6,6 +6,8 @@ import android.util.Log
 import android.view.KeyEvent
 import android.os.Bundle
 import android.os.SystemClock
+import com.ai.assistance.quro.core.ScreenOcrBridge
+import com.ai.assistance.quro.core.adb.QuroAdbWireless
 import com.ai.assistance.quro.core.shizuku.QuroShizuku
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +55,16 @@ object QuroVirtualScreen {
 
     private var frameJob: Job? = null
 
+    /**
+     * 屏的保活器：见 [DisplayAwake]。
+     *
+     * 没有它，这块自带显示组的屏会自己息屏，于是「截图不变 / 点按无效 / 启动变慢」三个症状
+     * 同时出现，而且从 App 侧完全看不出原因（没有异常、没有错误码，帧就是不来）。
+     */
+    private val awake = DisplayAwake(scope) { displayId ->
+        QuroShizuku.acquireShellService()?.pokeUserActivity(displayId) == true
+    }
+
     private val _frames = MutableStateFlow<Bitmap?>(null)
 
     /** 后台屏的实时画面（缩略到宽 ≤360，供管理页/画中画显示）。 */
@@ -77,6 +89,16 @@ object QuroVirtualScreen {
     val lastError: String? get() = _state.value.error
 
     val isReady: Boolean get() = display != null
+
+    /** 屏是否正在被保活（防息屏）。false 时这块屏可能自己睡过去，截图与点按都会失效。 */
+    val isAwake: Boolean get() = awake.isRunning
+
+    /** 无障碍服务是否在跑（决定能不能给出控件 ref）。 */
+    val isA11yAvailable: Boolean
+        get() = com.ai.assistance.quro.service.QuroAccessibilityService.instance != null
+
+    /** 端侧 OCR 是否已预热（首次调用要加载模型，约 1s）。 */
+    val isOcrReady: Boolean get() = ScreenOcrBridge.isWarm
 
     val displayId: Int get() = display?.displayId ?: -1
 
@@ -113,6 +135,13 @@ object QuroVirtualScreen {
                 val d = QuroAgentDisplay(shell, w, h, dpi)
                 display = d
                 Log.i(TAG, "后台虚拟屏已创建 id=${d.displayId} ${w}x$h @${dpi}dpi")
+
+                // 🔴 建完立刻开始保活：这块屏自带显示组，不报活动就会自己睡（见 DisplayAwake）
+                awake.start(d.displayId)
+
+                // 屏在的这段时间里 OCR 一定会被用到，趁现在把两套模型加载掉（约 1s），
+                // 别让「第一次看屏」承担这笔开销
+                scope.launch { runCatching { ScreenOcrBridge.warmUp() } }
 
                 // 把屏的帧流转发到自己的 _frames，UI 只依赖本对象即可
                 frameJob?.cancel()
@@ -257,6 +286,47 @@ object QuroVirtualScreen {
         return runCatching { d.latestFramePng() }.getOrNull()
     }
 
+    /**
+     * 截后台屏：优先 Shizuku ImageReader（[screenshotPng]），失败退回 shell 的
+     * `screencap -d <displayId>`（Shizuku 特权进程或无线调试 ADB 都行）。
+     * 这样「Shizuku 或无线调试，只要有一种权限就能看后台虚拟屏」—— 任一通道可用即可出图。
+     */
+    fun captureDisplay(context: Context): ByteArray? = screenshotPng(context) ?: screenshotPngViaAdb(context)
+
+    /**
+     * 经 shell 截指定屏：Shizuku 特权进程或无线调试 ADB 都行（二者都是 shell 身份，能
+     * `screencap` 虚拟屏；用户实测无线 ADB `screencap -d 18` 可截到 423KB 图）。
+     *
+     * 先把图写到 `/sdcard` 共享存储、再让本进程读回（App 有 MANAGE_EXTERNAL_STORAGE，可跨进程读）。
+     * 依赖本进程已知的 displayId；若后台屏不是本 App 建的（displayId=-1），返回 null。
+     */
+    fun screenshotPngViaAdb(context: Context): ByteArray? {
+        val id = displayId
+        if (id < 0) return null
+        val path = "/sdcard/quro_vd_capture.png"
+        var ran = false
+        // ① Shizuku 特权进程（与建屏同一个 shell，最稳）
+        runCatching {
+            QuroShizuku.acquireShellService()?.let { shell ->
+                shell.exec("screencap -d $id -p $path")
+                ran = true
+            }
+        }
+        // ② 无线调试 ADB（Shizuku 不可用时兜底）
+        if (!ran) {
+            runCatching {
+                if (QuroAdbWireless.ensureConnected(context)) {
+                    QuroAdbWireless.exec("screencap -d $id -p $path")
+                    ran = true
+                }
+            }
+        }
+        if (!ran) return null
+        val f = java.io.File(path)
+        if (!f.isFile || f.length() == 0L) return null
+        return runCatching { f.readBytes().also { f.delete() } }.getOrNull()
+    }
+
     /** 后台屏当前最上层 Activity 的完整类名；无任务返回 null。 */
     fun topActivity(context: Context): String? {
         val d = ensureDisplay(context) ?: return null
@@ -317,6 +387,10 @@ object QuroVirtualScreen {
      * 判定用移植来的 [MainScreenSpill]（纯逻辑）：排除本应用自己、桌面/最近任务类页面、
      * 从别的屏挪过来的任务、以及用户正在主屏上用着的那个 App（那属于用户意图，不能抢）。
      *
+     * 🔴 这里曾经**无条件** `sleep(900)`，于是每次 open 都白等将近 1 秒 ——
+     * 用户感知就是「AI 启动 App 特别慢」。绝大多数启动根本不会外溢到主屏，
+     * 所以改成：先看有没有记录，**没有就直接返回**，有才等这一小会儿。
+     *
      * @return 给 AI 看的一句话；没有需要处理的情况返回 null
      */
     private fun rescueIfOnMainScreen(
@@ -328,6 +402,9 @@ object QuroVirtualScreen {
         context: Context,
     ): String? {
         return runCatching {
+            // 快速通道：这一刻主屏没有任何新到达的任务 → 什么都不会发生，不必等
+            val first = shell.mainArrivals(since) ?: return null
+            if (parseArrivals(first).isEmpty()) return null
             Thread.sleep(RESCUE_WAIT_MS)
             val b = shell.mainArrivals(since) ?: return null
             val arrivals = parseArrivals(b)
@@ -488,6 +565,199 @@ object QuroVirtualScreen {
     @Volatile
     private var lastSnapshot: BgSnapshot? = null
 
+    /** 最近一次完整读屏（结构 + OCR + 诊断），供 UI 显示。 */
+    @Volatile
+    private var lastReading: BgReading? = null
+
+    /**
+     * 读一次屏的完整结果：**无障碍控件树 + 端侧 OCR + 画面诊断**。
+     *
+     * 为什么要把三样合在一起交给模型：以前只给控件树，于是「自绘界面 / 无障碍没开 /
+     * 界面禁止截屏 / 还在加载」这四种情况在模型眼里长得一模一样——都是「没有元素」。
+     * 模型只能瞎猜，表现出来就是「AI 看屏有问题」。
+     */
+    data class BgReading(
+        val displayId: Int,
+        val width: Int,
+        val height: Int,
+        val topPackage: String?,
+        /** 无障碍控件树；无障碍服务没开时为 null（不是「界面为空」）。 */
+        val snapshot: BgSnapshot?,
+        /** OCR 结果；没跑 OCR 时为 null（结构已经够用）。 */
+        val ocr: ScreenOcrBridge.Result?,
+        /** 画面采样；没拿到帧时为 null。 */
+        val probe: FrameGate.Probe?,
+        /** 画面是否已停稳（false = 预算内一直在变，通常还在加载）。 */
+        val stable: Boolean,
+        /** 后台屏是否就绪。 */
+        val screenReady: Boolean,
+        /** 屏不可用的原因。 */
+        val error: String? = null,
+    ) {
+        /** 结构信息和 OCR 都很空 —— 模型最容易被这种情况骗。 */
+        private val emptyish: Boolean
+            get() = (snapshot?.elements?.isEmpty() ?: true) && (ocr?.lines?.isEmpty() ?: true)
+
+        /** 压成给模型看的文本。**有诊断结论，不让模型自己猜。** */
+        fun toPromptText(): String {
+            val sb = StringBuilder()
+            sb.appendLine("后台屏 displayId=$displayId ${width}x$height")
+            topPackage?.let { sb.appendLine("前台包：$it") }
+
+            val snap = snapshot
+            if (snap == null) {
+                sb.appendLine("无障碍：❌ 未开启 → 没有控件 ref，只能按坐标点。ocr 文字可直接 tap。")
+            } else {
+                val els = snap.elements
+                if (els.isEmpty()) {
+                    sb.appendLine("无障碍：✅ 已开启，但这块屏上没有可读控件（自绘界面/游戏/界面还没画出来）。")
+                } else {
+                    sb.appendLine("无障碍：✅ 可操作元素 ${els.size} 个（ref 可直接用于 tap_element）：")
+                    els.take(ELEMENT_LIMIT).forEach { e ->
+                        val flags = buildList {
+                            if (e.clickable) add("可点")
+                            if (e.editable) add("可输入")
+                            if (e.scrollable) add("可滚")
+                            if (e.checked) add("已选")
+                            if (!e.enabled) add("禁用")
+                            if (e.password) add("密码")
+                            if (e.focused) add("已聚焦")
+                        }.joinToString(",")
+                        val label = e.name.ifBlank { "(无文字)" }.take(48)
+                        // 资源 ID 与占位语对「认出哪个是搜索框」很关键，但只在有信息量时才打印
+                        val id = e.resourceId?.let { " #$it" } ?: ""
+                        val ph = e.placeholder?.takeIf { it.isNotBlank() && it != e.name }
+                            ?.let { " 占位\"${it.take(24)}\"" } ?: ""
+                        sb.appendLine("  ${e.ref} ${e.role} \"$label\" (${e.centerX},${e.centerY})$id$ph${if (flags.isEmpty()) "" else " [$flags]"}")
+                    }
+                    if (els.size > ELEMENT_LIMIT) sb.appendLine("  …还有 ${els.size - ELEMENT_LIMIT} 个未列出")
+                    val texts = snap.texts
+                    if (texts.isNotEmpty()) {
+                        sb.appendLine("界面文字：" + texts.take(TEXT_LIMIT).joinToString(" | ").take(1200))
+                    }
+                }
+            }
+
+            val o = ocr
+            if (o != null) {
+                when (o.status) {
+                    ScreenOcrBridge.Status.OK -> {
+                        sb.appendLine("OCR 补读（本机识别 ${o.lines.size} 行，坐标可直接 tap）：")
+                        o.lines.take(OCR_LIMIT).forEach { l ->
+                            sb.appendLine("  \"${l.text.take(60)}\" (${l.centerX},${l.centerY})")
+                        }
+                        if (o.lines.size > OCR_LIMIT) sb.appendLine("  …还有 ${o.lines.size - OCR_LIMIT} 行")
+                    }
+                    ScreenOcrBridge.Status.EMPTY ->
+                        sb.appendLine("OCR：识别成功但屏上没有文字（纯图标/纯图片界面）。")
+                    ScreenOcrBridge.Status.FAILED ->
+                        sb.appendLine("OCR：❌ 识别器出错（${o.reason}）—— 这不代表屏上没有文字。")
+                    ScreenOcrBridge.Status.UNAVAILABLE ->
+                        sb.appendLine("OCR：不可用（${o.reason}）。")
+                }
+            }
+
+            // ── 诊断结论：把「看起来一样」的几种坏状态区分开 ──
+            val p = probe
+            when {
+                !screenReady -> sb.appendLine("⚠️ 后台屏未就绪：${error ?: "先 open 一个 App 再读"}")
+                p?.black == true ->
+                    sb.appendLine("⚠️ 画面全黑：该界面很可能禁止截屏（FLAG_SECURE），结构也读不到内容。只能盲操作或改用主屏工具。")
+                !stable ->
+                    sb.appendLine("⚠️ 画面一直在变：界面可能还在加载/过渡。等 1 秒再 read 一次通常就正常。")
+                emptyish ->
+                    sb.appendLine("⚠️ 结构与文字都为空：确认 App 真的在这个屏上（open 后先看 top），或改用 screenshot 看画面。")
+            }
+            return sb.toString().trim()
+        }
+
+        private companion object {
+            const val ELEMENT_LIMIT = 60
+            const val TEXT_LIMIT = 40
+            const val OCR_LIMIT = 40
+        }
+    }
+
+    /**
+     * 读一次屏（结构为主，结构稀薄时自动补 OCR）。
+     *
+     * @param withOcr 允许 OCR 兜底。关掉它只读结构（更快，但自绘界面会读空）
+     */
+    suspend fun readForAi(context: Context, withOcr: Boolean = true): BgReading {
+        val d = ensureDisplay(context)
+        if (d == null) {
+            return BgReading(-1, 0, 0, null, null, null, null, true, false, lastError ?: "后台虚拟屏不可用")
+        }
+
+        // ① 控件树：无障碍在跑才有；没开时为 null（不是空界面）
+        val snap = readScreen()
+        lastSnapshot = snap
+
+        // ② 是否需要 OCR：结构读不到、或读到的太少（自绘 UI 的典型形态）
+        val sparse = snap == null || snap.elements.size < 3 || snap.texts.size < 3
+        var ocr: ScreenOcrBridge.Result? = null
+        var probe: FrameGate.Probe? = null
+        var stable = true
+
+        if (withOcr && sparse) {
+            // 等画面停稳再认，否则会认到启动图/白屏/骨架屏（这是「看屏不准」的主因之一）
+            val frame = FrameGate.awaitStable { d.latestFrameBitmap() }
+            if (frame != null) {
+                probe = frame.probe
+                stable = frame.stable
+                if (frame.probe.black) {
+                    // 防截屏/还没亮：别浪费时间 OCR，直接回收
+                    runCatching { frame.bitmap.recycle() }
+                } else {
+                    // 🔴 直接喂位图：以前走「Bitmap → PNG → decode → OCR」，
+                    //    多一次全尺寸编码+解码，白白慢 400~800ms。
+                    ocr = ScreenOcrBridge.read(frame.bitmap)
+                }
+            }
+        } else if (sparse) {
+            // 不跑 OCR，但至少告诉模型画面是不是黑的
+            d.latestFrameBitmap()?.let { bmp ->
+                probe = FrameGate.probe(bmp)
+                bmp.recycle()
+            }
+        }
+
+        return BgReading(
+            displayId = d.displayId,
+            width = d.width,
+            height = d.height,
+            topPackage = snap?.topPackage,
+            snapshot = snap,
+            ocr = ocr,
+            probe = probe,
+            stable = stable,
+            screenReady = true,
+        ).also { lastReading = it }
+    }
+
+    /** 最近一次完整读屏（不重新读）。 */
+    fun lastReading(): BgReading? = lastReading
+
+    /** 当前画面的粗签名（0 = 还没画面）。动作前后各取一次就能判断「界面到底变没变」。 */
+    fun frameSignature(): Long {
+        val d = display ?: return 0L
+        val bmp = d.latestFrameBitmap() ?: return 0L
+        return try {
+            FrameGate.probe(bmp).signature
+        } finally {
+            bmp.recycle()
+        }
+    }
+
+    /**
+     * 等画面变化，最多 [timeoutMs]。
+     *
+     * 用途：点完立刻判断「这一下到底点中没点中」——变了通常 100–300ms 就返回，
+     * 没变才等满。比固定 sleep 快，也比「再 read 一次让模型自己比」准。
+     */
+    suspend fun awaitFrameChange(before: Long, timeoutMs: Long = 1_200L): Boolean =
+        FrameGate.awaitChange(before, timeoutMs) { display?.latestFrameBitmap() }
+
     /**
      * 读后台屏的**控件树**（不是截图）。
      *
@@ -562,6 +832,7 @@ object QuroVirtualScreen {
         synchronized(lock) {
             val d = display ?: return
             display = null
+            awake.stop()
             frameJob?.cancel()
             frameJob = null
             runCatching { d.release() }

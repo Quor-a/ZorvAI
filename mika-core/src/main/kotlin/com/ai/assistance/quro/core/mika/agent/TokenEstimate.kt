@@ -6,7 +6,7 @@ import kotlin.math.ceil
 
 /**
  * 不调分词器的粗估:非汉字字符 / 4 + 汉字 × 0.75;图片知道尺寸时按 宽×高/[PIXELS_PER_TOKEN],不知道按 1000 计。
- * 只用来判断要不要压缩。
+ * 只用来判断要不要压缩，以及上下文预算里按 token 截断。
  * 中日韩标点、全角字符、假名、谚文和汉字一样按 0.75 计。
  */
 object TokenEstimate {
@@ -47,6 +47,23 @@ object TokenEstimate {
 
     /** 同一口径估算一段文字,用于不在消息里的固定开销(基础提示词、工具定义)。 */
     fun of(text: String): Int = ceil(chars(text)).toInt()
+
+    /** 截到不超过 [maxTokens] 个 token 的最长前缀,末尾接 [hint];只在上下文预算处用。 */
+    fun clip(text: String, maxTokens: Int, hint: String = "…"): String {
+        if (maxTokens <= 0 || text.isEmpty()) return ""
+        if (of(text) <= maxTokens) return text
+        val room = maxTokens - of(hint)
+        if (room <= 0) return hint
+        var lo = 0
+        var hi = text.length
+        while (lo < hi) {
+            val mid = (lo + hi + 1) / 2
+            if (of(text.substring(0, mid)) <= room) lo = mid else hi = mid - 1
+        }
+        // 不把一个代理对劈成两半
+        if (lo in 1 until text.length && text[lo - 1].isHighSurrogate() && text[lo].isLowSurrogate()) lo--
+        return text.substring(0, lo) + hint
+    }
 
     private val WIDE_SCRIPTS = setOf(
         Character.UnicodeScript.HAN, Character.UnicodeScript.HIRAGANA, Character.UnicodeScript.KATAKANA, Character.UnicodeScript.HANGUL,

@@ -87,6 +87,15 @@ class ActionExecutor(
         tools.aim(call.name, args)
         try {
             return aimed(call, origin, followUp, reads, args, offScreen, verb)
+        } catch (e: com.ai.assistance.quro.core.mika.access.AppAccessDenied) {
+            val content = buildJsonObject {
+                put("ok", false); put("error", e.code); put("message", e.message); put("retryable", false)
+                e.packageName?.let { put("package", it) }
+            }
+            // 单步:作为这次工具调用的结果交给模型,让它换路线或向用户说明;批和脚本按 Refused 自己处理
+            if (origin.policy.recordsRefusal) followUp.refused(content)
+            recorder.result(origin.step, call.name, verb, content, content, null, null, 0, origin.policy.source, call.id)
+            return ActionOutcome.Refused(e.code, content, emptyList())
         } finally {
             // 成功与否由分发器记;这里只结束这一层
             tools.release(false)
@@ -100,6 +109,7 @@ class ActionExecutor(
         var call = given
         var args = givenArgs
         var note: JsonObject? = null
+        tools.interfaces.checkAppAccess(tools.declared(call.name))
         when (val d = tools.interfaces.described(tools.declared(call.name), args)) {
             is Described.Failed -> return ran(Step(call, args, origin, emptyList(), writing = false, offScreen, verb, null, followUp, reads, preset = d.result))
             is Described.Resolved -> { args = d.args; call = call.copy(argsJson = d.args.toString()); note = d.note }
@@ -207,6 +217,7 @@ class ActionExecutor(
         if (changes && s.preset == null && !failed) recorder.noteChange(mark)
         val durationMs = recorder.now() - started
         val resolved = s.followUp.resolve(raw) ?: return ActionOutcome.Cancelled(s.before)
+        tools.interfaces.checkAppAccess(tools.declared(call.name), after = true)
 
         val after = subVerdicts.toMutableList()
         after += if (s.offScreen) offScreen?.result(call.name, s.args, resolved.content).orEmpty() else guards.result(call.name, resolved.content)

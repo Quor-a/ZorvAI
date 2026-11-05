@@ -46,7 +46,20 @@ data class ScenarioFailurePolicy(
 /** 全局默认决策表（按失败类型给出最合理的尝试序列）。 */
 val DEFAULT_TABLE: Map<FailureType, List<RecoveryAction>> = mapOf(
     FailureType.PERMISSION to listOf(RecoveryAction.ESCALATE),
-    FailureType.TIMEOUT to listOf(RecoveryAction.RETRY, RecoveryAction.RETRY, RecoveryAction.ESCALATE),
+    /**
+     * 超时**不重试**。
+     *
+     * 原来的 `[RETRY, RETRY, ESCALATE]` 是把「卡」放大成「长时间卡」的直接原因：
+     * 单个工具默认 `execTimeoutMs = 60s`，同一份参数重跑两次，一次调用就要占 180s；
+     * 而 `QuroToolEngine.execute` 的整轮预算只在**多个串行调用**时生效
+     * （`serial.size <= 1` 时直接放行给工具自己的预算），所以「模型只发了一个调用」
+     * 恰恰是最不受保护的情况 —— 用户侧看到的是转圈三分钟、最后吐一句超时。
+     *
+     * 判断依据：超时说明**在给定预算内做不到**，同样参数重跑几乎必然再次超时；
+     * 真正的瞬时抖动属于 [FailureType.TRANSPORT]（那条仍保留两次重试，网络类容错不受影响）。
+     * 需要长时间跑的工具（harness 3600s 等）本来就声明了更长的 `execTimeoutMs`，不会触发这里。
+     */
+    FailureType.TIMEOUT to listOf(RecoveryAction.ESCALATE),
     FailureType.TRANSPORT to listOf(RecoveryAction.RETRY, RecoveryAction.RETRY, RecoveryAction.ESCALATE),
     FailureType.PARSE to listOf(RecoveryAction.CORRECT, RecoveryAction.ESCALATE),
     FailureType.BUSINESS to listOf(

@@ -1228,7 +1228,14 @@ fun RenderChip(component: UIComponent, ctx: RenderContext, modifier: Modifier = 
     )
     AssistChip(
         onClick = { ctx.clickHandler(component)?.invoke() },
-        label = { Text(text = label, color = textColor) },
+        // 🔴 chip 文本锁单行（2026-11-06 根治「行尾 chip 被挤成一字一行」）：
+        //    Row 按序测量非 weight 子节点，行尾 chip 拿到的剩余宽度不足时，
+        //    无 maxLines 的 Text 逐字换行。
+        label = { Text(
+            text = label, color = textColor,
+            maxLines = 1, softWrap = false,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        ) },
         modifier = modifier,
         colors = AssistChipDefaults.assistChipColors(containerColor = bg, labelColor = textColor)
     )
@@ -1880,8 +1887,10 @@ fun RenderNavDrawer(component: UIComponent, ctx: RenderContext, modifier: Modifi
     val header = component.propStringResolved("header", ctx)
     Column(
         modifier = modifier
-            .fillMaxHeight()
-            .width(260.dp)
+            // 🔴 移动端适配修复（2026-11-04）：作为普通节点渲染时 fillMaxHeight 在
+            //    纵向滚动父容器里是无界约束、260dp 定宽占掉版心 80%。
+            //    内联场景按「满宽纵向列表」渲染，抽屉语义由外层容器决定。
+            .fillMaxWidth()
             .background(containerColor(component, ctx, ctx.theme.colorScheme.surface))
             .verticalScroll(rememberScrollState())
     ) {
@@ -2186,8 +2195,8 @@ fun RenderSideMenu(component: UIComponent, ctx: RenderContext, modifier: Modifie
     var selected by remember { mutableIntStateOf(0) }
     Column(
         modifier = modifier
-            .fillMaxHeight()
-            .width(240.dp)
+            // 🔴 移动端适配修复（2026-11-04）：同 nav_drawer，内联时按满宽纵向列表渲染。
+            .fillMaxWidth()
             .background(containerColor(component, ctx, ctx.theme.colorScheme.surface))
             .verticalScroll(rememberScrollState())
     ) {

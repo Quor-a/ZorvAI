@@ -46,6 +46,29 @@ class QuroUpstreamRefusalTest {
     }
 
     @Test
+    fun `apology plus workaround is NOT a refusal`() {
+        // 真实误判场景：开头道歉 + 不能，但立刻给了替代方案 / 步骤 → 这是真答案，不能误判。
+        listOf(
+            "抱歉，我现在不能帮你操作这个，但我可以给你步骤。",
+            "我无法帮你解决这个问题，但是下面是替代方案。",
+            "我不是不能帮你，其实这个很简单，步骤如下。",
+            "我无法回答这个，不过你可以看日志里的时间戳。",
+            "抱歉我不能直接改系统文件，不过你可以用下面的命令。",
+            "I'm sorry I can't run it directly, but here's how you can do it.",
+        ).forEach { assertFalse(it, QuroUpstreamRefusal.detect(it)) }
+    }
+
+    @Test
+    fun `pure chinese refusal without alternative is still flagged`() {
+        // 纯拒答（无替代方案、篇幅短）仍应判拒答，避免漏判。
+        listOf(
+            "抱歉，我无法提供该内容的回答。",
+            "我的安全策略禁止生成此类内容。",
+            "很遗憾，我不能协助您完成此请求。",
+        ).forEach { assertTrue(it, QuroUpstreamRefusal.detect(it)) }
+    }
+
+    @Test
     fun `blank text is not a refusal`() {
         assertFalse(QuroUpstreamRefusal.detect(""))
         assertFalse(QuroUpstreamRefusal.detect("   \n  "))

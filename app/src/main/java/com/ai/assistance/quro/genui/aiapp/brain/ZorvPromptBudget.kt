@@ -91,13 +91,35 @@ const val MEMORY_SHARE_OF_SYSTEM: Double = 0.08
         "get_device_info", "get_current_time", "calculate", "run_code",
         "web_search", "read_url", "http_request",
         "list_files", "read_text_file", "file_read", "file_info", "find_files",
-        "terminal_run", "terminal_exec", "terminal_write", "terminal_status",
+        // 🔴 终端一族必须在这里，而且要写**真实工具名**。
+        // 这张表此前写的是 `terminal_run` / `terminal_exec` / `terminal_write` / `terminal_status`——
+        // 那四个是 `terminal` 工具的 **action 值**，不是工具名；注册表里根本不存在这些名字，
+        // 于是四条优先级全部落空（等于名单里从来没有终端）。预算一紧，AI 的 tools 字段里
+        // 就一个终端工具都没有 —— 表现就是「提示词说了它也不用 / 不会用」。
+        // 真实名字（`override val name`）：
+        //   termux        → Termux 官方 bootstrap（PREFIX / pkg），用户说「终端」默认用它
+        //   terminal      → 界面那几个终端窗口的会话驱动（exec / run / write）
+        //   linux_*       → 沙箱 proot Ubuntu 24.04（apt）
+        "termux", "terminal", "linux_run", "linux_pkg", "linux_status", "shizuku_exec",
         "speak", "stop_speak", "get_clipboard", "set_clipboard",
         "get_battery", "get_network_info", "get_location",
         "get_active_notifications", "get_wifi_info",
         "list_installed_apps", "launch_app", "search_and_launch_app",
         "read_calendar", "get_sensors", "vibrate",
     )
+
+    /**
+     * 自检：[PRIORITY_TOOLS] 里有哪些名字在 [all] 中**根本不存在**。
+     *
+     * 这张表是手写字符串，工具一改名（或把 action 值当工具名写进来）就静默失效：
+     * 不报错、不崩溃，只是「优先级」不再生效，表现为预算一紧关键工具就消失，
+     * 排查时要从 258 个工具里一个个比对才能发现。上次 `terminal_run` 写进这张表
+     * 就是这么静默失效的，所以把比对做成可直接断言的纯函数。
+     */
+    fun missingPriorityNames(all: List<QuroToolSpec>): List<String> {
+        val names = all.mapTo(HashSet()) { it.name }
+        return PRIORITY_TOOLS.filter { it !in names }
+    }
 
     /** 工具层收敛结果（带诊断信息，供调用方打日志；不自己打，避免单测依赖 android.util.Log）。 */
     data class ToolFit(
@@ -163,9 +185,15 @@ const val MEMORY_SHARE_OF_SYSTEM: Double = 0.08
 
         val kept = ArrayList<QuroToolSpec>(all.size)
         var used = 0
-        // 第一轮：白名单工具优先全保（它们是 GenUI 的实际依赖）
-        for (t in all) {
-            if (t.name !in PRIORITY_TOOLS) continue
+        // 第一轮：白名单工具优先全保（它们是 GenUI 的实际依赖）。
+        //
+        // 🔴 必须按 [PRIORITY_TOOLS] 的**声明顺序**遍历，不能按注册顺序：
+        // 按注册顺序时「优先集」只保证成员身份、不保证先后，排在注册表末尾的关键工具
+        // （`termux` 就是典型）照样会被前面的长描述工具吃光额度，白名单形同虚设。
+        // 名单顺序 = 真实优先级，这是这张表存在的意义。
+        val byName = all.associateBy { it.name }
+        for (name in PRIORITY_TOOLS) {
+            val t = byName[name] ?: continue
             val cost = t.description.length + t.parametersJson.length
             if (used + cost > allowed) continue
             kept.add(t); used += cost
@@ -179,6 +207,10 @@ const val MEMORY_SHARE_OF_SYSTEM: Double = 0.08
         }
         // 极端情况下（预算连一份工具都放不下）至少发一份，别让 Agent 彻底没有工具
         if (kept.isEmpty()) return ToolFit(all.take(1), all.size, totalChars, allowed, truncated = true)
+        // 输出按注册顺序还原：优先级只决定「保谁」，不改变「以什么顺序发」，
+        // 避免上游因为工具排列变化出现缓存/行为漂移。
+        val order = all.withIndex().associate { (i, t) -> t.name to i }
+        kept.sortBy { order[it.name] ?: Int.MAX_VALUE }
         return ToolFit(kept, all.size, totalChars, allowed, truncated = true)
     }
 

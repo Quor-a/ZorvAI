@@ -67,6 +67,8 @@ enum class Advice {
     PhoneTooOld,
     /** 系统里没有无线调试:改用电脑经 USB 启动。 */
     NoWirelessDebugging,
+    /** 这个环境里开发者选项和无线调试都没有,操作不了手机里的 App;聊天、网页、文件和计算照常可用。 */
+    PhoneControlUnavailable,
     /** 无障碍没开。 */
     TurnOnAccessibility,
     /** 无障碍开着却没在运行:关掉再打开。 */
@@ -142,7 +144,8 @@ data class CheckResult(
 
 /**
  * 报告抬头的设备事实,都来自系统公开的接口;不含序列号、账号这类能认出人的东西。
- * [wirelessDebugging] 系统里有没有无线调试这一项,读不准为 null。
+ * [wirelessDebugging] 系统里有没有无线调试这一项,读不准为 null;[developerOptionsPage] 系统里打不打得开开发者选项页,不知道为 null。
+ * [phoneControlUnavailable] 是这个环境没有能起助手的路(和引导页同一个判断)。
  */
 data class DeviceFacts(
     val manufacturer: String,
@@ -156,6 +159,8 @@ data class DeviceFacts(
     val wirelessDebugging: Boolean?,
     val appVersion: String,
     val appBuild: String,
+    val developerOptionsPage: Boolean? = null,
+    val phoneControlUnavailable: Boolean = false,
 ) {
     /** 机型:型号里已带厂商名时只写型号。 */
     val modelName: String get() = if (model.startsWith(manufacturer, ignoreCase = true)) model.trim() else "$manufacturer $model".trim()

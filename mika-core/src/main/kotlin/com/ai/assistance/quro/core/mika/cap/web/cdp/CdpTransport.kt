@@ -84,7 +84,7 @@ object CdpDiscovery {
                     headers["transfer-encoding"]?.contains("chunked", ignoreCase = true) == true -> Http.readChunked(input)
                     headers["content-length"] != null -> {
                         val n = headers.getValue("content-length").trim().toInt()
-                        input.readNBytes(n).also { if (it.size < n) throw IOException("HTTP body truncated") }
+                        Http.readUpTo(input, n).also { if (it.size < n) throw IOException("HTTP body truncated") }
                     }
                     else -> input.readBytes()
                 }
@@ -158,7 +158,7 @@ internal object Http {
             buf.write(b)
             if (buf.size() > MAX_LINE) throw IOException("header line too long")
         }
-        val s = buf.toString(Charsets.ISO_8859_1)
+        val s = String(buf.toByteArray(), Charsets.ISO_8859_1)
         return s.removeSuffix("\r")
     }
 
@@ -174,6 +174,21 @@ internal object Http {
         }
     }
 
+    /**
+     * 读满 [n] 字节,流先结束就返回已读到的部分。不用 InputStream.readNBytes:安卓 13 才有,
+     * 同样不用 ByteArrayOutputStream.toString(Charset)。
+     */
+    fun readUpTo(input: InputStream, n: Int): ByteArray {
+        val out = ByteArray(n)
+        var got = 0
+        while (got < n) {
+            val r = input.read(out, got, n - got)
+            if (r < 0) break
+            got += r
+        }
+        return if (got == n) out else out.copyOf(got)
+    }
+
     fun readChunked(input: InputStream): ByteArray {
         val out = ByteArrayOutputStream()
         while (true) {
@@ -182,7 +197,7 @@ internal object Http {
                 while (!readLine(input).isNullOrEmpty()) Unit
                 return out.toByteArray()
             }
-            val chunk = input.readNBytes(size)
+            val chunk = readUpTo(input, size)
             if (chunk.size < size) throw IOException("HTTP chunk truncated")
             out.write(chunk)
             readLine(input)

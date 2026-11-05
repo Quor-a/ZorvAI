@@ -30,7 +30,7 @@
     <string name="qk_00027">ACI app: %1$s (package: %2$s)</string>
     <string name="qk_00028" formatted="false">User selected: Visual Popup. Please call the visual_popup tool to create a visual popup now.</string>
     <string name="qk_00029" formatted="false">User selected: Visual Question. Please call the visual_question tool to create a visual question now.</string>
-    <string name="qk_00030" formatted="false">User selected: Visual Card. Please output a self-developed visual card (metric/progress/structured block) using the ```quro-card fence. Plain text replies are forbidden.</string>
+    <string name="qk_00030" formatted="false">User selected: Widget Card (an independent category). Immediately call visual_card_skeleton(kind=...) to fetch an HTML skeleton, replace every {{placeholder}} with real data, then call visual_card(title, html=...) to render one inline widget card. Never substitute dynamic UI / rich components / popups / HTML page preview / quro-card fence. Plain text replies are forbidden.</string>
     <string name="qk_00031" formatted="false">User selected: Dynamic UI. Please output a native interactive UI (form/panel/tool entry) using the ```quro-ui fence. Plain text replies are forbidden.</string>
     <string name="qk_00032" formatted="false">User selected: AIP Layout. Please output a fully laid-out document/PPT/report (doc/deck/mindmap) using the ```aip fence (or aip_compose tool). Do not reply with plain text only.</string>
     <string name="qk_00033">Enabled skills (%1$s): ${enabledSkills.joinToString(</string>
@@ -2408,7 +2408,7 @@ or tap + at bottom right to add one, or ask the AI in chat to write one for you.
     <string name="qk_02477" formatted="false">Two independent controls, no mutual influence. On = 100% proactive use; Off = only when the user reminds.</string>
     <string name="qk_02478" formatted="false">Dynamic UI components</string>
     <string name="qk_02479" formatted="false">On: AI proactively outputs native interactive UI via ```quro-ui; Off: only when the user asks.</string>
-    <string name="qk_02480" formatted="false">On: AI proactively outputs self-built small cards via ```quro-card; Off: only when the user asks.</string>
+    <string name="qk_02480" formatted="false">On: AI proactively calls the visual_card tool to render widget cards (optionally fetching a skeleton first); Off: only when the user asks.</string>
     <string name="qk_02481" formatted="false">Save soul card</string>
     <string name="qk_02482" formatted="false">Tag management</string>
     <string name="qk_02483" formatted="false">No tags yet, tap + at top right to create one.</string>

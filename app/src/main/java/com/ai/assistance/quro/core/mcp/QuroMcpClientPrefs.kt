@@ -28,6 +28,8 @@ object QuroMcpClientPrefs {
                         token = o.optString("token", ""),
                         kind = o.optString("kind", "remote"),
                         toolDefs = o.optString("toolDefs", ""),
+                        handshake = o.optBoolean("handshake", false),
+                        enabled = o.optBoolean("enabled", true),
                     )
                 )
             }
@@ -46,6 +48,11 @@ object QuroMcpClientPrefs {
                         put("token", it.token)
                         put("kind", it.kind)
                         put("toolDefs", it.toolDefs)
+                        // 🔴 handshake 持久化修复（2026-11-04）：此前不读写该字段，
+                        //    保存的服务器重启后恒 handshake=false —— 严格型第三方 MCP
+                        //    （需要 initialize 会话，如官方 Notion/Sentry）全部连不上。
+                        if (it.handshake) put("handshake", true)
+                        if (!it.enabled) put("enabled", false)
                     }
                 )
             }
@@ -57,6 +64,10 @@ object QuroMcpClientPrefs {
     /** 仅返回 AI 部署的本地 MCP 服务器（kind == "local"）。 */
     fun loadLocal(context: Context): List<QuroMcpClient.McpServerConfig> =
         load(context).filter { it.kind == "local" }
+
+    /** 仅返回启用的服务器（工具层用；UI 需展示停用的，所以走 [load]）。 */
+    fun loadEnabled(context: Context): List<QuroMcpClient.McpServerConfig> =
+        load(context).filter { it.enabled }
 
     fun add(context: Context, cfg: QuroMcpClient.McpServerConfig) {
         val list = load(context).toMutableList()
@@ -73,7 +84,7 @@ object QuroMcpClientPrefs {
 
     /** 按别名精确匹配，失败再按 url 匹配。 */
     fun find(context: Context, ref: String): QuroMcpClient.McpServerConfig? {
-        val list = load(context)
+        val list = loadEnabled(context)
         return list.firstOrNull { it.alias == ref } ?: list.firstOrNull { it.url == ref }
     }
 }

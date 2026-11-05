@@ -2,6 +2,7 @@ package com.ai.assistance.quro.core.tools
 
 import com.ai.assistance.quro.core.QuroToolSpec
 import java.security.MessageDigest
+import org.json.JSONObject
 
 /**
  * 工具规格的**协议合法性护栏**（N5）。
@@ -167,5 +168,50 @@ object QuroToolSpecGuard {
             if (seen.add(s.name)) kept.add(s) else dropped.add(s.name)
         }
         return DedupeResult(kept, dropped)
+    }
+
+    /**
+     * 给工具 schema 注入 `display_intent` 可选参数。
+     *
+     * ## 目的
+     *
+     * 对话框里的「活动流」要给每次工具调用显示**一句用户能看懂的话**
+     * （「探测本地 MCP 端点」），而不是内部工具名 `quroterm_exec`。
+     * 做法是让**模型自己写**：给 schema 加一个 `display_intent` 字符串参数，
+     * 并在描述里写清写法要求，模型调用时就会填。
+     *
+     * ## 安全边界（重要）
+     *
+     * - 只在 `properties` 里**追加**一个可选字段，**不改**任何既有字段
+     *   → 不改变工具的实际语义，也不会让工具「多一个必填参数」而调用失败。
+     * - **不**把它加进 `required` → 模型不填也能正常调用（老模型不认识这个参数）。
+     * - schema 非法/无法解析时**原样返回**（绝不用坏 schema 覆盖好 schema）。
+     * - 参数已存在同名 `display_intent` 时**不重复注入**。
+     */
+    fun withDisplayIntent(spec: QuroToolSpec): QuroToolSpec {
+        val raw = spec.parametersJson.trim()
+        if (raw.isEmpty()) return spec
+        return try {
+            val obj = JSONObject(raw)
+            val props = obj.optJSONObject("properties") ?: JSONObject()
+            if (props.has("display_intent")) return spec
+            props.put(
+                "display_intent",
+                JSONObject()
+                    .put("type", "string")
+                    .put(
+                        "description",
+                        "一句面向用户的简短说明（6–30 字），描述这次调用要达成的**目的**，" +
+                            "用用户的语言写。不要复述原始参数、不要提工具内部名、" +
+                            "不要用「正在」「完成」这类状态词。",
+                    ),
+            )
+            obj.put("type", obj.optString("type", "object"))
+            obj.put("properties", props)
+            spec.copy(parametersJson = obj.toString())
+        } catch (_: Throwable) {
+            // 解析失败 → 原样保留（宁可没有意图文案，也不能用一个坏 schema 让整轮请求失败）。
+            spec
+        }
     }
 }

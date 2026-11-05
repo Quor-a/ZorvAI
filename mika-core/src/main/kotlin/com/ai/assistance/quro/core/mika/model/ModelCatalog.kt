@@ -1,5 +1,6 @@
 package com.ai.assistance.quro.core.mika.model
 
+import com.ai.assistance.quro.core.mika.net.ProxyFailure
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -33,6 +34,16 @@ data class ListedModel(
     val chat: Boolean? = null,
     /** 服务商明确给出的思考档位;null 表示未知,空列表表示没有可选档位。保留服务商的顺序。 */
     val reasoningEfforts: List<String>? = null,
+    /**
+     * 服务商写明这个模型接受的思考方式(Anthropic 列表 `capabilities.thinking.types` 里支持的那几种,
+     * 如 `adaptive`、`enabled`、`disabled`);null 表示没说。
+     */
+    val thinkingTypes: List<String>? = null,
+    /**
+     * 接口写明了这个模型能走哪几种协议(有的聚合服务用 `supported_endpoints` 给出,如 `/chat/completions`、
+     * `/messages`);null 表示没说。用不在其中的接口类型调用必然失败,见 [ModelProtocol.ofPath]。
+     */
+    val protocols: List<ModelProtocol>? = null,
 ) {
     val usable: Boolean get() = endpoint != null || unsupportedApis.isEmpty()
 }
@@ -50,6 +61,24 @@ enum class ModelProtocol(val wire: String) {
 
     companion object {
         fun of(wire: String?): ModelProtocol? = entries.firstOrNull { it.wire == wire }
+
+        /**
+         * 按端点路径认协议:有的聚合服务用 `supported_endpoints` 给每个模型能走哪些端点(`/chat/completions`、
+         * `/messages`、`/responses`、`/v1beta/models/{模型}:generateContent`),只写路径不写协议名。认不出为 null。
+         *
+         * 只认 `…:generateContent` 这一种 Gemini 生成端点:裸的 `/models`(或 `/v1/models`、`/provider/v1/models`)
+         * 是列模型的端点,列得出来不等于调得动,按它认定「能生成」会让不该试的模型被试一次,所以宁可认不出。
+         */
+        fun ofPath(path: String?): ModelProtocol? {
+            val p = path?.trim()?.trimEnd('/')?.lowercase() ?: return null
+            return when {
+                p.endsWith("/chat/completions") -> ChatCompletions
+                p.endsWith("/messages") -> Messages
+                p.endsWith("/responses") -> Responses
+                p.endsWith(":generatecontent") -> GenerateContent
+                else -> null
+            }
+        }
     }
 }
 
@@ -81,9 +110,21 @@ enum class ListFailure(val text: String) {
     Quota("账户额度已用完"),
     RateLimited("请求太频繁,请稍后再试"),
     Network("连不上这个地址,请检查网络和接口地址"),
+    ProxyUnreachable("连不上网络代理,或代理没有转发这个请求;请检查设置 › 网络代理"),
+    ProxyAuth("网络代理拒绝了账号或密码,请检查设置 › 网络代理"),
     NotSupported("这个服务不提供模型列表"),
     Server("服务暂时出错,请稍后再试"),
     BadResponse("返回的内容看不懂,请检查接口地址和接口类型"),
+    ;
+
+    companion object {
+        /** 请求没发成:代理那一段的问题照实说,别的算连不上。 */
+        fun of(e: Throwable): ListFailure = when ((e as? ModelError.Proxy)?.failure) {
+            ProxyFailure.Unreachable -> ProxyUnreachable
+            ProxyFailure.AuthFailed -> ProxyAuth
+            null -> Network
+        }
+    }
 }
 
 sealed interface ModelListResult {
@@ -103,8 +144,9 @@ sealed interface ModelListResult {
  *   给了 `input_modalities`、`context_window`、`supported_reasoning_levels` 的照填。
  * - Anthropic:`GET {base}/v1/models`,按 `after_id` 翻页;`max_input_tokens` 是上下文,
  *   `capabilities.image_input` / `capabilities.thinking` 是看图和推理。不给工具调用信息。
+ *   思考档位按 `capabilities.effort` 和 `capabilities.thinking.types` 逐项照填(见 [anthropicEfforts])。
  * - Gemini:`GET {base}/v1beta/models`,按 `pageToken` 翻页;只留能 `generateContent` 的,
- *   `inputTokenLimit` 是上下文,`thinking` 是推理。不给工具调用和看图信息。
+ *   `inputTokenLimit` 是上下文,`thinking` 是推理。不给工具调用和看图信息,也不给思考档位。
  */
 class ModelCatalog(private val http: OkHttpClient) {
     // 各方法的 headers:每个请求都带的头(见 [ClientHeaders]);Key 的头由这里自己加
@@ -174,6 +216,11 @@ class ModelCatalog(private val http: OkHttpClient) {
                 ?.trim()?.takeIf { it.isNotEmpty() }
         }?.distinct()
         val api = o.obj("api")
+        // 有的聚合服务不给 `api` 表,改用 `supported_endpoints` 写这个模型能走哪几个端点
+        val protocols = (o["supported_endpoints"] as? JsonArray)
+            ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.let(ModelProtocol::ofPath) }
+            ?.distinct()
+            ?.takeIf { it.isNotEmpty() }
         // 一个模型可能写了几种协议:按 Chat Completions、Messages、generateContent、Responses 的次序取第一种会说的
         val endpoint = api?.let { a ->
             ModelProtocol.entries.firstNotNullOfOrNull { p ->
@@ -196,6 +243,7 @@ class ModelCatalog(private val http: OkHttpClient) {
             endpoint = endpoint,
             reasoningEfforts = efforts,
             unsupportedApis = if (endpoint == null) api?.keys?.toList().orEmpty() else emptyList(),
+            protocols = protocols,
             chat = when (o.str("type")?.lowercase()) {
                 in CHAT_TYPES -> true
                 in NON_CHAT_TYPES -> false
@@ -208,14 +256,33 @@ class ModelCatalog(private val http: OkHttpClient) {
     private fun anthropicModel(o: JsonObject): ListedModel? {
         val id = o.str("id")?.takeIf { it.isNotBlank() } ?: return null
         val caps = o["capabilities"] as? JsonObject
+        val thinking = caps?.obj("thinking")
+        val types = thinking?.obj("types")?.supportedKeys()
         return ListedModel(
             id = id,
             displayName = o.str("display_name").orEmpty(),
             vision = (caps?.get("image_input") as? JsonObject)?.bool("supported"),
             contextTokens = o.int("max_input_tokens"),
-            reasoning = (caps?.get("thinking") as? JsonObject)?.bool("supported"),
+            reasoning = thinking?.bool("supported"),
+            reasoningEfforts = types?.let { anthropicEfforts(caps?.obj("effort"), it) },
+            thinkingTypes = types,
         )
     }
+
+    /**
+     * Anthropic 模型可选的思考档位:只在它接受自适应思考(`adaptive`,档位放 `output_config.effort`)时给,
+     * 档位是 `capabilities.effort` 里标了支持的那几级;也接受关掉思考(`disabled`)的,前面加一档 `none`。
+     * 只接受按预算思考(`enabled` + `budget_tokens`)或不分档位的,没有可选档位。
+     */
+    private fun anthropicEfforts(effort: JsonObject?, types: List<String>): List<String> {
+        val levels = effort?.takeIf { it.bool("supported") == true }?.supportedKeys().orEmpty()
+            .sortedBy { EFFORT_ORDER.indexOf(it).takeIf { i -> i >= 0 } ?: EFFORT_ORDER.size }
+        if ("adaptive" !in types || levels.isEmpty()) return emptyList()
+        return listOfNotNull("none".takeIf { "disabled" in types }) + levels
+    }
+
+    /** `{"a":{"supported":true},"b":{"supported":false},"supported":true}` 里标了支持的子项:`[a]`。 */
+    private fun JsonObject.supportedKeys(): List<String> = keys.filter { (this[it] as? JsonObject)?.bool("supported") == true }
 
     private fun geminiModel(o: JsonObject): ListedModel? {
         val id = o.str("name")?.removePrefix("models/")?.takeIf { it.isNotBlank() } ?: return null
@@ -240,7 +307,7 @@ class ModelCatalog(private val http: OkHttpClient) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            return Result.failure(Failure(ModelListResult.Failed(ListFailure.Network)))
+            return Result.failure(Failure(ModelListResult.Failed(ListFailure.of(e))))
         }
         if (raw.status !in 200..299) return Result.failure(Failure(failureFor(raw.status, raw.body)))
         val root = try { json.parseToJsonElement(raw.body).jsonObject } catch (e: Exception) { null }
@@ -271,6 +338,8 @@ class ModelCatalog(private val http: OkHttpClient) {
     private companion object {
         /** 翻页上限:防止服务端一直给下一页。 */
         const val MAX_PAGES = 10
+        /** Anthropic 的 `capabilities.effort` 按字母排;界面按由浅到深排,不认得的排最后。 */
+        val EFFORT_ORDER = listOf("low", "medium", "high", "xhigh", "max")
         /** 列表里 `type` 一项的写法:是对话模型的,和不是的(向量、重排、画图、语音、审核)。 */
         val CHAT_TYPES = setOf("chat", "llm", "language", "text", "vlm", "code")
         val NON_CHAT_TYPES = setOf(

@@ -9,6 +9,7 @@ import com.ai.assistance.quro.core.mika.model.Part
 import com.ai.assistance.quro.core.mika.model.Role
 import com.ai.assistance.quro.core.mika.model.StreamingChatModel
 import com.ai.assistance.quro.core.mika.model.ToolSpec
+import com.ai.assistance.quro.core.mika.model.Usage
 import com.ai.assistance.quro.core.mika.record.Redactor
 import com.ai.assistance.quro.core.mika.record.RunEvent
 import com.ai.assistance.quro.core.mika.tool.ToolDispatcher
@@ -35,11 +36,13 @@ internal class ModelCaller(
     private val emit: (RunEvent) -> Unit,
     private val now: () -> Long,
     private val autonomous: Boolean = false,
+    private val trace: RunTrace? = null,
 ) {
     /** 每个模型一份压缩状态:各自的上下文、各自发出的那份历史,轻量模型那次压缩不连累主模型的请求前缀。 */
     private val compressors = java.util.IdentityHashMap<ChatModel, ContextCompressor>()
     private fun compressorFor(m: ChatModel) =
-        compressors.getOrPut(m) { ContextCompressor(tools.index, structured = flags.structuredCompaction, diffScreens = tools.inlineScreen) }
+        compressors.getOrPut(m) { ContextCompressor(tools.index, structured = flags.structuredCompaction,
+            diffScreens = tools.inlineScreen, triggerOverride = m.capabilities.compactionTriggerTokens) }
     private val compactions = java.util.IdentityHashMap<ChatModel, CompactionState>()
     /** 本任务里已为重试等过的时间(对着 [RetryPolicy.taskWaitBudgetMs])。 */
     private var taskRetryWaitMs = 0L
@@ -54,18 +57,31 @@ internal class ModelCaller(
     /** 本任务里轻量模型给出、已进历史的回复;换模型时按它去掉别家模型的私有数据。 */
     private val lightReplies: MutableSet<Message> = java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
 
+    /** 带真实用量的回复(按消息身份)和给出它的模型,是量请求大小的锚点([UsageMeter]);压缩改写前缀后清空。 */
+    private val anchors = java.util.IdentityHashMap<Message, Pair<ChatModel, UsageMeter.Anchor>>()
+    /** 每个模型最近一次请求的固定开销估算;回复进历史时和用量一起记进锚点。 */
+    private val lastOverhead = java.util.IdentityHashMap<ChatModel, Int>()
+
     fun reset(prompt: String) {
         systemPrompt = prompt
         compactions.clear()
         taskRetryWaitMs = 0
         compressors.values.forEach { it.forget() }
         lightReplies.clear()
+        anchors.clear()
+        lastOverhead.clear()
     }
 
-    /** 回复进了历史:是轻量模型给的就记下。 */
-    fun noteReply(m: Message, used: ChatModel) {
+    /** 回复进了历史:是轻量模型给的就记下;有真实 usage 的记成上下文大小的锚点。 */
+    fun noteReply(m: Message, used: ChatModel, usage: Usage?) {
         if (router?.isLight(used) == true) lightReplies += m
+        val overhead = lastOverhead[used]
+        if (usage != null && overhead != null) anchors[m] = used to UsageMeter.Anchor(usage, overhead)
     }
+
+    /** 发给 [using] 的整份请求有多大:最近一条它给的、带真实用量的回复作锚点,没有就全量估算(见 [UsageMeter])。 */
+    private fun requestTokens(messages: List<Message>, using: ChatModel, overhead: Int, scale: Double): Int =
+        UsageMeter.of(messages, overhead, scale) { m -> anchors[m]?.takeIf { it.first === using }?.second }
 
     /** 本任务里分工是否在起作用:开关打开、轻量模型能接手机步、没因不可恢复的错误停用。 */
     private val routing: Boolean get() = flags.lightSteps && router?.active == true
@@ -84,20 +100,20 @@ internal class ModelCaller(
         history: List<Message>, specs: List<ToolSpec>, track: StepTrack, step: Int, restarted: (Long) -> Unit,
         onText: ((String) -> Unit)? = null,
     ): Pair<ModelReply, ChatModel> {
-        val r = router?.takeIf { routing } ?: return ask(history, specs, onText = onText) to model
+        val r = router?.takeIf { routing } ?: return ask(history, specs, step, onText = onText) to model
         val picked = r.pick(track.context(step, history.any { m -> m.parts.any { it is Part.Image } }))
-        if (!r.isLight(picked)) return ask(history, specs, onText = onText) to model
+        if (!r.isLight(picked)) return ask(history, specs, step, onText = onText) to model
         // 轻量模型的上下文可能更小:它报超长、它那次折叠多少,都不连累主模型(压缩状态按模型分开记)
         val asked = now()
         val light = try {
-            complete(viewFor(history, picked), specs, picked, RetryPolicy.NONE, onText)
+            complete(viewFor(history, picked), specs, picked, RetryPolicy.NONE, step, onText)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             // Key、额度、模型名、请求本身不对,重试也没用:本任务余下的步都用主模型
             if (e is ModelError.Auth || e is ModelError.QuotaExceeded || e is ModelError.ModelNotFound ||
                 e is ModelError.ModelNotAvailable || e is ModelError.ToolsUnsupported ||
-                e is ModelError.ChatGptLimitReached || e is ModelError.ChatGptNotEligible || e is ModelError.SignInExpired ||
+                e is ModelError.ChatGptLimitReached || e is ModelError.ChatGptNotEligible || e is ModelError.SignInExpired || e is ModelError.AccountPlanNotAllowed ||
                 (e is ModelError.Server && e.status in 400..499)) r.disable()
             null
         }
@@ -113,7 +129,7 @@ internal class ModelCaller(
         emit(RunEvent.State(now(), "light_to_main", first?.name ?: if (light == null) "light_error" else "no_tool"))
         onText?.invoke("")
         restarted(now())
-        return ask(history, specs, onText = onText) to model
+        return ask(history, specs, step, onText = onText) to model
     }
 
     private fun needsMain(call: Part.ToolCall): Boolean =
@@ -121,8 +137,8 @@ internal class ModelCaller(
             (!autonomous && ConfirmDecision.mayBeIrreversible(tools, call.name, parseArgs(call.argsJson)))
 
     /** 问 [using](默认主模型):发出的是给它看的那份历史([viewFor])压缩后的副本。 */
-    suspend fun ask(history: List<Message>, specs: List<ToolSpec>, using: ChatModel = model, onText: ((String) -> Unit)? = null): ModelReply =
-        complete(viewFor(history, using), specs, using, retry, onText)
+    suspend fun ask(history: List<Message>, specs: List<ToolSpec>, step: Int, using: ChatModel = model, onText: ((String) -> Unit)? = null): ModelReply =
+        complete(viewFor(history, using), specs, using, retry, step, onText)
 
     /**
      * 发给 [to] 的历史:别的模型给出的回复去掉思考内容和调用上的私有数据(这些只能原样回给产生它的那个模型)。
@@ -144,7 +160,7 @@ internal class ModelCaller(
         }
     }
 
-    private suspend fun complete(history: List<Message>, specs: List<ToolSpec>, using: ChatModel, policy: RetryPolicy,
+    private suspend fun complete(history: List<Message>, specs: List<ToolSpec>, using: ChatModel, policy: RetryPolicy, step: Int,
         onText: ((String) -> Unit)? = null): ModelReply {
         var retries = 0
         lastRetryWaitMs = 0
@@ -154,8 +170,12 @@ internal class ModelCaller(
         val compressor = compressorFor(using)
         var compaction = compactions[using] ?: CompactionState()
         var overflowRetried = false
+        var overflowRewrote = false
         while (true) {
-            val raw = compressor.compress(history, contextTokens, compaction.aggressive, overhead, using.capabilities.maxImages)
+            val current = ContextRecovery.ensure(history, compressor.current(history, contextTokens))
+            val currentTokens = requestTokens(current, using, overhead, compressor.scale)
+            val raw = compressor.compress(history, contextTokens, currentTokens, compaction.aggressive, overhead, using.capabilities.maxImages)
+            if (raw.rewritten) anchors.clear()
             val restored = ContextRecovery.ensure(history, raw.messages)
             val sent = if (restored === raw.messages) raw else raw.copy(messages = restored, estimate = TokenEstimate.of(restored))
             val (next, report) = CompactionPolicy.sent(compaction, sent.foldedSteps)
@@ -167,13 +187,23 @@ internal class ModelCaller(
                 if (tools.inlineScreen) tools.setVisibleObservations(visibleReads(sent.messages))
                 // 这一次之前花掉的(失败的请求、退避)都算重试等待
                 lastRetryWaitMs = now() - began
-                val reply = if (onText == null) using.complete(systemPrompt, sent.messages, specs)
+                suspend fun send(): ModelReply = if (onText == null) using.complete(systemPrompt, sent.messages, specs)
                     else if (using is StreamingChatModel) using.completeStreaming(systemPrompt, sent.messages, specs, onText)
                     else using.complete(systemPrompt, sent.messages, specs).also { result ->
                         result.parts.filterIsInstance<Part.Text>().joinToString("") { it.text }
                             .takeIf(String::isNotEmpty)?.let(onText)
                     }
+                val reply = if (trace == null) send() else {
+                    val change = when {
+                        overflowRewrote -> "overflow_compaction folded=" + raw.foldedSteps
+                        raw.rewritten && current != sent.messages -> "history_rewritten folded=" + raw.foldedSteps
+                        else -> null
+                    }
+                    overflowRewrote = false
+                    trace.modelCall(step, using, tools::verb, change, sent.messages) { send() }
+                }
                 return reply.also { r ->
+                    lastOverhead[using] = overhead
                     r.usage?.let { compressor.calibrate(sent.estimate + overhead, it.inputTokens) }
                 }
             } catch (e: ModelError.ContextTooLong) {
@@ -184,6 +214,7 @@ internal class ModelCaller(
                 compaction = after
                 compactions[using] = compaction
                 overflowRetried = true
+                if (again) { anchors.clear(); overflowRewrote = true }
                 if (!again) throw e
             } catch (e: ModelError) {
                 onText?.invoke("")

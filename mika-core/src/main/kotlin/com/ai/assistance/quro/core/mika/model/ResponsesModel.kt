@@ -13,10 +13,9 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
-import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * 请求时带的 Bearer 令牌。[fresh] 为真表示上一个被拒了(HTTP 401),要先换一个新的;换不到抛 [ModelError]。
@@ -46,6 +45,7 @@ interface BearerToken {
  *
  * 只有收到 `response.completed`(或 `response.incomplete`)才算成功;流在这之前断开当作网络故障(会重试)。
  * [chatGptPlan] 为真时请求用的是用户的 ChatGPT 套餐额度:HTTP 429 是额度到了上限、403 是账号不能这样用,都不重试。
+ * [accountLogin] 是用别家账号登录(如 xAI)时那一家的名字:HTTP 403 是订阅档位不能用这个接口([ModelError.AccountPlanNotAllowed])。
  */
 class ResponsesModel(
     baseUrl: String,
@@ -58,6 +58,7 @@ class ResponsesModel(
     private val headers: Map<String, String> = emptyMap(),
     /** null 使用服务端默认;服务端拒绝所选档位时照常报错,不悄悄换档重试。 */
     private val reasoningEffort: String? = null,
+    private val accountLogin: String? = null,
 ) : StreamingChatModel {
     override val name: String get() = model
     private val endpoint = baseUrl.trim().trimEnd('/') + "/responses"
@@ -103,12 +104,14 @@ class ResponsesModel(
             if (includeReasoning) putJsonArray("include") { add(ENCRYPTED_REASONING) }
         }
 
-    private fun request(bearer: String?, system: String, messages: List<Message>, tools: List<ToolSpec>, includeReasoning: Boolean): Request =
+    private suspend fun request(bearer: String?, system: String, messages: List<Message>, tools: List<ToolSpec>, includeReasoning: Boolean): Request =
         Request.Builder().url(endpoint)
             .withHeaders(headers)
             .apply { if (!bearer.isNullOrEmpty()) header("Authorization", "Bearer $bearer") }
             .header("Accept", "text/event-stream")
-            .post(body(system, messages, tools, includeReasoning).toString().toRequestBody("application/json".toMediaType()))
+            .postInference(InferenceProtocol.Responses, body(system, messages, tools, includeReasoning)) {
+                if (chatGptPlan || endpoint.toHttpUrlOrNull()?.host == "api.openai.com") "openai" else "openai_compatible"
+            }
             .build()
 
     private fun toolJson(t: ToolSpec): JsonObject = buildJsonObject {
@@ -187,19 +190,22 @@ class ResponsesModel(
         "context_length_exceeded" -> ModelError.ContextTooLong()
         "insufficient_quota" -> ModelError.QuotaExceeded()
         "rate_limit_exceeded" -> if (chatGptPlan) ModelError.ChatGptLimitReached() else ModelError.RateLimited(null)
-        "model_not_found" -> ModelError.ModelNotFound(model)
+        "model_not_found" -> ModelError.ModelNotFound(model, ModelAccessErrors.clip(message))
         "server_error" -> ModelError.Server(500)
         else -> null
     }
 
     private fun httpError(status: Int, retryAfter: String?, body: String, err: ErrorBody?): ModelError =
-        err?.let { errorOf(it.code, it.message, it.param) } ?: ModelAccessErrors.of(status, body, model) ?: when {
+        err?.let { errorOf(it.code, it.message, it.param) }
+            // 账号登录已经核对过身份:没有认得出的错误代码的 403 是档位不够,不当成 Key 不对或某个模型没开通
+            ?: (if (status == 403 && accountLogin != null) ModelError.AccountPlanNotAllowed(accountLogin, err?.message.orEmpty().take(200)) else null)
+            ?: ModelAccessErrors.of(status, body, model) ?: when {
             status == 401 -> ModelError.Auth()
             status == 403 -> if (chatGptPlan) ModelError.ChatGptNotEligible(err?.message.orEmpty().take(200)) else ModelError.Auth()
             status == 429 -> if (chatGptPlan) ModelError.ChatGptLimitReached() else ModelError.RateLimited(HttpSupport.retryAfterMs(retryAfter))
             status == 402 -> ModelError.QuotaExceeded()
             status == 400 && (body.contains("context_length") || body.contains("maximum context")) -> ModelError.ContextTooLong()
-            status == 404 -> ModelError.ModelNotFound(model)
+            status == 404 -> ModelError.ModelNotFound(model, ModelAccessErrors.jsonDetail(body))
             status in 500..599 -> ModelError.Server(status)
             else -> ModelError.BadResponse("HTTP $status ${body.take(200)}")
         }
@@ -318,6 +324,8 @@ private class ResponsesStream(
         fun int(o: JsonObject?, k: String) = (o?.get(k) as? JsonPrimitive)?.intOrNull
         val input = int(u, "input_tokens") ?: return null
         val cached = int(u["input_tokens_details"] as? JsonObject, "cached_tokens") ?: 0
-        return Usage(input, int(u, "output_tokens") ?: 0, cached.coerceAtMost(input))
+        val output = int(u, "output_tokens") ?: 0
+        val reasoning = (int(u["output_tokens_details"] as? JsonObject, "reasoning_tokens") ?: 0).coerceIn(0, output)
+        return Usage(input, output, cached.coerceAtMost(input), reasoning)
     }
 }

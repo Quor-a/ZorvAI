@@ -67,6 +67,9 @@ private fun iconRes(name: String): Int = when (normalizeIconName(name)) {
     "square"           -> R.drawable.ic_square
     "code"             -> R.drawable.ic_code
     "maximize"         -> R.drawable.ic_maximize
+    "presentation"     -> R.drawable.ic_presentation   // PPT / 幻灯片附件
+    "archive"          -> R.drawable.qic_archive        // 压缩包附件（zip/rar/7z）
+    "music"            -> R.drawable.qic_music          // 音频附件（mp3/wav/...）
 
     // ── 工具调用族专用图标（qic_* 前缀，本项目自绘）──
     // 🔴 这些是 drawable 资源名，**必须与 res/drawable 下的文件名逐一对应**。

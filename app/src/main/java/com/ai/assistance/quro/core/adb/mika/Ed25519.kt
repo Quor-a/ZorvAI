@@ -62,10 +62,22 @@ internal class EdPoint private constructor(
     override fun hashCode(): Int = encode().contentHashCode()
 
     companion object {
-        val P: BigInteger = BigInteger.TWO.pow(255) - BigInteger.valueOf(19)
+        /**
+         * 常数 2。
+         *
+         * 🔴 **不要**改回 `BigInteger.TWO`：那个静态字段是 **Android 13 (API 33)** 才加进
+         * `java.math.BigInteger` 的。本项目 minSdk 26，在 Android 12 及更低的机器上，
+         * `Ed25519` 的 companion 一被类加载就抛 `NoSuchFieldError` ——
+         * 而类加载发生在**配对的那一刻**，于是表现为「一点配对，整个 App 直接崩掉」，
+         * 且崩溃栈指向初始化器，看起来像密码学实现有问题，极难归因。
+         * 上游 Mika 已用 `BigInteger.valueOf(2)` 修掉这一点，这里对齐。
+         *
+         * 顺序也有讲究：[P] / [L] 初始化时就要用到它，所以必须定义在它们之前。
+         */
+        private val TWO = BigInteger.valueOf(2)
+        val P: BigInteger = TWO.pow(255) - BigInteger.valueOf(19)
         /** 素数阶子群的阶。 */
-        val L: BigInteger = BigInteger.TWO.pow(252) + BigInteger("27742317777372353535851937790883648493")
-        private val TWO = BigInteger.TWO
+        val L: BigInteger = TWO.pow(252) + BigInteger("27742317777372353535851937790883648493")
         private val D: BigInteger = (BigInteger.valueOf(-121665) * BigInteger.valueOf(121666).modInverse(P)).mod(P)
         private val D2 = D * TWO % P
         private val SQRT_M1: BigInteger = TWO.modPow((P - BigInteger.ONE).shiftRight(2), P)

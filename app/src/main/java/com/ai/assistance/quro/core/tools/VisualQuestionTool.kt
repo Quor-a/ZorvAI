@@ -11,6 +11,18 @@ import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
 
+/** 提问卡的状态机：「待回答 → 已回答 / 已跳过 / 已结束」三态。 */
+enum class VisualQuestionStatus {
+    /** 待回答：正在等用户作答。 */
+    PENDING,
+    /** 已回答：用户已给出答案。 */
+    ANSWERED,
+    /** 已跳过：用户主动跳过（返回/点外部/点跳过）。 */
+    SKIPPED,
+    /** 已结束：超时或被后续提问顶掉，未作答。 */
+    ENDED,
+}
+
 /** 待处理的问答问题 */
 data class VisualPendingQuestion(
     val question: String,
@@ -24,7 +36,9 @@ data class VisualPendingQuestion(
      * 把答案作为新用户消息回流触发 AI 续跑（非阻塞）。
      * GenUI 直接构造 pending 时不设此值，保持原有阻塞消费语义。
      */
-    val onDeliver: ((String) -> Unit)? = null
+    val onDeliver: ((String) -> Unit)? = null,
+    /** 提问卡状态（三态）。默认 PENDING。 */
+    val status: AtomicReference<VisualQuestionStatus> = AtomicReference(VisualQuestionStatus.PENDING),
 )
 
 /** 待处理的操作弹窗 */
@@ -58,6 +72,25 @@ object VisualQuestionQueue {
     private val _eventChannel = Channel<QuestionEvent>(Channel.BUFFERED)
     val eventFlow = _eventChannel.receiveAsFlow()
 
+    /**
+     * 已结束提问的留档（内存）：记录「问过什么 + 最终状态 + 答案」。
+     * 供「会话内回看历史提问及其结果」用——三态均可回看。
+     * 只留最近 N 条，避免无界增长。
+     */
+    private val _answeredHistory = mutableListOf<VisualQuestionRecord>()
+    @Volatile var onHistoryChanged: (() -> Unit)? = null
+
+    data class VisualQuestionRecord(
+        val question: String,
+        val options: List<String>,
+        val answer: String?,
+        val status: VisualQuestionStatus,
+        val at: Long = System.currentTimeMillis(),
+    )
+
+    fun answeredHistory(): List<VisualQuestionRecord> =
+        synchronized(pendingQuestions) { _answeredHistory.toList() }
+
     sealed class QuestionEvent {
         data class QuestionAdded(val index: Int) : QuestionEvent()
         data class QuestionRemoved(val index: Int) : QuestionEvent()
@@ -68,13 +101,27 @@ object VisualQuestionQueue {
             if (index in pendingQuestions.indices) {
                 val pending = pendingQuestions[index]
                 pending.result.set(answer)
+                // 三态判定：空白答案 = 跳过；非空 = 已回答。
+                val status = if (answer.isBlank()) VisualQuestionStatus.SKIPPED else VisualQuestionStatus.ANSWERED
+                pending.status.set(status)
+                // 留档：记录最终状态与答案，供历史回看。
+                _answeredHistory.add(
+                    VisualQuestionRecord(
+                        question = pending.question,
+                        options = pending.options,
+                        answer = answer.takeIf { it.isNotBlank() },
+                        status = status,
+                    )
+                )
+                if (_answeredHistory.size > 40) _answeredHistory.removeAt(0)
                 pending.latch.countDown()
                 pendingQuestions.removeAt(index)
-                Log.d(TAG, "用户提交答案: $answer")
+                Log.d(TAG, "用户提交答案: $answer (status=$status)")
                 _eventChannel.trySend(QuestionEvent.QuestionRemoved(index))
                 // 主 App 工具入队（onDeliver != null）→ 答案作为新用户消息回流，下一轮 AI 续跑。
                 // GenUI 不设置 onDeliver，不触发回流，保持阻塞消费。
                 pending.onDeliver?.invoke(answer)
+                onHistoryChanged?.invoke()
             }
         }
     }

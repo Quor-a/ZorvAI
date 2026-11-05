@@ -60,6 +60,13 @@ class McpTaskTools(
                 taskIdProp()
                 putJsonObject("text") { put("type", "string"); put("description", "The answer.") }
             }, readOnly = false),
+        Tool(STEER, "Add instructions to a running remote task, keeping its task_id and context. " +
+            "Accepted means queued, not executed; check steers in quro_task_status for the message_id. " +
+            "Does not answer questions, approve payments, resume paused tasks, or start a new task.",
+            schema(required = listOf("task_id", "text")) {
+                taskIdProp()
+                putJsonObject("text") { put("type", "string"); put("minLength", 1); put("maxLength", RemoteTaskService.MAX_STEER) }
+            }, readOnly = false),
         Tool(CANCEL, "Stop a remote task.",
             schema(required = listOf("task_id")) { taskIdProp() }, readOnly = false),
         Tool(LIST, "Recent remote tasks, newest first.",
@@ -78,7 +85,7 @@ class McpTaskTools(
                 putJsonObject("annotations") {
                     put("readOnlyHint", t.readOnly)
                     if (!t.readOnly) put("destructiveHint", t.name != ANSWER)
-                    put("openWorldHint", t.name == RUN)
+                    put("openWorldHint", t.name == RUN || t.name == STEER)
                 }
             })
         }
@@ -101,6 +108,9 @@ class McpTaskTools(
                 put("task_id", service.answer(taskId(args), string(args, "text").orEmpty()))
                 put("accepted", true)
             }
+            STEER -> service.steer(taskId(args), string(args, "text").orEmpty()).let { r -> buildJsonObject {
+                put("task_id", r.taskId); put("message_id", r.messageId); put("accepted", true)
+            } }
             CANCEL -> service.cancel(taskId(args)).let { r -> buildJsonObject {
                 put("task_id", r.taskId); put("cancelled", r.accepted)
                 r.status?.let { put("status", it) }
@@ -157,6 +167,7 @@ class McpTaskTools(
 
     companion object {
         const val RUN = "quro_run_task"
+        const val STEER = "quro_steer_task"
         const val STATUS = "quro_task_status"
         const val WAIT = "quro_wait_task"
         const val ANSWER = "quro_answer"

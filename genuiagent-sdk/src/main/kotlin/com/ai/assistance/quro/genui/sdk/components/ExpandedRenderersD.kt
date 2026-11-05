@@ -283,9 +283,20 @@ fun ElementCardRenderer(c: UIComponent, ctx: RenderContext) {
 @Composable
 fun ScrollIndicatorRenderer(c: UIComponent, ctx: RenderContext) {
     val frac = c.properties.fD("position", 0.3f).coerceIn(0f, 1f)
-    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+    // 🔴 移动端适配修复（2026-11-04）：滑块位移此前硬编码 240dp，而轨道是 fillMaxWidth ——
+    //    容器宽≠240dp 时滑块位置全错。改用 BoxWithConstraints 按实际宽度比例定位。
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        val track = maxWidth
+        val thumb = track * 0.3f
         Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(6.dp)).background(Color.LightGray.copy(alpha = 0.4f)))
-        Box(Modifier.fillMaxWidth(0.3f).height(3.dp).clip(RoundedCornerShape(6.dp)).background(themeD()).offset(x = (frac * 240f).dp))
+        Box(
+            Modifier
+                .width(thumb)
+                .height(3.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(themeD())
+                .offset(x = (track - thumb) * frac)
+        )
     }
 }
 

@@ -33,6 +33,15 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlin.coroutines.coroutineContext
 
+/**
+ * 历史回传 reasoning 时的截断长度。
+ *
+ * 只保留「上次判断了什么」，不把整段推演喂回去 —— 完整回传会让模型顺着自己的思考
+ * 继续推演（死循环思考）。2000 字符足够覆盖结论与关键约束，又能砍掉绝大部分过程。
+ */
+private const val REASONING_ECHO_MAX_CHARS = 2000
+
+
 private const val TAG = "QuroLlm"
 
 /**
@@ -76,6 +85,11 @@ class QuroLlmClient(
         /** 单次响应体最大 4MB；超过此限制的响应（如 MiMo 超长 reasoning）直接截断，
          * 作为内存护栏，避免超大响应直接 OOM。 */
         const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+
+        /** 内联文本文件的最大字节数（约 30KB），超过则退回工具提示，避免超长正文淹没上下文。 */
+        const val MAX_INLINE_TEXT_BYTES = 30_000L
+        /** 内联文本最大字符数。 */
+        const val MAX_INLINE_TEXT_CHARS = 12_000
 
         /** 首包延迟埋点。用 `adb logcat -s QuroLatency:*` 可直接看每段耗时。 */
         private const val LAT = "QuroLatency"
@@ -638,12 +652,21 @@ class QuroLlmClient(
 
     private fun messageToJson(m: QuroChatMessage, emitReasoning: Boolean = true): JSONObject {
         val o = JSONObject().put("role", m.role)
-        // 🔧 toolfix8：推理模型的思考过程（reasoning_content）随 assistant 消息一并回传。
-        //  mimo-v2.5 等严格上游要求带 tool_calls 的 assistant 历史必须带 reasoning_content，
-        //  缺失会被拒收 → 500。o 系列推理模型（isReasoningModel）服务端不接受输入侧的
-        //  reasoning_content，故对其不发送（避免 400）。其余模型 reasoning 本就为空，不会发送。
-        if (emitReasoning && m.reasoning != null) {
-            o.put("reasoning_content", m.reasoning)
+        // 🔴 推理回传的**止血点**（死循环思考的真正成因）。
+        //
+        // 旧实现：只要 emitReasoning 为 true（QuroReasoningEcho 对除 o 系/GPT-5 之外的
+        // 所有家族都返回 true），历史里**每条** assistant 消息都把完整的 reasoning 发回上游。
+        // 于是模型每一轮都读到自己上一轮的整段思考，顺着「接着想」，思考越滚越长，
+        // 最终在同一段话里原地复读 —— 用户看到的就是「一直思考、几分钟不出结果」。
+        // 这不是工具慢，也不是轮次太多：它压根走不到下一轮，轮次级检测对它无效。
+        //
+        // 现在收紧成两条：
+        //  1. 只有**带 tool_calls** 的消息才回传 —— 那是 MiMo 等严格上游的硬要求
+        //     （缺 reasoning_content 会 400/500），不能省；
+        //  2. 回传时**截断**到 2000 字符 —— 让模型知道「上次判断了什么」即可，
+        //     不需要把整段推演再喂回去（那正是让它继续推演的燃料）。
+        if (emitReasoning && m.reasoning != null && m.role == "assistant" && m.toolCalls != null) {
+            o.put("reasoning_content", m.reasoning.take(REASONING_ECHO_MAX_CHARS))
         }
         // 🔧 清洗非法字符：发送前统一清洗，保证请求体 JSON 合法且喂给模型的文本干净。
         val safeContent = sanitizeForLlm(m.content)
@@ -699,11 +722,18 @@ class QuroLlmClient(
                         append("\n  路径: ${att.uri}")
                         append("\n  大小: ${sizeMB}MB")
                         append("\n  类型: ${att.mime}")
-                        // 对于文档类型，提示AI可以使用 aiwps_read 工具读取
-                        if (att.mime.contains("pdf") || att.mime.contains("document") ||
-                            att.mime.contains("text") || att.name.endsWith(".txt") ||
-                            att.name.endsWith(".md") || att.name.endsWith(".csv")) {
-                            append("\n  💡 你可以使用 aiwps_read 工具读取此文件内容")
+                        // 纯文本类文件：直接读取内容喂给模型，让 AI 无需再调工具即可理解正文。
+                        // uri 是应用私有目录绝对路径（QuroAttachmentKit.fromUri 已复制落盘）。
+                        val inline = readInlineTextFile(att)
+                        if (inline != null) {
+                            append("\n  内容：\n$inline")
+                        } else {
+                            // 非文本类（docx/xlsx/pptx/pdf 等）：提示 AI 用工具读取
+                            if (att.mime.contains("pdf") || att.mime.contains("document") ||
+                                att.mime.contains("text") || att.name.endsWith(".txt") ||
+                                att.name.endsWith(".md") || att.name.endsWith(".csv")) {
+                                append("\n  💡 你可以使用 aiwps_read 工具读取此文件内容")
+                            }
                         }
                     }
                 }
@@ -726,6 +756,31 @@ class QuroLlmClient(
             o.put("content", safeContent)
         }
         return o
+    }
+
+    /** 纯文本类附件的扩展名集合（可直接读内容喂模型）。 */
+    private val INLINE_TEXT_EXTS = setOf(
+        "txt", "md", "markdown", "csv", "tsv", "json", "xml", "yml", "yaml",
+        "log", "html", "htm", "js", "ts", "kt", "java", "py", "go", "rs", "c", "cpp", "h",
+        "sh", "bat", "ini", "conf", "properties", "sql",
+    )
+
+    /**
+     * 读取纯文本类附件内容（供多模态消息直接内联喂给模型）。
+     * 仅对白名单扩展名 + 大小 ≤ [MAX_INLINE_TEXT_BYTES] 的文件读取，
+     * 超过阈值或非文本/读取失败返回 null（由调用方回落到工具提示）。
+     */
+    private fun readInlineTextFile(att: com.ai.assistance.quro.core.QuroAttachment): String? {
+        val ext = att.name.substringAfterLast('.', "").lowercase()
+        if (ext !in INLINE_TEXT_EXTS) return null
+        if (att.size > MAX_INLINE_TEXT_BYTES) return null
+        return runCatching {
+            val f = java.io.File(att.uri)
+            if (!f.exists() || !f.isFile) return null
+            val text = f.readText(Charsets.UTF_8)
+            if (text.isBlank()) return null
+            text.take(MAX_INLINE_TEXT_CHARS)
+        }.getOrNull()
     }
 
     /**
@@ -1003,6 +1058,10 @@ class QuroLlmClient(
             // usage 在顶层 usage（部分网关仅非流式回；流式整轮没有也属正常）。
             // 声明在重试循环**内** → 每轮天然重置，避免上一轮残留污染本轮判定。
             var rawFinishReason: String? = null
+            // 🔴 单轮内推理打转的主动掐断：模型在 reasoning 里复读时这条流会一路吐到 token 上限，
+            // 上层几十秒到几分钟拿不到返回、界面永远「思考中」。轮次检测对此无效 —— 压根没到下一轮。
+            val reasoningGuard = ReasoningLoopGuard()
+            var stallReason: String? = null
             var usageObj: JSONObject? = null
             if (attempt > 0) {
                 // 已吐出内容 → 不再重试，按已有内容兜底（下方统一处理）。
@@ -1083,6 +1142,12 @@ class QuroLlmClient(
                                     // 此前云端只在终态 result 里带 reasoning，思考段生成期间 UI 完全空白，
                                     // 体感等同「卡住/不回复」。现在每片 reasoning 增量即回调，UI 边想边显示。
                                     onThinking?.invoke(reasoningAcc.toString())
+                                    // 判定在复读 → 立即断流，不等模型自己收尾
+                                    if (reasoningGuard.onReasoning(reasoningAcc)) {
+                                        stallReason = reasoningGuard.stallReason
+                                        Log.w(TAG, "<<< 推理打转，主动断流：$stallReason")
+                                        break
+                                    }
                                 }
                                 // 🔧 累计流式 tool_calls（index 槽位 + name/arguments 拼接）
                                 val tcs = delta.optJSONArray("tool_calls")
@@ -1104,7 +1169,12 @@ class QuroLlmClient(
                         }
                     }
                     // 与 parse() 一致：tool_calls 优先于 content
-                    buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc, readMeta(rawFinishReason, usageObj))
+                    // 推理打转且一个字正文都没产出 → 这轮等于失败，明确告知用户，别返回空文本
+                    if (stallReason != null && contentAcc.isEmpty() && toolAcc.isEmpty()) {
+                        QuroLlmResult.Error(ReasoningLoopGuard.STALL_NOTE)
+                    } else {
+                        buildToolCallsOrText(toolAcc, contentAcc, reasoningAcc, readMeta(rawFinishReason, usageObj))
+                    }
                 }
                 } finally {
                     cancelHook?.dispose()

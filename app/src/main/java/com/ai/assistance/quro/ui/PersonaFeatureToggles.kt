@@ -8,10 +8,12 @@ import androidx.compose.ui.platform.LocalContext
 /**
  * 人格卡里的两个「功能开关」——各自独立、互不影响、不合并。
  *
- * 1. feat_dynamic_ui ：已有的「动态 UI 组件」(quro-ui DSL) 总开关。默认开。
- * 2. feat_self_card ：「可视化小卡片（自研卡片渲染）」（7 层自研架构，见 core.ui.card），
- *                      与动态 UI 完全无关，不合并。v1.0.82 起功能补全（提示词接线 + 渲染器补齐），
- *                      默认开——AI 用 ```quro-card 围栏下发小卡片。
+ * 1. feat_dynamic_ui ：「动态 UI 组件」(```quro-ui DSL) 总开关。默认开。
+ * 2. feat_self_card ：「可视化小卡片」总开关。默认开。
+ *    🔴 2026-11-05 重写：可视化小卡片是**独立分类**，唯一出口为 `visual_card` 工具
+ *    （配套 `visual_card_skeleton` 骨架库 + Widget Lab 统一卡壳），不再是 ```quro-card
+ *    Canvas 围栏。旧围栏渲染能力保留为 legacy，但不再作为小卡片教给模型。
+ *    它既不是动态 UI 组件，也不是富组件 / 弹窗 / 网页预览，严禁互相顶替。
  */
 object PersonaFeatureToggles {
     private const val PREFS = "quro_persona_features"

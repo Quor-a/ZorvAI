@@ -20,7 +20,7 @@ import com.ai.assistance.quro.core.mika.tool.Verb
  *
  * 按一条裁剪线([Cut]):线之后的往返原样,线之前的按结果里读到的观察是什么样的东西([ObsForm],见 [BY_FORM])缩短:
  * 界面状态(读界面、动作带回的界面、回看的元素文字)一律换成 [OMITTED];页面内容、命令输出、文件、回复只在结果很大
- * (超过 [BIG_RESULT] 字)时把长字段换成 [OMITTED_READ];用户说的(记忆)和参考资料不裁。没有观察的结果按动作认。
+ * (超过 [BIG_RESULT_TOKENS] 个 token)时把长字段换成 [OMITTED_READ];用户说的(记忆)和参考资料不裁。没有观察的结果按动作认。
  * 缩短后的结果留着结局(ok、错误与原因)和指回证据账本的观察编号([OBS_IDS])。线之前最近的一次全量界面不裁:之后的动作、差异要靠它才看得懂。
  * 线之前的图换成占位(界面画面是可回看的 [olderImage],读到的图片文件是 [OMITTED_IMAGE]);用户的话连同照片不裁。
  *
@@ -35,8 +35,11 @@ object HistoryPruner {
     const val OMITTED_READ = "(content read earlier, omitted; read it again with nextOffset, path and so on if needed)"
     /** 缩短后的结果里指回证据账本的观察编号。 */
     const val OBS_IDS = "obsIds"
-    /** 超过这么多字的工具结果算「大结果」。 */
-    const val BIG_RESULT = 4000
+    /**
+     * 超过这么多 token 的工具结果算「大结果」。工具结果多是英文和 JSON(约 4 个字符一个 token),
+     * 取原来 4000 字符那条线对应的 token 数,英文结果的裁法不变;中文结果按真实占用算,比原来更早算大。
+     */
+    const val BIG_RESULT_TOKENS = 1_000
 
     /** 线之前各种观察怎么缩短。 */
     private enum class Shrink { Interface, IfBig, Never }
@@ -88,7 +91,7 @@ object HistoryPruner {
     }
 
     /**
-     * 压到最重仍放不下时的兜底:从最新的开始,把超过 [BIG_RESULT] 字的工具结果(不论哪种)的长字段换成 [OMITTED_READ],
+     * 压到最重仍放不下时的兜底:从最新的开始,把超过 [BIG_RESULT_TOKENS] 个 token 的工具结果(不论哪种)的长字段换成 [OMITTED_READ],
      * 结局字段和观察编号留着,直到 [fits]。用户的话不动。
      */
     fun shrinkOversized(messages: List<Message>, fits: (List<Message>) -> Boolean): List<Message> {
@@ -96,9 +99,9 @@ object HistoryPruner {
         for (i in out.indices.reversed()) {
             if (fits(out)) break
             val m = out[i]
-            if (m.author == Author.User || m.parts.none { it is Part.ToolResult && it.content.length > BIG_RESULT }) continue
+            if (m.author == Author.User || m.parts.none { it is Part.ToolResult && TokenEstimate.of(it.content) > BIG_RESULT_TOKENS }) continue
             out[i] = m.copy(parts = m.parts.map { p ->
-                if (p is Part.ToolResult && p.content.length > BIG_RESULT) withObsIds(p, shrinkRead(p.content)) else p
+                if (p is Part.ToolResult && TokenEstimate.of(p.content) > BIG_RESULT_TOKENS) withObsIds(p, shrinkRead(p.content)) else p
             })
         }
         return out
@@ -140,7 +143,7 @@ object HistoryPruner {
             p.callId in screens -> shrinkScreen(p.content)
             Shrink.Interface in ways || verb in INTERFACE_VERBS -> shrinkInterface(p.content)
             verb == Verb.ViewPastScreens -> shrinkRecall(p.content)
-            p.content.length > BIG_RESULT -> shrinkRead(p.content)
+            TokenEstimate.of(p.content) > BIG_RESULT_TOKENS -> shrinkRead(p.content)
             else -> p.content
         }
         return if (content == p.content) p else withObsIds(p, content)

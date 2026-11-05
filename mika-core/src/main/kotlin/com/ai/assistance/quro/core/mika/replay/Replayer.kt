@@ -173,6 +173,7 @@ class Replayer(
         /** 这些错误在动作执行之前就拒了,界面没被动过。 */
         private val NOT_EXECUTED = setOf(
             "invalid_arguments", "unknown_tool", "invalid_link", "link_unresolved", "ref_expired", "app_in_use_by_other_task",
+            "app_wait_would_deadlock", "app_wait_timed_out",
             "app_in_use_by_user", "app_not_found", "no_app_open", "confirmation_required", "batch_stopped",
         )
 

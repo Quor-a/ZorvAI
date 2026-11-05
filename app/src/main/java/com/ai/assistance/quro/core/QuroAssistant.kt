@@ -24,6 +24,7 @@ import org.json.JSONObject
 import android.util.Log
 import com.ai.assistance.quro.core.QuroToolSpec
 import com.ai.assistance.quro.core.tools.QuroToolRouter
+import com.ai.assistance.quro.core.tools.ToolCategoryRegistry
 import java.util.IdentityHashMap
 import com.ai.assistance.quro.core.agent.QuroAgentTrace
 import com.ai.assistance.quro.core.agent.orchestration.TaskPlanner
@@ -71,6 +72,33 @@ class QuroAssistant(
     private val registry: QuroToolRegistry,
     private val store: QuroConversationStore,
 ) {
+
+    /**
+     * 本轮（最近一次 [ask]）最后一次 LLM 调用的**停止原因与用量**。
+     *
+     * 为什么挂在实例上而不是从 [ask] 返回：`ask` 的返回值是给用户看的正文，
+     * 早期版本把 `finish_reason` / `usage` 全丢在客户端内部（见 [QuroLlmMeta] 的缺口说明），
+     * 改动返回值会波及全部调用方（语音球 / 视频通话 / IM 机器人 / 键盘）。
+     * 挂一个只读快照，调用方按需取，零破坏。
+     *
+     * 语义：**只反映最后一帧**。多轮工具循环里前面几帧的 meta 会被覆盖，
+     * 这是刻意的 —— 决定「这一轮为什么结束」的是最后一帧。
+     */
+    @Volatile
+    var lastTurnMeta: QuroLlmMeta = QuroLlmMeta.EMPTY
+        private set
+
+    /**
+     * 本轮模型发出、但本地无法解析成工具调用的次数。
+     *
+     * 与「工具执行失败」是两件事：这里是**模型没把 JSON 写对**（缺括号、参数类型错、
+     * 调了不存在的工具名），属于模型侧问题；工具执行失败是本地环境问题。
+     * 两者给用户的处置建议完全不同，因此分开计数。
+     */
+    @Volatile
+    var malformedToolCalls: Int = 0
+        private set
+
     private val engine = QuroToolEngine(registry)
 
     /**
@@ -110,6 +138,79 @@ class QuroAssistant(
 
     /** 一趟 ReAct 在编排器里的步骤 id（仅用于轨迹展示）。 */
     private val REACT_PASS_STEP_ID = "react_pass"
+
+    /**
+     * 云端模型调用 + 故障转移兜底。
+     *
+     * 主链路此前直接 [client.chat]，当前提供商失败就整轮报错，[QuroFailoverManager]
+     * 那套「多提供商故障转移」从未真正接进对话（写了没接线）。现补上：先用当前
+     * [QuroModelConfig] 直连；若返回 [QuroLlmResult.Error]，再按优先级遍历
+     * [QuroMultiProviderRepository] 里其他「启用且非当前」的提供商重试，首个成功即返回。
+     *
+     * 兜底只覆盖「结果级失败」（Error 分支），异常仍向上抛由外层 [runCatching] 处理；
+     * 取消信号（CancellationException）绝不吞，保证「停止生成」依然即时生效。
+     */
+    private suspend fun chatCloudWithFailover(
+        context: Context,
+        cfg: QuroModelConfig,
+        llmMessages: List<QuroChatMessage>,
+        temperature: Float,
+        maxTokens: Int,
+        reasoningLevel: QuroReasoningControl.ThinkingLevel,
+        tools: List<QuroToolSpec>,
+        stream: Boolean,
+        onToken: ((String) -> Unit)?,
+        onThinking: ((String) -> Unit)?,
+    ): QuroLlmResult {
+        val first = client.chat(
+            baseUrl = cfg.baseUrl,
+            apiKey = cfg.apiKey,
+            model = cfg.model,
+            messages = llmMessages,
+            temperature = temperature,
+            maxTokens = maxTokens,
+            provider = cfg.provider,
+            thinkingLevel = reasoningLevel,
+            tools = tools,
+            stream = stream,
+            onToken = onToken,
+            onThinking = onThinking,
+        )
+        if (first !is QuroLlmResult.Error) return first
+
+        // 当前提供商失败 → 遍历备用提供商重试（排除当前，避免原地重试）。
+        val fallback = runCatching {
+            com.ai.assistance.quro.core.model.QuroMultiProviderRepository(context)
+                .getEnabledConfigs()
+                .filter { it.baseUrl.isNotBlank() && it.defaultModel.isNotBlank() }
+                .filter { it.baseUrl != cfg.baseUrl || it.defaultModel != cfg.model }
+        }.getOrNull().orEmpty()
+        if (fallback.isEmpty()) return first
+
+        for (alt in fallback) {
+            val r = runCatching {
+                client.chat(
+                    baseUrl = alt.baseUrl,
+                    apiKey = alt.apiKey,
+                    model = alt.defaultModel,
+                    messages = llmMessages,
+                    temperature = temperature,
+                    maxTokens = maxTokens,
+                    provider = alt.providerType.name,
+                    thinkingLevel = reasoningLevel,
+                    tools = tools,
+                    stream = stream,
+                    onToken = onToken,
+                    onThinking = onThinking,
+                )
+            }.getOrNull() ?: continue
+            if (r !is QuroLlmResult.Error) {
+                QuroDiag.log("Failover", "当前提供商失败，已切换到备用提供商 ${alt.name} (${alt.defaultModel})")
+                return r
+            }
+        }
+        return first
+    }
 
     /** 用宿主云端模型做自由编排策划（仅当配置了 API Key 时可用；否则返回 null → 退化为本地启发式策划）。 */
     private fun buildHostCompleter(context: Context): LlmCompleter? {
@@ -297,6 +398,7 @@ class QuroAssistant(
         historyRounds: Int = 0,
         deepThink: Boolean = false,
         subAgentEnabled: Boolean = true,
+        enabledToolCategories: List<String> = emptyList(),
         onUpdate: (() -> Unit)? = null,
     ): String =
         withContext(Dispatchers.IO) {
@@ -315,6 +417,10 @@ class QuroAssistant(
                 content = systemPrompt + buildDeepThinkDirective(deepThink) + langTail,
             )
             var lastText = ""
+            // 本轮统计清零：同一个 Assistant 实例会被反复使用（子智能体、IM、语音球共用），
+            // 不清零会把上一轮的停止原因带到这一轮，归因就会张冠李戴。
+            lastTurnMeta = QuroLlmMeta.EMPTY
+            malformedToolCalls = 0
             // 🔗 编排接线（本轮落点）：此前 LongHorizonOrchestrator.runTask 全仓零调用（死代码），
             //   「策划 + 交付闸门 + 重规划」只在 ask() 内自己实现了一套补丁式重试。
             //   现在把 ReAct 循环抽成**一趟执行体**（reactPass），交给 runTask 作为任务级闭环驱动：
@@ -325,6 +431,10 @@ class QuroAssistant(
             //   多趟之间共用同一个占位气泡（用户视角是「同一条回答被续写」，而非刷出多条气泡）。
             var streamPlaceholderId: String? = null
             var lastStreamEmitMs = 0L
+            // 思考计时：首个思考 token 到达时刻；首个可见 token 到达时结算为 thinkDurationMs。
+            // 0 = 还没开始思考 / 已结算。旧消息与不支持 reasoning 的模型保持 0，UI 回退「N 步」口径。
+            var thinkStartMs = 0L
+            var thinkDurWritten = false
             // 🔧 #765 防御：记录流式累计文本，终态 result.content 异常空白时回退到此，避免正文被截断覆盖。
             var streamedContent: String = ""
             // 🔑 编排与容错层：本次运行的检查点。
@@ -398,17 +508,26 @@ class QuroAssistant(
                     SUBAGENT_TOOL_PARAMS,
                 )
             }
+            // 工具类别白名单（按 Bot 隔离）：persona 声明了 enabledToolCategories 时，
+            // 只保留命中白名单类别的工具；空白名单 = 全部（保持旧行为零迁移）。
+            val categoryAwareSpecs = if (enabledToolCategories.isEmpty()) {
+                agentAwareSpecs
+            } else {
+                agentAwareSpecs.filter {
+                    ToolCategoryRegistry.categoryOf(it.name) in enabledToolCategories
+                }
+            }
             // 🔧 渐进式工具披露 / RAG 式按需检索：每轮只下发【路由目录 + 常驻核心 + 已加载】，而非全部工具。
             // router 实例按会话(store)保留，跨轮次累积「已加载」工具，避免每次都扫全量、也不需要每次 discovery。
             // ⚠️ 传入 context：已加载集合要落盘（进程被杀后不必重新学一遍工具参数）。
             val activeToolRouter = if (QuroToolRouter.PROGRESSIVE && !isLocal) {
                 toolRouters.getOrPut(store) {
-                    QuroToolRouter(agentAwareSpecs, context.applicationContext)
-                }.also { it.setSpecs(agentAwareSpecs) }
+                    QuroToolRouter(categoryAwareSpecs, context.applicationContext)
+                }.also { it.setSpecs(categoryAwareSpecs) }
             } else null
-            Log.i("QuroAssistant", "tool mode=${if (!effEnableTools) "off" else if (QuroToolRouter.PROGRESSIVE && !isLocal) "rag(${activeToolRouter?.activeSpecs()?.size})" else if (cfg.useFullTools) "full(${agentAwareSpecs.size})" else "core(${agentAwareSpecs.size})"}")
+            Log.i("QuroAssistant", "tool mode=${if (!effEnableTools) "off" else if (QuroToolRouter.PROGRESSIVE && !isLocal) "rag(${activeToolRouter?.activeSpecs()?.size})" else if (cfg.useFullTools) "full(${categoryAwareSpecs.size})" else "core(${categoryAwareSpecs.size})"}")
             // 诊断日志：确认 aci/workspace 工具是否在下发列表中
-            val aciWsTools = agentAwareSpecs.filter { it.name.startsWith("aci_") || it.name.startsWith("workspace_") }
+            val aciWsTools = categoryAwareSpecs.filter { it.name.startsWith("aci_") || it.name.startsWith("workspace_") }
             if (aciWsTools.isNotEmpty()) {
                 Log.i("QuroAssistant", "aci/workspace tools included: ${aciWsTools.map { it.name }}")
             } else {
@@ -513,14 +632,24 @@ class QuroAssistant(
                     //   仅跳过本次 emit 而不让 streamChat 的 catch 把整段输出吞成截断文本。
                     streamedContent = acc
                     runCatching {
+                        // 思考耗时结算：首个可见 token 到达时，若思考已在计时则落一次账（与占位更新同一次写）。
+                        var thinkDur: Long? = null
+                        if (!thinkDurWritten && thinkStartMs > 0) {
+                            thinkDurWritten = true
+                            thinkDur = (System.currentTimeMillis() - thinkStartMs).coerceAtLeast(0)
+                        }
                         if (streamPlaceholderId == null) {
-                            val p = QuroMessage(role = "assistant", content = acc)
+                            val p = QuroMessage(role = "assistant", content = acc, thinkDurationMs = thinkDur ?: 0L)
                             store.add(p)
                             streamPlaceholderId = p.id
                             lastStreamEmitMs = System.currentTimeMillis()
                             emit()
                         } else {
-                            store.update(streamPlaceholderId!!) { it.copy(content = acc) }
+                            val dur = thinkDur
+                            store.update(streamPlaceholderId!!) {
+                                if (dur != null) it.copy(content = acc, thinkDurationMs = dur)
+                                else it.copy(content = acc)
+                            }
                             val now = System.currentTimeMillis()
                             if (now - lastStreamEmitMs >= 100L) {
                                 lastStreamEmitMs = now
@@ -535,6 +664,8 @@ class QuroAssistant(
                 // 后续可见文本流到达时 emitStreamToken 会接着填 content（copy 只改 content，不丢 reasoning）。
                 val emitThinkingToken: (String) -> Unit = { acc ->
                     runCatching {
+                        // 思考计时起点：首个思考 token 到达（仅记一次）。
+                        if (thinkStartMs == 0L) thinkStartMs = System.currentTimeMillis()
                         if (streamPlaceholderId == null) {
                             val p = QuroMessage(role = "assistant", content = "", reasoning = acc)
                             store.add(p)
@@ -611,22 +742,16 @@ class QuroAssistant(
                         )
                     } else {
                         val streaming = stream
-                        client.chat(
-                            baseUrl = cfg.baseUrl,
-                            apiKey = cfg.apiKey,
-                            model = cfg.model,
-                            messages = llmMessages,
+                        chatCloudWithFailover(
+                            context = context,
+                            cfg = cfg,
+                            llmMessages = llmMessages,
                             temperature = effTemperature,
                             maxTokens = effMaxTokens,
-                            // N1：provider 参与家族判定（同一模型名在不同网关字段不同）
-                            provider = cfg.provider,
-                            thinkingLevel = reasoningLevel,
-                            tools = if (activeToolRouter != null) activeToolRouter.activeSpecs() else agentAwareSpecs,
+                            reasoningLevel = reasoningLevel,
+                            tools = if (activeToolRouter != null) activeToolRouter.activeSpecs() else categoryAwareSpecs,
                             stream = streaming,
-                            // 注意：v384 已根除重组期重编译正则的 ANR 真凶，此处无需再用 500ms 粗节流保命。
                             onToken = if (streaming) emitStreamToken else null,
-                            // 🧠 补齐云模型流式思考上屏通道（此前只有本地路径有，云端被简化掉了）。
-                            // 与 emitThinkingToken 对称：思考先到 → 建 reasoning 占位；content 到达 → 填充正文。
                             onThinking = if (streaming) emitThinkingToken else null,
                         )
                     }
@@ -664,6 +789,9 @@ class QuroAssistant(
 
                 when (result) {
                     is QuroLlmResult.Text -> {
+                        // 归因原料：这一帧的停止原因与用量。多轮里后面若还有帧会覆盖它，
+                        // 最终留下的是「决定这一轮如何结束」的那一帧。
+                        lastTurnMeta = result.meta
                         // 🛡️ 内容提取：只取模型返回的正式 content；reasoning 绝不进 content。
                         //   此前 content=reasoning 导致「思考 HTML 同时出现在正文气泡和 ThinkBubble」。
                         //   reasoning 仅通过 reasoning 字段传递，由 ChatScreen 的 ThinkBubble 按需渲染。
@@ -734,6 +862,9 @@ class QuroAssistant(
                         return lastText
                     }
                     is QuroLlmResult.ToolCalls -> {
+                        // 归因原料：工具轮的停止原因同样要留痕（length 出现在这里，
+                        // 意味着 tool_calls 的 arguments 很可能被切在半途）。
+                        lastTurnMeta = result.meta
                         // 死循环检测在下方 sig 计算处与 while 末尾统一处理（按「签名是否原地重复」判定，
                         // 不按单轮有无文本，避免误杀 AI 修 bug 等合法长任务）。
                         // 同一轮可能返回多个 tool_call（模型批量并发调用）。
@@ -797,7 +928,14 @@ class QuroAssistant(
                             }
                         }
                         runCatching {
-                            val toolThink = store.all().filter {
+                            // 🔴 限定在**本轮**内：旧实现 store.all() 全库过滤，超过 8 条就把
+                            //   **历史回合**的思考也清空（store.update 直接改旧消息并落盘，
+                            //   不可逆）—— 打开旧对话时以往显示过的思考行消失/缩水。
+                            //   「只留最近 N 步」防的是本轮内无限堆叠，作用域只能是本轮：
+                            //   本轮起点 = 最后一条 user 消息（含 hidden 的 [第N轮] 注入）之后。
+                            val all = store.all()
+                            val turnStart = all.indexOfLast { it.role == "user" } + 1
+                            val toolThink = all.drop(turnStart).filter {
                                 it.role == "assistant" && it.toolCalls != null && !it.reasoning.isNullOrBlank()
                             }
                             if (toolThink.size > TOOL_THINK_KEEP) {

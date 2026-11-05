@@ -46,11 +46,12 @@ class RemoteTaskApi(
             method(req, "GET")
             return ok(buildJsonObject {
                 put("api_version", 1); put("server_version", serverVersion)
-                putJsonArray("capabilities") { add("tasks"); if (device != null) add("device_state") }
+                putJsonArray("capabilities") { add("tasks"); add("task_steer"); if (device != null) add("device_state") }
                 putJsonObject("limits") {
                     put("max_wait_s", RemoteTaskService.MAX_WAIT_S)
                     put("max_goal", RemoteTaskService.MAX_GOAL)
                     put("max_answer", RemoteTaskService.MAX_ANSWER)
+                    put("max_steer", RemoteTaskService.MAX_STEER)
                 }
             })
         }
@@ -98,6 +99,14 @@ class RemoteTaskApi(
                 method(req, "POST")
                 val b = body(req, setOf("text"))
                 ok(buildJsonObject { put("task_id", service.answer(id, string(b, "text").orEmpty())); put("accepted", true) })
+            }
+            "steer" -> {
+                method(req, "POST")
+                val b = body(req, setOf("text"))
+                val r = service.steer(id, string(b, "text").orEmpty())
+                ok(buildJsonObject {
+                    put("task_id", r.taskId); put("message_id", r.messageId); put("accepted", true)
+                }, 202)
             }
             "cancel" -> {
                 method(req, "POST")

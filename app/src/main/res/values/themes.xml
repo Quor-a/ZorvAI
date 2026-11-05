@@ -16,6 +16,14 @@
         <item name="android:windowNoTitle">true</item>
     </style>
 
+    <!-- 🔴 libtaskbar 设置页专用浅色主题（2026-11-04）：修复「深底深字一片黑」。
+         库布局遵循 AppCompat 语义色，强制 Light 后文字/背景对比恢复。 -->
+    <style name="Theme.Quro.TaskbarSettings" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="android:windowBackground">#FFF6F1</item>
+        <item name="android:colorBackground">#FFF6F1</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
     <!-- 品牌启动页（v128）：深色无动作栏，避免白屏闪烁 -->
     <style name="Theme.Quro.Splash" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/quro_splash_bg</item>

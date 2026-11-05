@@ -217,6 +217,11 @@ class FlexLayout(private val viewportWidth: Float, private val viewportHeight: F
     private fun resolveFontStyle(st: Style) {
         if (st.fontSizeIsRpx) { st.fontSize *= rpxRatio; st.fontSizeIsRpx = false }
         if (st.lineHeightIsRpx) { st.lineHeight *= rpxRatio; st.lineHeightIsRpx = false }
+        // 🔴 无单位 line-height = 字号倍数（CSS 语义），2026-11-04 修复行距坍缩/文字重叠
+        if (st.lineHeightUnitless) {
+            st.lineHeight = st.fontSize * st.lineHeight
+            st.lineHeightUnitless = false
+        }
     }
 
     // ---------------------------------------------------------------- layout

@@ -78,6 +78,9 @@ object QuroTtsHolder {
     private val pendingQueue = ArrayDeque<SpeechJob>()
     private val pumpLock = Mutex()
     @Volatile private var isSpeaking = false
+
+    /** 当前是否在播报（含队列）——供「朗读」按钮做 停止/开始 切换（2026-11-04 朗读对接补全）。 */
+    val speaking: Boolean get() = isSpeaking
     // 队列空闲监听器：供语音球等「等全部播报完毕再续听」场景使用
     private val idleListeners = mutableListOf<() -> Unit>()
 
@@ -480,15 +483,26 @@ object QuroTtsHolder {
      * 异步朗读：立即返回是否已发起，真正的合成+播放在后台 IO 协程进行，绝不阻塞调用线程。
      * 用于 SpeakTool 等工具调用场景——此前提到的「发唱歌就卡了」正是因为 runBlocking 等整首歌
      * 播放完才返回，把 ReAct 循环卡死；改为异步后工具瞬间返回，歌曲后台播放，界面不再冻结。
+     *
+     * @param onResult 播报结果回调（0=成功 / -1=无上下文 / -2=合成或播放失败）。
+     *   🔴 2026-11-06 补：此前云端合成失败在 speakCloud 里只写 Log，调用方拿到 true 后
+     *   以为一切正常——消息气泡「朗读」点了没声也没任何提示。现在把最终结果回传给调用方。
      */
-    fun speakAsync(text: String, voice: String? = null): Boolean {
-        val ctx = appCtx ?: run { log("speakAsync: 无 appCtx ❌"); return false }
+    fun speakAsync(text: String, voice: String? = null, onResult: ((Int) -> Unit)? = null): Boolean {
+        if (appCtx == null) {
+            log("speakAsync: 无 appCtx ❌")
+            onResult?.invoke(-1)
+            return false
+        }
         holderScope.launch {
+            var rc = -2
             try {
-                speak(text, voice = voice)
+                rc = speak(text, voice = voice)
+                if (rc != 0) log("speakAsync: speak 返回 $rc（0=成功，非 0=失败）")
             } catch (e: Exception) {
                 Log.e(TAG, "speakAsync 异常: ${e.message}")
             }
+            onResult?.invoke(rc)
         }
         return true
     }
@@ -612,6 +626,22 @@ class SpeakTool : QuroTool {
         if (!QuroTtsHolder.speakAsync(text, voiceId)) return "TTS 未就绪（缺少上下文）"
         // 标记「AI 本轮主动用 speak 工具播报」→ 自动朗读(朗读)让位，交由 AI 决定播放顺序
         QuroTtsHolder.speakToolFiredThisTurn = true
+        // ★ 语音条落盘：除即时播报外，异步合成一份音频文件落盘，供「语音条气泡」回放。
+        //   落盘失败不阻断主流程（即时播报已发出），语音条回放时若无文件则懒合成。
+        runCatching {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val synth = QuroCloudTts.synthBytes(context, text, voiceId)
+                    val path = com.ai.assistance.quro.core.media.VoiceNotePlayer.persistSynth(
+                        context, synth.bytes, synth.format, synth.pcmSampleRate,
+                        com.ai.assistance.quro.core.media.VoiceNoteStore.keyOf(text),
+                    ).absolutePath
+                    com.ai.assistance.quro.core.media.VoiceNoteStore.put(text, path)
+                } catch (_: Exception) {
+                    // 落盘失败静默：语音条回放时会再试懒合成。
+                }
+            }
+        }
         return "已请求朗读（后台播放中）" + if (voiceId != null) "（音色=$voiceId）" else ""
     }
 }

@@ -165,6 +165,14 @@ class Style {
     var fontSizeIsRpx = false
     var lineHeightIsRpx = false
 
+    /**
+     * 🔴 line-height 无单位修正（2026-11-04）：CSS 语义 `line-height: 1.5` 是
+     * 「字号 × 1.5 的倍数」，旧实现 parsePx 直取数值 → 1.5px，行距坍缩、文本重叠
+     * （AI 写的小程序大面积文字几乎必踩）。解析时记此标志，
+     * FlexLayout.resolveFontStyle 里统一换算为 fontSize × 值。
+     */
+    var lineHeightUnitless = false
+
     var lineHeight: Float = Float.NaN  // px; NaN => auto (1.2 * fontSize)
     var textAlign: TextAlign = TextAlign.LEFT
     var borderRadius: Float = 0f
@@ -376,7 +384,10 @@ class Style {
             val s = Style()
             for ((rawKey, rawValue) in decls) {
                 val key = rawKey.trim().lowercase()
-                val v = rawValue.trim()
+                // 🔴 `!important` 全局剥离（2026-11-04）：旧实现把后缀带进值里，
+                //    Length.parse/parsePx 的 toFloatOrNull 失败 → 值静默变 0
+                //    （width:100%!important 之类把元素压成 0 宽）。
+                val v = rawValue.trim().removeSuffix("!important").trim()
                 when (key) {
                     "display" -> {
                         s.displaySet = true
@@ -435,7 +446,21 @@ class Style {
                     "color" -> { parseColor(v)?.let { s.color = it; s.colorSet = true } }
                     "font-size" -> { s.fontSize = parsePx(v); if (v.trim().endsWith("rpx")) s.fontSizeIsRpx = true; s.fontSizeSet = true }
                     "font-weight" -> { s.fontWeight = if (v == "bold" || v.toIntOrNull() ?: 0 >= 600) FontWeight.BOLD else FontWeight.NORMAL; s.weightSet = true }
-                    "line-height" -> { s.lineHeight = parsePx(v); if (v.trim().endsWith("rpx")) s.lineHeightIsRpx = true; s.lineHeightSet = true }
+                    // 🔴 无单位值 = 字号倍数（CSS 语义），标记后由 FlexLayout 换算；`!important` 一并剥离
+                    "line-height" -> {
+                        val raw = v.trim().removeSuffix("!important").trim()
+                        val unitless = !raw.endsWith("px") && !raw.endsWith("rpx") && raw.toFloatOrNull() != null
+                        if (unitless) {
+                            s.lineHeightUnitless = true
+                            s.lineHeight = raw.toFloatOrNull() ?: 0f
+                            s.lineHeightIsRpx = false
+                        } else {
+                            s.lineHeightUnitless = false
+                            s.lineHeight = parsePx(raw)
+                            s.lineHeightIsRpx = raw.endsWith("rpx")
+                        }
+                        s.lineHeightSet = true
+                    }
                     "text-align" -> { s.textAlign = when (v) { "center" -> TextAlign.CENTER; "right" -> TextAlign.RIGHT; else -> TextAlign.LEFT }; s.textAlignSet = true }
                     "border-radius" -> { s.borderRadius = parsePx(v); s.radiusSet = true }
                     "border-width" -> { s.borderWidth = parsePx(v); s.borderWidthSet = true }

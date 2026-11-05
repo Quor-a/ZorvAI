@@ -204,7 +204,18 @@ sealed class GenUIAction {
     @SerialName("open_app")
     data class OpenApp(
         val packageName: String = "",
-        val action: String = "",
+        /**
+         * 额外的 Intent action（如 `android.intent.action.VIEW`）。
+         *
+         * 🔴 **必须**用 `@SerialName("intentAction")` 改名：JSON 的类判别符就是 `action`
+         * （`DslParser` 里 `classDiscriminator = "action"`），字段再叫 `action` 会与判别符冲突，
+         * kotlinx-serialization 直接抛 `IllegalArgumentException: ... property 'action' that
+         * conflicts with JSON class discriminator`。而这个异常发生在 **`DslParser` 的类初始化**里，
+         * 一旦这个子类被注册进 serializersModule，**整个 DslParser 就再也初始化不了** ——
+         * 所有 GenUI 界面统一变成「⚠️ UI 解析失败」，且编译期毫无提示。
+         * 这也正是 `open_app` / `execute` 此前一直没被注册进注册表的原因。
+         */
+        @SerialName("intentAction") val action: String = "",
         val fallbackUrl: String = ""
     ) : GenUIAction()
 
@@ -240,7 +251,17 @@ sealed class GenUIAction {
     @Serializable
     @SerialName("execute")
     data class Execute(
-        val action: String,
+        /**
+         * 要执行的系统任务名。
+         *
+         * 🔴 JSON 字段名是 **`task`** 而不是 `action`：`action` 已被用作类判别符
+         * （`{"action":"execute"}` 里的那个）。字段若也叫 `action`，serializer 会因
+         * 「property conflicts with JSON class discriminator」在 **DslParser 类初始化**时抛异常，
+         * 导致所有界面解析全崩（见 [OpenApp.action] 的注释）。
+         * 这也解释了为什么规则文档里写的一直是 `{"action":"execute","task":"dial"}` ——
+         * 它与代码字段本来是错位的，之前靠「不注册这个子类」掩盖着。
+         */
+        @SerialName("task") val action: String = "",
         val params: Map<String, String> = emptyMap()
     ) : GenUIAction()
 
@@ -254,4 +275,36 @@ sealed class GenUIAction {
     data class SendMessage(
         val text: String
     ) : GenUIAction()
+
+    /**
+     * **调用宿主工具**（真实执行，界面自己就能把事办完）。
+     *
+     * 与 [SendMessage] 的分工：
+     *  · [SendMessage] 是「把话交给模型，让它再决定」——多绕一轮 LLM，慢且可能被理解偏；
+     *  · 本动作是「界面直接把工具跑了」——按钮点下去就是一次真实调用，结果当场回填。
+     *
+     * 典型场景：点「刷新」跑 `get_battery`、点「查询」跑 `web_search`、
+     * 点「发送」跑 `send_sms`、下拉刷新跑 `bg_screen read`。没有它，GenUI 界面里
+     * 任何「要真做事」的按钮都只能退化成发一句话（这也是「GenUI 用不了工具」的根因）。
+     *
+     * @param name 宿主工具名，**必须与下发给模型的 tools 名单一致**（如 `web_search`）
+     * @param arguments 工具入参 JSON 对象，与 function-calling 的 arguments 同构
+     * @param showResult 是否把结果以 Toast/状态提示给用户看。默认 true。
+     *        敏感或大段结果（如整页 OCR 文本）建议置 false，只让界面自己通过
+     *        [host][com.ai.assistance.quro.genui.sdk.interaction.ActionHost.callTool] 的
+     *        返回值去用；宿主侧会把结果同时写入状态总线，界面可用 `bind` 展示。
+     */
+    @Serializable
+    @SerialName("call_tool")
+    data class CallTool(
+        val name: String,
+        val arguments: JsonElement = kotlinx.serialization.json.JsonObject(emptyMap()),
+        val showResult: Boolean = true
+    ) : GenUIAction() {
+        /**
+         * 参数压成 JSON 文本 —— 宿主工具层（function-calling）吃的就是这个形态，
+         * 免得每个宿主各自再写一遍序列化、写歪了就是一次「参数不合法」。
+         */
+        val argumentsJson: String get() = arguments.toString()
+    }
 }

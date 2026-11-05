@@ -29,6 +29,10 @@ data class Turn(
     val finishedReplies: List<String> = emptyList(),
     /** 这一轮真的用过的能力组(手机、网页、沙箱……);下一轮开局预先展开,不进给模型的上文。 */
     val groups: List<String> = emptyList(),
+    /** 任务结束后留在后台接着运行的那一页的站点(见 web_keep_open);没留为 null。 */
+    val keptPage: String? = null,
+    /** 留下的那一页后来关掉的原因([com.ai.assistance.quro.core.mika.cap.web.KeptPageClose.wire]);还开着或没留为 null。 */
+    val keptPageClosed: String? = null,
 )
 
 object Conversation {
@@ -41,16 +45,22 @@ object Conversation {
     fun stopSummary(t: Turn): String? =
         t.outcome.trim().takeIf { t.status == "cancelled" && it.isNotEmpty() && it != CANCELLED_OUTCOME }
 
-    /** 把之前的轮次做成一条用户角色的参考消息,最近的在最后;太长就丢掉较早的轮次。没有轮次返回 null。 */
-    fun context(turns: List<Turn>, maxTurns: Int = 5, maxChars: Int = 4000): Message? {
+    /**
+     * 把之前的轮次做成一条用户角色的参考消息,最近的在最后;整条超过 [maxTokens](按 [TokenEstimate])就丢掉较早的轮次。
+     * 只剩一轮还超长时各字段分别截断(用户原话和结局都留一段),仍超长再整段截断。没有轮次返回 null。
+     */
+    fun context(turns: List<Turn>, maxTurns: Int = 5, maxTokens: Int = 2_500): Message? {
         var recent = turns.takeLast(maxTurns.coerceAtLeast(0))
         if (recent.isEmpty()) return null
+        val header = "$HEADER\n"
         fun render(ts: List<Turn>, clip: Int) = ts.mapIndexed { i, t -> line(i + 1, t, clip) }.joinToString("\n")
-        while (recent.size > 1 && HEADER.length + 1 + render(recent, Int.MAX_VALUE).length > maxChars) recent = recent.drop(1)
+        while (recent.size > 1 && TokenEstimate.of(header + render(recent, Int.MAX_VALUE)) > maxTokens) recent = recent.drop(1)
         var body = render(recent, Int.MAX_VALUE)
-        if (HEADER.length + 1 + body.length > maxChars) {
-            // 只剩一轮还超长:各字段截断
-            body = render(recent, ((maxChars - HEADER.length) / 3).coerceAtLeast(20))
+        val room = (maxTokens - TokenEstimate.of(header)).coerceAtLeast(20)
+        if (TokenEstimate.of(header + body) > maxTokens) {
+            // 只剩一轮还超长:各字段截断,原话和结局各留一段
+            body = render(recent, room / 3)
+            if (TokenEstimate.of(header + body) > maxTokens) body = TokenEstimate.clip(body, room, "…")
         }
         return Message(Role.User, listOf(Part.Text("$HEADER\n$body")), Author.ZorvAI)
     }
@@ -67,8 +77,14 @@ object Conversation {
             t.status == "cancelled" -> stopSummary(t)?.let { "the user stopped this task partway; before the stop: ${it.clip(clip)}" } ?: "the user cancelled this task"
             else -> "not finished, reason: ${t.outcome.clip(clip)}"
         }
-        return "$n. The user said: ${t.userText.clip(clip)}; $result"
+        // 任务结束后留下的那一页:下一轮被问到「还在播吗」时知道它还开着还是已经关了
+        val kept = t.keptPage?.let { host ->
+            if (t.keptPageClosed == null) "; after it ZorvAI kept the page on $host running in the background"
+            else "; ZorvAI kept the page on $host running after it, and that page has since been closed"
+        }.orEmpty()
+        return "$n. The user said: ${t.userText.clip(clip)}; $result$kept"
     }
 
-    private fun String.clip(max: Int) = if (length <= max) this else take(max) + "…"
+    /** 截到 [max] 个 token(含末尾的「…」)。 */
+    private fun String.clip(max: Int) = if (max == Int.MAX_VALUE || TokenEstimate.of(this) <= max) this else TokenEstimate.clip(this, max, "…")
 }

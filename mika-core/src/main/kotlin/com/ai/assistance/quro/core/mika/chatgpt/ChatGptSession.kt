@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.mika.chatgpt
 
 import com.ai.assistance.quro.core.mika.model.BearerToken
+import com.ai.assistance.quro.core.mika.oauth.LoopbackCallback
 import com.ai.assistance.quro.core.mika.model.ModelError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
