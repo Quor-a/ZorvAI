@@ -40,10 +40,14 @@ object DimensionSerializer : KSerializer<Dimension> {
             content.toFloatOrNull()?.let {
                 return Dimension.Fixed(it)
             }
-            if (content == "match" || content == "fill") {
+            if (content == "match" || content == "fill" ||
+                content == "match_parent" || content == "fill_parent" ||
+                content == "matchparent" || content == "fillparent"
+            ) {
+                // 🔴 2026-11-06：AI 高频写 Android 风格 match_parent，此前落到 Wrap 语义直接反了
                 return Dimension.Match
             }
-            if (content == "wrap") {
+            if (content == "wrap" || content == "wrap_content" || content == "wrapcontent" || content == "auto") {
                 return Dimension.Wrap
             }
             if (content.endsWith("%")) {
@@ -51,6 +55,11 @@ object DimensionSerializer : KSerializer<Dimension> {
                 return Dimension.Weight(value / 100f)
             }
             if (content.endsWith("dp", ignoreCase = true)) {
+                val value = content.dropLast(2).toFloatOrNull() ?: 0f
+                return Dimension.Fixed(value)
+            }
+            if (content.endsWith("px", ignoreCase = true)) {
+                // 🔴 2026-11-06：AI 写 "16px" —— 移动端 DSL 按 dp 收（此前静默 Wrap 丢尺寸）
                 val value = content.dropLast(2).toFloatOrNull() ?: 0f
                 return Dimension.Fixed(value)
             }

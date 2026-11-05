@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
@@ -139,9 +140,10 @@ private fun PageCanvas(
  */
 private val SELF_SCROLLING_ROOT_TYPES = setOf(
     "scroll", "nested_scroll", "custom_scroll",
-    "list", "lazy_column", "column_scroll", "virtual_list",
-    "data_list", "media_list", "audio_list", "chat_list",
 )
+// 🔴 2026-11-06 P0：list/data_list/lazy_column 等的线上渲染器（GenListRenderer/DataListRenderer）
+//    是纯 Column 没有自滚，未注册类型走 FallbackRenderer 同样不滚 —— 留在本集合会让
+//    PageCanvas 跳过外层滚动 → 根类型为这些时整页超屏内容不可达。只有 scroll 族真自滚。
 
 /**
  * 创建并缓存 RenderContext
@@ -286,9 +288,27 @@ fun GenUIDialogOverlay(ctx: RenderContext) {
             // 🔴 移动端适配修复（2026-11-04）：usePlatformDefaultWidth=false 下 Surface
             //    wrap 内容、无宽度上限 —— 对话框子树里任何宽 child（fixed width 500）都横向出屏。
             //    统一钳到「页面可用宽」，与 PageCanvas 同口径。
-            val dialogMax = GenUILayoutGuard.LocalPageMaxWidth.current
-            Box(modifier = Modifier.widthIn(max = dialogMax.dp).padding(padding)) {
-                RenderChildren(currentDialog.children, ctx)
+            // 🔴 2026-11-06 P0：弹窗位于 PageCanvas 的 CompositionLocalProvider 之外，
+            //    此处读到的 LocalPageMaxWidth 是 staticCompositionLocalOf 的 360 默认值 ——
+            //    手机上弹窗可比页面版心更宽、平板上被钳成半宽。按 PageCanvas 同口径自算并提供。
+            val dialogConfiguration = androidx.compose.ui.platform.LocalConfiguration.current
+            val dialogMax = (((dialogConfiguration?.screenWidthDp ?: 360) - (GenUIDesignTokens.pagePaddingH * 2).value)
+                .coerceAtMost(GenUILayoutGuard.MAX_WIDTH_DP)
+                .coerceAtLeast(200f))
+            // 🔴 P1：长内容对话框底部被屏幕裁掉且无法滚 → 高度钳到屏高 80% + 内容可滚。
+            val dialogHMax = ((dialogConfiguration?.screenHeightDp ?: 800) * 0.8f).dp
+            androidx.compose.runtime.CompositionLocalProvider(
+                GenUILayoutGuard.LocalPageMaxWidth provides dialogMax
+            ) {
+                Box(
+                    modifier = Modifier
+                        .widthIn(max = dialogMax.dp)
+                        .heightIn(max = dialogHMax)
+                        .verticalScroll(rememberScrollState())
+                        .padding(padding)
+                ) {
+                    RenderChildren(currentDialog.children, ctx)
+                }
             }
         }
     }

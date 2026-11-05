@@ -34,8 +34,14 @@ class ActionExecutor(
      * @return 如果事件不存在则返回 null
      */
     fun handlerFor(component: UIComponent, eventName: String): (() -> Unit)? {
-        val event = component.events[eventName] ?: return null
-        return { execute(event.actions, component) }
+        // 🔴 2026-11-06：事件名别名回退 —— AI 常写 onTap/onPress，此前静默无响应。
+        val aliases = if (eventName == "onClick") listOf("onClick", "onTap", "onPress", "onAction")
+                      else listOf(eventName)
+        for (name in aliases) {
+            val event = component.events[name] ?: continue
+            return { execute(event.actions, component) }
+        }
+        return null
     }
 
     private fun executeOne(action: GenUIAction, component: UIComponent?) {

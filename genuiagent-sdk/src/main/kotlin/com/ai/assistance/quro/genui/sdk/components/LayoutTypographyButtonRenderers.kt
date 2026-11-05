@@ -693,13 +693,29 @@ fun ScrollRenderer(
     // 注意：这里不使用 fillMaxSize()，避免在无限高度父容器中闪退。
     // 尺寸由外层 RenderNode 的 Box（应用了 style 的 width/height）控制。
     // 如果 style 中设置了 height: "100%" 或具体高度，RenderNode 的 Box 会提供确定的高度约束。
-    Column(
-        modifier = modifier
-            .then(scrollModifier),
-        verticalArrangement = ltbVerticalArrangement(component.style.arrangement, spacing),
-        horizontalAlignment = ltbHorizontalAlign(component.style.crossAlignment)
-    ) {
-        RenderChildren(children = component.children, ctx = ctx)
+    // 🔴 2026-11-06 P0：横向分支此前也用 Column —— 子项竖着摞、横向滚动宽度只有最宽子项，
+    //    AI 想要的横向卡片带完全变形。横向改用 Row（主轴排列 + 交叉轴=垂直对齐）。
+    if (isHorizontal) {
+        Row(
+            modifier = modifier.then(scrollModifier),
+            horizontalArrangement = Arrangement.spacedBy(spacing.dp),
+            verticalAlignment = when (component.style.crossAlignment?.lowercase()) {
+                "start", "top" -> Alignment.Top
+                "end", "bottom" -> Alignment.Bottom
+                else -> Alignment.CenterVertically
+            }
+        ) {
+            RenderChildren(children = component.children, ctx = ctx)
+        }
+    } else {
+        Column(
+            modifier = modifier
+                .then(scrollModifier),
+            verticalArrangement = ltbVerticalArrangement(component.style.arrangement, spacing),
+            horizontalAlignment = ltbHorizontalAlign(component.style.crossAlignment)
+        ) {
+            RenderChildren(children = component.children, ctx = ctx)
+        }
     }
 }
 

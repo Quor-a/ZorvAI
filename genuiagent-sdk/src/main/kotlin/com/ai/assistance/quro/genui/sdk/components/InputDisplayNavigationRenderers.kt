@@ -13,6 +13,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import com.ai.assistance.quro.genui.sdk.render.GenUILayoutGuard
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.SubcomposeAsyncImage
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -1138,8 +1141,15 @@ fun RenderRatingInput(component: UIComponent, ctx: RenderContext, modifier: Modi
 fun RenderImage(component: UIComponent, ctx: RenderContext, modifier: Modifier = Modifier) {
     val bg = containerColor(component, ctx, ctx.theme.colorScheme.surfaceVariant)
     val shape = StyleResolver.resolveShape(component.style)
-    val widthDp = component.sizeDp(96.dp, horizontal = true)
+    // 🔴 2026-11-06 P0：固定宽钳到页面可用宽 —— sizeDp 裸取 Fixed.dp，AI 写 width:1080 横向出屏。
+    val pageMaxDp = GenUILayoutGuard.LocalPageMaxWidth.current.dp
+    val widthDp = component.sizeDp(96.dp, horizontal = true).coerceAtMost(pageMaxDp)
     val heightDp = component.sizeDp(96.dp, horizontal = false)
+    // 🔴 2026-11-06 P0：src/url 此前从不消费 → 媒体域永远灰块。真实加载 + 加载中/失败占位。
+    val src = component.propString("src")
+        ?: component.propString("url")
+        ?: component.propString("image")
+        ?: component.propString("imageUrl")
     Box(
         modifier = modifier
             .width(widthDp)
@@ -1148,12 +1158,36 @@ fun RenderImage(component: UIComponent, ctx: RenderContext, modifier: Modifier =
             .background(bg)
     ) {
         val content = component.style.contentDescription
-        if (content != null) {
-            Text(
-                text = content,
-                color = ctx.theme.colorScheme.onSurfaceVariant,
-                style = ctx.theme.typography.labelSmall,
-                modifier = Modifier.align(Alignment.Center)
+        if (src.isNullOrBlank()) {
+            if (content != null) {
+                Text(
+                    text = content,
+                    color = ctx.theme.colorScheme.onSurfaceVariant,
+                    style = ctx.theme.typography.labelSmall,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+        } else {
+            SubcomposeAsyncImage(
+                model = src,
+                contentDescription = content,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+                loading = {
+                    Box(Modifier.matchParentSize().background(bg), contentAlignment = Alignment.Center) {
+                        Text("…", color = ctx.theme.colorScheme.onSurfaceVariant, style = ctx.theme.typography.labelSmall)
+                    }
+                },
+                error = {
+                    Box(Modifier.matchParentSize().background(bg), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = content ?: "图片加载失败",
+                            color = ctx.theme.colorScheme.onSurfaceVariant,
+                            style = ctx.theme.typography.labelSmall,
+                            maxLines = 2
+                        )
+                    }
+                }
             )
         }
     }

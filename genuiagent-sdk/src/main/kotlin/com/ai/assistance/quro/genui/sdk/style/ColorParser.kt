@@ -67,6 +67,13 @@ object ColorParser {
 
         // 十六进制颜色
         parseHex(trimmed)?.let { return it }
+        // 🔴 2026-11-06：AI 常写不带 # 的裸 hex（"FF5722"）→ 此前静默回退默认色。补 # 再试。
+        if (!trimmed.startsWith("#") &&
+            (trimmed.length == 6 || trimmed.length == 8) &&
+            trimmed.all { it.isDigit() || it in 'A'..'F' || it in 'a'..'f' }
+        ) {
+            parseHex("#$trimmed")?.let { return it }
+        }
 
         return fallback
     }
@@ -78,17 +85,17 @@ object ColorParser {
         return try {
             when (hex.length) {
                 3 -> {
-                    // #RGB 格式
-                    val r = hexValue(hex[0]) * 17 / 255f
-                    val g = hexValue(hex[1]) * 17 / 255f
-                    val b = hexValue(hex[2]) * 17 / 255f
+                    // #RGB 格式（🔴 2026-11-06：hexValue 已归一到 0~1，旧式再 *17/255 等于再除一次 → #FFF 变近黑）
+                    val r = hexValue(hex[0])
+                    val g = hexValue(hex[1])
+                    val b = hexValue(hex[2])
                     Color(r, g, b)
                 }
                 4 -> {
-                    // #RGBA 格式
-                    val r = hexValue(hex[0]) * 17 / 255f
-                    val g = hexValue(hex[1]) * 17 / 255f
-                    val b = hexValue(hex[2]) * 17 / 255f
+                    // #RGBA 格式（同上修复）
+                    val r = hexValue(hex[0])
+                    val g = hexValue(hex[1])
+                    val b = hexValue(hex[2])
                     val a = hexValue(hex[3])
                     Color(r, g, b, a)
                 }
