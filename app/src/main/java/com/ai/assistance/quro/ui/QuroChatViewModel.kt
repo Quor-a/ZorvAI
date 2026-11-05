@@ -97,6 +97,8 @@ import com.ai.assistance.quro.core.tools.QuroTtsProviders
 import com.ai.assistance.quro.core.tools.QuroTtsProviderKind
 import com.ai.assistance.quro.core.tools.QuroVoiceFeaturePrefs
 import com.ai.assistance.quro.core.tools.QuroToolRouter
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -254,6 +256,27 @@ class QuroChatViewModel(context: Context) : ViewModel() {
      * @param speaker 角色显示名（如「主持人」「研究员 小林」）
      * @param text 发言正文（支持 markdown）
      */
+    // 🔴 G2（2026-11-06）：集群运行状态进 Compose + 停止指令 —— 此前 Composer 的
+    // clusterRunning/onStopCluster 全是默认空实现，横幅与停止键从未真正显示/生效过。
+    val clusterRunning = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    init {
+        // 引擎无回调流，轮询 800ms 对横幅/停止键足够；ViewModel 销毁即停。
+        viewModelScope.launch {
+            while (isActive) {
+                clusterRunning.value = runCatching {
+                    com.ai.assistance.quro.core.cluster.ClusterRuntime.isRunning.value
+                }.getOrDefault(false)
+                delay(800)
+            }
+        }
+    }
+
+    /** 用户点输入条附近的「停止」：中止当前集群任务（引擎 abort + 驱动协程取消）。 */
+    fun stopCluster() {
+        runCatching { com.ai.assistance.quro.core.cluster.ClusterRuntime.stopCurrent() }
+    }
+
     fun appendClusterMessage(speaker: String, text: String) {
         store.add(
             QuroMessage(

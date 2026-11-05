@@ -243,7 +243,18 @@ class ZxWebCardTool : QuroTool {
         )
         Log.d(TAG, "弹出 zxwidget 卡片: $component (ID: $id, 超时: ${timeout}s)")
 
-        val answered = latch.await(timeout.toLong(), TimeUnit.SECONDS)
+        // 🔴 P0-1：可中断等待 —— 外层取消（用户停止生成/切会话）时线程收到 interrupt，
+        // 立即 dismiss 残留条目并退出，不再阻塞到满超时、也不再给下一轮留下脏匹配项。
+        var answered = latch.await(250, TimeUnit.MILLISECONDS)
+        var waitedMs = 250L
+        while (!answered && waitedMs < timeout * 1000L) {
+            if (Thread.currentThread().isInterrupted) {
+                ZxWebCardQueue.dismiss(id)
+                throw kotlinx.coroutines.CancellationException("zx 卡等待被取消")
+            }
+            answered = latch.await(250, TimeUnit.MILLISECONDS)
+            waitedMs += 250
+        }
         val summary = result.get()
         return when {
             answered && summary != null -> summary
@@ -254,6 +265,16 @@ class ZxWebCardTool : QuroTool {
             }
         }
     }
+
+    /**
+     * 🔴 P0-1（2026-11-06）：本工具 run() 里 latch.await 等用户交互 10~600s，
+     * 基类默认执行预算只有 60s —— 外层先超时杀掉协程、内层线程还在等，
+     * 用户第 70 秒点按钮的结果写进一个已死的调用（静默丢失），且残留条目污染下一轮。
+     * 约定：预算 ≥ 自身超时 + 余量。
+     */
+    override fun execTimeoutMs(arguments: String): Long = runCatching {
+        (org.json.JSONObject(arguments).optInt("timeout", 120).coerceIn(10, 600) + 30) * 1000L
+    }.getOrDefault(150_000L)
 
     private fun zxErr(msg: String): String =
         JSONObject().put("ok", false).put("error", msg).toString()

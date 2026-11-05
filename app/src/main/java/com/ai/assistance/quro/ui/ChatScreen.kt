@@ -3663,6 +3663,9 @@ fun ChatScreen(
                         onOpenAciSelector = { showAciSelector = true },
                         onOpenEditor = { showEditor = true },
                         onWarmUp = { runCatching<Unit> { QuroLlmClient.warmUp(vm.currentConfig().baseUrl) } },
+                        // 🔴 G2（2026-11-06）：集群运行态 + 停止键接线（此前全是默认空实现，横幅从不显示）
+                        clusterRunning = vm.clusterRunning.collectAsState().value,
+                        onStopCluster = { vm.stopCluster() },
                         onSelectVisualPopup = {
                             pendingVisualPopup.value = !pendingVisualPopup.value
                             if (pendingVisualPopup.value) {
@@ -5075,7 +5078,8 @@ private fun MessageRow(
                                     Spacer(Modifier.width(10.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text(
-                                            zx.component,
+                                            // 🔴 P2-5（2026-11-06）：头部优先显示模型给的标题，回退技术名
+                                            zx.title.ifBlank { zx.component },
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = cs.onSurface,

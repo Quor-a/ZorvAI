@@ -1937,7 +1937,7 @@ private fun MermaidCardView(card: QuroChatCard.MermaidCard) {
             card = card,
             modifier = Modifier
                 .fillMaxWidth()
-                .height((heightPx / density).dp)
+                .height(heightPx.dp) // 🔴 P1-8（2026-11-06）：同上，CSS px 直接当 dp，不再除 density
                 .clip(RoundedCornerShape(10.dp)),
             zoomable = false,
             onHeight = { heightPx = it },
@@ -2210,7 +2210,7 @@ private fun HtmlPreviewCardView(card: QuroChatCard.HtmlPreviewCard) {
             html = card.html,
             modifier = Modifier
                 .fillMaxWidth()
-                .height((heightPx / density).dp)
+                .height(heightPx.dp) // 🔴 P1-8（2026-11-06）：同上，CSS px 直接当 dp，不再除 density
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color.White),
             onHeight = { heightPx = it },
@@ -2460,7 +2460,10 @@ private fun VisualMiniCardView(card: QuroChatCard.VisualMiniCard) {
                     Modifier.fillMaxSize(),
                     onHeight = { px ->
                         if (card.height <= 0) {
-                            val dp = (px / density.density).toInt().coerceIn(140, 620)
+                            // 🔴 P1-8（2026-11-06）：HtmlPreviewWebView 上报的是 CSS px（==dp），
+                            // 再除 density 在 2.75x 屏上把 600dp 内容压成 218dp → 内容被裁成内滚。
+                            // 与 zx 内联同口径：CSS px 直接当 dp。
+                            val dp = px.coerceIn(140, 620)
                             if (dp != measuredDp) measuredDp = dp
                         }
                     },
@@ -2630,7 +2633,7 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
                     appId = card.nativeAppId,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height((heightPx / density).dp)
+                        .height(heightPx.dp) // 🔴 P1-8（2026-11-06）：同上，CSS px 直接当 dp，不再除 density
                         .clip(RoundedCornerShape(10.dp)),
                 )
             }
@@ -2639,7 +2642,7 @@ private fun MiniAppCardView(card: QuroChatCard.MiniAppCard) {
                     html = card.html,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height((heightPx / density).dp)
+                        .height(heightPx.dp) // 🔴 P1-8（2026-11-06）：同上，CSS px 直接当 dp，不再除 density
                         .clip(RoundedCornerShape(10.dp))
                         .background(Color.White),
                     onHeight = { heightPx = it },
