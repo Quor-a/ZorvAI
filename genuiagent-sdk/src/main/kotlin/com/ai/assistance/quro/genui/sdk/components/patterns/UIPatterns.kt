@@ -5,6 +5,13 @@ package com.ai.assistance.quro.genui.sdk.components.patterns
 import androidx.compose.material3.minimumInteractiveComponentSize
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -150,7 +157,10 @@ fun InfoCardPattern(
             if (actionText != null) {
                 Spacer(Modifier.height(16.dp))
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        // 🔴 2026-11-06：actionText 此前是死文案 —— 点击触发卡片 onClick 动作（若有）
+                        ctx.executor.handlerFor(component, "onClick")?.invoke()
+                    },
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -461,7 +471,7 @@ fun TwoColumnGridPattern(
     if (children.isEmpty()) return
 
     val scheme = ctx.theme.colorScheme
-    val columns = component.propInt("columns", 2)
+    val columns = component.propInt("columns", 2).coerceAtLeast(1) // 🔴 2026-11-06：columns:0 → chunked(0) 崩溃
 
     Column(modifier = modifier.fillMaxWidth()) {
         val rows = children.chunked(columns)
@@ -614,7 +624,11 @@ fun HeaderBarPattern(
                         text = rightAction,
                         style = MaterialTheme.typography.labelLarge,
                         color = scheme.primary,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable {
+                            // 🔴 2026-11-06：右侧操作此前是死文案 → 点击触发 onClick 动作（若有）
+                            ctx.executor.handlerFor(component, "onClick")?.invoke()
+                        }
                     )
                 }
                 rightIcon != null -> {
@@ -763,25 +777,37 @@ fun LoadingStatePattern(
                 }
             }
             else -> {
-                // Spinner 效果（用圆+动画感）
+                // Spinner 效果（🔴 2026-11-06：静态双层圆像卡死 → 无限旋转弧）
+                val spinnerTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "genuiSpinner")
+                val spinnerAngle = spinnerTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 360f,
+                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                        androidx.compose.animation.core.tween(durationMillis = 900, easing = androidx.compose.animation.core.LinearEasing)
+                    ),
+                    label = "genuiSpinnerAngle"
+                )
                 Box(
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    // 背景圆
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .border(3.dp, scheme.surfaceVariant, CircleShape)
-                    )
-                    // 前景弧
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .border(3.dp, scheme.primary, CircleShape)
-                    )
-                }
+                    modifier = Modifier
+                        .size(40.dp)
+                        .rotate(spinnerAngle.value)
+                        .drawBehind {
+                            drawArc(
+                                color = scheme.surfaceVariant,
+                                startAngle = 0f,
+                                sweepAngle = 360f,
+                                useCenter = false,
+                                style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                            )
+                            drawArc(
+                                color = scheme.primary,
+                                startAngle = -90f,
+                                sweepAngle = 110f,
+                                useCenter = false,
+                                style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                            )
+                        }
+                )
             }
         }
 
@@ -822,17 +848,21 @@ fun ChipRowPattern(
     }
 
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().then(
+            if (chips.size > 5) Modifier.horizontalScroll(rememberScrollState()) else Modifier
+        ),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // 🔴 移动端适配修复（2026-11-04 真机截图：天气卡「东南风 2 级」chip 竖排成一字一行）：
         //    3+ 个 chip 无 weight 时最后一个被挤到剩余宽度不足，文字换行成竖排。
         //    每 chip weight(1f) 均分 + 单行居中省略。
-        chips.take(5).forEach { chipText ->
+        // 🔴 2026-11-06：take(5) 把第 6 个起静默丢弃 → >5 个时横向滚动全量渲染（此分支不能用 weight）。
+        val chipsScrollable = chips.size > 5
+        chips.forEach { chipText ->
             Surface(
                 color = scheme.primaryContainer.copy(alpha = 0.4f),
                 shape = RoundedCornerShape(6.dp),
-                modifier = Modifier.weight(1f),
+                modifier = if (chipsScrollable) Modifier else Modifier.weight(1f),
             ) {
                 Text(
                     text = chipText as String,
@@ -863,7 +893,7 @@ fun RatingRowPattern(
     val rating = component.propFloat("rating", 0f)
     val maxStars = component.propInt("maxStars", 5)
     val showValue = component.propBool("showValue", false)
-    val size = component.propFloat("size", 16f)
+    val size = component.propFloat("size", 16f).coerceIn(8f, 48f) // 🔴 2026-11-06：写 200 → 5×200dp 星星溢出
 
     Row(
         modifier = modifier,
@@ -884,7 +914,7 @@ fun RatingRowPattern(
         if (showValue) {
             Spacer(Modifier.width(8.dp))
             Text(
-                text = "${rating.toInt()}.0",
+                text = if (rating % 1f == 0f) "${rating.toInt()}" else "%.1f".format(rating), // 🔴 2026-11-06：4.5 显示成 4.0
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
                 fontWeight = FontWeight.Medium
@@ -908,10 +938,13 @@ fun ProgressLabelPattern(
     modifier: Modifier = Modifier
 ) {
     val scheme = ctx.theme.colorScheme
-    val value = component.propFloat("value", 0f).coerceIn(0f, 1f)
+    // 🔴 2026-11-06：AI 按百分制写 75 → 旧版钳成 100%；>1 统一按 /100 归一。
+    val progressRaw = component.propFloat("value", 0f)
+    val value = (if (progressRaw > 1f) progressRaw / 100f else progressRaw).coerceIn(0f, 1f)
     val label = component.propString("label")
     val showPercent = component.propBool("showPercent", false)
-    val barHeight = component.propFloat("height", 8f)
+    // 🔴 负值进 Modifier.height 有崩溃风险、巨值出 900dp 进度条 → 钳制
+    val barHeight = component.propFloat("height", 8f).coerceIn(2f, 48f)
 
     Column(modifier = modifier.fillMaxWidth()) {
         // 标签行

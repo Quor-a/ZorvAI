@@ -3,6 +3,9 @@ package com.ai.assistance.quro.genui.sdk.components
 import androidx.compose.material3.minimumInteractiveComponentSize
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -79,6 +82,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.quro.genui.sdk.dsl.UIComponent
+import com.ai.assistance.quro.genui.sdk.dsl.Dimension
 import com.ai.assistance.quro.genui.sdk.render.RenderChildren
 import com.ai.assistance.quro.genui.sdk.render.RenderContext
 import com.ai.assistance.quro.genui.sdk.render.StyleResolver
@@ -1010,13 +1014,21 @@ fun FeedbackFormRenderer(component: UIComponent, ctx: RenderContext, modifier: M
     val container = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface)
     val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: 1.dp
+    // 🔴 2026-11-06 线上 card 适配（此前固定高度修复误打在未注册的死代码 CardRenderer 上，线上无效）：
+    //    1) style.padding 生效（旧版硬编码 16dp，AI 写 padding 无效）；
+    //    2) 固定高度 card：内容可滚不裁剪（与 ColumnRowRenderer 同构）——「卡片很高、里面大片空白」的线上根因。
+    val cardPad = StyleResolver.resolvePadding(component.style.padding)
+    val cardFixedH = (component.style.height as? Dimension.Fixed)?.dp?.dp
+    val cardContentMod = if (cardFixedH != null && cardFixedH > 0.dp)
+        Modifier.fillMaxWidth().heightIn(max = cardFixedH).verticalScroll(rememberScrollState())
+    else Modifier.fillMaxWidth()
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = shape,
         colors = CardDefaults.cardColors(containerColor = container),
         elevation = CardDefaults.cardElevation(defaultElevation = elev)
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(modifier = cardContentMod.padding(cardPad)) {
             Text(text = title, style = ctx.theme.typography.titleMedium, color = scheme.onSurface)
             Text(text = subtitle, style = ctx.theme.typography.bodySmall, color = scheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
@@ -1815,13 +1827,21 @@ fun SummaryCardRenderer(component: UIComponent, ctx: RenderContext, modifier: Mo
     val container = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface)
     val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: 1.dp
+    // 🔴 2026-11-06 线上 card 适配（此前固定高度修复误打在未注册的死代码 CardRenderer 上，线上无效）：
+    //    1) style.padding 生效（旧版硬编码 16dp，AI 写 padding 无效）；
+    //    2) 固定高度 card：内容可滚不裁剪（与 ColumnRowRenderer 同构）——「卡片很高、里面大片空白」的线上根因。
+    val cardPad = StyleResolver.resolvePadding(component.style.padding)
+    val cardFixedH = (component.style.height as? Dimension.Fixed)?.dp?.dp
+    val cardContentMod = if (cardFixedH != null && cardFixedH > 0.dp)
+        Modifier.fillMaxWidth().heightIn(max = cardFixedH).verticalScroll(rememberScrollState())
+    else Modifier.fillMaxWidth()
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = shape,
         colors = CardDefaults.cardColors(containerColor = container),
         elevation = CardDefaults.cardElevation(defaultElevation = elev)
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(modifier = cardContentMod.padding(cardPad)) {
             if (title != null) {
                 Text(text = title, style = ctx.theme.typography.titleMedium, color = scheme.onSurface)
             }
@@ -1841,13 +1861,21 @@ fun DetailViewRenderer(component: UIComponent, ctx: RenderContext, modifier: Mod
     val container = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface)
     val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: 1.dp
+    // 🔴 2026-11-06 线上 card 适配（此前固定高度修复误打在未注册的死代码 CardRenderer 上，线上无效）：
+    //    1) style.padding 生效（旧版硬编码 16dp，AI 写 padding 无效）；
+    //    2) 固定高度 card：内容可滚不裁剪（与 ColumnRowRenderer 同构）——「卡片很高、里面大片空白」的线上根因。
+    val cardPad = StyleResolver.resolvePadding(component.style.padding)
+    val cardFixedH = (component.style.height as? Dimension.Fixed)?.dp?.dp
+    val cardContentMod = if (cardFixedH != null && cardFixedH > 0.dp)
+        Modifier.fillMaxWidth().heightIn(max = cardFixedH).verticalScroll(rememberScrollState())
+    else Modifier.fillMaxWidth()
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = shape,
         colors = CardDefaults.cardColors(containerColor = container),
         elevation = CardDefaults.cardElevation(defaultElevation = elev)
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(modifier = cardContentMod.padding(cardPad)) {
             if (title != null) {
                 Text(text = title, style = ctx.theme.typography.titleLarge, color = scheme.onSurface)
             }
@@ -2518,13 +2546,21 @@ fun GenCardRenderer(component: UIComponent, ctx: RenderContext, modifier: Modifi
     val container = StyleResolver.resolveColor(component.style.backgroundColor, scheme, scheme.surface)
     val shape = StyleResolver.resolveShape(component.style).let { if (it == RectangleShape) RoundedCornerShape(10.dp) else it }
     val elev = component.style.elevation.takeIf { it > 0f }?.dp ?: 1.dp
+    // 🔴 2026-11-06 线上 card 适配（此前固定高度修复误打在未注册的死代码 CardRenderer 上，线上无效）：
+    //    1) style.padding 生效（旧版硬编码 16dp，AI 写 padding 无效）；
+    //    2) 固定高度 card：内容可滚不裁剪（与 ColumnRowRenderer 同构）——「卡片很高、里面大片空白」的线上根因。
+    val cardPad = StyleResolver.resolvePadding(component.style.padding)
+    val cardFixedH = (component.style.height as? Dimension.Fixed)?.dp?.dp
+    val cardContentMod = if (cardFixedH != null && cardFixedH > 0.dp)
+        Modifier.fillMaxWidth().heightIn(max = cardFixedH).verticalScroll(rememberScrollState())
+    else Modifier.fillMaxWidth()
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = shape,
         colors = CardDefaults.cardColors(containerColor = container),
         elevation = CardDefaults.cardElevation(defaultElevation = elev)
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(modifier = cardContentMod.padding(cardPad)) {
             if (overline != null) {
                 Text(text = overline, style = ctx.theme.typography.labelMedium, color = scheme.primary)
                 Spacer(Modifier.height(2.dp))

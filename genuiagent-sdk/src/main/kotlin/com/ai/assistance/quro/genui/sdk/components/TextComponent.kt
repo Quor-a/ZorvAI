@@ -1,5 +1,10 @@
 package com.ai.assistance.quro.genui.sdk.components
 
+// ⚠️⚠️⚠️ 未注册的死代码（2026-11-06 审计确认）：本文件的渲染器没有注册进 BuiltinComponents 注册表，
+// 线上实际执行的是另一套实现（card→GenCardRenderer / column,row→ColumnRowRenderer / image→RenderImage /
+// button→MaterialButtonRenderer / text→BodyTextRenderer，见 BuiltinComponents.kt 注册表）。
+// 🔴 修复渲染问题请打到注册表指向的渲染器，改这里无效！
+
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
