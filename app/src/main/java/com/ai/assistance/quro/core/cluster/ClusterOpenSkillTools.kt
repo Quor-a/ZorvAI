@@ -310,33 +310,13 @@ class ClusterRoleCardTool : QuroTool {
         val installedCount = resolved.installedNow.size
         val missingLocal = resolved.missing.map { it.localName }
 
-        val persona = QuroPersona(
-            id = personaId,
-            name = displayName,
-            avatarEmoji = card.emoji,
-            description = card.tagline,
-            // #192：soul（信念 / 鄙视什么 / 可判据标准）渲染进 roleSetting。
-            // 为什么必须合成一段写进去而不只是展示在 UI：
-            // persona 只说「你是谁」，soul 说的才是「怎样才算做对」——
-            // 后者是唯一能被评审逐条对照的东西，也是本轮消灭空壳角色的关键。
-            roleSetting = buildString {
-                appendLine(card.persona)
-                if (!card.soul.isEmpty) {
-                    appendLine()
-                    appendLine(card.soul.render())
-                }
-            }.trim(),
-            chatSetting = "以职责为准，动手执行，不空谈。",
-            tags = listOf("集群角色", card.kind.label, "角色卡")
-        )
-        try {
-            QuroPersonaRepository(context).upsert(persona)
-        } catch (e: Throwable) {
-            return cardErr("创建人格卡失败：${e.message ?: e.javaClass.simpleName}")
-        }
-
+        // 🔴 灵魂解耦（2026-11-06）：不再创建 ZorvAI 人格卡 —— 角色身份/灵魂自持在 RoleProfile。
+        // soulInjection 只放「你是谁」的人设正文（card.persona）；完整 Soul 渲染/孵化/进化不属于集群角色。
         val role = RoleProfile(
             personaId = personaId,
+            name = displayName,
+            emoji = card.emoji,
+            soulInjection = card.persona,
             modelProfileId = a.optString("modelId").trim(),
             role = card.kind,
             duties = card.duties,
@@ -428,13 +408,18 @@ class ClusterForgeRoleTool : QuroTool {
             val displayName = a.optString("name").trim().ifBlank { "${safeName}专员" }
             val personaId = "persona_forge_${System.currentTimeMillis().toString().takeLast(8)}"
 
-            // 造人格卡
-            val persona = com.ai.assistance.quro.core.QuroPersona(
-                id = personaId,
+            // 🔴 灵魂解耦（2026-11-06）：不再写人格卡 —— 身份/灵魂自持在 RoleProfile。
+
+            // 绑定最接近的本地技能（若有）
+            val nearest = runCatching {
+                ClusterCapability.findLocalMatch(context, ability)
+            }.getOrNull()
+            val skillIds = nearest?.let { listOf(it.id) } ?: emptyList()
+            val role = RoleProfile(
+                personaId = personaId,
                 name = displayName,
-                avatarEmoji = "🛠",
-                description = "为补足「$ability」而动态创建的角色",
-                roleSetting = buildString {
+                emoji = "🛠",
+                soulInjection = buildString {
                     appendLine("你是本集群为补足「$ability」而动态创建的专家角色。")
                     appendLine()
                     appendLine("你的唯一使命：承接一切与「$ability」相关的子任务并给出可执行、可验收的产出。")
@@ -445,22 +430,6 @@ class ClusterForgeRoleTool : QuroTool {
                     appendLine("- 缺工具、缺资料、缺上游产物时，明确说出来让主持补，不要凭空编造。")
                     appendLine("- 交付物必须能被评审逐条验收。")
                 }.trim(),
-                chatSetting = "直接动手，缺什么就明确说出来让主持补。",
-                tags = listOf("集群角色", "动态创建", safeName),
-            )
-            try {
-                com.ai.assistance.quro.core.QuroPersonaRepository(context).upsert(persona)
-            } catch (e: Throwable) {
-                return cardErr("创建人格卡失败：${e.message ?: e.javaClass.simpleName}")
-            }
-
-            // 绑定最接近的本地技能（若有）
-            val nearest = runCatching {
-                ClusterCapability.findLocalMatch(context, ability)
-            }.getOrNull()
-            val skillIds = nearest?.let { listOf(it.id) } ?: emptyList()
-            val role = RoleProfile(
-                personaId = personaId,
                 modelProfileId = a.optString("modelId").trim(),
                 role = RoleKind.EXECUTOR,
                 duties = listOf("承接并完成「$ability」相关子任务"),

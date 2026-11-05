@@ -491,11 +491,10 @@ private fun EnrollDialog(
     onDismiss: () -> Unit,
     onDone: () -> Unit,
 ) {
-    val enrolled = remember { RoleRegistry.roles(ctx).map { it.personaId }.toSet() }
-    val candidates = remember {
-        QuroPersonaRepository(ctx).loadAll().filter { it.id !in enrolled && it.id != RoleRegistry.HOST_PERSONA_ID }
-    }
-    var sel by remember { mutableStateOf(candidates.firstOrNull()?.id) }
+    // 🔴 灵魂解耦（2026-11-06）：删除「从人格卡里选人」—— 集群角色直接在此创建，
+    // 每个角色配自己的灵魂注入（与 ZorvAI 人格库零耦合，新建即生效）。
+    var newName by remember { mutableStateOf("") }
+    var newSoul by remember { mutableStateOf("") }
     var kind by remember { mutableStateOf(RoleKind.EXPERT) }
     var duties by remember { mutableStateOf("") }
     var modelId by remember { mutableStateOf(models.firstOrNull()?.id ?: "cloud:current") }
@@ -505,75 +504,60 @@ private fun EnrollDialog(
         title = { Text("添加角色") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (candidates.isEmpty()) {
-                    Text("没有可用人格卡。请先在「人格」里创建一张。")
-                } else {
-                    Text(
-                        "选用人格卡",
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                    LazyColumn(
-                        Modifier.fillMaxWidth().heightIn(max = 200.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        items(candidates, key = { it.id }) { p ->
-                            FilterChip(
-                                selected = sel == p.id,
-                                onClick = { sel = p.id },
-                                label = { Text(p.name) },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                    }
-                    // #190 RoleKind 扩到 5 档后，这里原来写死的 if(EXPERT) "专家" else "评审"
-                    // 会让「规划/执行」两档都显示成「专家」。必须用 k.label。
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        RoleKind.selectable.forEach { k ->
-                            FilterChip(
-                                selected = kind == k,
-                                onClick = { kind = k },
-                                label = { Text(k.label) },
-                            )
-                        }
-                    }
-                    OutlinedTextField(
-                        value = duties,
-                        onValueChange = { duties = it },
-                        label = { Text("职责（顿号/逗号分隔）") },
-                        supportingText = {
-                            Text("会原样进该角色的系统提示词；填得越具体，角色越像专家")
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 2,
-                    )
-                    // 角色深度 = 人格卡(角色设定/描述) × 集群职责/禁忌/技能。
-                    // 两边都空就一定是个「简单介绍」—— 明确告知，否则用户以为招完就完了。
-                    val pickedPersona = candidates.firstOrNull { it.id == sel }
-                    if (pickedPersona != null &&
-                        pickedPersona.roleSetting.isBlank() &&
-                        duties.isBlank()
-                    ) {
-                        Text(
-                            "⚠ 这张卡的「角色设定」是空的，你也没填职责 —— 这样招出来的会是" +
-                                "一个只有名字的空壳。请先填职责，或去「设置 → 人格」补角色设定。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    label = { Text("角色名") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = newSoul,
+                    onValueChange = { newSoul = it },
+                    label = { Text("灵魂注入（这个角色是谁 / 信念 / 怎样才算做对）") },
+                    supportingText = { Text("集群角色自己的灵魂，与 ZorvAI 人格互不相干；不含孵化/进化/自我介绍") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 4,
+                )
+                // #190 RoleKind 扩到 5 档后，这里原来写死的 if(EXPERT) "专家" else "评审"
+                // 会让「规划/执行」两档都显示成「专家」。必须用 k.label。
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RoleKind.selectable.forEach { k ->
+                        FilterChip(
+                            selected = kind == k,
+                            onClick = { kind = k },
+                            label = { Text(k.label) },
                         )
                     }
                 }
+                OutlinedTextField(
+                    value = duties,
+                    onValueChange = { duties = it },
+                    label = { Text("职责（顿号/逗号分隔）") },
+                    supportingText = {
+                        Text("会原样进该角色的系统提示词；填得越具体，角色越像专家")
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                )
             }
         },
         confirmButton = {
             TextButton(
-                enabled = candidates.isNotEmpty() && sel != null,
+                enabled = newName.isNotBlank() && newSoul.isNotBlank(),
                 onClick = {
-                    val id = sel ?: return@TextButton
-                    RoleRegistry.enroll(
-                        ctx, id,
-                        modelProfileId = modelId,
-                        role = kind,
-                        duties = duties.split(',', '，')
-                            .map { it.trim() }.filter { it.isNotBlank() },
+                    val pid = "persona_cluster_manual_${System.currentTimeMillis().toString().takeLast(8)}"
+                    RoleRegistry.upsert(
+                        ctx,
+                        RoleProfile(
+                            personaId = pid,
+                            name = newName.trim(),
+                            soulInjection = newSoul.trim(),
+                            modelProfileId = modelId,
+                            role = kind,
+                            duties = duties.split(',', '，')
+                                .map { it.trim() }.filter { it.isNotBlank() },
+                        ),
                     )
                     onDone()
                 },
@@ -584,8 +568,11 @@ private fun EnrollDialog(
 }
 
 private fun personaName(ctx: Context, personaId: String): String =
-    runCatching { QuroPersonaRepository(ctx).get(personaId)?.name }.getOrNull()
-        ?.takeIf { it.isNotBlank() } ?: personaId
+    // 🔴 灵魂解耦（2026-11-06）：角色名优先取集群自持档案，人格库只作老数据兜底
+    runCatching { RoleRegistry.get(ctx, personaId)?.name }.getOrNull()
+        ?.takeIf { it.isNotBlank() }
+        ?: runCatching { QuroPersonaRepository(ctx).get(personaId)?.name }.getOrNull()
+            ?.takeIf { it.isNotBlank() } ?: personaId
 
 private fun toast(ctx: Context, msg: String) =
     Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()

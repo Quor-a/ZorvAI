@@ -101,6 +101,15 @@ fun RoleEditScreen(
         runCatching { QuroPersonaRepository(ctx).get(role.personaId) }.getOrNull()
     }
 
+    // 🔴 灵魂解耦（2026-11-06）：集群角色自己的灵魂注入 —— 自持在集群档案，
+    // 不再依赖人格卡。旧档案为空时回读一次人格卡作初始值（只读迁移）。
+    val initialSoul = remember(role.personaId) {
+        role.soulInjection.ifBlank {
+            runCatching { QuroPersonaRepository(ctx).get(role.personaId)?.roleSetting.orEmpty() }.getOrDefault("")
+        }
+    }
+    var soul by remember(role.personaId) { mutableStateOf(initialSoul) }
+
     var duties by remember { mutableStateOf(role.duties.joinToString("、")) }
     var taboos by remember { mutableStateOf(role.taboos.joinToString("、")) }
     var skills by remember { mutableStateOf(role.skills.joinToString("、")) }
@@ -140,7 +149,8 @@ fun RoleEditScreen(
         .map { it.trim() }.filter { it.isNotBlank() }
 
     // 脏检查：没改就不该拦用户返回
-    val dirty = duties != role.duties.joinToString("、") ||
+    val dirty = soul != initialSoul ||
+        duties != role.duties.joinToString("、") ||
         taboos != role.taboos.joinToString("、") ||
         skills != role.skills.joinToString("、") ||
         tags != role.tags.joinToString("、") ||
@@ -162,6 +172,8 @@ fun RoleEditScreen(
         RoleRegistry.upsert(
             ctx,
             role.copy(
+                name = role.name.ifBlank { persona?.name.orEmpty() },
+                soulInjection = soul.trim(),
                 modelProfileId = modelId,
                 role = if (isHost) RoleKind.HOST else kind,
                 duties = split(duties),
@@ -191,7 +203,7 @@ fun RoleEditScreen(
                             style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
-                            persona?.name ?: role.personaId,
+                            role.name.ifBlank { persona?.name ?: role.personaId },
                             style = MaterialTheme.typography.bodySmall,
                             color = cs.onSurfaceVariant,
                         )
@@ -229,6 +241,15 @@ fun RoleEditScreen(
                 colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant.copy(alpha = 0.35f)),
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // 🔴 灵魂注入（2026-11-06）：集群角色自己的灵魂正文 —— 存在集群档案里，
+                    // 与 ZorvAI 人格互不相干。不含人格孵化/自动进化/自我介绍/完整 Soul。
+                    OutlinedTextField(
+                        value = soul,
+                        onValueChange = { soul = it },
+                        label = { Text("灵魂注入（这个角色是谁 / 信念 / 怎样才算做对）") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 4,
+                    )
                     val thin = persona == null ||
                         persona.roleSetting.isBlank() || persona.description.isBlank()
                     Row(verticalAlignment = Alignment.CenterVertically) {
