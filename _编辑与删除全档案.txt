@@ -1,0 +1,52 @@
+=== Edit 清单(按出现顺序) ===
+1. C:\Users\admin\.zcode\workspace\default\scan_blobs.js
+   旧文前80:   const str = content.toString('utf8');⏎  for (const m of meta) {⏎    if (marker
+   新文前80:   const str = content.toString('utf8');⏎  for (const m of meta) {
+2. C:\Users\admin\.zcode\workspace\default\scan_blobs.js
+   旧文前80:   return spawnSync('git', args, { cwd: REPO, input, maxBuffer: 1 << 30, encoding
+   新文前80:   return spawnSync('git', args, { cwd: REPO, input, maxBuffer: 1 << 30 });
+3. C:\Users\admin\.zcode\workspace\default\scan_blobs.js
+   旧文前80:   return spawnSync('git', args, { cwd: REPO, input, maxBuffer: 1 << 30, encoding
+   新文前80:   return spawnSync('git', args, { cwd: REPO, input, maxBuffer: 1 << 30 });
+
+=== Write 清单 ===
+1. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+2. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+3. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+4. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+5. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+6. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+7. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+8. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+9. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+10. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+11. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+12. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+13. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+14. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+15. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+16. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+17. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+18. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+19. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+20. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+21. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+22. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+23. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+24. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+25. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+26. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+27. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+28. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+29. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+30. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+31. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+32. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+33. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+34. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+35. C:\Users\admin\.zcode\workspace\default\parse_transcript.js  (内容2379字)
+36. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger.js  (内容1243字)
+37. C:\Users\admin\.zcode\workspace\default\patch_voiceball_trigger2.js  (内容713字)
+38. C:\Users\admin\.zcode\workspace\default\parse_transcript.js  (内容2379字)
+
+=== 破坏性命令清单 ===

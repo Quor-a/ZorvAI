@@ -2206,6 +2206,16 @@ fun ChatScreen(
             onOpenGitHub = { showGitHub = true },
             onOpenModelHub = { showModelHub = true },
         )
+        // 🔴 2026-11-06：压缩终态反馈提升到顶层——此前 COMPLETED/FAILED 的 Toast 写在
+        //    showContextWindow 弹层内部，弹层没开时组件根本不组合，压缩完成/失败用户
+        //    什么都看不到（「压缩失败等等细节没有」的真正根因）。现在无论弹层开没开，
+        //    终态一律可见；弹层内部不再重复弹（删掉旧 LaunchedEffect 防双 Toast）。
+        //    （抽成独立 Composable：ChatOverlays 已逼近 JVM 64KB 方法上限，
+        //    Method too large 编译失败就是它顶爆的。）
+        CompactionTerminalToast(
+            record = compactionMap[currentId],
+            vm = vm,
+        )
         // 此前 ContextWindowSheet 写好了但**全工程无任何调用点** = 死代码，
         // 用户所以找不到“上下文窗口卡片”。现在接上顶栏入口。
         if (showContextWindow) {
@@ -2218,31 +2228,7 @@ fun ChatScreen(
                 val compactionRecord = vm.compactionOf(vm.currentId.value ?: "")
                 val compacting = compactionRecord != null &&
                     compactionRecord.status == com.ai.assistance.quro.core.chat.CompactionStatus.RUNNING
-                // 🔴 2026-11-06：终态反馈补全——此前 COMPLETED 无 Toast、FAILED 只写被弹窗
-                //    盖住的横幅，用户点完看不到任何变化，判定「压缩不起作用」。
-                LaunchedEffect(compactionRecord?.status, compactionRecord?.id) {
-                    when (compactionRecord?.status) {
-                        com.ai.assistance.quro.core.chat.CompactionStatus.COMPLETED -> {
-                            android.widget.Toast.makeText(
-                                ctx,
-                                qstr(R.string.qk_04522) + "（" + compactionRecord.tokensBefore + " → " +
-                                    compactionRecord.tokensAfter + " tokens）",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                            vm.clearCompactionRecord()
-                        }
-                        com.ai.assistance.quro.core.chat.CompactionStatus.FAILED,
-                        com.ai.assistance.quro.core.chat.CompactionStatus.INVALIDATED -> {
-                            android.widget.Toast.makeText(
-                                ctx,
-                                compactionRecord.reason ?: qstr(R.string.qk_04519),
-                                android.widget.Toast.LENGTH_LONG
-                            ).show()
-                            vm.clearCompactionRecord()
-                        }
-                        else -> {}
-                    }
-                }
+                // 终态 Toast 已提升到 ChatOverlays 顶层（见上方 topCompaction），此处不重复。
                 ContextWindowSheet(
                     usage = usage,
                     compactionRunning = compacting,
@@ -3535,7 +3521,14 @@ fun ChatScreen(
                     // 🔴 可视化小卡片是独立分类，走 visual_card 工具 → VisualMiniCard 内联渲染，
                     //    与本卡片栏无关，别再把它叫作「小卡片兜底」。
                     QuroChatCardTray(onCommand = { handleCardCommand(it) })
-                    // 上下文将满时的提示条：只在「剩余空间不够再聊一轮」时出现，
+                    // 🔴 2026-11-06：压缩进行时提示条（抽独立 Composable 防 ChatScreen
+                    //    方法体再爆 64KB）——压缩 RUNNING 时在输入区上方常驻一条：
+                    //    旋转图标 + 进度数据 + 停止按钮。
+                    CompactionRunningBar(
+                        record = compactionMap[currentId],
+                        tint = cs.primary,
+                        onStop = { vm.stopCompaction() },
+                    )
                     // 点开看是谁占的（系统提示词 / 工具定义 / 历史）。平时完全不占位。
                     ctxUsageMap[currentId]?.takeIf { it.shouldCompact }?.let { u ->
                         Row(
@@ -3755,6 +3748,97 @@ fun ChatScreen(
  * 用户资料条（显示在对话框顶部：头像 + 名字 + 签名）。
  * 资料来自「设置 > 外观与对话 > 用户资料」。
  */
+/**
+ * 压缩终态 Toast（2026-11-06 从 ChatOverlays 内抽出）：
+ * - ChatOverlays 方法体逼近 JVM 64KB 上限，再往里塞代码就 Method too large 编译失败；
+ * - 终态反馈必须常驻组合（不依赖 showContextWindow 弹层开没开），弹层关着也能看到
+ *   「压缩完成 / 压缩失败」；COMPLETED/FAILED/INVALIDATED 弹完即清记录，防重复弹。
+ */
+@Composable
+private fun CompactionTerminalToast(
+    record: com.ai.assistance.quro.core.chat.CompactionRecord?,
+    vm: QuroChatViewModel,
+) {
+    val ctx = LocalContext.current
+    LaunchedEffect(record?.status, record?.id) {
+        when (record?.status) {
+            com.ai.assistance.quro.core.chat.CompactionStatus.COMPLETED -> {
+                android.widget.Toast.makeText(
+                    ctx,
+                    qstr(R.string.qk_04522) + "（" + record.tokensBefore + " → " +
+                        record.tokensAfter + " tokens）",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+                vm.clearCompactionRecord()
+            }
+            com.ai.assistance.quro.core.chat.CompactionStatus.FAILED,
+            com.ai.assistance.quro.core.chat.CompactionStatus.INVALIDATED -> {
+                android.widget.Toast.makeText(
+                    ctx,
+                    record.reason ?: qstr(R.string.qk_04519),
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+                vm.clearCompactionRecord()
+            }
+            else -> {}
+        }
+    }
+}
+
+/**
+ * 压缩进行时提示条（2026-11-06 新增）：压缩 RUNNING 时在输入区上方常驻，
+ * 旋转 loader + 「压缩中…（N 条消息 · 约 M tokens）」+ 停止按钮。
+ * 抽成独立 Composable 而非内联在 ChatScreen：主函数方法体同样逼近 JVM 64KB 上限。
+ */
+@Composable
+private fun CompactionRunningBar(
+    record: com.ai.assistance.quro.core.chat.CompactionRecord?,
+    tint: Color,
+    onStop: () -> Unit,
+) {
+    val running = record != null &&
+        record.status == com.ai.assistance.quro.core.chat.CompactionStatus.RUNNING
+    if (!running) return
+    val spin = rememberInfiniteTransition(label = "compactionSpin")
+    val spinAngle by spin.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(1100), RepeatMode.Restart),
+        label = "compactionSpinAngle",
+    )
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(tint.copy(alpha = 0.08f))
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LucideIcon(
+            "loader", null,
+            Modifier
+                .size(12.dp)
+                .graphicsLayer { rotationZ = spinAngle },
+            tint = tint,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            qstr(R.string.qk_04523) + "（" + record.inputMessageCount + " 条消息 · 约 " +
+                record.tokensBefore + " tokens）",
+            fontSize = 11.sp,
+            color = tint,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            qstr(R.string.qk_04525),
+            fontSize = 11.sp,
+            color = tint,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.clickable { onStop() },
+        )
+    }
+}
+
 @Composable
 private fun UserProfileBar(
     profile: QuroChatViewModel.UserProfile,
@@ -3836,6 +3920,7 @@ private fun MessageList(
     val cs = MaterialTheme.colorScheme
     val narrow = LocalConfiguration.current.screenWidthDp < 400
     val listState = rememberLazyListState()
+    // 🔴 删除消息确认（2026-11-05 对齐 BotHub strings:936）：点删除→确认弹窗，防误触
     var pendingDeleteUids by remember { mutableStateOf<List<String>?>(null) }
     val scope = rememberCoroutineScope()
     val lastMsg = messages.lastOrNull()

@@ -94,7 +94,7 @@ class ClusterEngine(
             com.ai.assistance.quro.core.chat.ApprovalChannel.CMS ->
                 com.ai.assistance.quro.core.policy.QuroPolicyStore.getCms(context) == com.ai.assistance.quro.core.policy.QuroPolicy.ALLOW
             com.ai.assistance.quro.core.chat.ApprovalChannel.PRIV ->
-                com.ai.assistance.quro.core.policy.QuroPolicyStore.getPriv(context) == com.ai.assistance.quro.core.policy.QuroPolicy.ALLOW
+                com.ai.assistance.quro.core.policy.QuroPolicyStore.getPriv(context) == com.ai.assistance.quro.core.policy.QuroPolicy.DENY
             null -> false
         }
         val channelDenies = when (channel) {

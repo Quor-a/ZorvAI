@@ -918,6 +918,11 @@ add, arrowBack, arrowForward, call, check, clear, close, delete, edit, email, fa
 - 一行内的 chip/button/text 超过 2 个时，必须给每个子节点声明 width:match 或 weight，否则行尾子节点会被挤成一字一行。
 - 图片必须给明确宽高；横向滑动内容套 scroll-view。
 
+### 9. 布局硬规则（违反必出渲染问题）
+- 禁止给 column/card/容器写固定 height 和 arrangement:end/space_between——页面高度交给外层滚动，卡片内容永远从顶部开始排（否则内容被推到底、中间大片空白）。
+- 一行内的 chip/button/text 超过 2 个时，必须给每个子节点声明 width:match 或 weight，否则行尾子节点会被挤成一字一行。
+- 图片必须给明确宽高；横向滑动内容套 scroll-view。
+
 ### 9. 变体裂变系统（一键换肤）
 任何组件的 properties 里可加变体属性，无需手写样式：
 - variant/palette：neon|ocean|sunset|pastel|forest|candy|mono|cyberpunk|sakura|gold|aurora|default（12 配色）
