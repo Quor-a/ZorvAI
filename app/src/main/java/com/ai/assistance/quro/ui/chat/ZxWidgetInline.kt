@@ -65,7 +65,10 @@ fun ZxWidgetInline(
     // 运行时资源进程级缓存：一次会话里可能有多块 zxwidget，契约 195 KB，别每块都读一遍
     val (assetHtml, contractsJson) = remember(context) { ZxWebCard.assets(context) }
 
-    val html = remember(assetHtml, contractsJson, component, dsl, dark) {
+    // 🔴 P1-1（2026-11-06）：dark 曾是 remember key 且烧进 payload → 亮暗切换 = 整页重载 =
+    // 表单输入/勾选全丢；注释声称的 setDark 轻切换路径形同虚设。现在 html 与 dark 解耦
+    // （固定亮版加载），ready 后走 ZorvAI.setDark 纠正 —— 切换不重载、状态保留。
+    val html = remember(assetHtml, contractsJson, component, dsl) {
         if (assetHtml.isBlank()) ""
         else ZxWebCard.buildHtml(
             assetHtml = assetHtml,
@@ -73,7 +76,7 @@ fun ZxWidgetInline(
             component = component,
             title = "",
             dsl = dsl,
-            dark = dark,
+            dark = false,
             inline = true,
         )
     }
@@ -167,11 +170,16 @@ private fun InlineZxWebView(
                 settings.defaultTextEncodingName = "UTF-8"
                 settings.loadWithOverviewMode = true
                 settings.useWideViewPort = true
-                settings.textZoom = 100
+                // 🔴 P1-3（2026-11-06）：硬编码 100 无视系统字体缩放 —— 大字体用户看到
+                // 「周围字都大、就这块卡字小」。跟随 fontScale（钳 80%~200% 防极端值）。
+                settings.textZoom = (100 * ctx.resources.configuration.fontScale).toInt().coerceIn(80, 200)
                 // 内容超过高度上限时块内滚动；不超过则不出现滚动条
                 isVerticalScrollBarEnabled = true
                 setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
+                // 🔴 P1-5（2026-11-06）：桥方法跑在 JavaBridge 线程，此前直接回调改 Compose
+                // 状态（attachments/draft 等）属无帧并发。统一切主线程再回调。
+                val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
                 addJavascriptInterface(
                     object {
                         /** 用户操作：原样交给宿主（可能落到某个在等的工具，也可能作为用户消息发出） */
@@ -180,13 +188,13 @@ private fun InlineZxWebView(
                             val json = runCatching { JSONObject(payload) }.getOrElse {
                                 JSONObject().put("action", "raw").put("summary", payload)
                             }
-                            onInteract(json)
+                            mainHandler.post { onInteract(json) }
                         }
 
                         /** 页面真实内容高度，宿主据此设内联块高度 */
                         @JavascriptInterface
                         fun height(px: Int) {
-                            onHeight(px)
+                            mainHandler.post { onHeight(px) }
                         }
                     },
                     BRIDGE,
@@ -236,5 +244,5 @@ fun zxSpecOf(arguments: String?): ZxInlineSpec? {
         else -> v.toString()
     }
     if (dsl.isBlank() || dsl == "{}" || dsl == "null") return null
-    return ZxInlineSpec(comp, dsl)
+    return ZxInlineSpec(comp, dsl, o.optString("title", "").trim())
 }

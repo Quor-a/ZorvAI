@@ -73,10 +73,27 @@ object ClusterRuntime {
      * 事件照常发到 [ClusterEngine.events]（ClusterChatBridge / ClusterTraceBridge
      * 会投影到对话框与 trace 面板），调用方立即拿到任务 ID 用于 cluster_status 查询。
      */
+    // 🔴 G2（2026-11-06）：运行态对 UI 可见 + 可停止 —— 之前 Composer 的停止键没有任何引擎侧支撑。
+    val isRunning = kotlinx.coroutines.flow.MutableStateFlow(false)
+    @Volatile private var currentJob: kotlinx.coroutines.Job? = null
+
+    /** 停掉当前集群任务：引擎置 abort 标记 + 取消驱动协程。UI 停止键直连这里。 */
+    fun stopCurrent() {
+        runCatching { engine?.abort() }
+        currentJob?.cancel()
+        currentJob = null
+        isRunning.value = false
+    }
+
     fun launchBackground(cluster: ClusterConfig, task: ClusterTask) {
         val eng = engine ?: return
-        backgroundScope.launch {
-            runCatching { eng.drive(cluster, task) }
+        isRunning.value = true
+        currentJob = backgroundScope.launch {
+            try {
+                runCatching { eng.drive(cluster, task) }
+            } finally {
+                isRunning.value = false
+            }
         }
     }
 }
@@ -125,8 +142,11 @@ class ClusterStartTool : com.ai.assistance.quro.core.tools.QuroTool {
                 put("message", "任务已提交，主持正在后台推进，可用 cluster_status 查询进度")
             }.toString()
         }
-        val reason = withTimeoutOrNull(30 * 60 * 1000L) { engine.drive(cluster, task) }
-            ?: CloseReason.CIRCUIT_BROKEN
+        // 🔴 G2：同步路径也要让 UI 看到「在跑」并能停（abort 由 stopCurrent 置标记，drive 内自检）。
+        val reason = withTimeoutOrNull(30 * 60 * 1000L) {
+            ClusterRuntime.isRunning.value = true
+            try { engine.drive(cluster, task) } finally { ClusterRuntime.isRunning.value = false }
+        } ?: CloseReason.CIRCUIT_BROKEN
         val (done, total) = task.progress()
         JSONObject().apply {
             put("ok", reason == CloseReason.GOAL_REACHED)

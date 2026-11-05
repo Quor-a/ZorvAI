@@ -103,6 +103,8 @@ data class CitationUi(
 data class ZxInlineSpec(
     val component: String,
     val dsl: String,
+    /** 🔴 P2-5（2026-11-06）：模型给的标题，卡壳头部优先显示（原来只显示技术名）。 */
+    val title: String = "",
 )
 
 data class Message(

@@ -92,9 +92,19 @@ object RoleRegistry {
     private fun seedBuiltinExperts(context: Context) {
         val prefs = context.getSharedPreferences("quro_cluster", Context.MODE_PRIVATE)
         if (prefs.getBoolean(KEY_EXPERTS_SEEDED, false)) return
-        val existing = loadRaw(context).map { it.personaId }.toSet()
-        seedBuiltinExpertsLocked(context, existing)
+        // 🔴 S6（2026-11-06）：播种含 runBlocking 联网（技能解析/现拉现装），而本链路从
+        // Application.onCreate → ClusterRuntime.init 进来，是主线程 —— 会 ANR。
+        // 标志位先占住防重复播种，重活挪后台线程；失败回滚标志位，下次启动重试。
         prefs.edit().putBoolean(KEY_EXPERTS_SEEDED, true).apply()
+        Thread {
+            try {
+                val existing = loadRaw(context).map { it.personaId }.toSet()
+                seedBuiltinExpertsLocked(context, existing)
+            } catch (t: Throwable) {
+                android.util.Log.w("RoleRegistry", "内置专家人格播种失败（下次启动重试）", t)
+                prefs.edit().putBoolean(KEY_EXPERTS_SEEDED, false).apply()
+            }
+        }.start()
     }
 
     private fun seedBuiltinExpertsLocked(context: Context, existing: Set<String>) {
