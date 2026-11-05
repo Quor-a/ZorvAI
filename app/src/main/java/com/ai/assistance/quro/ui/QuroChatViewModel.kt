@@ -3214,6 +3214,11 @@ $recent
         val svcSection = com.ai.assistance.quro.core.services.QuroServiceCatalog.promptSection(appContext)
         if (svcSection.isNotBlank()) sb.append(svcSection).append("\n")
 
+        // ══════════════ 连接器：已连接的真实 MCP 服务（2026-11-06 新增） ══════════════
+        // 与上面应用中心的「资料目录」不同：连接器经真实授权，mcp_call 可直达该服务工具。
+        val connectorSection = com.ai.assistance.quro.core.connector.QuroConnectorCatalog.promptSection(appContext)
+        if (connectorSection.isNotBlank()) sb.append(connectorSection).append("\n")
+
         // ══════════════ 第二优先级：自我认知 + 工具调用原则（不列工具清单） ══════════════
         // 平台/品牌基座（QuroPlatformManifest.SYSTEM）已声明「你�? Zorv AI」与「必须调用工具」，
         // 人格仅作为上方叠加的扮演层，此处不再重复品牌与工具原则�?

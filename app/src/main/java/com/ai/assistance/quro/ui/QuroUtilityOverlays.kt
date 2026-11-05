@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -12,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.zIndex
+import com.ai.assistance.quro.core.connector.QuroConnectorLauncher
 
 /**
  * 外部连接 / 应用中心 / 后台进程 / 宠物设置：四个全屏覆盖层的统一挂载点。
@@ -65,6 +68,28 @@ fun QuroUtilityOverlays(
         BackHandler { onCloseAppCenter() }
         Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
             QuroAppCenterScreen(onClose = onCloseAppCenter)
+        }
+    }
+
+    // 连接器：全屏覆盖层（官方 MCP 服务商店：分类浏览 + 一键授权连接）。
+    // 🔴 状态内部自管理：ChatOverlays 已逼近 JVM 64KB 方法上限（Method too large
+    //    两次被它顶爆），任何加给 ChatScreen 的状态/命令分支都可能压垮它。
+    //    连接器的打开走全局事件桥 QuroConnectorLauncher（AI 命令 / 设置入口直接 open）。
+    var showConnector by remember { mutableStateOf(false) }
+    val connectorEvent by QuroConnectorLauncher.event.collectAsState()
+    LaunchedEffect(connectorEvent) {
+        if (connectorEvent != null) {
+            showConnector = true
+            QuroConnectorLauncher.consume()
+        }
+    }
+    if (showConnector) {
+        BackHandler { showConnector = false }
+        Box(Modifier.fillMaxSize().zIndex(100f).background(cs.background)) {
+            QuroConnectorScreen(
+                onClose = { showConnector = false },
+                onOpenMcpSettings = { showConnector = false },
+            )
         }
     }
 

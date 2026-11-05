@@ -7279,6 +7279,10 @@ private fun SettingsSheetContent(
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Extension, "MCP 与应用", "MCP 服务器 + 应用目录：扩展 AI 可调用的工具与资料源", "", onOpenMcp, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            // 连接器（2026-11-06 新增）：官方 MCP 服务商店。直接走全局事件桥，
+            // 不经 ChatScreen 状态（ChatOverlays 方法体 64KB 预算太紧）。
+            SetRowClickable(Icons.Filled.Apps, "连接器", "官方 MCP 服务商店：Notion / GitHub / 高德地图等一键授权连接，AI 直接调用其真实工具", "", { com.ai.assistance.quro.core.connector.QuroConnectorLauncher.open() }, scaled)
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Memory, "后台进程", "查看与管理常驻服务（语音球 / 宠物 / Web UI / 机器人…）", "", onOpenBgProcess, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             // 🔴 「搜索服务」设置项删除（2026-11-04 用户裁定：界面乱搞）。

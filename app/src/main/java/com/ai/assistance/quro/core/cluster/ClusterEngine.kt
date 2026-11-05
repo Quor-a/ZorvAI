@@ -1436,8 +1436,25 @@ ${stillFailed.joinToString("\n") { "- ${it.title}：${it.lastError}" }}
         profiles[personaId] = (ok + if (success) 1 else 0) to (fail + if (success) 0 else 1)
     }
 
-    private fun personaOf(id: String): com.ai.assistance.quro.core.QuroPersona? =
-        runCatching { com.ai.assistance.quro.core.QuroPersonaRepository(context).get(id) }.getOrNull()
+    /**
+     * 🔴 灵魂解耦（2026-11-06）：角色身份/灵魂一律**优先来自 RoleProfile 自身字段**
+     * （集群自持的 name/emoji/duties/soulInjection），人格库只在老档案缺字段时做只读兜底。
+     * 此前这里直读 ZorvAI 人格库 —— 集群角色的灵魂全靠人格卡，且人格卡缺失时角色直接瘫痪。
+     */
+    private fun personaOf(id: String): com.ai.assistance.quro.core.QuroPersona? {
+        val role = RoleRegistry.get(context, id)
+        if (role != null && (role.soulInjection.isNotBlank() || role.name.isNotBlank())) {
+            return com.ai.assistance.quro.core.QuroPersona(
+                id = role.personaId,
+                name = role.name.ifBlank { role.personaId },
+                avatarEmoji = role.emoji,
+                description = role.duties.joinToString("；"),
+                roleSetting = role.soulInjection,
+                chatSetting = "",
+            )
+        }
+        return runCatching { com.ai.assistance.quro.core.QuroPersonaRepository(context).get(id) }.getOrNull()
+    }
 
     private suspend fun emit(e: ClusterEvent) { _events.emit(e) }
 

@@ -45,20 +45,8 @@ object RoleRegistry {
 
     /** 保证主持人格与角色配置一定存在（应用启动 / 集群初始化时调用） */
     fun ensureHost(context: Context) {
-        val personas = com.ai.assistance.quro.core.QuroPersonaRepository(context)
-        if (personas.get(HOST_PERSONA_ID) == null) {
-            personas.upsert(
-                com.ai.assistance.quro.core.QuroPersona(
-                    id = HOST_PERSONA_ID,
-                    name = HOST_NAME,
-                    avatarEmoji = "🎯",
-                    description = "集群主持，内置不可替换",
-                    roleSetting = HOST_OATH,
-                    chatSetting = "简洁果断，直接点名并说明理由，不给废话。",
-                    tags = listOf("内置", "主持")
-                )
-            )
-        }
+        // 🔴 灵魂解耦（2026-11-06）：集群身份不再写进 ZorvAI 人格库 —— 主持档案
+        // 完全自持在 quro_cluster_roles.json（见 hostProfile），人格库零写入。
         val roles = loadRaw(context).toMutableList()
         if (roles.none { it.personaId == HOST_PERSONA_ID }) {
             roles += hostProfile()
@@ -115,7 +103,6 @@ object RoleRegistry {
             "bug-detector",
             "completeness-auditor",
         )
-        val personas = com.ai.assistance.quro.core.QuroPersonaRepository(context)
         for (cardId in seededIds) {
             val card = ClusterRoleCards.byId(cardId) ?: continue
             val personaId = "persona_cluster_${card.id}_seed"
@@ -124,24 +111,14 @@ object RoleRegistry {
             val resolved = runCatching {
                 kotlinx.coroutines.runBlocking { card.skills.resolveForRole(context) }
             }.getOrNull() ?: continue
-            val persona = com.ai.assistance.quro.core.QuroPersona(
-                id = personaId,
-                name = card.label,
-                avatarEmoji = card.emoji,
-                description = card.tagline,
-                roleSetting = buildString {
-                    appendLine(card.persona)
-                    if (!card.soul.isEmpty) {
-                        appendLine()
-                        appendLine(card.soul.render())
-                    }
-                }.trim(),
-                chatSetting = "以职责为准，动手执行，不空谈。",
-                tags = listOf("集群角色", card.kind.label, "角色卡"),
-            )
-            runCatching { personas.upsert(persona) }.getOrElse { continue }
+            // 🔴 灵魂解耦（2026-11-06）：不再往 ZorvAI 人格库写 persona_cluster_* ——
+            // 角色的灵魂注入自持在 RoleProfile.soulInjection（纯文本「你是谁」，
+            // 不含人格孵化/自动进化/自我介绍/完整 Soul）。card.soul 结构体不再渲染进去。
             val role = RoleProfile(
                 personaId = personaId,
+                name = card.label,
+                emoji = card.emoji,
+                soulInjection = card.persona,
                 role = card.kind,
                 duties = card.duties,
                 taboos = card.taboos,
@@ -244,6 +221,23 @@ object RoleRegistry {
             val arr = JSONArray(f.readText())
             (0 until arr.length()).mapNotNull { runCatching { RoleProfile.fromJson(arr.getJSONObject(it)) }.getOrNull() }
         }.getOrDefault(emptyList()).also { list ->
+            // 🔴 灵魂解耦迁移（2026-11-06）：老档案的身份/灵魂还在人格库里 ——
+            // 只读搬进 RoleProfile（绝不回写人格库），搬完即存。
+            if (list.any { it.name.isBlank() || it.soulInjection.isBlank() }) {
+                val migrated = list.map { r ->
+                    if (r.name.isNotBlank() && r.soulInjection.isNotBlank()) r
+                    else runCatching {
+                        val p = com.ai.assistance.quro.core.QuroPersonaRepository(context).get(r.personaId)
+                        r.copy(
+                            name = r.name.ifBlank { p?.name.orEmpty() },
+                            emoji = if (r.emoji == "🧩") (p?.avatarEmoji?.takeIf { it.isNotBlank() } ?: "🧩") else r.emoji,
+                            soulInjection = r.soulInjection.ifBlank { p?.roleSetting.orEmpty() },
+                        )
+                    }.getOrDefault(r)
+                }
+                saveRaw(context, migrated)
+                return migrated
+            }
             // 自愈：主持被外部改没了就补回来。
             //
             // 🔴 这里**绝不能调 ensureHost**：ensureHost 内部会再调 loadRaw，
@@ -262,6 +256,9 @@ object RoleRegistry {
     /** 内置主持档案（唯一真源，ensureHost 与 loadRaw 自愈共用）。 */
     private fun hostProfile() = RoleProfile(
         personaId = HOST_PERSONA_ID,
+        name = HOST_NAME,
+        emoji = "🎯",
+        soulInjection = HOST_OATH,
         role = RoleKind.HOST,
         duties = listOf("定义验收标准", "拆解子任务", "点名与裁决", "验收与收敛"),
         context = RoleContextPolicy(

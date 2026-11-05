@@ -32,6 +32,12 @@ object QuroUiActionBridge {
 
     /** 请求打开某界面（外部入口统一走这里，自动处理就绪/未就绪两种时机）。 */
     fun request(action: String) {
+        // 🔴 ui_open_connector 直走连接器事件桥（2026-11-06）：连接器页状态在
+        //    QuroUtilityOverlays 内部自管理，不占用 ChatOverlays 的 64KB 方法体预算。
+        if (action == "ui_open_connector") {
+            com.ai.assistance.quro.core.connector.QuroConnectorLauncher.open()
+            return
+        }
         val d = dispatch
         if (d != null) d(action) else pendingAction = action
     }
@@ -62,6 +68,7 @@ private val UI_ACTIONS = listOf(
     UiActionSpec("ui_open_plugins", qstr(R.string.qk_02779), "打开插件管理"),
     UiActionSpec("ui_open_skills", qstr(R.string.qk_00218), "打开技能 SKILL 管理（查看/新增/编辑/启用用户自定义技能）"),
     UiActionSpec("ui_open_cms", "能力模块(CMS)", "打开 CMS 能力模块"),
+    UiActionSpec("ui_open_connector", "连接器", "打开连接器页：浏览并连接官方 MCP 服务（Notion/GitHub/高德地图等），授权后 AI 可直接调用该服务的真实工具"),
     UiActionSpec("ui_open_aci", qstr(R.string.qk_03843), "打开 ACI 管理中心：浏览已发现的第三方 App、查看绑定状态与能力清单、手动注册 / 刷新 / 重绑"),
     UiActionSpec("ui_open_permission", "权限中心", "打开 CapOS 权限中心（L1-L4）"),
     UiActionSpec("ui_open_model_config", qstr(R.string.qk_02103), "打开模型配置"),

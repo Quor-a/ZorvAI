@@ -170,6 +170,14 @@ data class RoleContextPolicy(
  */
 data class RoleProfile(
     val personaId: String,
+    /**
+     * 🔴 灵魂解耦（2026-11-06）：角色身份与灵魂注入**自持**在集群档案
+     * （quro_cluster_roles.json），不再读写 ZorvAI 人格库。这三个字段是唯一真源。
+     */
+    val name: String = "",
+    val emoji: String = "🧩",
+    /** 该角色自己的灵魂注入正文（进 system prompt 的「你是谁」）——不含孵化/进化/自我介绍/完整Soul。 */
+    val soulInjection: String = "",
     /** 宿主已配置模型的 id（见 ModelProfile.id） */
     val modelProfileId: String = "",
     /** 降级链，同样是 ModelProfile.id */
@@ -212,6 +220,7 @@ data class RoleProfile(
         put("personaId", personaId); put("modelProfileId", modelProfileId)
         put("fallbackModelIds", JSONArray(fallbackModelIds))
         put("role", role.name)
+        put("name", name); put("emoji", emoji); put("soulInjection", soulInjection)
         put("duties", JSONArray(duties)); put("taboos", JSONArray(taboos)); put("skills", JSONArray(skills))
         put("skillIds", JSONArray(skillIds))
         put("tags", JSONArray(tags))
@@ -222,6 +231,9 @@ data class RoleProfile(
     companion object {
         fun fromJson(o: JSONObject): RoleProfile = RoleProfile(
             personaId = o.optString("personaId"),
+            name = o.optString("name"),
+            emoji = o.optString("emoji").ifBlank { "🧩" },
+            soulInjection = o.optString("soulInjection"),
             modelProfileId = o.optString("modelProfileId"),
             fallbackModelIds = o.optJSONArray("fallbackModelIds")?.let { a ->
                 (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }
