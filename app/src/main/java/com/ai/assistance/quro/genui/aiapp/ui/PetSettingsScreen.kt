@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -54,6 +55,9 @@ object PetPrefs {
             current = cur?.let { PetSpec.parseOrNull(it) } ?: PetSpec(),
             pets = list,
             tapOpensPanel = sp.getBoolean("tap_opens_panel", true),
+            placementMode = sp.getString("placement_mode", "physics") ?: "physics",
+            screenContext = sp.getBoolean("screen_context", false),
+            packDir = sp.getString("pet_pack_dir", null),
             tapInteract = sp.getBoolean("tap_interact", false),
             bubbleEnabled = sp.getBoolean("bubble_enabled", true),
             petVisible = sp.getBoolean("pet_visible", true),
@@ -82,6 +86,9 @@ object PetPrefs {
         sp.edit()
             .putString("pet_json", s.current.toJson())
             .putString("pet_list_json", JSONArray().apply { s.pets.forEach { put(JSONObject(it.toJson())) } }.toString())
+            .putString("placement_mode", s.placementMode)
+            .putBoolean("screen_context", s.screenContext)
+            .putString("pet_pack_dir", s.packDir)
             .putBoolean("tap_opens_panel", s.tapOpensPanel)
             .putBoolean("tap_interact", s.tapInteract)
             .putBoolean("bubble_enabled", s.bubbleEnabled)
@@ -145,6 +152,12 @@ data class PetSettings(
     val current: PetSpec,
     val pets: List<PetSpec> = emptyList(),
     val tapOpensPanel: Boolean = true,
+    /** 🔴 位置模式（对齐 BotHub）：physics 物理活动 / freeroam 自由活动 / pinned 固定当前位置 */
+    val placementMode: String = "physics",
+    /** 点击桌宠时读取当前屏幕作为回合上下文 */
+    val screenContext: Boolean = false,
+    /** 选中的宠物包目录名（desktop_pets/<dir>）；null = 无包（Canvas 矢量形象） */
+    val packDir: String? = null,
     val tapInteract: Boolean = false,
     val bubbleEnabled: Boolean = true,
     val petVisible: Boolean = true,
@@ -299,6 +312,101 @@ fun PetSettingsScreen(
             }
             PetSwitch(stringResource(R.string.qk_03816), stringResource(R.string.qk_03817), settings.bubbleEnabled) {
                 onSettingsChange(settings.copy(bubbleEnabled = it))
+            }
+            PetSwitch("点击时参考屏幕", "点击桌宠触发 AI 互动时读取当前屏幕作为上下文", settings.screenContext) {
+                onSettingsChange(settings.copy(screenContext = it))
+            }
+            Spacer(Modifier.height(18.dp))
+
+            // ── 位置模式（对齐 BotHub：物理活动 / 自由活动 / 固定当前位置） ──
+            Text("位置模式", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    "physics" to "物理活动",
+                    "freeroam" to "自由活动",
+                    "pinned" to "固定当前位置",
+                ).forEach { (id, label) ->
+                    androidx.compose.material3.FilterChip(
+                        selected = settings.placementMode == id,
+                        onClick = { onSettingsChange(settings.copy(placementMode = id)) },
+                        label = { Text(label, fontSize = 12.sp) },
+                    )
+                }
+            }
+            Text(
+                when (settings.placementMode) {
+                    "physics" -> "受重力、拖拽、投掷和边缘活动影响。"
+                    "freeroam" -> "在屏幕可用区域内自由移动，不会自动下坠。"
+                    else -> "停在你拖到的位置，只在事件反应时播放动作。"
+                },
+                fontSize = 11.sp, color = cs.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Spacer(Modifier.height(18.dp))
+
+            // ── 宠物包：选形象（spritesheet 帧动画包，zip 导入） ──
+            Text("宠物包（形象）", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
+            Spacer(Modifier.height(6.dp))
+            var packs by remember { mutableStateOf(com.ai.assistance.quro.core.pet.PetPack.scan(ctx).first) }
+            androidx.compose.material3.OutlinedButton(
+                onClick = {
+                    importing = true
+                    scope.launch {
+                        runCatching {
+                            // 从 Download 目录找最新的 petpack zip（用户放进来的）
+                            val dl = java.io.File(
+                                androidx.core.content.ContextCompat.getExternalFilesDirs(ctx, null)[0],
+                                "Download"
+                            )
+                            val zip = dl.listFiles { f -> f.name.endsWith(".zip") }
+                                ?.maxByOrNull { it.lastModified() }
+                            if (zip == null) importError = "未找到宠物包 zip（请放到应用目录 Download 下）"
+                            else {
+                                com.ai.assistance.quro.core.pet.PetPack.importZip(ctx, zip.inputStream())
+                                packs = com.ai.assistance.quro.core.pet.PetPack.scan(ctx).first
+                                importError = null
+                            }
+                        }.onFailure { importError = it.message }
+                        importing = false
+                    }
+                },
+                enabled = !importing,
+            ) { Text(if (importing) "导入中…" else "导入宠物包 zip") }
+            importError?.let {
+                Text(it, color = cs.error, fontSize = 12.sp)
+            }
+            if (packs.isEmpty()) {
+                Text(
+                    "还没有宠物包。导入 zip 后在这里选形象；无包时使用内置矢量形象。",
+                    fontSize = 11.sp, color = cs.onSurfaceVariant,
+                )
+            } else {
+                packs.forEach { pk ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    ) {
+                        androidx.compose.material3.FilterChip(
+                            selected = settings.packDir == pk.dirName,
+                            onClick = { onSettingsChange(settings.copy(packDir = pk.dirName)) },
+                            label = { Text(pk.manifest.displayName) },
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            pk.manifest.id + "（" + pk.manifest.animations.size + " 动画）",
+                            fontSize = 11.sp, color = cs.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = {
+                            com.ai.assistance.quro.core.pet.PetPack.delete(ctx, pk.dirName)
+                            packs = com.ai.assistance.quro.core.pet.PetPack.scan(ctx).first
+                            if (settings.packDir == pk.dirName) onSettingsChange(settings.copy(packDir = null))
+                        }) {
+                            Icon(Icons.Filled.Delete, "删除", Modifier.size(16.dp), tint = cs.error)
+                        }
+                    }
+                }
             }
             Spacer(Modifier.height(18.dp))
 

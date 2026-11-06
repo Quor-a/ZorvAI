@@ -18,6 +18,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -401,3 +404,101 @@ fun PetComponentRenderer(component: UIComponent, ctx: RenderContext, modifier: M
         PetSprite(spec, phase, toolName = component.propString("toolName"), showBubble = true)
     }
 }
+
+
+// ═══════════════════════════════════════════════════════════════════
+// 🔴 spritesheet 帧动画渲染（2026-11-07 对齐 BotHub 宠物包还原）：
+// 位图网格（24×24 viewBox 语义：按 cellWidth/cellHeight 裁帧），姿态→动画行
+// 候选映射（m69.L 表），帧推进 loop/once/hold，drawImage 源矩形裁剪。
+// 无包时仍走上方 Canvas 矢量 PetSprite（内置形象兜底）。
+// ═══════════════════════════════════════════════════════════════════
+
+/** 姿态 → 动画名候选（BotHub m69.L 表）。pose 用 13 标准动画名小写域。 */
+fun petPoseAnimationCandidates(pose: String, facingRight: Boolean, mode: String): List<String> = when (pose) {
+    "stand" -> listOf("stand")
+    "fall" -> listOf("fall")
+    "dragged", "edgeattached" -> listOf("dragged")
+    "thrown" -> listOf("thrown")
+    "celebrate" -> listOf("celebrate")
+    "think" -> listOf("think")
+    "usetool" -> listOf("usetool")
+    "reply" -> listOf("reply")
+    "walk" -> if (mode == "pinned") listOf("stand")
+             else listOf(if (facingRight) "walkright" else "walkleft", "stand")
+    "climb" -> listOf(if (facingRight) "climbrightedge" else "climbleftedge", "dragged")
+    else -> listOf(pose, "stand")
+}
+
+/**
+ * spritesheet 宠物渲染。
+ * @param bitmap     整张 spritesheet 位图
+ * @param animations 动画名→定义（row/frames/duration/playback）
+ * @param pose       13 标准姿态名（小写）
+ * @param clockMs    系统时间毫秒（驱动帧推进）
+ */
+@Composable
+fun PetSpriteFrames(
+    bitmap: androidx.compose.ui.graphics.ImageBitmap,
+    cellWidth: Int,
+    cellHeight: Int,
+    displayWidth: Int,
+    displayHeight: Int,
+    animations: Map<String, PetPackAnimDef>,
+    pose: String,
+    facingRight: Boolean = true,
+    mode: String = "physics",
+    bubbleText: String = "",
+    modifier: Modifier = Modifier,
+    scale: Float = 1f,
+) {
+    // 候选行：按顺序找第一个存在的动画，兜底 stand，再兜底首个
+    val def = petPoseAnimationCandidates(pose.lowercase(), facingRight, mode)
+        .firstNotNullOfOrNull { animations[it] }
+        ?: animations.values.firstOrNull()
+    val w = (displayWidth * scale).dp
+    val h = (displayHeight * scale).dp
+    // 帧推进：loop 循环 / once 停末帧 / hold 停首帧
+    var frameIdx by remember(def) { mutableIntStateOf(0) }
+    if (def != null && def.frames > 1) {
+        androidx.compose.runtime.LaunchedEffect(def) {
+            while (true) {
+                kotlinx.coroutines.delay(def.frameDurationMs)
+                frameIdx = when (def.playback.lowercase()) {
+                    "once" -> (frameIdx + 1).coerceAtMost(def.frames - 1)
+                    "hold" -> 0
+                    else -> (frameIdx + 1) % def.frames
+                }
+            }
+        }
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+        if (bubbleText.isNotBlank()) {
+            Surface(
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                shape = RoundedCornerShape(10.dp), shadowElevation = 3.dp,
+            ) {
+                Text(
+                    bubbleText,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+        Canvas(Modifier.size(w, h).padding(2.dp)) {
+            val d = def ?: return@Canvas
+            val col = frameIdx % d.frames.coerceAtLeast(1)
+            // 朝向不镜像——walkRight/walkLeft 用不同动画行（BotHub 同款语义）
+            drawImage(
+                image = bitmap,
+                srcOffset = androidx.compose.ui.unit.IntOffset(col * cellWidth, d.row * cellHeight),
+                srcSize = androidx.compose.ui.unit.IntSize(cellWidth, cellHeight),
+                dstSize = androidx.compose.ui.unit.IntSize(this.size.width.toInt(), this.size.height.toInt()),
+                filterQuality = androidx.compose.ui.graphics.FilterQuality.Low,
+            )
+        }
+    }
+}
+
+/** PetPack.AnimDef 的 SDK 侧轻量镜像（SDK 不依赖 app 模块）。 */
+data class PetPackAnimDef(val row: Int, val frames: Int, val frameDurationMs: Long, val playback: String)

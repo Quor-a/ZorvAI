@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import kotlinx.coroutines.launch
 import android.graphics.PixelFormat
+import androidx.compose.ui.graphics.asImageBitmap
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -61,6 +62,8 @@ import kotlin.math.hypot
 class QuroDesktopPetService : Service() {
 
     private var composeView: ComposeView? = null
+    /** 🔴 当前宠物包 spritesheet 位图（addPet 时 IO 加载；null=无包，走 Canvas 矢量） */
+    @Volatile var packImageBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
     private var lifecycleOwner: QuroServiceLifecycleOwner? = null
     private var petDialog: android.app.AlertDialog? = null
     private var petParams: WindowManager.LayoutParams? = null
@@ -217,6 +220,30 @@ class QuroDesktopPetService : Service() {
         val freePosition = petSettings.freePosition
         val interactions = petSettings.interactions
         val petScale = petSettings.petScale.coerceIn(0.5f, 2.0f)
+        // 🔴 宠物包 + 位置模式（2026-11-07 对齐 BotHub 还原）
+        val sp2 = getSharedPreferences(PREFS, MODE_PRIVATE)
+        val placementMode = sp2.getString("placement_mode", "physics") ?: "physics"   // physics|freeroam|pinned
+        val screenContext = sp2.getBoolean("screen_context", false)
+        val packDirName = sp2.getString("pet_pack_dir", null)
+        val packLoaded = packDirName?.let { dir ->
+            runCatching {
+                val (avails, _) = com.ai.assistance.quro.core.pet.PetPack.scan(this)
+                avails.firstOrNull { it.dirName == dir }
+            }.getOrNull()
+        }
+        packImageBitmap = packLoaded?.let { pk -> runCatching {
+            val f = pk.manifest.sheetFile(this)
+            val bmp: android.graphics.Bitmap? = if (f.exists()) android.graphics.BitmapFactory.decodeFile(f.absolutePath) else null
+            bmp?.asImageBitmap()
+        }.getOrNull() }
+        // 物理状态（40ms tick 驱动）
+        val physicsPose = androidx.compose.runtime.mutableStateOf<String?>(null) // fall/thrown/walk/stand/dragged
+        val velX = androidx.compose.runtime.mutableStateOf(0)
+        val velY = androidx.compose.runtime.mutableStateOf(0)
+        var lastMoveRawX = 0f; var lastMoveRawY = 0f; var lastMoveAt = 0L
+        var roamTargetIdx = 0
+        var roamDwell = 0
+        var roamTarget: Pair<Float, Float>? = null
 
         // 环境动画：空闲时每隔 actionIntervalSec 随机播一个互动动作（约 2.6s 后回 IDLE），
         // 让宠物「活着」——这是桌宠而非桌面图标的关键差别。
@@ -233,6 +260,7 @@ class QuroDesktopPetService : Service() {
                 mainHandler.postDelayed(this, petSettings.actionIntervalSec.coerceIn(10, 120) * 1000L)
             }
         }, petSettings.actionIntervalSec.coerceIn(10, 120) * 1000L)
+
 
         val view = ComposeView(context).apply {
             setViewTreeLifecycleOwner(owner)
@@ -251,11 +279,49 @@ class QuroDesktopPetService : Service() {
                         busPhase == PetPhase.THINKING && !thinkMatch -> PetPhase.IDLE
                         else -> busPhase
                     }
+                    // 🔴 宠物包渲染优先（spritesheet 帧动画），无包回退 Canvas 矢量
+                    // 位图在 addPet 时加载一次（IO 线程），Compose 层只读
+                    val packBitmap: androidx.compose.ui.graphics.ImageBitmap? = packImageBitmap
+                    val physicsPoseV = physicsPose.value
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.scale(petScale),
                     ) {
-                        PetSprite(
+                        if (packBitmap != null && packLoaded != null) {
+                            // spritesheet 帧动画路径：姿态取物理状态，动作取 PERFORMING 的包互动动画
+                            val poseName = when {
+                                physicsPoseV != null -> physicsPoseV
+                                effectivePhase == PetPhase.PERFORMING -> "celebrate"
+                                effectivePhase == PetPhase.THINKING || effectivePhase == PetPhase.PLANNING -> "think"
+                                effectivePhase == PetPhase.TOOL_CALLING -> "usetool"
+                                effectivePhase == PetPhase.GENERATING -> "reply"
+                                effectivePhase == PetPhase.DONE -> "celebrate"
+                                else -> "stand"
+                            }
+                            val bubbleTxt = when {
+                                !showBubble -> ""
+                                QuroPetStateBus.statusText != null -> QuroPetStateBus.statusText!!
+                                effectivePhase == PetPhase.TOOL_CALLING && !QuroPetStateBus.toolName.isNullOrBlank()
+                                    -> "正在调用 " + QuroPetStateBus.toolName
+                                else -> ""
+                            }
+                            com.ai.assistance.quro.genui.sdk.components.PetSpriteFrames(
+                                bitmap = packBitmap,
+                                cellWidth = packLoaded.manifest.cellWidth,
+                                cellHeight = packLoaded.manifest.cellHeight,
+                                displayWidth = packLoaded.manifest.displayWidth,
+                                displayHeight = packLoaded.manifest.displayHeight,
+                                animations = packLoaded.manifest.animations.mapValues {
+                                    com.ai.assistance.quro.genui.sdk.components.PetPackAnimDef(
+                                        it.value.row, it.value.frames, it.value.frameDurationMs, it.value.playback
+                                    )
+                                },
+                                pose = poseName,
+                                facingRight = true,
+                                mode = placementMode,
+                                bubbleText = bubbleTxt,
+                            )
+                        } else PetSprite(
                             spec = spec,
                             phase = effectivePhase,
                             toolName = QuroPetStateBus.toolName,
@@ -295,6 +361,77 @@ class QuroDesktopPetService : Service() {
         }
         runCatching { windowManager.addView(view, params) }
         petParams = params
+        // 🔴 物理引擎 tick（对齐 BotHub 40ms 循环；physics=重力/投掷/走动，freeroam=5点游走，pinned=静止）
+        val dm0 = resources.displayMetrics
+        val screenH = dm0.heightPixels
+        val screenW = dm0.widthPixels
+        val gravityPx = 1.4f; val maxFallPx = 24f; val walkPx = 1.8f
+        val physicsRunnable = object : Runnable {
+            override fun run() {
+                if (placementMode != "pinned" && petVisible) {
+                    when (placementMode) {
+                        "physics" -> {
+                            val floorY = screenH - view.height
+                            when (physicsPose.value) {
+                                "thrown", "fall" -> {
+                                    var vy = velY.value + 1
+                                    if (vy > 24) vy = 24
+                                    var vx = (velX.value * 0.88f).toInt()
+                                    var nx = (params.x + vx).coerceIn(0, (screenW - view.width).coerceAtLeast(0))
+                                    var ny = (params.y + vy).coerceAtMost(floorY)
+                                    if (nx <= 0 || nx >= screenW - view.width) vx = -(vx * 0.88f).toInt()
+                                    if (ny >= floorY) { vy = 0; vx = (vx * 0.78f).toInt(); physicsPose.value = "walk" }
+                                    velX.value = vx; velY.value = vy
+                                    params.x = nx.toInt(); params.y = ny.toInt()
+                                }
+                                "walk" -> {
+                                    // 沿地面走：velX 决定方向，碰壁回头
+                                    var vx = velX.value
+                                    if (vx == 0) vx = 2
+                                    var nx = params.x + vx
+                                    if (nx <= 0) { nx = 0; velX.value = 2 }
+                                    if (nx >= screenW - view.width) { nx = screenW - view.width; velX.value = -2 }
+                                    params.x = nx.toInt()
+                                }
+                                else -> physicsPose.value = "fall"
+                            }
+                            runCatching { windowManager.updateViewLayout(view, params) }
+                            sp.edit().putInt(K_X, params.x).putInt(K_Y, params.y).apply()
+                        }
+                        "freeroam" -> {
+                            // 5 点游走（水平 18%/垂直 16% 内缩：左中/上中/右中/下中/中心）
+                            if (roamTarget == null && roamDwell <= 0) {
+                                val insetW = (screenW * 0.18f).toInt(); val insetH = (screenH * 0.16f).toInt()
+                                val cx = screenW / 2; val cy = screenH / 2
+                                roamTarget = when (roamTargetIdx % 5) {
+                                    0 -> Pair(insetW.toFloat(), (cy - view.height / 2).toFloat())
+                                    1 -> Pair((cx - view.width / 2).toFloat(), insetH.toFloat())
+                                    2 -> Pair((screenW - insetW - view.width).toFloat(), (cy - view.height / 2).toFloat())
+                                    3 -> Pair((cx - view.width / 2).toFloat(), (screenH - insetH - view.height).toFloat())
+                                    else -> Pair((cx - view.width / 2).toFloat(), (cy - view.height / 2).toFloat())
+                                }
+                                roamTargetIdx++
+                            }
+                            val t = roamTarget
+                            if (t != null) {
+                                val dx = t.first - params.x; val dy = t.second - params.y
+                                val dist = kotlin.math.hypot(dx.toDouble(), dy.toDouble())
+                                if (dist <= 18) { roamDwell = 70; roamTarget = null }
+                                else {
+                                    params.x += (dx / dist * 1.6f).toInt()
+                                    params.y += (dy / dist * 1.6f).toInt()
+                                    runCatching { windowManager.updateViewLayout(view, params) }
+                                }
+                            }
+                            if (roamDwell > 0) roamDwell--
+                        }
+                    }
+                }
+                mainHandler.postDelayed(this, 40L)
+            }
+        }
+        mainHandler.postDelayed(physicsRunnable, 40L)
+
         // petVisible=false 时不显示桌宠，但仍保留服务与状态总线（开关可随时热更新回来）。
         view.visibility = if (petVisible) View.VISIBLE else View.GONE
 
@@ -319,7 +456,9 @@ class QuroDesktopPetService : Service() {
                     //    旧实现只替换引用不 dismiss，连续长按会叠出好几层菜单。
                     petDialog?.dismiss()
                     petDialog = null
-                    val items = arrayOf("💬 对它说", "🎭 播互动动作", "💬 打开对话", "✖ 关闭桌宠")
+                    val curMode = getSharedPreferences(PREFS, MODE_PRIVATE).getString("placement_mode", "physics") ?: "physics"
+                    val modeLabel = when (curMode) { "freeroam" -> "自由活动"; "pinned" -> "固定当前位置"; else -> "物理活动" }
+                    val items = arrayOf("💬 对它说", "🎭 播互动动作", "⇄ 模式：" + modeLabel, "💬 打开对话", "✖ 关闭桌宠")
                     petDialog = android.app.AlertDialog.Builder(this)
                         .setTitle(qstr(R.string.qk_04593))
                         .setItems(items) { d, which ->
@@ -343,13 +482,20 @@ class QuroDesktopPetService : Service() {
                                         }, 2600L)
                                     }
                                 }
-                                2 -> runCatching {
+                                2 -> {
+                                    // 🔴 模式三态轮换（对齐 BotHub 快捷菜单的物理/自由/固定）
+                                    val spMode = getSharedPreferences(PREFS, MODE_PRIVATE)
+                                    val next = when (spMode.getString("placement_mode", "physics")) { "physics" -> "freeroam"; "freeroam" -> "pinned"; else -> "physics" }
+                                    spMode.edit().putString("placement_mode", next).apply()
+                                    sendBroadcast(Intent("com.ai.assistance.quro.action.DESKTOP_PET_APPLY_SETTINGS").setPackage(packageName))
+                                }
+                                3 -> runCatching {
                                     startActivity(Intent(this, QuroMainActivity::class.java).apply {
                                         action = Intent.ACTION_MAIN
                                         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
                                     })
                                 }
-                                3 -> stopSelf()
+                                4 -> stopSelf()
                             }
                         }
                         .show()
@@ -371,8 +517,15 @@ class QuroDesktopPetService : Service() {
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = ev.rawX - downX; val dy = ev.rawY - downY
+                    if (moved) {
+                        // 记录最近位移（供拖拽结束计算投掷初速）
+                        val now = android.os.SystemClock.uptimeMillis()
+                        if (now - lastMoveAt > 16L) { lastMoveRawX = ev.rawX; lastMoveRawY = ev.rawY; lastMoveAt = now }
+                        if (placementMode == "physics") physicsPose.value = "dragged"
+                    }
                     if (!moved && hypot(dx, dy) > threshold) {
                         moved = true
+                        lastMoveRawX = ev.rawX; lastMoveRawY = ev.rawY; lastMoveAt = android.os.SystemClock.uptimeMillis()
                         if (longPressPosted) { mainHandler.removeCallbacks(longPressRunnable); longPressPosted = false }
                     }
                     if (moved) {
@@ -391,6 +544,22 @@ class QuroDesktopPetService : Service() {
                         // tapOpensPanel=true 且未开轻点互动 → 轻点打开主界面并预填「戳了戳桌宠」；
                         // 关掉它（或开了轻点互动）→ 轻点只播互动动作，不抢占前台。
                         if (tapInteract || !tapOpensPanel) {
+                            // 🔴 包互动带提示词模板（{input}←互动label）+ 可选屏幕上下文 → 自动对话回合
+                            val packInter = packLoaded?.manifest?.interactions
+                                ?.filter { it.enabled }?.randomOrNull()
+                            if (packInter != null && packInter.prompt.isNotBlank()) {
+                                var prompt = packInter.prompt.replace("{input}", packInter.label)
+                                if (screenContext) {
+                                    val screenText = runCatching {
+                                        com.ai.assistance.quro.core.tools.ReadScreenTool().run(this, "{}").take(3000)
+                                    }.getOrNull()
+                                    if (!screenText.isNullOrBlank()) {
+                                        prompt += "\n\n【当前屏幕线索】这些内容来自用户点击桌宠时的当前屏幕，请结合回答。\n" + screenText
+                                    }
+                                }
+                                QuroPetStateBus.onInteract(packInter.label, packInter.animation ?: "celebrate")
+                                com.ai.assistance.quro.ui.QuroShareBridge.emitAutoSend(prompt)
+                            } else {
                             val act = interactions.randomOrNull()
                             QuroPetStateBus.statusText = act?.label ?: "在这里"
                             QuroPetStateBus.phase = if (act?.action == "think") PetPhase.THINKING else PetPhase.PERFORMING
@@ -401,7 +570,7 @@ class QuroDesktopPetService : Service() {
                                     QuroPetStateBus.phase = PetPhase.IDLE
                                 }
                             }, 2600L)
-                            Unit
+                            }
                         } else {
                             //    经分享桥预填输入框并打开主界面；分享桥已有快照消费逻辑（prefill 后自动发送可由用户确认）。
                             runCatching {
@@ -416,13 +585,24 @@ class QuroDesktopPetService : Service() {
                             }
                         }
                     } else {
-                        // 拖完持久化落点；「非自由位置」吸附屏幕右缘
-                        if (!freePosition) {
-                            val dm = resources.displayMetrics
-                            params.x = (dm.widthPixels - view.width).coerceAtLeast(0)
-                            runCatching { windowManager.updateViewLayout(view, params) }
+                        // 🔴 拖拽结束：物理模式=计算投掷初速进抛体；吸附右缘逻辑仅在非物理模式保留
+                        if (placementMode == "physics") {
+                            val now = android.os.SystemClock.uptimeMillis()
+                            val dt = (now - lastMoveAt).coerceAtLeast(1L)
+                            // 速度 px/tick(40ms)：最近一次 MOVE 位移按时间折算
+                            val vx = (((ev.rawX - lastMoveRawX) / dt.toFloat() * 40f).coerceIn(-36f, 36f)).toInt()
+                            val vy = (((ev.rawY - lastMoveRawY) / dt.toFloat() * 40f).coerceIn(-36f, 36f)).toInt()
+                            velX.value = vx; velY.value = vy
+                            physicsPose.value = "thrown"
+                            sp.edit().putInt(K_X, params.x).putInt(K_Y, params.y).apply()
+                        } else {
+                            if (!freePosition) {
+                                val dm = resources.displayMetrics
+                                params.x = (dm.widthPixels - view.width).coerceAtLeast(0)
+                                runCatching { windowManager.updateViewLayout(view, params) }
+                            }
+                            sp.edit().putInt(K_X, params.x).putInt(K_Y, params.y).apply()
                         }
-                        sp.edit().putInt(K_X, params.x).putInt(K_Y, params.y).apply()
                     }
                     true
                 }
