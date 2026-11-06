@@ -664,8 +664,14 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
         if (channelDenies) {
             return QuroToolResult.Failed("approval_denied", "权限面板已把该通道设为「禁止」：${ApprovalPolicy.labelFor(call.name)}")
         }
+        // 🔴 信任重构（2026-11-06 用户裁定）：特权=允许 = 全局信任 —— 不管工具属于哪个通道
+        //    （还是 channelFor 覆盖不到的文件写入等），一律免审批卡。此前只有
+        //    「工具所属通道=允许」才免卡，写文件等无通道工具在特权允许下照样弹 ——
+        //    这就是「特权已开还弹窗」的残留根因。通道 DENY 仍在上面优先拦截。
+        val privTrustAll = com.ai.assistance.quro.core.policy.QuroPolicyStore.trustAll(context)
         val declared = registry.get(call.name)?.requiresApproval ?: false
-        if (channelAllows.not() &&
+        if (!privTrustAll &&
+            channelAllows.not() &&
             ApprovalPolicy.needsApproval(call.name, call.arguments, declared) &&
             !ApprovalMemory.isAllowed(call.name)
         ) {

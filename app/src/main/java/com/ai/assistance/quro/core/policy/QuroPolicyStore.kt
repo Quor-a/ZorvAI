@@ -55,6 +55,14 @@ object QuroPolicyStore {
         return _cms.value
     }
 
+    /**
+     * 🔴 全局信任（2026-11-06 重构）：特权=允许 → **所有**审批门免问。
+     * 语义：用户把「特权」拨到允许 = 信任 AI 直接执行（终端/root/Shizuku/ADB/文件/手机控制/
+     * CMS 能力……全部不再弹「是否允许」）。各通道显式 DENY 仍然优先（想拦哪个通道单独禁）。
+     * 所有审批门（工具审批卡 / CMS broker 授权框）统一走本判定，杜绝「开了允许还弹窗」。
+     */
+    fun trustAll(ctx: Context): Boolean = getPriv(ctx) == QuroPolicy.ALLOW
+
     /** CapOS 权限子系统 当前策略（惰性初始化）。 */
     fun getPriv(ctx: Context): QuroPolicy {
         ensure(ctx)
