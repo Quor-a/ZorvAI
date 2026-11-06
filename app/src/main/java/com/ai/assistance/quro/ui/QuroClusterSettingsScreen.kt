@@ -491,10 +491,9 @@ private fun EnrollDialog(
     onDismiss: () -> Unit,
     onDone: () -> Unit,
 ) {
-    // 🔴 灵魂解耦（2026-11-06）：删除「从人格卡里选人」—— 集群角色直接在此创建，
-    // 每个角色配自己的灵魂注入（与 ZorvAI 人格库零耦合，新建即生效）。
+    // 🔴 灵魂注入唯一入口 = 编辑角色（用户裁定 2026-11-06）：创建只登记名字/类型/职责/模型，
+    // 灵魂注入一律进「编辑角色」里配 —— 不搞创建时再选灵魂的多层结构。
     var newName by remember { mutableStateOf("") }
-    var newSoul by remember { mutableStateOf("") }
     var kind by remember { mutableStateOf(RoleKind.EXPERT) }
     var duties by remember { mutableStateOf("") }
     var modelId by remember { mutableStateOf(models.firstOrNull()?.id ?: "cloud:current") }
@@ -510,14 +509,6 @@ private fun EnrollDialog(
                     label = { Text("角色名") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = newSoul,
-                    onValueChange = { newSoul = it },
-                    label = { Text("灵魂注入（这个角色是谁 / 信念 / 怎样才算做对）") },
-                    supportingText = { Text("集群角色自己的灵魂，与 ZorvAI 人格互不相干；不含孵化/进化/自我介绍") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 4,
                 )
                 // #190 RoleKind 扩到 5 档后，这里原来写死的 if(EXPERT) "专家" else "评审"
                 // 会让「规划/执行」两档都显示成「专家」。必须用 k.label。
@@ -544,7 +535,7 @@ private fun EnrollDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = newName.isNotBlank() && newSoul.isNotBlank(),
+                enabled = newName.isNotBlank(),
                 onClick = {
                     val pid = "persona_cluster_manual_${System.currentTimeMillis().toString().takeLast(8)}"
                     RoleRegistry.upsert(
@@ -552,7 +543,6 @@ private fun EnrollDialog(
                         RoleProfile(
                             personaId = pid,
                             name = newName.trim(),
-                            soulInjection = newSoul.trim(),
                             modelProfileId = modelId,
                             role = kind,
                             duties = duties.split(',', '，')
