@@ -42,10 +42,12 @@ import okhttp3.RequestBody.Companion.toRequestBody
 /** 截取当前屏幕并保存为文件，返回文件路径。 */
 class ScreenshotTool : QuroTool {
     override val name = "screenshot"
-    override val description = "截取当前屏幕截图并保存。返回截图文件路径（可用于视觉分析）。无需参数 {}。"
-    override val parametersJson = """{"type":"object","properties":{}}"""
+    override val description = "截取当前屏幕截图并保存。返回截图文件路径（可用于视觉分析）。return_format=base64 时返回 Base64 全量数据（前缀 BASE64:，供视觉链路）。参数：{\"return_format\":\"path|base64\"}。"
+    override val parametersJson = """{"type":"object","properties":{"return_format":{"type":"string","enum":["path","base64"],"description":"path=文件路径（默认）/ base64=Base64 全量数据"}}}"""
 
     override fun run(context: Context, arguments: String): String {
+        val wantBase64 = runCatching { org.json.JSONObject(arguments).optString("return_format") }
+            .getOrElse { "" }.equals("base64", ignoreCase = true)
         val svc = QuroAccessibilityService.instance
             ?: return "❌ 无障碍服务未连接：请到设置 → 无障碍 → ZorvAI → 开启"
 
@@ -55,7 +57,7 @@ class ScreenshotTool : QuroTool {
                 val screenshot = captureWithAccessibility(svc)
                 if (screenshot != null) {
                     val path = saveScreenshot(context, screenshot)
-                    return "✅ 截图成功: $path"
+                    return if (wantBase64) encodeScreenshotBase64(path) else "✅ 截图成功: $path"
                 }
             }
 
@@ -65,15 +67,23 @@ class ScreenshotTool : QuroTool {
                 val bitmap = captureNodeTree(root)
                 if (bitmap != null) {
                     val path = saveScreenshot(context, bitmap)
-                    return "✅ 截图成功: $path"
+                    return if (wantBase64) encodeScreenshotBase64(path) else "✅ 截图成功: $path"
                 }
             }
 
             "❌ 截图失败：请确保已授予截图权限"
         } catch (e: Exception) {
-            "❌ 截图失败: ${e.message}"
+            "❌ 截图失败: " + e.message
         }
     }
+
+    /**
+     * 合并 screenshot_base64（2026-11-06）：文件读出后 Base64 全量返回。
+     * 旧 screenshot_base64 变体只回 base64_length 和 100 字预览，模型拿不到完整图。
+     */
+    private fun encodeScreenshotBase64(path: String): String = runCatching {
+        "BASE64:" + android.util.Base64.encodeToString(java.io.File(path.trim()).readBytes(), android.util.Base64.NO_WRAP)
+    }.getOrElse { "❌ 截图 Base64 编码失败: " + (it.message ?: it.javaClass.simpleName) }
 
     /**
      * 通过 AccessibilityService.takeScreenshot() 截图（Android P+）。

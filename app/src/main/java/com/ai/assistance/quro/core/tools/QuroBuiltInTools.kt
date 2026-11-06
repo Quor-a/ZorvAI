@@ -222,11 +222,22 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(GetNetworkTool())
     r.register(GetSensorsTool())
     r.register(VibrateTool())
-    r.register(GetClipboardTool())
-    r.register(SetClipboardTool())
+    // 🔴 合体（2026-11-06）：clipboard(get|set) 吸收 get_clipboard/set_clipboard
+    r.register(ClipboardTool())
+    // ── 16 族工具合体批（详见 QuroMergedTools.kt）：46 个散装入口 → 17 个 ──
+    r.register(FileReadMergedTool())       // file_read   ← read_text_file/file_read/workspace_read
+    r.register(ListDirMergedTool())        // list_dir    ← list_files/browse_files/workspace_list/find_files
+    r.register(FileWriteMergedTool())      // file_write  ← write_file/workspace_write
+    r.register(AlarmClockMergedTool())     // alarm_clock ← set_alarm/cancel_alarm/list_alarms/set_timer
+    r.register(TaskScheduleMergedTool())   // task_schedule ← schedule_task/list/delete_scheduled_task
+    r.register(DeviceControlMergedTool())  // device_control ← 8 个设置开关工具
+    r.register(SpeakMergedTool())          // speak       ← speak/stop_speak
+    r.register(VisualPopupMergedTool())    // visual_popup ← visual_popup/visual_question/visual_action
+
     r.register(ListAppsTool())
     r.register(LaunchAppTool())
-    r.register(SearchAndLaunchAppTool())
+    // 🔴 合体：open_app(自标弃用)/search_and_launch_app(模糊搜索是 launch_app 的子集) 退役
+
     r.register(GetPackageNameTool())
     r.register(GetNotificationsTool())
     r.register(GetBluetoothTool())
@@ -242,8 +253,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(ReadCalendarTool())
     r.register(WriteCalendarTool())
     // 文件（应用专属目录，无权限）
-    r.register(ListFilesTool())
-    r.register(ReadTextFileTool())
+    // 🔴 合体（2026-11-06）：file_read/list_dir 吸收 read_text_file/list_files/browse_files/workspace_read/list/find_files
+
     // 位置
     r.register(GetLocationTool())
     r.register(GeocodeTool())
@@ -252,11 +263,11 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // AI 发文件：把设备文件作为对话框附件（图片/视频/文档直接预览）
     r.register(AttachFileTool())
     // 闹钟（应用内真正会响的提醒）
-    r.register(SetAlarmTool())
-    r.register(CancelAlarmTool())
-    r.register(ListAlarmsTool())
+    // 🔴 合体（2026-11-06）：alarm_clock 吸收 set_alarm/cancel_alarm/list_alarms/set_timer
+
     // 定时任务/自动化提醒
-    r.register(ScheduleTaskTool())
+    // 🔴 合体（2026-11-06）：task_schedule 吸收 schedule_task/list_scheduled_tasks/delete_scheduled_task
+
     r.register(ListScheduledTasksTool())
     r.register(DeleteScheduledTaskTool())
     // 网络 / Web
@@ -268,15 +279,16 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // ═══ 屏幕捕获授权（AI 主动发起 MediaProjection 系统授权，无需手动长按开关）═══
     r.register(EnableScreenCaptureTool())
     // 文件写改删
-    r.register(WriteFileTool())
+    // 🔴 合体（2026-11-06）：file_write 吸收 write_file/workspace_write
+
     r.register(DeleteFileTool())
     r.register(MakeDirectoryTool())
     r.register(MoveFileTool())
     r.register(CopyFileTool())
-    r.register(FindFilesTool())
+
     r.register(FileInfoTool())
     // 工具箱：文件管理 / 浏览器 / IDE
-    r.register(BrowseFilesTool())
+
     // 格式转换（对应「其他 AI」扩展生态里点名的 file_converter 能力：csv↔json、markdown→html、json 美化）
     r.register(QuroFileConverterTool())
     // 文件编辑增强（对应「其他 AI」文件与编辑维的 writer / ApkEditor / ExeEditor）
@@ -289,7 +301,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(QuroMemoryAutoSaveTool())
     r.register(QuroMemoryWindowPlanTool())
     r.register(QuroMemoryExportTool())
-    r.register(FileReadTool())
+
     r.register(OpenWebTool())
     r.register(RunCodeTool())
     // 宿主技能库管理：AI 只可列举技能。用哪个技能由用户在对话框选择后随消息发送，
@@ -304,8 +316,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(BuildApkTool())
     r.register(ExportApkTool())    // 让 AI 也能「导出产物」（构建台 UI 的导出是文件选择器、AI 调不起）
     // Web 应用：多文件多语言 Web 应用工程（WebView + native.* 原生桥）。
-    // workbench 是 miniapp 的兼容别名（MiniAppAliasTool），历史对话/手册仍可能引用。
-    r.register(MiniAppAliasTool())
+    // 🔴 合体（2026-11-06）：workbench 纯别名壳退役 —— 错误提示 removedToolNotes 指回 miniapp。
+
     // Web 应用：AI 直接 CRUD/运行 Web 应用工程（HTML + Page() 运行时 + native.* 原生桥）。
     // 产物经 ```miniapp 围栏回到对话框气泡渲染；工具箱「Web 应用」面板与它共享同一份工程文件。
     r.register(MiniAppTool())
@@ -318,7 +330,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(GenUiAgentOpenTool())
     // TTS 朗读
     r.register(SpeakTool())
-    r.register(StopSpeakTool())
+    // 🔴 合体（2026-11-06）：speak(action=stop) 吸收 stop_speak
+
     // Intent / 广播
     r.register(ExecuteIntentTool())
     r.register(SendBroadcastTool())
@@ -338,9 +351,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // ACI HTTP 模拟服务器（当真实 API 尚未完成时使用）
     r.register(QuroAciHttpServerTool())
     // 工作区 AI 工具：AI 直接读写 ZorvAI 自己的 QuroWorkspace（与构建台 ACI 协作）
-    r.register(WorkspaceWriteTool())
-    r.register(WorkspaceReadTool())
-    r.register(WorkspaceListTool())
+
     r.register(WorkspaceRenderTool())   // 工作区文件渲染到对话框
     r.register(WorkspaceDocTool())      // 工作区文档创建
     r.register(WorkspaceMediaTool())    // 工作区媒体播放（音乐/视频）
@@ -399,23 +410,15 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(BackgroundScreenTool())
     // ═════════════ 屏幕视觉双模感知（截图+视觉分析）══════════════
     r.register(ScreenshotTool())           // 截图并保存文件
-    r.register(ScreenshotBase64Tool())     // 截图返回Base64（用于视觉模型）
+    // 🔴 合体（2026-11-06）：screenshot(return_format=base64) 吸收 screenshot_base64
     r.register(VisualAnalysisTool())       // 截图+视觉模型分析
     // ═════════════ 系统级控制动作（一等公民）══════════════
     r.register(TakePhotoTool())            // 拍照
     r.register(ScreenRecordTool())         // 录屏
-    r.register(VolumeControlTool())        // 音量控制
-    r.register(BrightnessControlTool())    // 亮度控制
-    r.register(WiFiControlTool())          // WiFi控制
-    r.register(BluetoothControlTool())     // 蓝牙控制
-    r.register(NotificationControlTool())  // 通知栏控制
-    r.register(AirplaneModeTool())         // 飞行模式
-    r.register(ScreenRotationTool())       // 屏幕旋转
-    r.register(SetTimerTool())             // 倒计时
-    r.register(OpenAppTool())              // 打开应用
+    // 🔴 合体（2026-11-06）：device_control 吸收 8 个设置开关工具；SetTimerTool 并入 alarm_clock；OpenAppTool 退役
     // 文件知识库（Path ②）：本地文档检索 + 写入，零基建覆盖日常知识检索
-    r.register(KnowledgeSearchTool())
-    r.register(KnowledgeAddTool())
+    // 🔴 合体（2026-11-06）：knowledge_manage(action=search|add) 吸收 knowledge_search/knowledge_add
+
     // 第三方服务授权保险库：供 http_request 用 service 参数自动带鉴权与 baseUrl
     r.register(AuthServiceAddTool())
     r.register(AuthServiceListTool())
@@ -424,7 +427,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // ═══ 七维能力补全（Dim1/2/3/4/7）：扩展生态 / 五语言真执行 / UI 自动化 / FFmpeg 链 / 终端增强 ═══
     // Dim1 扩展生态（网络类 + 编排）：对应「其他 AI」JS 工具包量级差距，补齐可调用联网能力
     r.register(QuroCrossrefTool())            // crossref_search：Crossref 学术文献检索（免费）
-    r.register(QuroSearchProviderTool())      // search_provider：多引擎搜索聚合（duckduckgo/tavily）
+    // 🔴 合体（2026-11-06）：web_search(engine=…) 吸收 search_provider（内部转发）
+
     r.register(QuroImgGenProviderTool())     // img_gen_provider：多厂商文生图（openai/qwen/minimax/siliconflow/xai/nanobanana/zhipu）
     r.register(QuroTrain12306Tool())         // train_12306：12306 余票查询
     r.register(QuroGithubReadTool())         // github_read：读仓库文件/Issue/PR diff
@@ -485,7 +489,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // 应用私有数据库只读查询（应用私有目录隔离，只读安全）
     r.register(QuroPrivateDbTool())
     // 媒体：百分百开源本地音乐 / 视频播放器（基于 Android 框架 MediaPlayer / 系统播放能力）
-    r.register(LocalMusicPlayerTool())
+    // 🔴 合体（2026-11-06）：music_play 显式兼容单曲参数，local_music_player 退役
+
     r.register(MusicPlayTool())
     r.register(LocalVideoPlayerTool())
     // AI 自动化浏览器 + 联网搜索（后台可用）
@@ -540,7 +545,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // 恢复注册后，ui_open_build 等全部 ui_open_*/ui_toggle_* 既下发给 LLM、又能被 engine 真正执行。
     allUiActionTools.forEach { r.register(it) }
     // 对话框富组件工具（ui_card）：预制组件名册（独立分类；🔴 可视化小卡片是 WIDGET_CARD 分类、走 visual_card 工具，与本工具互不相关）
-    r.register(UiCardTool())
+    // 🔴 合体（2026-11-06）：ui_card 与 ui_widget 的 run() 逐行相同（仅多一步 kind→type 改写），退役，kind 字段由 ui_widget 兼容
     // 对话框富组件工具（ui_widget）：预制组件名册（与 ui_control / quro-ui / visual_popup / visual_card 互不相关）
     r.register(UiWidgetTool())
     // 可视化组件目录查询（card_catalog）：全量组件的常驻清单在两个下发工具的描述里，
@@ -573,9 +578,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // 广义 IDE 集成工具：图形/视频/音频/3D/游戏/低代码/代码 IDE 的完整知识库和调用能力
     r.register(CreativeStudioTool())
     // 可视化问答和操作弹窗工具
-    r.register(VisualQuestionTool())   // 可视化问答弹窗
-    r.register(VisualActionTool())     // 可视化操作弹窗
-    r.register(VisualPopupTool())      // 自由可视化弹窗（固定UI组件）
+    // 🔴 合体（2026-11-06）：visual_popup 按参数自动分派 提问/确认/富弹窗 三形态，吸收 visual_question/visual_action
+    r.register(VisualPopupMergedTool())
     r.register(VisualCardTool())       // 🔴 可视化小卡片（独立分类唯一出口：AI 自由写 HTML 卡体，Widget Lab 卡壳内联渲染）
     r.register(VisualCardSkeletonTool()) // 🔴 13 份参考样板检索（visual_card 的 html 本可自由写任意场景，样板仅供没把握时参考）
     r.register(ZxWebCardTool())        // zxwidget 卡片（动态交互界面，477 个 zx 组件）

@@ -100,7 +100,7 @@ object ToolTaxonomy {
         Rule(
             ToolCategory.VISUAL_INTERACT,
             exact = setOf(
-                "visual_question", "visual_ask", "visual_action", "visual_popup",
+                "visual_popup",
                 "visual_custom_popup", "visual_analysis",
             ),
             prefixes = listOf("visual_"),
@@ -131,7 +131,7 @@ object ToolTaxonomy {
         Rule(
             ToolCategory.FILE_OPERATION,
             exact = setOf(
-                "write_file", "read_text_file", "list_files", "copy_file", "move_file",
+                "file_write", "file_read", "list_dir", "copy_file", "move_file",
                 "delete_file", "find_files", "file_info", "make_directory", "browse_files",
                 "file_read", "attach_file", "file_converter", "ffmpeg", "search_files",
                 "read_file", "share_file",
@@ -154,7 +154,7 @@ object ToolTaxonomy {
         Rule(
             ToolCategory.COMMUNICATION,
             exact = setOf(
-                "send_sms", "read_sms", "read_contacts", "set_alarm", "cancel_alarm",
+                "send_sms", "read_sms", "read_contacts", "alarm_clock",
                 "list_alarms", "geocode", "get_location", "train_12306",
             ),
             prefixes = listOf("send_sms", "read_sms", "read_contacts"),
@@ -166,7 +166,7 @@ object ToolTaxonomy {
             ToolCategory.WORKFLOW,
             exact = setOf(
                 "wf_create", "wf_trigger", "wf_run_status", "workflow_run", "tasker",
-                "schedule_task", "list_scheduled_tasks", "delete_scheduled_task",
+                "task_schedule", "write_calendar",
             ),
         ),
 
@@ -181,7 +181,7 @@ object ToolTaxonomy {
             exact = setOf(
                 "read_screen", "tap_screen", "swipe_screen", "long_press_screen",
                 "scroll_screen", "input_text", "get_foreground_app", "get_screen_state",
-                "screenshot", "screenshot_base64", "global_action", "enable_screen_capture",
+                "screenshot", "global_action", "enable_screen_capture",
                 "screen_record", "take_photo", "ai_type_text", "ai_press_enter", "ai_press_send",
                 "ui_tree", "visual_analysis", "image_recognition",
             ),
@@ -243,7 +243,7 @@ object ToolTaxonomy {
         Rule(
             ToolCategory.SYSTEM_CONTROL,
             exact = setOf(
-                "toggle_flashlight", "set_timer", "show_alarms", "set_wheel",
+                "device_control", "show_alarms", "set_wheel",
                 "wake_device", "dismiss_keyguard",
             ),
             prefixes = listOf(
@@ -256,7 +256,7 @@ object ToolTaxonomy {
         Rule(
             ToolCategory.BASIC,
             exact = setOf(
-                "calculate", "vibrate", "set_clipboard", "get_clipboard",
+                "calculate", "vibrate", "clipboard",
                 "get_current_time", "get_device_info", "get_battery",
             ),
             prefixes = listOf("get_"),

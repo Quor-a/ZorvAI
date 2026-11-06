@@ -87,17 +87,17 @@ class QuroToolRouter(
             "get_current_time", "get_device_info", "calculate",
             "get_battery", "list_installed_apps", "launch_app",
             "search_and_launch_app", "list_files", "read_text_file",
-            "write_file", "find_files", "file_info",
+            "file_write", "file_read", "list_dir", "file_info",
             "browse_files", "http_request", "open_web",
             "web_search", "read_url", "read_sms",
             "send_sms", "read_contacts", "read_calendar",
-            "write_calendar", "set_alarm", "terminal",
+            "write_calendar", "alarm_clock", "task_schedule", "terminal",
             "termux", "quroterm_exec", "shizuku_exec",
             "memory_save", "memory_search", "rag_search",
-            "speak", "stop_speak", "read_screen",
+            "speak", "read_screen",
             "tap_screen", "input_text", "get_foreground_app",
-            "bg_screen", "ui_card", "ui_widget",
-            "ui_control", "zx_web_card", "visual_question",
+            "bg_screen", "ui_widget",
+            "ui_control", "zx_web_card", "visual_popup",
             // 🔴 可视化小卡片是独立分类且是用户高频口语（「小卡片」），必须常驻：
             //   过去只靠 discovery，模型既不知道 visual_card 存在、也把它当弹窗类，
             //   结果「AI 永远不用可视化小卡片、老用动态UI/富组件顶替」。

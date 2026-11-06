@@ -5,6 +5,7 @@ import com.ai.assistance.quro.core.QuroChatMessage
 import com.ai.assistance.quro.core.QuroLlmResult
 import com.ai.assistance.quro.core.model.QuroModelConfigRepository
 import com.ai.assistance.quro.core.network.QuroLlmClient
+import com.ai.assistance.quro.core.tools.QuroSearchProviderTool
 import com.ai.assistance.quro.core.tools.QuroTool
 import com.ai.assistance.quro.core.websearch.model.SearchBundle
 import kotlinx.coroutines.runBlocking
@@ -64,6 +65,12 @@ class WebSearchTool(private val toolName: String) : QuroTool {
             return "联网搜索已被关闭。请在「设置 → 搜索服务」中打开「联网搜索」总开关后重试。"
         }
         val orchestrator = WebSearchProvider.build(buildCompleter(context))
+        // 合并 search_provider（2026-11-06）：engine 显式指定非 auto 时转发单引擎工具，
+        // 保留 duckduckgo/google/tavily/zhipu 直选；默认 auto 走自研编排器。
+        val engine = runCatching { JSONObject(arguments).optString("engine") }.getOrElse { "" }
+        if (toolName == "web_search" && engine.isNotBlank() && !engine.equals("auto", true)) {
+            return QuroSearchProviderTool().run(context, arguments)
+        }
         return runBlocking {
             try {
                 when (toolName) {

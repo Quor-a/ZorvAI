@@ -167,7 +167,7 @@ object PromptRagIndex {
                 "打分", "评分", "进度", "看板", "热力图", "散点", "甘特", "漏斗",
             ),
             keywords = listOf(
-                "attach_file", "ui_card", "ui_widget", "codecanvas", "输出格式",
+                "attach_file", "ui_widget", "codecanvas", "输出格式",
                 "card_catalog", "find", "ranking", "scoreboard", "gauge", "pie", "timeline",
                 "compare", "heatmap", "speedometer", "kanban", "gantt",
             ),
@@ -197,7 +197,7 @@ object PromptRagIndex {
                 - 🔴 用户说「小卡片」时**严禁**改用动态UI组件 / 富组件 / 弹窗顶替——那是分类错误。
             """.trimIndent(),
             triggers = listOf("界面", "卡片", "组件", "画布", "页面", "弹窗", "小程序", "Web应用", "Web 应用", "网页应用", "可视化", "交互", "zx", "zxwidget", "对比", "占比", "趋势", "表单", "时间线"),
-            keywords = listOf("visual_card", "visual_card_skeleton", "ui_card", "ui_widget", "ui_control", "genui", "miniapp", "codecanvas", "zx_web_card", "zx_catalog", "rag_search", "zx_components"),
+            keywords = listOf("visual_card", "visual_card_skeleton", "ui_widget", "ui_control", "genui", "miniapp", "codecanvas", "zx_web_card", "zx_catalog", "rag_search", "zx_components"),
         ),
         PromptBlock(
             id = "memory_policy",
