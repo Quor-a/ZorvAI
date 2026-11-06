@@ -395,10 +395,13 @@ private fun BotPlatformCard(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 图标磁贴
-            Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(AccentSoft), contentAlignment = Alignment.Center) {
-                Icon(icon, null, Modifier.size(17.dp), tint = Accent)
-            }
+            // 🔴 官方品牌图标（2026-11-06）：QQ/飞书/微信按官方 logo+底色
+            com.ai.assistance.quro.ui.BrandAvatar(
+                name = "微信 iLink",
+                urlOrId = "wechat",
+                size = 32.dp,
+                corner = 8.dp,
+            )
             Spacer(Modifier.width(8.dp))
             // 名称 + 副标
             Column(Modifier.weight(1f)) {
@@ -638,10 +641,13 @@ private fun WechatBotPlatformCard(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 图标磁贴
-            Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(AccentSoft), contentAlignment = Alignment.Center) {
-                Icon(icon, null, Modifier.size(17.dp), tint = Accent)
-            }
+            // 🔴 官方品牌图标（2026-11-06）：QQ/飞书/微信按官方 logo+底色
+            com.ai.assistance.quro.ui.BrandAvatar(
+                name = "微信 iLink",
+                urlOrId = "wechat",
+                size = 32.dp,
+                corner = 8.dp,
+            )
             Spacer(Modifier.width(8.dp))
             // 名称 + 副标
             Column(Modifier.weight(1f)) {

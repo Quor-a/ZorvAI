@@ -4070,8 +4070,8 @@ private fun MessageList(
         //   token 再到占位移除 → 又展开），这正是「思考显示不会收起来」观感的成因之一。
         //   这里一律取**最后一条真实消息**（占位行自带 isWaiting/isWorking 标记，予以排除）。
         val lastRealIdx = messages.indexOfLast { !it.isWaiting && !it.isWorking }
-        itemsIndexed(messages, key = { _, msg -> msg.id }) { index, msg ->
-            Box(Modifier.animateItem(fadeInSpec = tween(220), fadeOutSpec = tween(180), placementSpec = spring(stiffness = Spring.StiffnessMediumLow))) {
+        itemsIndexed(messages, key = { idx, msg -> msg.uids.firstOrNull()?.let { "m_" + it } ?: ("ph_" + msg.id + "_" + idx) }) { index, msg ->
+            Box {
                 MessageRow(
                     msg, scaled, onOpenLink,
                     onCommand = { onCommand(it) },
