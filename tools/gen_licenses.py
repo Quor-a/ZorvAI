@@ -32,7 +32,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_OUT = os.path.join(ROOT, "app/src/main/assets/legal/third_party_licenses.json")
 NOTICE_OUT = os.path.join(ROOT, "NOTICE")
 
-GENERATED_AT = "2026-10-26"
+GENERATED_AT = "2026-11-06"
 
 # copyleft: 0=宽松  1=弱 copyleft（LGPL/MPL/EPL）  2=强 copyleft（GPL/AGPL）
 E = lambda cat, name, lic, zh, en="", copyleft=0: dict(
@@ -65,6 +65,8 @@ ENTRIES = [
     E("android", "Jetpack Compose（UI / Foundation / Material3 / Animation / Runtime）", "Apache-2.0",
       "声明式 UI 框架（BOM 2026.01.01 统一版本）。"),
     E("android", "Material Components for Android", "Apache-2.0", "Material Design 组件与主题。"),
+    E("android", "ML Kit text-recognition（拉丁+中文）", "Google APIs ToS（非开源）",
+      "Google ML Kit 文字识别（com.google.mlkit）。专有服务条款：模型随 AAR 分发，不适用开源许可证义务，此处仅作来源披露。"),
     E("android", "Coil（io.coil-kt:coil-compose）", "Apache-2.0", "Compose 图片加载。"),
     E("android", "AndroidSVG（com.caverock:androidsvg）", "Apache-2.0", "SVG 渲染（GenUI 画布兜底）。"),
     E("android", "Facebook Yoga（com.facebook.yoga:yoga）", "MIT",
@@ -100,6 +102,17 @@ ENTRIES = [
       "纯 Java Git 实现。弱 copyleft：修改 JGit 源文件需公开该文件。", copyleft=1),
     E("javalibs", "SQLCipher for Android（net.zetetic）", "BSD-style (Zetetic)",
       "加密 SQLite（集群数据库）。"),
+    E("javalibs", "jlatexmath-android（ru.noties）", "GPL-2.0-only",
+      "LaTeX 公式渲染（LatexMathText/富文本公式）。强 copyleft：本应用整体 Apache-2.0，该组件按 GPL-2.0 单独授权随包分发，"
+      "对应源码经仓库与上游提供（见 NOTICE SOURCE AVAILABILITY）；计划迁移 KaTeX 渲染后移除。", copyleft=2),
+    E("javalibs", "Google Guava（+ listenablefuture）", "Apache-2.0", "Google 核心库（集合/并发工具）。"),
+    E("javalibs", "Lottie-compose（airbnb）", "Apache-2.0", "Lottie 动画播放。"),
+    E("javalibs", "libtaskbar（farmerbb）", "Apache-2.0", "任务栏组件（桌面模式）。"),
+    E("javalibs", "termux-am-library（Termux）", "Apache-2.0", "Termux AM 调用库（v2.0.0，Maven 元数据实测 Apache-2.0，非 GPL）。"),
+    E("javalibs", "commons-io", "Apache-2.0", "Apache IO 工具（termux-host）。"),
+    E("javalibs", "hiddenapibypass（tikdev）", "Apache-2.0", "Android 隐藏 API 反射限制绕过（termux-host）。"),
+    E("javalibs", "desugar_jdk_libs（AOSP）", "Apache-2.0", "Java 8+ API 脱糖（构建期，运行时随包）。"),
+    E("javalibs", "Markwon 附加插件（linkify / recycler）", "Apache-2.0", "Markwon 自动链接与回收站插件（core/tables/strikethrough 已列）。"),
     E("javalibs", "JUnit 4", "EPL-2.0", "单元测试（不随发布包分发）。", copyleft=1),
 
     # ── 离线模型引擎 ────────────────────────────────────────────────────
@@ -248,6 +261,17 @@ ENTRIES = [
     E("feature", "墨语言 / Molang（terminal-core，自研语言）", "Apache-2.0（语言）+ 运行时含 GPL",
       "墨语言为自研语言（MolangIso 等自有代码）；但其运行时捆绑 proot(GPL-2.0+)/BusyBox(GPL-2.0)/"
       "GNU Bash(GPL-3.0)/QEMU(GPL-2.0)/Ubuntu rootfs(GPL-3.0)。语言本身无 GPL，运行时见『内置运行时』分类。"),
+    E("feature", "Termux 宿主层移植（termux-host 模块）", "GPL-3.0-or-later",
+      "Termux 应用宿主层（TermuxActivity/Service/termux-shared）的功能移植，配合 :vtlib 终端仿真。"
+      "强 copyleft：对应源码随仓库提供（见 NOTICE SOURCE AVAILABILITY）。", copyleft=2),
+    E("feature", "终端仿真库（vtlib 模块）", "Apache-2.0",
+      "源自 jackpal/Termux 与 termux-app 的 terminal-emulator/terminal-view（这两个子模块上游为 Apache-2.0）。"),
+    E("feature", "集群多角色引擎（cluster-* 6 模块）", "内部交付（上游许可待留证）",
+      "去品牌化的 AI 集群 SDK：自研改造为主，上游第三方来源如有将补记许可。"),
+    E("feature", "Mika 助手内核（mika-core / mika-phone）", "Apache-2.0",
+      "源自 wangzan101/Mika（Apache-2.0，已核实），去品牌化移植。"),
+    E("feature", "连接器核心遗留包（libs/aci-core-legacy.aar）", "Apache-2.0（自研遗留）",
+      "本地 AAR：早期自研连接器核心，仅作过渡兼容，计划移除。"),
     E("feature", "GenUI Agent（genuiagent-sdk）", "Apache-2.0",
       "去品牌化移植自 Quor-a/GenUI-Agent（sdk 模块）；纯 Kotlin/Compose，无打包第三方库，无 GPL。"),
     E("feature", "APK 插件框架（plugin-* 系列）", "Apache-2.0（框架）+ QuickJS MIT",
