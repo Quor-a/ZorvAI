@@ -45,6 +45,13 @@ class QuroCmsBroker(context: Context) {
             return true
         }
         // 策略关卡：在用户确认之前判定。
+        // 🔴 全局信任（2026-11-06）：特权=允许 → CMS 授权框也免弹（自动临时令牌）。
+        if (QuroPolicyStore.trustAll(appContext)) {
+            storage.setAuth(moduleId, perm.id, AuthorizationLevel.Temporary)
+            storage.log(moduleId, perm.id, "authorize", "Temporary", "policy-trust-all",
+                "特权=允许：全局信任自动授权(临时令牌)", riskLevel)
+            return true
+        }
         return when (QuroPolicyStore.getCms(appContext)) {
             QuroPolicy.ALLOW -> {
                 storage.setAuth(moduleId, perm.id, AuthorizationLevel.Temporary)
