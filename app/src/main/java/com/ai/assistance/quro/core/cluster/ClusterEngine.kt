@@ -1448,9 +1448,12 @@ ${stillFailed.joinToString("\n") { "- ${it.title}：${it.lastError}" }}
                 id = role.personaId,
                 name = role.name.ifBlank { role.personaId },
                 avatarEmoji = role.emoji,
-                description = role.duties.joinToString("；"),
+                avatarUri = role.avatarUri,
+                // 🔴 灵魂卡完整字段（2026-11-06）：描述/开场白/聊天设定全部来自角色灵魂卡
+                description = role.description.ifBlank { role.duties.joinToString("；") },
                 roleSetting = role.soulInjection,
-                chatSetting = "",
+                opening = role.opening,
+                chatSetting = role.chatSetting,
             )
         }
         return runCatching { com.ai.assistance.quro.core.QuroPersonaRepository(context).get(id) }.getOrNull()

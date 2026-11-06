@@ -178,6 +178,12 @@ data class RoleProfile(
     val emoji: String = "🧩",
     /** 该角色自己的灵魂注入正文（进 system prompt 的「你是谁」）——不含孵化/进化/自我介绍/完整Soul。 */
     val soulInjection: String = "",
+    /** 🔴 灵魂卡完整功能（2026-11-06 用户裁定）：与人格页灵魂编辑同字段集 */
+    val description: String = "",
+    val opening: String = "",
+    val chatSetting: String = "",
+    /** 自定义图片头像的内部路径（空=用 emoji） */
+    val avatarUri: String = "",
     /** 宿主已配置模型的 id（见 ModelProfile.id） */
     val modelProfileId: String = "",
     /** 降级链，同样是 ModelProfile.id */
@@ -221,6 +227,8 @@ data class RoleProfile(
         put("fallbackModelIds", JSONArray(fallbackModelIds))
         put("role", role.name)
         put("name", name); put("emoji", emoji); put("soulInjection", soulInjection)
+        put("description", description); put("opening", opening)
+        put("chatSetting", chatSetting); put("avatarUri", avatarUri)
         put("duties", JSONArray(duties)); put("taboos", JSONArray(taboos)); put("skills", JSONArray(skills))
         put("skillIds", JSONArray(skillIds))
         put("tags", JSONArray(tags))
@@ -234,6 +242,10 @@ data class RoleProfile(
             name = o.optString("name"),
             emoji = o.optString("emoji").ifBlank { "🧩" },
             soulInjection = o.optString("soulInjection"),
+            description = o.optString("description"),
+            opening = o.optString("opening"),
+            chatSetting = o.optString("chatSetting"),
+            avatarUri = o.optString("avatarUri"),
             modelProfileId = o.optString("modelProfileId"),
             fallbackModelIds = o.optJSONArray("fallbackModelIds")?.let { a ->
                 (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }
