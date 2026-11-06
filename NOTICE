@@ -2,7 +2,7 @@ ZorvAI
 Copyright 2025-2026 ZorvAI
 
 本文件由 tools/gen_licenses.py 生成（数据源与「设置 → 关于 ZorvAI → 开源许可声明」
-在应用内展示的清单为同一份数据），生成日期：2026-10-26。
+在应用内展示的清单为同一份数据），生成日期：2026-11-06。
 
 本应用自身以 Apache License 2.0 发布（见 LICENSE）。随包分发或链接的第三方组件
 各自保留其原有许可，摘要如下。标注 GPL 的组件以独立可执行程序分发，本应用不与
@@ -22,6 +22,27 @@ THIRD-PARTY COMPONENTS AND LICENSES
     Note:    本应用自身代码。仓库内含去品牌化移植的上游组件，其原始许可保留在各自文件头。
 
 ## 功能模块与第三方代码 / Feature modules & bundled code
+
+  Termux 宿主层移植（termux-host 模块）
+    License: GPL-3.0-or-later
+    Note:    Termux 应用宿主层（TermuxActivity/Service/termux-shared）功能移植，
+             配合 :vtlib 终端仿真。强 copyleft：对应源码随仓库提供。
+  终端仿真库（vtlib 模块）
+    License: Apache-2.0
+    Note:    源自 jackpal/Termux 与 termux-app 的 terminal-emulator/terminal-view
+             （这两个子模块上游为 Apache-2.0）。
+  集群多角色引擎（cluster-* 6 模块）
+    License: 内部交付（上游许可待留证）
+    Note:    去品牌化 AI 集群 SDK：自研改造为主，上游第三方来源如有将补记许可。
+  Mika 助手内核（mika-core / mika-phone）
+    License: Apache-2.0
+    Note:    源自 wangzan101/Mika（Apache-2.0，已核实），去品牌化移植。
+  连接器核心遗留包（libs/aci-core-legacy.aar）
+    License: Apache-2.0（自研遗留）
+    Note:    早期自研连接器核心，仅作过渡兼容，计划移除。
+  ML Kit text-recognition（拉丁+中文）
+    License: Google APIs ToS（非开源）
+    Note:    专有服务条款：模型随 AAR 分发，不适用开源许可证义务，仅作来源披露。
 
   LSPosed / Xposed 模块（app 自身即 opt-in 模块）
     License: Apache-2.0
@@ -109,6 +130,36 @@ THIRD-PARTY COMPONENTS AND LICENSES
     Note:    JSON 序列化。
 
 ## 第三方 Java / Kotlin 库 / Third-party Java / Kotlin libraries
+
+  jlatexmath-android（ru.noties:jlatexmath-android:0.2.0）
+    License: GPL-2.0-only
+    Note:    LaTeX 公式渲染（LatexMathText/富文本公式）。强 copyleft：本应用整体
+             Apache-2.0，该组件按 GPL-2.0 单独授权随包分发，源码经仓库与上游提供；
+             计划迁移 KaTeX 渲染后移除。
+  Google Guava（+ listenablefuture）
+    License: Apache-2.0
+    Note:    Google 核心库。
+  Lottie-compose（airbnb）
+    License: Apache-2.0
+    Note:    Lottie 动画播放。
+  libtaskbar（farmerbb）
+    License: Apache-2.0
+    Note:    任务栏组件（桌面模式）。
+  termux-am-library（Termux v2.0.0）
+    License: Apache-2.0
+    Note:    Termux AM 调用库（Maven 元数据实测 Apache-2.0，非 GPL）。
+  commons-io
+    License: Apache-2.0
+    Note:    Apache IO 工具（termux-host）。
+  hiddenapibypass（tikdev）
+    License: Apache-2.0
+    Note:    Android 隐藏 API 反射限制绕过。
+  desugar_jdk_libs（AOSP）
+    License: Apache-2.0
+    Note:    Java 8+ API 脱糖。
+  Markwon 附加插件（linkify / recycler）
+    License: Apache-2.0
+    Note:    Markwon 自动链接与回收站插件。
 
   OkHttp（com.squareup.okhttp3）
     License: Apache-2.0
@@ -421,6 +472,10 @@ SOURCE AVAILABILITY
   dsh-mobile:    https://github.com/kelai141/dsh-mobile-apk （Termux 快照基线 0.118.3, GPL-3.0）
   SheetJS:       https://github.com/SheetJS/sheetjs （npm xlsx@0.18.5, MIT；CDN ≥0.19 为 GPLv3）
   GeckoView:     https://hg.mozilla.org/mozilla-central/
+  jlatexmath-android: https://github.com/noties/jlatexmath-android （GPL-2.0；上游
+                  org.scilab.forge/jlatexmath 为 GPL-2.0+Classpath 例外）
+  termux-host:   https://github.com/termux/termux-app （宿主层移植基线；对应源码随
+                  本仓库提供）
   MNN:           https://github.com/alibaba/MNN
   llama.cpp:     https://github.com/ggml-org/llama.cpp
   sherpa-ncnn:   https://github.com/k2-fsa/sherpa-ncnn
