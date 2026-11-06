@@ -3298,7 +3298,10 @@ fun ChatScreen(
                         onVideoCall = openVideoCall,
                         onMinimize = { chatMinimized = true },
                         persona = selectedPersona,
-                        onPick = { sheet = SheetType.Persona },
+                        // 🔴 灵魂注入迁移（2026-11-06 用户指令）：对话框左上角的灵魂卡 chip
+                        //    点击 = 直接打开「灵魂注入」弹层（人格切换/新建/编辑/记忆库全功能），
+                        //    替代原「人格选择列表」；设置弹层里的灵魂注入入口已删除，这里成为唯一入口。
+                        onPick = { showSoulSheet = true },
                         scaled = { scaled(it) }
                     )
                 }
@@ -7288,8 +7291,8 @@ private fun SettingsSheetContent(
             // 🔴 「搜索服务」设置项删除（2026-11-04 用户裁定：界面乱搞）。
             //    联网搜索的开关与 Key 配置仍由 QuroWebSearchSettingsScreen 保留在代码中，
             //    后续重写后再挂回；web_search 工具的运行时开关不受影响。
-            SetRowClickable(Icons.Filled.Person, stringResource(R.string.qk_02449), stringResource(R.string.qk_03854), "", onManagePersona, scaled)
-            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            // 🔴 「灵魂注入」设置项已删除（2026-11-06 用户指令）：功能全部并入对话框
+            //    左上角灵魂卡 chip 的点击（showSoulSheet），设置里不再保留重复入口。
             SetRowClickable(Icons.Filled.Download, stringResource(R.string.qk_03841), stringResource(R.string.qk_03861), "", onOpenModelHub, scaled)
         }
         GroupCaption(stringResource(R.string.qk_03831))
