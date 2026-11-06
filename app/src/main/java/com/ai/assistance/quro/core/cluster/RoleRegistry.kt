@@ -119,6 +119,7 @@ object RoleRegistry {
                 personaId = personaId,
                 name = card.label,
                 emoji = card.emoji,
+                description = card.tagline,
                 soulInjection = buildString {
                     appendLine(card.persona)
                     if (!card.soul.isEmpty) {

@@ -316,6 +316,7 @@ class ClusterRoleCardTool : QuroTool {
             personaId = personaId,
             name = displayName,
             emoji = card.emoji,
+            description = card.tagline,
             soulInjection = buildString {
                 appendLine(card.persona)
                 if (!card.soul.isEmpty) {

@@ -1,9 +1,19 @@
 package com.ai.assistance.quro.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import com.canhub.cropper.CropImageContract
+import com.canhub.cropper.CropImageContractOptions
+import com.canhub.cropper.CropImageOptions
+import com.canhub.cropper.CropImageView
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -16,6 +26,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -28,6 +40,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -86,7 +99,7 @@ import com.ai.assistance.quro.core.cluster.RoleRegistry
  *
  * 真正的编辑入口在「设置 → 人格」（那里已是完整编辑器），不重复造。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun RoleEditScreen(
     role: RoleProfile,
@@ -126,13 +139,60 @@ fun RoleEditScreen(
     // 🔴 用户最终裁定（2026-11-06）：所有角色（含主持）的灵魂注入**一律可编辑**，
     //    编辑器就是灵魂注入本身（与人格页灵魂注入编辑器同形态）。内置角色额外提供恢复默认。
     var name by remember(role.personaId) { mutableStateOf(role.name.ifBlank { persona?.name.orEmpty() }) }
+    // 🔴 灵魂卡完整功能（2026-11-06 用户裁定）：描述/开场白/聊天设定/图片头像/标签chips
+    var description by remember(role.personaId) {
+        mutableStateOf(role.description.ifBlank { persona?.description.orEmpty() })
+    }
+    var opening by remember(role.personaId) {
+        mutableStateOf(role.opening.ifBlank { persona?.opening.orEmpty() })
+    }
+    var chatSetting by remember(role.personaId) {
+        mutableStateOf(role.chatSetting.ifBlank { persona?.chatSetting.orEmpty() })
+    }
+    var avatarUri by remember(role.personaId) {
+        mutableStateOf(role.avatarUri.ifBlank { persona?.avatarUri.orEmpty() })
+    }
+    // 标签 = 角色类型（用户裁定）：与 RoleProfile.tags 同源，chips 可删、输入可加
+    var tagList by remember(role.personaId) { mutableStateOf(role.tags) }
+    var tagInput by remember { mutableStateOf("") }
+    // 头像：选图 → 圆形裁剪 → 复制私有目录（与人格页灵魂编辑同流程）
+    val cropLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        com.canhub.cropper.CropImageContract()
+    ) { result ->
+        if (result.isSuccessful) {
+            result.uriContent?.let { cropped ->
+                runCatching {
+                    val dir = java.io.File(ctx.filesDir, "quro_avatars")
+                    dir.mkdirs()
+                    val dst = java.io.File(dir, "${role.personaId}.jpg")
+                    ctx.contentResolver.openInputStream(cropped)?.use { input ->
+                        dst.outputStream().use { out -> input.copyTo(out) }
+                    }
+                    avatarUri = dst.absolutePath
+                }
+            }
+        }
+    }
+    val imagePicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            cropLauncher.launch(
+                com.canhub.cropper.CropImageContractOptions(
+                    it,
+                    com.canhub.cropper.CropImageOptions(
+                        guidelines = com.canhub.cropper.CropImageView.Guidelines.ON,
+                        cropShape = com.canhub.cropper.CropImageView.CropShape.OVAL,
+                    ),
+                )
+            )
+        }
+    }
 
 
     var duties by remember { mutableStateOf(role.duties.joinToString("、")) }
     var taboos by remember { mutableStateOf(role.taboos.joinToString("、")) }
     var skills by remember { mutableStateOf(role.skills.joinToString("、")) }
-    // #215：角色类型标签（可添加、带内容，参考灵魂注入标签）
-    var tags by remember { mutableStateOf(role.tags.joinToString("、")) }
     // #190：绑定的真技能（id）。与上面的「技能标签」不同 —— 这里选的是技能库里的真技能，
     // 勾上之后技能正文会真正注入该角色的系统提示词。
     var skillIds by remember { mutableStateOf(role.skillIds) }
@@ -167,11 +227,15 @@ fun RoleEditScreen(
 
     // 脏检查：没改就不该拦用户返回
     val dirty = name != (role.name.ifBlank { persona?.name.orEmpty() }) ||
+        description != (role.description.ifBlank { persona?.description.orEmpty() }) ||
+        opening != (role.opening.ifBlank { persona?.opening.orEmpty() }) ||
+        chatSetting != (role.chatSetting.ifBlank { persona?.chatSetting.orEmpty() }) ||
+        avatarUri != (role.avatarUri.ifBlank { persona?.avatarUri.orEmpty() }) ||
+        tagList != role.tags ||
         soul != initialSoul ||
         duties != role.duties.joinToString("、") ||
         taboos != role.taboos.joinToString("、") ||
         skills != role.skills.joinToString("、") ||
-        tags != role.tags.joinToString("、") ||
         skillIds != role.skillIds ||
         modelId != role.modelProfileId ||
         (if (isHost) RoleKind.HOST else kind) != role.role ||
@@ -191,13 +255,17 @@ fun RoleEditScreen(
             ctx,
             role.copy(
                 name = name.trim(),
+                description = description.trim(),
+                opening = opening.trim(),
+                chatSetting = chatSetting.trim(),
+                avatarUri = avatarUri,
+                tags = tagList,
                 soulInjection = soul.trim(),
                 modelProfileId = modelId,
                 role = if (isHost) RoleKind.HOST else kind,
                 duties = split(duties),
                 taboos = split(taboos),
                 skills = split(skills),
-                tags = split(tags),
                 skillIds = skillIds,
                 context = ctxPolicy,
                 version = role.version + 1,
@@ -259,19 +327,50 @@ fun RoleEditScreen(
                 colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant.copy(alpha = 0.35f)),
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // 🔴 灵魂注入 = 角色编辑本身（2026-11-06 用户最终裁定）：与人格页灵魂注入
-                    // 编辑器同形态 —— 平铺字段、大输入框、直接可编辑。集群角色的灵魂存在集群
-                    // 自己的档案里，与「设置 → 人格」零关联；不含孵化/自动进化/自我介绍/完整Soul。
+                    // 🔴 灵魂卡完整形态（2026-11-06 用户终裁）：与人格页灵魂编辑同字段集 ——
+                    // 图片头像 / 名称 / 描述 / 角色设定(灵魂注入) / 开场白 / 聊天设定 / 标签(=角色类型)。
+                    // 集群角色的灵魂存集群自己的档案，与「设置 → 人格」零关联。
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        com.ai.assistance.quro.ui.AvatarContent(avatarUri, name.ifBlank { "角色" }, 64)
+                        Spacer(Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                if (avatarUri.isNotBlank()) "图片头像" else "头像",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (avatarUri.isNotBlank()) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            OutlinedButton(
+                                onClick = { imagePicker.launch("image/*") },
+                                modifier = Modifier.padding(top = 4.dp),
+                            ) {
+                                Icon(Icons.Filled.Edit, null, Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(if (avatarUri.isNotBlank()) "更换 / 裁剪图片" else "选择 / 裁剪图片")
+                            }
+                        }
+                        Spacer(Modifier.weight(1f))
+                    }
+
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
-                        label = { Text("角色名") },
+                        label = { Text("灵魂卡名称") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("描述") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                    )
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         Text(
-                            "灵魂注入（角色设定 · 系统提示词核心）",
+                            "角色设定（系统提示词核心 · 灵魂注入）",
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.weight(1f),
                         )
@@ -291,6 +390,56 @@ fun RoleEditScreen(
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 4,
                     )
+                    OutlinedTextField(
+                        value = opening,
+                        onValueChange = { opening = it },
+                        label = { Text("开场白") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                    )
+                    OutlinedTextField(
+                        value = chatSetting,
+                        onValueChange = { chatSetting = it },
+                        label = { Text("聊天设定") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                    )
+                    // 标签 = 角色类型：chips 可删 + 输入添加（灵魂编辑同形态）
+                    Text("标签（角色类型）", style = MaterialTheme.typography.bodySmall)
+                    if (tagList.isNotEmpty()) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            tagList.forEach { t ->
+                                androidx.compose.material3.InputChip(
+                                    selected = false,
+                                    onClick = {},
+                                    label = { Text(t) },
+                                    trailingIcon = {
+                                        Icon(
+                                            Icons.Filled.Close, "删除标签",
+                                            Modifier.size(14.dp).clickable { tagList = tagList - t },
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = tagInput,
+                            onValueChange = { tagInput = it },
+                            label = { Text("添加标签") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(
+                            onClick = {
+                                val t = tagInput.trim()
+                                if (t.isNotBlank() && t !in tagList) tagList = tagList + t
+                                tagInput = ""
+                            },
+                            enabled = tagInput.isNotBlank(),
+                        ) { Text("添加") }
+                    }
                 }
             }
 
@@ -414,16 +563,6 @@ fun RoleEditScreen(
                 label = { Text("技能标签（自由描述）") },
                 placeholder = { Text("例：数据分析、检索、写作") },
                 supportingText = { Text("只是几句描述，不产生约束力。真正的手艺请在下方勾选技能库。") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            // #215：角色类型标签 —— 参考灵魂注入的标签功能，可添加、带内容。
-            // 不限于 RoleKind 那 5 个固定枚举，用户可自由定义「这个角色是什么类型」。
-            OutlinedTextField(
-                value = tags,
-                onValueChange = { tags = it },
-                label = { Text("角色类型标签（可自定义）") },
-                placeholder = { Text("例：前端、视觉、文案、验收、数据") },
-                supportingText = { Text("顿号/逗号分隔。会作为身份标记注入系统提示词，角色据此自我定位。") },
                 modifier = Modifier.fillMaxWidth(),
             )
 
