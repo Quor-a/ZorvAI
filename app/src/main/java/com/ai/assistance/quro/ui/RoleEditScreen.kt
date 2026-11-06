@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import com.ai.assistance.quro.core.QuroPersonaRepository
+import com.ai.assistance.quro.core.QuroTagRepository
 import com.ai.assistance.quro.core.cluster.ModelProfile
 import com.ai.assistance.quro.core.cluster.RoleContextPolicy
 import com.ai.assistance.quro.core.cluster.RoleKind
@@ -152,9 +153,15 @@ fun RoleEditScreen(
     var avatarUri by remember(role.personaId) {
         mutableStateOf(role.avatarUri.ifBlank { persona?.avatarUri.orEmpty() })
     }
-    // 标签 = 角色类型（用户裁定）：与 RoleProfile.tags 同源，chips 可删、输入可加
+    // 标签 = 角色类型（用户裁定）：**完整移植灵魂注入的标签系统** —— 全局标签库
+    // （QuroTagRepository，与人格页同一份）+ 管理标签（新建/编辑/删除）+ 从库中勾选。
     var tagList by remember(role.personaId) { mutableStateOf(role.tags) }
-    var tagInput by remember { mutableStateOf("") }
+    val tagRepo = remember { QuroTagRepository(ctx.applicationContext) }
+    var globalTags by remember(role.personaId) { mutableStateOf(tagRepo.loadAll()) }
+    var showTagManager by remember { mutableStateOf(false) }
+    fun toggleTag(t: String) {
+        tagList = if (t in tagList) tagList - t else tagList + t
+    }
     // 头像：选图 → 圆形裁剪 → 复制私有目录（与人格页灵魂编辑同流程）
     val cropLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         com.canhub.cropper.CropImageContract()
@@ -276,6 +283,18 @@ fun RoleEditScreen(
 
     fun requestBack() {
         if (dirty) confirmExit = true else onBack()
+    }
+
+    if (showTagManager) {
+        // 与人格页灵魂注入同一个标签管理器（全局标签库，可新建/编辑/删除）
+        com.ai.assistance.quro.ui.TagManageScreen(
+            onBack = {
+                showTagManager = false
+                globalTags = tagRepo.loadAll()
+            },
+            selectedNames = tagList,
+            onToggleSelect = { toggleTag(it) },
+        )
     }
 
     Scaffold(
@@ -405,40 +424,62 @@ fun RoleEditScreen(
                         minLines = 2,
                     )
                     // 标签 = 角色类型：chips 可删 + 输入添加（灵魂编辑同形态）
-                    Text("标签（角色类型）", style = MaterialTheme.typography.bodySmall)
-                    if (tagList.isNotEmpty()) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            tagList.forEach { t ->
+                    // 🔴 角色类型 = 完整移植灵魂注入的标签系统（2026-11-06 用户裁定）：
+                    //    全局标签库勾选 + 「管理标签」新建/编辑/删除（TagManageScreen，
+                    //    与人格页灵魂注入同一个管理器、同一份 QuroTagRepository）——
+                    //    不再是写死的固定档位，用户可自建任意类型。
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text(
+                            "标签（角色类型）",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { showTagManager = true }) {
+                            Text("管理标签", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                    if (globalTags.isNotEmpty()) {
+                        FlowRow(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            globalTags.forEach { tag ->
+                                val selected = tag.name in tagList
+                                androidx.compose.material3.AssistChip(
+                                    onClick = { toggleTag(tag.name) },
+                                    label = { Text(tag.name) },
+                                    leadingIcon = if (selected) {
+                                        { Icon(Icons.Filled.Check, null, Modifier.size(14.dp)) }
+                                    } else null,
+                                    colors = androidx.compose.material3.AssistChipDefaults.assistChipColors(
+                                        containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                        else MaterialTheme.colorScheme.surface,
+                                    ),
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            "标签库为空 —— 点上方「管理标签」新建角色类型（如：前端 / 数据分析 / 评审专家），" +
+                                "或直接用下方固定档位。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (tagList.any { it !in globalTags.map { g -> g.name } }) {
+                        // 已选但库中已删除的标签：保留显示，可手动摘除
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            tagList.filter { it !in globalTags.map { g -> g.name } }.forEach { t ->
                                 androidx.compose.material3.InputChip(
-                                    selected = false,
-                                    onClick = {},
+                                    selected = true,
+                                    onClick = { toggleTag(t) },
                                     label = { Text(t) },
                                     trailingIcon = {
-                                        Icon(
-                                            Icons.Filled.Close, "删除标签",
-                                            Modifier.size(14.dp).clickable { tagList = tagList - t },
-                                        )
+                                        Icon(Icons.Filled.Close, "移除", Modifier.size(14.dp))
                                     },
                                 )
                             }
                         }
-                    }
-                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = tagInput,
-                            onValueChange = { tagInput = it },
-                            label = { Text("添加标签") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(
-                            onClick = {
-                                val t = tagInput.trim()
-                                if (t.isNotBlank() && t !in tagList) tagList = tagList + t
-                                tagInput = ""
-                            },
-                            enabled = tagInput.isNotBlank(),
-                        ) { Text("添加") }
                     }
                 }
             }
