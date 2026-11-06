@@ -80,15 +80,11 @@ object ToolTaxonomy {
         Rule(ToolCategory.ZXWIDGET, prefixes = listOf("zx_")),
         Rule(ToolCategory.GENUI, prefixes = listOf("genui_")),
         Rule(ToolCategory.GENUI, exact = setOf("miniapp", "miniapp_sdk")),
-        // 🔴 界面导航必须在 UI_CARDS 的 `ui_` 前缀之前：
-        // 36 个 UiActionSpec（ui_open_build / ui_open_permission / ui_toggle_deepthink …）
-        // 本质是「打开某个设置页 / 切某个开关」，不是「画卡片」。
-        // 原来被 ui_ 前缀一口吞进 UI_CARDS，导致该类 42 个工具里 30+ 个语义错配：
-        // 想画卡片时看到一堆 ui_open_*，想开设置页时又以为要进「卡片」分类。
+        // 🔴 界面导航（2026-11-06 合体后）：37 个 ui_open_*/ui_toggle_* 散装工具已退役，
+        // 唯一入口 = ui_control（open/toggle/sheet/chat + 历史动作名兼容直通）。
         Rule(
             ToolCategory.APP_NAVIGATION,
-            exact = setOf("ui_clear_chat", "ui_new_chat"),
-            prefixes = listOf("ui_open_", "ui_toggle_"),
+            exact = setOf("ui_control"),
         ),
         Rule(ToolCategory.DYNAMIC_UI, exact = setOf("ui_dsl_spec", "ui_validate", "game_ui", "automatic_ui")),
         Rule(ToolCategory.UI_CARDS, exact = setOf("card_patch", "card_catalog", "ui_card", "ui_widget", "ui_control")),

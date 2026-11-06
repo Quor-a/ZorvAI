@@ -316,9 +316,9 @@ object ToolCapabilityDirectory {
                 "这是插件框架的**唯一**入口，所有插件相关操作都走它，不要自己猜插件工具名。",
                 "插件贡献的 AI 工具通常已直接在你的工具集里；若没生效，用 action=call 兜底调用。",
                 "不确定插件有什么能力时：先 action=list 看插件，再 action=tools 看工具。",
-                "插件桌面（启动器式管理界面）用 ui_open_plugins 打开。"
+                "插件桌面（启动器式管理界面）用 ui_control(action=「ui_open_plugins」) 打开。"
             ),
-            relatedTools = listOf("ui_open_plugins", "build_apk"),
+            relatedTools = listOf("ui_control", "build_apk"),
             priority = 4
         ),
 
@@ -1635,7 +1635,7 @@ object ToolCapabilityDirectory {
                 "dependencies" to "依赖JAR路径数组",
                 "icon_path" to "自定义图标PNG路径"
             ),
-            tips = listOf("支持自定义包名、release签名生成与使用、引用依赖JAR、自定义图标", "入口类支持任意包名/类名（动态探测 zorv_entry.txt）", "与 ui_open_build（打开构建台UI）互补"),
+            tips = listOf("支持自定义包名、release签名生成与使用、引用依赖JAR、自定义图标", "入口类支持任意包名/类名（动态探测 zorv_entry.txt）", "与 ui_control(action=「ui_open_build」，打开构建台UI) 互补"),
             relatedTools = listOf("export_apk", "ui_control", "workspace_write"),
             priority = 5
         ),

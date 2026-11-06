@@ -6804,44 +6804,42 @@ fun HistoryDrawer(
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(AccentSoft)
-                    .clickable(onClick = onNew)
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                LucideIcon("square_pen", null, Modifier.size(18.dp), tint = Accent)
-                Spacer(Modifier.width(10.dp))
-                Text(stringResource(R.string.qk_00062), fontSize = scaled(14), color = AccentPress, fontWeight = FontWeight.SemiBold)
-            }
-            // 临时对话：与「新建对话」并排 —— 位置本身就是语义（同一次动作的两种模式：留下 / 不留下）。
-            // 内容永不落盘，切走即消失，所以不需要「退出临时对话」这种额外动作。
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(cs.surfaceVariant.copy(alpha = 0.55f))
-                    .clickable(onClick = onNewTemporary)
-                    .padding(horizontal = 12.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                LucideIcon("clock", null, Modifier.size(15.dp), tint = cs.onSurfaceVariant)
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    stringResource(R.string.qk_04477),
-                    fontSize = scaled(13),
-                    color = cs.onSurface,
-                    fontWeight = FontWeight.Medium,
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    stringResource(R.string.qk_04478),
-                    fontSize = scaled(10),
-                    color = cs.onSurfaceVariant.copy(alpha = 0.75f),
-                )
+            // 🔴 新建对话 + 临时对话一行两按钮（2026-11-06 用户裁定）——
+            // 同一次动作的两种模式（留下 / 不留下）本就该并排，不必各占一整行。
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(AccentSoft)
+                        .clickable(onClick = onNew)
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    LucideIcon("square_pen", null, Modifier.size(18.dp), tint = Accent)
+                    Spacer(Modifier.width(10.dp))
+                    Text(stringResource(R.string.qk_00062), fontSize = scaled(14), color = AccentPress, fontWeight = FontWeight.SemiBold)
+                }
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(cs.surfaceVariant.copy(alpha = 0.55f))
+                        .clickable(onClick = onNewTemporary)
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    LucideIcon("clock", null, Modifier.size(15.dp), tint = cs.onSurfaceVariant)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        stringResource(R.string.qk_04477),
+                        fontSize = scaled(13),
+                        color = cs.onSurface,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                }
             }
             // 内置 GenUI Agent 入口：拉起独立的生成式界面智能体应用
             // （完整内置开源项目 GenUI-Agent，AI 产出 GenUI JSON DSL → 原生 Compose 组件）。
