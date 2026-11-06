@@ -40,7 +40,11 @@ PATTERN='(\.jks|\.keystore|\.p12|\.bks|\.pk8|keystore\.properties|.*[_-]keystore
 
 # ---------- 1. 被跟踪的密钥文件 ----------
 info "扫描 1/3 · 被跟踪的密钥文件…"
-HITS="$(git ls-files | grep -Ei "$PATTERN" || true)"
+# 白名单（逐一经人工核实内容零凭证，仅文件名命中模式）：
+#   scripts/setup-keystore.sh —— fork/CI 初始化工具：**生成**新钥匙到 ~/.zorvai-signing
+#     （项目外），自身不含任何密钥/口令；扫描 2/3 硬编码凭证对该文件常年为零命中。
+ALLOWLIST_RE="^scripts/setup-keystore.sh$"
+HITS="$(git ls-files | grep -Ei "$PATTERN" | grep -Ev "$ALLOWLIST_RE" || true)"
 if [[ -n "$HITS" ]]; then
     printf '%s发现%s\n%s\n' "$C_RED" "$C_OFF" "$HITS"
     if (( FIX )); then
