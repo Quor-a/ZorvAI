@@ -6,18 +6,16 @@ import android.content.Context
 import com.ai.assistance.quro.core.cards.QuroChatCard
 
 /**
- * UI 动作工具层：把对话框内部可打开的界面 / 弹层 / 开关 注册为 AI 可调用工具。
+ * UI 动作工具层：把对话框内部可打开的界面 / 弹层 / 开关暴露给 AI。
  *
- * 设计：UI 与 AI 工具原本正交——UI 走 `sheet` / `showX` 状态，工具走 `QuroToolRegistry`。
- * 本层用一座「桥」[QuroUiActionBridge] 把两者接起来：工具 `run()` 仅把 action 名回调给
- * 对话框组合作用域（ChatScreen 注入的 `dispatch`），由对话框设置对应状态真正打开界面。
- * 这样 AI 就能「打开文档查看器 / 切换深度思考 / 清空对话」等，等价于点对应按钮。
+ * 🔴 合体重构（2026-11-06 用户裁定）：不再把每个界面注册成独立工具
+ * （ui_open_onlyoffice / ui_open_terminal / ui_toggle_deepthink … 37 个散装工具把
+ * 注册表撑到 300+，提示词预算也被工具名淹没）。现在只有一个 **`ui_control`** 工具，
+ * `action` 参数枚举全部动作 —— 打开哪个界面 / 切哪个开关由参数决定，注册表从 37 项收到 1 项。
  *
- * 工具名约定：
- * - `ui_open_<surface>`：打开某个全屏界面或底部弹层（如 ui_open_onlyoffice）
- * - `ui_toggle_<switch>`：切换某个开关（如 ui_toggle_deepthink）
- * - `ui_clear_chat` / `ui_new_chat`：清空 / 新建对话
- * 全部进入 [coreSpecs] 默认下发集，并由 [appendCapabilityAwareness] 自动带进系统提示词（同源）。
+ * 桥与动作名保持不变：[QuroUiActionBridge.dispatch] 收到的仍是 `ui_open_<surface>` 等
+ * 历史动作名（桌面组件 / 卡片 command / 通知入口都按这些名字调用），因此 ChatScreen 的
+ * 分发 when 与所有外部入口零改动 —— 只是把「37 个工具入口」收成「1 个工具 + 参数」。
  */
 object QuroUiActionBridge {
     /** 由 ChatScreen 注入：action -> 在 UI 层执行对应打开/切换。未连接时工具返回提示。 */
@@ -55,7 +53,7 @@ private data class UiActionSpec(
     val desc: String,
 )
 
-/** 全部可被 AI 打开/控制的界面、弹层与开关（对话框内 UI 组件 → 工具）。 */
+/** 全部可被 AI 打开/控制的界面、弹层与开关（对话框内 UI 组件 → ui_control 的 action 枚举）。 */
 private val UI_ACTIONS = listOf(
     UiActionSpec("ui_open_onlyoffice", "文档查看器", "打开应用内文档查看器（本地渲染引擎，支持 Word/Excel/PPT/PDF/文本预览与编辑，无需联网、不依赖第三方）"),
     UiActionSpec("ui_open_knowledge", qstr(R.string.qk_00215), "打开知识库，浏览/导入/检索本地知识文档"),
@@ -97,23 +95,14 @@ private val UI_ACTIONS = listOf(
     UiActionSpec("ui_new_chat", qstr(R.string.qk_00282), "新建一个对话"),
 )
 
-private class UiActionTool(private val spec: UiActionSpec) : QuroTool {
-    override val name = spec.action
-    override val description = spec.desc
-    override val parametersJson = """{"type":"object","properties":{"note":{"type":"string","description":"可选备注，说明为何打开此界面"}}}"""
-    override fun run(context: Context, arguments: String): String {
-        val d = QuroUiActionBridge.dispatch
-        return if (d != null) {
-            d(spec.action)
-            "已执行 UI 动作：${spec.label}"
-        } else {
-            "UI 动作桥未连接（对话框未就绪，无法打开界面）"
-        }
-    }
-}
+/**
+ * 🔴 合体终局（2026-11-06）：唯一的 `ui_control` 工具在 [QuroUiControlTool]
+ * （QuroUiTools.kt，走 UiNavigationBus，ChatScreen 已订阅）。本文件不再注册任何工具 ——
+ * 旧的 37 个 ui_open_*、ui_toggle_*、ui_clear_chat、ui_new_chat 全部退役；
+ * UI_ACTIONS 保留为**动作目录**（供 QuroUiControlTool 的兼容直通与描述全集引用）。
+ * 桥 [QuroUiActionBridge] 保持不变：桌面组件 / 卡片 command / 通知入口仍按历史动作名调用。
+ */
+val allUiActionTools: List<QuroTool> = emptyList()
 
-/** 全部 UI 动作工具实例（供 [buildQuroRegistry] 注册）。 */
-val allUiActionTools: List<QuroTool> = UI_ACTIONS.map { UiActionTool(it) }
-
-/** UI 动作工具名集合（供 [QuroToolRegistry.coreSpecs] 纳入默认下发集）。 */
-fun uiActionToolNames(): Set<String> = UI_ACTIONS.map { it.action }.toSet()
+/** UI 动作工具名集合（coreSpecs 默认下发集引用 —— ui_control 由 QuroUiTools 注册）。 */
+fun uiActionToolNames(): Set<String> = setOf("ui_control")

@@ -53,6 +53,7 @@ object UiNavigationBus {
 class QuroUiControlTool : QuroTool {
     override val name = "ui_control"
     override val description = """UI 统一控制工具。参数:
+（兼容用法：action 也可直接填历史动作名全集 ui_open_onlyoffice/ui_open_knowledge/ui_open_terminal/ui_open_editor/ui_open_toolbox/ui_open_kaleidobox/ui_open_build/ui_open_desktop/ui_open_plugins/ui_open_skills/ui_open_cms/ui_open_connector/ui_open_aci/ui_open_permission/ui_open_model_config/ui_open_voice/ui_open_tts/ui_open_stt/ui_open_voice_service/ui_open_about/ui_open_appearance/ui_open_soul/ui_open_memory/ui_open_sheet_model/ui_open_sheet_persona/ui_open_sheet_settings/ui_open_sheet_upload/ui_open_sheet_voice/ui_open_upload/ui_open_import_tool/ui_open_ai_search/ui_open_doc_generate/ui_open_webui/ui_toggle_deepthink/ui_toggle_memory/ui_clear_chat/ui_new_chat —— 等价于 open/toggle/chat 对应项，未列进下面 target 清单的界面用这种写法）
 {
   "action": "操作类型",
   "target": "操作目标",
@@ -228,6 +229,23 @@ action 说明:
         val json = JSONObject(arguments)
         val action = json.optString("action", "")
         val target = json.optString("target", "")
+
+        // 🔴 合体兼容直通（2026-11-06）：历史动作名（ui_open_*/ui_toggle_*/ui_clear_chat/ui_new_chat）
+        //    直接经 QuroUiActionBridge 分发 —— 覆盖 open target 清单之外的全部界面
+        //    （onlyoffice/kaleidobox/build/desktop/plugins/skills/connector/aci/webui…37 个全集），
+        //    也让桌面组件 / 卡片 command 的旧动作名经同一工具可用。
+        if (action.startsWith("ui_open_") || action.startsWith("ui_toggle_") ||
+            action == "ui_clear_chat" || action == "ui_new_chat"
+        ) {
+            val d = QuroUiActionBridge.dispatch
+            return if (d != null) {
+                d(action)
+                "已执行 UI 动作：$action"
+            } else {
+                QuroUiActionBridge.pendingAction = action
+                "UI 动作桥未连接（对话框未就绪），已暂存动作：$action"
+            }
+        }
 
         return when (action) {
             // ─── 界面控制 ───
