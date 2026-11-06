@@ -109,6 +109,20 @@ fun RoleEditScreen(
         }
     }
     var soul by remember(role.personaId) { mutableStateOf(initialSoul) }
+    // 🔴 恢复默认灵魂（2026-11-06）：内置角色卡播种/建角的灵魂是种子文本，被改/删后
+    // 可一键恢复。主持恢复为内置誓言；手动创建/动态造角的角色没有默认灵魂（不显示按钮）。
+    val defaultSoul = remember(role.personaId, isHost) {
+        if (isHost) {
+            RoleRegistry.HOST_OATH
+        } else {
+            runCatching {
+                val cardId = role.personaId
+                    .removePrefix("persona_cluster_")
+                    .replace(Regex("_(seed|[0-9a-fA-F]{6})$"), "")
+                com.ai.assistance.quro.core.cluster.ClusterRoleCards.byId(cardId)?.persona.orEmpty()
+            }.getOrDefault("")
+        }
+    }
 
     var duties by remember { mutableStateOf(role.duties.joinToString("、")) }
     var taboos by remember { mutableStateOf(role.taboos.joinToString("、")) }
@@ -243,10 +257,25 @@ fun RoleEditScreen(
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     // 🔴 灵魂注入（2026-11-06）：集群角色自己的灵魂正文 —— 存在集群档案里，
                     // 与 ZorvAI 人格互不相干。不含人格孵化/自动进化/自我介绍/完整 Soul。
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text(
+                            "灵魂注入（这个角色是谁 / 信念 / 怎样才算做对）",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (defaultSoul.isNotBlank()) {
+                            TextButton(
+                                onClick = { soul = defaultSoul },
+                                enabled = soul != defaultSoul,
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            ) {
+                                Text("恢复默认灵魂", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
                     OutlinedTextField(
                         value = soul,
                         onValueChange = { soul = it },
-                        label = { Text("灵魂注入（这个角色是谁 / 信念 / 怎样才算做对）") },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 4,
                     )
