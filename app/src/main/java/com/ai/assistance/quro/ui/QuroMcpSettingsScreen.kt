@@ -157,6 +157,13 @@ fun QuroMcpSettingsScreen(onBack: () -> Unit = {}) {
                 ) {
                     Column(Modifier.fillMaxWidth().padding(12.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            // 🔴 官方品牌图标（2026-11-06）：MCP 机器人按 alias/url 匹配官方底色+字形
+                            com.ai.assistance.quro.ui.BrandAvatar(
+                                name = srv.alias,
+                                urlOrId = srv.url,
+                                size = 36.dp,
+                            )
+                            Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(srv.alias + if (srv.enabled) "" else " · 已停用", style = MaterialTheme.typography.bodyMedium)
                                 Text(

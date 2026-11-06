@@ -57,7 +57,7 @@
   <b>☕ 如果这个项目对你有帮助，欢迎到 <a href="https://afdian.com/a/zorvAI">爱发电 (afdian)</a> 支持我们，助力持续开发 ❤️</b>
 </p>
 
-> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.2.1`（`versionCode 1002001`）
+> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.2.2`（`versionCode 1002002`）
 >
 > Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **235 个内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
 >
@@ -119,7 +119,7 @@
 |--------|----------|
 | **对话 UI（Compose）** | ChatScreen 对话框、PersonaBar 人格卡、PermissionModeBar（「AI 自动保存记忆」+「深度思考」并排胶囊）、对话框内 **IDE 能力入口**（代码编辑器 / 终端 / 工具箱 / 文件，经输入框「+」菜单与 `ui_open_*` 唤起）、**支持 7 种编程语言**、**```mermaid 围栏即画即渲染**、**AI 自写代码运行（`run_code`，html 网页工件内联预览）**、回到底部浮动按钮、全屏预览、Markdown 与代码块渲染 |
 | **Agent 核心** | 多会话隔离（`liveBuffers`）、种子快照（`convBase`）、显示刷新闸门（`canUpdateDisplay`）、多轮 `[第N轮]` hidden 标记防串台、工具注册表（`QuroToolRegistry`，总注册 235 / 每轮常驻下发 151）、技能系统（`QuroSkill` → 注册为 `skill__{name}` 工具） |
-| **工具 / 能力层** | **235 个内置工具**（常驻下发 151，其余经 `tool_router` 按需 `get_schema`）：无障碍 `input_text` / `tap_screen` / `read_screen`、文件读写、**L1–L5 特权执行**、`cms_*` 模块、Agent 键盘 `ai_type_text` / `ai_press_enter`、定时任务、记忆工具、知识库 RAG、文档处理 |
+| **工具 / 能力层** | **240+ 个内置工具**（多轮合体后从 307 收敛：`ui_control` 合一 + 16 族同功能合并；常驻下发 + `tool_router` 按需 `get_schema`）：无障碍 `input_text` / `tap_screen` / `read_screen`、文件读写、**L1–L5 特权执行**、`cms_*` 模块、Agent 键盘 `ai_type_text` / `ai_press_enter`、定时任务、记忆工具、知识库 RAG、文档处理 |
 | **离线 LLM 引擎** | 内置 **MNN / llama.cpp** 本地推理（`QuroLocalEngineNative`），支持流式、`<think>` 思考段流式上屏、本地工具调用、会话常驻复用 |
 | **特权层 L1–L5** | 无障碍 → Shizuku（uid 0/2000）→ 设备管理员 → ROOT（su）→ 应用内 Linux（proot + Ubuntu 24.04）。其中 **L1–L4 由 `PrivilegeLevel` 枚举承载**（系统权限），**L5 不在枚举内**，由 Linux 环境是否就绪决定 |
 | **终端 / Linux 沙箱** | 完整终端模拟器：proot + Ubuntu 24.04 ARM64 真实用户空间；PTY 伪终端（`/dev/ptmx` + `fork/exec`）；前台服务保活（specialUse，息屏/切 App 不被杀）；ACI 跨进程 26 个能力（终端服务单一入口 + `action` 分发）；4 种 IPC 接入（ContentProvider / Deep Link / Intent / BroadcastReceiver）；多会话管理 |
@@ -503,7 +503,19 @@ dsh 是 Node.js 应用（`dsh web` 起 HTTP 服务 + 自带前端）。要让它
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[v1.2.1 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
+- 🟢 **[v1.2.2 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
+
+  **流式叠影根治 · 工具大合体（46→17） · 特权全局信任 · 集群灵魂注入解耦 · 官方品牌图标 · 许可证 133 条**
+
+  - **流式叠影根治**：AI 输出流式期间「思考步骤与正文互相叠字、同一段回答出现两份」的截图 bug —— 根因为正文内嵌 `<think>` 块未剥离 + 工具循环 hidden 消息与最终可见消息内容完全相同被聚合两份；聚合层现已剥离 think 并做尾部完全重复去重，切换对话/重开 App 历史重放同样修复。
+  - **工具大合体**：37 个 `ui_open_*` 散装工具 → 唯一 `ui_control`；16 个同功能拆散族（文件读写/闹钟/定时任务/设置开关/剪贴板/播报/弹窗/截图/搜索/音乐/知识库/启动应用等）46 → 17 合体（转发式实现，行为零变化）；注册表从 307 收敛，提示词预算大幅减负。审批策略/分类/词典/提示词清单全量适配新名。
+  - **特权全局信任**：特权=允许 → 所有审批门（工具审批卡 + CMS 授权框）一律免弹；通道 DENY 仍优先。
+  - **集群灵魂注入解耦**：集群角色的身份/灵魂（名称/头像/描述/角色设定/开场白/聊天设定/标签）完全自持在集群档案，零写 ZorvAI 人格库；编辑角色 = 灵魂注入完整形态；内置角色可一键恢复默认灵魂。
+  - **官方品牌图标**：连接器页 / 应用目录 / MCP 机器人按官方 logo 矢量（Simple Icons 官方路径随包入库）+ 官方品牌底色渲染。
+  - **开源许可证更新**：117 → 133 条 —— 补 jlatexmath-android（GPL-2.0）、termux-host 宿主层移植（GPL-3.0）、ML Kit（专有 ToS）、DeepSeek Harness 引擎总条目等 17 项缺失披露；随包附 OFL-1.1 字体许可全文 + FONTNOTICE。
+  - **抽屉**：新建对话与临时对话并排一行。
+
+- 🟢 **[v1.2.1 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名）
 
   **开源协议全量排查（11 功能模块 · 117 条第三方许可）+ 无障碍服务合并 + 设置-关于-开源许可证数据驱动页面**
 

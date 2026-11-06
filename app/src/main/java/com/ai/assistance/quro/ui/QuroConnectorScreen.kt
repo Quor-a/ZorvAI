@@ -355,16 +355,12 @@ private fun ConnectorRow(
             Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 首字图标（品牌色系轮换）
-            val hue = (connector.id.hashCode() % 360 + 360) % 360
-            val iconBg = Color.hsl(hue.toFloat(), 0.45f, 0.82f)
-            val iconFg = Color.hsl(hue.toFloat(), 0.55f, 0.30f)
-            Box(
-                Modifier.size(40.dp).background(iconBg, RoundedCornerShape(10.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(connector.name.take(1), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = iconFg)
-            }
+            // 🔴 官方品牌图标（2026-11-06）：已知品牌用官方底色+官方字形，未知回退首字
+            BrandAvatar(
+                name = connector.name,
+                urlOrId = connector.id,
+                size = 40.dp,
+            )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

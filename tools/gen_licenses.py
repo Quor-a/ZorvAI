@@ -272,6 +272,9 @@ ENTRIES = [
       "源自 wangzan101/Mika（Apache-2.0，已核实），去品牌化移植。"),
     E("feature", "连接器核心遗留包（libs/aci-core-legacy.aar）", "Apache-2.0（自研遗留）",
       "本地 AAR：早期自研连接器核心，仅作过渡兼容，计划移除。"),
+    E("feature", "DeepSeek Harness 引擎（dsh-runtime.pack，556 个 npm 依赖）", "GPL-3.0（Termux 快照）+ npm 依赖多为 MIT/Apache-2.0/ISC/BSD",
+      "内置 agent 引擎总条目：引擎内核为 Termux 快照（GPL-3.0，见 dshmobile 条目），" +
+      "随包 npm 依赖（556 包）许可实测分布见『内置 agent 引擎』分类逐条；全部以独立可执行/动态库形式分发，不与本应用静态链接。", copyleft=2),
     E("feature", "GenUI Agent（genuiagent-sdk）", "Apache-2.0",
       "去品牌化移植自 Quor-a/GenUI-Agent（sdk 模块）；纯 Kotlin/Compose，无打包第三方库，无 GPL。"),
     E("feature", "APK 插件框架（plugin-* 系列）", "Apache-2.0（框架）+ QuickJS MIT",

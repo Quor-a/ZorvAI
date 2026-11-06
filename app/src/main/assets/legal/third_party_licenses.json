@@ -6,7 +6,7 @@
     "license": "Apache-2.0",
     "source": "https://github.com/Quor-a/ZorvAI"
   },
-  "total": 132,
+  "total": 133,
   "distribution": [
     {
       "license": "Apache-2.0",
@@ -176,6 +176,13 @@
           "copyleft": 0,
           "noteZh": "墨语言为自研语言（MolangIso 等自有代码）；但其运行时捆绑 proot(GPL-2.0+)/BusyBox(GPL-2.0)/GNU Bash(GPL-3.0)/QEMU(GPL-2.0)/Ubuntu rootfs(GPL-3.0)。语言本身无 GPL，运行时见『内置运行时』分类。",
           "noteEn": "墨语言为自研语言（MolangIso 等自有代码）；但其运行时捆绑 proot(GPL-2.0+)/BusyBox(GPL-2.0)/GNU Bash(GPL-3.0)/QEMU(GPL-2.0)/Ubuntu rootfs(GPL-3.0)。语言本身无 GPL，运行时见『内置运行时』分类。"
+        },
+        {
+          "name": "DeepSeek Harness 引擎（dsh-runtime.pack，556 个 npm 依赖）",
+          "license": "GPL-3.0（Termux 快照）+ npm 依赖多为 MIT/Apache-2.0/ISC/BSD",
+          "copyleft": 2,
+          "noteZh": "内置 agent 引擎总条目：引擎内核为 Termux 快照（GPL-3.0，见 dshmobile 条目），随包 npm 依赖（556 包）许可实测分布见『内置 agent 引擎』分类逐条；全部以独立可执行/动态库形式分发，不与本应用静态链接。",
+          "noteEn": "Engine summary entry: kernel is a Termux snapshot (GPL-3.0); bundled npm deps (556) are itemized in the agent-engine category; distributed as standalone executables, not statically linked."
         },
         {
           "name": "GenUI Agent（genuiagent-sdk）",

@@ -799,8 +799,39 @@ fun ChatScreen(
                         }
                     }
                     if (m.content.isNotBlank()) {
-                        if (aggText.isNotEmpty()) aggText.append("\n\n")
-                        aggText.append(m.content)
+                        // 🔴 流式叠影修复（2026-11-06 用户截图实证）：
+                        //   ① 正文里内嵌的 <think>…</think> 块剥离 —— 思考已在 reasoning 通道
+                        //      渲染成「思考过程·N步」步骤 UI，正文再渲染一份就是截图里
+                        //      「步骤 11/12/13 与正文互相叠字」。reasoning 为空时把剥离出的
+                        //      行并入步骤列表（相邻重复行已有去重）。
+                        //   ② 连续内容完全相同不重复并入 —— 工具循环每轮写一条 hidden 助手消息
+                        //      （reasoning+content），结束时又写一条**可见**消息（content=lastText，
+                        //      与最后一轮 hidden 完全相同），聚合后正文出现两份；切对话/重开
+                        //      历史重放同样触发。判定：新内容是已累积文本的完整尾部重复 → 跳过。
+                        var c = m.content
+                        val closedThink = Regex("<think>[\\s\\S]*?</think>").find(c)
+                        val openThink = if (closedThink == null) c.indexOf("<think>") else -1
+                        if (closedThink != null || openThink >= 0) {
+                            if (m.reasoning.isNullOrBlank()) {
+                                val inner = closedThink?.groupValues?.get(1)
+                                    ?: (if (openThink >= 0) c.substring(openThink + 7) else "")
+                                inner.lineSequence().filter { it.isNotBlank() }.forEach { line ->
+                                    val t = line.trim()
+                                    if (t.isNotEmpty() && aggThinkLines.lastOrNull() != t) aggThinkLines.add(t)
+                                }
+                            }
+                            c = c.replace(Regex("<think>[\\s\\S]*?</think>"), "")
+                            if (openThink >= 0 && closedThink == null) c = c.substring(0, openThink)
+                            c = c.trim()
+                        }
+                        if (c.isNotBlank()) {
+                            val acc = aggText.toString()
+                            val isTailDup = acc.isNotEmpty() && (acc.endsWith(c) || c == acc)
+                            if (!isTailDup) {
+                                if (acc.isNotEmpty()) aggText.append("\\n\\n")
+                                aggText.append(c)
+                            }
+                        }
                     }
                     if (m.cards.isNotEmpty()) aggCards.addAll(m.cards)
                     if (!m.attachments.isNullOrEmpty()) {

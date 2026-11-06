@@ -336,15 +336,12 @@ private fun ServiceRow(svc: QuroService, connected: Boolean, onToggle: (Boolean)
             Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier.size(40.dp).background(AccentSoft, RoundedCornerShape(10.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    svc.name.take(1),
-                    fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Accent,
-                )
-            }
+            // 🔴 官方品牌图标（2026-11-06）：Notion/GitHub/高德等按官方底色+字形
+            com.ai.assistance.quro.ui.BrandAvatar(
+                name = svc.name,
+                urlOrId = svc.id,
+                size = 40.dp,
+            )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(svc.name, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = cs.onSurface)
