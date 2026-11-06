@@ -57,7 +57,9 @@ enum class PetPhase(val bubble: String) {
     TOOL_CALLING(""),
     PLANNING("规划中…"),
     GENERATING("正在生成回复…"),
-    DONE("回复完成 ✓")
+    DONE("回复完成 ✓"),
+    /** 🔴 互动动作执行中（挥手/弹跳/聊天…）：气泡空，弹跳动画，label 由 statusText 承载。 */
+    PERFORMING("")
 }
 
 data class PetSpec(
@@ -196,15 +198,21 @@ fun PetSprite(
                 PetPhase.TOOL_CALLING -> 2f
                 PetPhase.GENERATING -> 3f
                 PetPhase.DONE -> 4f
+                PetPhase.PERFORMING -> 5f
             }
-            // 身体
-            rotate(if (phase == PetPhase.THINKING || phase == PetPhase.PLANNING) sway * 4f else 0f, pivot = Offset(w / 2f, h)) {
-                scale(1f + sin(breathe) * 0.03f, 1f - sin(breathe) * 0.02f, pivot = Offset(w / 2f, h * 0.6f)) {
-                    drawBody(w, h, spec, phaseT)
+            // 🔴 PERFORMING：互动动作的弹跳（挥手/聊天等动作的通用视觉）
+            val hop = if (phase == PetPhase.PERFORMING)
+                -kotlin.math.abs(kotlin.math.sin(breathe * 2f)) * h * 0.06f else 0f
+            // 身体（PERFORMING 时整体弹跳）
+            translate(left = 0f, top = hop) {
+                rotate(if (phase == PetPhase.THINKING || phase == PetPhase.PLANNING) sway * 4f else 0f, pivot = Offset(w / 2f, h)) {
+                    scale(1f + sin(breathe) * 0.03f, 1f - sin(breathe) * 0.02f, pivot = Offset(w / 2f, h * 0.6f)) {
+                        drawBody(w, h, spec, phaseT)
+                    }
                 }
             }
             // 眼睛
-            translate(left = 0f, top = if (phase == PetPhase.THINKING) -h * 0.02f * sway else 0f) {
+            translate(left = 0f, top = hop + if (phase == PetPhase.THINKING) -h * 0.02f * sway else 0f) {
                 drawEyes(w, h, spec, phase, blink, sway)
             }
             // 头顶标记：思考=问号泡，工具=旋转环

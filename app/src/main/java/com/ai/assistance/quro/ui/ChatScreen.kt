@@ -1947,12 +1947,28 @@ fun ChatScreen(
         // 发送成功后清除该会话草稿，避免切回来时残留已发送的文字/附件
         QuroComposerDraft.clear(ctx, currentId)
     }    // 🔴 桌宠点击等入口的直接发送消费（2026-11-05）：计数递增 → 自动 send，不经输入框
+    val petTapCtx = LocalContext.current
     LaunchedEffect(QuroShareBridge.pendingAutoSend.value) {
         val n = QuroShareBridge.pendingAutoSend.value
-        if (n > 0 && !busy) {
-            QuroShareBridge.pendingText.value?.let { txt ->
-                QuroShareBridge.consume()
-                send(txt)
+        if (n <= 0) return@LaunchedEffect
+        // 🔴 修复（2026-11-06）：忙时静默丢失且 pendingText 残留 —— 重试 3 次（间隔 700ms），
+        // 仍忙则消费丢弃并提示（对齐 BotHub pet_interaction_busy 的「还在回复中」反馈）。
+        var tried = 0
+        while (busy && tried < 3) {
+            kotlinx.coroutines.delay(700)
+            tried++
+        }
+        val txt = QuroShareBridge.pendingText.value
+        if (!busy && txt != null) {
+            QuroShareBridge.consume()
+            send(txt)
+        } else {
+            QuroShareBridge.consume()
+            if (txt != null) {
+                android.widget.Toast.makeText(
+                    petTapCtx, "AI 还在回复中，稍后再戳桌宠吧",
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
             }
         }
     }
@@ -3380,7 +3396,11 @@ fun ChatScreen(
                             busy && islandTool != null -> bus.onBusy(islandTool)
                             busy && thinking -> bus.onBusy(null)
                             busy -> bus.onGenerating()
-                            petPrevBusy -> bus.onReplyComplete(null)
+                            petPrevBusy -> bus.onReplyComplete(
+                                // 🔴 对齐 BotHub：回复内容上宠物气泡（截前 90 字，带过期时间由总线控制）
+                                uiMessages.lastOrNull { !it.mine && !it.text.isNullOrBlank() }
+                                    ?.text?.take(90)
+                            )
                             else -> bus.onIdle()
                         }
                         petPrevBusy = busy
