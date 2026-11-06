@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Intent
 import android.content.IntentFilter
+import kotlinx.coroutines.launch
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
@@ -89,6 +90,27 @@ class QuroDesktopPetService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        // 🔴 服务级接线（2026-11-06 对齐 BotHub：事件源在回合管理层而非 UI）：
+        // 订阅 QuroAgentTrace —— 此前唯一生产者在 ChatScreen 组合里，GenUI 应用内聊天、
+        // 语音对话、后台代理、App 被杀重启（START_STICKY 拉回）四种场景桌宠全部失联。
+        // 仅在 IDLE 时写入，避免与 ChatScreen 的即时微调互相打架。
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            com.ai.assistance.quro.core.agent.QuroAgentTrace.flow.collect { ev ->
+                val bus = com.ai.assistance.quro.core.pet.QuroPetStateBus
+                if (bus.phase != com.ai.assistance.quro.genui.sdk.components.PetPhase.IDLE) return@collect
+                when (ev.kind) {
+                    com.ai.assistance.quro.core.agent.QuroAgentTrace.TraceKind.ACTION -> {
+                        val tool = ev.summary.substringAfter("执行工具：", "")
+                            .substringBefore("（").split(',', '，').map { it.trim() }
+                            .firstOrNull { it.isNotBlank() }
+                        bus.onBusy(tool)
+                    }
+                    com.ai.assistance.quro.core.agent.QuroAgentTrace.TraceKind.THOUGHT ->
+                        bus.onBusy(null)
+                    else -> Unit
+                }
+            }
+        }
         val filter = IntentFilter().apply {
             addAction(ACTION_APPLY_SETTINGS)
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -225,7 +247,7 @@ class QuroDesktopPetService : Service() {
                     val celebrate = QuroPetStateBus.celebrateText
                     val effectivePhase = when {
                         celebrate != null -> PetPhase.DONE
-                        ambientFlag.value -> if (ambientAction == "think") PetPhase.THINKING else PetPhase.PLANNING
+                        ambientFlag.value -> if (ambientAction == "think") PetPhase.THINKING else PetPhase.PERFORMING
                         busPhase == PetPhase.THINKING && !thinkMatch -> PetPhase.IDLE
                         else -> busPhase
                     }
@@ -293,33 +315,37 @@ class QuroDesktopPetService : Service() {
             if (!moved) {
                 //    旧实现长按=直接关闭桌宠（破坏性误触）。菜单项：互动动作 / 打开对话 / 关闭。
                 runCatching {
-                    val items = arrayOf("🎭 播互动动作", "💬 打开对话", "✖ 关闭桌宠")
+                    val items = arrayOf("💬 对它说", "🎭 播互动动作", "💬 打开对话", "✖ 关闭桌宠")
                     petDialog = android.app.AlertDialog.Builder(this)
                         .setTitle(qstr(R.string.qk_04593))
                         .setItems(items) { d, which ->
                             d.dismiss()
                             when (which) {
                                 0 -> {
+                                    // 🔴 对它说（对齐 BotHub PetActionInputActivity）：透明输入条 → 自动对话回合
+                                    runCatching { startActivity(Intent(this, com.ai.assistance.quro.activity.PetInputActivity::class.java)) }
+                                }
+                                1 -> {
                                     val act = interactions.randomOrNull()
                                     if (act != null) {
                                         val thinkAct = act.action == "think"
                                         QuroPetStateBus.statusText = act.label
-                                        QuroPetStateBus.phase = if (thinkAct) PetPhase.THINKING else PetPhase.PLANNING
+                                        QuroPetStateBus.phase = if (thinkAct) PetPhase.THINKING else PetPhase.PERFORMING
                                         mainHandler.postDelayed({
                                             QuroPetStateBus.statusText = null
-                                            if (QuroPetStateBus.phase == PetPhase.THINKING || QuroPetStateBus.phase == PetPhase.PLANNING) {
+                                            if (QuroPetStateBus.phase == PetPhase.THINKING || QuroPetStateBus.phase == PetPhase.PLANNING || QuroPetStateBus.phase == PetPhase.PERFORMING) {
                                                 QuroPetStateBus.phase = PetPhase.IDLE
                                             }
                                         }, 2600L)
                                     }
                                 }
-                                1 -> runCatching {
+                                2 -> runCatching {
                                     startActivity(Intent(this, QuroMainActivity::class.java).apply {
                                         action = Intent.ACTION_MAIN
                                         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
                                     })
                                 }
-                                2 -> stopSelf()
+                                3 -> stopSelf()
                             }
                         }
                         .show()
@@ -363,11 +389,11 @@ class QuroDesktopPetService : Service() {
                         if (tapInteract || !tapOpensPanel) {
                             val act = interactions.randomOrNull()
                             QuroPetStateBus.statusText = act?.label ?: "在这里"
-                            QuroPetStateBus.phase = if (act?.action == "think") PetPhase.THINKING else PetPhase.PLANNING
+                            QuroPetStateBus.phase = if (act?.action == "think") PetPhase.THINKING else PetPhase.PERFORMING
                             mainHandler.postDelayed({
                                 QuroPetStateBus.statusText = null
                                 // 互动动作结束后只在仍是互动态时归位，别把真实的 AI 生成状态清掉。
-                                if (QuroPetStateBus.phase == PetPhase.THINKING || QuroPetStateBus.phase == PetPhase.PLANNING) {
+                                if (QuroPetStateBus.phase == PetPhase.THINKING || QuroPetStateBus.phase == PetPhase.PLANNING || QuroPetStateBus.phase == PetPhase.PERFORMING) {
                                     QuroPetStateBus.phase = PetPhase.IDLE
                                 }
                             }, 2600L)

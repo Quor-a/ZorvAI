@@ -47,9 +47,16 @@ class PetControlTool : QuroTool {
                 if (anim !in listOf("actionWave", "actionBounce", "actionChat", "think")) {
                     return "❌ 不支持的动画 $anim（可选 actionWave/actionBounce/actionChat/think）"
                 }
-                bus.onReplyComplete(null)
-                bus.statusText = anim
-                "✅ 宠物动作：$anim"
+                // 🔴 修复（2026-11-06）：此前 onReplyComplete(null)+statusText=anim ——
+                // 宠物冒出「回复完成 ✓」+ 底部小字是动画原始码。改走 onInteract（PERFORMING 弹跳 + 中文 label）。
+                val label = when (anim) {
+                    "actionWave" -> "挥手~"
+                    "actionBounce" -> "蹦蹦跳跳~"
+                    "actionChat" -> "想聊天啦~"
+                    else -> "思考中…"
+                }
+                bus.onInteract(label, anim)
+                "✅ 宠物动作：$label"
             }
             "hide", "show" -> {
                 val prefs = context.getSharedPreferences("pet_prefs", Context.MODE_PRIVATE)

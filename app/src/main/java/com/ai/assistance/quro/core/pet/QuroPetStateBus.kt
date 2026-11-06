@@ -64,6 +64,24 @@ object QuroPetStateBus {
         phase = PetPhase.GENERATING
     }
 
+    /**
+     * 🔴 互动动作（2026-11-06 修复「act 显示回复完成+动画码」）：
+     * AI 的 pet(action=act) / 服务内互动统一入口 —— PERFORMING 弹跳 + label 气泡，
+     * 2.6s 后回 IDLE。不再借用 onReplyComplete（那会显示错误的「回复完成 ✓」）。
+     */
+    fun onInteract(label: String, action: String) {
+        celebrateJob?.cancel()
+        celebrateText = null
+        toolName = null
+        statusText = label
+        phase = PetPhase.PERFORMING
+        celebrateJob = kotlinx.coroutines.MainScope().launch {
+            kotlinx.coroutines.delay(2600)
+            statusText = null
+            phase = PetPhase.IDLE
+        }
+    }
+
     /** 对话层写入：回到空闲。 */
     fun onIdle() {
         celebrateJob?.cancel()
