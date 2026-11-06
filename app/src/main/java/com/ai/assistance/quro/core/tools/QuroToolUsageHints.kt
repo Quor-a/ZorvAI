@@ -64,7 +64,7 @@ object QuroToolUsageHints {
         "file_read" to "「读取这个文件」「打开文件内容」「读 XX 文件」都调用（与 read_text_file 同族，按路径/类型选用）",
 
         // ── 文件写/改/删 ──
-        "write_file" to "「帮我建个文件写点东西」「把这段存成 xx.txt」「生成配置文件」都调用",
+        "file_write" to "「帮我建个文件写点东西」「把这段存成 xx.txt」「生成配置文件」都调用（root=app|workspace）。",
         "delete_file" to "「删掉这个文件」「清掉 XX」「移除那个日志」都调用",
         "make_directory" to "「新建个文件夹」「建个目录叫 XX」都调用",
         "move_file" to "「把这个文件挪到 XX」「移动文件」「重命名并移动」都调用",
@@ -96,10 +96,10 @@ object QuroToolUsageHints {
 
         // ── TTS ──
         "speak" to "「读给我听」「念一下这段」「大声朗读」「用语音播报」都调用；也可用于把 AI 回复转语音",
-        "stop_speak" to "「别念了」「停下朗读」「静音」都调用",
+        "stop_speak" to "「别念了」「停下朗读」→ speak(action=\"stop\")。",
 
         // ── 闹钟 ──
-        "set_alarm" to "「定个明早 7 点闹钟」「提醒我 3 小时后吃药（闹钟）」「加个闹铃」都调用",
+        "alarm_clock" to "「定个明早 7 点闹钟」「3 小时后提醒我」「倒计时 5 分钟」都调用（action=set，type=alarm|timer）。",
 
         // ── 定时任务 / 自动化 ──
         "schedule_task" to "多用途：既能「每天定时提醒我喝水」也能「下周三自动发条消息」也能「10 分钟后执行某个动作」——需要「未来某时刻自动触发」时调用",
@@ -119,8 +119,7 @@ object QuroToolUsageHints {
         "experience_version_check" to "「这个功能在旧版本和新版本有啥区别」「查版本差异」都调用",
 
         // ── 知识库 ──
-        "knowledge_search" to "「在我的知识库里搜 XX」「查资料（本地文档）」「找下我存过的关于 YY 的」都调用",
-        "knowledge_add" to "「把这篇文档加进知识库」「导入这个文件当知识」「存成知识条目」都调用",
+        "knowledge_manage" to "「知识库搜 XX」→ action=search；「把文档加进知识库」→ action=add；导入/列出/删除同工具。",
         "knowledge_manage" to "「管理我的知识库」「删掉某条知识」「看知识库列表/重新建索引」都调用",
         "knowledge_rag_search" to "多用途：语义/向量检索本地知识库——「按意思找相关文档」「类似 XX 的内容有哪些」「用自然语言搜我存过的资料」都调用（比关键词 search 更懂语义）",
 
@@ -132,7 +131,7 @@ object QuroToolUsageHints {
         // 历史提示词里把卡片挂在 ui_control(action="card"/"widget") 名下，
         // 与真实工具不符 → 模型会调一个不存在的 action，卡片静默不出现。
         "ui_widget" to "在对话框里展示单个可视化组件时调用（按钮/开关/滑块/进度/仪表/统计/表格/列表/分段控件/饼图/评分/倒计时/标签页/折叠/表单/筹码/步骤条/甘特/热力/雷达/对比/看板/轮播/时间线/里程碑/文件/代码/终端/日志/二维码/条码/颜色/计数器/面包屑/标签云/徽章/头像组/mermaid 图表/miniapp 网页……）。凡是「结果适合画出来而不是写成文字」都优先用它，别退化成一堆纯文本。",
-        "ui_card" to "一次要出多张富卡片时调用（传组件数组）；只出单张就用 ui_widget。",
+        "ui_widget" to "富组件卡片下发（一次一张，传组件 spec；旧名 ui_card 等价，kind 字段兼容）。",
         "card_catalog" to "不记得某个卡片类型的字段名时调用，拉该类目的完整样例与字段说明（也可查围栏 4 种头、card_patch 补丁语法、组件名归一化）。别凭印象编字段——字段写错会静默渲染成兜底卡。",
         "card_patch" to "已下发过的卡片要改内容时调用（进度刷新、倒计时走字、勾掉待办、改表格单元格、更新统计数字、列表追加），只发改动的字段而不重发整张卡；建议先 describe 拿合法路径。",
 
@@ -181,7 +180,7 @@ object QuroToolUsageHints {
 
         // ── 屏幕视觉双模感知 ──
         "screenshot" to "「截个图」「截图保存」「把屏幕截下来」都调用——返回截图文件路径",
-        "screenshot_base64" to "「截图发给视觉模型」「截屏分析」都调用——返回Base64编码的图片",
+        "screenshot" to "「截图」→ 默认回路径；「截屏分析/发视觉模型」→ return_format=base64。",
         "visual_analysis" to "任何需要「看见屏幕」的场景都调用：看屏幕内容、识别按钮/文字/图标、理解游戏或 App 界面、找某个元素、OCR 提取文字、辅助操作。当 read_screen 节点树不够用时（游戏/WebView/Flutter/自绘 UI），用视觉大模型真实分析截图，mode 可选 general/ui/ocr/game/find。",
 
         // ── 系统级控制动作 ──
@@ -198,7 +197,7 @@ object QuroToolUsageHints {
         "open_app" to "「打开XX应用」「启动XX」都调用（传包名）",
 
         // ── 媒体 ──
-        "local_music_player" to "「放首歌」「打开音乐播放器」「播我的本地音乐」都调用",
+        "music_play" to "「放首歌」「播我的本地音乐」都调用（单曲 {uri,title} 或播放列表都支持）。",
         "local_video_player" to "「播这个视频」「打开视频播放器」都调用",
         "list_media" to "「我手机里有哪些音乐/视频」「媒体库列表」都调用",
         "music_play" to "「播第 3 首」「切歌」「放 XX 这首歌」都调用",

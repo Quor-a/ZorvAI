@@ -172,7 +172,7 @@ object ToolCapabilityDirectory {
         // 后台虚拟屏（非 intrusive，单列 VIRTUAL_SCREEN，是这套能力的入口/锚点）
         "bg_screen",
         // 读取 / 理解屏幕（用户主屏）
-        "read_screen", "screenshot", "screenshot_base64", "ui_tree", "visual_analysis", "image_recognition",
+        "read_screen", "screenshot", "ui_tree", "visual_analysis", "image_recognition",
         // 操控屏幕（用户主屏）
         "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen", "input_text",
         "global_action", "ai_type_text", "ai_press_enter", "ai_press_send",
@@ -360,8 +360,8 @@ object ToolCapabilityDirectory {
         ),
         
         // ═══════════════ 系统控制 ═══════════════
-        "volume_control" to ToolInfo(
-            name = "volume_control",
+        "device_control" to ToolInfo(
+            name = "device_control",
             category = ToolCategory.SYSTEM_CONTROL,
             description = qstr(R.string.qk_03697),
             useCases = listOf("调高音量", "静音", "音量调到最大", "把声音关小"),
@@ -385,8 +385,8 @@ object ToolCapabilityDirectory {
         ),
         
         // ═══════════════ 文件操作 ═══════════════
-        "write_file" to ToolInfo(
-            name = "write_file",
+        "file_write" to ToolInfo(
+            name = "file_write",
             category = ToolCategory.FILE_OPERATION,
             description = qstr(R.string.qk_03419),
             useCases = listOf("帮我建个文件", "把这段存成txt", "生成配置文件", "写代码到文件"),
@@ -397,20 +397,20 @@ object ToolCapabilityDirectory {
             priority = 4
         ),
         
-        "read_text_file" to ToolInfo(
-            name = "read_text_file",
+        "file_read" to ToolInfo(
+            name = "file_read",
             category = ToolCategory.FILE_OPERATION,
             description = qstr(R.string.qk_03741),
             useCases = listOf("读一下这个txt", "打开那个日志看看", "把md内容念给我"),
             examples = listOf("read_text_file(path=\"/sdcard/test.txt\")"),
             parameters = mapOf("path" to qstr(R.string.qk_01054)),
             tips = listOf("只能读文本文件", "大文件会截断"),
-            relatedTools = listOf("write_file", "workspace_read"),
+            relatedTools = listOf("file_write", "file_read"),
             priority = 4
         ),
         
-        "list_files" to ToolInfo(
-            name = "list_files",
+        "list_dir" to ToolInfo(
+            name = "list_dir",
             category = ToolCategory.FILE_OPERATION,
             description = qstr(R.string.qk_03629),
             useCases = listOf("看看Download里有什么", "列一下这个文件夹", "目录里有哪些文件"),
@@ -553,7 +553,7 @@ object ToolCapabilityDirectory {
             // 🔴 全家桶互链：AI 操控虚拟屏时，必须能发现「全部看屏工具」，而不只是一两个。
             // 这里把整套屏感知/屏操作能力列全（详见 [SCREEN_TOOL_FAMILY] / [getScreenTools]）。
             relatedTools = listOf(
-                "read_screen", "screenshot", "screenshot_base64", "ui_tree",
+                "read_screen", "screenshot", "ui_tree",
                 "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen", "input_text",
                 "global_action", "get_foreground_app", "get_screen_state",
                 "enable_screen_capture", "screen_record", "take_photo",
@@ -1012,7 +1012,7 @@ object ToolCapabilityDirectory {
             examples = listOf("visual_popup(title=\"结果\", content=\"...\")"),
             parameters = mapOf("title" to "标题", "content" to "内容", "buttons" to "可选按钮列表"),
             tips = listOf("适合呈现结构化内容", "返回用户操作结果"),
-            relatedTools = listOf("visual_question", "visual_action", "visual_custom_popup"),
+            relatedTools = listOf("visual_popup", "visual_custom_popup"),
             priority = 5
         ),
         "visual_custom_popup" to ToolInfo(
@@ -1023,33 +1023,9 @@ object ToolCapabilityDirectory {
             examples = listOf("visual_custom_popup(spec=\"{...}\")"),
             parameters = mapOf("spec" to "自定义 UI 规格 JSON"),
             tips = listOf("适合复杂交互场景", "返回用户操作结果"),
-            relatedTools = listOf("visual_popup", "visual_question"),
+            relatedTools = listOf("visual_popup"),
             priority = 5
         ),
-        "visual_question" to ToolInfo(
-            name = "visual_question",
-            category = ToolCategory.VISUAL_INTERACT,
-            description = qstr(R.string.qk_03464),
-            useCases = listOf("用户指令模糊", "缺少关键信息", "需要确认不可逆操作", "多个选项需要用户选择", "多种理解需要确认"),
-            examples = listOf("visual_question(question=\"你想要什么风格？\", options=[\"正式\",\"轻松\"])"),
-            parameters = mapOf("question" to "问题", "options" to "选项列表", "allow_custom" to qstr(R.string.qk_03114)),
-            tips = listOf("【强制】遇到任何不确定必须调用", "禁止猜测、禁止假设、禁止跳过", "返回用户选择的答案"),
-            relatedTools = listOf("visual_action", "visual_popup"),
-            priority = 5
-        ),
-        
-        "visual_action" to ToolInfo(
-            name = "visual_action",
-            category = ToolCategory.VISUAL_INTERACT,
-            description = qstr(R.string.qk_03481),
-            useCases = listOf("选择操作", "确认/取消", "选择打开方式"),
-            examples = listOf("visual_action(title=\"选择操作\", buttons=[{\"text\":\"查看\",\"value\":\"view\"}])"),
-            parameters = mapOf("title" to qstr(R.string.qk_01066), "buttons" to "按钮列表"),
-            tips = listOf("适合让用户选择操作", "返回用户点击的按钮值"),
-            relatedTools = listOf("visual_question", "visual_popup"),
-            priority = 4
-        ),
-
         "node_editor" to ToolInfo(
             name = "node_editor",
             category = ToolCategory.UI_CARDS,
@@ -1161,8 +1137,8 @@ object ToolCapabilityDirectory {
             priority = 3
         ),
 
-        "knowledge_search" to ToolInfo(
-            name = "knowledge_search",
+        "knowledge_manage" to ToolInfo(
+            name = "knowledge_manage",
             category = ToolCategory.KNOWLEDGE_MEMORY,
             description = qstr(R.string.qk_03712),
             useCases = listOf("在我的知识库里搜XX", "查资料（本地文档）", "找下我存过的关于YY的"),
@@ -1728,8 +1704,8 @@ object ToolCapabilityDirectory {
         ),
         
         // ═══════════════ 定时任务 ═══════════════
-        "schedule_task" to ToolInfo(
-            name = "schedule_task",
+        "task_schedule" to ToolInfo(
+            name = "task_schedule",
             category = ToolCategory.AI_CAPABILITIES,
             description = qstr(R.string.qk_03628),
             useCases = listOf("每天定时提醒我喝水", "下周三自动发条消息", "10分钟后执行某个动作"),

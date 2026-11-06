@@ -467,7 +467,7 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
             "get_current_time", "get_device_info", "get_battery",
             "get_wifi_info", "get_network_info", "get_sensors",
             "calculate",
-            "file_info", "find_files",
+            "file_info", "list_dir", "file_read",
             "get_package_name", "get_active_notifications", "get_bluetooth_status",
             "root_status", "shizuku_status",
         )

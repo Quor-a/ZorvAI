@@ -34,31 +34,29 @@ object ApprovalPolicy {
         "termux", "terminal_", "quroterm_", "root_", "shizuku_", "adb_", "priv_exec",
         "python_run", "run_code", "code_runner", "polyglot_run", "sandbox",
         "harness",
-        // 文件写入/删除/移动/复制
-        "write_file", "delete_file", "move_file", "copy_file", "make_directory",
+        // 文件写入/删除/移动/复制（🔴 2026-11-06 合体：write_file/workspace_write → file_write）
+        "file_write", "delete_file", "move_file", "copy_file", "make_directory",
         // 应用/包管理
         "install_app", "uninstall", "apk_", "freeze_app", "export_apk",
         // 手机控制
         "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen", "input_text",
-        "ai_type_text", "ai_press_enter", "ai_press_send", "send_sms", "set_alarm",
-        "schedule_task", "delete_scheduled_task", "write_calendar",
+        "ai_type_text", "ai_press_enter", "ai_press_send", "send_sms",
+        "alarm_clock", "task_schedule", "write_calendar",
         "lock_screen", "global_action", "send_broadcast", "screen_record",
-        "set_camera_disabled", "set_clipboard", "vibrate", "volume_control",
-        "brightness_control", "bluetooth_control", "wifi_control", "airplane_mode",
-        "toggle_flashlight", "notification_control", "set_timer", "cancel_alarm",
+        "set_camera_disabled", "device_control", "clipboard", "vibrate",
         "take_photo", "execute_intent",
         // 终端执行
         "linux_run", "linux_install", "linux_pkg", "linux_start", "linux_stop",
         "linux_process",
         // 工作区写入
-        "workspace_write", "workspace_render", "workspace_media",
+        "workspace_render", "workspace_media",
         // 网络副作用
         "send_", "post_",
     )
 
     private val exact = setOf(
         "terminal", "terminal_exec", "terminal_run", "terminal_write",
-        "screenshot", "screenshot_base64",
+        "screenshot",
         "git", // git commit/push 有副作用，但 read 也有；由 args 再判
     )
 
@@ -77,6 +75,17 @@ object ApprovalPolicy {
     /** 该调用是否需要审批（带参数二次判定，例如 git 只有 push/commit 才问）。 */
     fun needsApproval(toolName: String, arguments: String, declared: Boolean = false): Boolean {
         if (declared) return true
+        // 🔴 合体工具（2026-11-06）：按 action 精细判定 —— 读动作不问，写动作问
+        if (toolName == "clipboard" || toolName == "device_control" ||
+            toolName == "alarm_clock" || toolName == "task_schedule"
+        ) {
+            val a = runCatching { JSONObject(arguments).optString("action").lowercase() }.getOrElse { "" }
+            return when (toolName) {
+                "clipboard" -> a == "set"
+                "device_control" -> true   // 全部是真实系统设置变更
+                else -> a != "list"        // alarm/task：set/create/cancel/delete 问，list 不问
+            }
+        }
         // git 只读操作（status/log/diff/remote -v）不问，写操作问
         if (toolName == "git") {
             val lower = arguments.lowercase()
@@ -116,7 +125,8 @@ object ApprovalPolicy {
                     facts += ApprovalFact("命令", it, emphasis = true)
                 }
             }
-            toolName.startsWith("write_file") || toolName.startsWith("workspace_write") -> {
+            toolName.startsWith("write_file") || toolName.startsWith("workspace_write") ||
+                toolName.startsWith("file_write") -> {
                 arg("path", "file_path", "filename", "name")?.let {
                     facts += ApprovalFact("目标文件", it, emphasis = true)
                 }
@@ -159,11 +169,22 @@ object ApprovalPolicy {
                 toolName == "screen_record" -> {
                 facts += ApprovalFact("操作", "截取/录制屏幕", emphasis = true)
             }
-            toolName.startsWith("set_alarm") || toolName.startsWith("schedule_task") -> {
-                arg("time", "at", "cron", "schedule")?.let { facts += ApprovalFact("时间", it) }
-                arg("content", "title", "task", "command")?.let {
+            toolName.startsWith("set_alarm") || toolName.startsWith("schedule_task") ||
+                toolName == "alarm_clock" || toolName == "task_schedule" -> {
+                arg("scheduledAt", "hour", "minutes", "time", "at", "cron", "schedule")?.let {
+                    facts += ApprovalFact("时间", it)
+                }
+                arg("label", "title", "prompt", "task", "command")?.let {
                     facts += ApprovalFact("内容", it.take(120))
                 }
+            }
+            toolName == "device_control" -> {
+                arg("setting")?.let { facts += ApprovalFact("设置项", it, emphasis = true) }
+                arg("action")?.let { facts += ApprovalFact("动作", it) }
+                arg("level")?.let { facts += ApprovalFact("级别", it) }
+            }
+            toolName == "clipboard" -> {
+                arg("text")?.let { facts += ApprovalFact("写入内容", it.take(120), emphasis = true) }
             }
             toolName.startsWith("write_calendar") -> {
                 arg("title", "summary")?.let { facts += ApprovalFact("事件", it) }
@@ -190,7 +211,8 @@ object ApprovalPolicy {
             toolName.startsWith("quroterm_") || toolName.startsWith("root_") ||
             toolName.startsWith("shizuku_") || toolName.startsWith("adb_") ||
             toolName == "priv_exec" -> "执行终端命令"
-        toolName.startsWith("write_file") || toolName.startsWith("workspace_write") -> "写入文件"
+        toolName.startsWith("write_file") || toolName.startsWith("workspace_write") ||
+            toolName.startsWith("file_write") -> "写入文件"
         toolName.startsWith("delete_file") -> "删除文件"
         toolName.startsWith("move_file") -> "移动文件"
         toolName.startsWith("copy_file") -> "复制文件"
@@ -202,7 +224,10 @@ object ApprovalPolicy {
         toolName.startsWith("input_text") || toolName.startsWith("ai_type_text") -> "输入文字"
         toolName == "screenshot" || toolName == "screenshot_base64" -> "截屏"
         toolName == "screen_record" -> "录制屏幕"
-        toolName.startsWith("set_alarm") || toolName.startsWith("schedule_task") -> "设置定时任务"
+        toolName.startsWith("set_alarm") || toolName.startsWith("schedule_task") ||
+            toolName == "alarm_clock" || toolName == "task_schedule" -> "设置闹钟/定时任务"
+        toolName == "device_control" -> "修改系统设置"
+        toolName == "clipboard" -> "写剪贴板"
         toolName.startsWith("write_calendar") -> "写入日历"
         toolName == "git" -> "执行 Git 操作"
         toolName.startsWith("linux_run") -> "运行 Linux 命令"
@@ -242,6 +267,8 @@ object ApprovalPolicy {
             toolName.startsWith("install_app") || toolName.startsWith("uninstall") ||
             toolName.startsWith("apk_") || toolName.startsWith("freeze_app") ||
             toolName.startsWith("export_apk") || toolName.startsWith("set_clipboard") ||
+                toolName == "device_control" || toolName == "clipboard" ||
+                toolName == "alarm_clock" || toolName == "task_schedule" ||
             toolName.startsWith("volume_control") || toolName.startsWith("brightness_control") ||
             toolName.startsWith("bluetooth_control") || toolName.startsWith("wifi_control") ||
             toolName.startsWith("airplane_mode") || toolName.startsWith("toggle_flashlight") ||

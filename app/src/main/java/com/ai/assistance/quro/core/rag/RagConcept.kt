@@ -81,7 +81,7 @@ internal object RagConcept {
         // 界面组件
         // 🔴 可视化小卡片是**独立分类**（visual_card 工具），不是富组件 ui_card/ui_widget。
         //    旧映射把「小卡片」指到 ui_card，正是「AI 老用富组件顶替小卡片」的直接来源。
-        "小卡片" to "visual_card", "可视化小卡片" to "visual_card", "卡片" to "ui_card", "小控件" to "ui_widget",
+        "小卡片" to "visual_card", "可视化小卡片" to "visual_card", "卡片" to "ui_widget", "小控件" to "ui_widget",
         "动态组件" to "ui_control", "活组件" to "ui_control",
     )
 
@@ -115,10 +115,10 @@ internal object RagConcept {
         "image_gen" to listOf("画", "出图", "作图", "生成图片", "文生图", "海报", "封面", "配图", "壁纸", "插画"),
         "codecanvas_markup" to listOf("画", "出图", "海报", "封面", "配图", "流程图", "示意图", "架构图", "确定性渲染", "排版整齐的海报"),
         "codecanvas_script" to listOf("脚本画", "编程画图", "代码渲染", "数据驱动绘图"),
-        "set_alarm" to listOf("闹钟", "叫我", "定时", "提醒我", "别忘", "到点"),
+        "alarm_clock" to listOf("闹钟", "叫我", "定时", "提醒我", "别忘", "到点", "倒计时"),
         "build_apk" to listOf("打包", "构建", "编译", "出包", "出 apk"),
         "export_apk" to listOf("导出", "拿出包", "给我 apk", "导出安装包"),
-        "write_file" to listOf("写入", "保存", "存起来", "存一下", "落盘", "写文件"),
+        "file_write" to listOf("写入", "保存", "存起来", "存一下", "落盘", "写文件"),
         "read_text_file" to listOf("读取", "读文件", "看看文件", "打开文件", "读一下"),
         "delete_file" to listOf("删除", "删了", "干掉", "清掉", "扔掉", "删文件"),
         "launch_app" to listOf("启动", "打开应用", "开个", "进那个", "运行一下"),
@@ -133,7 +133,7 @@ internal object RagConcept {
         "memory_search" to listOf("想不起来", "之前说的", "查记忆", "回忆", "记的什么"),
         "visual_card" to listOf("小卡片", "可视化小卡片", "小卡片组件", "来张卡", "天气卡", "日程卡", "时钟卡"),
         "visual_card_skeleton" to listOf("小卡片骨架", "卡片骨架", "widget skeleton"),
-        "ui_card" to listOf("卡片", "ui_card", "富卡片", "富组件"),
+        "ui_widget" to listOf("卡片", "富卡片", "富组件", "ui_widget"),
         "ui_widget" to listOf("小控件", "ui_widget", "控件", "浮层组件"),
         "ui_control" to listOf("动态组件", "ui_control", "活组件", "交互组件"),
         "genui_draw" to listOf("画界面", "生成界面", "做界面", "整个界面", "ui 界面", "全屏界面"),
@@ -161,7 +161,7 @@ internal object RagConcept {
         "求推荐" to listOf("web_search", "对比", "评价", "排行"),
         "哪个好" to listOf("web_search", "对比", "评测", "口碑"),
         "做个界面" to listOf("genui", "界面", "画布", "ui", "动态组件", "quro-ui"),
-        "看数据" to listOf("图表", "可视化", "ui_card", "canvas", "统计"),
+        "看数据" to listOf("图表", "可视化", "ui_widget", "canvas", "统计"),
         "装到手机上" to listOf("构建", "打包", "apk", "导出", "安装"),
         "读文件里的内容" to listOf("read_text_file", "读取", "解析", "文件"),
         "让 AI 记住" to listOf("memory_save", "记忆", "写入", "保存"),
