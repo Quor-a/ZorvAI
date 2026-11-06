@@ -78,10 +78,10 @@ import com.ai.assistance.quro.core.cluster.RoleRegistry
  * `QuroAidlAciCenterScreen`：`Scaffold + TopAppBar + actions + verticalScroll`），
  * 这里直接对齐—— TopAppBar 右侧放保存，表单整页可滚，底部按钮不再被裁。
  *
- * ## 为什么把「人格卡」做成可折叠而不是删掉
+ * ## 灵魂注入（2026-11-06 解耦后的现状）
  *
- * 角色的深度 = 人格卡（角色设定/描述）× 集群职责/禁忌/技能。
- * 只在设置页配职责、却不管人格卡 → 角色照样单薄。所以这里保留只读预览 +
+ * 角色的深度 = 灵魂注入 × 集群职责/禁忌/技能，全部自持在集群档案（quro_cluster_roles.json），
+ * 与「设置 → 人格」零关联。内置角色（主持/角色卡系）只读展示 + 可恢复默认；自建角色自由编辑。
  * 缺内容时的醒目提示，但**默认折叠**，避免一进来就是一大段灰字占满屏。
  *
  * 真正的编辑入口在「设置 → 人格」（那里已是完整编辑器），不重复造。
@@ -123,6 +123,10 @@ fun RoleEditScreen(
             }.getOrDefault("")
         }
     }
+    // 🔴 用户最终裁定（2026-11-06）：所有角色（含主持）的灵魂注入**一律可编辑**，
+    //    编辑器就是灵魂注入本身（与人格页灵魂注入编辑器同形态）。内置角色额外提供恢复默认。
+    var name by remember(role.personaId) { mutableStateOf(role.name.ifBlank { persona?.name.orEmpty() }) }
+
 
     var duties by remember { mutableStateOf(role.duties.joinToString("、")) }
     var taboos by remember { mutableStateOf(role.taboos.joinToString("、")) }
@@ -156,14 +160,14 @@ fun RoleEditScreen(
     // 而模型配置是 65536）—— skills 需要大量上下文与输出，这层必须去掉。
     var seeOthers by remember { mutableStateOf(role.context.seeOtherRoles) }
     var modelOpen by remember { mutableStateOf(false) }
-    var personaOpen by remember { mutableStateOf(false) }
     var confirmExit by remember { mutableStateOf(false) }
 
     fun split(s: String) = s.split('、', ',', '，', '\n')
         .map { it.trim() }.filter { it.isNotBlank() }
 
     // 脏检查：没改就不该拦用户返回
-    val dirty = soul != initialSoul ||
+    val dirty = name != (role.name.ifBlank { persona?.name.orEmpty() }) ||
+        soul != initialSoul ||
         duties != role.duties.joinToString("、") ||
         taboos != role.taboos.joinToString("、") ||
         skills != role.skills.joinToString("、") ||
@@ -186,7 +190,7 @@ fun RoleEditScreen(
         RoleRegistry.upsert(
             ctx,
             role.copy(
-                name = role.name.ifBlank { persona?.name.orEmpty() },
+                name = name.trim(),
                 soulInjection = soul.trim(),
                 modelProfileId = modelId,
                 role = if (isHost) RoleKind.HOST else kind,
@@ -255,11 +259,19 @@ fun RoleEditScreen(
                 colors = CardDefaults.cardColors(containerColor = cs.surfaceVariant.copy(alpha = 0.35f)),
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // 🔴 灵魂注入（2026-11-06）：集群角色自己的灵魂正文 —— 存在集群档案里，
-                    // 与 ZorvAI 人格互不相干。不含人格孵化/自动进化/自我介绍/完整 Soul。
+                    // 🔴 灵魂注入 = 角色编辑本身（2026-11-06 用户最终裁定）：与人格页灵魂注入
+                    // 编辑器同形态 —— 平铺字段、大输入框、直接可编辑。集群角色的灵魂存在集群
+                    // 自己的档案里，与「设置 → 人格」零关联；不含孵化/自动进化/自我介绍/完整Soul。
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("角色名") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         Text(
-                            "灵魂注入（这个角色是谁 / 信念 / 怎样才算做对）",
+                            "灵魂注入（角色设定 · 系统提示词核心）",
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.weight(1f),
                         )
@@ -279,49 +291,6 @@ fun RoleEditScreen(
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 4,
                     )
-                    val thin = persona == null ||
-                        persona.roleSetting.isBlank() || persona.description.isBlank()
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "人格卡",
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (thin) {
-                            Icon(
-                                Icons.Filled.Warning,
-                                "缺少角色设定",
-                                tint = cs.error,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        }
-                        TextButton(onClick = { personaOpen = !personaOpen }) {
-                            Text(if (personaOpen) "收起" else "查看")
-                        }
-                    }
-
-                    if (thin) {
-                        Text(
-                            "这张卡的「角色设定 / 描述」是空的。角色的深度主要由它决定——" +
-                                "只填下面的职责，出来的仍然是个浅角色。" +
-                                "请先去「设置 → 人格」补上，再回来。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = cs.error,
-                        )
-                    } else {
-                        Text(
-                            "来自「设置 → 人格」的角色设定与描述。改它请去人格页。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = cs.onSurfaceVariant,
-                        )
-                    }
-
-                    if (personaOpen && persona != null) {
-                        HorizontalDivider()
-                        LabelledText("角色设定", persona.roleSetting.ifBlank { "（空）" })
-                        LabelledText("描述", persona.description.ifBlank { "（空）" })
-                        LabelledText("表达约束", persona.chatSetting.ifBlank { "（空）" })
-                    }
                 }
             }
 
