@@ -20,10 +20,23 @@ object QuroShareBridge {
     private val _pendingAutoSend = mutableStateOf(0)
     val pendingAutoSend: State<Int> = _pendingAutoSend
 
-    /** 写入一条**直接发送**的文本（跳过预填，进对话框即发送）。 */
+    // 🔴 通道分离（2026-11-07 修复「点宠物还要手动发送」）：自动发送的文本此前写进
+    // pendingText —— 与输入框预填的 snapshotFlow 抢同一字段，预填方先 consume 掉，
+    // 自动发送方醒来时文本已没了 → 文本留在输入框等用户手发。现在自动发送有独立
+    // 通道（_autoSendText），预填通道永远看不到它。
+    private val _autoSendText = mutableStateOf<String?>(null)
+
+    /** 写入一条**直接发送**的文本（独立通道，不经预填/输入框）。 */
     fun emitAutoSend(text: String) {
-        _pendingText.value = text
+        _autoSendText.value = text
         _pendingAutoSend.value = _pendingAutoSend.value + 1
+    }
+
+    /** 自动发送方取走文本（取走即清空）。 */
+    fun consumeAutoSend(): String? {
+        val t = _autoSendText.value
+        _autoSendText.value = null
+        return t
     }
 
     private val _pendingUris = mutableStateOf<List<Uri>>(emptyList())

@@ -1958,12 +1958,10 @@ fun ChatScreen(
             kotlinx.coroutines.delay(700)
             tried++
         }
-        val txt = QuroShareBridge.pendingText.value
+        val txt = QuroShareBridge.consumeAutoSend()
         if (!busy && txt != null) {
-            QuroShareBridge.consume()
             send(txt)
         } else {
-            QuroShareBridge.consume()
             if (txt != null) {
                 android.widget.Toast.makeText(
                     petTapCtx, "AI 还在回复中，稍后再戳桌宠吧",

@@ -315,6 +315,10 @@ class QuroDesktopPetService : Service() {
             if (!moved) {
                 //    旧实现长按=直接关闭桌宠（破坏性误触）。菜单项：互动动作 / 打开对话 / 关闭。
                 runCatching {
+                    // 🔴 修复叠层（2026-11-07）：再次长按时先关掉上一个对话框 ——
+                    //    旧实现只替换引用不 dismiss，连续长按会叠出好几层菜单。
+                    petDialog?.dismiss()
+                    petDialog = null
                     val items = arrayOf("💬 对它说", "🎭 播互动动作", "💬 打开对话", "✖ 关闭桌宠")
                     petDialog = android.app.AlertDialog.Builder(this)
                         .setTitle(qstr(R.string.qk_04593))
