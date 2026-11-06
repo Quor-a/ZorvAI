@@ -112,13 +112,20 @@ object RoleRegistry {
                 kotlinx.coroutines.runBlocking { card.skills.resolveForRole(context) }
             }.getOrNull() ?: continue
             // 🔴 灵魂解耦（2026-11-06）：不再往 ZorvAI 人格库写 persona_cluster_* ——
-            // 角色的灵魂注入自持在 RoleProfile.soulInjection（纯文本「你是谁」，
-            // 不含人格孵化/自动进化/自我介绍/完整 Soul）。card.soul 结构体不再渲染进去。
+            // 角色的灵魂注入自持在 RoleProfile.soulInjection。默认灵魂 = 身份（card.persona）
+            // + 灵魂三段（card.soul：信念/鄙视/可判据标准）—— 与人格页灵魂注入同形态，
+            // 不含人格孵化/自动进化/自我介绍。
             val role = RoleProfile(
                 personaId = personaId,
                 name = card.label,
                 emoji = card.emoji,
-                soulInjection = card.persona,
+                soulInjection = buildString {
+                    appendLine(card.persona)
+                    if (!card.soul.isEmpty) {
+                        appendLine()
+                        appendLine(card.soul.render())
+                    }
+                }.trim(),
                 role = card.kind,
                 duties = card.duties,
                 taboos = card.taboos,
@@ -220,11 +227,32 @@ object RoleRegistry {
         return runCatching {
             val arr = JSONArray(f.readText())
             (0 until arr.length()).mapNotNull { runCatching { RoleProfile.fromJson(arr.getJSONObject(it)) }.getOrNull() }
-        }.getOrDefault(emptyList()).also { list ->
+        }.getOrDefault(emptyList()).also { rawList ->
+            val list = rawList // 升级/迁移在下方块内完成并提前 return 或落盘
+            // 🔴 内置角色灵魂升级（2026-11-06）：播种/建角早期版本只灌了 persona 工作准则，
+            // 缺「信念/鄙视/判据」灵魂三段 —— 对内置卡系角色按卡上的默认灵魂补全。
+            // 判据：personaId 可解析出卡 id、且卡存在、且当前灵魂没有「## 你的信念」段。
+            val upgraded = list.map { r ->
+                if (r.soulInjection.contains("## 你的信念")) r
+                else runCatching {
+                    val cardId = r.personaId
+                        .removePrefix("persona_cluster_")
+                        .replace(Regex("_(seed|[0-9a-fA-F]{6})$"), "")
+                    val card = com.ai.assistance.quro.core.cluster.ClusterRoleCards.byId(cardId)
+                        ?: return@runCatching r
+                    r.copy(soulInjection = buildString {
+                        appendLine(card.persona)
+                        if (!card.soul.isEmpty) {
+                            appendLine()
+                            appendLine(card.soul.render())
+                        }
+                    }.trim())
+                }.getOrDefault(r)
+            }
             // 🔴 灵魂解耦迁移（2026-11-06）：老档案的身份/灵魂还在人格库里 ——
             // 只读搬进 RoleProfile（绝不回写人格库），搬完即存。
-            if (list.any { it.name.isBlank() || it.soulInjection.isBlank() }) {
-                val migrated = list.map { r ->
+            if (upgraded.any { it.name.isBlank() || it.soulInjection.isBlank() }) {
+                val migrated = upgraded.map { r ->
                     if (r.name.isNotBlank() && r.soulInjection.isNotBlank()) r
                     else runCatching {
                         val p = com.ai.assistance.quro.core.QuroPersonaRepository(context).get(r.personaId)
@@ -238,6 +266,7 @@ object RoleRegistry {
                 saveRaw(context, migrated)
                 return migrated
             }
+            if (upgraded != list) saveRaw(context, upgraded)
             // 自愈：主持被外部改没了就补回来。
             //
             // 🔴 这里**绝不能调 ensureHost**：ensureHost 内部会再调 loadRaw，
@@ -245,8 +274,8 @@ object RoleRegistry {
             // （本轮实测：主持未初始化时 upsert 任何角色都会炸，且 runCatching
             //  会把 StackOverflow 吞成 message=null，报成「绑定失败：null」，极难定位。）
             // 所以这里直接就地补一条主持档案，不走任何会回读本函数的路径。
-            if (list.none { it.personaId == HOST_PERSONA_ID }) {
-                val fixed = list + hostProfile()
+            if (upgraded.none { it.personaId == HOST_PERSONA_ID }) {
+                val fixed = upgraded + hostProfile()
                 saveRaw(context, fixed)
                 return fixed
             }

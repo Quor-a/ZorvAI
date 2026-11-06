@@ -311,12 +311,18 @@ class ClusterRoleCardTool : QuroTool {
         val missingLocal = resolved.missing.map { it.localName }
 
         // 🔴 灵魂解耦（2026-11-06）：不再创建 ZorvAI 人格卡 —— 角色身份/灵魂自持在 RoleProfile。
-        // soulInjection 只放「你是谁」的人设正文（card.persona）；完整 Soul 渲染/孵化/进化不属于集群角色。
+        // 默认灵魂 = 身份正文 + soul 三段（信念/鄙视/可判据），不含孵化/进化/自我介绍。
         val role = RoleProfile(
             personaId = personaId,
             name = displayName,
             emoji = card.emoji,
-            soulInjection = card.persona,
+            soulInjection = buildString {
+                appendLine(card.persona)
+                if (!card.soul.isEmpty) {
+                    appendLine()
+                    appendLine(card.soul.render())
+                }
+            }.trim(),
             modelProfileId = a.optString("modelId").trim(),
             role = card.kind,
             duties = card.duties,
