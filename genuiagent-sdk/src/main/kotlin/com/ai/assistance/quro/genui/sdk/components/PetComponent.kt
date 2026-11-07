@@ -421,11 +421,13 @@ fun petPoseAnimationCandidates(pose: String, facingRight: Boolean, mode: String)
     "thrown" -> listOf("thrown")
     "celebrate" -> listOf("celebrate")
     "think" -> listOf("think")
-    "usetool" -> listOf("usetool")
+    // 🔴 2026-11-07 修复：候选名必须与 PetPack.REQUIRED_ANIMATIONS 的 camelCase key 一致，
+    //    此前全小写导致 animations[it] 永远查不到、落到兜底 stand 行，帧动画形同失效。
+    "usetool" -> listOf("useTool")
     "reply" -> listOf("reply")
     "walk" -> if (mode == "pinned") listOf("stand")
-             else listOf(if (facingRight) "walkright" else "walkleft", "stand")
-    "climb" -> listOf(if (facingRight) "climbrightedge" else "climbleftedge", "dragged")
+             else listOf(if (facingRight) "walkRight" else "walkLeft", "stand")
+    "climb" -> listOf(if (facingRight) "climbRightEdge" else "climbLeftEdge", "dragged")
     else -> listOf(pose, "stand")
 }
 

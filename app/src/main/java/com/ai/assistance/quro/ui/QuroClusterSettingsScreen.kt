@@ -494,6 +494,10 @@ private fun EnrollDialog(
     // 🔴 灵魂注入唯一入口 = 编辑角色（用户裁定 2026-11-06）：创建只登记名字/类型/职责/模型，
     // 灵魂注入一律进「编辑角色」里配 —— 不搞创建时再选灵魂的多层结构。
     var newName by remember { mutableStateOf("") }
+    // 🔴 2026-11-07：创建入口与编辑入口共用同一份角色类型库，不再是写死的四档枚举。
+    var selectedType by remember {
+        mutableStateOf(com.ai.assistance.quro.core.cluster.QuroRoleTypeRepository.default(ctx).name)
+    }
     var kind by remember { mutableStateOf(RoleKind.EXPERT) }
     var duties by remember { mutableStateOf("") }
     var modelId by remember { mutableStateOf(models.firstOrNull()?.id ?: "cloud:current") }
@@ -510,17 +514,13 @@ private fun EnrollDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                // #190 RoleKind 扩到 5 档后，这里原来写死的 if(EXPERT) "专家" else "评审"
-                // 会让「规划/执行」两档都显示成「专家」。必须用 k.label。
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RoleKind.selectable.forEach { k ->
-                        FilterChip(
-                            selected = kind == k,
-                            onClick = { kind = k },
-                            label = { Text(k.label) },
-                        )
-                    }
-                }
+                // 🔴 2026-11-07：与「编辑角色」同一份类型库、同一个新建入口，
+                // 不再出现「创建时四档写死、编辑时标签可自建」的两套口径。
+                RoleTypePickerCompact(
+                    ctx = ctx,
+                    selected = selectedType,
+                    onSelect = { t -> selectedType = t.name; kind = t.kind },
+                )
                 OutlinedTextField(
                     value = duties,
                     onValueChange = { duties = it },
@@ -545,6 +545,8 @@ private fun EnrollDialog(
                             name = newName.trim(),
                             modelProfileId = modelId,
                             role = kind,
+                            // 角色类型与编辑页共用单一真源：一个角色只写一个类型名
+                            tags = listOf(selectedType),
                             duties = duties.split(',', '，')
                                 .map { it.trim() }.filter { it.isNotBlank() },
                         ),

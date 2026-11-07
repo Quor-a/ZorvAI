@@ -97,7 +97,8 @@ class QuroDesktopPetService : Service() {
         // 订阅 QuroAgentTrace —— 此前唯一生产者在 ChatScreen 组合里，GenUI 应用内聊天、
         // 语音对话、后台代理、App 被杀重启（START_STICKY 拉回）四种场景桌宠全部失联。
         // 仅在 IDLE 时写入，避免与 ChatScreen 的即时微调互相打架。
-        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+        // 🔴 2026-11-07：存 Job 引用，避免服务反复启停累积永久订阅者（onDestroy 里 cancel）。
+        traceJob = kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
             com.ai.assistance.quro.core.agent.QuroAgentTrace.flow.collect { ev ->
                 val bus = com.ai.assistance.quro.core.pet.QuroPetStateBus
                 if (bus.phase != com.ai.assistance.quro.genui.sdk.components.PetPhase.IDLE) return@collect
@@ -139,8 +140,13 @@ class QuroDesktopPetService : Service() {
         return START_STICKY
     }
 
+    /** 订阅 QuroAgentTrace 的协程句柄；onDestroy 必须取消，否则服务重启会累积订阅者。 */
+    private var traceJob: kotlinx.coroutines.Job? = null
+
     override fun onDestroy() {
         mainHandler.removeCallbacksAndMessages(null)
+        traceJob?.cancel()
+        traceJob = null
         runCatching { unregisterReceiver(eventsReceiver) }
         petDialog?.dismiss()
         petDialog = null
@@ -466,7 +472,9 @@ class QuroDesktopPetService : Service() {
                             when (which) {
                                 0 -> {
                                     // 🔴 对它说（对齐 BotHub PetActionInputActivity）：透明输入条 → 自动对话回合
-                                    runCatching { startActivity(Intent(this, com.ai.assistance.quro.activity.PetInputActivity::class.java)) }
+                                    // 🔴 2026-11-07：Service 上下文 startActivity 必须带 NEW_TASK，
+                                    //    否则抛 AndroidRuntimeException 被 runCatching 吞掉，输入框打不开。
+                                    runCatching { startActivity(Intent(this, com.ai.assistance.quro.activity.PetInputActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                                 }
                                 1 -> {
                                     val act = interactions.randomOrNull()
@@ -498,10 +506,13 @@ class QuroDesktopPetService : Service() {
                                 4 -> stopSelf()
                             }
                         }
-                        .show()
-                    // 服务上下文弹窗必须用悬浮窗类型（已有 SYSTEM_ALERT_WINDOW 权限）；
+                        .create()
+                    // 🔴 2026-11-07 修复：服务上下文弹窗必须「先设悬浮窗类型、再 show()」。
+                    //    旧实现 .show() 在前，以 TYPE_APPLICATION 调 addView 会抛 BadTokenException
+                    //    （被外层 runCatching 吞掉），长按菜单永远弹不出来。
                     // 持有引用以便 onDestroy / rebuildPet 时 dismiss，避免窗口泄漏。
                     petDialog?.window?.setType(android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+                    petDialog?.show()
                 }
             }
         }

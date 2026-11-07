@@ -198,6 +198,12 @@ class QuroToolRegistry {
             "get_current_time", "get_device_info", "calculate",
             "get_battery", "get_wifi_info", "get_network_info", "get_sensors", "vibrate",
             "get_clipboard", "set_clipboard",
+            // 🔴 2026-11-07 修复：16 族工具合体后，合体工具的注册名从未补进 coreNames，
+            // 而 coreSpecs() 是默认配置下 tools 字段的唯一来源（filter { it.name in coreNames }）——
+            // 缺名 = 模型完全看不到该工具（剪贴板/列目录/写文件/闹钟/定时任务/设备开关/弹窗全失效）。
+            // 白名单「只增不删」零风险：残留的退役名不会凭空产生工具。
+            "clipboard", "list_dir", "file_write", "alarm_clock", "task_schedule",
+            "device_control", "visual_popup",
             // 应用管理
             "list_installed_apps", "launch_app", "search_and_launch_app", "get_package_name",
             "list_app_functions", "invoke_app_function",

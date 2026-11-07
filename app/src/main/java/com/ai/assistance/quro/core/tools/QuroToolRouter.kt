@@ -89,6 +89,9 @@ class QuroToolRouter(
             "search_and_launch_app", "list_files", "read_text_file",
             "file_write", "file_read", "list_dir", "file_info",
             "browse_files", "http_request", "open_web",
+            // 🔴 2026-11-07 补合体工具名：ALWAYS_ON 与 coreNames 同为白名单，
+            //    缺名会让 PROGRESSIVE 路由静默丢弃这些工具。
+            "clipboard", "device_control", "visual_popup",
             "web_search", "read_url", "read_sms",
             "send_sms", "read_contacts", "read_calendar",
             "write_calendar", "alarm_clock", "task_schedule", "terminal",

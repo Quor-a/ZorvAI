@@ -131,10 +131,12 @@ fun QuroBotSettingsScreen(onClose: () -> Unit) {
 @Composable
 private fun ConnectionStatusBar(manager: QuroBotManager) {
     val cs = MaterialTheme.colorScheme
+    // 🔴 官方品牌图标（2026-11-07）：状态胶囊也按平台显示各自官方 logo，
+    // 旧版三个全是通用 Chat/Forum 图标，用户根本分不出是哪个平台。
     val items = listOf(
-        Triple(QuroBotPlatform.QQ, "QQ", Icons.Filled.Chat),
-        Triple(QuroBotPlatform.FEISHU, stringResource(R.string.qk_00767), Icons.Filled.Forum),
-        Triple(QuroBotPlatform.WECHAT, stringResource(R.string.qk_00768), Icons.Filled.Chat),
+        Triple(QuroBotPlatform.QQ, "QQ", "qq"),
+        Triple(QuroBotPlatform.FEISHU, stringResource(R.string.qk_00767), "feishu"),
+        Triple(QuroBotPlatform.WECHAT, stringResource(R.string.qk_00768), "wechat"),
     )
     val statuses = remember {
         mutableStateListOf<Triple<String, Color, Boolean>>().apply {
@@ -169,7 +171,7 @@ private fun ConnectionStatusBar(manager: QuroBotManager) {
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            items.forEachIndexed { i, (_, label, icon) ->
+            items.forEachIndexed { i, (_, label, brandId) ->
                 val (text, color, ok) = statuses.getOrElse(i) { Triple("…", Color.Gray, false) }
                 Row(
                     Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
@@ -179,7 +181,12 @@ private fun ConnectionStatusBar(manager: QuroBotManager) {
                 ) {
                     Box(Modifier.size(8.dp).background(color, CircleShape))
                     Spacer(Modifier.width(5.dp))
-                    Icon(icon, null, Modifier.size(14.dp), tint = color.copy(alpha = 0.7f))
+                    com.ai.assistance.quro.ui.BrandAvatar(
+                        name = label,
+                        brandId = brandId,
+                        size = 16.dp,
+                        corner = 5.dp,
+                    )
                     Spacer(Modifier.width(4.dp))
                     Text(label, fontSize = 11.sp, color = cs.onSurface, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.width(4.dp))
@@ -395,12 +402,20 @@ private fun BotPlatformCard(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 🔴 官方品牌图标（2026-11-06）：QQ/飞书/微信按官方 logo+底色
+            // 🔴 官方品牌图标（2026-11-07）：按平台取各自官方 logo。
+            // 旧版这里硬编码成「微信 iLink」，导致 QQ / 飞书 / 微信三张卡片全顶着微信图标。
+            val brandId = when (platform) {
+                QuroBotPlatform.QQ -> "qq"
+                QuroBotPlatform.FEISHU -> "feishu"
+                QuroBotPlatform.WECHAT -> "wechat"
+                else -> "wechat"
+            }
             com.ai.assistance.quro.ui.BrandAvatar(
-                name = "微信 iLink",
-                urlOrId = "wechat",
+                name = platform.label,
+                urlOrId = brandId,
                 size = 32.dp,
                 corner = 8.dp,
+                brandId = brandId,
             )
             Spacer(Modifier.width(8.dp))
             // 名称 + 副标
@@ -641,12 +656,13 @@ private fun WechatBotPlatformCard(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 🔴 官方品牌图标（2026-11-06）：QQ/飞书/微信按官方 logo+底色
+            // 🔴 官方品牌图标（2026-11-07）：微信 iLink 显式绑定 wechat，不走名称猜测。
             com.ai.assistance.quro.ui.BrandAvatar(
                 name = "微信 iLink",
                 urlOrId = "wechat",
                 size = 32.dp,
                 corner = 8.dp,
+                brandId = "wechat",
             )
             Spacer(Modifier.width(8.dp))
             // 名称 + 副标
