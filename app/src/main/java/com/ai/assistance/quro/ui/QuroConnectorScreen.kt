@@ -355,11 +355,13 @@ private fun ConnectorRow(
             Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 🔴 官方品牌图标（2026-11-06）：已知品牌用官方底色+官方字形，未知回退首字
+            // 🔴 官方品牌图标（2026-11-07）：按目录 id 精确绑定官方品牌，
+            // 不再靠名称 contains 猜（旧版会让 DeepWiki 顶 GitHub、Context7 顶 Kagi）。
             BrandAvatar(
                 name = connector.name,
                 urlOrId = connector.id,
                 size = 40.dp,
+                brandId = connector.id,
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {

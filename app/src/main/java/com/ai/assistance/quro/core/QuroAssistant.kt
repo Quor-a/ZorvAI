@@ -1605,7 +1605,9 @@ class QuroAssistant(
         "get_current_time", "calculate", "get_device_info", "get_battery",
         "get_network_info", "get_wifi_info",
         "web_search", "read_url", "http_request",
-        "knowledge_search", "knowledge_rag_search", "memory_search",
+        // 🔴 2026-11-07：knowledge_search 已并入 knowledge_manage，补上合体名，
+        //    否则子智能体「查本地知识库」能力被静默丢弃。
+        "knowledge_search", "knowledge_rag_search", "memory_search", "knowledge_manage",
         "file_read", "list_dir", "file_info",
         "github_search", "github_read", "crossref_search",
     )

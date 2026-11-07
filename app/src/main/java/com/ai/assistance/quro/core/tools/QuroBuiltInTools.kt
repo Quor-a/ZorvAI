@@ -329,7 +329,9 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // 与上面的 miniapp 是**不同范式**的两套东西：miniapp 走 HTML/WXML 引擎，本工具走原生 Compose。
     r.register(GenUiAgentOpenTool())
     // TTS 朗读
-    r.register(SpeakTool())
+    // 🔴 2026-11-07 修复重复注册：上方「16 族合体批」已注册 SpeakMergedTool(name=speak，
+    //    支持 action=stop)。此处再注册旧 SpeakTool，registry 的 map[name]=tool 会静默覆盖
+    //    合体版，导致 speak(action=stop) 永远走旧实现并忽略 action。删除，保留合体版。
     // 🔴 合体（2026-11-06）：speak(action=stop) 吸收 stop_speak
 
     // Intent / 广播
@@ -579,7 +581,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(CreativeStudioTool())
     // 可视化问答和操作弹窗工具
     // 🔴 合体（2026-11-06）：visual_popup 按参数自动分派 提问/确认/富弹窗 三形态，吸收 visual_question/visual_action
-    r.register(VisualPopupMergedTool())
+    // 🔴 2026-11-07 修复重复注册：上方「16 族合体批」已注册 VisualPopupMergedTool，
+    //    此处重复 register 会静默覆盖同一个 name，属重构残留，删除。
     r.register(VisualCardTool())       // 🔴 可视化小卡片（独立分类唯一出口：AI 自由写 HTML 卡体，Widget Lab 卡壳内联渲染）
     r.register(VisualCardSkeletonTool()) // 🔴 13 份参考样板检索（visual_card 的 html 本可自由写任意场景，样板仅供没把握时参考）
     r.register(ZxWebCardTool())        // zxwidget 卡片（动态交互界面，477 个 zx 组件）

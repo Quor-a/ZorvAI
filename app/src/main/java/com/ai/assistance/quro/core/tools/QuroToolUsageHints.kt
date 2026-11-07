@@ -119,8 +119,8 @@ object QuroToolUsageHints {
         "experience_version_check" to "「这个功能在旧版本和新版本有啥区别」「查版本差异」都调用",
 
         // ── 知识库 ──
-        "knowledge_manage" to "「知识库搜 XX」→ action=search；「把文档加进知识库」→ action=add；导入/列出/删除同工具。",
-        "knowledge_manage" to "「管理我的知识库」「删掉某条知识」「看知识库列表/重新建索引」都调用",
+        // 🔴 2026-11-07 修复重复 key：mapOf 同名后者覆盖前者，两条引导各丢一半，合并为一条。
+        "knowledge_manage" to "「知识库搜 XX」→ action=search；「把文档加进知识库」→ action=add；「管理我的知识库」「删掉某条知识」「看知识库列表/重新建索引」→ action=manage/delete/list/reindex；导入/列出/删除同工具。",
         "knowledge_rag_search" to "多用途：语义/向量检索本地知识库——「按意思找相关文档」「类似 XX 的内容有哪些」「用自然语言搜我存过的资料」都调用（比关键词 search 更懂语义）",
 
         // ── 文档生成 ──
@@ -130,8 +130,8 @@ object QuroToolUsageHints {
         // 🔴 这四个是「在对话框里直接把结果画出来」的唯一正路。
         // 历史提示词里把卡片挂在 ui_control(action="card"/"widget") 名下，
         // 与真实工具不符 → 模型会调一个不存在的 action，卡片静默不出现。
-        "ui_widget" to "在对话框里展示单个可视化组件时调用（按钮/开关/滑块/进度/仪表/统计/表格/列表/分段控件/饼图/评分/倒计时/标签页/折叠/表单/筹码/步骤条/甘特/热力/雷达/对比/看板/轮播/时间线/里程碑/文件/代码/终端/日志/二维码/条码/颜色/计数器/面包屑/标签云/徽章/头像组/mermaid 图表/miniapp 网页……）。凡是「结果适合画出来而不是写成文字」都优先用它，别退化成一堆纯文本。",
-        "ui_widget" to "富组件卡片下发（一次一张，传组件 spec；旧名 ui_card 等价，kind 字段兼容）。",
+        // 🔴 2026-11-07：两条 ui_widget 合并，保留完整组件清单（此前被短句覆盖丢失）。
+        "ui_widget" to "在对话框里展示单个可视化组件时调用（按钮/开关/滑块/进度/仪表/统计/表格/列表/分段控件/饼图/评分/倒计时/标签页/折叠/表单/筹码/步骤条/甘特/热力/雷达/对比/看板/轮播/时间线/里程碑/文件/代码/终端/日志/二维码/条码/颜色/计数器/面包屑/标签云/徽章/头像组/mermaid 图表/miniapp 网页……）。凡是「结果适合画出来而不是写成文字」都优先用它，别退化成一堆纯文本。富组件卡片一次一张，传组件 spec；旧名 ui_card 等价，kind 字段兼容。",
         "card_catalog" to "不记得某个卡片类型的字段名时调用，拉该类目的完整样例与字段说明（也可查围栏 4 种头、card_patch 补丁语法、组件名归一化）。别凭印象编字段——字段写错会静默渲染成兜底卡。",
         "card_patch" to "已下发过的卡片要改内容时调用（进度刷新、倒计时走字、勾掉待办、改表格单元格、更新统计数字、列表追加），只发改动的字段而不重发整张卡；建议先 describe 拿合法路径。",
 
@@ -179,8 +179,8 @@ object QuroToolUsageHints {
         "global_action" to "「返回桌面」「下拉通知栏」「展开通知」「下拉状态栏/快捷设置」「截个图」「最近任务」「锁屏」等系统全局动作都调用",
 
         // ── 屏幕视觉双模感知 ──
-        "screenshot" to "「截个图」「截图保存」「把屏幕截下来」都调用——返回截图文件路径",
-        "screenshot" to "「截图」→ 默认回路径；「截屏分析/发视觉模型」→ return_format=base64。",
+        // 🔴 2026-11-07：两条 screenshot 合并，保留 base64 用法说明。
+        "screenshot" to "「截个图」「截图保存」「把屏幕截下来」都调用——默认返回截图文件路径；「截屏分析/发视觉模型」→ return_format=base64。",
         "visual_analysis" to "任何需要「看见屏幕」的场景都调用：看屏幕内容、识别按钮/文字/图标、理解游戏或 App 界面、找某个元素、OCR 提取文字、辅助操作。当 read_screen 节点树不够用时（游戏/WebView/Flutter/自绘 UI），用视觉大模型真实分析截图，mode 可选 general/ui/ocr/game/find。",
 
         // ── 系统级控制动作 ──
@@ -197,10 +197,11 @@ object QuroToolUsageHints {
         "open_app" to "「打开XX应用」「启动XX」都调用（传包名）",
 
         // ── 媒体 ──
-        "music_play" to "「放首歌」「播我的本地音乐」都调用（单曲 {uri,title} 或播放列表都支持）。",
+        // 🔴 2026-11-07：两条 music_play 合并（原第二条在下方数行，已删除）。
+        "music_play" to "「放首歌」「播我的本地音乐」都调用（单曲 {uri,title} 或播放列表都支持）；「播第 3 首」「切歌」「放 XX 这首歌」也用它。",
         "local_video_player" to "「播这个视频」「打开视频播放器」都调用",
         "list_media" to "「我手机里有哪些音乐/视频」「媒体库列表」都调用",
-        "music_play" to "「播第 3 首」「切歌」「放 XX 这首歌」都调用",
+        // （重复的 music_play key 已合并到上方）
 
         // ── L2 Shizuku ──
         "shizuku_exec" to "「用 Shizuku 跑条命令」「以 ADB 权限执行 XX」都调用（需 Shizuku 已授权运行）",

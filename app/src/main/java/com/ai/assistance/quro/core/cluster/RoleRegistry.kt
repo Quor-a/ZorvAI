@@ -128,10 +128,12 @@ object RoleRegistry {
                     }
                 }.trim(),
                 role = card.kind,
-                duties = card.duties,
+                // 🔴 2026-11-07：tags 收敛为「单个角色类型名」（与编辑页同一真源）。
+                // 卡片原有的能力关键词不丢弃，并入职责继续影响系统提示词。
+                duties = (card.duties + card.tags).distinct(),
                 taboos = card.taboos,
                 skillIds = resolved.skillIds,
-                tags = card.tags,
+                tags = listOf(card.kind.label),
             )
             runCatching { upsert(context, role) }.getOrElse { continue }
         }

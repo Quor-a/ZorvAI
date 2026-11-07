@@ -239,24 +239,7 @@
              来源：https://github.com/Quor-a/GenUI-Agent（去品牌化后内置为 com.ai.assistance.quro.genui.aiapp / .sdk）。
              - 不使用上游的 LAUNCHER 入口（避免抢占 ZorvAI 桌面图标），由 App 内导航显式拉起。
              - 不注册上游的自定义 Application（ZorvAI 已有 QuroApplication；appCtx 由本 Activity 自行初始化）。 -->
-                <service
-            android:name=".service.PetTileService"
-            android:exported="true"
-            android:icon="@android:drawable/ic_menu_myplaces"
-            android:label="桌宠"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
-
         <activity
-            android:name=".activity.PetInputActivity"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar"
-            android:windowSoftInputMode="stateVisible"
-            android:excludeFromRecents="true"
-            android:taskAffinity="pet_input" />
-<activity
             android:name="com.ai.assistance.quro.genui.aiapp.GenUiAgentActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"

@@ -13,22 +13,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -38,9 +34,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.InputChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,7 +62,6 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import com.ai.assistance.quro.core.QuroPersonaRepository
-import com.ai.assistance.quro.core.QuroTagRepository
 import com.ai.assistance.quro.core.cluster.ModelProfile
 import com.ai.assistance.quro.core.cluster.RoleContextPolicy
 import com.ai.assistance.quro.core.cluster.RoleKind
@@ -153,15 +146,24 @@ fun RoleEditScreen(
     var avatarUri by remember(role.personaId) {
         mutableStateOf(role.avatarUri.ifBlank { persona?.avatarUri.orEmpty() })
     }
-    // 标签 = 角色类型（用户裁定）：**完整移植灵魂注入的标签系统** —— 全局标签库
-    // （QuroTagRepository，与人格页同一份）+ 管理标签（新建/编辑/删除）+ 从库中勾选。
-    var tagList by remember(role.personaId) { mutableStateOf(role.tags) }
-    val tagRepo = remember { QuroTagRepository(ctx.applicationContext) }
-    var globalTags by remember(role.personaId) { mutableStateOf(tagRepo.loadAll()) }
-    var showTagManager by remember { mutableStateOf(false) }
-    fun toggleTag(t: String) {
-        tagList = if (t in tagList) tagList - t else tagList + t
+    // 🔴 角色类型（2026-11-07 用户裁定）：全页只有这一处「角色类型」。
+    // 旧版这里是一套 QuroTagRepository 语气标签（多选），分组 2 又有一套 RoleKind
+    // 固定枚举（单选），两套各写各的字段 —— 正是「固定死、和标签各走各的」。
+    // 现在统一到 QuroRoleTypeRepository：单选、可切换、可自定义添加。
+    // 老档案的多个 tag 取第一个作为当前类型，并自动登记成自定义类型，绝不丢数据。
+    val initialTypeName = remember(role.personaId) {
+        val legacy = role.tags.firstOrNull { it.isNotBlank() }
+        when {
+            legacy != null -> {
+                com.ai.assistance.quro.core.cluster.QuroRoleTypeRepository
+                    .ensureLegacy(ctx, legacy, role.role)
+                legacy
+            }
+            role.role == RoleKind.HOST -> "专家" // 主持不显示类型区，仅占位避免空值
+            else -> role.role.label
+        }
     }
+    var selectedType by remember(role.personaId) { mutableStateOf(initialTypeName) }
     // 头像：选图 → 圆形裁剪 → 复制私有目录（与人格页灵魂编辑同流程）
     val cropLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         com.canhub.cropper.CropImageContract()
@@ -238,7 +240,7 @@ fun RoleEditScreen(
         opening != (role.opening.ifBlank { persona?.opening.orEmpty() }) ||
         chatSetting != (role.chatSetting.ifBlank { persona?.chatSetting.orEmpty() }) ||
         avatarUri != (role.avatarUri.ifBlank { persona?.avatarUri.orEmpty() }) ||
-        tagList != role.tags ||
+        selectedType != initialTypeName ||
         soul != initialSoul ||
         duties != role.duties.joinToString("、") ||
         taboos != role.taboos.joinToString("、") ||
@@ -266,7 +268,9 @@ fun RoleEditScreen(
                 opening = opening.trim(),
                 chatSetting = chatSetting.trim(),
                 avatarUri = avatarUri,
-                tags = tagList,
+                // 单一真源：一个角色只写一个类型名；能力档位由类型库随切换同步。
+                // 主持是集群唯一身份，不参与类型体系，tags 保持为空。
+                tags = if (isHost) emptyList() else listOf(selectedType),
                 soulInjection = soul.trim(),
                 modelProfileId = modelId,
                 role = if (isHost) RoleKind.HOST else kind,
@@ -285,17 +289,8 @@ fun RoleEditScreen(
         if (dirty) confirmExit = true else onBack()
     }
 
-    if (showTagManager) {
-        // 与人格页灵魂注入同一个标签管理器（全局标签库，可新建/编辑/删除）
-        com.ai.assistance.quro.ui.TagManageScreen(
-            onBack = {
-                showTagManager = false
-                globalTags = tagRepo.loadAll()
-            },
-            selectedNames = tagList,
-            onToggleSelect = { toggleTag(it) },
-        )
-    }
+    // 角色类型的新建/编辑/删除已内聚到 RoleTypeSection（ui/RoleTypeUi.kt），
+    // 这里不再挂第二套「标签管理器」，全页只保留一个角色类型入口。
 
     Scaffold(
         containerColor = cs.background,
@@ -423,69 +418,13 @@ fun RoleEditScreen(
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 2,
                     )
-                    // 标签 = 角色类型：chips 可删 + 输入添加（灵魂编辑同形态）
-                    // 🔴 角色类型 = 完整移植灵魂注入的标签系统（2026-11-06 用户裁定）：
-                    //    全局标签库勾选 + 「管理标签」新建/编辑/删除（TagManageScreen，
-                    //    与人格页灵魂注入同一个管理器、同一份 QuroTagRepository）——
-                    //    不再是写死的固定档位，用户可自建任意类型。
-                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        Text(
-                            "标签（角色类型）",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(onClick = { showTagManager = true }) {
-                            Text("管理标签", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                    if (globalTags.isNotEmpty()) {
-                        FlowRow(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            globalTags.forEach { tag ->
-                                val selected = tag.name in tagList
-                                androidx.compose.material3.AssistChip(
-                                    onClick = { toggleTag(tag.name) },
-                                    label = { Text(tag.name) },
-                                    leadingIcon = if (selected) {
-                                        { Icon(Icons.Filled.Check, null, Modifier.size(14.dp)) }
-                                    } else null,
-                                    colors = androidx.compose.material3.AssistChipDefaults.assistChipColors(
-                                        containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                        else MaterialTheme.colorScheme.surface,
-                                    ),
-                                )
-                            }
-                        }
-                    } else {
-                        Text(
-                            "标签库为空 —— 点上方「管理标签」新建角色类型（如：前端 / 数据分析 / 评审专家），" +
-                                "或直接用下方固定档位。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (tagList.any { it !in globalTags.map { g -> g.name } }) {
-                        // 已选但库中已删除的标签：保留显示，可手动摘除
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            tagList.filter { it !in globalTags.map { g -> g.name } }.forEach { t ->
-                                androidx.compose.material3.InputChip(
-                                    selected = true,
-                                    onClick = { toggleTag(t) },
-                                    label = { Text(t) },
-                                    trailingIcon = {
-                                        Icon(Icons.Filled.Close, "移除", Modifier.size(14.dp))
-                                    },
-                                )
-                            }
-                        }
-                    }
+                    // 角色类型已统一到下方「模型与角色类型」分组（RoleTypeSection），
+                    // 全页只有这一处入口；这里不再放第二套标签 chips。
                 }
             }
 
-            // ══ 分组 2：模型与类型 ══
-            SectionLabel("模型与类型")
+            // ══ 分组 2：模型与角色类型 ══
+            SectionLabel("模型与角色类型")
 
             // 模型：用整行可点的行而不是按钮，避免「像输入框」的错视 + 弹层对不齐
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
@@ -545,37 +484,17 @@ fun RoleEditScreen(
             }
 
             if (!isHost) {
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text("角色类型", style = MaterialTheme.typography.bodyMedium)
-                        Row(
-                            Modifier.fillMaxWidth().padding(top = 8.dp).selectableGroup(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            // #190：分工扩到四档（原来只有专家/评审，缺「谁执行」与「谁规划」）
-                            RoleKind.selectable.forEach { k ->
-                                FilterChip(
-                                    selected = kind == k,
-                                    onClick = { kind = k },
-                                    label = { Text(k.label) },
-                                )
-                            }
-                        }
-                        Text(
-                            when (kind) {
-                                RoleKind.CRITIC -> "评审：专职挑毛病、验收产出。系统不会给它改文件/操作设备的工具，" +
-                                    "它只能读和判 —— 这样验收才不会被它自己改掉。"
-                                RoleKind.PLANNER -> "规划：拆解目标、定验收标准、给方案，不动手产出。"
-                                RoleKind.EXECUTOR -> "执行：真正动手的活。会被下发文件、终端、网络、设备操作等工具，" +
-                                    "可以调工具真的把事做完。"
-                                else -> "专家：按职责产出具体内容，可查证资料。"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = cs.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                    }
-                }
+                // 🔴 2026-11-07：全页唯一的「角色类型」入口。
+                // 单选切换 + 自定义添加 + 管理；切换时同步内部能力档位（kind），
+                // 用户不再面对两套互相打架的「类型 / 标签」。
+                RoleTypeSection(
+                    ctx = ctx,
+                    selected = selectedType,
+                    onSelect = { t ->
+                        selectedType = t.name
+                        kind = t.kind
+                    },
+                )
             }
 
             // ══ 分组 3：职责（决定角色深度的主战场）══
