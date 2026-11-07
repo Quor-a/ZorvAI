@@ -57,7 +57,7 @@
   <b>☕ 如果这个项目对你有帮助，欢迎到 <a href="https://afdian.com/a/zorvAI">爱发电 (afdian)</a> 支持我们，助力持续开发 ❤️</b>
 </p>
 
-> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.2.2`（`versionCode 1002002`）
+> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.2.3`（`versionCode 1002003`）
 >
 > Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **235 个内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
 >
@@ -503,7 +503,7 @@ dsh 是 Node.js 应用（`dsh web` 起 HTTP 服务 + 自带前端）。要让它
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[v1.2.2 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
+- 🟢 **[v1.2.3 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
 
   **流式叠影根治 · 工具大合体（46→17） · 特权全局信任 · 集群灵魂注入解耦 · 官方品牌图标 · 许可证 133 条**
 
