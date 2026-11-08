@@ -57,7 +57,7 @@
   <b>☕ 如果这个项目对你有帮助，欢迎到 <a href="https://afdian.com/a/zorvAI">爱发电 (afdian)</a> 支持我们，助力持续开发 ❤️</b>
 </p>
 
-> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.2.3`（`versionCode 1002003`）
+> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.2.4`（`versionCode 1002004`）
 >
 > Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **235 个内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
 >
@@ -503,7 +503,18 @@ dsh 是 Node.js 应用（`dsh web` 起 HTTP 服务 + 自带前端）。要让它
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[v1.2.3 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名，**最新**）
+- 🟢 **[v1.2.4 Release](https://github.com/Quor-a/ZorvAI/releases/tag/v1.2.4)**（Release 签名，**最新**）
+
+  **会话库原子写与损坏隔离 · 桌宠菜单收起与冷启动恢复**
+
+  - **会话库不再因写盘中断被截断**：保存改为「临时文件 → fsync → 原子替换」，主文件在替换完成前始终是上一份完整数据；应用内更新、后台清理、低内存回收撞上写盘窗口都不会留下半截 JSON。
+  - **加载失败不再静默清空历史**：解析失败时原文件改名为 `quro_conversations.corrupt-*.json` 单独隔离，进入只读降级并弹出明确提示；用户选择恢复或放弃前禁止任何全量保存，旧数据不会被新会话覆盖。
+  - **轮转备份与一键恢复**：成功加载后按 10 分钟节流生成 `quro_backups/conv-*.json`，保留最近 8 份，可在提示框里从最近备份恢复。
+  - **覆盖安装保护**：更新完成后先做一次完整性校验，提前隔离损坏文件并留下备份。
+  - **桌宠**：长按快捷菜单新增收起按钮，支持点卡片外区域、点宠物本体、返回键收起，展开期间暂停漂移；修复退出应用再打开后已开启的桌宠不回到桌面的问题，关闭路径同步写回开关。
+  - **开源许可清单**：补齐素材与字体条目，随包数据 133 → 134 条。
+
+- 🟢 **[v1.2.3 Release](https://github.com/Quor-a/ZorvAI/releases)**（Release 签名）
 
   **流式叠影根治 · 工具大合体（46→17） · 特权全局信任 · 集群灵魂注入解耦 · 官方品牌图标 · 许可证 133 条**
 

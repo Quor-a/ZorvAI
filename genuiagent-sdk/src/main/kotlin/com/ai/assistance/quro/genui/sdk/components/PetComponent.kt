@@ -9,10 +9,17 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -30,7 +37,9 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
@@ -54,22 +63,73 @@ import kotlin.math.sin
  * PetPhase：随 AI 状态切换（正在思考/思考完成/工具调用/规划中/生成回复/回复完成），
  * 驱动眼睛、身体摇摆、头顶标记与气泡文案。
  */
+/**
+ * 桌宠专属视觉常量：与悬浮层 PetVisuals 同一套深墨蓝 + 青蓝强调体系。
+ * 不复用 ZorvPalette 的陶土粉，避免「通用 AI 可爱团子」的廉价感；
+ * 用户自定义 spec 仍可覆盖任意颜色。
+ */
+private object PetArt {
+    val Ink = Color(0xFF16223A)
+    val InkDeep = Color(0xFF0D1526)
+    val Accent = Color(0xFF86ACFF)
+    val Violet = Color(0xFFB79BFF)
+    val On = Color(0xFFF2F6FF)
+    val Muted = Color(0xFF94A5C2)
+    val Line = Color(0xFF31405C)
+    val LineSoft = Color(0xFF243350)
+    val Surface = Color(0xFF111A2B)
+    val Success = Color(0xFF7FDEB2)
+}
+
 enum class PetPhase(val bubble: String) {
     IDLE(""),
     THINKING("正在思考…"),
     TOOL_CALLING(""),
     PLANNING("规划中…"),
     GENERATING("正在生成回复…"),
-    DONE("回复完成 ✓"),
-    /** 🔴 互动动作执行中（挥手/弹跳/聊天…）：气泡空，弹跳动画，label 由 statusText 承载。 */
+    DONE("回复完成"),
+    /** 互动动作执行中（挥手/弹跳/聊天…）：气泡空，弹跳动画，label 由 statusText 承载。 */
     PERFORMING("")
 }
 
+/**
+ * 细描边胶囊气泡（带尖角）：取代 Material Surface 的默认圆角卡片。
+ * SDK 不依赖 app 模块，所以这里保留一份同款实现，保证两处桌宠视觉一致。
+ */
+@Composable
+fun PetBubbleCard(text: String, modifier: Modifier = Modifier, accent: Color = PetArt.Accent) {
+    if (text.isBlank()) return
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .background(PetArt.Surface.copy(alpha = 0.96f), RoundedCornerShape(999.dp))
+                .border(1.dp, PetArt.Line, RoundedCornerShape(999.dp))
+                .padding(horizontal = 11.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(5.dp).background(accent, CircleShape))
+                Spacer(Modifier.width(7.dp))
+                Text(text, color = PetArt.On, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 3)
+            }
+        }
+        Canvas(Modifier.size(10.dp, 6.dp)) {
+            val w = size.width; val h = size.height
+            drawPath(Path().apply {
+                moveTo(0f, 0f); lineTo(w, 0f); lineTo(w / 2f, h); close()
+            }, color = PetArt.Surface.copy(alpha = 0.96f))
+            drawPath(Path().apply {
+                moveTo(0f, 0f); lineTo(w / 2f, h); lineTo(w, 0f)
+            }, color = PetArt.Line, style = Stroke(width = 1.5f, cap = StrokeCap.Round))
+        }
+    }
+}
+
 data class PetSpec(
-    val name: String = "团子",
-    val body: List<Color> = listOf(ZorvPalette.ErrorSoft, ZorvPalette.ErrorSoft),
-    val eye: Color = ZorvPalette.InkSoft,
-    val accent: Color = ZorvPalette.ErrorWarm,
+    val name: String = "墨团",
+    val body: List<Color> = listOf(Color(0xFF35507F), Color(0xFF16223A)),
+    val eye: Color = Color(0xFF0B1220),
+    val accent: Color = PetArt.Violet,
     val form: String = "blob",
     val size: Float = 76f
 ) {
@@ -111,10 +171,10 @@ data class PetSpec(
                 runCatching { Color(android.graphics.Color.parseColor(it.trim().removePrefix("#").let { h -> if (h.length == 6) "#$h" else h })) }.getOrNull()
             }
             return PetSpec(
-                name = (obj["name"] as? JsonPrimitive)?.content ?: "团子",
-                body = body ?: listOf(ZorvPalette.ErrorSoft, ZorvPalette.ErrorSoft),
-                eye = eye ?: ZorvPalette.InkSoft,
-                accent = accent ?: ZorvPalette.ErrorWarm,
+                name = (obj["name"] as? JsonPrimitive)?.content ?: "墨团",
+                body = body ?: listOf(Color(0xFF35507F), Color(0xFF16223A)),
+                eye = eye ?: Color(0xFF0B1220),
+                accent = accent ?: PetArt.Violet,
                 form = ((obj["form"] as? JsonPrimitive)?.content ?: "blob").lowercase(),
                 size = ((obj["size"] as? JsonPrimitive)?.content?.toFloatOrNull() ?: 76f).coerceIn(48f, 160f)
             )
@@ -170,19 +230,7 @@ fun PetSprite(
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         if (showBubble && bubbleText.isNotBlank()) {
-            Surface(
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                shape = RoundedCornerShape(10.dp),
-                shadowElevation = 3.dp
-            ) {
-                Text(
-                    bubbleText,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Medium
-                )
-            }
+            PetBubbleCard(bubbleText)
         }
         Canvas(modifier = Modifier.size(s).padding(2.dp)) {
             val w = this.size.width
@@ -221,7 +269,7 @@ fun PetSprite(
             // 头顶标记：思考=问号泡，工具=旋转环
             if (phase == PetPhase.THINKING || phase == PetPhase.PLANNING) {
                 drawCircle(Color.White.copy(alpha = 0.85f), radius = w * 0.09f, center = Offset(w * 0.86f, h * 0.12f))
-                drawCircle(ZorvPalette.Terracotta, radius = w * 0.045f, center = Offset(w * 0.86f, h * 0.12f))
+                drawCircle(PetArt.Accent, radius = w * 0.045f, center = Offset(w * 0.86f, h * 0.12f))
             }
             if (phase == PetPhase.TOOL_CALLING) {
                 val c = Offset(w * 0.86f, h * 0.12f)
@@ -229,7 +277,7 @@ fun PetSprite(
                 repeat(3) { i ->
                     val a = spin + i * 120f
                     drawCircle(
-                        ZorvPalette.Terracotta.copy(alpha = 0.9f),
+                        PetArt.Violet.copy(alpha = 0.9f),
                         radius = w * 0.025f,
                         center = Offset(c.x + cos(Math.toRadians(a.toDouble())).toFloat() * r,
                             c.y + sin(Math.toRadians(a.toDouble())).toFloat() * r)
@@ -237,7 +285,7 @@ fun PetSprite(
                 }
             }
             if (phase == PetPhase.DONE) {
-                drawCircle(ZorvPalette.Success.copy(alpha = 0.9f), radius = w * 0.06f, center = Offset(w * 0.86f, h * 0.12f))
+                drawCircle(PetArt.Success.copy(alpha = 0.9f), radius = w * 0.06f, center = Offset(w * 0.86f, h * 0.12f))
                 drawCircle(Color.White, radius = w * 0.028f, center = Offset(w * 0.86f, h * 0.12f))
             }
         }
@@ -298,7 +346,7 @@ private fun DrawScope.drawBody(w: Float, h: Float, spec: PetSpec, phaseT: Float)
     } else bodyPath(w, h, "blob")
     drawPath(
         outlinePath,
-        ZorvPalette.Ink,
+        PetArt.InkDeep,
         style = androidx.compose.ui.graphics.drawscope.Stroke(width = w * 0.022f)
     )
     // 小脚（blob/cat：底部两个半圆）
@@ -450,6 +498,9 @@ fun PetSpriteFrames(
     facingRight: Boolean = true,
     mode: String = "physics",
     bubbleText: String = "",
+    /** 当前动作所在的分片位图；宠物包把上百段动作拆成多张图时由外层按需提供，
+     *  避免一次性解码单张巨型雪碧图。null 时仍用整包主图 [bitmap]。 */
+    sheetBitmap: androidx.compose.ui.graphics.ImageBitmap? = null,
     modifier: Modifier = Modifier,
     scale: Float = 1f,
 ) {
@@ -464,7 +515,8 @@ fun PetSpriteFrames(
     if (def != null && def.frames > 1) {
         androidx.compose.runtime.LaunchedEffect(def) {
             while (true) {
-                kotlinx.coroutines.delay(def.frameDurationMs)
+                // 外部导入的包可能写 0/1ms，不设下限会变成忙循环把主线程打满。
+                kotlinx.coroutines.delay(def.frameDurationMs.coerceAtLeast(16L))
                 frameIdx = when (def.playback.lowercase()) {
                     "once" -> (frameIdx + 1).coerceAtMost(def.frames - 1)
                     "hold" -> 0
@@ -475,24 +527,14 @@ fun PetSpriteFrames(
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         if (bubbleText.isNotBlank()) {
-            Surface(
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                shape = RoundedCornerShape(10.dp), shadowElevation = 3.dp,
-            ) {
-                Text(
-                    bubbleText,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
+            PetBubbleCard(bubbleText)
         }
         Canvas(Modifier.size(w, h).padding(2.dp)) {
             val d = def ?: return@Canvas
             val col = frameIdx % d.frames.coerceAtLeast(1)
             // 朝向不镜像——walkRight/walkLeft 用不同动画行
             drawImage(
-                image = bitmap,
+                image = sheetBitmap ?: bitmap,
                 srcOffset = androidx.compose.ui.unit.IntOffset(col * cellWidth, d.row * cellHeight),
                 srcSize = androidx.compose.ui.unit.IntSize(cellWidth, cellHeight),
                 dstSize = androidx.compose.ui.unit.IntSize(this.size.width.toInt(), this.size.height.toInt()),

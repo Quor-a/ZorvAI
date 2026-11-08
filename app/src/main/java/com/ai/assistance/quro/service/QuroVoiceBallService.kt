@@ -292,16 +292,10 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                             toolName = currentToolName,
                             showBubble = petSettings.bubbleEnabled,
                         )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            status,
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier
-                                .background(Color(0xFF555555).copy(alpha = 0.85f), CircleShape)
-                                .clip(CircleShape)
-                                .padding(8.dp, 3.dp),
-                        )
+                        Spacer(Modifier.height(5.dp))
+                        // 与桌宠悬浮层统一的状态胶囊（深墨蓝纯色 + 细描边），
+                        // 替代原来的半透明灰底 + 白字贴片。
+                        com.ai.assistance.quro.ui.pet.PetStatusPill(status)
                     }
                 } else {
                     QuroVoiceBall(listening, speaking, !conversationActive, status)
@@ -813,7 +807,12 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                     )
                     assistant.ask(applicationContext, cfg, buildVoiceSystemPrompt())
                 }
-                mainHandler.post { speaking = true; status = "回复中：${reply.take(40)}" }
+                // 兜底：VM 未就绪的回退路径，或任何链路漏网的错误文案，都不朗读、
+                // 也不写进状态栏——只播一句轻提示，避免把 HTTP 429 等内部错误念给用户。
+                val spoken = if (com.ai.assistance.quro.core.pet.QuroQuietTurn.isDiagnosticError(reply)) {
+                    com.ai.assistance.quro.core.pet.QuroQuietTurn.FAILURE_HINT
+                } else reply
+                mainHandler.post { speaking = true; status = "回复中：${spoken.take(40)}" }
                 petPhase = PetPhase.GENERATING; currentToolName = null
                 // 朗读协调：若本轮 AI 已通过 speak 工具主动控制播报（多音色/分段/唱歌等），
                 // 语音球自动朗读让位，避免与 speak 工具重复播报同一段回复。
@@ -825,7 +824,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                         if (conversationActive) { status = qstr(R.string.qk_01757); startListening() }
                     }
                 } else {
-                    speak(reply) {
+                    speak(spoken) {
                         // 此 lambda 已在 main 线程（见下 speak 包装）
                         speaking = false
                         if (conversationActive) { status = qstr(R.string.qk_01757); startListening() }

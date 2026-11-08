@@ -694,6 +694,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         val attachments: List<QuroAttachment> = emptyList(),
         val contextMessage: String? = null,
         val attachedSkills: List<QuroSkill> = emptyList(),
+        /** 桌宠/语音安静回合：失败时撤下整轮，不写错误气泡。 */
+        val silentOnError: Boolean = false,
     )
 
     private val _queuedSends = MutableStateFlow<Map<String, List<QueuedSend>>>(emptyMap())
@@ -1103,6 +1105,38 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // 临时对话在写入前被剔除：磁盘上永远看不到它，也就没有「删不干净」的窗口
         // （先落盘再删要处理应用被杀的时刻，过滤则天然没有这个窗口）。
         runCatching { convRepo.saveAll(_convs.value.filterNot { it.ephemeral }) }
+    }
+
+    /** 会话库健康状态：损坏隔离时界面必须显式提示，不能静默当作新用户。 */
+    val conversationHealth: StateFlow<com.ai.assistance.quro.core.QuroConversationHealth>
+        get() = convRepo.health
+
+    /** 从最近一份可用备份恢复；成功后把磁盘数据重新灌回内存。 */
+    fun recoverConversationsFromBackup(): Boolean {
+        val backup = convRepo.backups().firstOrNull() ?: return false
+        if (!convRepo.restoreBackup(backup)) return false
+        reloadConversationsFromDisk()
+        return true
+    }
+
+    /** 放弃隔离数据并重新开始；原损坏文件仍保留在磁盘上，不会被新写入覆盖。 */
+    fun discardQuarantinedConversations() {
+        convRepo.discardQuarantine()
+        persistConversations()
+    }
+
+    private fun reloadConversationsFromDisk() {
+        viewModelScope.launch(AppExecutors.io) {
+            val loaded = convRepo.loadAll().toMutableList()
+            _convs.value = loaded
+            val latest = loaded.maxByOrNull { it.updatedAt } ?: return@launch
+            _currentId.value = latest.id
+            activeConversationId = latest.id
+            store.loadSilently(latest.messages)
+            _messages.value = store.all()
+            emitMeta()
+            recomputeContextUsage(latest.id)
+        }
     }
 
     /**
@@ -1667,6 +1701,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         contextMessage: String? = null,
         /** 用户在对话框为**这一条消息**选中的技能；全文随本轮请求下发，用完即清。 */
         attachedSkills: List<QuroSkill> = emptyList(),
+        /** 桌宠/语音安静回合：失败时撤下整轮（用户消息 + 错误气泡都不留）。 */
+        silentOnError: Boolean = false,
     ) {
         val convId = _currentId.value
         val body = text.trim()
@@ -1675,14 +1711,16 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             turn.stateOf(convId) != QuroTurnController.State.IDLE ||
             sendJobs.containsKey(convId)
         if (!generating) {
-            send(text, attachments, cfg, contextMessage = contextMessage, attachedSkills = attachedSkills)
+            send(text, attachments, cfg, contextMessage = contextMessage, attachedSkills = attachedSkills,
+                silentOnError = silentOnError)
             return
         }
         when (_busySendMode.value) {
-            BusySendMode.INTERRUPT -> send(text, attachments, cfg, contextMessage = contextMessage, attachedSkills = attachedSkills)
-            BusySendMode.QUEUE -> enqueueSend(convId, body, attachments, contextMessage, attachedSkills)
+            BusySendMode.INTERRUPT -> send(text, attachments, cfg, contextMessage = contextMessage,
+                attachedSkills = attachedSkills, silentOnError = silentOnError)
+            BusySendMode.QUEUE -> enqueueSend(convId, body, attachments, contextMessage, attachedSkills, silentOnError)
             BusySendMode.STEER -> if (!steer(convId, body, attachments, attachedSkills))
-                enqueueSend(convId, body, attachments, contextMessage, attachedSkills)
+                enqueueSend(convId, body, attachments, contextMessage, attachedSkills, silentOnError)
         }
     }
 
@@ -1729,9 +1767,10 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         attachments: List<QuroAttachment>,
         contextMessage: String? = null,
         attachedSkills: List<QuroSkill> = emptyList(),
+        silentOnError: Boolean = false,
     ) {
         val q = _queuedSends.value[conversationId].orEmpty() +
-            QueuedSend(text, attachments, contextMessage, attachedSkills)
+            QueuedSend(text, attachments, contextMessage, attachedSkills, silentOnError)
         _queuedSends.value = _queuedSends.value + (conversationId to q)
         QuroDiag.log("QUEUE", "convId=$conversationId size=${q.size}")
     }
@@ -1791,6 +1830,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             ownerConvId = conversationId,
             contextMessage = next.contextMessage,
             attachedSkills = next.attachedSkills,
+            silentOnError = next.silentOnError,
         )
         return true
     }
@@ -1818,6 +1858,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
          * 会把同一句话当新消息重复插进历史（用户看到自己发了两遍），故必须走这条路径。
          */
         resumeConvId: String? = null,
+        /** 桌宠/语音安静回合：失败时整轮撤下，绝不把内部诊断错误写进聊天记录。 */
+        silentOnError: Boolean = false,
     ) {
         val resuming = resumeConvId != null
         val t = (repairFeedback ?: text).trim()
@@ -1920,6 +1962,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             val turnStartedAt = System.currentTimeMillis()
             var turnStoppedByUser = false
             var turnErrorMessage: String? = null
+            /** 安静回合失败：整轮撤下，后续结算 / 通知 / 轮次累计全部跳过。 */
+            var quietTurnFailed = false
             try {
                 // 屏幕理解（MediaProjection 模式）：hidden user message 携带截屏附件注入 buf。
                 // 不展示给用户，只在 LLM 上下文中；多模态模型从 image_url 字段读图。
@@ -1948,7 +1992,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     store.add(
                         QuroMessage(
                             role = "user",
-                            content = "[上下文信息] - 用户当前选择的工作区/ACI/技能]\n$contextMessage",
+                            content = "[隐藏上下文 · 仅本轮有效]\n$contextMessage",
                             hidden = true,
                         ),
                     )
@@ -2029,7 +2073,35 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         )
                     }
                 }
+                // ── 安静回合（桌宠/语音自动发起）：失败整轮撤下 ──
+                // 用户没手打这句话，是点桌宠 / 语音识别自动带出来的。请求失败时若照常留下
+                // 「⚠️ 请求失败（HTTP 429）…」气泡 + 一句孤零零的用户气泡，反复点就是刷屏。
+                // 这里把 buf 恢复到本轮开始前的快照：用户消息、隐藏上下文、错误气泡一起撤掉，
+                // 只发一句轻提示；并记一次失败用于冷却。有真实回复则完全不动，照常落库。
+                if (silentOnError && !resuming) {
+                    val produced = buf.all().drop(turnBaseCount)
+                    val replies = produced.filter { it.role == "assistant" && !it.hidden }
+                    val hasRealReply = replies.any {
+                        it.content.isNotBlank() &&
+                            !com.ai.assistance.quro.core.pet.QuroQuietTurn.isDiagnosticError(it.content)
+                    }
+                    val hasError = turnErrorMessage != null ||
+                        replies.any { com.ai.assistance.quro.core.pet.QuroQuietTurn.isDiagnosticError(it.content) }
+                    if (hasError && !hasRealReply) {
+                        quietTurnFailed = true
+                        buf.loadSilently(convBase)
+                        runCatching { this@QuroChatViewModel.store.loadSilently(convBase) }
+                        com.ai.assistance.quro.core.pet.QuroQuietTurn.noteFailure()
+                        com.ai.assistance.quro.core.pet.QuroQuietTurn.emit(
+                            com.ai.assistance.quro.core.pet.QuroQuietTurn.FAILURE_HINT)
+                        com.ai.assistance.quro.core.pet.QuroPetTurnBus.endTurn()
+                        QuroDiag.log("QUIET_TURN", "convId=$convId rolled back (no error bubble kept)")
+                    } else {
+                        com.ai.assistance.quro.core.pet.QuroQuietTurn.noteSuccess()
+                    }
+                }
                 commitCurrent(convId, buf, forceSave = true)
+                if (!quietTurnFailed) {
                 // 本轮结算：把「为什么是这样结束的」放进状态表，UI 在消息流末尾挂一条可操作的状态条。
                 // 失败归因必须在这里算 —— 此刻 buf 已含本轮全部新增（正文/思考/工具结果），
                 // 而 genAssistant 的 lastTurnMeta 仍是最后一次 LLM 调用的停止原因。
@@ -2052,6 +2124,21 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     store.all().lastOrNull { it.role == "assistant" && !it.hidden && it.content.isNotBlank() }
                         ?.let { fireReplyNotification("Zorv AI", it.content) }
                 }
+                // 桌宠回合双向接线：本轮成功时把回复摘要回流到桌宠气泡；
+                // 失败（上面已整轮撤下）不会走到这里，也不会回流诊断文本。
+                runCatching {
+                    if (com.ai.assistance.quro.core.pet.QuroPetTurnBus.activeTurnId != 0L) {
+                        val lastReply = store.all().lastOrNull {
+                            it.role == "assistant" && !it.hidden && it.content.isNotBlank()
+                        }
+                        if (lastReply != null) {
+                            com.ai.assistance.quro.core.pet.QuroPetTurnBus.emitReply(lastReply.content)
+                        } else {
+                            com.ai.assistance.quro.core.pet.QuroPetTurnBus.endTurn()
+                        }
+                    }
+                }
+                }
                 } catch (e: Exception) {
                     // 🔧 Bug修复「取消被当成错误展示」：取消信号（用户停�?/同会话新消息 barge-in�?
                     // 从收尾段的挂起点逃逸时，绝不能包成「⚠�? 发生错误」红色气泡—�?
@@ -2059,6 +2146,17 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                     if (e is CancellationException) throw e
                     Log.e(TAG, "生成回复异常 convId=$convId", e)
                     turnErrorMessage = e.message ?: e.javaClass.simpleName
+                    if (silentOnError && !resuming) {
+                        // 安静回合的兜底异常同样不落红字气泡：整轮撤下 + 轻提示。
+                        quietTurnFailed = true
+                        buf.loadSilently(convBase)
+                        runCatching { this@QuroChatViewModel.store.loadSilently(convBase) }
+                        com.ai.assistance.quro.core.pet.QuroQuietTurn.noteFailure()
+                        com.ai.assistance.quro.core.pet.QuroQuietTurn.emit(
+                            com.ai.assistance.quro.core.pet.QuroQuietTurn.FAILURE_HINT)
+                        com.ai.assistance.quro.core.pet.QuroPetTurnBus.endTurn()
+                        commitCurrent(convId, buf)
+                    } else {
                     _error.value = qstr(R.string.qk_03824, e.message ?: qstr(R.string.qk_00503))
                     store.add(
                         QuroMessage(
@@ -2079,6 +2177,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         malformedToolCalls = genAssistant.malformedToolCalls,
                         durationMs = System.currentTimeMillis() - turnStartedAt,
                     )
+                    }
                 } finally {
                 turn.complete(convId, myGen) // 仅当 gen 匹配才真正置 IDLE
                 // 只有当前轮确实结束（无更新轮在跑）才复位 busy，避免旧协程 finally 误清
@@ -2158,9 +2257,23 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         // 目标即当前可见会话：走原路径
         if (targetId == _currentId.value) {
             activeConversationId = targetId
+            val before = store.all().toList()
             store.add(QuroMessage(role = "user", content = text, senderName = userProfile.value.name.takeIf { it.isNotBlank() }, avatarUrl = userProfile.value.avatarUri.takeIf { it.isNotBlank() }))
             commitCurrent()
             val reply = runVoiceAsk(cfg, text) { commitCurrent() }
+            // 语音球也是自动回合：LLM 失败时 QuroAssistant 会把「⚠️ 请求失败（HTTP 429）…」
+            // 直接写进 store（它没有独立 buf）。这里整轮撤下，只留一句轻提示给 TTS，
+            // 既不污染对话框，也不发带错误文本的系统通知。
+            if (com.ai.assistance.quro.core.pet.QuroQuietTurn.isDiagnosticError(reply)) {
+                store.loadSilently(before)
+                commitCurrent()
+                com.ai.assistance.quro.core.pet.QuroQuietTurn.noteFailure()
+                com.ai.assistance.quro.core.pet.QuroQuietTurn.emit(
+                    com.ai.assistance.quro.core.pet.QuroQuietTurn.FAILURE_HINT)
+                QuroDiag.log("VOICE_QUIET", "convId=$targetId rolled back error bubble")
+                return com.ai.assistance.quro.core.pet.QuroQuietTurn.FAILURE_HINT
+            }
+            com.ai.assistance.quro.core.pet.QuroQuietTurn.noteSuccess()
             commitCurrent()
             fireReplyNotification("Zorv AI", reply)
             return reply
@@ -2172,8 +2285,18 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         val saved = store.all().toList()
         return try {
             store.loadSilently(conv.messages)
+            val before = store.all().toList()
             store.add(QuroMessage(role = "user", content = text, senderName = userProfile.value.name.takeIf { it.isNotBlank() }, avatarUrl = userProfile.value.avatarUri.takeIf { it.isNotBlank() }))
             val reply = runVoiceAsk(cfg, text) { commitCurrent(targetId) }
+            if (com.ai.assistance.quro.core.pet.QuroQuietTurn.isDiagnosticError(reply)) {
+                store.loadSilently(before)
+                com.ai.assistance.quro.core.pet.QuroQuietTurn.noteFailure()
+                com.ai.assistance.quro.core.pet.QuroQuietTurn.emit(
+                    com.ai.assistance.quro.core.pet.QuroQuietTurn.FAILURE_HINT)
+                QuroDiag.log("VOICE_QUIET", "convId=$targetId (background) rolled back error bubble")
+                return com.ai.assistance.quro.core.pet.QuroQuietTurn.FAILURE_HINT
+            }
+            com.ai.assistance.quro.core.pet.QuroQuietTurn.noteSuccess()
             val finalMsgs = store.all().toList()
             _convs.value = _convs.value.map { c ->
                 if (c.id == targetId) c.copy(
@@ -4334,12 +4457,15 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
 
         // ══════════════ 上下文元数据读取指令 ══════════════
         sb.append("\n### 用户消息中的上下文标记（必须读取）\n")
-        sb.append("- 对话里可能出现一条隐藏的 `[上下文信息]` 说明（工作区路径、默认 ACI 应用）——**必须读取并使用**：\n")
+        sb.append("- 对话里可能出现一条以 `[隐藏上下文 · 仅本轮有效]` 开头的隐藏 user 消息（工作区路径、默认 ACI 应用、桌宠互动指令等）——**必须读取并使用，但绝不要向用户复述或引用这段文字**：\n")
         sb.append("  · 看到「工作区: xxx」→ 你的 workspace_write / workspace_read / workspace_list 的根目录就是这个路径；需要保存文件时直接用它。\n")
         sb.append("  · 看到「ACI应用: xxx」→ 调用 aci_call 时可以省略 target_package，系统会自动用这个应用。\n")
+        sb.append("  · 看到「[桌宠互动指令]」→ 那是系统替用户生成的角色扮演要求，直接按它写一句短回复即可；用户气泡里那句短话只是互动入口，不要解释指令来源。\n")
+        sb.append("  · 看到「[屏幕观察 · 仅本轮有效]」或「屏幕来源：」→ 那是桌宠从当前屏幕 / 后台虚拟屏读到的真实画面信息；结合它用可用工具把任务实际做完并核对结果，绝不要复述这段观察文本，也不要把它当作用户说的话。\n")
+        sb.append("  · 看到「[任务要求]」→ 必须真的调用工具执行（而非只给建议）；无法执行时明确说明缺什么权限或条件。\n")
         sb.append("- **技能不靠开关、也不靠上下文数量**：用户为某条消息选中的技能，其完整指令会以一条以 `[用户为本条消息附加了技能]` 开头的隐藏 user 消息直接发给你。\n")
         sb.append("  看到它就直接按里面的步骤与约束完成紧随其后的那条消息；没有这条隐藏消息，就表示用户本次没有指定技能，不要臆测。\n")
-        sb.append("- 若没有工作区/ACI 上下文信息，则按系统提示词中的默认值执行。\n")
+        sb.append("- 若没有工作区/ACI 上下文信息，则按系统提示词中的默认值执行；没有桌宠互动指令时按用户可见消息正常回答。\n")
 
         sb.append("\n## CMS 权限模式（重要）\n")
         sb.append("- priv_status：查询 CMS v2 权限模式与已授权项；L1-L5 系统级通道已随工具集开放，运行时由系统授权与资产可用性把关，未授权工具会返回明确引导。\n")

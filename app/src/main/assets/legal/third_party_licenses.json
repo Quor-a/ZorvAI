@@ -6,7 +6,7 @@
     "license": "Apache-2.0",
     "source": "https://github.com/Quor-a/ZorvAI"
   },
-  "total": 133,
+  "total": 134,
   "distribution": [
     {
       "license": "Apache-2.0",
@@ -126,6 +126,10 @@
     },
     {
       "license": "EPL-2.0（ECJ）+ Apache-2.0（D8/apksigner/android.jar）",
+      "count": 1
+    },
+    {
+      "license": "CC BY-NC-SA 4.0",
       "count": 1
     }
   ],
@@ -1114,6 +1118,20 @@
           "copyleft": 0,
           "noteZh": "标题字体（runtimes/fonts）。",
           "noteEn": "标题字体（runtimes/fonts）。"
+        }
+      ]
+    },
+    {
+      "id": "artwork",
+      "titleZh": "桌面宠物形象与素材",
+      "titleEn": "Desktop pet artwork",
+      "entries": [
+        {
+          "name": "大肥鱼桌面宠物形象（dsh-pet）",
+          "license": "CC BY-NC-SA 4.0",
+          "copyleft": 1,
+          "noteZh": "形象来源：PC2005-cloud、上善无形（B 站）、ZipZipPipe（B 站）。许可：形象 CC BY-NC-SA 4.0（署名 · 非商业 · 相同方式共享），https://creativecommons.org/licenses/by-nc-sa/4.0/ ；项目代码 MIT；素材允许开源使用、禁止商用。原仓库：https://github.com/PC2005-cloud/dsh-pet 。宠物形象为社区二创的 DeepSeek「大肥鱼」（鲸鱼娘），非 DeepSeek 官方形象，不可以任何形式商业化。基于本项目的衍生 / 改版 / 换皮作品，在 GitHub 仓库、产品官网等公开渠道须附上原作者地址 https://github.com/PC2005-cloud/dsh-pet 。改动：从透明 GIF / VP9-alpha WebM 逐段抽帧、统一缩放与脚底对齐，合成为 Android 端 spritesheet 宠物包（114 段动作），新增标准动画槽位、模式配置、环境动作池与中文互动菜单；角色形象本身未改动。",
+          "noteEn": "Desktop pet artwork from https://github.com/PC2005-cloud/dsh-pet (authors: PC2005-cloud, 上善无形, ZipZipPipe). Artwork is CC BY-NC-SA 4.0 (attribution, non-commercial, share-alike); project code is MIT. This is a community derivative of the DeepSeek whale-girl mascot, NOT an official DeepSeek asset, and must not be used commercially. Derivative works published in public channels must link back to the original repository. Modifications: transparent GIF/VP9-alpha WebM frames were extracted, uniformly scaled and foot-aligned into an Android spritesheet pet pack (114 actions); the character artwork itself was not altered."
         }
       ]
     },

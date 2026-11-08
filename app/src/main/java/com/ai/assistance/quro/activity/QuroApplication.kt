@@ -358,5 +358,17 @@ class QuroApplication : Application(), Configuration.Provider {
         } catch (e: Throwable) {
             android.util.Log.e("QuroApplication", "InboxWatcher 启动失败（不影响主流程）", e)
         }
+        // 桌面宠物冷启动自愈：开关持久化在 QuroVoiceFeaturePrefs，但进程被回收（划掉任务、
+        // 厂商省电策略、系统重启）后从没有入口重新拉起服务 —— 开机广播只管 BOOT_COMPLETED，
+        // 「退出软件再打开」这条最常见的路径完全漏了，设置里显示已开启、桌面却没有宠物。
+        // 放到主线程消息队列尾部：onCreate 后面还有终端 / 插件 / 工作流等重初始化，
+        // 立刻 startForegroundService 可能因主线程被占满触发前台服务启动超时。
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            try {
+                com.ai.assistance.quro.service.QuroDesktopPetService.ensureStarted(applicationContext)
+            } catch (e: Throwable) {
+                android.util.Log.w("QuroApplication", "桌宠自愈失败（不影响主流程）", e)
+            }
+        }
     }
 }

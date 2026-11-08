@@ -488,3 +488,22 @@ SOURCE AVAILABILITY
 
   （注：reference-projects/ 下的 Agora/Eta/Kai/TinyContainer 等为独立示例工程，
    各自带 LICENSE，不参与本 APK 构建，故不在上方清单内。）
+
+----------------------------------------------------------------------
+DESKTOP PET ARTWORK / 桌面宠物形象
+----------------------------------------------------------------------
+
+  「大肥鱼」桌面宠物形象与动画素材（app/src/main/assets/pets/dafeiyu/）
+    来源：  https://github.com/PC2005-cloud/dsh-pet  （dsh-pet 项目）
+    作者：  PC2005-cloud（dsh-pet 项目作者）
+            上善无形（B 站）—— 原型「溟月」设计
+            ZipZipPipe（B 站）—— DeepSeek 版女仆鲸鱼娘设计
+    许可：  形象 CC BY-NC-SA 4.0（署名 · 非商业 · 相同方式共享）
+            https://creativecommons.org/licenses/by-nc-sa/4.0/
+            项目代码 MIT；素材允许开源使用、禁止商用。
+    说明：  该形象为社区二创的 DeepSeek「大肥鱼」（鲸鱼娘），非 DeepSeek 官方形象，
+            不可以任何形式商业化。基于本项目的衍生 / 改版 / 换皮作品，在 GitHub 仓库、
+            产品官网等公开渠道须附上原作者地址 https://github.com/PC2005-cloud/dsh-pet。
+    改动：  从 dsh-pet 的透明 GIF / VP9-alpha WebM 逐段抽帧、统一缩放与脚底对齐，
+            合成为 Android 端 spritesheet 宠物包（114 段动作）；新增标准动画槽位、
+            模式配置、环境动作池与中文互动菜单；角色形象本身未改动。

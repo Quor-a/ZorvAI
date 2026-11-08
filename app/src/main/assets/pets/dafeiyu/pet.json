@@ -1,0 +1,1385 @@
+{
+  "schemaVersion": 1,
+  "id": "dsh.dafeiyu",
+  "displayName": "大肥鱼",
+  "description": "蓝发鲸鱼娘小女仆 · 114 段透明动画 · 待机/行走/拖拽/思考/工具/回复/睡觉/时节/玩耍全状态",
+  "tags": [
+    "桌宠",
+    "鲸鱼娘",
+    "女仆",
+    "动画宠物"
+  ],
+  "sheets": {
+    "sheet_00": "sheets/sheet_00.webp",
+    "sheet_01": "sheets/sheet_01.webp",
+    "sheet_02": "sheets/sheet_02.webp",
+    "sheet_03": "sheets/sheet_03.webp",
+    "sheet_04": "sheets/sheet_04.webp",
+    "sheet_05": "sheets/sheet_05.webp",
+    "sheet_06": "sheets/sheet_06.webp",
+    "sheet_07": "sheets/sheet_07.webp"
+  },
+  "spritesheet": {
+    "path": "sheets/sheet_00.webp",
+    "cellWidth": 160,
+    "cellHeight": 176,
+    "columns": 8,
+    "defaultDisplayWidth": 96,
+    "defaultDisplayHeight": 106
+  },
+  "animations": {
+    "daiji-huxi-xiuxian": {
+      "sheet": "sheet_00",
+      "row": 0,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "dongzhangxiwang": {
+      "sheet": "sheet_00",
+      "row": 1,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "beishubiao-tuozhuai-xuankong-fankui": {
+      "sheet": "sheet_00",
+      "row": 2,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "dianji-huiying-kaixin-yuedong": {
+      "sheet": "sheet_00",
+      "row": 3,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "dianji-huiying-haixiu-jingya": {
+      "sheet": "sheet_00",
+      "row": 4,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "dianji-huiying-aojiao-shengqi-ceshen-zhanshi": {
+      "sheet": "sheet_00",
+      "row": 5,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "dianji-huiying-naoyang-gegexiao": {
+      "sheet": "sheet_00",
+      "row": 6,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "dianji-huiying-yuanqi-huishou": {
+      "sheet": "sheet_00",
+      "row": 7,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "pangxie-zoulu": {
+      "sheet": "sheet_00",
+      "row": 8,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "yuandi-piaofu-tabu": {
+      "sheet": "sheet_00",
+      "row": 9,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "yuandi-zuozhuan-benpao": {
+      "sheet": "sheet_00",
+      "row": 10,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "youxian-hengga": {
+      "sheet": "sheet_00",
+      "row": 11,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chaoda-shenlanyao": {
+      "sheet": "sheet_00",
+      "row": 12,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "yuandi-qiaoji-zhuomian-hudong": {
+      "sheet": "sheet_00",
+      "row": 13,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "yuandi-zhongli-xiadun-yasuo": {
+      "sheet": "sheet_00",
+      "row": 14,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "haqian-liantian": {
+      "sheet": "sheet_00",
+      "row": 15,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "yuandi-xiaoqi-chenmian": {
+      "sheet": "sheet_01",
+      "row": 0,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "nvpu-quxi-liyi": {
+      "sheet": "sheet_01",
+      "row": 1,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "beixiayitiao-zhamao": {
+      "sheet": "sheet_01",
+      "row": 2,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "xiaofudu-yuandi-360du-xuanzhuan-zhanshi": {
+      "sheet": "sheet_01",
+      "row": 3,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "touchi-lingshi-bei-zhuazhu": {
+      "sheet": "sheet_01",
+      "row": 4,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "yong-jingyu-weiba-paidadi": {
+      "sheet": "sheet_01",
+      "row": 5,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "da-keshui-bei-jingxing": {
+      "sheet": "sheet_01",
+      "row": 6,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "zhao-jingzi": {
+      "sheet": "sheet_01",
+      "row": 7,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "zhengti-huanzhuang-shise": {
+      "sheet": "sheet_01",
+      "row": 8,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "qingkuai-jilu": {
+      "sheet": "sheet_01",
+      "row": 9,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "xie-daima": {
+      "sheet": "sheet_01",
+      "row": 10,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "yaoshan-naliang": {
+      "sheet": "sheet_01",
+      "row": 11,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chenjian-shuaya": {
+      "sheet": "sheet_01",
+      "row": 12,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "yuandi-zhuanxin-wan-mofang": {
+      "sheet": "sheet_01",
+      "row": 13,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "yuandi-dunxia-wan-wanju-qiche": {
+      "sheet": "sheet_01",
+      "row": 14,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "jingyu-tu-paopao-texiao": {
+      "sheet": "sheet_01",
+      "row": 15,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "yuandi-tiaoyue-zhuasui-touding-wupin": {
+      "sheet": "sheet_02",
+      "row": 0,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "wan-youxi-qijibaituai": {
+      "sheet": "sheet_02",
+      "row": 1,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "wan-shuiqiang": {
+      "sheet": "sheet_02",
+      "row": 2,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "xiaotiqin-yanzou": {
+      "sheet": "sheet_02",
+      "row": 3,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "lanjing-xianshi": {
+      "sheet": "sheet_02",
+      "row": 4,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "youya-nvpuwu": {
+      "sheet": "sheet_02",
+      "row": 5,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "qingkuai-yaobaiwu": {
+      "sheet": "sheet_02",
+      "row": 6,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "keai-zhaiwu": {
+      "sheet": "sheet_02",
+      "row": 7,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chui-qiqiu": {
+      "sheet": "sheet_02",
+      "row": 8,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "dongwu-huanrao": {
+      "sheet": "sheet_02",
+      "row": 9,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "fang-fengzheng": {
+      "sheet": "sheet_02",
+      "row": 10,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chai-liwu": {
+      "sheet": "sheet_02",
+      "row": 11,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "bian-gezi": {
+      "sheet": "sheet_02",
+      "row": 12,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "puke-moshu": {
+      "sheet": "sheet_02",
+      "row": 13,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chou-tuoluo": {
+      "sheet": "sheet_02",
+      "row": 14,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chui-dizi": {
+      "sheet": "sheet_02",
+      "row": 15,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "hudie-mifeng-huanrao-touding-kaihua": {
+      "sheet": "sheet_03",
+      "row": 0,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "lu-mao": {
+      "sheet": "sheet_03",
+      "row": 1,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "pingkong-shenghua": {
+      "sheet": "sheet_03",
+      "row": 2,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "qi-muma": {
+      "sheet": "sheet_03",
+      "row": 3,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "sanqiu-paojie": {
+      "sheet": "sheet_03",
+      "row": 4,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "ti-jianzi": {
+      "sheet": "sheet_03",
+      "row": 5,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "xiawuziqi": {
+      "sheet": "sheet_03",
+      "row": 6,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "dangqiuqian": {
+      "sheet": "sheet_03",
+      "row": 7,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-baifan": {
+      "sheet": "sheet_03",
+      "row": 8,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "dakou-chi-lingshi": {
+      "sheet": "sheet_03",
+      "row": 9,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-token": {
+      "sheet": "sheet_03",
+      "row": 10,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-zaocan": {
+      "sheet": "sheet_03",
+      "row": 11,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-wucan": {
+      "sheet": "sheet_03",
+      "row": 12,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-wancan": {
+      "sheet": "sheet_03",
+      "row": 13,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-bingqilin-ronghua": {
+      "sheet": "sheet_03",
+      "row": 14,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-dazhaxie": {
+      "sheet": "sheet_03",
+      "row": 15,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-tanghulu": {
+      "sheet": "sheet_04",
+      "row": 0,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-changshoumian": {
+      "sheet": "sheet_04",
+      "row": 1,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-xigua": {
+      "sheet": "sheet_04",
+      "row": 2,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "shuan-huoguo": {
+      "sheet": "sheet_04",
+      "row": 3,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "beiluoye-yanmo": {
+      "sheet": "sheet_04",
+      "row": 4,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "zhongqiu-shangyue-chi-yuebing": {
+      "sheet": "sheet_04",
+      "row": 5,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "duixueren": {
+      "sheet": "sheet_04",
+      "row": 6,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "fang-yanhua": {
+      "sheet": "sheet_04",
+      "row": 7,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-zongzi": {
+      "sheet": "sheet_04",
+      "row": 8,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-niangao": {
+      "sheet": "sheet_04",
+      "row": 9,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-qingtuan": {
+      "sheet": "sheet_04",
+      "row": 10,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-labazhou": {
+      "sheet": "sheet_04",
+      "row": 11,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chi-chongyanggao": {
+      "sheet": "sheet_04",
+      "row": 12,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "shou-hongbao": {
+      "sheet": "sheet_04",
+      "row": 13,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "xie-fuzi": {
+      "sheet": "sheet_04",
+      "row": 14,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chuanzhenqiqiao": {
+      "sheet": "sheet_04",
+      "row": 15,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "wu-shitou": {
+      "sheet": "sheet_05",
+      "row": 0,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "taotang-nanguadeng": {
+      "sheet": "sheet_05",
+      "row": 1,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "cha-zhuyu-shangju": {
+      "sheet": "sheet_05",
+      "row": 2,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "fanghedeng": {
+      "sheet": "sheet_05",
+      "row": 3,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "menghua-xiaoyouling": {
+      "sheet": "sheet_05",
+      "row": 4,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "zhuangdian-shengdanshu": {
+      "sheet": "sheet_05",
+      "row": 5,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "fang-kongmingdeng": {
+      "sheet": "sheet_05",
+      "row": 6,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chitangyuan": {
+      "sheet": "sheet_05",
+      "row": 7,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "chijiaozi": {
+      "sheet": "sheet_05",
+      "row": 8,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "shia-chishenme": {
+      "sheet": "sheet_05",
+      "row": 9,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "shendu-sikao-suisuinian": {
+      "sheet": "sheet_05",
+      "row": 10,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "qian-dai-man-yi": {
+      "sheet": "sheet_05",
+      "row": 11,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "jin-dai-ding-dang": {
+      "sheet": "sheet_05",
+      "row": 12,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "qian-dai-ru-chang": {
+      "sheet": "sheet_05",
+      "row": 13,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "shu-jin-zhou-mei": {
+      "sheet": "sheet_05",
+      "row": 14,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "dai-kong-ru-xi": {
+      "sheet": "sheet_05",
+      "row": 15,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "fen-wen-bu-sheng": {
+      "sheet": "sheet_06",
+      "row": 0,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "suisuinian-cazhuo-suisuinian": {
+      "sheet": "sheet_06",
+      "row": 1,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "suisuinian-fadai-suisuinian": {
+      "sheet": "sheet_06",
+      "row": 2,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "suisuinian-duiping-suisuinian": {
+      "sheet": "sheet_06",
+      "row": 3,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "gongzuozhuangtai-sikao-maopao": {
+      "sheet": "sheet_06",
+      "row": 4,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "gongzuozhuangtai-manglu-dianan": {
+      "sheet": "sheet_06",
+      "row": 5,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "gongzuozhuangtai-qingdian-guidang": {
+      "sheet": "sheet_06",
+      "row": 6,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "gongzuozhuangtai-yuandi-duobu-zhangwang": {
+      "sheet": "sheet_06",
+      "row": 7,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "gongzuozhuangtai-queyue-qingzhu": {
+      "sheet": "sheet_06",
+      "row": 8,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "gongzuozhuangtai-chuitou-tanqi-maohan": {
+      "sheet": "sheet_06",
+      "row": 9,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "shuijiao-kaishi": {
+      "sheet": "sheet_06",
+      "row": 10,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "shuijiao-xunhuan": {
+      "sheet": "sheet_06",
+      "row": 11,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "shuijiao-qilai": {
+      "sheet": "sheet_06",
+      "row": 12,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "baifan-kaixin-xiaopao": {
+      "sheet": "sheet_06",
+      "row": 13,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "baifan-ceshen-jizao-pao": {
+      "sheet": "sheet_06",
+      "row": 14,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "baifan-qidai-kaifan": {
+      "sheet": "sheet_06",
+      "row": 15,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "baifan-chi-wanfan": {
+      "sheet": "sheet_07",
+      "row": 0,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "baifan-chi-fantuan": {
+      "sheet": "sheet_07",
+      "row": 1,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "pangxie-zoulu-mirror": {
+      "sheet": "sheet_07",
+      "row": 2,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "stand": {
+      "sheet": "sheet_00",
+      "row": 0,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "freeIdle": {
+      "sheet": "sheet_00",
+      "row": 0,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "pinnedStill": {
+      "sheet": "sheet_00",
+      "row": 0,
+      "frames": 1,
+      "frameDurationMs": 110,
+      "playback": "hold"
+    },
+    "walkRight": {
+      "sheet": "sheet_00",
+      "row": 8,
+      "frames": 8,
+      "frameDurationMs": 130,
+      "playback": "loop"
+    },
+    "walkLeft": {
+      "sheet": "sheet_07",
+      "row": 2,
+      "frames": 8,
+      "frameDurationMs": 130,
+      "playback": "loop"
+    },
+    "dragged": {
+      "sheet": "sheet_00",
+      "row": 2,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "fall": {
+      "sheet": "sheet_01",
+      "row": 2,
+      "frames": 8,
+      "frameDurationMs": 90,
+      "playback": "loop"
+    },
+    "thrown": {
+      "sheet": "sheet_01",
+      "row": 2,
+      "frames": 8,
+      "frameDurationMs": 70,
+      "playback": "loop"
+    },
+    "reply": {
+      "sheet": "sheet_06",
+      "row": 1,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "celebrate": {
+      "sheet": "sheet_06",
+      "row": 8,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "action": {
+      "sheet": "sheet_00",
+      "row": 3,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "think": {
+      "sheet": "sheet_06",
+      "row": 4,
+      "frames": 8,
+      "frameDurationMs": 240,
+      "playback": "loop"
+    },
+    "useTool": {
+      "sheet": "sheet_06",
+      "row": 5,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "climbRightEdge": {
+      "sheet": "sheet_00",
+      "row": 8,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "climbLeftEdge": {
+      "sheet": "sheet_07",
+      "row": 2,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    },
+    "edgeattached": {
+      "sheet": "sheet_00",
+      "row": 2,
+      "frames": 8,
+      "frameDurationMs": 110,
+      "playback": "loop"
+    }
+  },
+  "modeProfiles": {
+    "physics": {
+      "baseAction": "stand",
+      "moveRight": "walkRight",
+      "moveLeft": "walkLeft",
+      "ambientActions": {
+        "enabledByDefault": true,
+        "intervalSeconds": 33,
+        "actions": [
+          "youxian-hengga",
+          "chaoda-shenlanyao",
+          "yuandi-qiaoji-zhuomian-hudong",
+          "yuandi-zhongli-xiadun-yasuo",
+          "haqian-liantian",
+          "yuandi-xiaoqi-chenmian",
+          "nvpu-quxi-liyi",
+          "beixiayitiao-zhamao",
+          "xiaofudu-yuandi-360du-xuanzhuan-zhanshi",
+          "touchi-lingshi-bei-zhuazhu",
+          "yong-jingyu-weiba-paidadi",
+          "da-keshui-bei-jingxing",
+          "zhao-jingzi",
+          "zhengti-huanzhuang-shise",
+          "qingkuai-jilu",
+          "xie-daima",
+          "yaoshan-naliang",
+          "chenjian-shuaya",
+          "yuandi-zhuanxin-wan-mofang",
+          "yuandi-dunxia-wan-wanju-qiche",
+          "jingyu-tu-paopao-texiao",
+          "yuandi-tiaoyue-zhuasui-touding-wupin",
+          "wan-youxi-qijibaituai",
+          "wan-shuiqiang",
+          "xiaotiqin-yanzou",
+          "lanjing-xianshi",
+          "youya-nvpuwu",
+          "qingkuai-yaobaiwu",
+          "keai-zhaiwu",
+          "chui-qiqiu",
+          "dongwu-huanrao",
+          "fang-fengzheng",
+          "chai-liwu",
+          "bian-gezi",
+          "puke-moshu",
+          "chou-tuoluo",
+          "chui-dizi",
+          "hudie-mifeng-huanrao-touding-kaihua",
+          "lu-mao",
+          "pingkong-shenghua",
+          "qi-muma",
+          "sanqiu-paojie",
+          "ti-jianzi",
+          "xiawuziqi",
+          "dangqiuqian",
+          "chi-baifan",
+          "dakou-chi-lingshi",
+          "chi-token",
+          "chi-zaocan",
+          "chi-wucan",
+          "chi-wancan",
+          "chi-bingqilin-ronghua",
+          "chi-dazhaxie",
+          "chi-tanghulu",
+          "chi-changshoumian",
+          "chi-xigua",
+          "shuan-huoguo",
+          "beiluoye-yanmo",
+          "zhongqiu-shangyue-chi-yuebing",
+          "duixueren",
+          "fang-yanhua",
+          "chi-zongzi",
+          "chi-niangao",
+          "chi-qingtuan",
+          "chi-labazhou",
+          "chi-chongyanggao",
+          "shou-hongbao",
+          "xie-fuzi",
+          "chuanzhenqiqiao",
+          "wu-shitou",
+          "taotang-nanguadeng",
+          "cha-zhuyu-shangju",
+          "fanghedeng",
+          "menghua-xiaoyouling",
+          "zhuangdian-shengdanshu",
+          "fang-kongmingdeng",
+          "chitangyuan",
+          "chijiaozi",
+          "dianji-huiying-kaixin-yuedong",
+          "dianji-huiying-haixiu-jingya",
+          "dianji-huiying-aojiao-shengqi-ceshen-zhanshi",
+          "dianji-huiying-naoyang-gegexiao",
+          "dianji-huiying-yuanqi-huishou",
+          "gongzuozhuangtai-queyue-qingzhu",
+          "gongzuozhuangtai-sikao-maopao",
+          "shuijiao-xunhuan",
+          "dongzhangxiwang"
+        ]
+      }
+    },
+    "freeRoam": {
+      "baseAction": "freeIdle",
+      "moveRight": "walkRight",
+      "moveLeft": "walkLeft",
+      "ambientActions": {
+        "enabledByDefault": true,
+        "intervalSeconds": 33,
+        "actions": [
+          "youxian-hengga",
+          "chaoda-shenlanyao",
+          "yuandi-qiaoji-zhuomian-hudong",
+          "yuandi-zhongli-xiadun-yasuo",
+          "haqian-liantian",
+          "yuandi-xiaoqi-chenmian",
+          "nvpu-quxi-liyi",
+          "beixiayitiao-zhamao",
+          "xiaofudu-yuandi-360du-xuanzhuan-zhanshi",
+          "touchi-lingshi-bei-zhuazhu",
+          "yong-jingyu-weiba-paidadi",
+          "da-keshui-bei-jingxing",
+          "zhao-jingzi",
+          "zhengti-huanzhuang-shise",
+          "qingkuai-jilu",
+          "xie-daima",
+          "yaoshan-naliang",
+          "chenjian-shuaya",
+          "yuandi-zhuanxin-wan-mofang",
+          "yuandi-dunxia-wan-wanju-qiche",
+          "jingyu-tu-paopao-texiao",
+          "yuandi-tiaoyue-zhuasui-touding-wupin",
+          "wan-youxi-qijibaituai",
+          "wan-shuiqiang",
+          "xiaotiqin-yanzou",
+          "lanjing-xianshi",
+          "youya-nvpuwu",
+          "qingkuai-yaobaiwu",
+          "keai-zhaiwu",
+          "chui-qiqiu",
+          "dongwu-huanrao",
+          "fang-fengzheng",
+          "chai-liwu",
+          "bian-gezi",
+          "puke-moshu",
+          "chou-tuoluo",
+          "chui-dizi",
+          "hudie-mifeng-huanrao-touding-kaihua",
+          "lu-mao",
+          "pingkong-shenghua",
+          "qi-muma",
+          "sanqiu-paojie",
+          "ti-jianzi",
+          "xiawuziqi",
+          "dangqiuqian",
+          "chi-baifan",
+          "dakou-chi-lingshi",
+          "chi-token",
+          "chi-zaocan",
+          "chi-wucan",
+          "chi-wancan",
+          "chi-bingqilin-ronghua",
+          "chi-dazhaxie",
+          "chi-tanghulu",
+          "chi-changshoumian",
+          "chi-xigua",
+          "shuan-huoguo",
+          "beiluoye-yanmo",
+          "zhongqiu-shangyue-chi-yuebing",
+          "duixueren",
+          "fang-yanhua",
+          "chi-zongzi",
+          "chi-niangao",
+          "chi-qingtuan",
+          "chi-labazhou",
+          "chi-chongyanggao",
+          "shou-hongbao",
+          "xie-fuzi",
+          "chuanzhenqiqiao",
+          "wu-shitou",
+          "taotang-nanguadeng",
+          "cha-zhuyu-shangju",
+          "fanghedeng",
+          "menghua-xiaoyouling",
+          "zhuangdian-shengdanshu",
+          "fang-kongmingdeng",
+          "chitangyuan",
+          "chijiaozi",
+          "dianji-huiying-kaixin-yuedong",
+          "dianji-huiying-haixiu-jingya",
+          "dianji-huiying-aojiao-shengqi-ceshen-zhanshi",
+          "dianji-huiying-naoyang-gegexiao",
+          "dianji-huiying-yuanqi-huishou",
+          "gongzuozhuangtai-queyue-qingzhu",
+          "gongzuozhuangtai-sikao-maopao",
+          "shuijiao-xunhuan",
+          "dongzhangxiwang"
+        ]
+      }
+    },
+    "pinned": {
+      "baseAction": "pinnedStill",
+      "ambientActions": {
+        "enabledByDefault": false,
+        "intervalSeconds": 33,
+        "actions": []
+      }
+    }
+  },
+  "ambientActions": {
+    "enabledByDefault": true,
+    "intervalSeconds": 33,
+    "actions": [
+      "youxian-hengga",
+      "chaoda-shenlanyao",
+      "yuandi-qiaoji-zhuomian-hudong",
+      "yuandi-zhongli-xiadun-yasuo",
+      "haqian-liantian",
+      "yuandi-xiaoqi-chenmian",
+      "nvpu-quxi-liyi",
+      "beixiayitiao-zhamao",
+      "xiaofudu-yuandi-360du-xuanzhuan-zhanshi",
+      "touchi-lingshi-bei-zhuazhu",
+      "yong-jingyu-weiba-paidadi",
+      "da-keshui-bei-jingxing",
+      "zhao-jingzi",
+      "zhengti-huanzhuang-shise",
+      "qingkuai-jilu",
+      "xie-daima",
+      "yaoshan-naliang",
+      "chenjian-shuaya",
+      "yuandi-zhuanxin-wan-mofang",
+      "yuandi-dunxia-wan-wanju-qiche",
+      "jingyu-tu-paopao-texiao",
+      "yuandi-tiaoyue-zhuasui-touding-wupin",
+      "wan-youxi-qijibaituai",
+      "wan-shuiqiang",
+      "xiaotiqin-yanzou",
+      "lanjing-xianshi",
+      "youya-nvpuwu",
+      "qingkuai-yaobaiwu",
+      "keai-zhaiwu",
+      "chui-qiqiu",
+      "dongwu-huanrao",
+      "fang-fengzheng",
+      "chai-liwu",
+      "bian-gezi",
+      "puke-moshu",
+      "chou-tuoluo",
+      "chui-dizi",
+      "hudie-mifeng-huanrao-touding-kaihua",
+      "lu-mao",
+      "pingkong-shenghua",
+      "qi-muma",
+      "sanqiu-paojie",
+      "ti-jianzi",
+      "xiawuziqi",
+      "dangqiuqian",
+      "chi-baifan",
+      "dakou-chi-lingshi",
+      "chi-token",
+      "chi-zaocan",
+      "chi-wucan",
+      "chi-wancan",
+      "chi-bingqilin-ronghua",
+      "chi-dazhaxie",
+      "chi-tanghulu",
+      "chi-changshoumian",
+      "chi-xigua",
+      "shuan-huoguo",
+      "beiluoye-yanmo",
+      "zhongqiu-shangyue-chi-yuebing",
+      "duixueren",
+      "fang-yanhua",
+      "chi-zongzi",
+      "chi-niangao",
+      "chi-qingtuan",
+      "chi-labazhou",
+      "chi-chongyanggao",
+      "shou-hongbao",
+      "xie-fuzi",
+      "chuanzhenqiqiao",
+      "wu-shitou",
+      "taotang-nanguadeng",
+      "cha-zhuyu-shangju",
+      "fanghedeng",
+      "menghua-xiaoyouling",
+      "zhuangdian-shengdanshu",
+      "fang-kongmingdeng",
+      "chitangyuan",
+      "chijiaozi",
+      "dianji-huiying-kaixin-yuedong",
+      "dianji-huiying-haixiu-jingya",
+      "dianji-huiying-aojiao-shengqi-ceshen-zhanshi",
+      "dianji-huiying-naoyang-gegexiao",
+      "dianji-huiying-yuanqi-huishou",
+      "gongzuozhuangtai-queyue-qingzhu",
+      "gongzuozhuangtai-sikao-maopao",
+      "shuijiao-xunhuan",
+      "dongzhangxiwang"
+    ]
+  },
+  "interactions": [
+    {
+      "id": "greet",
+      "label": "打个招呼",
+      "icon": "wave",
+      "animation": "dianji-huiying-yuanqi-huishou",
+      "prompt": "用户轻点了大肥鱼。用一句温柔俏皮的话和主人打招呼，20 字以内。",
+      "enabled": true,
+      "order": 0
+    },
+    {
+      "id": "comfort",
+      "label": "安慰一下",
+      "icon": "hug",
+      "animation": "dianji-huiying-naoyang-gegexiao",
+      "prompt": "用户现在想要一点安慰。用一两句温柔的话陪陪主人，不要说教。",
+      "enabled": true,
+      "order": 10
+    },
+    {
+      "id": "joke",
+      "label": "讲个笑话",
+      "icon": "joke",
+      "animation": "dianji-huiying-kaixin-yuedong",
+      "prompt": "给主人讲一个轻松简短的冷笑话，20 字以内。",
+      "enabled": true,
+      "order": 20
+    },
+    {
+      "id": "fact",
+      "label": "说个冷知识",
+      "icon": "idea",
+      "animation": "gongzuozhuangtai-sikao-maopao",
+      "prompt": "分享一个关于鲸鱼或海洋的简短冷知识，30 字以内。",
+      "enabled": true,
+      "order": 30
+    },
+    {
+      "id": "sing",
+      "label": "唱首歌",
+      "icon": "music",
+      "animation": "youxian-hengga",
+      "prompt": "用两三句歌词即兴哼一小段，可爱一点，不要真的写长歌。",
+      "enabled": true,
+      "order": 40
+    },
+    {
+      "id": "eat",
+      "label": "开饭啦",
+      "icon": "eat",
+      "animation": "chi-baifan",
+      "prompt": "主人喊开饭了！用一句话开心地回应，带一点吃货感。",
+      "enabled": true,
+      "order": 50
+    },
+    {
+      "id": "sleep",
+      "label": "去睡觉",
+      "icon": "sleep",
+      "animation": "shuijiao-kaishi",
+      "prompt": "主人让你去睡觉。用一句困困的话道晚安。",
+      "enabled": true,
+      "order": 60
+    },
+    {
+      "id": "wake",
+      "label": "快起来",
+      "icon": "wake",
+      "animation": "shuijiao-qilai",
+      "prompt": "主人把你叫醒了。用一句刚睡醒迷糊的话回应。",
+      "enabled": true,
+      "order": 70
+    },
+    {
+      "id": "token",
+      "label": "看看余额",
+      "icon": "wallet",
+      "animation": "qian-dai-man-yi",
+      "prompt": "主人问起额度/余额。用一句俏皮的话回应，不要编造具体数字。",
+      "enabled": true,
+      "order": 80
+    },
+    {
+      "id": "work",
+      "label": "开始工作",
+      "icon": "work",
+      "animation": "xie-daima",
+      "prompt": "主人要开始工作了。说一句鼓劲的短句，20 字以内。",
+      "enabled": true,
+      "order": 90
+    },
+    {
+      "id": "celebrate",
+      "label": "庆祝一下",
+      "icon": "celebrate",
+      "animation": "gongzuozhuangtai-queyue-qingzhu",
+      "prompt": "主人刚刚完成了一件事，用一句话真心替他开心。",
+      "enabled": true,
+      "order": 100
+    },
+    {
+      "id": "pat",
+      "label": "摸摸头",
+      "icon": "pet",
+      "animation": "dianji-huiying-haixiu-jingya",
+      "prompt": "主人摸了摸你的头。用一句害羞又开心的短话回应。",
+      "enabled": true,
+      "order": 110
+    }
+  ],
+  "theme": {
+    "bubbleContainer": "#EEF4FF",
+    "bubbleContent": "#27364F",
+    "bubbleStroke": "#9EC1F5"
+  },
+  "attribution": {
+    "authors": [
+      {
+        "name": "PC2005-cloud",
+        "role": "dsh-pet 项目作者",
+        "url": "https://github.com/PC2005-cloud"
+      },
+      {
+        "name": "上善无形（B 站）",
+        "role": "原型「溟月」设计"
+      },
+      {
+        "name": "ZipZipPipe（B 站）",
+        "role": "DeepSeek 版女仆鲸鱼娘设计"
+      }
+    ],
+    "sourceUrl": "https://github.com/PC2005-cloud/dsh-pet",
+    "licenseName": "CC BY-NC-SA 4.0（形象）；代码 MIT；素材允许开源使用、禁止商用",
+    "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "modifications": "从 dsh-pet 的透明 GIF / VP9-alpha WebM 逐段抽帧、统一缩放与脚底对齐，合成为 Android 端 spritesheet 宠物包；新增标准动画槽位、模式配置、环境动作池与中文互动菜单；未改动角色形象本身。",
+    "notice": "宠物形象为社区二创的 DeepSeek「大肥鱼」（鲸鱼娘），非 DeepSeek 官方形象。形象遵守 CC BY-NC-SA 4.0：署名、非商业、相同方式共享，不可以任何形式商业化。基于本项目的衍生/改版/换皮作品，在 GitHub 仓库、产品官网等公开渠道须附上原作者地址：https://github.com/PC2005-cloud/dsh-pet"
+  }
+}

@@ -3,21 +3,44 @@ import com.ai.assistance.quro.R
 import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import com.ai.assistance.quro.core.cards.QuroChatCard
 import com.ai.assistance.quro.core.cards.parseCard
 import com.ai.assistance.quro.core.cards.serializeCard
 import com.ai.assistance.quro.util.QuroStageHints
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 /**
- * 多会话持久化（原创）：把多个对话（含消息、工具调用）以 JSON 落盘到应用私有目录，
+ * 多会话持久化：把多个对话（含消息、工具调用）以 JSON 落盘到应用私有目录，
  * 退出 APP 后再次打开可完整恢复历史聊天记录。
  * 仅依赖 Android 自带的 org.json，不引入任何序列化第三方库。
  */
+
+/**
+ * 会话库健康状态。
+ * 解析失败时不能静默当作「新用户」，必须把损坏文件隔离并让界面明确提示，
+ * 同时在用户做出选择前暂停一切写入，避免把可抢救的数据永久覆盖。
+ */
+data class QuroConversationHealth(
+    val quarantined: Boolean = false,
+    val corruptFile: String? = null,
+    val reason: String? = null,
+    val backupCount: Int = 0,
+)
 
 /** 历史列表中展示用的轻量元数据。 */
 data class QuroConversationMeta(
@@ -59,28 +82,68 @@ data class QuroPersistedConversation(
 )
 
 class QuroConversationRepository(context: Context) {
-    private val file = File(context.filesDir, "quro_conversations.json")
+    private val dir = context.filesDir
+    private val file = File(dir, "quro_conversations.json")
+    private val backupDir = File(dir, "quro_backups")
+    private val healthPrefs = context.getSharedPreferences("quro_conversation_health", Context.MODE_PRIVATE)
+
+    private val _health = MutableStateFlow(QuroConversationHealth())
+    val health: StateFlow<QuroConversationHealth> = _health.asStateFlow()
+
+    /** 只读降级：损坏文件被隔离后，用户确认前任何全量保存都必须被拒绝。 */
+    @Volatile private var readOnly = false
+    @Volatile private var lastBackupAt = 0L
+
+    fun isReadOnly(): Boolean = readOnly
 
     fun loadAll(): List<QuroPersistedConversation> {
-        return runCatching {
-            if (!file.exists()) return emptyList()
-            val text = file.readText()
-            if (text.isBlank()) return emptyList()
-            val root = JSONObject(text)
-            val arr = root.optJSONArray("conversations") ?: return emptyList()
-            val raw = mutableListOf<QuroPersistedConversation>()
-            for (i in 0 until arr.length()) {
-                runCatching { parseConv(arr.getJSONObject(i)) }.getOrNull()?.let { raw.add(it) }
+        if (!file.exists()) {
+            // 隔离状态跨进程重启保留：文件已被改名移走，不能因为「主文件不存在」就当新用户处理。
+            val pending = healthPrefs.getString("corrupt_file", null)
+            if (pending != null) {
+                readOnly = true
+                _health.value = QuroConversationHealth(
+                    quarantined = true,
+                    corruptFile = pending,
+                    reason = healthPrefs.getString("reason", null),
+                    backupCount = listBackups().size,
+                )
+                return emptyList()
             }
-            // 迁移：自愈旧版本遗留的脏数据（hidden 字段不存在、管道消息泄漏、垃圾工具结果）。
-            // 每次加载时检查是否需要清理；仅当发现脏数据时才回写，避免每次启动都写磁盘。
-            val healed = migrateAndClean(raw)
-            Log.i("QuroPersist", "LOAD rawConvs=${raw.size} rawMsgs=${raw.sumOf { it.messages.size }} healedMsgs=${healed.sumOf { it.messages.size }}")
-            if (healed !== raw) {
-                saveAll(healed)  // 回写修复后的数据，下次不再重复迁移
-            }
-            healed
-        }.getOrElse { emptyList() }
+            readOnly = false
+            _health.value = QuroConversationHealth()
+            return emptyList()
+        }
+        val text = try {
+            file.readText()
+        } catch (e: Throwable) {
+            return quarantine("读取失败：${e.message}")
+        }
+        if (text.isBlank()) return quarantine("文件为空或被截断")
+        val root = try {
+            JSONObject(text)
+        } catch (e: Throwable) {
+            return quarantine("JSON 解析失败：${e.message}")
+        }
+        val arr = root.optJSONArray("conversations")
+            ?: return quarantine("缺少 conversations 字段")
+        val raw = mutableListOf<QuroPersistedConversation>()
+        for (i in 0 until arr.length()) {
+            runCatching { parseConv(arr.getJSONObject(i)) }.getOrNull()?.let { raw.add(it) }
+        }
+        readOnly = false
+        _health.value = QuroConversationHealth()
+        if (healthPrefs.contains("corrupt_file")) healthPrefs.edit().clear().apply()
+        scheduleBackup(text)
+
+        // 迁移：自愈旧版本遗留的脏数据（hidden 字段不存在、管道消息泄漏、垃圾工具结果）。
+        // 每次加载时检查是否需要清理；仅当发现脏数据时才回写，避免每次启动都写磁盘。
+        val healed = migrateAndClean(raw)
+        Log.i("QuroPersist", "LOAD rawConvs=${raw.size} rawMsgs=${raw.sumOf { it.messages.size }} healedMsgs=${healed.sumOf { it.messages.size }}")
+        if (healed !== raw) {
+            saveAll(healed)  // 回写修复后的数据，下次不再重复迁移
+        }
+        return healed
     }
 
     /**
@@ -160,13 +223,148 @@ class QuroConversationRepository(context: Context) {
         return if (needsSave) cleaned else raw
     }
 
+    @Synchronized
     fun saveAll(list: List<QuroPersistedConversation>) {
+        if (readOnly) {
+            Log.w("QuroPersist", "会话库处于只读降级，跳过保存")
+            return
+        }
         runCatching {
             val arr = JSONArray()
             list.forEach { arr.put(serializeConv(it)) }
             val root = JSONObject().put("conversations", arr)
-            file.writeText(root.toString())
+            val text = root.toString()
+            atomicWrite(file, text)
+            scheduleBackup(text)
+        }.onFailure {
+            Log.e("QuroPersist", "会话库保存失败", it)
         }
+    }
+
+    /**
+     * 原子写：临时文件 → flush + fsync → 原子替换。
+     * 目标文件在替换完成前始终是上一份完整数据；进程在写入窗口内被强杀，
+     * 最多留下一个临时文件，主文件不会被截断。
+     */
+    private fun atomicWrite(target: File, text: String) {
+        val parent = target.parentFile ?: throw IOException("no parent directory")
+        if (!parent.exists()) parent.mkdirs()
+        val tmp = File(parent, "${target.name}.${System.nanoTime()}.tmp")
+        try {
+            FileOutputStream(tmp, false).use { fos ->
+                fos.write(text.toByteArray(Charsets.UTF_8))
+                fos.flush()
+                fos.fd.sync()
+            }
+            replaceAtomically(tmp, target)
+        } finally {
+            if (tmp.exists()) tmp.delete()
+        }
+    }
+
+    private fun replaceAtomically(tmp: File, target: File) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val atomic = runCatching {
+                Files.move(
+                    tmp.toPath(), target.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE,
+                )
+                true
+            }.getOrDefault(false)
+            if (atomic) return
+            val plain = runCatching {
+                Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                true
+            }.getOrDefault(false)
+            if (plain) return
+        }
+        if (tmp.renameTo(target)) return
+        // 仅当所有原子路径都不可用时才删除旧目标；此时旧数据已有轮转备份可回退。
+        target.delete()
+        if (!tmp.renameTo(target)) throw IOException("atomic replace failed: ${target.name}")
+    }
+
+    /** 把损坏文件改名隔离并进入只读降级；原文件绝不删除、绝不覆盖。 */
+    private fun quarantine(reason: String): List<QuroPersistedConversation> {
+        readOnly = true
+        val previous = healthPrefs.getString("corrupt_file", null)
+        val kept = if (previous != null) {
+            File(previous)
+        } else {
+            val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+            val target = File(dir, "quro_conversations.corrupt-$stamp.json")
+            if (file.renameTo(target)) target else file
+        }
+        if (previous == null) {
+            healthPrefs.edit()
+                .putString("corrupt_file", kept.absolutePath)
+                .putString("reason", reason)
+                .apply()
+        }
+        _health.value = QuroConversationHealth(
+            quarantined = true,
+            corruptFile = kept.absolutePath,
+            reason = reason,
+            backupCount = listBackups().size,
+        )
+        Log.w("QuroPersist", "会话库损坏已隔离，暂停保存：$reason")
+        return emptyList()
+    }
+
+    /** 轮转备份：节流到每 10 分钟一次，后台原子写入，保留最近 8 份。 */
+    private fun scheduleBackup(text: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastBackupAt < BACKUP_INTERVAL_MS) return
+        lastBackupAt = now
+        Thread({
+            runCatching {
+                if (!backupDir.exists()) backupDir.mkdirs()
+                val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+                atomicWrite(File(backupDir, "conv-$stamp.json"), text)
+                pruneBackups()
+            }.onFailure { Log.w("QuroPersist", "会话库备份失败", it) }
+        }, "quro-conv-backup").apply { isDaemon = true }.start()
+    }
+
+    private fun listBackups(): List<File> = runCatching {
+        (backupDir.listFiles(
+            java.io.FileFilter { f -> f.isFile && f.name.startsWith("conv-") && f.name.endsWith(".json") }
+        ) ?: emptyArray())
+            .sortedByDescending { it.name }
+    }.getOrDefault(emptyList())
+
+    private fun pruneBackups() {
+        listBackups().drop(BACKUP_KEEP).forEach { runCatching { it.delete() } }
+    }
+
+    /** 按时间倒序的可用备份，供界面展示与恢复。 */
+    fun backups(): List<File> = listBackups()
+
+    /** 从备份恢复主文件；成功后解除只读降级。 */
+    fun restoreBackup(backup: File): Boolean = runCatching {
+        val text = backup.readText()
+        require(JSONObject(text).has("conversations")) { "备份结构不完整" }
+        atomicWrite(file, text)
+        healthPrefs.edit().clear().apply()
+        readOnly = false
+        _health.value = QuroConversationHealth()
+        true
+    }.getOrElse {
+        Log.e("QuroPersist", "从备份恢复失败", it)
+        false
+    }
+
+    /** 放弃隔离数据并重新开始；损坏文件仍保留在磁盘上，不会被新写入覆盖。 */
+    fun discardQuarantine() {
+        healthPrefs.edit().clear().apply()
+        readOnly = false
+        _health.value = QuroConversationHealth()
+    }
+
+    companion object {
+        private const val BACKUP_INTERVAL_MS = 10 * 60 * 1000L
+        private const val BACKUP_KEEP = 8
     }
 
     /**

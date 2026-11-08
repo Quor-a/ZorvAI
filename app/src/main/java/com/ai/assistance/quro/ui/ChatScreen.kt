@@ -1887,7 +1887,13 @@ fun ChatScreen(
     // ══ #666：把发起逻辑注册进全局闸门，供 QuroVisionLoop / AI 工具 enable_screen_capture 在任意位置触发 ══
     com.ai.assistance.quro.core.vision.MediaProjectionRequester.request = { requestMediaProjection() }
 
-    fun send(text: String) {
+    fun send(
+        text: String,
+        /** 桌宠/语音安静回合：给模型的隐藏指令，不显示在气泡里。 */
+        hiddenInstruction: String? = null,
+        /** 桌宠/语音安静回合：失败时撤下整轮，不写错误气泡。 */
+        silentOnError: Boolean = false,
+    ) {
         val t = text.trim()
         if (t.isEmpty() && attachments.isEmpty()) return
         // 对话框做 GitHub 搜索引擎：/gh <关键词> 直接在 GitHub 屏搜索（不发给 AI）
@@ -1937,10 +1943,14 @@ fun ChatScreen(
         // 🔴 旧实现在这里塞一句「已启用技能(N个): 名字列表」——AI 只看到名字，
         //    既不知道正文，也不知道用户这条消息想用哪个。这条误导性文本已删除：
         //    技能全文改由 attachedSkills 走隐藏 user 消息，跟着这一条消息一起发出。
-        val contextStr = ctxParts.joinToString("\n").ifBlank { null }
+        // 安静回合的隐藏指令并入「隐藏上下文」通道（用户不可见，模型可见）。
+        // 它绝不拼进 t —— 用户气泡里只留 visibleText 那一句短话。
+        val contextStr = (ctxParts + listOfNotNull(hiddenInstruction?.trim()?.takeIf { it.isNotBlank() }))
+            .joinToString("\n").ifBlank { null }
 
         val skillsForThisMessage = attachedSkills
-        vm.dispatchSend(t, attachments.toList(), cfg, contextStr, attachedSkills = skillsForThisMessage)
+        vm.dispatchSend(t, attachments.toList(), cfg, contextStr, attachedSkills = skillsForThisMessage,
+            silentOnError = silentOnError)
         // 发送完立刻清空：技能只属于这一条消息，不会偷偷影响下一句。
         attachedSkills = emptyList()
         attachments.clear()
@@ -1958,15 +1968,51 @@ fun ChatScreen(
             kotlinx.coroutines.delay(700)
             tried++
         }
+        val quiet = QuroShareBridge.consumeQuietTurn()
         val txt = QuroShareBridge.consumeAutoSend()
-        if (!busy && txt != null) {
-            send(txt)
+        if (!busy && (quiet != null || txt != null)) {
+            if (quiet != null) {
+                // 桌宠/语音自动回合：可见气泡只放干净短句，指令走隐藏上下文，
+                // 失败不落错误气泡；连续失败时冷却，只给一句轻提示。
+                if (com.ai.assistance.quro.core.pet.QuroQuietTurn.allowAutoTurn()) {
+                    // 结构化接线：登记本轮来源与 id，ViewModel 成功收尾时把回复回流桌宠气泡。
+                    com.ai.assistance.quro.core.pet.QuroPetTurnBus.beginTurn(
+                        com.ai.assistance.quro.core.pet.PetTurn(
+                            source = com.ai.assistance.quro.core.pet.PetSource.fromKey(quiet.source),
+                            visibleText = quiet.visibleText,
+                            requestId = quiet.requestId,
+                        ),
+                    )
+                    val hidden = listOfNotNull(
+                        quiet.hiddenInstruction?.trim()?.takeIf { it.isNotBlank() },
+                        quiet.screenInsight?.trim()?.takeIf { it.isNotBlank() }
+                            ?.let { "[屏幕观察 · 仅本轮有效，不要原样复述]\n$it" },
+                    ).joinToString("\n\n").takeIf { it.isNotBlank() }
+                    send(quiet.visibleText, hiddenInstruction = hidden,
+                        silentOnError = quiet.silentOnError)
+                } else {
+                    com.ai.assistance.quro.core.pet.QuroQuietTurn.emit(
+                        com.ai.assistance.quro.core.pet.QuroQuietTurn.FAILURE_HINT)
+                }
+            } else if (txt != null) {
+                send(txt)
+            }
         } else {
-            if (txt != null) {
+            if (quiet != null || txt != null) {
                 android.widget.Toast.makeText(
                     petTapCtx, "AI 还在回复中，稍后再戳桌宠吧",
                     android.widget.Toast.LENGTH_SHORT,
                 ).show()
+            }
+        }
+    }
+
+    // 安静回合失败 / 冷却：统一用一句轻提示反馈，绝不把 ⚠️/❌ 诊断文本写进对话框。
+    LaunchedEffect(Unit) {
+        com.ai.assistance.quro.core.pet.QuroQuietTurn.hint.collect { msg ->
+            if (msg != null) {
+                android.widget.Toast.makeText(petTapCtx, msg, android.widget.Toast.LENGTH_SHORT).show()
+                com.ai.assistance.quro.core.pet.QuroQuietTurn.consume()
             }
         }
     }
@@ -3780,6 +3826,9 @@ fun ChatScreen(
 
         // 底部弹层（自定义，统一遮罩 + 上滑）
         ChatOverlays()
+
+        // 会话库损坏隔离提示：独立顶层 Composable，不占用 ChatOverlays 的方法体预算。
+        ConversationRecoveryGate(vm)
     }
 
     // 监听来自 open_web 工具/链接的内置浏览器打开请求：
@@ -12619,4 +12668,52 @@ private fun contextSegmentColor(
     com.ai.assistance.quro.core.chat.ContextSegmentKind.MEMORY -> Color(0xFF8B5CF6)
     com.ai.assistance.quro.core.chat.ContextSegmentKind.INJECTED -> Color(0xFFEC4899)
     com.ai.assistance.quro.core.chat.ContextSegmentKind.OTHER -> Color(0xFF6B7280)
+}
+
+/**
+ * 会话库损坏时的恢复入口。
+ * 原文件已被改名隔离、自动保存已暂停，这里不提供直接关闭：必须由用户选择
+ * 从备份恢复或放弃隔离数据，避免把仍可抢救的历史永久覆盖。
+ */
+@Composable
+private fun ConversationRecoveryGate(vm: QuroChatViewModel) {
+    val health by vm.conversationHealth.collectAsState()
+    if (!health.quarantined) return
+    ConversationRecoveryDialog(
+        health = health,
+        onRestore = { vm.recoverConversationsFromBackup() },
+        onDiscard = { vm.discardQuarantinedConversations() },
+    )
+}
+
+@Composable
+private fun ConversationRecoveryDialog(
+    health: com.ai.assistance.quro.core.QuroConversationHealth,
+    onRestore: () -> Unit,
+    onDiscard: () -> Unit,
+) {
+    val fileName = health.corruptFile?.substringAfterLast('/') ?: ""
+    val detail = buildString {
+        append("检测到会话数据无法解析，已把原文件单独隔离并暂停自动保存，避免覆盖仍可恢复的内容。")
+        health.reason?.takeIf { it.isNotBlank() }?.let {
+            append("\n\n原因：").append(it)
+        }
+        if (fileName.isNotBlank()) {
+            append("\n隔离文件：").append(fileName)
+        }
+        append("\n可用备份：").append(health.backupCount).append(" 份")
+    }
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("会话数据需要恢复") },
+        text = { Text(detail, style = MaterialTheme.typography.bodyMedium) },
+        confirmButton = {
+            TextButton(onClick = onRestore, enabled = health.backupCount > 0) {
+                Text(if (health.backupCount > 0) "从最近备份恢复" else "无可用备份")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDiscard) { Text("放弃并重新开始") }
+        },
+    )
 }

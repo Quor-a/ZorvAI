@@ -5,6 +5,9 @@ import com.ai.assistance.quro.util.qstr
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -57,7 +60,11 @@ object PetPrefs {
             tapOpensPanel = sp.getBoolean("tap_opens_panel", true),
             placementMode = sp.getString("placement_mode", "physics") ?: "physics",
             screenContext = sp.getBoolean("screen_context", false),
-            packDir = sp.getString("pet_pack_dir", null),
+            screenAnalysis = sp.getBoolean("pet_screen_analysis", true),
+            virtualScreen = sp.getBoolean("pet_virtual_screen", true),
+            // 空串是「用户显式选择无包」的哨兵：与「从未设置过（键不存在）」区分开，
+            // 后者才会默认启用随包内置的宠物。
+            packDir = sp.getString("pet_pack_dir", null)?.takeIf { it.isNotEmpty() },
             tapInteract = sp.getBoolean("tap_interact", false),
             bubbleEnabled = sp.getBoolean("bubble_enabled", true),
             petVisible = sp.getBoolean("pet_visible", true),
@@ -88,7 +95,9 @@ object PetPrefs {
             .putString("pet_list_json", JSONArray().apply { s.pets.forEach { put(JSONObject(it.toJson())) } }.toString())
             .putString("placement_mode", s.placementMode)
             .putBoolean("screen_context", s.screenContext)
-            .putString("pet_pack_dir", s.packDir)
+            .putBoolean("pet_screen_analysis", s.screenAnalysis)
+            .putBoolean("pet_virtual_screen", s.virtualScreen)
+            .putString("pet_pack_dir", s.packDir ?: "")
             .putBoolean("tap_opens_panel", s.tapOpensPanel)
             .putBoolean("tap_interact", s.tapInteract)
             .putBoolean("bubble_enabled", s.bubbleEnabled)
@@ -156,6 +165,10 @@ data class PetSettings(
     val placementMode: String = "physics",
     /** 点击桌宠时读取当前屏幕作为回合上下文 */
     val screenContext: Boolean = false,
+    /** 屏幕分析：长按菜单显示「看当前屏幕 / 后台虚拟屏任务」 */
+    val screenAnalysis: Boolean = true,
+    /** 优先使用后台虚拟屏（Shizuku 不可用时自动降级到当前屏幕） */
+    val virtualScreen: Boolean = true,
     /** 选中的宠物包目录名（desktop_pets/<dir>）；null = 无包（Canvas 矢量形象） */
     val packDir: String? = null,
     val tapInteract: Boolean = false,
@@ -190,7 +203,65 @@ fun PetSettingsScreen(
     val ctx = LocalContext.current
     val cs = MaterialTheme.colorScheme
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var importing by remember { mutableStateOf(false) }
+    var packs by remember {
+        mutableStateOf(com.ai.assistance.quro.core.pet.PetPack.scan(ctx).first)
+    }
+    // 随 APK 内置的宠物包目录项：直接展示、一键安装，不需要用户导入任何文件。
+    var builtins by remember {
+        mutableStateOf(emptyList<com.ai.assistance.quro.core.pet.PetPackAssets.BuiltinEntry>())
+    }
+    var packBusy by remember { mutableStateOf<String?>(null) }
+    var packStatus by remember { mutableStateOf<String?>(null) }
+    var showUrlInstall by remember { mutableStateOf(false) }
+    // 长篇授权声明默认收起；完整版在「设置 → 关于 ZorvAI → 开源许可声明」。
+    var expandedAttribution by remember { mutableStateOf(setOf<String>()) }
+    // 文件选择器的回调可能晚于重组，用最新值避免把包选中到过期的 settings 上。
+    val latestSettings by rememberUpdatedState(settings)
+    val latestOnChange by rememberUpdatedState(onSettingsChange)
+
+    // 首次进入设置页时把随包内置的宠物包落盘，之后扫描器才能发现它。
+    LaunchedEffect(Unit) {
+        val (b, p) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.ai.assistance.quro.core.pet.PetPackAssets.ensure(ctx)
+            com.ai.assistance.quro.core.pet.PetPackAssets.builtinCatalog(ctx) to
+                com.ai.assistance.quro.core.pet.PetPack.scan(ctx).first
+        }
+        builtins = b
+        packs = p
+    }
+
+    /** 统一的安装 → 刷新列表 → 自动选中 → 广播生效流程。 */
+    fun runInstall(busyText: String, block: () -> String) {
+        packBusy = busyText
+        packStatus = null
+        scope.launch {
+            val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { block() }
+            }
+            result.onSuccess { dir ->
+                val list = com.ai.assistance.quro.core.pet.PetPack.scan(ctx).first
+                packs = list
+                val name = list.firstOrNull { it.dirName == dir }?.manifest?.displayName ?: dir
+                // PetPrefs.save 会广播 ACTION_APPLY_SETTINGS，运行中的桌宠立即重建换形象。
+                latestOnChange(latestSettings.copy(packDir = dir))
+                packStatus = "已安装并启用「$name」，桌宠已立即切换"
+            }.onFailure {
+                packStatus = "失败：" + (it.message ?: it.javaClass.simpleName)
+            }
+            packBusy = null
+        }
+    }
+
+    // 宠物包：在 ZorvAI 内直接选 zip 安装（系统文件选择器），不再要求手动放文件。
+    val packImportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runInstall("正在导入宠物包…") {
+            com.ai.assistance.quro.core.pet.PetPackCatalog.installFromUri(ctx, uri)
+        }
+    }
+
     var importError by remember { mutableStateOf<String?>(null) }
     // AI 直接生成宠物：描述 → LLM → PetSpec
     var showAiGen by remember { mutableStateOf(false) }
@@ -236,9 +307,39 @@ fun PetSettingsScreen(
                 Spacer(Modifier.width(64.dp))
             }
 
-            // 预览
+            // 预览：选中宠物包时显示该包真实待机帧，否则显示内置矢量形象
             Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
-                PetSprite(settings.current, PetPhase.IDLE, showBubble = false)
+                val previewPack = remember(packs, settings.packDir) {
+                    packs.firstOrNull { it.dirName == settings.packDir }
+                }
+                if (previewPack != null) {
+                    val m = previewPack.manifest
+                    val previewBmp = produceState<ImageBitmap?>(null, previewPack.dirName) {
+                        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            runCatching {
+                                BitmapFactory.decodeFile(m.sheetFileFor(ctx, "stand").absolutePath)
+                                    ?.asImageBitmap()
+                            }.getOrNull()
+                        }
+                    }
+                    previewBmp.value?.let { bmp ->
+                        com.ai.assistance.quro.genui.sdk.components.PetSpriteFrames(
+                            bitmap = bmp,
+                            cellWidth = m.cellWidth,
+                            cellHeight = m.cellHeight,
+                            displayWidth = m.displayWidth,
+                            displayHeight = m.displayHeight,
+                            animations = m.animations.mapValues {
+                                com.ai.assistance.quro.genui.sdk.components.PetPackAnimDef(
+                                    it.value.row, it.value.frames, it.value.frameDurationMs, it.value.playback
+                                )
+                            },
+                            pose = "stand",
+                        )
+                    } ?: Text(m.displayName, fontSize = 14.sp, color = cs.onSurfaceVariant)
+                } else {
+                    PetSprite(settings.current, PetPhase.IDLE, showBubble = false)
+                }
             }
 
             // ── 宠物切换 ──
@@ -316,6 +417,12 @@ fun PetSettingsScreen(
             PetSwitch("点击时参考屏幕", "点击桌宠触发 AI 互动时读取当前屏幕作为上下文", settings.screenContext) {
                 onSettingsChange(settings.copy(screenContext = it))
             }
+            PetSwitch("屏幕分析", "长按菜单提供「看当前屏幕 / 后台虚拟屏任务」", settings.screenAnalysis) {
+                onSettingsChange(settings.copy(screenAnalysis = it))
+            }
+            PetSwitch("后台虚拟屏", "有 Shizuku 时在独立虚拟屏看屏并完成任务；不可用时自动降级到当前屏幕", settings.virtualScreen) {
+                onSettingsChange(settings.copy(virtualScreen = it))
+            }
             Spacer(Modifier.height(18.dp))
 
             // ── 位置模式（物理活动 / 自由活动 / 固定当前位置） ──
@@ -345,65 +452,258 @@ fun PetSettingsScreen(
             )
             Spacer(Modifier.height(18.dp))
 
-            // ── 宠物包：选形象（spritesheet 帧动画包，zip 导入） ──
+            // ── 宠物包中心：内置目录一键启用 / 应用内直接导入 ──
             Text("宠物包（形象）", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
             Spacer(Modifier.height(6.dp))
-            var packs by remember { mutableStateOf(com.ai.assistance.quro.core.pet.PetPack.scan(ctx).first) }
-            androidx.compose.material3.OutlinedButton(
-                onClick = {
-                    importing = true
-                    scope.launch {
-                        runCatching {
-                            // 从 Download 目录找最新的 petpack zip（用户放进来的）
-                            val dl = java.io.File(
-                                androidx.core.content.ContextCompat.getExternalFilesDirs(ctx, null)[0],
-                                "Download"
+
+            // 内置宠物包目录：随 APK 提供，点「使用」即可，不需要准备或放置任何文件。
+            if (builtins.isNotEmpty()) {
+                Text("内置宠物包", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = cs.onSurfaceVariant)
+                Spacer(Modifier.height(6.dp))
+                builtins.forEach { b ->
+                    val installed = packs.any { it.dirName == b.id }
+                    val selected = settings.packDir == b.id
+                    Column(
+                        Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (selected) cs.primaryContainer else cs.surface)
+                            .border(
+                                1.dp,
+                                if (selected) cs.primary else cs.outline.copy(alpha = 0.3f),
+                                RoundedCornerShape(12.dp),
                             )
-                            val zip = dl.listFiles { f -> f.name.endsWith(".zip") }
-                                ?.maxByOrNull { it.lastModified() }
-                            if (zip == null) importError = "未找到宠物包 zip（请放到应用目录 Download 下）"
-                            else {
-                                com.ai.assistance.quro.core.pet.PetPack.importZip(ctx, zip.inputStream())
-                                packs = com.ai.assistance.quro.core.pet.PetPack.scan(ctx).first
-                                importError = null
-                            }
-                        }.onFailure { importError = it.message }
-                        importing = false
+                            .padding(12.dp)
+                    ) {
+                        Text(b.displayName, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "${b.animationCount} 个动作 · 随 APK 内置" +
+                                (if (installed) " · 已安装" else " · 未安装"),
+                            fontSize = 11.sp, color = cs.onSurfaceVariant,
+                        )
+                        if (b.description.isNotBlank()) {
+                            Text(b.description, fontSize = 11.sp, color = cs.onSurfaceVariant)
+                        }
+                        b.attribution?.let { at ->
+                            Text(
+                                "形象来源：" + at.authors.joinToString("、") { it.name } + " · " + at.licenseName,
+                                fontSize = 10.sp, color = cs.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    runInstall("正在启用内置宠物包…") {
+                                        com.ai.assistance.quro.core.pet.PetPackCatalog
+                                            .installBuiltin(ctx, b.assetDir, b.id)
+                                    }
+                                },
+                                enabled = packBusy == null,
+                                modifier = Modifier.weight(1f),
+                            ) { Text(if (selected) "重新应用" else "使用", maxLines = 1) }
+                            OutlinedButton(
+                                onClick = {
+                                    runInstall("正在重装内置宠物包…") {
+                                        com.ai.assistance.quro.core.pet.PetPackCatalog
+                                            .installBuiltin(ctx, b.assetDir, b.id, force = true)
+                                    }
+                                },
+                                enabled = packBusy == null,
+                                modifier = Modifier.weight(1f),
+                            ) { Text("重新安装", maxLines = 1) }
+                        }
                     }
-                },
-                enabled = !importing,
-            ) { Text(if (importing) "导入中…" else "导入宠物包 zip") }
-            importError?.let {
-                Text(it, color = cs.error, fontSize = 12.sp)
+                    Spacer(Modifier.height(8.dp))
+                }
             }
+
+            // 应用内直接导入：选文件 / 填链接，安装完自动启用并热更新桌宠。
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = {
+                        packImportLauncher.launch(
+                            arrayOf(
+                                "application/zip", "application/x-zip-compressed",
+                                "application/octet-stream", "*/*",
+                            )
+                        )
+                    },
+                    enabled = packBusy == null,
+                    modifier = Modifier.weight(1f),
+                ) { Text("从文件导入 zip", maxLines = 1) }
+                OutlinedButton(
+                    onClick = { showUrlInstall = true },
+                    enabled = packBusy == null,
+                    modifier = Modifier.weight(1f),
+                ) { Text("从链接安装", maxLines = 1) }
+            }
+            Text(
+                "在 ZorvAI 里直接选 zip 或填链接：自动下载/解压/校验并立即启用，不用把文件放到任何目录。",
+                fontSize = 11.sp, color = cs.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            packBusy?.let {
+                Text(it, fontSize = 12.sp, color = cs.primary, modifier = Modifier.padding(top = 4.dp))
+            }
+            packStatus?.let {
+                Text(
+                    it, fontSize = 12.sp,
+                    color = if (it.startsWith("失败")) cs.error else cs.primary,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+
+            if (showUrlInstall) {
+                var urlText by remember { mutableStateOf("") }
+                var shaText by remember { mutableStateOf("") }
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showUrlInstall = false },
+                    title = { Text("从链接安装宠物包") },
+                    text = {
+                        Column {
+                            Text("填入 petpack zip 直链，ZorvAI 下载校验后自动安装并启用。", fontSize = 12.sp)
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = urlText, onValueChange = { urlText = it },
+                                label = { Text("zip 链接") }, singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = shaText, onValueChange = { shaText = it },
+                                label = { Text("SHA-256（可选）") }, singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            enabled = urlText.isNotBlank() && packBusy == null,
+                            onClick = {
+                                val u = urlText.trim()
+                                val sha = shaText.trim().ifBlank { null }
+                                showUrlInstall = false
+                                runInstall("正在下载并安装…") {
+                                    com.ai.assistance.quro.core.pet.PetPackCatalog.installFromUrl(ctx, u, sha)
+                                }
+                            },
+                        ) { Text("安装") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showUrlInstall = false }) { Text("取消") }
+                    },
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "已安装（${packs.size}）",
+                fontSize = 12.sp, fontWeight = FontWeight.Medium, color = cs.onSurfaceVariant,
+            )
             if (packs.isEmpty()) {
                 Text(
-                    "还没有宠物包。导入 zip 后在这里选形象；无包时使用内置矢量形象。",
+                    "还没有安装宠物包。点上方「使用」即可启用内置大肥鱼，也可以直接导入 zip。",
                     fontSize = 11.sp, color = cs.onSurfaceVariant,
                 )
             } else {
                 packs.forEach { pk ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    ) {
-                        androidx.compose.material3.FilterChip(
-                            selected = settings.packDir == pk.dirName,
-                            onClick = { onSettingsChange(settings.copy(packDir = pk.dirName)) },
-                            label = { Text(pk.manifest.displayName) },
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            pk.manifest.id + "（" + pk.manifest.animations.size + " 动画）",
-                            fontSize = 11.sp, color = cs.onSurfaceVariant,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(onClick = {
-                            com.ai.assistance.quro.core.pet.PetPack.delete(ctx, pk.dirName)
-                            packs = com.ai.assistance.quro.core.pet.PetPack.scan(ctx).first
-                            if (settings.packDir == pk.dirName) onSettingsChange(settings.copy(packDir = null))
-                        }) {
-                            Icon(Icons.Filled.Delete, "删除", Modifier.size(16.dp), tint = cs.error)
+                    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            androidx.compose.material3.FilterChip(
+                                selected = settings.packDir == pk.dirName,
+                                onClick = { onSettingsChange(settings.copy(packDir = pk.dirName)) },
+                                label = { Text(pk.manifest.displayName) },
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                (if (pk.dirName == com.ai.assistance.quro.core.pet.PetPackAssets.BUILTIN_ID) "内置 · " else "") +
+                                    pk.manifest.id + "（" + pk.manifest.animations.size + " 动画）",
+                                fontSize = 11.sp, color = cs.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            )
+                            IconButton(onClick = {
+                                com.ai.assistance.quro.core.pet.PetPack.delete(ctx, pk.dirName)
+                                packs = com.ai.assistance.quro.core.pet.PetPack.scan(ctx).first
+                                if (settings.packDir == pk.dirName) onSettingsChange(settings.copy(packDir = null))
+                                packStatus = if (pk.dirName == com.ai.assistance.quro.core.pet.PetPackAssets.BUILTIN_ID) {
+                                    "已删除内置包，可在上方「内置宠物包」一键恢复"
+                                } else {
+                                    "已删除「${pk.manifest.displayName}」"
+                                }
+                            }) {
+                                com.ai.assistance.quro.ui.pet.PetIcon(
+                                    com.ai.assistance.quro.ui.pet.PetGlyph.TRASH,
+                                    Modifier.size(16.dp), tint = cs.error,
+                                )
+                            }
+                        }
+                        // 包内互动动作预览：统一矢量图标，不再使用 emoji 图标数据。
+                        val previewActions = pk.manifest.interactions.take(8)
+                        if (previewActions.isNotEmpty()) {
+                            Spacer(Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                previewActions.forEach { inter ->
+                                    Box(
+                                        Modifier
+                                            .size(26.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(cs.surfaceVariant)
+                                            .padding(5.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        com.ai.assistance.quro.ui.pet.PetIcon(
+                                            com.ai.assistance.quro.ui.pet.PetGlyph.fromIcon(inter.icon),
+                                            Modifier.fillMaxSize(), tint = cs.primary,
+                                        )
+                                    }
+                                    Spacer(Modifier.width(5.dp))
+                                }
+                            }
+                        }
+                        // 形象授权默认收起成一个按钮，不再把整篇声明铺在设置页里。
+                        // 完整声明统一放「设置 → 关于 ZorvAI → 开源许可声明」。
+                        pk.manifest.attribution?.let { at ->
+                            val expanded = pk.dirName in expandedAttribution
+                            TextButton(
+                                onClick = {
+                                    expandedAttribution = if (expanded) {
+                                        expandedAttribution - pk.dirName
+                                    } else {
+                                        expandedAttribution + pk.dirName
+                                    }
+                                },
+                                contentPadding = PaddingValues(0.dp),
+                            ) {
+                                Text(
+                                    if (expanded) "收起形象授权" else "形象授权 · ${at.licenseName} ▸",
+                                    fontSize = 11.sp, color = cs.primary,
+                                )
+                            }
+                            if (expanded) {
+                                Text(
+                                    "形象来源：" + at.authors.joinToString("、") { it.name } +
+                                        "\n许可：" + at.licenseName +
+                                        "\n原仓库：" + at.sourceUrl,
+                                    fontSize = 10.sp, color = cs.onSurfaceVariant,
+                                    modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+                                )
+                                if (at.notice.isNotBlank()) {
+                                    Text(
+                                        at.notice,
+                                        fontSize = 10.sp, color = cs.onSurfaceVariant,
+                                        modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+                                    )
+                                }
+                                Text(
+                                    "完整开源许可声明见：设置 → 关于 ZorvAI → 开源许可声明",
+                                    fontSize = 10.sp, color = cs.onSurfaceVariant,
+                                    modifier = Modifier.padding(start = 4.dp, top = 6.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -418,7 +718,10 @@ fun PetSettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 ) {
-                    Icon(Icons.Filled.Pets, null, Modifier.size(16.dp), tint = cs.primary.copy(alpha = 0.7f))
+                    com.ai.assistance.quro.ui.pet.PetIcon(
+                        com.ai.assistance.quro.ui.pet.PetGlyph.PAW,
+                        Modifier.size(16.dp), tint = cs.primary.copy(alpha = 0.8f),
+                    )
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(act.label, fontSize = 14.sp, fontWeight = FontWeight.Medium)

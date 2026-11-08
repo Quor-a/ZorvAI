@@ -47,5 +47,16 @@ class QuroBootReceiver : BroadcastReceiver() {
         if (QuroVoiceFeaturePrefs.getDesktopPet(context)) {
             runCatching { QuroDesktopPetService.start(context) }
         }
+
+        // 5) 覆盖安装后的完整性校验：安装过程会强杀进程，若刚好撞上写盘窗口，
+        //    这里提前把损坏文件隔离并留下备份，避免用户首次启动直接面对空会话列表。
+        //    放后台线程执行，广播接收不能做全量 JSON 解析这类重 IO。
+        if (action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            Thread({
+                runCatching {
+                    com.ai.assistance.quro.core.QuroConversationRepository(context.applicationContext).loadAll()
+                }
+            }, "quro-conv-verify").apply { isDaemon = true }.start()
+        }
     }
 }

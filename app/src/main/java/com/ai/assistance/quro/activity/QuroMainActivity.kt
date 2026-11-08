@@ -164,6 +164,12 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
             putExtra(QuroVoiceBallService.EXTRA_NO_LISTEN, true)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc) else startService(svc)
+        // 桌宠冷启动恢复：Activity 已在前台，是最可靠的拉起时机
+        // （Application 阶段可能因 Android 12+ 后台启动前台服务限制被系统拒绝）。
+        // ensureStarted 幂等，开关为 false 或服务已在跑时什么都不会做。
+        runCatching {
+            com.ai.assistance.quro.service.QuroDesktopPetService.ensureStarted(this)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -175,6 +181,11 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
     override fun onResume() {
         super.onResume()
         QuroReplyNotifier.isAppForeground = true
+        // 从后台 / 最近任务切回来时补一次：服务可能在后台被系统单独回收，
+        // 而进程还活着、Application.onCreate 不会重跑。
+        runCatching {
+            com.ai.assistance.quro.service.QuroDesktopPetService.ensureStarted(this)
+        }
     }
 
     override fun onPause() {
