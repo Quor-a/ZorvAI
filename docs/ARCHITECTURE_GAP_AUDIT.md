@@ -184,10 +184,10 @@
 
 ---
 
-## 11. 搜索服务 —— 全链路自研、碾压参考，但 Bothub 是误读
+## 11. 搜索服务 —— 全链路自研、碾压参考（一处误读已澄清）
 
-### 「Bothub 搜索」真相（已查清）
-**Bothub 不是搜索服务，是微信 Bot 扫码登录平台。** `ClawBotApiClient.kt:53` 注释：「BotHub 的扫码登录 HTTP 客户端…`User-Agent: Bothub-Android/iLink`」。全库 grep bothub 仅 3 处命中，均与搜索无关。→ 你记的「搜索服务-Bothub搜索」可能是记忆偏差，真正的搜索参考是 `droid-mcp-web` 的 DDG 单引擎（远弱于 QuroAI）。
+### 误读澄清（已查清）
+全库核对确认该名字与搜索服务无关；真正的搜索参考是 `droid-mcp-web` 的 DDG 单引擎（远弱于 QuroAI）。
 
 ### 现状（core/websearch 28 文件，碾压参考）
 - 7 引擎（Bing RSS+HTML 双通道/Baidu/Brave/DDG/GoogleNewsRSS/SearXNG）+ 熔断 `EngineHealth`

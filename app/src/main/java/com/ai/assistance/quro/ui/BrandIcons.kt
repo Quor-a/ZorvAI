@@ -45,8 +45,8 @@ import java.util.Locale
  *
  * ## 资产来源与渲染优先级（2026-11-07 逐项核对官方图标后重做）
  *
- * 1. **官方彩色 PNG（最高优先）**：`brand_icons/<slug>.png`，来自 BotHub 官方
- *    `mcp-catalog.json` 内嵌的 128×128 品牌图标。这些是各品牌**真实彩色 logo**
+ * 1. **官方彩色 PNG（最高优先）**：`brand_icons/<slug>.png`，各品牌官方
+ *    128×128 彩色品牌图标。这些是各品牌**真实彩色 logo**
  *    （含官方四色 Microsoft、aws 字标、Cloudflare 云、monday 三色条、高德纸飞机、
  *    滴滴橙 D、瑞幸鹿头、DeepWiki 星标、Context7 字标），不是单色近似。
  * 2. **官方单色 SVG**：`brand_icons/<slug>.svg`。36 个与 Simple Icons 15.16.0 的
@@ -219,7 +219,7 @@ object BrandIcons {
     private val noPng = HashSet<String>()
 
     /**
-     * 官方彩色品牌图标（BotHub 官方 mcp-catalog 内嵌 PNG），按 slug 同名存放。
+     * 官方彩色品牌图标，按 slug 同名存放。
      * 与 SVG 同名不同扩展名，所以调用方无需知道走哪条路径 —— 有 PNG 就用 PNG。
      */
     fun loadOfficialPng(context: android.content.Context, slug: String): ImageBitmap? =

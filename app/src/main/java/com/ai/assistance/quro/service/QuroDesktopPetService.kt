@@ -93,7 +93,7 @@ class QuroDesktopPetService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        // 🔴 服务级接线（2026-11-06 对齐 BotHub：事件源在回合管理层而非 UI）：
+        // 服务级接线（事件源在回合管理层而非 UI）：
         // 订阅 QuroAgentTrace —— 此前唯一生产者在 ChatScreen 组合里，GenUI 应用内聊天、
         // 语音对话、后台代理、App 被杀重启（START_STICKY 拉回）四种场景桌宠全部失联。
         // 仅在 IDLE 时写入，避免与 ChatScreen 的即时微调互相打架。
@@ -226,7 +226,7 @@ class QuroDesktopPetService : Service() {
         val freePosition = petSettings.freePosition
         val interactions = petSettings.interactions
         val petScale = petSettings.petScale.coerceIn(0.5f, 2.0f)
-        // 🔴 宠物包 + 位置模式（2026-11-07 对齐 BotHub 还原）
+        // 宠物包 + 位置模式
         val sp2 = getSharedPreferences(PREFS, MODE_PRIVATE)
         val placementMode = sp2.getString("placement_mode", "physics") ?: "physics"   // physics|freeroam|pinned
         val screenContext = sp2.getBoolean("screen_context", false)
@@ -367,7 +367,7 @@ class QuroDesktopPetService : Service() {
         }
         runCatching { windowManager.addView(view, params) }
         petParams = params
-        // 🔴 物理引擎 tick（对齐 BotHub 40ms 循环；physics=重力/投掷/走动，freeroam=5点游走，pinned=静止）
+        // 物理引擎 tick（40ms 循环；physics=重力/投掷/走动，freeroam=5点游走，pinned=静止）
         val dm0 = resources.displayMetrics
         val screenH = dm0.heightPixels
         val screenW = dm0.widthPixels
@@ -471,7 +471,7 @@ class QuroDesktopPetService : Service() {
                             d.dismiss()
                             when (which) {
                                 0 -> {
-                                    // 🔴 对它说（对齐 BotHub PetActionInputActivity）：透明输入条 → 自动对话回合
+                                    // 对它说：透明输入条 → 自动对话回合
                                     // 🔴 2026-11-07：Service 上下文 startActivity 必须带 NEW_TASK，
                                     //    否则抛 AndroidRuntimeException 被 runCatching 吞掉，输入框打不开。
                                     runCatching { startActivity(Intent(this, com.ai.assistance.quro.activity.PetInputActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -491,7 +491,7 @@ class QuroDesktopPetService : Service() {
                                     }
                                 }
                                 2 -> {
-                                    // 🔴 模式三态轮换（对齐 BotHub 快捷菜单的物理/自由/固定）
+                                    // 模式三态轮换（物理/自由/固定）
                                     val spMode = getSharedPreferences(PREFS, MODE_PRIVATE)
                                     val next = when (spMode.getString("placement_mode", "physics")) { "physics" -> "freeroam"; "freeroam" -> "pinned"; else -> "physics" }
                                     spMode.edit().putString("placement_mode", next).apply()

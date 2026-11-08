@@ -88,7 +88,7 @@ object WebSearchKeys {
         get() = string(KEY_TAVILY)
         set(value) { write(KEY_TAVILY, value.trim()) }
 
-    /** BotHub 网关 API Key（OpenAI 兼容；驱动 LLM 搜索引擎）。 */
+    /** OpenAI 兼容网关 API Key（驱动 LLM 搜索引擎）。 */
     var bothubKey: String
         get() = string(KEY_BOTHUB)
         set(value) { write(KEY_BOTHUB, value.trim()) }

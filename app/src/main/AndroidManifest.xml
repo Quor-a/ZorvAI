@@ -49,7 +49,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <!-- Android 14+ 特殊用途前台服务（BotHub 也有此权限，覆盖桌面宠物/悬浮窗等场景） -->
+    <!-- Android 14+ 特殊用途前台服务（覆盖桌面宠物/悬浮窗等场景） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- 屏幕录制（MediaProjection）前台服务类型（Android 14+ 必须为录屏前台服务显式声明，否则 startForeground 抛异常）。 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
@@ -236,9 +236,8 @@
         android:networkSecurityConfig="@xml/network_security_config">
 
         <!-- ==================== GenUI Agent（内置完整项目） ====================
-             来源：https://github.com/Quor-a/GenUI-Agent（去品牌化后内置为 com.ai.assistance.quro.genui.aiapp / .sdk）。
-             - 不使用上游的 LAUNCHER 入口（避免抢占 ZorvAI 桌面图标），由 App 内导航显式拉起。
-             - 不注册上游的自定义 Application（ZorvAI 已有 QuroApplication；appCtx 由本 Activity 自行初始化）。 -->
+             - 不提供 LAUNCHER 入口（避免抢占 ZorvAI 桌面图标），由 App 内导航显式拉起。
+             - 不注册自定义 Application（ZorvAI 已有 QuroApplication；appCtx 由本 Activity 自行初始化）。 -->
         <activity
             android:name="com.ai.assistance.quro.genui.aiapp.GenUiAgentActivity"
             android:exported="false"

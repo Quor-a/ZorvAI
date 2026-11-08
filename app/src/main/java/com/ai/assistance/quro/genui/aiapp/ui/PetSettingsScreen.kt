@@ -152,7 +152,7 @@ data class PetSettings(
     val current: PetSpec,
     val pets: List<PetSpec> = emptyList(),
     val tapOpensPanel: Boolean = true,
-    /** 🔴 位置模式（对齐 BotHub）：physics 物理活动 / freeroam 自由活动 / pinned 固定当前位置 */
+    /** 位置模式：physics 物理活动 / freeroam 自由活动 / pinned 固定当前位置 */
     val placementMode: String = "physics",
     /** 点击桌宠时读取当前屏幕作为回合上下文 */
     val screenContext: Boolean = false,
@@ -318,7 +318,7 @@ fun PetSettingsScreen(
             }
             Spacer(Modifier.height(18.dp))
 
-            // ── 位置模式（对齐 BotHub：物理活动 / 自由活动 / 固定当前位置） ──
+            // ── 位置模式（物理活动 / 自由活动 / 固定当前位置） ──
             Text("位置模式", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

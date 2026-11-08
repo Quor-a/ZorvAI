@@ -8,9 +8,9 @@ import java.util.Locale
 import java.util.zip.ZipInputStream
 
 /**
- * 🔴 宠物包系统（2026-11-07 对齐 BotHub desktop_pets 还原）：
+ * 宠物包系统：
  * 每个宠物 = 一个目录（filesDir/desktop_pets/<dirName>/），内含 pet.json + spritesheet 图片
- * （+可选音效）。pet.json 字段与校验对齐 BotHub PetPackageManifest（schema 1）。
+ * （+可选音效）。pet.json 字段与校验（schema 1）。
  *
  * animations 13 个标准名（stand/walkRight/walkLeft/dragged/fall/thrown/celebrate/think/
  * useTool/reply/action/climbRightEdge/climbLeftEdge），每行一条动画按行列取帧。
@@ -21,7 +21,7 @@ object PetPack {
     const val MAX_UNZIP_BYTES = 200L * 1024 * 1024
     private val ALLOWED_EXT = setOf("json", "webp", "png", "jpg", "jpeg", "wav", "ogg", "mp3")
 
-    /** 13 个标准动画名（BotHub ioa.e 全集）。 */
+    /** 13 个标准动画名全集。 */
     val REQUIRED_ANIMATIONS = listOf(
         "stand", "think", "walkRight", "walkLeft", "dragged", "useTool", "reply",
         "celebrate", "fall", "thrown", "action", "climbRightEdge", "climbLeftEdge",
@@ -125,7 +125,7 @@ object PetPack {
         )
     }
 
-    /** 路径净化（对齐 BotHub ioa.a：反斜杠转斜杠、去 "." 段、禁 ".." 与首尾斜杠）。 */
+    /** 路径净化（反斜杠转斜杠、去 "." 段、禁 ".." 与首尾斜杠）。 */
     fun sanitizePath(raw: String): String {
         val cleaned = raw.replace('\\', '/')
             .split('/').filter { it.isNotBlank() && it != "." }
@@ -160,7 +160,7 @@ object PetPack {
 
     // ———————————————— zip 导入 ————————————————
 
-    /** zip 导入（对齐 BotHub doa.f：200MB 上限/扩展名白名单/路径净化/pet.json 校验）。 */
+    /** zip 导入（200MB 上限/扩展名白名单/路径净化/pet.json 校验）。 */
     fun importZip(context: Context, stream: java.io.InputStream, expectId: String? = null): LoadedPack {
         val root = packRoot(context); root.mkdirs()
         val staging = File(root, ".staging-${System.currentTimeMillis()}")

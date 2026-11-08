@@ -3,7 +3,7 @@ package com.ai.assistance.quro.core.connector
 import android.content.Context
 
 /**
- * 连接器目录（2026-11-06 新增功能，参照 BotHub mcp-catalog 架构）。
+ * 连接器目录（2026-11-06 新增功能）。
  *
  * ## 这是什么
  *
@@ -27,7 +27,7 @@ import android.content.Context
  * - [SignInType.API_KEY]：连接时弹 Key 输入框，Key 以 Bearer 存入 MCP 配置。
  * - [SignInType.NONE]：免登录直连。
  *
- * 端点来源（2026-11-06 全量核实）：各厂商官方 MCP 文档 + BotHub mcp-catalog.json
+ * 端点来源（2026-11-06 全量核实）：各厂商官方 MCP 文档
  * 交叉比对 + awesome-remote-mcp-servers 开源清单。仅收录 Streamable HTTP
  * （POST JSON-RPC）端点——旧式 /sse 纯推流端点本客户端不支持，一律不收。
  *

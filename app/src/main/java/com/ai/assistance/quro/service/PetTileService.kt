@@ -5,7 +5,7 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 
 /**
- * 🔴 快捷设置磁贴（对齐 BotHub PetQuickSettingsTileService）：
+ * 快捷设置磁贴：
  * 下拉快捷面板一键 显示/关闭 桌宠；无悬浮窗权限时跳权限页。
  */
 class PetTileService : TileService() {

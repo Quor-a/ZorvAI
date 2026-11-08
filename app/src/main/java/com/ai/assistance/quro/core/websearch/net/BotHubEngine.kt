@@ -5,9 +5,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * BotHubEngine —— BotHub 网关（OpenAI 兼容）驱动的 LLM 搜索引擎。
+ * BotHubEngine —— OpenAI 兼容网关驱动的 LLM 搜索引擎。
  *
- * BotHub（openai.bothub.chat/v1）是 OpenAI 兼容聚合网关，
+ * 网关（openai.bothub.chat/v1）是 OpenAI 兼容聚合网关，
  * 配置 API Key 后可调用其带联网检索能力的对话模型（gpt-4o-search-preview 系列）——
  * 模型自行搜索并返回带来源的答案。本引擎把答案按 URL 拆成 [SearchHit] 条目，
  * 与其余引擎的命中合并进统一召回管线。
@@ -17,7 +17,7 @@ import org.json.JSONObject
  */
 class BotHubEngine(
     override val enabled: Boolean = true,
-    /** 搜索模型：BotHub 网关上带内置联网检索的对话模型。 */
+    /** 搜索模型：网关上带内置联网检索的对话模型。 */
     private val model: String = "gpt-4o-search-preview",
 ) : SearchEngine {
 

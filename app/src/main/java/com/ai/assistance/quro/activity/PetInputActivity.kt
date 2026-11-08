@@ -10,7 +10,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * 「对宠物说」透明输入条（对齐 BotHub PetActionInputActivity）：
+ * 「对宠物说」透明输入条：
  * 桌宠长按菜单 → 💬 对它说 → 本 Activity（屏幕底部透明输入条）→
  * 发送 = 经 QuroShareBridge 自动产生对话回合（pet_message 语义）。
  */

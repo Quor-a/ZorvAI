@@ -21,7 +21,7 @@
 | # | 缺陷 | 修复 | 位置 |
 |---|---|---|---|
 | 1 | 「· 250 工具」徽章把思考步数也算进工具数（219 步思考 + 31 工具 = 250），纯思考也显示「N 工具」 | 计数口径改为**只数工具调用**；图标随展开态切换（chevron_up/down） | `ui/ChatScreen.kt` 名字行 TinyChip |
-| 2 | 工具明细默认一层都看不见（showActivity 默认 false） | 活动流**默认展开**（对齐 BotHub 真机：汇总行 + 逐条明细直接可见），胶囊只做收起开关 | `ui/ChatScreen.kt` |
+| 2 | 工具明细默认一层都看不见（showActivity 默认 false） | 活动流**默认展开**（汇总行 + 逐条明细直接可见），胶囊只做收起开关 | `ui/ChatScreen.kt` |
 | 3 | 同一段推理一屏出现三遍（折叠行 + 活动流条目 + 流式内联） | 思考不再进活动流（有专属「思考了 N秒 ›」行） | `ui/ChatScreen.kt` activityEntries |
 | 4 | 每条 AI 消息无条件平铺 8 个操作按钮，窄屏 FlowRow 堆 2-3 行（「顶部太多重新规划」的来源）；生成中照常显示，可对流式消息重复触发重试 | 完整操作行只挂**最后一条 AI 消息且本轮已结束**；历史消息走名字行长按菜单；新增 `showActions` 参数统一门控（动态 UI 分支与普通分支两处） | `ui/ChatScreen.kt` MessageList/MessageRow |
 | 5 | 顶部「AI 思考中…」胶囊与消息流内的进行中表达重复（用户拍板：多余） | NotificationIsland 只保留「N 个对话后台生成中」；当前会话状态由消息流内表达 | `ui/ChatScreen.kt` |

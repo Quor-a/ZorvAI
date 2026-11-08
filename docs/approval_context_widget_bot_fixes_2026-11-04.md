@@ -1,8 +1,8 @@
 # 审批卡对接 / 上下文窗口补全 / 卡片 WebView 兼容层 / 节点编辑器黑屏 / Bot 体系（2026-11-04 第二批）
 
-> 对应 WorkBuddy 任务「修复 termux 与可视化卡片问题」第二批 + BotHub 反翻译对齐。
+> 对应 WorkBuddy 任务「修复 termux 与可视化卡片问题」第二批。
 > 全部改动已通过 `:app:compileFullDebugKotlin` + `:termux-host:compileDebugJavaWithJavac`。
-> 反编译参考：`D:\bothub_ref_172`（1.0.172，调研报告见会话/调研记录）。
+> 参考实现调研（1.0.172，报告见会话/调研记录）。
 
 ## 一、审批卡「总是允许」对接（用户实测：一直允许了还要一直授权）
 
@@ -12,9 +12,9 @@
 | 2 | 审批卡之外还有 CMS broker / 特权管理器**第二道关卡**，点了允许照样被拦 | `ApprovalPolicy.channelFor(toolName)` 判定工具所属通道，拍板「总是允许」时联动把权限面板的 **CMS / 特权开关置为允许**（横幅提示，可在面板改回） | `core/chat/ApprovalPolicy.kt`、`ui/QuroChatViewModel.kt` |
 | 3 | 授权卡半透明背景，底下的聊天文字透上来「看不清」 | 卡片背景改不透明 `surfaceVariant`，边框加深 | `ui/chat/ApprovalCard.kt` |
 
-## 二、上下文窗口补全（对照 BotHub 反翻译）
+## 二、上下文窗口补全
 
-BotHub 分段 = 系统提示词/系统工具/MCP 工具/技能/记忆文件/消息/其他 + 自动压缩预留/剩余空间（运行时上报）。ZorvAI 的段枚举与弹层 UI 本来就支持 8 段，但计算侧只填了 3 段。
+分段 = 系统提示词/系统工具/MCP 工具/技能/记忆文件/消息/其他 + 自动压缩预留/剩余空间（运行时上报）。ZorvAI 的段枚举与弹层 UI 本来就支持 8 段，但计算侧只填了 3 段。
 
 - `computeContextUsage` 补齐：**MCP 工具**（`mcp*` 前缀元工具单列）、**技能**（`skillsSectionText` 抽成唯一格式化实现，与注入同源）、**记忆**（persona.soul + memory entries，`memoryEnabled` 关闭时不计）。
 - 技能/记忆正文确实拼在系统提示词里下发 → 按 token 估算**从系统提示词段里减出去**单列（estimateTokens 近似线性，coerce 保底非负）。
@@ -39,16 +39,16 @@ BotHub 分段 = 系统提示词/系统工具/MCP 工具/技能/记忆文件/消�
 | 1 | 渲染进程崩溃（onRenderProcessGone）无处理 → 永远黑屏 | 捕获后销毁尸体 + epoch 自增强制重建 WebView，自动恢复画布 |
 | 2 | 离开面板不销毁 WebView → 渲染进程（有限资源）反复泄漏，第 N 次打开即崩 | 补 `onRelease { destroy() }` |
 
-## 五、Bot 体系第一批（对齐 BotHub 反翻译 Bot.java / bot.json）
+## 五、Bot 体系第一批
 
-用户澄清：**Bot = BotHub 那种对话内一等公民**（模型+提示词+Soul+Memory+工具开关按 Bot 隔离），不是 IM 机器人（IM 灵魂注入第一批已做）。
+用户澄清：**Bot = 对话内一等公民**（模型+提示词+Soul+Memory+工具开关按 Bot 隔离），不是 IM 机器人（IM 灵魂注入第一批已做）。
 
 | 能力 | 对齐字段 | 实现 |
 |---|---|---|
 | Bot 级默认模型 | `default_model_id` | `QuroPersona.defaultModelId` + 发送时覆盖 `cfg.model`（provider/key 跟随全局）+ SoulUi 编辑页「Bot 默认模型」输入框 |
 | Bot 级采样覆盖 | `temperature(_enabled)` / `top_p` | 发送时 `persona.temperatureEnabled` → 覆盖 `cfg.temperature`（此前两条链路都无消费点） |
 | Soul 进化调度 | `evolution_min_interval_hours`(默认8) / `evolution_turns_per_check`(默认10) | `QuroPersona.evolutionMinIntervalHours/evolutionTurnsPerCheck`（0–168h / 1–50 轮，序列化容错）+ `BotEvolution.shouldCheck/isCoolingDown` 增加 Bot 级重载 + `maybeAutoEvolve` 接入 |
-| 已有对齐 | prompt/roleSetting、Soul、chatSetting、标签、memoryEnabled、evolutionEnabled、proactiveMode、enabledToolCategories、voiceProfile | QuroPersona 原有字段，命名与 BotHub 一一对应 |
+| 已有对齐 | prompt/roleSetting、Soul、chatSetting、标签、memoryEnabled、evolutionEnabled、proactiveMode、enabledToolCategories、voiceProfile | QuroPersona 原有字段，命名与参考实现一一对应 |
 
 **下一批（架构级，未动）**：会话↔Bot 绑定（conversations.botId 换绑 + 聊天页 Bot pill 切换）、Bot 目录与互问（bot_message/bot_threads + description 注入）、Bot 包 .bot.zip 导入导出、主动模式计划预览、Soul 进化 open_items。
 

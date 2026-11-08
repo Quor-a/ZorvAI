@@ -407,13 +407,13 @@ fun PetComponentRenderer(component: UIComponent, ctx: RenderContext, modifier: M
 
 
 // ═══════════════════════════════════════════════════════════════════
-// 🔴 spritesheet 帧动画渲染（2026-11-07 对齐 BotHub 宠物包还原）：
+// spritesheet 帧动画渲染：
 // 位图网格（24×24 viewBox 语义：按 cellWidth/cellHeight 裁帧），姿态→动画行
-// 候选映射（m69.L 表），帧推进 loop/once/hold，drawImage 源矩形裁剪。
+// 姿态候选映射，帧推进 loop/once/hold，drawImage 源矩形裁剪。
 // 无包时仍走上方 Canvas 矢量 PetSprite（内置形象兜底）。
 // ═══════════════════════════════════════════════════════════════════
 
-/** 姿态 → 动画名候选（BotHub m69.L 表）。pose 用 13 标准动画名小写域。 */
+/** 姿态 → 动画名候选。pose 用 13 标准动画名小写域。 */
 fun petPoseAnimationCandidates(pose: String, facingRight: Boolean, mode: String): List<String> = when (pose) {
     "stand" -> listOf("stand")
     "fall" -> listOf("fall")
@@ -490,7 +490,7 @@ fun PetSpriteFrames(
         Canvas(Modifier.size(w, h).padding(2.dp)) {
             val d = def ?: return@Canvas
             val col = frameIdx % d.frames.coerceAtLeast(1)
-            // 朝向不镜像——walkRight/walkLeft 用不同动画行（BotHub 同款语义）
+            // 朝向不镜像——walkRight/walkLeft 用不同动画行
             drawImage(
                 image = bitmap,
                 srcOffset = androidx.compose.ui.unit.IntOffset(col * cellWidth, d.row * cellHeight),

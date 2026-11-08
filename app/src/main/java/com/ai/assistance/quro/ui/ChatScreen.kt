@@ -1952,7 +1952,7 @@ fun ChatScreen(
         val n = QuroShareBridge.pendingAutoSend.value
         if (n <= 0) return@LaunchedEffect
         // 🔴 修复（2026-11-06）：忙时静默丢失且 pendingText 残留 —— 重试 3 次（间隔 700ms），
-        // 仍忙则消费丢弃并提示（对齐 BotHub pet_interaction_busy 的「还在回复中」反馈）。
+        // 仍忙则消费丢弃并提示（「还在回复中」反馈）。
         var tried = 0
         while (busy && tried < 3) {
             kotlinx.coroutines.delay(700)
@@ -3395,7 +3395,7 @@ fun ChatScreen(
                             busy && thinking -> bus.onBusy(null)
                             busy -> bus.onGenerating()
                             petPrevBusy -> bus.onReplyComplete(
-                                // 🔴 对齐 BotHub：回复内容上宠物气泡（截前 90 字，带过期时间由总线控制）
+                                // 回复内容上宠物气泡（截前 90 字，带过期时间由总线控制）
                                 uiMessages.lastOrNull { !it.mine && !it.text.isNullOrBlank() }
                                     ?.text?.take(90)
                             )
@@ -3975,7 +3975,7 @@ private fun MessageList(
     val cs = MaterialTheme.colorScheme
     val narrow = LocalConfiguration.current.screenWidthDp < 400
     val listState = rememberLazyListState()
-    // 🔴 删除消息确认（2026-11-05 对齐 BotHub strings:936）：点删除→确认弹窗，防误触
+    // 删除消息确认：点删除→确认弹窗，防误触
     var pendingDeleteUids by remember { mutableStateOf<List<String>?>(null) }
     val scope = rememberCoroutineScope()
     val lastMsg = messages.lastOrNull()
