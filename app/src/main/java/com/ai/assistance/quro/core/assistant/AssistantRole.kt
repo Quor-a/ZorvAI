@@ -6,6 +6,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import com.ai.assistance.quro.core.privilege.QuroRootGateway
+import com.ai.assistance.quro.core.shizuku.QuroShizuku
+import com.ai.assistance.quro.service.AssistantAssistService
+import com.ai.assistance.quro.service.QuroVoiceInteractionService
 import com.ai.assistance.quro.util.QuroDiag
 
 /**
@@ -29,11 +33,15 @@ import com.ai.assistance.quro.util.QuroDiag
  * - **但只有用户把本应用设为默认助理后，系统才会真的发过来**。
  * 缺这一条，代码写得再全也唤不醒 —— 这正是"设置页有个开关但不工作"的根因。
  *
- * ## 为什么不用 VoiceInteractionService
- * 完整的语音交互服务（`VoiceInteractionService` + `RecognitionService` + 常驻会话）
- * 是 Android 给 Google Assistant 那套用的，要求提供 `RecognitionService`、
- * 常驻语音输入会话与完整的 UI 会话栈，接入面很大且各 ROM 行为不一。
- * 小布走的是较轻的 `ROLE_ASSISTANT` + ASSIST/VOICE_COMMAND 组合，我们与它保持一致。
+ * ## 两条身份通道都要有（缺一条就有 ROM 唤不醒）
+ * - **角色**：`ROLE_ASSISTANT` 持有者。系统按角色决定「谁是默认助手」。
+ * - **VoiceInteractionService 组件**：`Settings.Secure.voice_interaction_service` 只接受
+ *   真正的 `VoiceInteractionService`。本应用现在已提供
+ *   [com.ai.assistance.quro.service.QuroVoiceInteractionService]，它的会话不做识别，
+ *   只把控制权交回应用内语音球 —— 这样长按电源键在「走 voiceinteraction」的 ROM 上也能直达。
+ *
+ * 只注册 action 而没有上面任一条，系统根本不会把 ASSIST 投过来，
+ * 于是表现为「设置页有开关但唤不醒」。
  */
 object AssistantRole {
 
@@ -91,6 +99,71 @@ object AssistantRole {
         }
         openSystemSettings(activity)
         return false
+    }
+
+    /**
+     * 诊断：把「能不能成为默认助手」这条链路的每一环摊开。
+     *
+     * 为什么需要：这条链路在 ColorOS / HyperOS 上会**静默失败**——
+     * 角色不可用、设置页不存在、后台拉起被拦，表现全都是「点了没反应」。
+     * 把每一环的布尔值直接给用户看，才能知道卡在哪一步，而不是反复点。
+     */
+    fun diagnostics(ctx: Context): List<String> = buildList {
+        val sdk = Build.VERSION.SDK_INT
+        add("系统版本：Android ${Build.VERSION.RELEASE}（API $sdk）")
+        add("角色接口：${if (sdk >= Build.VERSION_CODES.Q) "RoleManager 可用" else "无 RoleManager（改用 assistant 设置项）"}")
+        if (sdk >= Build.VERSION_CODES.Q) {
+            add("ROLE_ASSISTANT 可申请：${if (available(ctx)) "是" else "否（该 ROM 关闭了这个角色）"}")
+            add("当前是否已持有：${if (isAssistant(ctx)) "是" else "否"}")
+        }
+        add("本应用 VoiceInteractionService：${if (hasVoiceInteractionService(ctx)) "已在清单声明" else "未声明（角色无法授予）"}")
+        add("「数字助理」设置页：${if (canResolve(ctx, Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))) "可打开" else "本机没有这个页面"}")
+        if (sdk >= Build.VERSION_CODES.Q) {
+            add("「默认应用」设置页：${if (canResolve(ctx, Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))) "可打开" else "本机没有这个页面"}")
+        }
+        add("Root / Shizuku：${if (privilegeReady()) "可用（可直接写入系统配置）" else "不可用"}")
+    }
+
+    /** 本应用是否声明了真正的 VoiceInteractionService（角色能否授予取决于它）。 */
+    fun hasVoiceInteractionService(ctx: Context): Boolean = runCatching {
+        val intent = Intent("android.service.voice.VoiceInteractionService").setPackage(ctx.packageName)
+        ctx.packageManager.queryIntentServices(intent, 0).any { it.serviceInfo.packageName == ctx.packageName }
+    }.getOrDefault(false)
+
+    private fun canResolve(ctx: Context, intent: Intent): Boolean =
+        runCatching { ctx.packageManager.resolveActivity(intent, 0) != null }.getOrDefault(false)
+
+    private fun privilegeReady(): Boolean = runCatching {
+        QuroShizuku.isReady || QuroRootGateway.exec(null, "id", 3_000L, "assistant.role.probe").success
+    }.getOrDefault(false)
+
+    /**
+     * 不弹窗、直接生效：经 Root / Shizuku 写系统设置。
+     *
+     * 为什么需要这条路：ColorOS 的「数字助理」设置页可能根本不存在，
+     * ROLE_ASSISTANT 也可能被 ROM 关掉，此时系统对话框永远弹不出来。
+     * 有特权时直接写 `voice_interaction_service` 是唯一确定能生效的方式。
+     *
+     * @return 成功与否 + 可展示的说明
+     */
+    fun applyViaPrivilege(ctx: Context): Pair<Boolean, String> {
+        val pkg = ctx.packageName
+        val vis = "$pkg/${QuroVoiceInteractionService::class.java.name}"
+        val assist = "$pkg/${AssistantAssistService::class.java.name}"
+        val commands = listOf(
+            "settings put secure voice_interaction_service $vis",
+            "settings put secure assistant $assist",
+        )
+        val failures = mutableListOf<String>()
+        commands.forEach { cmd ->
+            val r = QuroRootGateway.exec(ctx, cmd, 8_000L, "assistant.role.write")
+            if (!r.success) failures += "${cmd.substringBeforeLast(' ')}"
+        }
+        return if (failures.isEmpty()) {
+            true to "已写入系统助手配置：$vis\n重启后长按电源键将由本应用接管"
+        } else {
+            false to "写入失败（需要 Root 或已启动的 Shizuku）：${failures.joinToString()}"
+        }
     }
 
     /**

@@ -56,6 +56,14 @@ class ClusterEngine(
         // #217：渐进式披露 —— `tool_router` 调用由主通道的 QuroToolRouter 处理，
         // 不进真实工具注册表（它不是可执行工具，是路由目录）。
         if (name == "tool_router") {
+            val args = runCatching { org.json.JSONObject(call.arguments) }
+                .getOrElse { org.json.JSONObject() }
+            val forwarded = com.ai.assistance.quro.core.tools.QuroToolRouter.parseForwardCall(args)
+            if (forwarded != null) {
+                // 发现与调用合并：转成一次真实工具执行，复用下面完整的权限/审批/超时链路，
+                // 不在路由层裸跑 tool.run（那会绕开用户拍板与通道开关）。
+                return execTool(call.copy(name = forwarded.first, arguments = forwarded.second))
+            }
             val all = runCatching {
                 com.ai.assistance.quro.core.tools.QuroToolRegistry.active?.fullSpecs()
             }.getOrNull() ?: return "工具注册表未就绪（应用可能刚启动，稍后重试）"
@@ -94,7 +102,7 @@ class ClusterEngine(
             com.ai.assistance.quro.core.chat.ApprovalChannel.CMS ->
                 com.ai.assistance.quro.core.policy.QuroPolicyStore.getCms(context) == com.ai.assistance.quro.core.policy.QuroPolicy.ALLOW
             com.ai.assistance.quro.core.chat.ApprovalChannel.PRIV ->
-                com.ai.assistance.quro.core.policy.QuroPolicyStore.getPriv(context) == com.ai.assistance.quro.core.policy.QuroPolicy.DENY
+                com.ai.assistance.quro.core.policy.QuroPolicyStore.getPriv(context) == com.ai.assistance.quro.core.policy.QuroPolicy.ALLOW
             null -> false
         }
         val channelDenies = when (channel) {

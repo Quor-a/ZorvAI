@@ -1978,7 +1978,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_02036" formatted="false">激活 Zorv AI 模块</string>
     <string name="qk_02037" formatted="false">在 LSPosed「模块」列表启用 Zorv AI，并在「应用」勾选本应用以纳入作用域</string>
     <string name="qk_02038" formatted="false">Zorv AI 的终端 / ACI / 自动化能力走自有管线（无障碍 · Shizuku · 设备管理员 · ROOT），不依赖 Xposed 也能运行。</string>
-    <string name="qk_02039" formatted="false">Zorv AI 现已提供 opt-in LSPosed 模块：被纳入作用域即写入作用域标记；可选开启跨应用注入 / 系统重定向桥（需外部 lsposed_bridge.json 配置，默认关闭）。本页不定义任何 ai.aci.permission.*。</string>
+    <string name="qk_02039" formatted="false">Zorv AI 使用 LSPosed 现代模块（API 102）：框架服务连接后可读写 RemotePreferences 能力开关；作用域与已加载模块进程由框架直接给出，不再依赖作用域标记文件。</string>
     <string name="qk_02040" formatted="false">权限定义（ai.aci.permission.* 等）由控制端工程维护，本应用只声明与使用，不重复定义。</string>
     <string name="qk_02041">无法打开 %1$s：%2$s</string>
     <string name="qk_02042" formatted="false">复制并关闭</string>
@@ -2270,7 +2270,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_02321" formatted="false">ROOT 访问</string>
     <string name="qk_02322" formatted="false">内核级操作 / 系统文件修改 / SELinux（最高风险）。</string>
     <string name="qk_02323" formatted="false">请在 Root 管理器中允许 CapOS</string>
-    <string name="qk_02324">ROOT：%1$s（root 命令经 root_exec / shizuku_root_exec 工具真实执行，受「权限模式」策略约束）</string>
+    <string name="qk_02324">ROOT：%1$s（root 命令经 root / shizuku 工具真实执行，受「权限模式」策略约束）</string>
     <string name="qk_02325" formatted="false">标准运行时权限</string>
     <string name="qk_02326" formatted="false">请在系统设置开启「精确闹钟」，返回后再次点击测试</string>
     <string name="qk_02327" formatted="false">请到 设置→应用→Zorv AI→通知/权限 中开启「精确闹钟」</string>
@@ -3650,7 +3650,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_03674" formatted="false">查询 CMS v2 各模块与最近任务的执行状态（部署态/运行中/任务终态），让 AI 确认「部署/调用是否成功」。</string>
     <string name="qk_03675" formatted="false">控制 ACI HTTP 模拟服务器（当真实 ACI API 尚未完成时使用）。</string>
     <string name="qk_03676" formatted="false">无法渲染 GenUI 内容</string>
-    <string name="qk_03677" formatted="false">调用一个第三方 App 通过 ACI（Agent Capability Interface）暴露的能力（如发消息 / 查未读 / 建群 / 打开网页 / 执行网页 JS / 发起 HTTP 请求 / 共享工作空间读写 workspace_write·workspace_read·workspace_list·workspace_delete）。</string>
+    <string name="qk_03677" formatted="false">调用一个第三方 App 通过 ACI（Agent Capability Interface）暴露的能力（如发消息 / 查未读 / 建群 / 打开网页 / 执行网页 JS / 发起 HTTP 请求 / 共享工作空间读写 workspace）。</string>
     <string name="qk_03678" formatted="false">Zorv AI 不存储邮件，发送经你选择的邮件应用完成。</string>
     <string name="qk_03679" formatted="false">设备管理员权限</string>
     <string name="qk_03680" formatted="false">启动应用</string>
@@ -3689,7 +3689,7 @@ AI 生成的内容可能涉及版权、商标、肖像权、隐私权等知识�
     <string name="qk_03713" formatted="false">宠物管理</string>
     <string name="qk_03714" formatted="false">」及其全部内容？</string>
     <string name="qk_03715" formatted="false">在 proot 容器内用 tmux 管理终端会话（多窗格/后台任务/键盘发送）。</string>
-    <string name="qk_03716" formatted="false">通过 Zorv AI 智能体键盘发送回车键（提交/换行）。前置条件同 ai_type_text：已启用并切到『Zorv AI 键盘』且目标 App 输入框已聚焦。</string>
+    <string name="qk_03716" formatted="false">通过 Zorv AI 智能体键盘发送回车键（提交/换行）。前置条件同 keyboard：已启用并切到『Zorv AI 键盘』且目标 App 输入框已聚焦。</string>
     <string name="qk_03717" formatted="false">工具链</string>
     <string name="qk_03718" formatted="false">列出可用的ACI能力</string>
     <string name="qk_03719" formatted="false">列出CMS能力模块（旧接口，建议使用cms_toolbox）</string>

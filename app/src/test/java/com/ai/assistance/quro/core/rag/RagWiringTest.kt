@@ -267,15 +267,17 @@ class RagWiringTest {
 
     @Test
     fun 元工具被点名时仍然排第一() {
-        // 压权只压排序、不压召回：用户直接说「rag_search」时它必须拿满分。
-        val hits = AgentRag.tools("rag_search", 5)
+        // 压权只压排序、不压召回：用户直接点名时它必须拿满分。
+        // 2026-11-12 合体新世界：rag_search 并入 memory(action=discover)，
+        // specs 里已无 rag_search——等价语义是「点名 memory 必须召回到自己且排第一」。
+        val hits = AgentRag.tools("memory", 5)
         assertTrue(
-            "点名 rag_search 却没召回到：${hits.map { "${it.nameOrId()}=${it.score}" }}",
-            hits.any { it.nameOrId() == "rag_search" }
+            "点名 memory 却没召回到：${hits.map { "${it.nameOrId()}=${it.score}" }}",
+            hits.any { it.nameOrId() == "memory" }
         )
         assertTrue(
-            "点名 rag_search 却不是第一：${hits.map { "${it.nameOrId()}=${it.score}" }}",
-            hits.firstOrNull()?.nameOrId() == "rag_search"
+            "点名 memory 却不是第一：${hits.map { "${it.nameOrId()}=${it.score}" }}",
+            hits.firstOrNull()?.nameOrId() == "memory"
         )
     }
 

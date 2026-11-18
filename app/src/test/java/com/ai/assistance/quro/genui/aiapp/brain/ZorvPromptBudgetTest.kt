@@ -275,7 +275,8 @@ class ZorvPromptBudgetTest {
         for (bogus in listOf("terminal_run", "terminal_exec", "terminal_write", "terminal_status")) {
             assertFalse("$bogus 是 terminal 的 action，不是工具名", bogus in ZorvPromptBudget.PRIORITY_TOOLS)
         }
-        for (real in listOf("termux", "terminal", "linux_run", "linux_pkg", "linux_status")) {
+        for (real in listOf("termux", "terminal", "linux_env")) {
+        // 2026-11-12 合体新世界：linux_run/linux_pkg/linux_status 并入 linux_env(action=...)
             assertTrue("$real 是真实工具名，必须在优先名单里", real in ZorvPromptBudget.PRIORITY_TOOLS)
         }
     }

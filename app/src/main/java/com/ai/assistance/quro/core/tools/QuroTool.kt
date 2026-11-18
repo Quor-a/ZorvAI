@@ -107,6 +107,18 @@ interface QuroTool {
     val category: String get() = ToolCategory.GENERAL
 }
 
+/**
+ * 合体工具向引擎声明「本次调用实际会执行哪些旧实现」。
+ *
+ * 合体工具在自身 run() 内部转调旧实现，若引擎只按外层名字做治理，
+ * 审批、权限通道、超时预算、通道开关会全部落空。实现本接口后，
+ * 引擎按返回的真实目标逐项施加同一套治理，合体不改变任何安全语义。
+ */
+interface QuroToolDelegation {
+    /** 子调用工具名 → 透传参数。返回空表示按自身名字治理。 */
+    fun governedCalls(arguments: String): List<Pair<String, String>>
+}
+
 /** 工具注册表（持有全部原创工具）。 */
 class QuroToolRegistry {
     companion object {
@@ -116,13 +128,50 @@ class QuroToolRegistry {
 
     private val map = LinkedHashMap<String, QuroTool>()
 
+    /**
+     * 合体之后退役、但仍按原名可解析的旧实现。
+     *
+     * 这里的工具**不进 all()/specs()**，也就是不再下发给模型，界面上只会出现合体后的
+     * 单个入口；但 get(旧名) 依旧命中原实现，参数格式一字不变。历史会话回放、
+     * 工作流/工具内部按旧名互相调用、审批策略与能力目录里的旧名因此全部保持有效，
+     * 「合体」不需要以「删名字」为代价。
+     */
+    private val legacy = LinkedHashMap<String, QuroTool>()
+
     /** 技能可调用（function calling）总开关：false=技能仅注入系统提示词，不下发为工具函数。 */
     var skillToolsEnabled: Boolean = true
     /** 最多下发的技能工具数量（避免工具集过大被 API 中转静默丢弃）。 */
     var maxSkillTools: Int = 16
 
+    @Synchronized
     fun register(tool: QuroTool) {
         map[tool.name] = tool
+    }
+
+    /** 把已注册工具降级为内部实现：不再下发模型，但按原名仍可执行。 */
+    @Synchronized
+    fun demote(name: String) {
+        map.remove(name)?.let { legacy[name] = it }
+    }
+
+    /** 内部旧实现直取（供合体分派器调用；绕开 get 以免同名解析成自身）。 */
+    @Synchronized
+    fun legacy(name: String): QuroTool? = legacy[name]
+
+    /**
+     * 已降级为内部实现的旧工具名。
+     *
+     * 供 `UnifiedToolingContractTest` 断言「降级 = 真的不再下发」：
+     * 合体最容易出的错就是「注册表里还在 all() 里」——模型侧看到两个入口，
+     * 分类构架立刻变成两套说法。
+     */
+    @Synchronized
+    internal fun legacyNames(): Set<String> = legacy.keys.toSet()
+
+    /** 注册合体工具：先把被吸收的旧实现降级，再把合体工具放进可下发集合。 */
+    fun installUnified(tool: QuroTool, absorbed: Collection<String>) {
+        absorbed.forEach { demote(it) }
+        register(tool)
     }
 
     /**
@@ -130,8 +179,12 @@ class QuroToolRegistry {
      * 反向级联：删除「技能工具」（skill__<name>）时，同步删除对应的用户技能定义，
      * 否则下次 mergeSkills 会把该技能重新注册为工具「复活」，造成「工具删了技能还在」的悬挂（#913）。
      */
+    @Synchronized
     fun remove(name: String): Boolean {
-        val removed = map.remove(name) != null
+        // 两张表都要删，不能用 || 短路：同名若同时存在会留下幽灵实现。
+        val inMap = map.remove(name) != null
+        val inLegacy = legacy.remove(name) != null
+        val removed = inMap || inLegacy
         if (removed && name.startsWith("skill__")) {
             appContext?.let { ctx ->
                 QuroSkillStore.load(ctx).firstOrNull { QuroSkill.toolNameOf(it.name) == name }
@@ -141,10 +194,29 @@ class QuroToolRegistry {
         return removed
     }
 
-    fun get(name: String): QuroTool? = map[name]
+    @Synchronized
+    fun get(name: String): QuroTool? = map[name] ?: legacy[name]
+
+    @Synchronized
     fun all(): List<QuroTool> = map.values.toList()
+
+    @Synchronized
     fun specs(): List<QuroToolSpec> = map.values.map {
         QuroToolSpec(it.name, it.description, it.parametersJson)
+    }
+
+    /**
+     * 执行层全集：可下发工具 + 降级为内部实现的旧名。
+     *
+     * 引擎派发用的是这张表，模型下发用的是 [all]。二者分离后，
+     * 历史会话、工作流、能力目录里按旧名的调用仍能走完整治理链路执行，
+     * 同时旧名不会再出现在 tools 字段里。
+     */
+    @Synchronized
+    fun executableTools(): List<QuroTool> {
+        val merged = LinkedHashMap<String, QuroTool>(map)
+        legacy.forEach { (k, v) -> if (!merged.containsKey(k)) merged[k] = v }
+        return merged.values.toList()
     }
 
     /** 绑定 Application Context 并把已持久化的「导入工具」并入运行时注册表（执行 + 下发明细都生效）。 */
@@ -181,6 +253,7 @@ class QuroToolRegistry {
      * 可在 [com.ai.assistance.quro.core.QuroAssistant.ask] 中将
      * `registry.coreSpecs()` 改为 `registry.fullSpecs()` 解锁全部工具（实测 258 个）。
      */
+    @Synchronized
     fun coreSpecs(): List<QuroToolSpec> {
         // 精简核心集：仅保留口语指令最高频、且依赖链最短的动作。
         // 目的——把工具 definitions 的 token 开销压到 ~1,200 以内，
@@ -193,11 +266,12 @@ class QuroToolRegistry {
         // 默认（useFullTools=false）即下发此集；fullSpecs 在其基础上再并入其余高级/小众工具。
         // 注意：菜单（appendCapabilityAwareness）与 tools 字段都由此集生成，二者严格一致，
         // 避免模型选了菜单里有、字段里没有的工具而报「未知工具」。
+        // 2026-11-11：已合体降级的散装旧名不再列白名单（列了也不会生成工具，反而误导）。
+        // 8 族合体名与更早的合体名统一由末尾 QuroUnifiedToolNames.ALL 并入。
         val coreNames = setOf(
             // 基础
             "get_current_time", "get_device_info", "calculate",
             "get_battery", "get_wifi_info", "get_network_info", "get_sensors", "vibrate",
-            "get_clipboard", "set_clipboard",
             // 🔴 2026-11-07 修复：16 族工具合体后，合体工具的注册名从未补进 coreNames，
             // 而 coreSpecs() 是默认配置下 tools 字段的唯一来源（filter { it.name in coreNames }）——
             // 缺名 = 模型完全看不到该工具（剪贴板/列目录/写文件/闹钟/定时任务/设备开关/弹窗全失效）。
@@ -205,12 +279,12 @@ class QuroToolRegistry {
             "clipboard", "list_dir", "file_write", "alarm_clock", "task_schedule",
             "device_control", "visual_popup",
             // 应用管理
-            "list_installed_apps", "launch_app", "search_and_launch_app", "get_package_name",
+            "list_installed_apps", "launch_app", "get_package_name",
             "list_app_functions", "invoke_app_function",
             // 通知 / 蓝牙 / 手电（注意：真实注册名是 get_active_notifications，coreNames 必须与之一致，否则工具会被静默丢弃）
-            "get_active_notifications", "get_bluetooth_status", "toggle_flashlight",
-            // 相机能力补充（能力查询/录像；take_photo 拍照此前漏在核心集外，一并补入）
-            "get_camera_capabilities", "take_photo", "capture_video",
+            "get_active_notifications", "get_bluetooth_status",
+            // 相机能力补充（能力查询/录像；拍照已并入 screen(action=photo)）
+            "get_camera_capabilities", "capture_video",
             // 通信
             "read_sms", "send_sms", "read_contacts",
             // Intent / 系统广播（唤起其他 App 的 Activity/Service、发系统广播）
@@ -234,7 +308,6 @@ class QuroToolRegistry {
             // 对话框内 GitHub 搜索引擎（仓库/代码/Issue/用户）
             "github_search",
             // 屏幕捕获授权（AI 主动发起 MediaProjection 系统授权，无需手动长按开关）
-            "enable_screen_capture",
             // 代码执行
             "run_code",
             // SandboxPackage 完整脚本运行时（JS/TS + Tools.* 宿主 API）+ ToolPkg 脚本包 + 项目模板
@@ -246,7 +319,8 @@ class QuroToolRegistry {
             // （注释已说明菜单与 tools 字段同源）。此前只有 `terminal`，于是 `termux` 工具
             // 从未出现在 tools 里 —— 模型连看都看不到，表现就是「怎么提示都不会用 pkg」。
             // 两者是**两套环境**，不是替代关系：terminal=proot Ubuntu（apt），termux=官方 bootstrap（pkg）。
-            "terminal", "termux", "quroterm_exec",   // 合并后的统一终端工具（应用内 proot+Ubuntu / 设备 shell / Termux 原生）
+            "terminal", "termux", 
+            // 合并后的统一终端工具（应用内 proot+Ubuntu / 设备 shell / Termux 原生）
             // TTS
             "speak", "stop_speak",
             // 闹钟
@@ -254,11 +328,8 @@ class QuroToolRegistry {
             // 定时任务/自动化提醒
             "schedule_task", "list_scheduled_tasks", "delete_scheduled_task",
             // 记忆库
-            "memory_save", "memory_list", "memory_search", "memory_delete",
             // AI 经验闭环（自我进化：报错/方案/工具模式/版本差异 的沉淀与复用）
-            "experience_log", "experience_query", "experience_correct", "experience_version_check",
             // 文件知识库（Path ②）
-            "knowledge_search", "knowledge_add", "knowledge_manage", "knowledge_rag_search",
             // 文档生成（aiWPS：本地生成 WPS / Office 兼容 .docx/.xlsx/.pptx，零外部依赖）
             "aiwps_create",
             // CodeCanvas 出图后端（外部 FastAPI 渲染服务）：确定性渲染，同样输入永远出同样的图，
@@ -293,46 +364,33 @@ class QuroToolRegistry {
             // 节点编辑器：AI 直接读写节点流工程（与工具中心面板共享 studio/flow/*.qne，面板打开自动恢复）
             "node_editor",
             // 工作流引擎 AI 侧调用入口：创建/点燃/查询运行（缺口清单 · 可实现项）
-            "wf_create", "wf_trigger", "wf_run_status",
             // MCP 客户端：AI 调用外部 MCP 服务器工具（#402）
-            "mcp_servers", "mcp_list_tools", "mcp_call", "mcp_deploy", "mcp_undeploy", "mcp_list_local",
             // MCP-ACI 桥接：通过 ACI 调用外部 MCP 服务器工具
-            "mcp_aci_list", "mcp_aci_call", "mcp_aci_bridge",
             // 第三方服务授权保险库
-            "auth_service_add", "auth_service_list", "auth_service_remove",
             // CMS v2 能力模块 + 特权通道自查
-            "cms_list", "cms_call", "cms_status", "cms_logs", "cms_result", "cms_run_dag", "cms_deploy_terminal", "cms_undeploy_terminal", "priv_status", "cms_engine_status",
             // ACI（Agent Capability Interface）：AI 作为控制方调用第三方 App 暴露的能力（发现 + 调用）
-            "aci_list", "aci_call",
-            // 工作区 AI 工具：AI 直接读写 ZorvAI 自己的 QuroWorkspace（与构建台 ACI 协作写码→编译）
-            "workspace_write", "workspace_read", "workspace_list",
+            // 工作区统一入口 workspace 由 QuroUnifiedToolNames.ALL 并入；
+            // 这里不再列已退役的散装名，避免白名单里出现注册表不存在的死名字。
             // 构建台：端侧 APK 构建（Java → DEX → APK，AI 可真正触发编译打包，与 ui_open_build 互补）
             "build_apk",
             // 构建台：导出产物（构建台 UI 的导出是文件选择器、AI 用不了，本工具替代它把 APK 导出到可访问位置）
             "export_apk",
             // L1 无障碍控屏（CapOS 通道）
-            "read_screen", "get_foreground_app", "get_screen_state",
-            "tap_screen", "swipe_screen", "input_text", "scroll_screen", "global_action",
             // AI 智能体键盘（Agent IME）：把文本直接打字进聚焦输入框（需启用并切到『Zorv AI 键盘』）
-            "ai_type_text", "ai_press_enter", "ai_press_send",
             // 媒体：百分百开源本地音乐 / 视频播放器（后台可用，对话框显示播放卡片）
             "local_music_player", "local_video_player", "list_media", "music_play",
             // 真实执行链路（L1-L4 CapOS 通道已恢复 v115，L5 Linux v116 恢复）：
-            // L2: Shizuku ADB 级 IPC（shizuku_exec/freeze_app/install_app/shizuku_root_exec/shizuku_status）
-            // L3: 设备管理员（lock_screen/device_admin_status/set_camera_disabled）
-            // L4: ROOT 执行（root_exec/root_status）
+            // L2: Shizuku ADB 级 IPC（统一走 shizuku 的 exec/freeze/install/root_exec/status）
+            // L3: 设备管理员（统一走 permissions 的 lock/status/camera）
+            // L4: ROOT 执行（统一走 root 的 exec/status）
             // L5: 应用内 Linux 环境（linux_run/linux_install/linux_start/linux_stop/linux_status）
             // 说明：L2-L5 默认进核心集（AI 默认可调用），运行时由系统权限授予 / 资产可用性再把关；
             // 若仍想收紧，可在设置关闭「完整工具集」或调整下方 coreNames。
-            "shizuku_exec", "shizuku_root_exec", "freeze_app", "install_app", "shizuku_status",
-            "lock_screen", "device_admin_status", "set_camera_disabled",
-            "root_exec", "root_status",
-            "linux_run", "linux_install", "linux_start", "linux_stop", "linux_status",
             // terminal_run/terminal_exec 为应用沙盒内免权限 shell（Runtime.exec /system/bin/sh）
             // 流体云（OPPO Fluid Cloud）：状态栏胶囊和卡片显示
             "fluid_cloud_notify",
             // 隔离沙箱 + 私有数据库只读查询（应用内免权限）
-            "sandbox", "private_db",
+            "sandbox",
             // KaleidoBox 工具包运行器：进程内 JVM / Dex 引擎运行 Kotlin/Java 工具包（list/install/invoke）
             "kaleidobox",
             // ★ APK 级插件框架总控（唯一入口）：列/装/卸/重载插件 + 查看与调用插件贡献的 AI 工具
@@ -349,14 +407,13 @@ class QuroToolRegistry {
             // Dim4 媒体
             "ffmpeg",
             // Dim7 终端增强
-            "tmux", "terminal_keys",
             // Dim5 文件与编辑补全：Git 集成 + 语法检查
             "git", "syntax_check",
             // 自动化集成：Tasker 双向（#39）
             "tasker",
             // 宿主技能库管理：AI 只可列举技能（具体用哪个由用户在对话框选择后随消息发送）
             "skill_list",
-        ) + uiActionToolNames() // 并入「UI 动作工具」：对话框界面/弹层/开关 → AI 可调用（见 QuroToolsUiActions）
+        ) + QuroUnifiedToolNames.ALL + uiActionToolNames() // 并入合体工具与「UI 动作工具」：对话框界面/弹层/开关 → AI 可调用（见 QuroToolsUiActions）
         val base = map.values.filter { it.name in coreNames }.map {
             QuroToolSpec(it.name, it.description, it.parametersJson)
         }
@@ -372,6 +429,7 @@ class QuroToolRegistry {
     }
 
     /** 完整工具规格（全部内置工具 + 技能工具）。仅在 API 代理确认支持时使用（见 coreSpecs 说明）。 */
+    @Synchronized
     fun fullSpecs(): List<QuroToolSpec> = guardSpecs(specs().plus(skillSpecs()))
 
     /**
@@ -405,7 +463,7 @@ class QuroToolRegistry {
         }
         //
         // 目的：活动流里每条工具调用要显示一句**用户可读**的意图描述
-        // （如「探测本地 MCP 端点」），而不是 `quroterm_exec` 这种内部工具名。
+        // （如「探测本地 MCP 端点」），而不是内部实现名。终端命令现在统一走 terminal 的 action。
         // 做法：给工具 schema 追加一个可选字符串参数 display_intent，
         // 并在描述里写明写法要求；模型调用时会自己填这句话，UI 直接显示。
         //
@@ -491,9 +549,33 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
         const val MAX_ROUND_BUDGET_MS: Long = 180_000L
     }
 
+    // 派发表必须含降级为内部实现的旧名：历史会话、工作流、能力目录里按原名发起的
+    // 调用经 engine.execute 时仍要能命中，且必须走完整治理（审批/权限/超时）。
     private val droidMcp: DroidMcp = DroidMcp.builder()
-        .addTools(registry.all().map { it.toMcpTool(this) })
+        .addTools(registry.executableTools().map { it.toMcpTool(this) })
         .build()
+
+    /**
+     * 本次调用的治理对象。合体工具会在内部转调多个旧实现，
+     * 只按外层名判定会让危险动作绕开审批、权限与超时预算。
+     */
+    private fun governanceTargets(call: QuroToolCall): List<Pair<String, String>> {
+        val declared = runCatching {
+            (registry.get(call.name) as? QuroToolDelegation)?.governedCalls(call.arguments)
+        }.getOrNull().orEmpty().filter { it.first.isNotBlank() }
+        return declared.ifEmpty { listOf(call.name to call.arguments) }
+    }
+
+    /** 执行预算：普通工具取自身声明；合体工具按内部串行的真实子实现累加。 */
+    private fun execBudgetFor(call: QuroToolCall): Long {
+        val own = runCatching { registry.get(call.name)?.execTimeoutMs(call.arguments) }
+            .getOrNull() ?: TOOL_EXEC_TIMEOUT_MS
+        val targets = governanceTargets(call)
+        if (targets.size == 1 && targets[0].first == call.name) return own
+        return targets.sumOf { (name, args) ->
+            runCatching { registry.get(name)?.execTimeoutMs(args) }.getOrNull() ?: TOOL_EXEC_TIMEOUT_MS
+        }.coerceAtLeast(own)
+    }
 
     internal fun getContext(): Context? = appContext
 
@@ -628,9 +710,7 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
         var sum = 0L
         var anyLong = false
         for (i in serial) {
-            val budget = runCatching {
-                registry.get(calls[i].name)?.execTimeoutMs(calls[i].arguments)
-            }.getOrNull() ?: TOOL_EXEC_TIMEOUT_MS
+            val budget = execBudgetFor(calls[i])
             if (budget > TOOL_EXEC_TIMEOUT_MS) anyLong = true
             sum += budget
         }
@@ -648,55 +728,59 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
         //    权限面板的 CMS / 特权开关此前只管 CMS broker / 特权管理器那道关卡，
         //    这道审批卡是独立的第二道门 —— 开关=允许时照样弹。现在反向也接上：
         //    工具所属通道开关为 ALLOW → 直接免卡放行；DENY → 直接拒，不弹卡。
-        val channel = com.ai.assistance.quro.core.chat.ApprovalPolicy.channelFor(call.name)
-        val channelAllows = when (channel) {
-            com.ai.assistance.quro.core.chat.ApprovalChannel.CMS ->
-                com.ai.assistance.quro.core.policy.QuroPolicyStore.getCms(context) ==
-                    com.ai.assistance.quro.core.policy.QuroPolicy.ALLOW
-            com.ai.assistance.quro.core.chat.ApprovalChannel.PRIV ->
-                com.ai.assistance.quro.core.policy.QuroPolicyStore.getPriv(context) ==
-                    com.ai.assistance.quro.core.policy.QuroPolicy.ALLOW
-            null -> false
-        }
-        val channelDenies = when (channel) {
-            com.ai.assistance.quro.core.chat.ApprovalChannel.CMS ->
-                com.ai.assistance.quro.core.policy.QuroPolicyStore.getCms(context) ==
-                    com.ai.assistance.quro.core.policy.QuroPolicy.DENY
-            com.ai.assistance.quro.core.chat.ApprovalChannel.PRIV ->
-                com.ai.assistance.quro.core.policy.QuroPolicyStore.getPriv(context) ==
-                    com.ai.assistance.quro.core.policy.QuroPolicy.DENY
-            null -> false
-        }
-        if (channelDenies) {
-            return QuroToolResult.Failed("approval_denied", "权限面板已把该通道设为「禁止」：${ApprovalPolicy.labelFor(call.name)}")
-        }
-        // 🔴 信任重构（2026-11-06 用户裁定）：特权=允许 = 全局信任 —— 不管工具属于哪个通道
-        //    （还是 channelFor 覆盖不到的文件写入等），一律免审批卡。此前只有
-        //    「工具所属通道=允许」才免卡，写文件等无通道工具在特权允许下照样弹 ——
-        //    这就是「特权已开还弹窗」的残留根因。通道 DENY 仍在上面优先拦截。
+        // 治理对象按真实目标展开：合体工具一次调用会在内部执行多个旧实现，
+        // 只按外层名判定的话，shell/包管理/部署这类危险动作会整体绕开审批。
+        val targets = governanceTargets(call)
+        // 🔴 特权=允许 = 全局信任；通道 DENY 仍优先拦截（见各分支）。
         val privTrustAll = com.ai.assistance.quro.core.policy.QuroPolicyStore.trustAll(context)
-        val declared = registry.get(call.name)?.requiresApproval ?: false
-        if (!privTrustAll &&
-            channelAllows.not() &&
-            ApprovalPolicy.needsApproval(call.name, call.arguments, declared) &&
-            !ApprovalMemory.isAllowed(call.name)
-        ) {
-            val request = ApprovalRequest(
-                id = "approval_${System.currentTimeMillis()}_${call.name.hashCode()}",
-                toolName = call.name,
-                toolLabel = ApprovalPolicy.labelFor(call.name),
-                summary = "即将执行「${ApprovalPolicy.labelFor(call.name)}」",
-                reason = null,
-                facts = ApprovalPolicy.factsFor(call.name, call.arguments),
-                risk = registry.get(call.name)?.risk,
-            )
-            val denial = ApprovalGate.awaitDecision(request)
-            if (denial != null) {
-                // 拒绝/超时：短路，工具不执行，把审查说明回喂给模型。
-                return QuroToolResult.Failed("approval_denied", denial)
+        for ((targetName, targetArgs) in targets) {
+            val channel = ApprovalPolicy.channelFor(targetName)
+            val channelAllows = when (channel) {
+                com.ai.assistance.quro.core.chat.ApprovalChannel.CMS ->
+                    com.ai.assistance.quro.core.policy.QuroPolicyStore.getCms(context) ==
+                        com.ai.assistance.quro.core.policy.QuroPolicy.ALLOW
+                com.ai.assistance.quro.core.chat.ApprovalChannel.PRIV ->
+                    com.ai.assistance.quro.core.policy.QuroPolicyStore.getPriv(context) ==
+                        com.ai.assistance.quro.core.policy.QuroPolicy.ALLOW
+                null -> false
             }
-            // 允许：按用户选的粒度记住，后续同类调用免问。
-            // （粒度在 ApprovalGate.resolve 时由 UI 传入，这里通过 listener 回传的记忆集合兜底）
+            val channelDenies = when (channel) {
+                com.ai.assistance.quro.core.chat.ApprovalChannel.CMS ->
+                    com.ai.assistance.quro.core.policy.QuroPolicyStore.getCms(context) ==
+                        com.ai.assistance.quro.core.policy.QuroPolicy.DENY
+                com.ai.assistance.quro.core.chat.ApprovalChannel.PRIV ->
+                    com.ai.assistance.quro.core.policy.QuroPolicyStore.getPriv(context) ==
+                        com.ai.assistance.quro.core.policy.QuroPolicy.DENY
+                null -> false
+            }
+            if (channelDenies) {
+                return QuroToolResult.Failed(
+                    "approval_denied",
+                    "权限面板已把该通道设为「禁止」：${ApprovalPolicy.labelFor(targetName)}",
+                )
+            }
+            val declared = registry.get(targetName)?.requiresApproval ?: false
+            if (!privTrustAll &&
+                channelAllows.not() &&
+                ApprovalPolicy.needsApproval(targetName, targetArgs, declared) &&
+                !ApprovalMemory.isAllowed(targetName)
+            ) {
+                val request = ApprovalRequest(
+                    id = "approval_${System.currentTimeMillis()}_${targetName.hashCode()}",
+                    toolName = targetName,
+                    toolLabel = ApprovalPolicy.labelFor(targetName),
+                    summary = "即将执行「${ApprovalPolicy.labelFor(targetName)}」",
+                    reason = null,
+                    facts = ApprovalPolicy.factsFor(targetName, targetArgs),
+                    risk = registry.get(targetName)?.risk,
+                )
+                val denial = ApprovalGate.awaitDecision(request)
+                if (denial != null) {
+                    // 拒绝/超时：短路，工具不执行，把审查说明回喂给模型。
+                    return QuroToolResult.Failed("approval_denied", denial)
+                }
+                // 允许：按用户选的粒度记住，后续同类调用免问。
+            }
         }
         return closedLoop.dispatch(
             context = context,
@@ -836,7 +920,11 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
         val tool = registry.get(call.name)
         if (tool == null) return ExecResult.Terminal(FailureType.UNKNOWN, "未知工具: ${call.name}")
         // 危险权限前置申请：工具运行在 Application Context 上无法弹框，交由 Activity 注入的网关处理。
-        val perms = tool.requiredPermissions
+        // 合体工具内部转调的旧实现也要一并计入，否则授权（如截图、录音）会被跳过。
+        val targets = governanceTargets(call)
+        val perms = (tool.requiredPermissions + targets.flatMap { (n, _) ->
+            registry.get(n)?.requiredPermissions.orEmpty()
+        }).distinct()
         if (perms.isNotEmpty() && !QuroPermissionHolder.isGranted(context, perms)) {
             val requester = QuroPermissionHolder.requester
             if (requester != null) {
@@ -875,7 +963,7 @@ class QuroToolEngine(private val registry: QuroToolRegistry) {
         // apt install 一等就是一分多钟，用户点停止毫无反应，根因就在这里。
         // #496：执行预算由工具自己按参数声明（长跑工具如 harness 可到 3600s）。
         // 60s 默认值保持不变，未 override 的工具行为与此前完全一致。
-        val execBudgetMs = tool.execTimeoutMs(call.arguments)
+        val execBudgetMs = execBudgetFor(call)
         val execResult = runCatching {
             withTimeout(execBudgetMs) {
                 val run = QuroToolProcesses.beginRun(coroutineContext[Job])

@@ -108,9 +108,9 @@ object PetPrefs {
             .putBoolean("think_match", s.thinkMatch)
             .putString("interactions_json", arr.toString())
             .apply()
-        // 🔴 设置热更新（2026-11-05）：旧实现
-        //    只在服务首次 addPet 时读一次 PetPrefs，改形象/大小/开关必须重启服务才生效。
-        //    这里统一广播，所有设置入口（主 app 与 GenUI 应用内）自动覆盖。
+        // 形象缓存必须随设置一起失效，否则桌宠与语音球还画着上一个包。
+        com.ai.assistance.quro.core.pet.PetAppearanceResolver.invalidate()
+        // 设置热更新：统一广播，所有设置入口自动覆盖，不需要重启服务。
         runCatching {
             context.sendBroadcast(
                 android.content.Intent("com.ai.assistance.quro.action.DESKTOP_PET_APPLY_SETTINGS")
@@ -132,7 +132,7 @@ data class PetInteraction(val label: String, val action: String) {
 }
 
 /**
- * 🔴 AI 产出的动作收敛到 PetSprite 实际支持的 4 种（2026-11-05）：
+ * AI 产出的动作收敛到 PetSprite 实际支持的 4 种：
  * AI 写的宠物动作若不在 actionWave/actionBounce/actionChat/think 里，
  * 旧实现会静默不播（宠物不支持）——现在强制收敛并保留 label。
  */
@@ -881,7 +881,7 @@ fun PetSettingsScreen(
                                 val sIdx = raw.indexOf('{')
                                 val eIdx = raw.lastIndexOf('}')
                                 val spec = if (sIdx >= 0 && eIdx > sIdx) PetSpec.parseOrNull(raw.substring(sIdx, eIdx + 1)) else null
-                                // 🔴 AI 写宠物动作（2026-11-05）：AI 产出的互动动作一并解析，收敛到支持集
+                                // AI 产出的互动动作一并解析，收敛到支持集
                                 val aiInteractions = if (sIdx >= 0 && eIdx > sIdx) {
                                     runCatching {
                                         val o = JSONObject(raw.substring(sIdx, eIdx + 1))
@@ -896,7 +896,7 @@ fun PetSettingsScreen(
                                     onSettingsChange(settings.copy(
                                         current = spec,
                                         pets = (settings.pets + spec).distinctBy { it.name },
-                                        // 🔴 AI 写宠物动作接线（2026-11-05）：收敛到支持的 4 种动画
+                                        // 收敛到支持的 4 种动画
                                         interactions = aiInteractions.clampedToSupported().ifEmpty { settings.interactions },
                                     ))
                                     showAiGen = false

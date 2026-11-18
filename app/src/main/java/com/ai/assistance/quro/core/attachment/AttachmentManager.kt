@@ -167,7 +167,7 @@ class AttachmentManager(private val context: Context) {
             content = buildString {
                 appendLine("当前工作区：$workspaceName")
                 appendLine("工作区路径：$workspacePath")
-                appendLine("你可以使用 workspace_write、workspace_read、workspace_list 工具操作此工作区。")
+                appendLine("你可以使用 workspace(action=write)、workspace(action=read)、workspace(action=list) 工具操作此工作区。")
             }
         )
         addAttachment(attachment)
@@ -184,7 +184,7 @@ class AttachmentManager(private val context: Context) {
             content = buildString {
                 appendLine("当前 ACI 应用：$aciName")
                 appendLine("包名：$packageName")
-                appendLine("你可以使用 aci_list、aci_call 工具与该应用交互。")
+                appendLine("你可以使用 aci 工具与该应用交互：aci(action=\"list\") 查能力、aci(action=\"call\", target_package=\"$packageName\", capability=\"能力id\", args={...}) 调用。")
             }
         )
         addAttachment(attachment)

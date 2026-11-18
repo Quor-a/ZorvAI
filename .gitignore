@@ -1,3 +1,6 @@
+# 源码树外的历史备份，不参与构建，也不进版本库
+_backup_outside_src/
+
 # Built application files
 *.apk
 # NOTE: 保留端侧 APK 构建器的模板 APK（位于 assets 内，是构建引擎注入 DEX 的底座，非构建产物）

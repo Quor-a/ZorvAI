@@ -92,7 +92,16 @@ fun ActivityDetailSheet(
             appendLine()
             appendLine("参数：")
             appendLine(prettifyJson(entry.args))
-            if (!entry.result.isNullOrBlank()) {
+            // 同一动作折叠成一行后，逐次列出全部结果；只展示最后一次会把
+            // 中间执行记录永久丢掉，重试/批处理的排查信息就没了。
+            val history = entry.resultHistory.filter { it.isNotBlank() }
+            if (history.size > 1) {
+                history.forEachIndexed { i, r ->
+                    appendLine()
+                    appendLine("结果（第 ${i + 1} 次，共 ${history.size} 次）：")
+                    appendLine(r)
+                }
+            } else if (!entry.result.isNullOrBlank()) {
                 appendLine()
                 appendLine("结果：")
                 appendLine(entry.result)
@@ -509,7 +518,7 @@ private fun fileExists(p: String?): Boolean =
  *
  * 规则（宁可缺省，不硬塞）：
  * - 命令类（quroterm_exec / run_code / shell…）→「打开终端」（去终端里看会话/重跑）；
- * - 文件类（workspace_write / read / edit…）且参数带路径 →「在工作区打开」（落到该路径）；
+ * - 文件类（workspace / file_write / file_read…）且参数带路径 →「在工作区打开」（落到该路径）；
  * - 图片产物（image_gen 结果路径 / code_canvas 输出）且文件仍在 →「查看图片」（全屏查看器）；
  * - 视频产物（video_gen 结果路径）且文件仍在 →「播放视频」（应用内播放器）；
  * - 纯文本编辑器类（write_text / draft…）→「在编辑器打开」；

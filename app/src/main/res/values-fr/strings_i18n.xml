@@ -1983,7 +1983,7 @@ Try opening with &quot;Other app&quot;.</string>
     <string name="qk_02036" formatted="false">Activate Zorv AI module</string>
     <string name="qk_02037" formatted="false">Enable Zorv AI in LSPosed &quot;Modules&quot;, and check this app in &quot;Apps&quot; to include it in scope</string>
     <string name="qk_02038" formatted="false">Zorv AI’s terminal / ACI / automation capabilities run on their own pipeline (accessibility · Shizuku · device admin · ROOT) and work without Xposed.</string>
-    <string name="qk_02039" formatted="false">Zorv AI now provides an opt-in LSPosed module: writing a scope marker when included in scope; optional cross-app injection / system redirect bridge (requires external lsposed_bridge.json, off by default). This page defines no ai.aci.permission.*.</string>
+    <string name="qk_02039" formatted="false">Zorv AI uses the modern LSPosed module (API 102): once the framework service is connected, capability switches are stored in RemotePreferences; scope and loaded-module processes come from the framework instead of a marker file.</string>
     <string name="qk_02040" formatted="false">Permission definitions (ai.aci.permission.* etc.) are maintained by the control-end project; this app only declares and uses them, no duplication.</string>
     <string name="qk_02041">Cannot open %1$s: %2$s</string>
     <string name="qk_02042" formatted="false">Copy and Close</string>
@@ -2275,7 +2275,7 @@ Code
     <string name="qk_02321" formatted="false">ROOT access</string>
     <string name="qk_02322" formatted="false">Kernel-level operations / system file modification / SELinux (highest risk).</string>
     <string name="qk_02323" formatted="false">Allow CapOS in the Root manager</string>
-    <string name="qk_02324">ROOT: %1$s (root commands are executed for real via root_exec / shizuku_root_exec tools, constrained by the &quot;Permission Mode&quot; policy)</string>
+    <string name="qk_02324">ROOT: %1$s (root commands are executed for real via root / shizuku tools, constrained by the &quot;Permission Mode&quot; policy)</string>
     <string name="qk_02325" formatted="false">Standard runtime permissions</string>
     <string name="qk_02326" formatted="false">Enable &quot;Exact Alarm&quot; in system settings, then return and tap test again</string>
     <string name="qk_02327" formatted="false">Go to Settings→Apps→Zorv AI→Notifications/Permissions to enable &quot;Exact Alarm&quot;</string>
@@ -2315,7 +2315,7 @@ Code
     <string name="qk_02386" formatted="false">One-time</string>
     <string name="qk_02387" formatted="false">Repeat</string>
     <string name="qk_02388" formatted="false">Trigger Time</string>
-    <string name="qk_02389" formatted="false">Call a capability exposed by a third-party App via ACI (Agent Capability Interface) (e.g. send message / check unread / create group / open web / run web JS / initiate HTTP request / shared workspace read-write workspace_write·workspace_read·workspace_list·workspace_delete).</string>
+    <string name="qk_02389" formatted="false">Call a capability exposed by a third-party App via ACI (Agent Capability Interface) (e.g. send message / check unread / create group / open web / run web JS / initiate HTTP request / shared workspace read-write workspace).</string>
     <string name="qk_02390" formatted="false">Select time</string>
     <string name="qk_02391" formatted="false">Select date and time first</string>
     <string name="qk_02392" formatted="false">Frequency</string>
@@ -3655,7 +3655,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03674" formatted="false">Query CMS v2 modules’ and recent tasks’ execution status (deploy state / running / terminal), letting the AI confirm &quot;deploy/call succeeded&quot;.</string>
     <string name="qk_03675" formatted="false">Control the ACI HTTP mock server (used when the real ACI API is not done yet).</string>
     <string name="qk_03676" formatted="false">Cannot render GenUI content</string>
-    <string name="qk_03677" formatted="false">Call a capability exposed by a third-party app via ACI (Agent Capability Interface) (e.g. send message / check unread / create group / open web / run web JS / initiate HTTP request / shared workspace read-write workspace_write·workspace_read·workspace_list·workspace_delete).</string>
+    <string name="qk_03677" formatted="false">Call a capability exposed by a third-party app via ACI (Agent Capability Interface) (e.g. send message / check unread / create group / open web / run web JS / initiate HTTP request / shared workspace read-write workspace).</string>
     <string name="qk_03678" formatted="false">Zorv AI doesn’t store email; sending is done via your chosen email app.</string>
     <string name="qk_03679" formatted="false">Device admin permission</string>
     <string name="qk_03680" formatted="false">Launch app</string>
@@ -3694,7 +3694,7 @@ or tap &quot;+&quot; at top right to create</string>
     <string name="qk_03713" formatted="false">Pet management</string>
     <string name="qk_03714" formatted="false">&quot; and all its contents?</string>
     <string name="qk_03715" formatted="false">Manage terminal sessions with tmux inside the proot container (multi-pane / background tasks / keyboard send).</string>
-    <string name="qk_03716" formatted="false">Send the Enter key via the Zorv AI agent keyboard (submit/newline). Preconditions same as ai_type_text: enabled and switched to ’Zorv AI Keyboard’, and the target app’s input box is focused.</string>
+    <string name="qk_03716" formatted="false">Send the Enter key via the Zorv AI agent keyboard (submit/newline). Preconditions same as keyboard: enabled and switched to ’Zorv AI Keyboard’, and the target app’s input box is focused.</string>
     <string name="qk_03717" formatted="false">Toolchain</string>
     <string name="qk_03718" formatted="false">List available ACI capabilities</string>
     <string name="qk_03719" formatted="false">List CMS capability modules (old interface; cms_toolbox recommended)</string>

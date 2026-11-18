@@ -59,15 +59,17 @@ object ToolRagIndex {
     /**
      * 元工具：**它们本身是检索器**，关键词全是「工具/组件/怎么查」这类元词汇。
      *
-     * 🔴 不压权的后果是实测出来的：`rag_search` 注册后，「把这段视频弄短一点」的 top1
-     * 立刻从 `video_gen` 变成 `rag_search`——它描述里写着「视频/组件/出图」的例子，
+     * 🔴 不压权的后果是实测出来的：检索类工具一旦进了索引，「把这段视频弄短一点」的 top1
+     * 就会从 `video_gen` 变成检索器自己——它描述里写着「视频/组件/出图」的例子，
      * 与任何业务查询都有字面重叠。模型拿到 top1 去调，只会得到一个「检索建议」列表，
      * 反而不知道该剪视频了。压权只影响排序，不影响「直接点名调用」。
+     *
+     * 🔴 2026-11-12：名单只保留**真实下发**的元工具。原来还列着 rag_search / card_catalog /
+     * ui_dsl_spec / ui_validate / get_best_practices —— 前四个已合体降级，最后一个是
+     * tool_router 的 action 而不是工具；挂在表里等于给不存在的 key 配权重。
      */
     private val META_TOOLS = setOf(
-        "rag_search", "tool_router", "tool_discovery",
-        "card_catalog", "ui_dsl_spec", "ui_validate", "ui_tree",
-        "get_best_practices",
+        "tool_router", "tool_discovery", "ui_tree",
     )
 
     private fun toDoc(spec: QuroToolSpec): RagDoc {

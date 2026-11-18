@@ -8,10 +8,10 @@ import org.json.JSONObject
 /**
  * 对话框文档工具：AI 在对话中直接写文档并渲染显示
  *
- * 与 aiwps_create / enhanced_doc_create / workspace_doc 的区别：
+ * 与 aiwps_create / enhanced_doc_create / workspace(action=doc) 的区别：
  * - aiwps_create：生成真实 Office 文件到 Downloads 目录（可分享）
  * - enhanced_doc_create：生成多种格式文件到 Documents 目录
- * - workspace_doc：写入工作区文件
+ * - workspace(action=doc)：写入工作区文件
  * - chat_doc：不生成文件，直接在对话框内渲染文档内容（Markdown/HTML/代码/文本）
  *
  * 使用场景：

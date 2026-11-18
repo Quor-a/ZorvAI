@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="injected_reasoning">Zorv AI is reasoning…</string>
+    <string name="injected_executing">Zorv AI is working…</string>
+    <string name="injected_completed">Zorv AI completed this task</string>
+    <string name="injected_failed">Zorv AI could not complete the task. Try again later</string>
+    <string name="injected_breeno_custom_model_disabled">Enable Breeno custom models in Zorv AI settings first</string>
+    <string name="injected_breeno_context_unavailable">Breeno context is unavailable</string>
+    <string name="injected_runtime_failed">Agent Runtime failed</string>
+    <string name="injected_breeno_failed">Breeno custom model failed: %1$s</string>
+    <string name="injected_using_tool">Using %1$s</string>
+    <string name="injected_tool">tool</string>
+    <string name="injected_system_tool">system tool</string>
+    <string name="injected_app_tool">app tool</string>
+    <string name="injected_screen_tool">screen tool</string>
+    <string name="injected_reasoning_label">Reasoning</string>
+    <string name="injected_image_data_limit">Image data exceeds the safe limit. Resize the image and try again</string>
+    <string name="injected_image_count_limit">You can attach up to %1$d images at a time. Remove some images and try again</string>
+    <string name="injected_image_input_limit">The image input is too complex. Remove some images or simplify the image data</string>
+    <string name="injected_image_cache_limit">Image reference data is too large to cache safely. Choose the images again or use remote image links</string>
+    <string name="injected_image_unreadable">Some images could not be read. Choose the images again and retry</string>
+</resources>

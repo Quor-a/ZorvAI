@@ -187,7 +187,8 @@ private fun ActivityRow(e: ActivityEntry, onClick: () -> Unit) {
         )
         Spacer(Modifier.width(9.dp))
         Text(
-            e.title,
+            // 同一动作被连续执行多次时折叠成一行 + ×N，不再平铺成多行一样的内容。
+            e.title + if (e.repeatCount > 1) " ×${e.repeatCount}" else "",
             fontSize = 13.sp,
             color = tint,
             maxLines = 2,

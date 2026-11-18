@@ -24,10 +24,13 @@ class QuroToolRegistryTest {
     @Test
     fun registry_hasNewWebFileTtsIntentTools() {
         val names = buildQuroRegistry().all().map { it.name }.toSet()
+        // 2026-11-12 合体新世界：write_file/find_files/stop_speak 分别并入
+        // file_write / list_dir / speak（旧名 demote 后按原名仍可执行，但不再作为独立工具存在）。
+        // 断言精神不变：文件写、文件查找、TTS 停止三类能力必须真实可调。
         val expected = setOf(
             "http_request",
-            "write_file", "delete_file", "make_directory", "move_file", "copy_file", "find_files", "file_info",
-            "speak", "stop_speak",
+            "file_write", "delete_file", "make_directory", "move_file", "copy_file", "list_dir", "file_info",
+            "speak",
             "execute_intent", "send_broadcast",
         )
         val missing = expected - names

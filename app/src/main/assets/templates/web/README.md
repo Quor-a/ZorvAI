@@ -6,4 +6,4 @@
 - `style.css`  —— 样式
 - `app.js`     —— 交互逻辑
 
-预览：ZorvAI 对话框里 run_code(lang=html) 渲染完整 HTML；或用 workspace_render 打开。
+预览：ZorvAI 对话框里 run_code(lang=html) 渲染完整 HTML；或用 workspace(action=render) 打开。

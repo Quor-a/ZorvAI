@@ -16,7 +16,7 @@ import java.io.FileOutputStream
  * 执行 ecj 编译 → d8 转 DEX → 注入 base.apk 模板并签名打包，产出可直接安装的 APK；
  * 全程复用 [BuildEngine] 同一套离线工具链。
  *
- * 关键：本工具编译的是**传入的源码目录**，默认优先用 AI 通过 workspace_write 写进工作区
+ * 关键：本工具编译的是**传入的源码目录**，默认优先用 AI 通过 workspace(action=write) 写进工作区
  * （QuroWorkspace）的源码，而不是构建台内置的示例工程。这样 AI 写的代码才会真正被编进去。
  *
  * 设计原则「绝不假装能编」：src 无 .java、工具链缺失、编译/打包报错时，如实返回日志，
@@ -27,7 +27,7 @@ class BuildApkTool : QuroTool {
     override val description = """端侧 APK 构建（多语言）：把指定目录下的源码编译/打包成可直接安装的 APK。支持：
 · Java（默认，lang="java"）：src 目录下 .java → ecj → d8 → 注入 base.apk 模板签名。
 · HTML / JS / CSS（lang="html" 或 "web"）：把网页工程（index.html + js/css/资源）注入 WebView 壳模板，打成可安装 APK，无需写 Java。
-【重要】编译的是「AI 用 workspace_write 写进工作区的源码」，不是构建台内置示例！必须告诉它源码在哪：
+【重要】编译的是「AI 用 workspace(action=write) 写进工作区的源码」，不是构建台内置示例！必须告诉它源码在哪：
 · Java：src_path="MyApp/src"（你写的是 MyApp/src/Main.java）；不传默认 工作区/src。
 · HTML：src_path="MyWeb"（其下有 index.html）；不传自动在 workspace 找 index.html。
 【入口类·任意包名/类名】Java 工程无需再固定 com.example.hello.Main：构建台会自动扫描编出的类，
@@ -40,7 +40,7 @@ class BuildApkTool : QuroTool {
 【自定义包名 / 应用名 / 版本】用 package_name / app_label / version_name。
 【Release 签名·生成并使用】传 generate_keystore=true 由端侧自动生成自定义 keystore（release 签名），并用 keystore_alias / store_password / key_password 指定别名与密码；也可传 keystore_path 指向已有的 .jks/.p12 由构建台使用。不传则默认用内置 debug.keystore。
 【构建时引用依赖】传 dependencies（JAR 路径数组）：每个元素可以是绝对路径，或相对于「构建台依赖目录 buildproject/deps」/「工作区 deps」的文件名，构建台把它们加入编译 classpath 与 d8 lib，一起编进 APK（适合引入第三方库）。
-【AI 自制图标（头像）】传 icon_path 指向一张 PNG（AI 用 image_gen 生成或 workspace_write 写入的图片文件），构建台把它写入 APK 作为启动图标。"""
+【AI 自制图标（头像）】传 icon_path 指向一张 PNG（AI 用 image_gen 生成或 workspace(action=write) 写入的图片文件），构建台把它写入 APK 作为启动图标。"""
     override val parametersJson = """{
         "type":"object",
         "properties":{
@@ -56,7 +56,7 @@ class BuildApkTool : QuroTool {
             "key_password":{"type":"string","description":"密钥密码（生成或使用时；不传默认 zorvai）"},
             "keystore_path":{"type":"string","description":"（可选）已存在的 keystore 绝对路径(.jks/.p12)，由构建台使用它签名；与 generate_keystore 二选一"},
             "dependencies":{"type":"array","items":{"type":"string"},"description":"构建时依赖的第三方 JAR 路径数组：绝对路径，或相对「buildproject/deps」/「工作区 deps」的文件名。构建台把它们加入编译 classpath 与 d8 lib。"},
-            "icon_path":{"type":"string","description":"（可选）自定义启动图标 PNG 的绝对路径（AI 用 image_gen 生成或 workspace_write 写入的图片文件），写入 APK 作为应用图标（头像）。"}
+            "icon_path":{"type":"string","description":"（可选）自定义启动图标 PNG 的绝对路径（AI 用 image_gen 生成或 workspace(action=write) 写入的图片文件），写入 APK 作为应用图标（头像）。"}
         },
         "required":[]
     }"""
@@ -75,7 +75,7 @@ class BuildApkTool : QuroTool {
     private fun buildWeb(context: Context, args: JSONObject): String {
         val webDir = resolveWebDir(context, args)
         if (webDir == null || !webDir.isDirectory) {
-            return "网页工程目录不存在或未找到 index.html。请用 workspace_write 把 index.html（及 js/css/资源）写到工作区，例如 workspace_write(path=\"MyWeb/index.html\", content=...)，再调用 build_apk 时传 src_path=\"MyWeb\"；或把 index.html 直接放在工作区根目录（不传 src_path 会自动查找）。"
+            return "网页工程目录不存在或未找到 index.html。请用 workspace(action=write) 把 index.html（及 js/css/资源）写到工作区，例如 workspace(action=write, path=\"MyWeb/index.html\", content=...)，再调用 build_apk 时传 src_path=\"MyWeb\"；或把 index.html 直接放在工作区根目录（不传 src_path 会自动查找）。"
         }
         val signing = resolveSigning(context, args)
         if (signing.error != null) {
@@ -117,7 +117,7 @@ class BuildApkTool : QuroTool {
         val srcDir = resolveBuildSrcDir(context, args)
         val outDir = File(projectRoot, "out")
         if (!srcDir.exists() || !srcDir.isDirectory) {
-            return "源码目录不存在（${srcDir.absolutePath}）。请先用 workspace_write 把 .java 源码写进工作区的源码目录（如 MyApp/src/Main.java），再调用 build_apk 时传 src_path=\"MyApp/src\"；或在构建台 UI 里写代码。"
+            return "源码目录不存在（${srcDir.absolutePath}）。请先用 workspace(action=write) 把 .java 源码写进工作区的源码目录（如 MyApp/src/Main.java），再调用 build_apk 时传 src_path=\"MyApp/src\"；或在构建台 UI 里写代码。"
         }
         // 1) 编译 Java 工程 → classes.dex（自动探测入口类，支持任意包名/类名）
         val explicitEntry = args.optString("entry_class", "").trim().ifBlank { null }
@@ -209,7 +209,7 @@ class BuildApkTool : QuroTool {
 
     /**
      * 解析本次构建要编译的源码目录。
-     * 默认优先用 AI 通过 workspace_write 写进工作区(QuroWorkspace)的源码，而不是构建台内置示例工程——
+     * 默认优先用 AI 通过 workspace(action=write) 写进工作区(QuroWorkspace)的源码，而不是构建台内置示例工程——
      * 否则 build_apk 永远只在编内置示例，AI 写的代码根本进不去（用户实测现象）。
      * - src_path 绝对路径：直接用；
      * - src_path 相对路径：相对当前工作区根解析；

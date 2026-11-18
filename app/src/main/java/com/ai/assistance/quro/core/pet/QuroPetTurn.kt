@@ -5,21 +5,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * 桌宠 → 对话框的结构化接线层。
+ * 桌宠回合的结构化描述层。
  *
- * 旧实现只有 `QuroShareBridge.emitAutoSend(String)` 一条裸字符串通道：
- * 桌宠轻点、对它说、屏幕分析、语音球全部挤在同一个入口，对话框无法区分
- * 「用户手打的一句话」和「应用自动发起的回合」，也无法把 AI 的回复回流给桌宠。
- *
- * 这里按消息来源分层，每一类回合有明确的语义与展示策略：
- *  - [PetSource.PET_INPUT] 用户在桌宠悬浮输入框里手打的内容 —— 完全等同正常用户消息；
- *  - [PetSource.PET_TAP] / [PetSource.PET_ACTION] 陪伴式互动 —— 可见气泡只放干净短句；
+ * 每一类回合有明确的语义与展示策略：
+ *  - [PetSource.PET_INPUT] 用户在桌宠悬浮输入框里手打的内容；
+ *  - [PetSource.PET_TAP] / [PetSource.PET_ACTION] 陪伴式互动 —— 气泡只放干净短句；
  *  - [PetSource.PET_SCREEN] / [PetSource.PET_TASK] 带屏幕观察的任务回合
  *    —— 屏幕结果走隐藏上下文，AI 可以据此调用工具完成任务；
  *  - [PetSource.PET_COMPANION] / [PetSource.VOICE] 主动陪伴与语音识别。
  *
- * 回复回流：[QuroPetTurnBus] 把本轮 AI 回复摘要推回桌宠气泡，形成双向闭环；
- * 失败回合（静默撤下）不回流，也不在对话里留下任何诊断文本。
+ * 回合由 [PetTurnRunner] 在服务侧无界面执行，结果经 [QuroPetTurnBus] 回流到
+ * 桌宠气泡：不拉起主对话框、不写主聊天记录；失败回合不回流任何诊断文本。
  */
 enum class PetSource(val key: String, val label: String) {
     USER("user", "用户"),
@@ -58,8 +54,6 @@ data class PetTurn(
     val completeTask: Boolean = false,
     /** 失败时静默撤下整轮，不落错误气泡。 */
     val silentOnError: Boolean = true,
-    /** 是否拉起主对话框展示本轮。 */
-    val openChat: Boolean = true,
     /** 回合关联 id，用于把回复回流到桌宠气泡。 */
     val requestId: Long = System.currentTimeMillis(),
 ) {
@@ -80,9 +74,9 @@ data class PetTurn(
 /**
  * 桌宠 ↔ 对话框的回复回流总线。
  *
- * ChatScreen 接住 [PetTurn] 时调用 [beginTurn]；ViewModel 本轮成功收尾时读
- * [activeTurnId] 并把回复摘要 [emitReply]，桌宠服务订阅 [reply] 显示气泡；
- * 失败（静默撤下）调用 [endTurn]，不回流。
+ * [PetTurnRunner] 发起无界面回合时调用 [beginTurn]，成功后 [emitReply] 把摘要
+ * 推给桌宠气泡；桌宠服务订阅 [reply] 显示。失败调用 [endTurn]，不回流。
+ * 主聊天若恰好也发起安静回合，同样沿用这条总线，双方共享同一个「当前回合」。
  */
 object QuroPetTurnBus {
 
@@ -90,6 +84,29 @@ object QuroPetTurnBus {
 
     private val _reply = MutableStateFlow<Reply?>(null)
     val reply: StateFlow<Reply?> = _reply.asStateFlow()
+
+    /**
+     * 桌宠「服务侧无界面回合」的独立回复通道。
+     *
+     * 不能复用上面的 [reply] + [activeTurnId]：后者是全局单一 id，ViewModel 在任意一轮
+     * 主对话成功收尾时都会读它并 emitReply。桌宠回合一跑就是几十秒，期间用户若在主
+     * 对话框发消息，主对话的回复会被误回流到桌宠气泡、桌宠回合 id 也会被清掉 ——
+     * 这是「桌宠接线乱七八糟」串台的根源。这里用完全隔离的通道，主对话 ViewModel
+     * 一行都不碰，双方互不干扰。
+     */
+    private val _headlessReply = MutableStateFlow<Reply?>(null)
+    val headlessReply: StateFlow<Reply?> = _headlessReply.asStateFlow()
+
+    /** 只由 [PetTurnRunner] 调用：无界面回合成功收尾，推一条纯净摘要给桌宠气泡。 */
+    fun emitHeadlessReply(text: String, source: PetSource) {
+        val clean = QuroQuietTurn.stripDiagnostics(text).trim().take(160)
+        if (clean.isBlank()) return
+        _headlessReply.value = Reply(System.currentTimeMillis(), clean, source)
+    }
+
+    fun consumeHeadlessReply() {
+        _headlessReply.value = null
+    }
 
     @Volatile private var turnId: Long = 0L
     @Volatile private var turnSource: PetSource = PetSource.PET_TAP
@@ -110,7 +127,7 @@ object QuroPetTurnBus {
     fun emitReply(text: String) {
         val id = turnId
         if (id == 0L || text.isBlank()) return
-        val clean = QuroQuietTurn.stripDiagnostics(text).trim().take(90)
+        val clean = QuroQuietTurn.stripDiagnostics(text).trim().take(160)
         if (clean.isBlank()) return endTurn()
         _reply.value = Reply(id, clean, turnSource)
         turnId = 0L
@@ -139,11 +156,10 @@ object QuroPetTurn {
         screenInsight = screen,
     )
 
-    /** 快捷动作互动（不发起对话，只播动画）。 */
+    /** 快捷动作互动（不发起 AI 回合，只播动画）。 */
     fun action(label: String) = PetTurn(
         source = PetSource.PET_ACTION,
         visibleText = label,
-        openChat = false,
     )
 
     /** 「看看当前屏幕」：屏幕观察 + 让 AI 说明画面。 */

@@ -3,6 +3,7 @@ import com.ai.assistance.quro.R
 import com.ai.assistance.quro.util.qstr
 
 import android.app.KeyguardManager
+import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Bitmap
@@ -18,7 +19,6 @@ import android.util.Log
 import android.view.Display
 import android.view.accessibility.AccessibilityNodeInfo
 import com.ai.assistance.quro.core.ScreenOcrBridge
-import com.ai.assistance.quro.core.privilege.QuroLsposeBridgeReceiver
 import com.ai.assistance.quro.service.QuroAccessibilityService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -190,20 +190,28 @@ class GetForegroundAppTool : QuroTool {
                 }
             }
         }
-        // 2) LSPosed 跨应用注入桥回退（补无障碍 / usage-stats 盲区）：模块钩中目标 App Activity.onCreate
-        //    后广播，QuroLsposeBridgeReceiver 记录到 SharedPreferences，这里读取。
-        val lsp = QuroLsposeBridgeReceiver.lastForegroundApp(context)
-        if (lsp != null) {
-            val (pkg, activity, ts) = lsp
-            if (!pkg.isNullOrEmpty()) {
+        // 2) 使用情况统计回退（需 PACKAGE_USAGE_STATS）；旧版 LSPosed 跨应用注入桥已随
+        //    API 82 模块退役，这里改用系统标准接口，不再依赖向第三方进程注入广播。
+        val usm = runCatching {
+            context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+        }.getOrNull()
+        if (usm != null) {
+            val now = System.currentTimeMillis()
+            val recent = runCatching {
+                usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 10_000L, now)
+                    ?.filter { it.lastTimeUsed > now - 10_000L && it.packageName != context.packageName }
+                    ?.maxByOrNull { it.lastTimeUsed }
+            }.getOrNull()
+            if (recent != null) {
+                val pkg = recent.packageName
                 val label = runCatching {
                     context.packageManager.getPackageInfo(pkg, 0)
                         .applicationInfo?.loadLabel(context.packageManager)?.toString()
                 }.getOrNull() ?: pkg
-                return """{"package":"$pkg","label":"$label","activity":"$activity","ts":$ts,"source":"lsposed_bridge"}"""
+                return """{"package":"$pkg","label":"$label","ts":${recent.lastTimeUsed},"source":"usage_stats"}"""
             }
         }
-        return "❌ 无法获取前台应用：无障碍服务未连接，且 LSPosed 桥未上报（若已装 LSPosed，请在本应用纳入作用域并 enable 跨应用注入桥）"
+        return "❌ 无法获取前台应用：无障碍服务未连接，且未取得「使用情况访问」权限或近期无使用记录"
     }
 }
 

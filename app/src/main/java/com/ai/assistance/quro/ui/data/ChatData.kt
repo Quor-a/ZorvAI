@@ -79,6 +79,13 @@ data class ToolCallUi(
     val result: String? = null,
     /** 工具执行耗时（毫秒），展示用。 */
     val durationMs: Long = 0,
+    /** 稳定分组键：优先用 toolCallId，旧数据缺失时用 工具名|参数 生成。
+     *  同一键的「执行中占位」与「结果回填」合并为一行，不再出现两次调用。 */
+    val id: String = "",
+    /** 同一动作在本次回答里重复执行的次数；>1 时活动行显示 ×N。 */
+    val repeatCount: Int = 1,
+    /** 折叠成一行时保留每一次的结果，详情弹层按顺序全部展示，不丢中间执行记录。 */
+    val resultHistory: List<String> = emptyList(),
 )
 
 /** 一条可溯源引用（web_search / read_url 返回的来源），用于消息底部渲染可点击来源胶囊。 */

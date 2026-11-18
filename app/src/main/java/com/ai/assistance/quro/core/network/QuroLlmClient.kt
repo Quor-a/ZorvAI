@@ -8,6 +8,7 @@ import android.util.Log
 import com.ai.assistance.quro.activity.QuroApplication
 import com.ai.assistance.quro.core.QuroAttachmentKit
 import com.ai.assistance.quro.core.QuroChatMessage
+import com.ai.assistance.quro.util.QuroDiag
 import com.ai.assistance.quro.core.QuroLlmMeta
 import com.ai.assistance.quro.core.QuroLlmResult
 import com.ai.assistance.quro.core.QuroToolCall
@@ -315,8 +316,11 @@ class QuroLlmClient(
             if (stream) put("stream", true)
         }
         val bodyStr = body.toString()
-        // ===== 调试日志：请求体概览（Logcat tag=QuroLlm）=====
-        Log.i(TAG, ">>> REQUEST  model=$model url=$url messages=${messages.size} tools=${tools.size} maxTokens=$effectiveMaxTokens body=${bodyStr.length}ch")
+        val hintCount = messages.count { it.externalHint }
+        // 请求概览走 E 级日志并按天落盘：部分 ROM 只保留 E 级日志，I 级完全不可见。
+        // 带上 messages 数量与外部提示条数，可直接判断提示是否真的进入本轮请求。
+        Log.e(TAG, ">>> REQUEST  model=$model url=$url messages=${messages.size} hints=$hintCount tools=${tools.size} maxTokens=$effectiveMaxTokens body=${bodyStr.length}ch")
+        QuroDiag.log("LLM_REQUEST", "model=$model messages=${messages.size} hints=$hintCount tools=${tools.size} body=${bodyStr.length}ch url=$url")
         // 思考控制的编译依据单列一行：线上「为什么这个模型没生效」全靠它定位。
         Log.i(TAG, ">>> REASONING ${reasoningPlan.summary()}")
         // N6：这个判定错了不会报错、只会让模型「失忆」，所以必须在日志里直接可见。
@@ -808,6 +812,10 @@ class QuroLlmClient(
         val out = ArrayList<QuroChatMessage>(input.size)
         // 当前「等待 tool 结果回填」的 tool_call id 集合（LinkedHashSet 保顺序）。
         var open = linkedSetOf<String>()
+        // 生成中注入的外部提示可能正好落在未闭合的工具调用组之间。直接剔除会让
+        // 「轮内注入」失效；插在 assistant[tool_calls] 与 tool 结果之间又会被严格上游判 400。
+        // 做法是先暂存，等该组 tool 结果闭合后立即追加，既保住顺序合法，也不丢提示。
+        val pendingHints = ArrayList<QuroChatMessage>()
         for (m in input) {
             when {
                 m.toolCalls != null && m.toolCalls.isNotEmpty() -> {
@@ -821,10 +829,15 @@ class QuroLlmClient(
                     if (m.toolCallId != null && m.toolCallId in open) {
                         out.add(m)
                         open.remove(m.toolCallId)
+                        if (open.isEmpty() && pendingHints.isNotEmpty()) {
+                            out.addAll(pendingHints)
+                            pendingHints.clear()
+                        }
                     } else {
                         Log.d(TAG, "🔧 丢弃孤儿 tool 结果（tool_call_id=${m.toolCallId ?: "null"} 无对应开放调用）")
                     }
                 }
+                m.externalHint && open.isNotEmpty() -> pendingHints.add(m)
                 else -> {
                     // user / assistant 文本：open 非空说明有未闭合工具调用、中间插了非 tool 消息 → 剔除插队消息。
                     if (open.isNotEmpty()) {
@@ -835,6 +848,8 @@ class QuroLlmClient(
                 }
             }
         }
+        // 整轮都没有闭合的工具组（或提示落在末尾）：追加到末尾，下一跳请求仍会读到。
+        if (pendingHints.isNotEmpty()) out.addAll(pendingHints)
         // 终态兜底：仍有未闭合调用 → 从原 assistant 剥离 dangling tool_calls。
         if (open.isNotEmpty()) {
             val idx = out.indexOfLast { it.toolCalls != null && it.toolCalls!!.any { c -> c.id in open } }

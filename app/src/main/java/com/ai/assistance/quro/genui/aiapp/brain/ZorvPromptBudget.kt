@@ -89,8 +89,9 @@ const val MEMORY_SHARE_OF_SYSTEM: Double = 0.08
      */
     val PRIORITY_TOOLS: Set<String> = setOf(
         "get_device_info", "get_current_time", "calculate", "run_code",
-        "web_search", "read_url", "http_request",
-        "list_files", "read_text_file", "file_read", "file_info", "find_files",
+        "web", "web_search", "read_url", "http_request",
+        "mcp", "cms", "wf", "auth_service",
+        "file_read", "file_write", "list_dir", "file_info", "workspace",
         // 🔴 终端一族必须在这里，而且要写**真实工具名**。
         // 这张表此前写的是 `terminal_run` / `terminal_exec` / `terminal_write` / `terminal_status`——
         // 那四个是 `terminal` 工具的 **action 值**，不是工具名；注册表里根本不存在这些名字，
@@ -100,11 +101,12 @@ const val MEMORY_SHARE_OF_SYSTEM: Double = 0.08
         //   termux        → Termux 官方 bootstrap（PREFIX / pkg），用户说「终端」默认用它
         //   terminal      → 界面那几个终端窗口的会话驱动（exec / run / write）
         //   linux_*       → 沙箱 proot Ubuntu 24.04（apt）
-        "termux", "terminal", "linux_run", "linux_pkg", "linux_status", "shizuku_exec",
-        "speak", "stop_speak", "get_clipboard", "set_clipboard",
+        "termux", "terminal", "linux_env", "shizuku", "root", "permissions", "screen",
+        "keyboard", "aci", "memory", "workspace",
+        "speak", "stop_speak", "clipboard",
         "get_battery", "get_network_info", "get_location",
         "get_active_notifications", "get_wifi_info",
-        "list_installed_apps", "launch_app", "search_and_launch_app",
+        "list_installed_apps", "launch_app",
         "read_calendar", "get_sensors", "vibrate",
     )
 

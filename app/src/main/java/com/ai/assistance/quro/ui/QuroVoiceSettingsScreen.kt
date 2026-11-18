@@ -329,14 +329,14 @@ fun QuroVoiceSettingsScreen(
                     SetRow(
                         icon = Icons.Filled.Favorite,
                         name = "桌面宠物模式",
-                        sub = "悬浮语音球以所选宠物形象显示，随思考/工具调用/回复切换表情与气泡",
+                        sub = "语音球与桌宠共用同一形象与状态，思考/工具调用/回复实时同步",
                         checked = petMode,
                         onToggle = { petMode = !petMode; QuroVoiceFeaturePrefs.setVoiceBallPet(ctx, petMode) },
                     )
                     if (petMode) {
                         HorizontalDivider()
                         Text(
-                            "开启后，语音球将渲染为「宠物设置」页所选的宠物形象。请在设置 → 宠物里选择并开启宠物显示。",
+                            "使用「宠物设置」里选中的形象（含已安装的宠物包）。若桌面宠物已开启，语音状态会同步到桌宠，桌面不会出现两只宠物。",
                             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                         )

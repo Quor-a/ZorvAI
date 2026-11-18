@@ -243,7 +243,8 @@ class RagSearchTool : QuroTool {
                 put(
                     "next",
                     "若上面某个域有你要的，就用 rag_search(domain=\"那个域\", query=\"更具体的说法\") 重查；" +
-                        "命中工具名后用 tool_router(action=\"get_schema\", name=...) 拿完整参数；" +
+                        "命中工具名后用 tool_router(action=\"get_schema\", name=...) 拿完整参数，" +
+                        "或直接 tool_router(action=\"call\", name=..., arguments={...}) 一次执行；" +
                         "命中 zx_components 后直接用返回的组件名 + 字段契约 + 示例 DSL 写 zx_web_card。"
                 )
             }
@@ -316,7 +317,8 @@ class RagSearchTool : QuroTool {
                 if (compBodies.isNotBlank()) put("components_full_text", compBodies)
                 put(
                     "next",
-                    "命中工具名后用 tool_router(action=\"get_schema\", name=...) 拿完整参数；" +
+                    "命中工具名后用 tool_router(action=\"get_schema\", name=...) 拿完整参数，" +
+                        "或直接 tool_router(action=\"call\", name=..., arguments={...}) 一次执行；" +
                         "命中卡片类型后用 card_catalog(types=[...]) 拿样例；" +
                         "命中组件类型后用 ui_dsl_spec 拿完整 DSL 规范；" +
                         "命中规则段（domain=prompts）后**按 rules_full_text 里那份正文执行**，不要只看摘要；" +

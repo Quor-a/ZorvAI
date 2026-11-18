@@ -61,22 +61,8 @@ object QuroShareBridge {
         _quietTurn.value = turn
         _pendingAutoSend.value = _pendingAutoSend.value + 1
     }
-
-    /** 结构化桌宠回合入口：桌宠输入框 / 屏幕分析 / 后台任务统一走这里。 */
-    fun emitPetTurn(turn: com.ai.assistance.quro.core.pet.PetTurn) {
-        emitQuietTurn(
-            QuietTurn(
-                visibleText = turn.visibleText,
-                hiddenInstruction = turn.hiddenContext(),
-                silentOnError = turn.silentOnError,
-                source = turn.source.key,
-                // 屏幕观察已由 PetTurn.hiddenContext() 合并进 hiddenInstruction，
-                // 此处不再重复传，避免对话里出现两份相同的屏幕文本。
-                completeTask = turn.completeTask,
-                requestId = turn.requestId,
-            ),
-        )
-    }
+    // 桌宠回合已改由 PetTurnRunner 在服务侧无界面执行，不再经本桥接进 ChatScreen：
+    // 那条链路必须先把主对话框拉到前台才有人消费，正是「所有动作都跳对话框」的根因。
 
     /** 优先取安静回合；没有则回退到普通自动发送文本。二者只可能命中一个。 */
     fun consumeQuietTurn(): QuietTurn? {

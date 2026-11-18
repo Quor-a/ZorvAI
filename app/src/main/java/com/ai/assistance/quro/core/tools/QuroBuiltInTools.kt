@@ -354,6 +354,8 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     r.register(QuroAciHttpServerTool())
     // 工作区 AI 工具：AI 直接读写 ZorvAI 自己的 QuroWorkspace（与构建台 ACI 协作）
 
+    // 下面 4 个是 workspace 统一入口的内部实现：applyUnifiedTools() 会把它们降级到 legacy，
+    // 模型只看到 workspace，历史会话按旧名发起的调用仍能真实执行。
     r.register(WorkspaceRenderTool())   // 工作区文件渲染到对话框
     r.register(WorkspaceDocTool())      // 工作区文档创建
     r.register(WorkspaceMediaTool())    // 工作区媒体播放（音乐/视频）
@@ -378,7 +380,7 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     // ADB 主机侧：本机当 ADB client 去调试**另一台**设备（USB 直连 / TCP / 回环），
     // 支持 shell / push / pull / install。与 adb_term 的分工：adb_term 是「本机被调试」，本工具是「去调试别人」。
     r.register(AdbDevTool())
-    // LSPosed/Xposed 模块 AI 直驱（完整对接）：status/foreground 读桥数据、enable/disable 写 lsposed_bridge.json 管控桥开关
+    // LSPosed 现代模块（API 102）AI 直驱：查框架通信/真实作用域/已加载模块进程，读写 RemotePreferences 能力开关
     r.register(QuroLsposeTool())
     // 记忆库：AI 自动沉淀长期记忆（保存/列出/检索/删除）
     r.register(QuroMemorySaveTool())
@@ -650,6 +652,10 @@ fun buildQuroRegistry(context: Context? = null): QuroToolRegistry {
     //   install 那一刻的 fullSpecs() 为快照；晚注册的工具不会进目录，match_intent 意图检索
     //   就永远召不回 cluster_start（表现为「明明有集群功能，助手却说不会」）。
     com.ai.assistance.quro.core.cluster.ClusterToolSet.registerAll(r)
+    // 合体收口：把「本来是一个动作、却注册成多个工具」的入口统一成单工具 + action。
+    // 必须在生成能力目录之前 —— 目录与 RAG 索引取的是此刻的 fullSpecs 快照，
+    // 晚一步就会继续把已退役的散装名字写进检索索引。
+    r.applyUnifiedTools()
     // 工具能力目录以真实注册表为单一真相源动态生成（修复「分组目录残缺→AI 查不到/不主动用工具」）
     // 用 fullSpecs()（内置全部 + 技能工具），与模型实际下发集合严格一致（core/full 模式下目录==可调用全集）
     ToolCapabilityDirectory.install(r.fullSpecs())

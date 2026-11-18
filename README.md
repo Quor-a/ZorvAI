@@ -57,7 +57,7 @@
   <b>☕ 如果这个项目对你有帮助，欢迎到 <a href="https://afdian.com/a/zorvAI">爱发电 (afdian)</a> 支持我们，助力持续开发 ❤️</b>
 </p>
 
-> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.2.4`（`versionCode 1002004`）
+> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.2.5`（`versionCode 1002005`）
 >
 > Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **235 个内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
 >
@@ -503,7 +503,17 @@ dsh 是 Node.js 应用（`dsh web` 起 HTTP 服务 + 自带前端）。要让它
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[v1.2.4 Release](https://github.com/Quor-a/ZorvAI/releases/tag/v1.2.4)**（Release 签名，**最新**）
+- 🟢 **[v1.2.5 Release](https://github.com/Quor-a/ZorvAI/releases/tag/v1.2.5)**（Release 签名，**最新**）
+
+  **手机助手入口补齐主对话框对等能力 · 逐字流式 / 思考过程 / 工具调用轨迹**
+
+  - **流式输出**：厂商语音助手入口不再等全文一次返回，正文按增量上屏，节奏与主对话框一致。
+  - **思考过程**：模型推理内容同步显示，不再只有通用「正在思考」占位文案。
+  - **工具调用显示**：工具开始、名称与结果摘要逐条上屏；语音播报只读最终答复，不朗读过程区。
+  - **稳定性**：流式失败自动回滚半截会话并降级为非流式重试；事件通道不可用时回退一次性全文，已可用的入口不受影响。
+  - **安装包**：V1（JAR）/ V2 / V3 三套签名齐全，旧安装器与新系统均可安装。
+
+- 🟢 **[v1.2.4 Release](https://github.com/Quor-a/ZorvAI/releases/tag/v1.2.4)**（Release 签名）
 
   **会话库原子写与损坏隔离 · 桌宠菜单收起与冷启动恢复**
 

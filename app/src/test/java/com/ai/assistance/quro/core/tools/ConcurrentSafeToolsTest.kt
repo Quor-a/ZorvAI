@@ -58,11 +58,13 @@ class ConcurrentSafeToolsTest {
     fun whitelist_only_contains_names_we_actually_tagged() {
         // 白名单与 readOnly 标记必须一一对应：
         // 白名单里有但没打标 = 永远不会并发（死条目，会误导后来人以为已经并发了）
+        // 2026-11-12：list_dir/file_read 合体实现（ListDirMergedTool/FileReadMergedTool）均已 readOnly=true，
+        // find_files 只是被 list_dir(action=find) 吸收的旧名，标它没有意义，从白名单移除。
         val tagged = setOf(
             "get_current_time", "get_device_info", "calculate",
             "get_battery", "get_wifi_info", "get_network_info", "get_sensors",
             "get_package_name", "get_active_notifications", "get_bluetooth_status",
-            "file_info", "find_files", "root_status", "shizuku_status",
+            "file_info", "list_dir", "file_read", "root_status", "shizuku_status",
         )
         val untagged = QuroToolEngine.CONCURRENT_SAFE - tagged
         assertTrue("白名单里这些没打 readOnly 标，永远不会并发：$untagged", untagged.isEmpty())

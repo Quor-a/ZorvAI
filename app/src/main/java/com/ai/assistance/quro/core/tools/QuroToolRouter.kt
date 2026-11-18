@@ -79,6 +79,22 @@ class QuroToolRouter(
         @Volatile var PROGRESSIVE: Boolean = true
 
         /**
+         * 解析 `action=call` 的转发目标，所有调用路径共用这一个口径。
+         * 返回 null 表示不是一次转发调用（或缺少目标名）。
+         */
+        fun parseForwardCall(args: org.json.JSONObject): Pair<String, String>? {
+            if (!args.optString("action").equals("call", ignoreCase = true)) return null
+            val target = args.optString("name").ifBlank { args.optString("tool") }.trim()
+            if (target.isBlank()) return null
+            val raw = args.opt("arguments")
+            val toolArgs = when {
+                raw == null || raw === org.json.JSONObject.NULL -> "{}"
+                else -> raw.toString().takeIf { it.isNotBlank() } ?: "{}"
+            }
+            return target to toolArgs
+        }
+
+        /**
          * 常驻核心集：高频、用户口语最常触发、依赖链最短的工具每轮都直接下发，
          * 模型无需先 discovery 即可调用（对应「AI 百分百先看哪些」）。
          * 其余工具经 tool_router 按需加载。
@@ -86,21 +102,19 @@ class QuroToolRouter(
         val ALWAYS_ON: Set<String> = setOf(
             "get_current_time", "get_device_info", "calculate",
             "get_battery", "list_installed_apps", "launch_app",
-            "search_and_launch_app", "list_files", "read_text_file",
             "file_write", "file_read", "list_dir", "file_info",
-            "browse_files", "http_request", "open_web",
+            "http_request", "open_web",
             // 🔴 2026-11-07 补合体工具名：ALWAYS_ON 与 coreNames 同为白名单，
             //    缺名会让 PROGRESSIVE 路由静默丢弃这些工具。
-            "clipboard", "device_control", "visual_popup",
-            "web_search", "read_url", "read_sms",
+            "clipboard", "visual_popup",
+            "read_sms",
             "send_sms", "read_contacts", "read_calendar",
-            "write_calendar", "alarm_clock", "task_schedule", "terminal",
-            "termux", "quroterm_exec", "shizuku_exec",
-            "memory_save", "memory_search", "rag_search",
-            "speak", "read_screen",
-            "tap_screen", "input_text", "get_foreground_app",
+            "write_calendar", "alarm_clock", "task_schedule",
+            // 8 族合体名由末尾的 QuroUnifiedToolNames.ALL 并入；这里只留散装期的真实常驻名。
+            "termux",
+            "speak",
             "bg_screen", "ui_widget",
-            "ui_control", "zx_web_card", "visual_popup",
+            "ui_control", "zx_web_card",
             // 🔴 可视化小卡片是独立分类且是用户高频口语（「小卡片」），必须常驻：
             //   过去只靠 discovery，模型既不知道 visual_card 存在、也把它当弹窗类，
             //   结果「AI 永远不用可视化小卡片、老用动态UI/富组件顶替」。
@@ -111,9 +125,17 @@ class QuroToolRouter(
             "skill",
             // 确定性出图三件套：用户历史上明确反馈「新加的代码生图 AI 根本查不到」，
             // 保留在常驻里（不靠检索），避免同类问题复发。
-            "codecanvas_probe", "codecanvas_script", "codecanvas_markup",
+            "codecanvas_script", "codecanvas_markup",
             "spawn_subagent",
-        )
+            // 2026-11-12 常驻集瘦身的取舍说明：
+            //  - 删幽灵名：search_and_launch_app/list_files/read_text_file/browse_files（第一批合体退役，
+            //    注册表里已无此名，留着只是死字符串）；web_search/read_url/read_url（并入 web 合体名，
+            //    ALL 已带）；read_screen/tap_screen/input_text/get_foreground_app/device_control/terminal
+            //    （并入 screen/keyboard/permissions/terminal 合体名，ALL 已带）；codecanvas_probe
+            //    （被 attachPreflight 降级为 codecanvas_script 的 auto_probe 参数，名字已不在 map）。
+            //  - 上限约束见 ToolTaxonomyTest.常驻核心集不得超过48个：合体后 8 个族入口 + 上述核心
+            //    恰好 <= 48，每轮固定 schema 开销反而比合体前更小。
+        ) + QuroUnifiedToolNames.ALL
 
         private val CATALOG_PARAMS_JSON = """{
   "type": "object",
@@ -121,11 +143,12 @@ class QuroToolRouter(
     "action": {
       "type": "string",
       "description": "操作类型",
-      "enum": ["list_categories", "list_tools", "list_screen_tools", "match_intent", "match_everything", "get_schema", "get_best_practices", "get_directory_summary"]
+      "enum": ["list_categories", "list_tools", "list_screen_tools", "match_intent", "match_everything", "get_schema", "call", "get_best_practices", "get_directory_summary"]
     },
     "category": { "type": "string", "description": "分类名（list_tools 使用）" },
     "intent": { "type": "string", "description": "用户意图描述（match_intent 使用）" },
-    "name": { "type": "string", "description": "工具名称（get_schema 使用）" }
+    "name": { "type": "string", "description": "工具名称（get_schema / call 必填；用工具真实名字，不是动作名）" },
+    "arguments": { "type": "object", "description": "call 使用：传给目标工具的参数对象。不确定字段时先 get_schema(name=...) 查完整参数再填，不要猜" }
   },
   "required": ["action"]
 }"""
@@ -136,8 +159,8 @@ class QuroToolRouter(
     }
 
     /** 全部可用工具规格（每次 ask 刷新，保留 loaded 状态）。 */
-    private var allSpecs: List<QuroToolSpec> = allSpecs
-    private var specByName: Map<String, QuroToolSpec> = allSpecs.associateBy { it.name }
+    @Volatile private var allSpecs: List<QuroToolSpec> = allSpecs
+    @Volatile private var specByName: Map<String, QuroToolSpec> = allSpecs.associateBy { it.name }
 
     init {
         // 工具能力目录以本 router 的真实 specs 为单一真相源，确保 match_intent / get_schema 查到的目录
@@ -149,8 +172,8 @@ class QuroToolRouter(
         restore()
     }
 
-    /** 对话级已加载工具（跨轮次保留，并落盘持久化）。 */
-    private val loaded = LinkedHashSet<String>()
+    /** 对话级已加载工具（跨轮次保留，并落盘持久化）。集群多角色共用一个 router，读写需并发安全。 */
+    private val loaded: MutableSet<String> = java.util.concurrent.CopyOnWriteArraySet()
 
     fun setSpecs(specs: List<QuroToolSpec>) {
         allSpecs = specs
@@ -231,7 +254,28 @@ class QuroToolRouter(
         return out
     }
 
-    /** 处理模型对 tool_router 的调用，返回结果文本（get_schema 会标记工具为已加载）。 */
+    /** 供主链路在 call 转发成功后顺手标记「已加载」，下一轮可直接调用真实工具。 */
+    fun markLoaded(name: String) {
+        if (name.isBlank()) return
+        // 只记录本轮目录里真实可见的工具。若把全量注册表里的隐藏/退役名写进 loaded，
+        // catalogSpec 会宣称「已可直接调用」，但 tools 字段根本没有它的 schema。
+        if (specByName.containsKey(name)) {
+            loaded.add(name)
+            persist()
+        }
+    }
+
+    /**
+     * 转发目标是否允许由 call 代为执行。
+     * 只放行本轮目录里可见的工具：被人格分类屏蔽、刻意隐藏的目录工具、
+     * 只有 spec 没有实现的编排工具，都不能借这条通道绕过工具集裁剪。
+     */
+    fun isCallableTarget(name: String): Boolean =
+        name.isNotBlank() &&
+            name != "tool_router" && name != "tool_discovery" && name != "spawn_subagent" &&
+            specByName.containsKey(name)
+
+    /** 处理模型对 tool_router 的调用，返回结果文本（get_schema / call 会标记工具为已加载）。 */
     fun handle(name: String, arguments: String): String {
         val args = runCatching { org.json.JSONObject(arguments) }.getOrElse { org.json.JSONObject() }
         val action = args.optString("action", "list_categories")
@@ -244,9 +288,18 @@ class QuroToolRouter(
             // 与 match_intent 的分工：那个只答「哪个工具」，这个答「我该走哪条路」。
             "match_everything" -> matchEverything(args.optString("intent"))
             "get_schema" -> getSchema(args.optString("name"))
+            "call" -> {
+                val f = parseForwardCall(args)
+                if (f == null) {
+                    "call 需要 name（要执行的工具名）与 arguments（参数对象）。"
+                } else {
+                    "本通道不代为执行工具。请直接调用 `${f.first}`（参数 ${f.second}）；" +
+                        "不确定参数时先用 get_schema(name=\"${f.first}\")。"
+                }
+            }
             "get_best_practices" -> ToolCapabilityDirectory.buildBestPractices()
             "get_directory_summary" -> buildCompactIndex()
-            else -> "未知操作：$action（支持 list_categories / list_tools / match_intent / match_everything / get_schema / get_best_practices / get_directory_summary）"
+            else -> "未知操作：$action（支持 list_categories / list_tools / match_intent / match_everything / get_schema / call / get_best_practices / get_directory_summary）"
         }
     }
 
@@ -255,19 +308,22 @@ class QuroToolRouter(
     private fun catalogSpec(): QuroToolSpec {
         val desc = buildString {
             appendLine("# 工具路由目录（RAG 式按需检索，禁止瞎猜工具名）")
-            appendLine("你拥有大量工具，但每轮只下发【已加载】工具的【真实可执行 schema】。先用本工具检索，再调用。")
+            appendLine("你拥有大量工具，但每轮只下发【已加载】工具的【真实可执行 schema】。检索、加载、执行都可以用本工具一次完成。")
             appendLine()
             appendLine("## 🔴 强制工作流（不确定就查，不要凭猜）")
-            appendLine("1. 收到用户需求 → 先 `match_intent(intent=...)` 用**用户的原话**检索（最常用，一步到位）。")
-            appendLine("2. 结果里挑最合适的 → `get_schema(name=...)` 拿到完整参数与用法，**下一轮起即可直接调用**。")
+            appendLine("1. 收到用户需求 → 先 `match_intent(intent=...)` 用**用户的原话**检索（最常用）。")
+            appendLine("2. 拿到工具名后有两种走法，都**不需要多等一轮**：")
+            appendLine("   · 直接 `call(name=..., arguments={...})` —— 由本工具代为执行，一次工具调用完成发现+执行；")
+            appendLine("   · 或 `get_schema(name=...)` 看完整参数，再用 `call` 执行，下一轮也可直接调用真实工具。")
             appendLine("3. `match_intent` 没给出结果 → `list_categories()` 看有哪些类，再 `list_tools(category=...)`。")
-            appendLine("4. 你已知道工具名 → 直接 `get_schema(name=...)`，不必先 match_intent。")
+            appendLine("4. 你已知道工具名与参数 → 直接 `call`，不必先 match_intent / get_schema。")
             appendLine("⚠️ 只要你认为自己没有某个能力（哪怕从没听说过这个工具），**必须先查一遍再说**。")
             appendLine("   下面的分类清单里可能就有它；绝大多数工具不会自动出现在你的 tools 字段里。")
             appendLine()
             appendLine("## 可用操作")
             appendLine("- `match_intent(intent=\"用户需求描述\")`：按意图匹配工具。**首选**。")
             appendLine("- `get_schema(name=\"工具名\")`：返回完整参数 JSON Schema + 专属用法，并加载它。")
+            appendLine("- `call(name=\"工具名\", arguments={...})`：**直接执行**该工具，无需等下一轮 schema 下发；会同时加载它。")
             appendLine("- `list_categories()`：列出所有工具分类。")
             appendLine("- `list_tools(category=\"分类名\")`：查看某分类下的工具及其说明。")
             appendLine("- `list_screen_tools()`：一次性列出**全部看屏/屏幕操作工具**（读屏、截图、点按、UI树、视觉分析、后台虚拟屏 bg_screen、ADB 截屏投屏…），AI 操控虚拟屏或读屏前先用它摸底。")
@@ -292,7 +348,7 @@ class QuroToolRouter(
         persist() // 立即落盘：进程被杀后不必重新 get_schema 一次
         val info = ToolCapabilityDirectory.getToolInfo(toolName)
         return buildString {
-            appendLine("## ✅ 已加载工具：$toolName（下一轮起可直接调用，无需再查）")
+            appendLine("## ✅ 已加载工具：$toolName（可用 call(name=\"$toolName\", arguments={...}) 直接执行，下一轮起也可直接调用）")
             appendLine()
             appendLine("**分类**：${info?.category?.displayName ?: "通用"}")
             appendLine("**说明**：${spec.description}")
@@ -311,8 +367,13 @@ class QuroToolRouter(
                 if (info.tips.isNotEmpty()) {
                     appendLine(); appendLine("**使用技巧**："); info.tips.forEach { appendLine("- $it") }
                 }
-                if (info.relatedTools.isNotEmpty()) {
-                    appendLine(); appendLine("**相关工具**：${info.relatedTools.joinToString("、")}")
+                // 指南里的相关工具是历史手写字符串，合体后可能指向已退役的旧名。
+                // 只输出本轮目录里真实存在的名字，模型才不会照着调出「未知工具」。
+                val related = info.relatedTools.filter { r ->
+                    specByName.containsKey(r.substringBefore("(").trim())
+                }
+                if (related.isNotEmpty()) {
+                    appendLine(); appendLine("**相关工具**：${related.joinToString("、")}")
                 }
             } else {
                 appendLine(); appendLine("（该工具暂无详细使用指南，请按上方参数 Schema 调用。）")

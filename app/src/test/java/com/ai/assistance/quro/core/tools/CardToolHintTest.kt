@@ -78,9 +78,23 @@ class CardToolHintTest {
     fun `工具用法提示表覆盖四个富卡片工具`() {
         // buildToolUseDirective / QuroVoiceBallService 都会遍历这张表往提示词注入说明。
         // 表里缺项 = 这些工具只有一句干巴巴的描述，没有「用户会怎么说」的映射。
-        listOf("ui_widget", "ui_card", "card_catalog", "card_patch").forEach { k ->
+        // 2026-11-12 合体新世界：
+        //  · ui_card 已退役（ui_widget 兼容 kind 字段），不再单独占一行提示；
+        //  · card_catalog 已降级为 ui_widget 的 with_catalog 参数，不再是一个工具。
+        // 断言精神不变：**真实入口**必须有提示，且被吸收的那两个入口必须在提示里出现，
+        // 否则历史会话/旧提示词不知道改找谁。
+        listOf("ui_widget", "card_patch").forEach { k ->
             assertTrue("TOOL_USAGE_HINTS 缺 $k 的专属提示", !QuroToolUsageHints.TOOL_USAGE_HINTS[k].isNullOrBlank())
         }
+        val widgetHint = QuroToolUsageHints.TOOL_USAGE_HINTS["ui_widget"]!!
+        assertTrue(
+            "ui_card 退役后 ui_widget 的提示必须带等价说明，否则历史会话/旧提示词不知道找谁",
+            widgetHint.contains("ui_card"),
+        )
+        assertTrue(
+            "card_catalog 退役后 ui_widget 的提示必须写明 with_catalog=true（否则「先查名册」这一步没人知道怎么走）",
+            widgetHint.contains("with_catalog"),
+        )
     }
 
     @Test

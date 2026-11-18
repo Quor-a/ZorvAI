@@ -137,18 +137,31 @@ class QuroTerminalPrivilegeBridge(
     }
 
     private fun lsposedEntry(): TerminalPrivilegeEntry {
+        val connected = runCatching {
+            com.ai.assistance.quro.core.xposed.QuroModuleServiceState.isConnected()
+        }.getOrDefault(false)
         val installed = runCatching { QuroLSPosed.isInstalled(appContext) }.getOrDefault(false)
         val inScope = runCatching { QuroLSPosed.isAppInScope(appContext) }.getOrDefault(false)
+        val label = runCatching { QuroLSPosed.frameworkLabel(appContext) }.getOrDefault("Xposed 框架")
+        val api = runCatching { QuroLSPosed.apiVersion() }.getOrDefault(0)
+        val scopeSize = runCatching {
+            com.ai.assistance.quro.core.xposed.QuroModuleServiceState.status().scope.size
+        }.getOrDefault(0)
         return TerminalPrivilegeEntry(
             key = KEY_LSPOSED,
-            title = "LSPosed",
+            // 新版框架叫 Vector，标题跟上实际生态，不再固定写死旧名。
+            title = if (connected) label else "LSPosed / Vector",
             status = when {
-                !installed -> "未安装 LSPosed / Xposed 框架"
-                inScope -> "已安装并纳入作用域"
-                else -> "已安装（未纳入作用域）"
+                !installed -> "未检测到 Vector / LSPosed / Xposed 框架"
+                !connected -> "已安装 $label（未收到框架服务连接）"
+                !runCatching { QuroLSPosed.supportsApi102(appContext) }.getOrDefault(false) ->
+                    "$label 已连接但 API $api < 102，模块无法加载"
+                inScope -> "$label 已连接（API $api），作用域 $scopeSize 项"
+                else -> "$label 已连接（API $api），未配置作用域"
             },
-            available = inScope,
-            detail = "可选：更深的系统钩子（本应用走自有管线，无需 Xposed 也能运行）",
+            available = inScope && runCatching { QuroLSPosed.supportsApi102(appContext) }.getOrDefault(false),
+            detail = "API 102 现代模块；Vector 2.2 + ZygiskNext/NeoZygisk 或 LSPosed 2.x 均可。" +
+                "可选：系统助手接管 / Gemini 与一圈即搜 / 无障碍保护（本应用基础能力不依赖 Xposed）",
         )
     }
 

@@ -107,6 +107,15 @@ object ToolCategoryRegistry {
         "get_active_notifications" to ToolCategory.SYSTEM,
         "get_bluetooth_status" to ToolCategory.SYSTEM,
         "toggle_flashlight" to ToolCategory.SYSTEM,
+        // 2026-11-11 第二批 8 族合体入口
+        "shizuku" to ToolCategory.CONTROL,
+        "root" to ToolCategory.CONTROL,
+        "permissions" to ToolCategory.CONTROL,
+        "screen" to ToolCategory.CONTROL,
+        "keyboard" to ToolCategory.CONTROL,
+        "aci" to ToolCategory.BRIDGE,
+        "terminal" to ToolCategory.CODE,
+        "memory" to ToolCategory.MEMORY,
         "enable_screen_capture" to ToolCategory.SYSTEM,
         // 应用
         "list_installed_apps" to ToolCategory.APPS,

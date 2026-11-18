@@ -98,49 +98,103 @@ internal object RagConcept {
         // 🔴 上面这批是「手段型」触发词（用户说出「上网查」）；下面这批是「效果型」（用户只说想要什么）。
         // 用户要「模糊搜索」，缺的就是后者：「这玩意现在多少钱」「外面怎么说」这类句子
         // 字面上与「搜索」零重叠，只靠手段型词永远命中不了。
-        "web_search" to listOf(
+        // 🔴 2026-11-12 合体对齐：键必须是**真实工具名**。此前的键还是旧名
+        // （web_search / read_url / read_text_file / linux_run / genui_draw）——
+        // triggersOf 按真实工具名反查，旧名键下的口语永远匹配不到任何文档，
+        // 概念加权整条失效（实测：口语探针里 web 排不进 top3，全是靠字面蹭分的工具）。
+        // 旧名触发词现在全部并入各自的合体承接者。
+        "web" to listOf(
             // —— 手段型：说清了怎么查 ——
             "联网", "上网", "网上", "查资料", "找资料", "搜一下", "查一查", "搜一搜",
             "百度", "google", "新闻", "资讯", "八卦", "热点", "调研",
-            // —— 效果型：只说想要什么，不说手段（新增，这批才是「模糊」的关键）——
+            // —— 效果型：只说想要什么，不说手段（这批才是「模糊」的关键）——
             "打听", "打听一下", "帮我打听", "外面怎么说", "外面是怎么说", "大家怎么说",
             "现在多少钱", "多少钱", "价格", "售价", "多少钱一个", "值不值",
             "最近有什么", "有什么新", "新说法", "最新进展", "怎么样了", "后续",
             "有没有这回事", "是真的吗", "靠不靠谱", "可信吗", "来源",
             "别人怎么评价", "口碑", "风评", "对比一下", "哪个好",
             "替代方案", "有哪些选择", "哪个牌子好", "推荐一下", "求推荐",
+            // ← 原 read_url 独有（web 的 action=read 就是它）
+            "这个网址", "打开链接", "网页内容", "抓取网页", "这个页面说了什么", "读一下这个链接",
         ),
-        "read_url" to listOf("这个网址", "打开链接", "网页内容", "抓取网页", "这个页面说了什么"),
         "speak" to listOf("念", "朗读", "读出来", "播报", "念给我听", "念首诗", "念一首诗"),
         "image_gen" to listOf("画", "出图", "作图", "生成图片", "文生图", "海报", "封面", "配图", "壁纸", "插画"),
+        // 视频：口语「把这段视频弄短一点」要能落到视频类工具上（用户实测探针）
+        "video_gen" to listOf("视频", "弄短", "剪短", "这段视频", "生成视频", "做视频"),
         "codecanvas_markup" to listOf("画", "出图", "海报", "封面", "配图", "流程图", "示意图", "架构图", "确定性渲染", "排版整齐的海报"),
         "codecanvas_script" to listOf("脚本画", "编程画图", "代码渲染", "数据驱动绘图"),
         "alarm_clock" to listOf("闹钟", "叫我", "定时", "提醒我", "别忘", "到点", "倒计时"),
         "build_apk" to listOf("打包", "构建", "编译", "出包", "出 apk"),
         "export_apk" to listOf("导出", "拿出包", "给我 apk", "导出安装包"),
         "file_write" to listOf("写入", "保存", "存起来", "存一下", "落盘", "写文件"),
-        "read_text_file" to listOf("读取", "读文件", "看看文件", "打开文件", "读一下"),
+        // ← 原 read_text_file 已并入 file_read（2026-11-06 合体）
+        "file_read" to listOf("读取", "读文件", "看看文件", "打开文件", "读一下"),
         "delete_file" to listOf("删除", "删了", "干掉", "清掉", "扔掉", "删文件"),
         "launch_app" to listOf("启动", "打开应用", "开个", "进那个", "运行一下"),
-        "read_screen" to listOf("看屏幕", "读屏", "看看屏幕", "当前界面", "屏幕内容"),
-        "tap_screen" to listOf("点击", "点一下", "戳一下", "按一下", "点屏幕"),
-        "input_text" to listOf("输入", "打字", "敲字", "填进去", "输入文字"),
+        // 2026-11-11：8 族合体入口的口语映射。
+        // 🔴 2026-11-12 并入旧名键的独有触发词：旧名（read_screen/tap_screen/input_text/
+        // memory_save/memory_search/quroterm_exec）已 demote 不再注册，triggersOf 按**真实工具名**
+        // 反查——挂在旧名键下的口语永远匹配不到任何文档，等于白写。合并到合体键才真正生效。
+        "screen" to listOf(
+            "看屏幕", "读屏", "点一下", "滑一下", "截图", "当前界面", "返回桌面",
+            // ← 原 read_screen / tap_screen 独有
+            "看看屏幕", "屏幕内容", "点击", "戳一下", "按一下", "点屏幕",
+        ),
+        "keyboard" to listOf(
+            "打字", "发出去", "按回车", "输入框填字",
+            // ← 原 input_text 独有
+            "输入", "敲字", "填进去", "输入文字",
+        ),
+        "aci" to listOf("让别的App帮忙", "打开真实网页", "第三方能力", "发消息"),
+        // 🔴 2026-11-12 补洞：这 5 个合体族此前**一条概念映射都没有**。
+        // 15 个合体入口里只有 10 个在表内，mcp / wf / cms / auth_service / workspace
+        // 五族等于对 RAG 完全隐形——不管用户怎么说，概念加权都给它们 0 分，
+        // 只能靠字面蹭分，一旦描述里没有那个词就永远召不回。
+        "mcp" to listOf(
+            "MCP", "mcp 服务", "外部工具", "接第三方工具", "挂个服务", "工具服务器",
+            "外部能力", "接上 github", "接个数据库", "stdio 服务", "sse 服务",
+        ),
+        "wf" to listOf("工作流", "编排", "自动化流程", "串起来跑", "按步骤执行", "流程跑一遍", "定时执行一串动作"),
+        "cms" to listOf("能力模块", "cms", "模块调用", "跑个模块", "模块日志", "引擎状态", "按依赖执行"),
+        "auth_service" to listOf("认证服务", "鉴权", "授权服务", "登录凭证", "token 管理", "api key 管理"),
+        "workspace" to listOf(
+            "工作区", "工作区文件", "工具箱工作区", "文档预览", "渲染预览", "预览卡",
+            "写个文档", "把文件打开看看", "播放工作区音频",
+        ),
+        "shizuku" to listOf("Shizuku", "冻结应用", "静默安装", "ADB级执行"),
+        "root" to listOf("Root执行", "root命令"),
+        "lsposed" to listOf(
+            "系统增强", "模块", "框架", "作用域", "LSPosed 模块", "Vector 框架", "ZygiskNext",
+            "小布接管", "超级小爱接管", "厂商助手接管", "一圈即搜", "圈选搜索",
+            "无障碍保护", "无障碍老是被关", "长按电源键", "电源键唤谁", "默认数字助理",
+            "接管生效了吗", "框架连上了吗", "模块启用了吗",
+        ),
+        "permissions" to listOf("权限模式", "开WiFi", "开蓝牙", "调亮度", "锁屏"),
+        "terminal" to listOf("终端", "跑命令", "tmux", "会话", "命令行", "shell", "cmd", "执行命令"),
+        "memory" to listOf(
+            "记住", "查记忆", "经验", "知识库", "别忘了",
+            // ← 原 memory_save / memory_search 独有
+            "记一下", "记着", "存记忆", "想不起来", "之前说的", "回忆", "记的什么",
+            // 口语：「在我存过的东西里找一下」——用户实测探针
+            "存过", "存过的",
+        ),
         "run_code" to listOf("运行代码", "跑代码", "执行脚本", "跑脚本", "跑一下"),
         "get_current_time" to listOf("几点", "现在时间", "今天几号", "日期", "星期几"),
         "get_device_info" to listOf("设备信息", "手机信息", "什么手机", "硬件", "这台手机"),
         "send_sms" to listOf("发短信", "发信息", "短信", "回信息"),
-        "memory_save" to listOf("记住", "记一下", "记着", "存记忆", "别忘了"),
-        "memory_search" to listOf("想不起来", "之前说的", "查记忆", "回忆", "记的什么"),
         "visual_card" to listOf("小卡片", "可视化小卡片", "小卡片组件", "来张卡", "天气卡", "日程卡", "时钟卡"),
         "visual_card_skeleton" to listOf("小卡片骨架", "卡片骨架", "widget skeleton"),
-        "ui_widget" to listOf("卡片", "富卡片", "富组件", "ui_widget"),
-        "ui_widget" to listOf("小控件", "ui_widget", "控件", "浮层组件"),
+        "ui_widget" to listOf(
+            "卡片", "富卡片", "富组件", "ui_widget",
+            // ← 原第二条重复键的触发词（mapOf 里重复键后者覆盖前者，前一组被静默吞掉）
+            "小控件", "控件", "浮层组件",
+        ),
         "ui_control" to listOf("动态组件", "ui_control", "活组件", "交互组件"),
-        "genui_draw" to listOf("画界面", "生成界面", "做界面", "整个界面", "ui 界面", "全屏界面"),
+        // ← 原 genui_draw（已不存在）：整屏界面现在由 GenUI Agent 承接
+        "genui_agent_open" to listOf("画界面", "生成界面", "做界面", "整个界面", "ui 界面", "全屏界面"),
         "miniapp" to listOf("Web 应用", "网页应用", "web 应用", "做个应用", "做个网站", "轻应用", "网页工具"),
         "miniapp_sdk" to listOf("小程序", "微信小程序", "原生小程序", "WXML", "WXSS"),
-        "quroterm_exec" to listOf("终端", "命令行", "shell", "cmd", "执行命令", "跑命令"),
-        "linux_run" to listOf("linux", "linux 环境", "子系统", "跑 linux"),
+        "linux_env" to listOf("linux", "linux 环境", "子系统", "跑 linux"),
         "http_request" to listOf("接口", "api", "请求", "http", "调接口"),
         "ai_browser" to listOf("浏览器", "上网", "打开网页", "浏览"),
         "browser_act" to listOf("点网页", "填表单", "网页点击", "自动浏览", "爬网页"),
@@ -149,23 +203,31 @@ internal object RagConcept {
     /** 整句意图 → 检索扩展词。解决长句里关键概念被淹没的问题。 */
     private val INTENT_EXPANSIONS: List<Pair<String, List<String>>> = listOf(
         "剪短" to listOf("视频", "剪辑", "转码", "ffmpeg", "时长", "截取", "片段"),
+        // 口语里「弄短」比「剪短」更常见（用户实测探针就是「把这段视频弄短一点」）。
+        // 🔴 扩展词里不能再写 "ffmpeg" —— 那是具体工具名，会把 ffmpeg 文档直接顶到第一，
+        // 而用户说的是「视频」这件事（实测 top1 变 ffmpeg，视频类反而挤不进去）。
+        "弄短" to listOf("视频", "剪辑", "截取", "片段", "时长"),
         "把歌弄成" to listOf("音频", "提取", "剪辑", "片段", "ffmpeg"),
-        "联网查" to listOf("web_search", "联网", "搜索", "read_url", "抓取"),
-        // 🔴 效果型整句意图：这些句式**不含任何手段词**，字面检索必然捞不到 web_search。
+        // 🔴 2026-11-12：扩展词必须指向**存在的**工具名（web/read_url 已合体，
+        // 扩展出文档里不存在的字样等于空转）。
+        "联网查" to listOf("web", "联网", "搜索", "抓取"),
+        // 🔴 效果型整句意图：这些句式**不含任何手段词**，字面检索必然捞不到 web。
         // 与 CAPACITIES 的补充是两层：这里管整句形态，那里管零散短语。
-        "现在多少钱" to listOf("web_search", "价格", "查询", "比价", "行情"),
-        "帮我打听" to listOf("web_search", "查询", "信息", "资讯"),
-        "外面怎么说" to listOf("web_search", "口碑", "评价", "讨论"),
-        "有没有这回事" to listOf("web_search", "查证", "核实", "来源"),
-        "最近有什么新" to listOf("web_search", "最新", "进展", "资讯"),
-        "求推荐" to listOf("web_search", "对比", "评价", "排行"),
-        "哪个好" to listOf("web_search", "对比", "评测", "口碑"),
+        "现在多少钱" to listOf("web", "价格", "查询", "比价", "行情"),
+        "帮我打听" to listOf("web", "查询", "信息", "资讯"),
+        "外面怎么说" to listOf("web", "口碑", "评价", "讨论"),
+        "有没有这回事" to listOf("web", "查证", "核实", "来源"),
+        "最近有什么新" to listOf("web", "最新", "进展", "资讯"),
+        "求推荐" to listOf("web", "对比", "评价", "排行"),
+        "哪个好" to listOf("web", "对比", "评测", "口碑"),
         "做个界面" to listOf("genui", "界面", "画布", "ui", "动态组件", "quro-ui"),
         "看数据" to listOf("图表", "可视化", "ui_widget", "canvas", "统计"),
         "装到手机上" to listOf("构建", "打包", "apk", "导出", "安装"),
-        "读文件里的内容" to listOf("read_text_file", "读取", "解析", "文件"),
-        "让 AI 记住" to listOf("memory_save", "记忆", "写入", "保存"),
-        "以前存的" to listOf("memory_search", "记忆", "检索", "回忆"),
+        "读文件里的内容" to listOf("file_read", "读取", "解析", "文件"),
+        // 🔴 2026-11-12：扩展词指向 memory → 合体入口（旧名 memory_save/memory_search 已 demote，
+        // 文档里已无该字样，扩展过去等于空转）。
+        "让 AI 记住" to listOf("memory", "记忆", "写入", "保存"),
+        "以前存的" to listOf("memory", "记忆", "检索", "回忆"),
         "打电话" to listOf("dial", "拨打", "号码", "通信"),
         "发消息给别人" to listOf("send_sms", "短信", "联系人"),
         "导航" to listOf("地图", "位置", "geocode", "地点"),

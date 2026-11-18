@@ -23,8 +23,8 @@ private fun resolveAppFile(context: Context, rel: String): File? {
 class WriteFileTool : QuroTool {
     override val name = "write_file"
     override val description = qstr(R.string.qk_03523) +
-        "与 workspace_write 的区别：write_file 用相对路径（相对于应用外部存储），写入设备通用位置；" +
-        "workspace_write 写入工作区（用户在工具箱-工作区可见）。" +
+        "与 workspace(action=write) 的区别：write_file 用相对路径（相对于应用外部存储），写入设备通用位置；" +
+        "workspace(action=write) 写入工作区（用户在工具箱-工作区可见）。" +
         "参数：{\"path\":\"sub/a.txt\",\"content\":\"文本\",\"append\":false}。"
     override val parametersJson = """{"type":"object","properties":{"path":{"type":"string","description":"相对 getExternalFilesDir 的路径"},"content":{"type":"string","description":"要写入的内容"},"append":{"type":"boolean","description":"是否追加，默认 false"}},"required":["path","content"]}"""
     override fun run(context: Context, arguments: String): String {

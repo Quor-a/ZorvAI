@@ -51,6 +51,9 @@ class ToolTaxonomyTest {
             "get_wifi_info", "get_network_info", "get_sensors", "vibrate",
             "get_clipboard", "set_clipboard", "get_active_notifications",
             "get_bluetooth_status", "vnc",
+            // 2026-11-12 合体新世界：clipboard(get|set) 是 get_clipboard/set_clipboard 的承接者，
+            // 规则表 BASIC exact 已显式收录——它不是「没人管的兜底」。
+            "clipboard",
         )
         val suspicious = fallback.filter { it !in allowedBasic }
         assertTrue("这些工具靠兜底才拿到分类：${suspicious.joinToString(", ")}", suspicious.isEmpty())
@@ -83,11 +86,13 @@ class ToolTaxonomyTest {
             "ui_open_permission" to ToolCategory.APP_NAVIGATION,
             "ui_toggle_deepthink" to ToolCategory.APP_NAVIGATION,
             // 真正的卡片渲染工具仍在 UI_CARDS
-            "ui_card" to ToolCategory.UI_CARDS,
+            // 2026-11-12 合体新世界：ui_card/write_file/read_text_file/set_alarm 已退役，
+            // 由 ui_widget/file_write/file_read/alarm_clock 承接；断言精神不变（承接者必须同类）。
             "ui_widget" to ToolCategory.UI_CARDS,
             // 文件操作
-            "write_file" to ToolCategory.FILE_OPERATION,
-            "read_text_file" to ToolCategory.FILE_OPERATION,
+            "file_write" to ToolCategory.FILE_OPERATION,
+            "file_read" to ToolCategory.FILE_OPERATION,
+            "list_dir" to ToolCategory.FILE_OPERATION,
             // 终端系
             "termux" to ToolCategory.TERMUX,
             "terminal" to ToolCategory.TERMINAL_LINUX,
@@ -95,7 +100,7 @@ class ToolTaxonomyTest {
             "adb_dev" to ToolCategory.ADB_DEBUG,
             // 通讯/日程
             "send_sms" to ToolCategory.COMMUNICATION,
-            "set_alarm" to ToolCategory.COMMUNICATION,
+            "alarm_clock" to ToolCategory.COMMUNICATION,
             // 联网
             "http_request" to ToolCategory.NETWORK_WEB,
             "web_search" to ToolCategory.NETWORK_WEB,
@@ -145,9 +150,12 @@ class ToolTaxonomyTest {
         val must = listOf(
             "bg_screen",      // 后台虚拟屏主力，原来不在常驻 —— AI 因此几乎不会用它
             "termux",         // 用户说「终端」时首选
-            "rag_search",     // 检索底座
-            "read_screen", "tap_screen", "input_text",  // 操作屏幕的最小闭环
-            "ui_widget", "ui_card", "zx_web_card",      // 产出通道
+            // 2026-11-12 合体新世界：操作屏幕的最小闭环收进 screen/keyboard 合体入口，
+            // rag_search 并入 memory(action=discover)，ui_card 退役由 ui_widget 兼容。
+            // 断言精神不变：屏幕操作、语义检索、富卡片产出必须每轮可见。
+            "screen", "keyboard",
+            "memory",
+            "ui_widget", "zx_web_card",
         )
         val missing = must.filter { it !in QuroToolRouter.ALWAYS_ON }
         assertTrue("这些关键能力不在常驻集，模型可能完全发现不了：${missing.joinToString(", ")}", missing.isEmpty())
@@ -188,7 +196,8 @@ class ToolTaxonomyTest {
         // UNCLASSIFIED 目前复用 BASIC 枚举值（不新增枚举以免影响 UI 分组），
         // 但 isClassified 必须能把「靠兜底」和「真的属于 BASIC」区分开。
         assertFalse("臆造的工具名不该被判为已分类", ToolTaxonomy.isClassified("totally_made_up_tool_xyz"))
-        assertTrue("真实工具应判为已分类", ToolTaxonomy.isClassified("write_file"))
+        // 2026-11-12 合体新世界：write_file 已退役，承接者 file_write
+        assertTrue("真实工具应判为已分类", ToolTaxonomy.isClassified("file_write"))
         assertEquals(
             "兜底分类应落在 BASIC 枚举上（UI 分组兼容）",
             ToolCategory.BASIC,
@@ -242,9 +251,11 @@ class ToolTaxonomyTest {
             "termux 不在常驻集 —— 用户说「终端」时模型可能根本发现不了它",
             "termux" in QuroToolRouter.ALWAYS_ON,
         )
+        // 2026-11-12 合体新世界：shizuku_exec 并入 shizuku(action=exec)。
+        // 断言精神不变：Android 系统命令（am/pm/settings）的特权通道必须每轮可见。
         assertTrue(
-            "shizuku_exec 不在常驻集 —— Android 系统命令（am/pm/settings）没有别的通道可走",
-            "shizuku_exec" in QuroToolRouter.ALWAYS_ON,
+            "shizuku 不在常驻集 —— Android 系统命令（am/pm/settings）没有别的通道可走",
+            "shizuku" in QuroToolRouter.ALWAYS_ON,
         )
     }
 }

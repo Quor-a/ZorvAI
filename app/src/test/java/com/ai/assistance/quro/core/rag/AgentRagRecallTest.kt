@@ -65,18 +65,19 @@ class AgentRagRecallTest {
      */
     private val probes = listOf(
         // —— 换一种说法：句子里完全没有工具名的字 ——
-        Triple("上网查一下最近的资料", "web_search", "换说法：上网查→联网检索"),
+        // 2026-11-12 合体新世界：web_search→web、memory_search→memory（合体承接者）
+        Triple("上网查一下最近的资料", "web", "换说法：上网查→联网检索"),
         Triple("帮我搜一下这个主题", "ai_browser", "换说法：搜一下→AI 浏览器检索"),
         Triple("看这个网址", "open_web", "换说法：看网址→打开网页"),
         Triple("生成一张图", "image_gen", "换说法：生成一张图→生图"),
         Triple("把这段视频弄短一点", "video_gen", "换说法：弄短→视频"),
-        Triple("在我存过的东西里找一下", "memory_search", "换说法：存过的东西→记忆检索"),
+        Triple("在我存过的东西里找一下", "memory", "换说法：存过的东西→记忆检索"),
         // —— 错别字 ——
         Triple("生成一在图片", "image_gen", "错别字：在→张"),
         // —— 拼音首字母（首字母表覆盖的是**中文**侧，探针必须用真实 handbook 词的中文首字母。
         //    read_url 的 useCases 是「读一下这个链接」→ dyxzglj。
         //    前两版探针写「ziliao 搜索」「dygelj」都是凭印象编的，不是引擎的 bug。）——
-        Triple("dyxzglj", "read_url", "拼音首字母：读一下这个链接→精读网页"),
+        Triple("dyxzglj", "web", "拼音首字母：读一下这个链接→精读网页（read_url 已并入 web.action=read）"),
     )
 
     @Test

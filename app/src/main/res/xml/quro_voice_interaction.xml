@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  默认数字助理能力声明。
+
+  supportsAssist：允许作为「数字助理」被长按 Home / 电源键唤起。
+  supportsLaunchFromKeyguard：锁屏上也能唤起（Android 会走
+  showSessionForActiveService / launchVoiceAssistFromKeyguard）。
+  不声明 recognitionService：本应用不使用系统语音识别通道，语音由应用内语音球自己处理。
+-->
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="com.ai.assistance.quro.service.QuroVoiceInteractionSessionService"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="true" />

@@ -41,23 +41,36 @@ object ApprovalPolicy {
         // 手机控制
         "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen", "input_text",
         "ai_type_text", "ai_press_enter", "ai_press_send", "send_sms",
-        "alarm_clock", "task_schedule", "write_calendar",
+        // 🔴 2026-11-12：set_alarm 此前只出现在 factsFor/labelFor，从未进审批清单 ——
+        // 设闹钟/定时任务是真实副作用（HEAD 起就漏，ApprovalPolicyTest 直接红）。
+        "set_alarm", "alarm_clock", "task_schedule", "write_calendar",
         "lock_screen", "global_action", "send_broadcast", "screen_record",
         "set_camera_disabled", "device_control", "clipboard", "vibrate",
         "take_photo", "execute_intent",
         // 终端执行
         "linux_run", "linux_install", "linux_pkg", "linux_start", "linux_stop",
         "linux_process",
-        // 工作区写入
-        "workspace_render", "workspace_media",
+        // 工作区写入/预览（合体后由 workspace 的 action 展开到这些真实目标）
+        "workspace_render", "workspace_media", "workspace_doc",
         // 网络副作用
         "send_", "post_",
     )
 
     private val exact = setOf(
         "terminal", "terminal_exec", "terminal_run", "terminal_write",
+        // 2026-11-11 第二批 8 族合体：无参数入口（集群等）拿不到 action，一律按高风险兜底；
+        // 带参数入口走下面的合体分支，按 action 精细放行只读动作。
+        "shizuku", "keyboard", "aci", "root", "screen", "permissions", "memory",
         "screenshot",
         "git", // git commit/push 有副作用，但 read 也有；由 args 再判
+        // 🔴 2026-11-12：第一批合体退役的**写类旧名**补进审批（legacy 名按原名执行，
+        // targetName 就是旧名——漏列等于历史会话/工作流按旧名写文件直接绕过审批）。
+        // 只补「有真实副作用」的：读类旧名（read_text_file/list_files/...）本就免审，不补。
+        "write_file", "workspace_write",
+        // 🔴 2026-11-12：合体后 ACI / MCP 的真实执行名（主链路按这些名字判定，
+        // 见 needsApproval 带参数版的首段说明）。
+        "aci_call", "aci_http_server",
+        "mcp_call", "mcp_deploy", "mcp_undeploy", "mcp_aci_call", "mcp_aci_bridge",
     )
 
     /**
@@ -84,6 +97,58 @@ object ApprovalPolicy {
                 "clipboard" -> a == "set"
                 "device_control" -> true   // 全部是真实系统设置变更
                 else -> a != "list"        // alarm/task：set/create/cancel/delete 问，list 不问
+            }
+        }
+        // 🔴 2026-11-12：合体工具的**真实子调用名**补审。
+        // 主链路（QuroTool.kt）是按 governedCalls 展开出的旧实现名判审批的 ——
+        // 也就是说 "aci"/"mcp" 这两个外层名的 action 分支在主链路上永远走不到，
+        // 真正被判定的是 aci_call / aci_http_server / mcp_call 这些名字。
+        // 它们既不在 exact 也不匹配任何前缀 → 从 HEAD 起就是「调用第三方 App 能力/
+        // 外部 MCP 工具完全不弹审批」的洞。这里按子调用名补回来：
+        // 读类（aci_list / server status）免问，执行类必问。
+        if (toolName == "aci_list") return false
+        if (toolName == "aci_call") return true
+        if (toolName == "aci_http_server") {
+            val a = runCatching { JSONObject(arguments).optString("action").lowercase() }.getOrElse { "" }
+            return a != "status"
+        }
+        if (toolName in setOf(
+                "mcp_call", "mcp_deploy", "mcp_undeploy", "mcp_aci_call", "mcp_aci_bridge"
+            )
+        ) return true
+        // 合体工具按 action 精细判定：查询类免问，执行/部署/写入类必问。
+        // 主链路还会按真实子调用名再判一次；这里是集群等只拿得到外层名的入口的兜底。
+        if (toolName == "web" || toolName == "mcp" || toolName == "linux_env" ||
+            toolName == "wf" || toolName == "cms" || toolName == "auth_service" ||
+            toolName == "workspace" || toolName == "shizuku" || toolName == "keyboard" ||
+            toolName == "aci" || toolName == "root" || toolName == "screen" ||
+            toolName == "permissions" || toolName == "memory"
+        ) {
+            val a = runCatching { JSONObject(arguments).optString("action").lowercase() }.getOrElse { "" }
+            return when (toolName) {
+                "web" -> false
+                "linux_env" -> a in setOf("run", "install", "pkg", "stop", "process", "start")
+                "mcp" -> a in setOf("call", "deploy", "undeploy", "aci_call", "aci_bridge")
+                "cms" -> a !in setOf("list", "status", "logs", "result", "engine_status", "priv_status")
+                "wf" -> a != "status"
+                "auth_service" -> a != "list"
+                "workspace" -> a in setOf("write", "doc", "write_and_render", "media")
+                // Shizuku / ROOT：只有查状态免问，执行与包操作必问
+                "shizuku" -> a !in setOf("status", "grant")
+                "root" -> a != "status"
+                // 权限通道：check / status / run_status 是自查，其余都是真实系统变更
+                "permissions" -> a !in setOf("check", "status", "run_status")
+                // 屏幕：纯读控件树/前台/状态免问；截图、拍照、录屏、授权、点按都问
+                "screen" -> a !in setOf("read", "foreground", "state")
+                // 键盘：打字与发送都是真实副作用，全部问
+                "keyboard" -> true
+                // ACI：列能力与查服务状态免问；调用与服务端点变更必问
+                "aci" -> a !in setOf("list", "server_status")
+                // 记忆：查询类免问，写入/删除/纠正/索引重建必问
+                "memory" -> a in setOf(
+                    "save", "delete", "log", "correct", "kb_add", "kb_delete", "rag_index"
+                )
+                else -> true
             }
         }
         // git 只读操作（status/log/diff/remote -v）不问，写操作问
@@ -117,6 +182,30 @@ object ApprovalPolicy {
         }
 
         when {
+            // 8 族合体：按 action 把真实参数摊开给用户看（命令 / 坐标 / 文本 / 能力）
+            toolName in setOf("shizuku", "root", "permissions", "terminal") -> {
+                arg("command", "cmd", "shell")?.let { facts += ApprovalFact("命令", it, emphasis = true) }
+                arg("apk_path", "package_name")?.let { facts += ApprovalFact("目标", it, emphasis = true) }
+                arg("setting", "op")?.let { facts += ApprovalFact("设置项", it) }
+            }
+            toolName == "screen" -> {
+                arg("text", "description", "target_text")?.let { facts += ApprovalFact("目标/输入", it, emphasis = true) }
+                val xy = listOfNotNull(json?.opt("x"), json?.opt("y")).joinToString(", ")
+                if (xy.isNotBlank()) facts += ApprovalFact("坐标", xy)
+                arg("op", "direction", "action")?.let { facts += ApprovalFact("动作", it) }
+            }
+            toolName == "keyboard" -> {
+                arg("text")?.let { facts += ApprovalFact("输入内容", it.take(200), emphasis = true) }
+            }
+            toolName == "aci" || toolName == "aci_call" || toolName == "mcp_call" -> {
+                arg("capability", "tool")?.let { facts += ApprovalFact("能力", it, emphasis = true) }
+                arg("target_package", "server", "package")?.let { facts += ApprovalFact("目标应用", it) }
+            }
+            toolName == "memory" -> {
+                arg("content", "query", "sql", "path", "title")?.let {
+                    facts += ApprovalFact("内容", it.take(200), emphasis = true)
+                }
+            }
             toolName.contains("termux") || toolName.startsWith("terminal_") ||
                 toolName.startsWith("quroterm_") || toolName.startsWith("root_") ||
                 toolName.startsWith("shizuku_") || toolName.startsWith("adb_") ||
@@ -207,6 +296,18 @@ object ApprovalPolicy {
 
     /** 工具名 -> 人类可读标签。 */
     fun labelFor(toolName: String): String = when {
+        toolName == "shizuku" -> "Shizuku 特权操作"
+        toolName == "root" -> "ROOT 命令执行"
+        toolName == "permissions" -> "权限与系统设置"
+        toolName == "screen" -> "屏幕感知与操控"
+        toolName == "keyboard" -> "键盘输入与发送"
+        toolName == "aci" -> "调用第三方 App 能力"
+        toolName == "aci_call" -> "调用第三方 App 能力"
+        toolName == "aci_http_server" -> "ACI 本地端点变更"
+        toolName in setOf(
+            "mcp_call", "mcp_deploy", "mcp_undeploy", "mcp_aci_call", "mcp_aci_bridge"
+        ) -> "调用外部 MCP 工具"
+        toolName == "memory" -> "记忆与知识库写入"
         toolName.contains("termux") || toolName.startsWith("terminal_") ||
             toolName.startsWith("quroterm_") || toolName.startsWith("root_") ||
             toolName.startsWith("shizuku_") || toolName.startsWith("adb_") ||
@@ -269,6 +370,7 @@ object ApprovalPolicy {
             toolName.startsWith("export_apk") || toolName.startsWith("set_clipboard") ||
                 toolName == "device_control" || toolName == "clipboard" ||
                 toolName == "alarm_clock" || toolName == "task_schedule" ||
+                toolName == "cms" ||
             toolName.startsWith("volume_control") || toolName.startsWith("brightness_control") ||
             toolName.startsWith("bluetooth_control") || toolName.startsWith("wifi_control") ||
             toolName.startsWith("airplane_mode") || toolName.startsWith("toggle_flashlight") ||

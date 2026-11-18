@@ -246,7 +246,7 @@ class ProjectCreateTool : QuroTool {
             append("共 ").append(files.size).append(" 个文件：\n")
             files.take(20).forEach { append("  · ").append(it).append('\n') }
             if (files.size > 20) append("  …等共 ").append(files.size).append(" 个\n")
-            append("下一步：workspace_write 修改文件 / code_runner 运行脚本 / toolpkg_list 查看脚本包工具。")
+            append("下一步：workspace(action=write) 修改文件 / code_runner 运行脚本 / toolpkg_list 查看脚本包工具。")
         }.trim()
     }
 

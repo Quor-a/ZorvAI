@@ -58,7 +58,7 @@ class WebSearchFuzzyRecallTest {
     )
 
     @Test
-    fun 效果型口语能召回web_search() {
+    fun 效果型口语能召回web() {
         val failures = ArrayList<String>()
         for ((query, why) in effectStyleProbes) {
             val hits = engine.search(query, ToolRagIndex.DOMAIN, 10)
@@ -67,12 +67,12 @@ class WebSearchFuzzyRecallTest {
                 continue
             }
             val top = hits.take(3).map { it.id }
-            if (top.none { it == "web_search" }) {
-                failures += "[$why] 「$query」→ 期望 web_search 进 top3，实际 top3=$top"
+            if (top.none { it == "web" }) {
+                failures += "[$why] 「$query」→ 期望 web 进 top3，实际 top3=$top"
             }
         }
         assertTrue(
-            "效果型口语未召回 web_search：\n" + failures.joinToString("\n"),
+            "效果型口语未召回 web：\n" + failures.joinToString("\n"),
             failures.isEmpty()
         )
     }
@@ -84,14 +84,14 @@ class WebSearchFuzzyRecallTest {
      * 这条是防止后来者为了压缩词表把手段型词删掉。
      */
     @Test
-    fun 手段型口语仍然能召回web_search() {
+    fun 手段型口语仍然能召回web() {
         val probes = listOf("上网查一下最近的资料", "帮我搜一下这个主题", "查资料", "百度一下")
         val failures = ArrayList<String>()
         for (q in probes) {
             val hits = engine.search(q, ToolRagIndex.DOMAIN, 10)
             val top = hits.take(3).map { it.id }
-            if (top.none { it == "web_search" }) {
-                failures += "「$q」→ 期望 web_search 进 top3，实际 top3=$top"
+            if (top.none { it == "web" }) {
+                failures += "「$q」→ 期望 web 进 top3，实际 top3=$top"
             }
         }
         assertTrue(
@@ -116,7 +116,7 @@ class WebSearchFuzzyRecallTest {
         val top = hits.take(3).map { it.id }
         assertTrue(
             "打包类查询的 top3 被联网类词污染了：$top",
-            top.none { it == "web_search" },
+            top.none { it == "web" },
         )
     }
 
@@ -126,8 +126,8 @@ class WebSearchFuzzyRecallTest {
         val specs = QuroToolRouter(buildQuroRegistry(null).specs()).allSpecsSnapshot()
         val names = specs.map { it.name }
         assertTrue(
-            "注册表里没有 web_search，探针期望值是编的：$names",
-            names.contains("web_search"),
+            "注册表里没有 web（web_search 的合体承接者），探针期望值是编的：$names",
+            names.contains("web"),
         )
     }
 }

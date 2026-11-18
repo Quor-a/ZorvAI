@@ -220,7 +220,7 @@ class MyAciService : BaseAidlAciService() {
 • 危险能力务必 setUserConfirm(true)，并在 onCall 内校验 user_confirmed（服务端兜底，防被绕过）。
 
 七、控制方如何调用（供你联调）
-• Zorv AI 用 aci_call 调用：aci_call(packageName, capability, params)。
+• Zorv AI 用 aci 工具调用：aci(action="list") 先列能力，再 aci(action="call", target_package=包名, capability=能力id, args={...}) 调用；capability 必须是能力 id 字符串（如 browser_open），不要传对象。
 • 危险能力调用前控制方会弹确认框；被控方 onCall 仍要查 user_confirmed。
 
 八、打包与测试清单
@@ -232,7 +232,7 @@ class MyAciService : BaseAidlAciService() {
 ☐ 危险能力在两侧都做了确认
 
 九、排障铁律
-• aci_list 为空：别用 Shizuku / dumpsys / ROOT 排查，确认你已装且 Service 带 ACTION_BIND。
+• aci(action="list") 列表为空：别用 Shizuku / dumpsys / ROOT 排查，确认你已装且 Service 带 ACTION_BIND。
 • 返回 503：绑定生命周期抖动，框架自动重绑，直接重试即可。
 • 能力不出现：确认 onCreateCapabilities 用「参数式 caps.add(...)」正确填充，且 Service 已运行（stopped 态会被唤醒广播拉起）。
 • 绑定直接失败/秒拒：99% 是 Manifest 漏写 <permission> 定义（CALL / DISCOVER / CALL_DANGEROUS），补上即可。

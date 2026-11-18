@@ -37,6 +37,33 @@ class QuroAidlAciListTool : QuroTool {
     }
 }
 
+/**
+ * capability 参数归一：把「能力 id」从各种历史格式里挖出来。
+ *
+ * 背景：合体早期 aci 的 schema 写过重复键（call 的 string 被 server_add 的 object 覆盖），
+ * 模型照 schema 传 {"id":"browser_open"} / {"name":"browser_open"}，旧实现用 optString
+ * 把整个对象序列化成字符串当能力 id 去查 → 404「Capability not found」（用户实测）。
+ * 这里统一容忍三种形态：纯字符串、对象（取 id/name/capability 字段）、JSON 文本。
+ * 挖不出来返回空串，由调用方给出明确的下一步指引，而不是拿一坨 JSON 去撞 404。
+ */
+internal fun normalizeAciCapabilityId(raw: Any?): String {
+    fun fromObject(o: JSONObject): String =
+        listOf("id", "name", "capability")
+            .map { o.optString(it, "").trim() }
+            .firstOrNull { it.isNotBlank() }
+            .orEmpty()
+
+    return when (raw) {
+        null -> ""
+        is JSONObject -> fromObject(raw)
+        is String -> {
+            val s = raw.trim()
+            if (s.startsWith("{")) runCatching { fromObject(JSONObject(s)) }.getOrDefault("") else s
+        }
+        else -> raw.toString().trim()
+    }
+}
+
 class QuroAidlAciCallTool : QuroTool {
     override val name = "aci_call"
     override val description =
@@ -53,7 +80,7 @@ class QuroAidlAciCallTool : QuroTool {
             "【真实触摸注入】受控浏览器额外暴露 inject_touch 能力：经 Uinput 伪输入设备向整台设备注入真实触摸事件（action ∈ down/move/up/click/drag/dblclick，参数 x/y/dx/dy/slot/tracking_id/pressure/major），作用于全设备（不限于浏览器视图），与控制面 AIDL/LocalSocket（L1）经 L4 编排协作（信令走 AIDL、内核事件走 Uinput）。仅 root 或系统签名构建真实生效；普通分发版 nativeOpen 失败会明确返回「需 root / 系统签名」，不会假装成功。" +
             "【端侧 APK 构建台（BuildAci，包名 com.ai.assistance.quro.build）协作工作流】构建台可在设备内把 Java 源码编译成 APK。推荐与 ZorvAI 工作区（QuroWorkspace）协作的闭环：" +
             "① 调用构建台 ACI.create_project（args:{project_name:\"工程名\"}）→ 它会在 ZorvAI 工作区建好文件夹并返回绝对路径 path；" +
-            "② 用 ZorvAI 自己的 workspace_write 工具把源码写进该 path 下的 src/（如 path/src/Main.java，用户在「工具箱-工作区」也能看到/改）；" +
+            "② 用 ZorvAI 自己的 workspace(action=write) 工具把源码写进该 path 下的 src/（如 path/src/Main.java，用户在「工具箱-工作区」也能看到/改）；" +
             "③ 调用构建台 ACI.build_apk（args:{project_dir: path 或工作区相对名, package_name?, app_label?, version_name?}）→ 构建台编译 src/ 全部 Java、注入 base.apk 模板并签名，把 APK 回写到该工程目录；" +
             "④ build_apk 的结果日志经 ACI 回传给你（AI）读取决策——你不要直接去读构建台目录，日志已在返回里。构建台另暴露 build_dex（单文件源码→DEX）、build_project（自带工程→DEX）、build_toolchain（工具链自检）。注意：构建台读写的就是 ZorvAI 工作区目录（它持有全部文件权限），所以 create_project 建的文件夹会直接出现在「工具箱-工作区」里。"
     override val parametersJson = """{
@@ -74,7 +101,9 @@ class QuroAidlAciCallTool : QuroTool {
         val obj = runCatching { JSONObject(arguments) }
             .getOrElse { return "参数不是合法 JSON：$arguments" }
         var target = obj.optString("target_package", "").trim()
-        val cap = obj.optString("capability", "").trim()
+        // 🔴 防御性归一：schema 已修正为纯字符串，但历史会话/旧习惯仍可能传对象
+        // （{"id":...}/{"name":...}），这里自愈而不是拿一坨 JSON 文本当 id 去查。
+        val cap = normalizeAciCapabilityId(obj.opt("capability"))
         
         // 如果 target_package 为空，使用默认 ACI 应用
         if (target.isEmpty()) {
@@ -86,7 +115,8 @@ class QuroAidlAciCallTool : QuroTool {
                     "或者先在 ACI 管理中心设置默认应用。"
             }
         }
-        if (cap.isEmpty()) return "缺少 capability（能力 id，用 aci_list 查）。"
+        if (cap.isEmpty()) return "缺少 capability（能力 id，用 aci_list 查）。" +
+            "capability 必须是字符串（如 \"browser_open\"），不要传对象。"
 
         val argsObj = obj.optJSONObject("args")
 
@@ -234,8 +264,11 @@ class QuroAidlAciCallTool : QuroTool {
 /**
  * ACI HTTP 服务器控制工具。
  *
- * 当 ACI 真实 API 尚未完成时，可启用模拟 HTTP 服务器供前端/测试使用。
- * 支持启停服务器、查看状态、添加/移除模拟能力。
+ * 暴露本地 /aci/ 下的 RESTful 端点（仅 127.0.0.1），供外部进程读取能力清单与发起调用。
+ * 🔴 2026-11-12：端点已从 mock 升级为**真实桥接** —— /aci/call 直接走
+ * QuroAidlAciManager.call（与 aci_call 同一条 AIDL/LocalSocket 链路、同一套
+ * Token 鉴权与审计），能力清单也实时取自 getCapabilityIndex()。
+ * 仅当 ACI 管理器不可用时才回落到内置模拟能力（响应里标 mock=true）。
  */
 class QuroAciHttpServerTool : QuroTool {
     override val name = "aci_http_server"

@@ -249,10 +249,14 @@ ENTRIES = [
       "轻量 Linux 用户空间，各包按其上游许可分发。"),
 
     # ── 功能模块（逐特征排查；回应「全项目而非单页」审计要求）────────────
-    E("feature", "LSPosed / Xposed 模块（app 自身即 opt-in 模块）", "Apache-2.0",
-      "本应用经 assets/xposed_init 注册为可选 LSPosed 模块（QuroXposedModule，自有代码 Apache-2.0）；"
-      "Xposed API 仅以 compileOnly 引用 xposed-stub（最小 API 桩，并非 Xposed 框架的 GPL 源码），"
-      "Xposed/LSPosed 框架类由运行时的 LSPosed 注入，**不随 APK 分发**，故本模块无 GPL 再分发义务。"),
+    E("feature", "LSPosed 系统增强模块（app 自身即模块）", "Apache-2.0",
+      "本应用经 META-INF/xposed/{module.prop,java_init.list,scope.list} 声明为 LSPosed 现代模块"
+      "（API 102，入口 QuroModuleMain 为自有代码 Apache-2.0）；旧版 assets/xposed_init（API 82）已退役。"
+      "框架类由运行时 LSPosed 注入，不随 APK 分发，故本模块无 GPL 再分发义务。"),
+    E("javalibs", "libxposed api 102.0.0（io.github.libxposed:api）", "Apache-2.0",
+      "现代 Xposed 模块 API；compileOnly，运行时由框架提供，不随 APK 分发。"),
+    E("javalibs", "libxposed service 102.0.0（io.github.libxposed:service）", "Apache-2.0",
+      "框架服务客户端：XposedServiceHelper / XposedService / RemotePreferences，随 APK 分发（含 XposedProvider）。"),
     E("feature", "USB / 无线调试（Shizuku + 自研 ADB-over-TCP）", "MIT",
       "基于 Shizuku（MIT）的 ADB 级通道 + 自研无线调试配对流程；未 fork 任何 GPL 项目（如 LADB）。无 copyleft。"),
     E("feature", "DeepSeek Harness（dshmobile 模块）", "GPL-3.0（Termux 快照）+ 引擎内 MPL/LGPL",

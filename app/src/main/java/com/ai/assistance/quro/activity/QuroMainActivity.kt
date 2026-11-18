@@ -183,9 +183,15 @@ class QuroMainActivity : ComponentActivity(), QuroPermissionRequester {
         QuroReplyNotifier.isAppForeground = true
         // 从后台 / 最近任务切回来时补一次：服务可能在后台被系统单独回收，
         // 而进程还活着、Application.onCreate 不会重跑。
-        runCatching {
-            com.ai.assistance.quro.service.QuroDesktopPetService.ensureStarted(this)
+        val restorePet = Runnable {
+            runCatching {
+                com.ai.assistance.quro.service.QuroDesktopPetService.ensureStarted(applicationContext)
+            }
         }
+        restorePet.run()
+        // 应用刚被划掉任务后，系统在短时间内仍可能拒绝后台启动前台服务；
+        // 界面稳定后再补一次（幂等，窗口已挂上就直接跳过，不会重复弹通知）。
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(restorePet, 900L)
     }
 
     override fun onPause() {

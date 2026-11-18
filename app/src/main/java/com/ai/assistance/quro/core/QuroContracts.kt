@@ -20,6 +20,8 @@ data class QuroChatMessage(
      *  必须一并携带 reasoning_content，否则部分严格上游（如 mimo-v2.5 要求 requiresReasoningContentOnAssistantMessages）
      *  会拒收 → 500。此前 toLlmMessages 构造 QuroChatMessage 时漏传此字段，导致思考被丢弃、回放历史缺思考。 */
     val reasoning: String? = null,
+    /** 外部投递的系统提醒：不参与 system 置顶，按时间顺序留在上下文里。仅内部判断，不序列化进请求体。 */
+    val externalHint: Boolean = false,
 )
 
 /** 一次工具调用（LLM 产生；也可由引擎回填 [result] 供 UI 自包含展示）。 */

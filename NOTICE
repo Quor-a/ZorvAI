@@ -23,30 +23,9 @@ THIRD-PARTY COMPONENTS AND LICENSES
 
 ## 功能模块与第三方代码 / Feature modules & bundled code
 
-  Termux 宿主层移植（termux-host 模块）
-    License: GPL-3.0-or-later
-    Note:    Termux 应用宿主层（TermuxActivity/Service/termux-shared）功能移植，
-             配合 :vtlib 终端仿真。强 copyleft：对应源码随仓库提供。
-  终端仿真库（vtlib 模块）
+  LSPosed 系统增强模块（app 自身即模块）
     License: Apache-2.0
-    Note:    源自 jackpal/Termux 与 termux-app 的 terminal-emulator/terminal-view
-             （这两个子模块上游为 Apache-2.0）。
-  集群多角色引擎（cluster-* 6 模块）
-    License: 内部交付（上游许可待留证）
-    Note:    去品牌化 AI 集群 SDK：自研改造为主，上游第三方来源如有将补记许可。
-  Mika 助手内核（mika-core / mika-phone）
-    License: Apache-2.0
-    Note:    源自 wangzan101/Mika（Apache-2.0，已核实），去品牌化移植。
-  连接器核心遗留包（libs/aci-core-legacy.aar）
-    License: Apache-2.0（自研遗留）
-    Note:    早期自研连接器核心，仅作过渡兼容，计划移除。
-  ML Kit text-recognition（拉丁+中文）
-    License: Google APIs ToS（非开源）
-    Note:    专有服务条款：模型随 AAR 分发，不适用开源许可证义务，仅作来源披露。
-
-  LSPosed / Xposed 模块（app 自身即 opt-in 模块）
-    License: Apache-2.0
-    Note:    本应用经 assets/xposed_init 注册为可选 LSPosed 模块（QuroXposedModule，自有代码 Apache-2.0）；Xposed API 仅以 compileOnly 引用 xposed-stub（最小 API 桩，并非 Xposed 框架的 GPL 源码），Xposed/LSPosed 框架类由运行时的 LSPosed 注入，**不随 APK 分发**，故本模块无 GPL 再分发义务。
+    Note:    本应用经 META-INF/xposed/{module.prop,java_init.list,scope.list} 声明为 LSPosed 现代模块（API 102，入口 QuroModuleMain 为自有代码 Apache-2.0）；旧版 assets/xposed_init（API 82）已退役。框架类由运行时 LSPosed 注入，不随 APK 分发，故本模块无 GPL 再分发义务。
   USB / 无线调试（Shizuku + 自研 ADB-over-TCP）
     License: MIT
     Note:    基于 Shizuku（MIT）的 ADB 级通道 + 自研无线调试配对流程；未 fork 任何 GPL 项目（如 LADB）。无 copyleft。
@@ -56,11 +35,24 @@ THIRD-PARTY COMPONENTS AND LICENSES
   墨语言 / Molang（terminal-core，自研语言）
     License: Apache-2.0（语言）+ 运行时含 GPL
     Note:    墨语言为自研语言（MolangIso 等自有代码）；但其运行时捆绑 proot(GPL-2.0+)/BusyBox(GPL-2.0)/GNU Bash(GPL-3.0)/QEMU(GPL-2.0)/Ubuntu rootfs(GPL-3.0)。语言本身无 GPL，运行时见『内置运行时』分类。
+  Termux 宿主层移植（termux-host 模块）
+    License: GPL-3.0-or-later
+    Note:    Termux 应用宿主层（TermuxActivity/Service/termux-shared）的功能移植，配合 :vtlib 终端仿真。强 copyleft：对应源码随仓库提供（见 NOTICE SOURCE AVAILABILITY）。
+  终端仿真库（vtlib 模块）
+    License: Apache-2.0
+    Note:    源自 jackpal/Termux 与 termux-app 的 terminal-emulator/terminal-view（这两个子模块上游为 Apache-2.0）。
+  集群多角色引擎（cluster-* 6 模块）
+    License: 内部交付（上游许可待留证）
+    Note:    去品牌化的 AI 集群 SDK：自研改造为主，上游第三方来源如有将补记许可。
+  Mika 助手内核（mika-core / mika-phone）
+    License: Apache-2.0
+    Note:    源自 wangzan101/Mika（Apache-2.0，已核实），去品牌化移植。
+  连接器核心遗留包（libs/aci-core-legacy.aar）
+    License: Apache-2.0（自研遗留）
+    Note:    本地 AAR：早期自研连接器核心，仅作过渡兼容，计划移除。
   DeepSeek Harness 引擎（dsh-runtime.pack，556 个 npm 依赖）
     License: GPL-3.0（Termux 快照）+ npm 依赖多为 MIT/Apache-2.0/ISC/BSD
-    Note:    内置 agent 引擎总条目：引擎内核为 Termux 快照（GPL-3.0，见 dshmobile
-             条目），随包 npm 依赖（556 包）许可实测分布见『内置 agent 引擎』分类
-             逐条；全部以独立可执行/动态库形式分发，不与本应用静态链接。
+    Note:    内置 agent 引擎总条目：引擎内核为 Termux 快照（GPL-3.0，见 dshmobile 条目），随包 npm 依赖（556 包）许可实测分布见『内置 agent 引擎』分类逐条；全部以独立可执行/动态库形式分发，不与本应用静态链接。
   GenUI Agent（genuiagent-sdk）
     License: Apache-2.0
     Note:    去品牌化移植自 Quor-a/GenUI-Agent（sdk 模块）；纯 Kotlin/Compose，无打包第三方库，无 GPL。
@@ -94,6 +86,9 @@ THIRD-PARTY COMPONENTS AND LICENSES
   Material Components for Android
     License: Apache-2.0
     Note:    Material Design 组件与主题。
+  ML Kit text-recognition（拉丁+中文）
+    License: Google APIs ToS（非开源）
+    Note:    Google ML Kit 文字识别（com.google.mlkit）。专有服务条款：模型随 AAR 分发，不适用开源许可证义务，此处仅作来源披露。
   Coil（io.coil-kt:coil-compose）
     License: Apache-2.0
     Note:    Compose 图片加载。
@@ -136,36 +131,6 @@ THIRD-PARTY COMPONENTS AND LICENSES
 
 ## 第三方 Java / Kotlin 库 / Third-party Java / Kotlin libraries
 
-  jlatexmath-android（ru.noties:jlatexmath-android:0.2.0）
-    License: GPL-2.0-only
-    Note:    LaTeX 公式渲染（LatexMathText/富文本公式）。强 copyleft：本应用整体
-             Apache-2.0，该组件按 GPL-2.0 单独授权随包分发，源码经仓库与上游提供；
-             计划迁移 KaTeX 渲染后移除。
-  Google Guava（+ listenablefuture）
-    License: Apache-2.0
-    Note:    Google 核心库。
-  Lottie-compose（airbnb）
-    License: Apache-2.0
-    Note:    Lottie 动画播放。
-  libtaskbar（farmerbb）
-    License: Apache-2.0
-    Note:    任务栏组件（桌面模式）。
-  termux-am-library（Termux v2.0.0）
-    License: Apache-2.0
-    Note:    Termux AM 调用库（Maven 元数据实测 Apache-2.0，非 GPL）。
-  commons-io
-    License: Apache-2.0
-    Note:    Apache IO 工具（termux-host）。
-  hiddenapibypass（tikdev）
-    License: Apache-2.0
-    Note:    Android 隐藏 API 反射限制绕过。
-  desugar_jdk_libs（AOSP）
-    License: Apache-2.0
-    Note:    Java 8+ API 脱糖。
-  Markwon 附加插件（linkify / recycler）
-    License: Apache-2.0
-    Note:    Markwon 自动链接与回收站插件。
-
   OkHttp（com.squareup.okhttp3）
     License: Apache-2.0
     Note:    HTTP 客户端。
@@ -202,9 +167,42 @@ THIRD-PARTY COMPONENTS AND LICENSES
   SQLCipher for Android（net.zetetic）
     License: BSD-style (Zetetic)
     Note:    加密 SQLite（集群数据库）。
+  jlatexmath-android（ru.noties）
+    License: GPL-2.0-only
+    Note:    LaTeX 公式渲染（LatexMathText/富文本公式）。强 copyleft：本应用整体 Apache-2.0，该组件按 GPL-2.0 单独授权随包分发，对应源码经仓库与上游提供（见 NOTICE SOURCE AVAILABILITY）；计划迁移 KaTeX 渲染后移除。
+  Google Guava（+ listenablefuture）
+    License: Apache-2.0
+    Note:    Google 核心库（集合/并发工具）。
+  Lottie-compose（airbnb）
+    License: Apache-2.0
+    Note:    Lottie 动画播放。
+  libtaskbar（farmerbb）
+    License: Apache-2.0
+    Note:    任务栏组件（桌面模式）。
+  termux-am-library（Termux）
+    License: Apache-2.0
+    Note:    Termux AM 调用库（v2.0.0，Maven 元数据实测 Apache-2.0，非 GPL）。
+  commons-io
+    License: Apache-2.0
+    Note:    Apache IO 工具（termux-host）。
+  hiddenapibypass（tikdev）
+    License: Apache-2.0
+    Note:    Android 隐藏 API 反射限制绕过（termux-host）。
+  desugar_jdk_libs（AOSP）
+    License: Apache-2.0
+    Note:    Java 8+ API 脱糖（构建期，运行时随包）。
+  Markwon 附加插件（linkify / recycler）
+    License: Apache-2.0
+    Note:    Markwon 自动链接与回收站插件（core/tables/strikethrough 已列）。
   JUnit 4
     License: EPL-2.0
     Note:    单元测试（不随发布包分发）。
+  libxposed api 102.0.0（io.github.libxposed:api）
+    License: Apache-2.0
+    Note:    现代 Xposed 模块 API；compileOnly，运行时由框架提供，不随 APK 分发。
+  libxposed service 102.0.0（io.github.libxposed:service）
+    License: Apache-2.0
+    Note:    框架服务客户端：XposedServiceHelper / XposedService / RemotePreferences，随 APK 分发（含 XposedProvider）。
 
 ## 离线模型引擎 / On-device model engines
 
@@ -446,6 +444,12 @@ THIRD-PARTY COMPONENTS AND LICENSES
     License: SIL OFL-1.1
     Note:    标题字体（runtimes/fonts）。
 
+## 桌面宠物形象与素材 / Desktop pet artwork
+
+  大肥鱼桌面宠物形象（dsh-pet）
+    License: CC BY-NC-SA 4.0
+    Note:    形象来源：PC2005-cloud、上善无形（B 站）、ZipZipPipe（B 站）。许可：形象 CC BY-NC-SA 4.0（署名 · 非商业 · 相同方式共享），https://creativecommons.org/licenses/by-nc-sa/4.0/ ；项目代码 MIT；素材允许开源使用、禁止商用。原仓库：https://github.com/PC2005-cloud/dsh-pet 。宠物形象为社区二创的 DeepSeek「大肥鱼」（鲸鱼娘），非 DeepSeek 官方形象，不可以任何形式商业化。基于本项目的衍生 / 改版 / 换皮作品，在 GitHub 仓库、产品官网等公开渠道须附上原作者地址 https://github.com/PC2005-cloud/dsh-pet 。改动：从透明 GIF / VP9-alpha WebM 逐段抽帧、统一缩放与脚底对齐，合成为 Android 端 spritesheet 宠物包（114 段动作），新增标准动画槽位、模式配置、环境动作池与中文互动菜单；角色形象本身未改动。
+
 ## 系统镜像 / System image
 
   Ubuntu 24.04 LTS（Noble，aarch64 rootfs）
@@ -477,10 +481,6 @@ SOURCE AVAILABILITY
   dsh-mobile:    https://github.com/kelai141/dsh-mobile-apk （Termux 快照基线 0.118.3, GPL-3.0）
   SheetJS:       https://github.com/SheetJS/sheetjs （npm xlsx@0.18.5, MIT；CDN ≥0.19 为 GPLv3）
   GeckoView:     https://hg.mozilla.org/mozilla-central/
-  jlatexmath-android: https://github.com/noties/jlatexmath-android （GPL-2.0；上游
-                  org.scilab.forge/jlatexmath 为 GPL-2.0+Classpath 例外）
-  termux-host:   https://github.com/termux/termux-app （宿主层移植基线；对应源码随
-                  本仓库提供）
   MNN:           https://github.com/alibaba/MNN
   llama.cpp:     https://github.com/ggml-org/llama.cpp
   sherpa-ncnn:   https://github.com/k2-fsa/sherpa-ncnn
@@ -488,22 +488,3 @@ SOURCE AVAILABILITY
 
   （注：reference-projects/ 下的 Agora/Eta/Kai/TinyContainer 等为独立示例工程，
    各自带 LICENSE，不参与本 APK 构建，故不在上方清单内。）
-
-----------------------------------------------------------------------
-DESKTOP PET ARTWORK / 桌面宠物形象
-----------------------------------------------------------------------
-
-  「大肥鱼」桌面宠物形象与动画素材（app/src/main/assets/pets/dafeiyu/）
-    来源：  https://github.com/PC2005-cloud/dsh-pet  （dsh-pet 项目）
-    作者：  PC2005-cloud（dsh-pet 项目作者）
-            上善无形（B 站）—— 原型「溟月」设计
-            ZipZipPipe（B 站）—— DeepSeek 版女仆鲸鱼娘设计
-    许可：  形象 CC BY-NC-SA 4.0（署名 · 非商业 · 相同方式共享）
-            https://creativecommons.org/licenses/by-nc-sa/4.0/
-            项目代码 MIT；素材允许开源使用、禁止商用。
-    说明：  该形象为社区二创的 DeepSeek「大肥鱼」（鲸鱼娘），非 DeepSeek 官方形象，
-            不可以任何形式商业化。基于本项目的衍生 / 改版 / 换皮作品，在 GitHub 仓库、
-            产品官网等公开渠道须附上原作者地址 https://github.com/PC2005-cloud/dsh-pet。
-    改动：  从 dsh-pet 的透明 GIF / VP9-alpha WebM 逐段抽帧、统一缩放与脚底对齐，
-            合成为 Android 端 spritesheet 宠物包（114 段动作）；新增标准动画槽位、
-            模式配置、环境动作池与中文互动菜单；角色形象本身未改动。

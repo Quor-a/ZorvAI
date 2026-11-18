@@ -218,7 +218,37 @@ class QuroConversationRepository(context: Context) {
                 needsSave = true
                 return@mapNotNull null  // 删除空/全管道会话
             }
-            conv.copy(messages = out)
+            // 工具结果配对：旧会话里 assistant[toolCalls].result 可能为空，结果只存在于
+            // 独立的 role=tool 消息中。按 toolCallId 回填进调用本身，让展示自包含，
+            // 重启/切会话后不会再被「执行中占位 + 结果行」拆成两条。
+            // role=tool 消息本身必须保留 —— 它是发给模型的工具结果，不是 UI 冗余。
+            val toolResults = HashMap<String, String>()
+            out.forEach { m ->
+                val id = m.toolCallId
+                if (m.role == "tool" && !id.isNullOrBlank() && m.content.isNotBlank()) {
+                    // role=tool 的 content 是发给模型的信封，回填到调用里展示时只取结果正文；
+                    // 同一 id 若有多条结果则拼接保留，不能让后一条覆盖前一条。
+                    val clean = cleanToolResultForDisplay(m.content)
+                    val prev = toolResults[id]
+                    toolResults[id] = if (prev.isNullOrBlank()) clean else prev + "\n\n────\n\n" + clean
+                }
+            }
+            var healed = false
+            val paired = out.map { m ->
+                val calls = m.toolCalls
+                if (calls.isNullOrEmpty() || toolResults.isEmpty()) {
+                    m
+                } else {
+                    var changed = false
+                    val merged = calls.map { c ->
+                        val fallback = if (c.result.isNullOrBlank()) toolResults[c.id] else null
+                        if (fallback.isNullOrBlank()) c else { changed = true; c.copy(result = fallback) }
+                    }
+                    if (changed) { healed = true; m.copy(toolCalls = merged) } else m
+                }
+            }
+            if (healed) needsSave = true
+            conv.copy(messages = paired)
         }
         return if (needsSave) cleaned else raw
     }
@@ -444,6 +474,8 @@ class QuroConversationRepository(context: Context) {
             m.senderName?.takeIf { it.isNotBlank() }?.let { put("senderName", it) }
             put("createdAt", m.createdAt)
             put("hidden", m.hidden)
+            if (m.externalHint) put("externalHint", true)
+            m.externalHintIds.takeIf { it.isNotEmpty() }?.let { put("externalHintIds", JSONArray(it)) }
             calls?.let { put("toolCalls", it) }
             atts?.let { put("attachments", it) }
             // 🛑 关键修复（v201）：持久化气泡内富组件。v201 前遗漏 cards 字段，
@@ -533,6 +565,10 @@ class QuroConversationRepository(context: Context) {
         val reasoning = if (o.has("reasoning") && !o.isNull("reasoning")) o.optString("reasoning") else null
         val role = o.optString("role", "user")
         val hasToolCalls = calls?.isNotEmpty() ?: false
+        val hintIdsArr = o.optJSONArray("externalHintIds")
+        val externalHintIds = if (hintIdsArr != null) {
+            (0 until hintIdsArr.length()).mapNotNull { hintIdsArr.optString(it, "").takeIf { s -> s.isNotEmpty() } }
+        } else emptyList()
         // 自修复（兼容旧版本未持久化 hidden 的历史数据）：
         // 凡是「工具结果（role==tool）」或「助手发出的工具调用占位（带 toolCalls）」，
         // 一律视为内部管道消息并隐藏，避免重启后空内容气泡 / 垃圾工具结果外泄。
@@ -554,6 +590,21 @@ class QuroConversationRepository(context: Context) {
             cards = cards,
             hidden = hidden,
             createdAt = o.optLong("createdAt", System.currentTimeMillis()),
+            externalHint = o.optBoolean("externalHint", false),
+            externalHintIds = externalHintIds,
         )
     }
+}
+
+/**
+ * role=tool 消息存的是发给模型的统一信封（[tool] 名 / status / 正文）。
+ * 回填到 toolCalls.result 供界面展示时剥掉信封头，避免详情页出现内部协议文本；
+ * 失败信封保留原文，用户需要看到错误原因。
+ */
+private fun cleanToolResultForDisplay(raw: String): String {
+    if (!raw.startsWith("[tool] ")) return raw
+    val lines = raw.lines()
+    val statusIdx = lines.indexOfFirst { it.startsWith("status: ") }
+    if (statusIdx < 0 || !lines[statusIdx].startsWith("status: ok")) return raw
+    return lines.drop(statusIdx + 1).joinToString("\n").trim()
 }

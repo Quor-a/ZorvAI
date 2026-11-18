@@ -139,13 +139,25 @@ class QuroUiTreeTool : QuroTool {
      * 若提供 task，会尝试调用 visual_analysis 取得即时结构化理解，并给出「将 base64 发给云端模型」的下一步指引。
      */
     private fun autoGlm(context: Context, task: String): String {
-        val shot = QuroToolRegistry.active?.get("screenshot_base64")?.run(context, "{}")
-            ?: return "❌ screenshot_base64 不可用（截图能力未就绪）"
-        val shotJson = runCatching { JSONObject(shot) }.getOrNull()
-        if (shotJson == null || !shot.startsWith("{")) return "❌ 截图失败：${shot.take(300)}"
-        val base64Len = shotJson.optInt("base64_length", 0)
-        val preview = shotJson.optString("base64_preview", "")
-        val path = shotJson.optString("path", "")
+        // 截图能力统一走 screenshot(return_format=base64)；旧变体退役后按旧名取恒定失败。
+        val shot = QuroToolRegistry.active?.get("screenshot")
+            ?.run(context, JSONObject().put("return_format", "base64").toString())
+            ?: return "❌ 截图能力未就绪"
+        val base64Len: Int
+        val preview: String
+        val path: String
+        if (shot.startsWith("BASE64:")) {
+            val b64 = shot.removePrefix("BASE64:")
+            base64Len = b64.length
+            preview = b64.take(100)
+            path = "（截图已在应用内落盘，完整 Base64 随本次结果返回）"
+        } else {
+            val shotJson = runCatching { JSONObject(shot) }.getOrNull()
+            if (shotJson == null || !shot.startsWith("{")) return "❌ 截图失败：${shot.take(300)}"
+            base64Len = shotJson.optInt("base64_length", 0)
+            preview = shotJson.optString("base64_preview", "")
+            path = shotJson.optString("path", "")
+        }
         val sb = StringBuilder("🤖 AutoGLM 云端视觉方案（截图已就绪）：\n")
         sb.append("截图路径: $path\n")
         sb.append("base64 长度: $base64Len\n")

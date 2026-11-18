@@ -13,6 +13,9 @@ import android.util.Log
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciCredentialVault
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciErrors
 import com.ai.assistance.quro.core.aidlaci.QuroAidlAciProtocol
+import com.ai.assistance.quro.core.hint.ExternalHint
+import com.ai.assistance.quro.core.hint.ExternalHintDispatcher
+import com.ai.assistance.quro.core.hint.ExternalHintPrefs
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -109,6 +112,23 @@ class QuroMainAciService : BaseAidlAciService() {
                 .addResult("supported", "string", "本端支持的全部协议版本（逗号分隔）")
                 .addFlag(Capability.FLAG_NO_UI)
         )
+        // 外部事件投递：第三方 App 经 ACI 把待处理提示投进当前对话。
+        caps.add(
+            Capability.create(
+                "quro_inject_hint",
+                "向当前对话投递一条外部待处理提示。提示作为系统提醒进入上下文，不伪造用户消息；" +
+                    "可指定 id 去重、source 标记来源、priority=1 立即注入。会话空闲时自动唤醒一轮，AI 在下一步动作优先处理。"
+            )
+                .addParam("text", "string", true, "待处理提示正文")
+                .addParam("id", "string", false, "事件 id，用于去重与 ack；缺省自动生成")
+                .addParam("source", "string", false, "来源标识，可在设置里按来源静音")
+                .addParam("priority", "string", false, "0=参与合并窗口（默认），1=立即注入")
+                .addResult("id", "string", "本次事件 id")
+                .addResult("accepted", "boolean", "是否已被接受")
+                .addResult("queued", "int", "当前合并队列中的事件数")
+                .addFlag(Capability.FLAG_BACKGROUND)
+                .addFlag(Capability.FLAG_NO_UI)
+        )
         // Intent 发送代理：受控端在自己进程内代发 Intent（Activity / 广播 / 服务）。
         // 实现复用 aci-core 的通用桥，任何受控端均可一行接入。
         caps.add(AciIntentBridge.capability())
@@ -137,8 +157,12 @@ class QuroMainAciService : BaseAidlAciService() {
     }
 
     override fun onCheckPermission(req: AidlAciRequest?, callerPkg: String?): Boolean {
-        val ok = callerPkg == SELF_PKG || callerPkg == BROWSER_PKG
-        Log.d(TAG, "onCheckPermission: caller=$callerPkg → ${if (ok) "放行" else "拒绝"}")
+        val base = callerPkg == SELF_PKG || callerPkg == BROWSER_PKG
+        // 提示投递沿用 ACI 授权体系，额外放行用户显式授权的第三方包名，并受通道开关管控。
+        val hintAllowed = req?.capability == "quro_inject_hint" &&
+            ExternalHintPrefs.aciEnabled(this) && ExternalHintPrefs.isCallerAllowed(this, callerPkg)
+        val ok = base || hintAllowed
+        Log.d(TAG, "onCheckPermission: caller=$callerPkg capability=${req?.capability} → ${if (ok) "放行" else "拒绝"}")
         return ok
     }
 
@@ -148,6 +172,7 @@ class QuroMainAciService : BaseAidlAciService() {
             when (req.capability) {
                 "http_request" -> handleHttpRequest(req.params)
                 "aci_protocol" -> handleProtocol()
+                "quro_inject_hint" -> handleInjectHint(req.params)
                 AciIntentBridge.CAP_ID -> AciIntentBridge.handle(this, req.params)
                 AciProviderBridge.CAP_ID -> AciProviderBridge.handle(this, req.params)
                 else -> {
@@ -171,6 +196,35 @@ class QuroMainAciService : BaseAidlAciService() {
             Log.e(TAG, "onCall 异常: ${e.message}")
             aciError(QuroAidlAciErrors.E_INTERNAL, "onCall 异常", "受控端处理调用时抛异常：${e.message}。请查看被控端日志。", QuroAidlAciErrors.LAYER_BINDER)
         }
+    }
+
+    /** 外部提示投递：不打开界面，交给统一分发器做去重、合并与唤醒。 */
+    private fun handleInjectHint(params: Bundle?): AidlAciResponse {
+        val text = params?.getString("text")?.trim().orEmpty()
+        if (text.isEmpty()) {
+            return aciError(
+                QuroAidlAciErrors.E_BAD_REQUEST,
+                "缺少 text 参数",
+                "调用 quro_inject_hint 必须传 text（待处理提示正文）。",
+                QuroAidlAciErrors.LAYER_PROTOCOL,
+            )
+        }
+        val id = params?.getString("id")?.takeIf { it.isNotBlank() }
+            ?: "aci-${java.util.UUID.randomUUID()}"
+        val source = params?.getString("source")?.takeIf { it.isNotBlank() } ?: "aci"
+        val priority = when (val p = params?.get("priority")) {
+            is Number -> p.toInt()
+            is String -> p.toIntOrNull() ?: 0
+            else -> 0
+        }
+        val accepted = ExternalHintDispatcher.submit(
+            applicationContext,
+            ExternalHint(id = id, text = text, source = source, priority = priority),
+        )
+        return AidlAciResponse.success(Bundle())
+            .putResult("id", id)
+            .putResult("accepted", accepted)
+            .putResult("queued", ExternalHintDispatcher.queuedCount())
     }
 
     private fun handleHttpRequest(params: Bundle?): AidlAciResponse {

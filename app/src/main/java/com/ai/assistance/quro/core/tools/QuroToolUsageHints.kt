@@ -15,6 +15,24 @@ object QuroToolUsageHints {
 
     /** 每个工具名 → 一句「常见说法 / 多用途」提示（注入系统提示词，增强灵活映射）。 */
     val TOOL_USAGE_HINTS: Map<String, String> = mapOf(
+        // ── 2026-11-11 第二批 8 族合体：一个入口 + action，别再找散装旧名 ──
+        "shizuku" to "「用 Shizuku 跑条命令」「冻结/解冻某 App」「静默安装 APK」「查 Shizuku 授权」都调用，action=exec/freeze/unfreeze/install/status",
+        "root" to "「用 root 执行」「查 Root 是否可用」都调用，action=exec/status",
+        // 🔴 2026-11-12 补：这 6 个合体族此前**没有提示条目**，而它们名下原本挂着
+        // 6 组旧名（mcp_* / cms_* / auth_service_* / linux_* / 定时任务 / 剪贴板）的提示——
+        // 旧名降级后那些条目永远查不到，用户的口语说法整块失效。这里把触发性说法补齐。
+        "mcp" to "「看看连了哪些 MCP 服务器」「MCP 服务列表」「这个 MCP 服务器有哪些工具」「列一下外部工具」「调用外部 MCP 的 XX 工具」「让连着的服务器干 YY」「把我的 MCP 服务器部署到本机」「起一个本地 MCP」「停掉那个本地 MCP 服务」「卸载部署」「本机部署了哪些 MCP」「本地服务列表」都调用，action=servers/list_tools/call/deploy/undeploy/list_local",
+        "cms" to "「我装了哪些能力模块」「CMS 模块列表」「调用 XX 能力模块做 YY」「让模块执行」「CMS 引擎状态」「引擎部署好没」「引擎就绪了吗」「引擎拉起了哪些服务」「那个模块部署成功没」「看模块的运行日志」「拿模块的返回结果」「按顺序跑这一组命令」「把这个模块推到终端跑」「从终端卸掉那个模块」都调用，action=list/call/status/logs/result/run_dag/deploy/undeploy/toolbox/engine_status",
+        "auth_service" to "「把 XX 平台的 token 存起来」「记录这个 API key 给以后用」「我存了哪些授权」「列一下凭证」「删掉 XX 的授权」「移除那个 key」都调用，action=add/list/remove",
+        "linux_env" to "「在 Linux 环境跑 XX」「执行个 Linux 命令」「装一下 Linux 环境」「初始化 Ubuntu」「启动 Linux 环境」「关掉 Linux 环境」「Linux 环境状态」「装好了没」都调用，action=start/stop/status/run/install/pkg/process",
+        "task_schedule" to "「每天定时提醒我喝水」「下周三自动发条消息」「10 分钟后执行某个动作」「未来某时刻自动触发」「我定了哪些定时任务」「看看待办的提醒」「自动化列表」「取消那个定时提醒」「删掉周三的任务」都调用",
+        "clipboard" to "「我刚复制了什么」「剪贴板里是啥」「读出我复制的内容」「帮我把这段复制下来」「存到剪贴板」「把这个文本放剪贴板」都调用",
+        "terminal" to "「跑终端命令」「开个会话」「无线调试」「tmux」「发按键」「看终端输出」都调用，action=exec/run/write/sessions/adb/tmux/keys/monitor（也说：「在终端跑条命令」「执行 shell」「df -h 看一下」「关掉终端」「杀掉那个 shell 进程」「终端还活着吗」「当前会话状态」）",
+        "keyboard" to "「在别的 App 输入框打字」「发出去」「按回车」都调用，日常发消息一次用 action=type_and_send",
+        "aci" to "「让第三方 App 帮我做事」「打开真实网页」「发消息」「列能力」「管本地 ACI 服务」都调用，action=call/list/list_and_call/server_status（也说：「这个 App 能做什么」「XX 有哪些可调用功能」「能调起它的什么页面」「用 XX App 分享到朋友圈」「调起 XX 的扫一扫」「让 XX 打开某页面」）",
+        "screen" to "「读屏」「点一下」「滑一下」「输入文字」「返回桌面」「截图」「看屏幕」「拍照」「录屏」都调用，action=read/tap/swipe/input/global/screenshot/analyze/photo/record_start（也说：「截个图」「截图保存」「把屏幕截下来」「截屏分析/发视觉模型」）",
+        "permissions" to "「查权限模式」「开关 WiFi/蓝牙/手电」「调音量/亮度」「锁屏」「禁用摄像头」都调用，action=check/policy/status/lock/camera/flashlight（也说：「调高音量」「静音」「音量调到最大」「把声音关小」「调亮屏幕」「亮度调高」「开自动亮度」「屏幕太暗了」「开WiFi」「关掉WiFi」「WiFi开一下」「开蓝牙」「关蓝牙」「蓝牙开一下」「下拉通知栏」「收起通知」「清掉通知」「开飞行模式」「关飞行模式」「飞行模式开一下」「自动旋转屏幕」「锁竖屏」「锁横屏」「锁住手机」）",
+        "memory" to "「记住这件事」「查记忆」「找经验」「知识库」「按原话找该用哪个工具」都调用，action=save/search/recall/query/kb_search/rag/discover",
         // ── 基础 ──
         "get_current_time" to "用户说「现在几点」「今天星期几」「现在什么日期」「距离某天还有多久」「现在是上午还是下午」都调用",
         "get_device_info" to "「我手机什么型号」「系统版本多少」「内存/存储还剩多少」「处理器是什么」都调用",
@@ -28,21 +46,15 @@ object QuroToolUsageHints {
         "vibrate" to "「震一下」「手机抖一下」「提醒我（震动）」都调用",
 
         // ── 剪贴板 ──
-        "get_clipboard" to "「我刚复制了什么」「剪贴板里是啥」「读出我复制的内容」都调用",
-        "set_clipboard" to "「帮我把这段复制下来」「存到剪贴板」「把这个文本放剪贴板」都调用",
 
         // ── 应用管理 ──
         "list_installed_apps" to "「我装了哪些 App」「列一下应用」「有没有装 XX」都调用",
-        "launch_app" to "「打开微信」「启动相机」「帮我开 XX 应用」都调用",
-        "search_and_launch_app" to "「打开那个绿的聊天软件」「找一下能扫码的 App 打开」「名字里有'shop'的打开」都调用",
+        "launch_app" to "「打开微信」「启动相机」「帮我开 XX 应用」都调用（也说：「打开那个绿的聊天软件」「找一下能扫码的 App 打开」「名字里有'shop'的打开」「打开XX应用」「启动XX」）",
         "get_package_name" to "「XX 应用的包名是什么」「这个 App 的 package」都调用",
-        "list_app_functions" to "「这个 App 能做什么」「XX 有哪些可调用功能」「能调起它的什么页面」都调用",
-        "invoke_app_function" to "「用 XX App 分享到朋友圈」「调起 XX 的扫一扫」「让 XX 打开某页面」都调用",
 
         // ── 通知 / 蓝牙 / 手电 ──
         "get_active_notifications" to "「我有什么通知」「未读消息有哪些」「状态栏提醒」都调用",
         "get_bluetooth_status" to "「蓝牙开了吗」「连了什么设备」「蓝牙状态」都调用",
-        "toggle_flashlight" to "「开手电筒」「关闪光灯」「灯亮一下」「照亮」都调用",
 
         // ── 通信 ──
         "read_sms" to "「读一下我的短信」「有没有验证码」「看下 XX 发的消息」都调用",
@@ -58,70 +70,45 @@ object QuroToolUsageHints {
         "geocode" to "「这个地址在哪」「帮我把'XX路1号'转成坐标」「导航到 XX 怎么走（先定位）」都调用",
 
         // ── 文件（只读） ──
-        "list_files" to "「看看 Download 里有什么」「列一下这个文件夹」「目录里有哪些文件」都调用",
-        "read_text_file" to "「读一下这个 txt」「打开那个日志看看」「把 md 内容念给我」都调用",
-        "browse_files" to "「浏览我的文件」「进到某个目录看看」「文件管理器打开 XX」都调用",
-        "file_read" to "「读取这个文件」「打开文件内容」「读 XX 文件」都调用（与 read_text_file 同族，按路径/类型选用）",
+        "file_read" to "「读一下这个 txt」「打开那个日志看看」「把 md 内容念给我」「读取这个文件」「读一下工作区里的 XX 文件」都调用（root=app|internal|workspace）",
+        "list_dir" to "「看看 Download 里有什么」「列一下这个文件夹」「目录里有哪些文件」「工作区里有什么」都调用（root=app|internal|workspace）",
 
         // ── 文件写/改/删 ──
-        "file_write" to "「帮我建个文件写点东西」「把这段存成 xx.txt」「生成配置文件」都调用（root=app|workspace）。",
+        "file_write" to "「帮我建个文件写点东西」「把这段存成 xx.txt」「生成配置文件」「把代码存到工作区」都调用（root=app|workspace）；工作区动作也可统一走 workspace。",
         "delete_file" to "「删掉这个文件」「清掉 XX」「移除那个日志」都调用",
         "make_directory" to "「新建个文件夹」「建个目录叫 XX」都调用",
         "move_file" to "「把这个文件挪到 XX」「移动文件」「重命名并移动」都调用",
         "copy_file" to "「复制这个文件到 XX」「备份一份」都调用",
-        "find_files" to "「找一下名字里带'报告'的文件」「全盘搜 xx.pdf」「哪个目录有这个文件」都调用",
         "file_info" to "「这个文件多大」「创建时间」「文件属性」都调用",
 
-        // ── 工作区（QuroWorkspace） ──
-        "workspace_write" to "「把这段代码保存到工作区」「写到我的工程里」「存成文件」「生成个项目放工作区」都调用（工作区即「工具箱-工作区」目录，用户能在 UI 看到/下载/改；path 是相对工作区根的路径，如 MyApp/src/Main.java）",
-        "workspace_read" to "「读一下工作区里的 XX 文件」「看看 MyApp/src/Main.java 现在内容」「工作区那个配置长啥样」都调用（path 为工作区内相对路径）",
-        "workspace_list" to "「工作区里有什么」「列出我的工程」「看下 MyApp 目录结构」「工作区根目录有哪些文件」都调用（path 可选，默认根目录）",
+        // ── 工作区（QuroWorkspace，统一入口） ──
+        "workspace" to "「把这段代码保存到工作区」「写到我的工程里」「工作区里有什么」「读一下工作区的 XX 文件」「预览这个文件」「创建文档」「播放工作区里的音乐」「打开这个PDF」都调用；用 action 区分：write / read / list / doc / render / write_and_render / doc_view / media。doc 与 write_and_render 自带预览，不要拆成多次调用。",
 
         // ── 网络 / Web ──
         "http_request" to "「调一下这个接口」「发个 GET/POST 到 XX」「请求这个 URL」「对接某个 API」都调用",
-        "open_web" to "「打开百度」「访问 XX 网址」类请求：若系统提示里已声明【默认 ACI 应用已设置】（通常是受控浏览器），【优先用 aci_call 的 browser_open】（真实可交互、能点进去）；只有在未设默认 ACI 应用时才用 open_web 被动展示（仅供查看，AI 无法点击交互）。真正操作网页（点链接/填表/翻页）一律用 aci_call 的 browser_open→browser_elements→browser_action。",
-        "ai_browser" to "多用途：既能「后台联网搜索资料/自动研究」也能「打开网页被动展示」也能「下载网页里的文件」——需要 AI 自动上网查资料/下载时调用（open 仅展示、不能点击；真正点击/填表/进入子页面请用 aci_call 的 ZorvAI 受控浏览器 browser_open→browser_elements→browser_action）",
+        "open_web" to "「打开百度」「访问 XX 网址」类请求：若系统提示里已声明【默认 ACI 应用已设置】（通常是受控浏览器），【优先用 aci(action=call) 的 browser_open】（真实可交互、能点进去）；只有在未设默认 ACI 应用时才用 open_web 被动展示（仅供查看，AI 无法点击交互）。真正操作网页（点链接/填表/翻页）一律用 aci(action=call) 的 browser_open→browser_elements→browser_action。",
+        "ai_browser" to "多用途：既能「后台联网搜索资料/自动研究」也能「打开网页被动展示」也能「下载网页里的文件」——需要 AI 自动上网查资料/下载时调用（open 仅展示、不能点击；真正点击/填表/进入子页面请用 aci(action=call) 的 ZorvAI 受控浏览器 browser_open→browser_elements→browser_action）",
         "browser_act" to "【内置浏览器 AI 真·交互工具】接管对话框当前正在显示的内置 WebView，能真正点击/填表/读取 DOM/截图/抓包——与 open_web / ai_browser 的 open（仅被动展示、点不进去）不同，browser_act 能真正操控页面。标准流程：action=open(网址或关键词，未开浏览器时自动打开并等待挂载) → action=status(确认 loaded=true) → action=snapshot(拿可交互元素的 quro-id 列表) → click(id)/fill(id) 操作 → read(selector) 回读 → 必要时 scroll/wait。需要像人一样操作内置浏览器网页（点链接/填表单/翻页/读点击后内容）时优先用 browser_act；化小窗状态下同样可用。",
 
         // ── 代码执行 ──
         "run_code" to "多用途：用户给的任意代码片段（Python/JS/Shell 等）都能跑；「算一下这段」「跑个脚本」「帮我试试这段代码」都调用",
 
         // ── 终端 ──
-        "terminal_run" to "「在终端跑条命令」「执行 shell」「df -h 看一下」都调用（应用内沙盒，免权限）",
-        "terminal_exec" to "需要连续/交互式终端会话（多步命令、保持状态）时调用",
-        "terminal_write" to "向已开的终端会话写入输入（如半交互命令的后续参数）",
-        "terminal_kill" to "「关掉终端」「杀掉那个 shell 进程」",
-        "terminal_status" to "「终端还活着吗」「当前会话状态」",
-        "quroterm_exec" to "走 ZorvAI 自研沙盒终端执行命令（与 terminal_run 同类，按当前通道选用）",
 
         // ── TTS ──
-        "speak" to "「读给我听」「念一下这段」「大声朗读」「用语音播报」都调用；也可用于把 AI 回复转语音",
-        "stop_speak" to "「别念了」「停下朗读」→ speak(action=\"stop\")。",
+        "speak" to "「读给我听」「念一下这段」「大声朗读」「用语音播报」都调用；也可用于把 AI 回复转语音（也说：「别念了」「停下朗读」）",
 
         // ── 闹钟 ──
-        "alarm_clock" to "「定个明早 7 点闹钟」「3 小时后提醒我」「倒计时 5 分钟」都调用（action=set，type=alarm|timer）。",
+        "alarm_clock" to "「定个明早 7 点闹钟」「3 小时后提醒我」「倒计时 5 分钟」都调用（action=set，type=alarm|timer）。（也说：「倒计时5分钟」「设个计时器」「煮面计时」）",
 
         // ── 定时任务 / 自动化 ──
-        "schedule_task" to "多用途：既能「每天定时提醒我喝水」也能「下周三自动发条消息」也能「10 分钟后执行某个动作」——需要「未来某时刻自动触发」时调用",
-        "list_scheduled_tasks" to "「我定了哪些定时任务」「看看待办的提醒」「自动化列表」都调用",
-        "delete_scheduled_task" to "「取消那个定时提醒」「删掉周三的任务」都调用",
 
         // ── 记忆库 ──
-        "memory_save" to "「记住我喜欢喝咖啡」「把这件事存进记忆」「记下 XX 偏好」都调用",
-        "memory_list" to "「你都记了我什么」「列一下记忆」「我存了哪些笔记」都调用",
-        "memory_search" to "「我之前是不是说过 XX」「查一下我记过的关于 YY 的」都调用",
-        "memory_delete" to "「忘掉那条记忆」「删掉关于 XX 的记录」都调用",
 
         // ── AI 经验闭环 ──
-        "experience_log" to "「把这次踩的坑记下来」「沉淀一个经验：XX 容易失败」「存个方案」都调用",
-        "experience_query" to "「以前有没有类似问题的解法」「查经验库里 YY 怎么处理」都调用",
-        "experience_correct" to "「上条经验是错的，更正为…」「修正那个记录」都调用",
-        "experience_version_check" to "「这个功能在旧版本和新版本有啥区别」「查版本差异」都调用",
 
         // ── 知识库 ──
         // 🔴 2026-11-07 修复重复 key：mapOf 同名后者覆盖前者，两条引导各丢一半，合并为一条。
-        "knowledge_manage" to "「知识库搜 XX」→ action=search；「把文档加进知识库」→ action=add；「管理我的知识库」「删掉某条知识」「看知识库列表/重新建索引」→ action=manage/delete/list/reindex；导入/列出/删除同工具。",
-        "knowledge_rag_search" to "多用途：语义/向量检索本地知识库——「按意思找相关文档」「类似 XX 的内容有哪些」「用自然语言搜我存过的资料」都调用（比关键词 search 更懂语义）",
 
         // ── 文档生成 ──
         "aiwps_create" to "「帮我生成一份 Word 周报」「做个 Excel 表格」「出个 PPT 关于 XX」都调用（本地生成 Office 兼容文件）",
@@ -131,70 +118,26 @@ object QuroToolUsageHints {
         // 历史提示词里把卡片挂在 ui_control(action="card"/"widget") 名下，
         // 与真实工具不符 → 模型会调一个不存在的 action，卡片静默不出现。
         // 🔴 2026-11-07：两条 ui_widget 合并，保留完整组件清单（此前被短句覆盖丢失）。
-        "ui_widget" to "在对话框里展示单个可视化组件时调用（按钮/开关/滑块/进度/仪表/统计/表格/列表/分段控件/饼图/评分/倒计时/标签页/折叠/表单/筹码/步骤条/甘特/热力/雷达/对比/看板/轮播/时间线/里程碑/文件/代码/终端/日志/二维码/条码/颜色/计数器/面包屑/标签云/徽章/头像组/mermaid 图表/miniapp 网页……）。凡是「结果适合画出来而不是写成文字」都优先用它，别退化成一堆纯文本。富组件卡片一次一张，传组件 spec；旧名 ui_card 等价，kind 字段兼容。",
-        "card_catalog" to "不记得某个卡片类型的字段名时调用，拉该类目的完整样例与字段说明（也可查围栏 4 种头、card_patch 补丁语法、组件名归一化）。别凭印象编字段——字段写错会静默渲染成兜底卡。",
+        "ui_widget" to "在对话框里展示单个可视化组件时调用（按钮/开关/滑块/进度/仪表/统计/表格/列表/分段控件/饼图/评分/倒计时/标签页/折叠/表单/筹码/步骤条/甘特/热力/雷达/对比/看板/轮播/时间线/里程碑/文件/代码/终端/日志/二维码/条码/颜色/计数器/面包屑/标签云/徽章/头像组/mermaid 图表/miniapp 网页……）。凡是「结果适合画出来而不是写成文字」都优先用它，别退化成一堆纯文本。富组件卡片一次一张，传组件 spec；旧名 ui_card 等价，kind 字段兼容。要组件名册与字段样例时带 with_catalog=true（原 card_catalog 已并入此参数），要 DSL 规范带 with_spec=true，输出前自检带 with_validate=true。",
         "card_patch" to "已下发过的卡片要改内容时调用（进度刷新、倒计时走字、勾掉待办、改表格单元格、更新统计数字、列表追加），只发改动的字段而不重发整张卡；建议先 describe 拿合法路径。",
 
         // ── 统一UI控制工具 ──
         "ui_control" to "统一UI控制工具：操控界面每个角落。常见用法：「打开编辑器/终端/工具箱」→ ui_control(action=\"open\", target=\"editor\")；「切换深度思考」→ ui_control(action=\"toggle\", target=\"deepthink\")；「打开模型选择」→ ui_control(action=\"sheet\", target=\"model\")；「新建对话」→ ui_control(action=\"chat\", action_type=\"new\")；「查询状态/更新属性/滚动/聚焦/隐藏/显示/导航/权限控制」→ ui_control(action=\"status\"/\"update\"/\"scroll\"/\"focus\"/\"hide\"/\"show\"/\"navigate\"/\"permission\")。可用 target（action=open 直达界面/能力）：editor/terminal/toolbox/knowledge/cms/aci/about/appearance/soul/memory/permission/model_config/voice/settings/tool_center（工具中心总览）/vispro（可视化编程：Mermaid 源码编辑+实时渲染+导出 SVG）/node_editor（节点编辑器：拖拽节点流，导出 Mermaid）/miniapp（Web 应用：渲染 AI 生成的 HTML/JS Web 应用）； Web 应用也可直接在对话框渲染——优先用 ```miniapp 围栏或 ui_widget(type=\"miniapp\")",
 
         // ── MCP 客户端 ──
-        "mcp_servers" to "「看看连了哪些 MCP 服务器」「MCP 服务列表」都调用",
-        "mcp_list_tools" to "「这个 MCP 服务器有哪些工具」「列一下外部工具」都调用",
-        "mcp_call" to "「调用外部 MCP 的 XX 工具」「让连着的服务器干 YY」都调用",
-        "mcp_deploy" to "「把我的 MCP 服务器部署到本机」「起一个本地 MCP」都调用",
-        "mcp_undeploy" to "「停掉那个本地 MCP 服务」「卸载部署」都调用",
-        "mcp_list_local" to "「本机部署了哪些 MCP」「本地服务列表」都调用",
 
         // ── 第三方授权保险库 ──
-        "auth_service_add" to "「把 XX 平台的 token 存起来」「记录这个 API key 给以后用」都调用",
-        "auth_service_list" to "「我存了哪些授权」「列一下凭证」都调用",
-        "auth_service_remove" to "「删掉 XX 的授权」「移除那个 key」都调用",
 
         // ── CMS v2 能力模块 ──
-        "cms_list" to "「我装了哪些能力模块」「CMS 模块列表」都调用",
-        "cms_call" to "「调用 XX 能力模块做 YY」「让模块执行」都调用",
-        "cms_engine_status" to "「CMS引擎状态」「引擎部署好没」「引擎就绪了吗」「引擎拉起了哪些服务」「系统资源包状态」都调用",
-        "cms_status" to "「那个模块部署成功没」「能力状态」都调用",
-        "cms_logs" to "「看模块的运行日志」「报错信息」都调用",
-        "cms_result" to "「拿模块的返回结果」「上次执行产出」都调用",
-        "cms_run_dag" to "「按顺序跑这一组命令/步骤」「编排执行」都调用",
-        "cms_deploy_terminal" to "「把这个模块推到终端跑」「部署到 Linux 环境」都调用",
-        "cms_undeploy_terminal" to "「从终端卸掉那个模块」都调用",
-        "priv_status" to "「我现在能用 Shizuku/ROOT 吗」「哪些高危通道可用」都调用（调用高风险能力前先自查）",
 
         // ── ACI ──
-        "aci_list" to "「有哪些第三方 App 能让我调用」「可控制的外部能力」都调用；想用受控浏览器访问局域网（LAN）HTTP 服务（路由器/NAS/智能家居后台/私有 API）也先 aci_list 看它是否暴露 http_request",
-        "aci_call" to "「让 XX App 帮我做 YY」「调起外部 App 的能力」都调用；可自由组合多个能力（如 browser_open 打开网页 → browser_script 执行 JS 取数 → browser_read 回读结果，其间用 browser_wait 等加载），也能调 http_request 让受控浏览器访问同网段 LAN 明文服务（http://192.168.x.x、http://10.x、*.local mDNS），不必死板地按固定步骤走",
 
         // ── L1 无障碍控屏 ──
-        "read_screen" to "「看看现在屏幕上是啥」「读一下当前界面」「这个 App 现在显示啥」都调用",
-        "get_foreground_app" to "「我现在在前用哪个 App」「前台是哪个」都调用",
-        "get_screen_state" to "「屏幕亮着吗」「锁屏没」「是否熄屏」都调用",
-        "tap_screen" to "「点一下屏幕上的 XX 按钮」「帮我戳那个位置」都调用",
-        "long_press_screen" to "「长按 XX 弹出菜单」「长按选择这段文字」「长按应用图标卸载」都调用（触发长按菜单/选择/拖拽预备）",
-        "swipe_screen" to "「往上滑」「左滑翻页」「划一下」「在 (x1,y1)→(x2,y2) 划」都调用",
-        "input_text" to "「在那个输入框里打'你好'」「填表」都调用",
-        "scroll_screen" to "「往下滚」「滚动列表」都调用",
-        "global_action" to "「返回桌面」「下拉通知栏」「展开通知」「下拉状态栏/快捷设置」「截个图」「最近任务」「锁屏」等系统全局动作都调用",
 
         // ── 屏幕视觉双模感知 ──
         // 🔴 2026-11-07：两条 screenshot 合并，保留 base64 用法说明。
-        "screenshot" to "「截个图」「截图保存」「把屏幕截下来」都调用——默认返回截图文件路径；「截屏分析/发视觉模型」→ return_format=base64。",
-        "visual_analysis" to "任何需要「看见屏幕」的场景都调用：看屏幕内容、识别按钮/文字/图标、理解游戏或 App 界面、找某个元素、OCR 提取文字、辅助操作。当 read_screen 节点树不够用时（游戏/WebView/Flutter/自绘 UI），用视觉大模型真实分析截图，mode 可选 general/ui/ocr/game/find。",
 
         // ── 系统级控制动作 ──
-        "take_photo" to "「拍照」「打开相机拍一张」「帮我拍照」都调用",
-        "screen_record" to "「录屏」「开始录像」「停止录屏」都调用",
-        "volume_control" to "「调高音量」「静音」「音量调到最大」「把声音关小」都调用",
-        "brightness_control" to "「调亮屏幕」「亮度调高」「开自动亮度」「屏幕太暗了」都调用",
-        "wifi_control" to "「开WiFi」「关掉WiFi」「WiFi开一下」都调用",
-        "bluetooth_control" to "「开蓝牙」「关蓝牙」「蓝牙开一下」都调用",
-        "notification_control" to "「下拉通知栏」「收起通知」「清掉通知」都调用",
-        "airplane_mode" to "「开飞行模式」「关飞行模式」「飞行模式开一下」都调用",
-        "screen_rotation" to "「自动旋转屏幕」「锁竖屏」「锁横屏」都调用",
-        "set_timer" to "「倒计时5分钟」「设个计时器」「煮面计时」都调用",
-        "open_app" to "「打开XX应用」「启动XX」都调用（传包名）",
 
         // ── 媒体 ──
         // 🔴 2026-11-07：两条 music_play 合并（原第二条在下方数行，已删除）。
@@ -204,27 +147,12 @@ object QuroToolUsageHints {
         // （重复的 music_play key 已合并到上方）
 
         // ── L2 Shizuku ──
-        "shizuku_exec" to "「用 Shizuku 跑条命令」「以 ADB 权限执行 XX」都调用（需 Shizuku 已授权运行）",
-        "shizuku_root_exec" to "「经 Shizuku 提权执行」「root 级命令（走 Shizuku）」都调用",
-        "freeze_app" to "「冻结 XX 应用」「停用这个 App」都调用",
-        "install_app" to "「装这个 apk」「安装 XX」都调用",
-        "shizuku_status" to "「Shizuku 连上了吗」「Shizuku 状态」都调用",
 
         // ── L3 设备管理员 ──
-        "lock_screen" to "「锁屏」「锁住手机」都调用（需设备管理员已激活）",
-        "device_admin_status" to "「设备管理员开了吗」「管理员状态」都调用",
-        "set_camera_disabled" to "「禁用摄像头」「关掉相机」都调用",
 
         // ── L4 ROOT ──
-        "root_exec" to "「以 root 执行 XX」「跑条需要 root 的命令」都调用（需已 Root）",
-        "root_status" to "「手机 root 了没」「root 状态」都调用",
 
         // ── L5 Linux 环境 ──
-        "linux_run" to "「在 Linux 环境跑 XX」「执行个 Linux 命令」都调用（需 proot 资产）",
-        "linux_install" to "「装一下 Linux 环境」「初始化 Ubuntu」都调用",
-        "linux_start" to "「启动 Linux 环境」都调用",
-        "linux_stop" to "「关掉 Linux 环境」都调用",
-        "linux_status" to "「Linux 环境状态」「装好了没」都调用",
 
         // ── Web 应用（多文件 Web 应用）──
         "miniapp" to "「做个计算器/游戏/网站/应用」「写个多文件项目」「创建前后端分离项目」「做个完整的XX功能」都调用 miniapp——AI用多种语言写多个文件，完成后渲染在对话框里",

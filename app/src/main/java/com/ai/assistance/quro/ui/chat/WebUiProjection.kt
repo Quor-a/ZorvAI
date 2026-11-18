@@ -191,22 +191,46 @@ object WebUiProjection {
 
         // ── 工具调用（原生是「N 工具」胶囊，投影投同样的条目）──
         m.toolCalls?.takeIf { it.isNotEmpty() }?.let { calls ->
-            val arr = JSONArray()
+            // 与原生同一口径：按 toolCallId 归组，占位行与结果行合并，重复执行折叠成 ×N。
+            val grouped = LinkedHashMap<String, JSONObject>()
             calls.forEach { tc ->
-                // 🔴 互动UI界面不是「一次工具调用」：原生侧把它抽成界面块内联渲染，
-                //   投影必须同样处理，否则网页会多出一行原始 JSON 参数
-                //   —— 那正是「卡片方式」的残留观感，用户已明确否定。
+                // 互动UI界面与可视化小卡片已抽成内联界面/卡片，不再算作一行工具调用。
                 if (tc.name == ZX_TOOL) return@forEach
-                // 可视化小卡片已在上面抽成内联卡片，不再重复算作一行工具调用。
                 if (tc.name == "visual_card") return@forEach
-                arr.put(
-                    JSONObject()
+                // 与原生同一归组键：toolCallId 每轮不同，按动作签名才能真正折叠重复执行。
+                val key = "${tc.name}|${tc.arguments}"
+                val result = tc.result?.takeIf { it.isNotBlank() }
+                val prev = grouped[key]
+                if (prev == null) {
+                    val history = JSONArray()
+                    result?.let { history.put(it) }
+                    grouped[key] = JSONObject()
+                        .put("id", key)
                         .put("name", tc.name)
                         .put("arguments", tc.arguments)
-                        .put("result", tc.result ?: JSONObject.NULL)
+                        .put("result", result ?: JSONObject.NULL)
+                        .put("resultHistory", history)
                         .put("durationMs", tc.durationMs)
-                )
+                        .put("repeatCount", 1)
+                } else {
+                    val history = prev.optJSONArray("resultHistory")
+                        ?: JSONArray().also { prev.put("resultHistory", it) }
+                    if (history.length() == 0 && result != null) {
+                        // 占位 → 结果：原地替换，不新增一行
+                        history.put(result)
+                        prev.put("result", result).put("durationMs", tc.durationMs)
+                    } else if (result != null) {
+                        // 重复执行：折叠计数，但逐次保留结果；耗时取最大而非累加。
+                        history.put(result)
+                        prev.put("repeatCount", prev.optInt("repeatCount", 1) + 1)
+                            .put("result", result)
+                            .put("durationMs", maxOf(prev.optLong("durationMs", 0L), tc.durationMs))
+                    }
+                    // 仍在执行的重复占位：不计数、不追加结果
+                }
             }
+            val arr = JSONArray()
+            grouped.values.forEach { arr.put(it) }
             if (arr.length() > 0) o.put("tools", arr)
         }
 

@@ -16,10 +16,15 @@ import java.net.SocketException
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * ACI HTTP API 服务器（假接口/模拟实现）。
+ * ACI HTTP API 服务器。
  *
- * 当 ACI 真实 API 尚未完成时，提供 HTTP RESTful 接口供前端/测试使用。
  * 基于 ServerSocket 零依赖实现，仅监听 127.0.0.1，外部不可达。
+ *
+ * 🔴 2026-11-12 从 mock 桥接为真实实现：/aci/call 此前走 simulateCapabilityCall
+ * 返回模拟数据（版本 1.0.0-mock、只有 6 个假能力），外部进程拿到的全是假结果。
+ * 现在直接路由到 QuroAidlAciManager.call —— 与 aci_call 工具同一条 AIDL 链路、
+ * 同一套 Token 鉴权与审计；能力清单也改从 getCapabilityIndex() 实时取（不再用假数据）。
+ * 仅当真实管理器不可用时，才回落到内置模拟能力（并如实标注 mock）。
  *
  * 端点：
  * - GET  /aci/capabilities          → 列出所有能力
@@ -47,7 +52,7 @@ class QuroAciHttpServer(private val appContext: Context) {
 
     val endpoint: String get() = "http://127.0.0.1:$port"
 
-    // 模拟的能力数据
+    // 模拟的能力数据（仅真实管理器不可用时的兜底）
     private val mockCapabilities = ConcurrentHashMap<String, JSONObject>()
 
     // 模拟的 ACI App 列表
@@ -180,10 +185,20 @@ class QuroAciHttpServer(private val appContext: Context) {
 
     /**
      * 启动HTTP服务器
+     * @param requestedPort 请求端口；🔴 此前写死 ServerSocket(0) 忽略该参数，
+     *   调用方要 8848 却每次拿到随机端口（实测 38457）。现在优先绑定请求端口，
+     *   被占用时才回落随机端口（并在日志说明）。
      */
-    fun start(): Int {
+    fun start(requestedPort: Int = 0): Int {
         if (running) return port
-        val ss = ServerSocket(0, 0, InetAddress.getByName("127.0.0.1"))
+        val ss = runCatching {
+            ServerSocket(requestedPort, 0, InetAddress.getByName("127.0.0.1"))
+        }.getOrElse { e ->
+            if (requestedPort > 0) {
+                Log.w(TAG, "端口 $requestedPort 绑定失败（${e.message}），回落随机端口")
+                ServerSocket(0, 0, InetAddress.getByName("127.0.0.1"))
+            } else throw e
+        }
         port = ss.localPort
         serverSocket = ss
         running = true
@@ -304,28 +319,45 @@ class QuroAciHttpServer(private val appContext: Context) {
     }
 
     private fun handleHealth(): JSONObject {
+        val real = runCatching { QuroAidlAciManager.getInstance() }.getOrNull()
+        val capCount = real?.getCapabilityIndex()?.values?.sumOf { it.size } ?: mockCapabilities.size
         return JSONObject().apply {
             put("success", true)
             put("data", JSONObject().apply {
                 put("status", "running")
                 put("port", port)
                 put("timestamp", System.currentTimeMillis())
-                put("capabilities_count", mockCapabilities.size)
-                put("apps_count", mockApps.size)
-                put("version", "1.0.0-mock")
+                put("capabilities_count", capCount)
+                put("mock_fallback", real == null)
+                put("version", if (real == null) "1.0.0-mock" else "1.1.0-real")
             })
         }
     }
 
     private fun handleGetCapabilities(): JSONObject {
         val capsArray = JSONArray()
-        mockCapabilities.values.forEach { capsArray.put(it) }
+        val real = runCatching { QuroAidlAciManager.getInstance() }.getOrNull()
+        if (real != null) {
+            // 真实能力清单：按 App 分组展开，附包名（HTTP 调用方要用 target_package）
+            real.getCapabilityIndex().forEach { (pkg, caps) ->
+                caps.forEach { c ->
+                    capsArray.put(JSONObject().apply {
+                        put("id", c.id)
+                        put("package", pkg)
+                        runCatching { put("description", c.description) }
+                    })
+                }
+            }
+        } else {
+            mockCapabilities.values.forEach { capsArray.put(it) }
+        }
 
         return JSONObject().apply {
             put("success", true)
             put("data", JSONObject().apply {
                 put("capabilities", capsArray)
                 put("total", capsArray.length())
+                put("mock_fallback", real == null)
             })
         }
     }
@@ -336,24 +368,74 @@ class QuroAciHttpServer(private val appContext: Context) {
             val capabilityId = request.optString("capability", "")
             val args = request.optJSONObject("args") ?: JSONObject()
             val callerPkg = request.optString("caller_package", "unknown")
+            val target = request.optString("target_package", request.optString("package", ""))
+                .ifBlank { "com.ai.assistance.quro" }
 
-            val capability = mockCapabilities[capabilityId]
-            if (capability == null) {
-                return createErrorResponse(404, "Capability not found: $capabilityId")
+            val mgr = runCatching { QuroAidlAciManager.getInstance() }.getOrNull()
+            if (mgr == null) {
+                // 真实管理器不可用 → 老行为兜底（如实标注 mock）
+                val capability = mockCapabilities[capabilityId]
+                    ?: return createErrorResponse(404, "Capability not found: $capabilityId（ACI 管理器未初始化，mock 兜底也无此能力）")
+                val result = simulateCapabilityCall(capabilityId, args)
+                return JSONObject().apply {
+                    put("success", true)
+                    put("data", JSONObject().apply {
+                        put("call_id", "mock_${System.currentTimeMillis()}")
+                        put("capability", capabilityId)
+                        put("mock", true)
+                        put("result", result)
+                        put("caller_package", callerPkg)
+                    })
+                }
             }
 
-            // 模拟调用结果
-            val result = simulateCapabilityCall(capabilityId, args)
-
-            JSONObject().apply {
-                put("success", true)
-                put("data", JSONObject().apply {
-                    put("call_id", "mock_${System.currentTimeMillis()}")
-                    put("capability", capabilityId)
-                    put("result", result)
-                    put("execution_time_ms", (Math.random() * 1000).toLong())
-                    put("caller_package", callerPkg)
-                })
+            // 🔴 真实链路：与 aci_call 工具同一条 AIDL/LocalSocket 通道、同一套 Token 与审计。
+            // 危险能力（setUserConfirm）必须与工具侧同一门禁：调用方要在 args 带 confirm:true，
+            // 否则外部进程可绕过控制方的确认策略。
+            val capDef = mgr.getCapabilityIndex()[target]?.firstOrNull { it.id == capabilityId }
+            val confirm = args.optBoolean("confirm", false)
+            if (capDef?.isRequireUserConfirm == true && !confirm) {
+                return createErrorResponse(
+                    403,
+                    "该能力（$capabilityId @ $target）需要用户确认：请在 args 中带 confirm:true 后重试。",
+                )
+            }
+            val bundle = android.os.Bundle()
+            args.keys().forEach { k ->
+                if (k == "confirm") return@forEach
+                when (val v = args.opt(k)) {
+                    is Boolean -> bundle.putBoolean(k, v)
+                    is Int -> bundle.putInt(k, v)
+                    is Long -> bundle.putLong(k, v)
+                    is Double -> bundle.putDouble(k, v)
+                    else -> bundle.putString(k, args.optString(k, ""))
+                }
+            }
+            if (confirm) bundle.putBoolean("user_confirmed", true)
+            val resp = mgr.call(target, capabilityId, bundle)
+            if (resp.isSuccess) {
+                val result = JSONObject()
+                resp.result?.keySet()?.forEach { key ->
+                    val raw = resp.result?.get(key)
+                    when (raw) {
+                        null -> {}
+                        is ByteArray -> result.put(key, java.util.Base64.getEncoder().encodeToString(raw))
+                        else -> result.put(key, raw.toString())
+                    }
+                }
+                JSONObject().apply {
+                    put("success", true)
+                    put("data", JSONObject().apply {
+                        put("call_id", resp.getCallId() ?: "real_${System.currentTimeMillis()}")
+                        put("capability", capabilityId)
+                        put("target_package", target)
+                        put("mock", false)
+                        put("result", result)
+                        put("caller_package", callerPkg)
+                    })
+                }
+            } else {
+                createErrorResponse(resp.getErrorCode(), resp.getErrorMessage() ?: "ACI 调用失败")
             }
         } catch (e: Exception) {
             createErrorResponse(400, "Invalid request: ${e.message}")
@@ -406,20 +488,48 @@ class QuroAciHttpServer(private val appContext: Context) {
 
     private fun handleGetApps(): JSONObject {
         val appsArray = JSONArray()
-        mockApps.forEach { appsArray.put(it) }
+        val real = runCatching { QuroAidlAciManager.getInstance() }.getOrNull()
+        var boundCount = 0
+        if (real != null) {
+            real.getCapabilityIndex().forEach { (pkg, caps) ->
+                boundCount++
+                appsArray.put(JSONObject().apply {
+                    put("package", pkg)
+                    put("capabilities", JSONArray(caps.map { it.id }))
+                    put("total", caps.size)
+                    put("status", "bound")
+                })
+            }
+        } else {
+            mockApps.forEach { appsArray.put(it) }
+            boundCount = mockApps.count { it.getString("status") == "bound" }
+        }
 
         return JSONObject().apply {
             put("success", true)
             put("data", JSONObject().apply {
                 put("apps", appsArray)
                 put("total", appsArray.length())
-                put("bound_count", mockApps.count { it.getString("status") == "bound" })
+                put("bound_count", boundCount)
+                put("mock_fallback", real == null)
             })
         }
     }
 
     private fun handleDiscover(): JSONObject {
-        // 模拟服务发现
+        val real = runCatching { QuroAidlAciManager.getInstance() }.getOrNull()
+        if (real != null) {
+            real.refresh()
+            return JSONObject().apply {
+                put("success", true)
+                put("data", JSONObject().apply {
+                    put("message", "服务发现已触发（真实链路）")
+                    put("found_apps", real.getCapabilityIndex().size)
+                    put("timestamp", System.currentTimeMillis())
+                })
+            }
+        }
+        // 模拟服务发现（兜底）
         return JSONObject().apply {
             put("success", true)
             put("data", JSONObject().apply {

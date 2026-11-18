@@ -113,6 +113,16 @@ data class QuroMessage(
     val createdAt: Long = System.currentTimeMillis(),
     /** 本条消息的思考段耗时（毫秒）：首个思考 token → 首个可见 token。0 = 未知/无思考。 */
     val thinkDurationMs: Long = 0,
+    /**
+     * 外部投递的系统提醒。此类消息不参与 LLM 上下文组装时的「system 整体提到最前」，
+     * 而是按发生时间留在历史里，让模型在下一步动作就近看到；同时用于一轮结束后 ack。
+     */
+    val externalHint: Boolean = false,
+    /**
+     * 该提醒对应的外部事件 id 列表。必须随消息落盘：进程被杀或会话恢复后，
+     * 一轮成功收尾仍要靠这些 id 找到来源文件并归档，否则事件会永远重复提醒。
+     */
+    val externalHintIds: List<String> = emptyList(),
 ) : com.ai.assistance.quro.core.chat.QuroMessageLike {
     override val textContent: String get() = content
 }
@@ -260,12 +270,17 @@ class QuroConversationStore(
                 QuroChatMessage(
                     m.role, content, m.toolCalls, m.toolCallId, m.attachments,
                     reasoning = if (thinkingFallback) null else m.reasoning,
+                    externalHint = m.externalHint,
                 )
             )
         }
         // 「保留对话轮数」对话框级覆盖：仅保留最近 N 个 (用户+助手) 轮次，其余丢弃。
         // 仅当 historyRounds > 0 时生效；0/未设置则跳过（与历史行为完全一致）。
         var capped = if (historyRounds > 0) capRecentRounds(built, historyRounds) else built
+        val hintCount = capped.count { it.externalHint }
+        if (hintCount > 0) {
+            QuroDiag.log("LlmMessages", "外部提示 $hintCount 条按时序参与上下文，不做 system 置顶")
+        }
         // 🔧 硬输入上限安全网（toolfix7）：用户把 contextWindow 设 0（「不限制」）时，旧逻辑完全不裁剪、
         // 每轮全量发送历史；长对话 / 多工具轮后总输入超过模型硬上限（如 262144）即被上游 500
         // 「context length exceeded」。现以模型真实输入上限（262144）作为预算：平时（远小于上限）不裁
@@ -279,7 +294,7 @@ class QuroConversationStore(
         // 「裁/不裁」反复横跳（自激振荡），且工具结果在原文/截断间抖动不利于 KV 缓存命中。
         val softTrimPct = softTrimThresholdPct.coerceIn(0, 100)
         val compressPct = compressThresholdPct.coerceIn(10, 100)
-        val usageTokens = sysTokens + capped.filter { it.role != "system" }
+        val usageTokens = sysTokens + capped.filter { it.role != "system" || it.externalHint }
             .sumOf { estTokens(it.content) + (it.toolCalls?.sumOf { c -> estTokens(c.arguments) } ?: 0) }
         val usagePct = if (ceiling > 0) usageTokens * 100 / ceiling else 0
         // 软精简闸门：用量达到阀值才就地精简超长工具结果；低于阀值保留原文（0=旧行为永远精简）。
@@ -302,10 +317,13 @@ class QuroConversationStore(
         // 压缩阀值 → 有效预算：达到 compressPct 即开始从最旧轮次裁剪，给回复留 (100−compressPct)% 余量。
         val effectiveBudget = (ceiling - sysTokens).coerceAtLeast(0) * compressPct / 100
         var budget = effectiveBudget
-        val nonSys = capped.filter { it.role != "system" }
+        // 身份 / 人格 / 工具指引这类常驻 system 才置顶；外部提醒按发生时间留在正文里，
+        // 与真实对话一起参与预算裁剪，避免被模型当成背景规则忽略或无限堆积在请求最前部。
+        val pinnedSys = capped.filter { it.role == "system" && !it.externalHint }
+        val nonSys = capped.filter { it.role != "system" || it.externalHint }
         if (budget <= 0) {
-            // 预算连 system 都不够：仅保留 system + 最后一条消息，避免空请求
-            return (capped.filter { it.role == "system" } + nonSys.takeLast(1))
+            // 预算连 system 都不够：仅保留常驻 system + 最后一条消息，避免空请求
+            return pruneOrphanToolMessages(pinnedSys + nonSys.takeLast(1))
         }
 
         // ═══ 串台防御（v429+）：巨型消息降权裁剪 ═══
@@ -352,16 +370,16 @@ class QuroConversationStore(
                 "上下文裁剪：保留 ${kept.size}/${nonSys.size} 条（用量 ${usagePct}% ≥ 压缩阀值 ${compressPct}%，有效预算 $effectiveBudget token）"
             )
         }
-        return pruneOrphanToolMessages(capped.filter { it.role == "system" } + kept)
+        return pruneOrphanToolMessages(pinnedSys + kept)
     }
 
     /**
-     * 保留最近 N 个 (用户+助手) 轮次：始终保留 system 提示，再从 body 中取最后 N*2 条消息。
-     * 既限制历史轮数，又不破坏 system 提示与工具上下文（contextWindow 仍作为单条超大消息的安全网）。
+     * 保留最近 N 个 (用户+助手) 轮次：常驻 system 提示置顶保留，外部提醒按时间留在正文里，
+     * 与真实对话一起受轮数上限约束（contextWindow 仍作为单条超大消息的安全网）。
      */
     private fun capRecentRounds(built: List<QuroChatMessage>, rounds: Int): List<QuroChatMessage> {
-        val sys = built.filter { it.role == "system" }
-        val body = built.filter { it.role != "system" }
+        val sys = built.filter { it.role == "system" && !it.externalHint }
+        val body = built.filter { it.role != "system" || it.externalHint }
         val keep = body.takeLast(rounds * 2)
         return sys + keep
     }

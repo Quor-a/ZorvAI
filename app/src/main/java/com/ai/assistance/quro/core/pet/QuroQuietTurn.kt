@@ -91,7 +91,7 @@ object QuroQuietTurn {
             .filter { it.isNotEmpty() && !isDiagnosticError(it) && !looksLikeUiDump(it) }
             .joinToString(" ")
             .replace(Regex("""\s+"""), " ")
-            .take(120)
+            .take(220)
     }
 
     /**

@@ -70,7 +70,11 @@ class CodeCanvasVisibilityTest {
     fun `全部进入 coreNames 核心集`() {
         val s = toolKt
         val i = s.indexOf("val coreNames = setOf(")
-        val j = s.indexOf(") + uiActionToolNames()")
+        // 结尾锚不再钉死某一串并集（曾因插入 QuroUnifiedToolNames.ALL 而 substring 越界崩溃），
+        // 改为取到 coreNames 声明段的收尾 "）" 行。
+        val j = s.indexOf("\n", s.indexOf(") + uiActionToolNames()", i).takeIf { it >= 0 }
+            ?: s.indexOf(") + QuroUnifiedToolNames.ALL", i).takeIf { it >= 0 }
+            ?: error("coreNames 声明段结构变了，请同步更新本测试的结尾锚"))
         val block = s.substring(i, j)
         tools.forEach {
             assertTrue("$it 不在 coreNames 里 —— 关掉「完整工具集」时模型将看不到它", block.contains("\"$it\""))
@@ -79,12 +83,19 @@ class CodeCanvasVisibilityTest {
 
     @Test
     fun `出图三件套进入 ALWAYS_ON 常驻集`() {
-        // probe（探活配地址）/ markup（HTML→图）/ script（脚本→图）是出图必经链路，
-        // 进常驻集才能免去 tool_router 往返；code_card / llm_code 次要，可经路由按需加载。
+        // markup（HTML→图）/ script（脚本→图）是出图必经链路，进常驻集才能免去 tool_router 往返。
+        // 2026-11-12 合体新世界：probe 被 attachPreflight 降级为 codecanvas_script 的
+        // auto_probe 前置参数（探活由 script 内部自动完成），不再单独常驻；
+        // 断言精神不变：探活→出图链路免检索可达。这里改断言 script/markup 常驻 + 源码含 auto_probe 前置。
         val s = routerKt
-        listOf("codecanvas_probe", "codecanvas_markup", "codecanvas_script").forEach {
+        listOf("codecanvas_markup", "codecanvas_script").forEach {
             assertTrue("$it 不在 ALWAYS_ON 里 —— 渐进式披露下模型得先 tool_router 才知道", s.contains("\"$it\""))
         }
+        val unified = source("app/src/main/java/com/ai/assistance/quro/core/tools/QuroUnifiedTools.kt")
+        assertTrue(
+            "codecanvas_script 丢了 auto_probe 前置（探活链路断裂，出图失败时模型会盲目重试）",
+            unified.contains("Preflight(\"auto_probe\", \"codecanvas_probe\""),
+        )
     }
 
     @Test

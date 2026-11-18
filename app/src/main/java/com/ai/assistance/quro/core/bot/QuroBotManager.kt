@@ -37,6 +37,8 @@ enum class QuroBotPlatform(val label: String) {
     QQ("QQ 机器人"),
     FEISHU("飞书机器人"),
     WECHAT(qstr(R.string.qk_00798)),
+    /** 桌面伙伴：不接 IM 适配器，只复用同一套无界面对话内核。 */
+    PET("桌面伙伴"),
 }
 
 /** 平台 → Quro 的入站消息。 */

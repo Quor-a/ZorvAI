@@ -85,6 +85,9 @@ object ToolTaxonomy {
         Rule(
             ToolCategory.APP_NAVIGATION,
             exact = setOf("ui_control"),
+            // 🔴 前缀规则必须在 UI_CARDS 的 ui_ 宽前缀之前：37 个 ui_open_*/ui_toggle_*
+            // 是界面导航（打开构建台/权限页/深度思考开关），不是气泡卡片。
+            prefixes = listOf("ui_open_", "ui_toggle_", "ui_clear_", "ui_show_", "ui_hide_"),
         ),
         Rule(ToolCategory.DYNAMIC_UI, exact = setOf("ui_dsl_spec", "ui_validate", "game_ui", "automatic_ui")),
         Rule(ToolCategory.UI_CARDS, exact = setOf("card_patch", "card_catalog", "ui_card", "ui_widget", "ui_control")),
@@ -113,6 +116,8 @@ object ToolTaxonomy {
                 "terminal", "moyu", "harness", "tmux", "term_monitor",
                 "run_code", "python_run", "code_runner", "polyglot_run", "syntax_check",
                 "lsposed", "git",
+                // 2026-11-11 合体入口：linux_env(proot Ubuntu start/status/run/install/pkg/process)
+                "linux_env",
             ),
             prefixes = listOf("terminal_", "linux_", "quroterm_", "moyu_", "harness_"),
         ),
@@ -125,7 +130,9 @@ object ToolTaxonomy {
             ),
             prefixes = listOf("toolpkg_"),
         ),
-        Rule(ToolCategory.CMS_DEVELOPMENT, prefixes = listOf("cms_")),
+        Rule(ToolCategory.CMS_DEVELOPMENT, prefixes = listOf(
+                "cms",
+                "cms_")),
 
         // ════════ 文件 ════════
         Rule(
@@ -146,6 +153,8 @@ object ToolTaxonomy {
                 "http_request", "open_web", "browser_act", "ai_browser", "web_crawler",
                 "crossref_search", "github_read", "github_search", "search_provider",
                 "web_search", "read_url",
+                // 2026-11-11 合体入口：web(search/read/search_and_read)、mcp(列/调/部署)
+                "web", "mcp",
             ),
             prefixes = listOf("mcp_", "web_", "browser_"),
         ),
@@ -167,6 +176,8 @@ object ToolTaxonomy {
             exact = setOf(
                 "wf_create", "wf_trigger", "wf_run_status", "workflow_run", "tasker",
                 "task_schedule", "write_calendar",
+                // 2026-11-11 合体入口：wf(create/trigger/status)
+                "wf",
             ),
         ),
 
@@ -179,6 +190,10 @@ object ToolTaxonomy {
         Rule(
             ToolCategory.SCREEN_PERCEPTION,
             exact = setOf(
+                // 2026-11-11 合体入口：screen(感知+操控+组合动作)、keyboard(Agent IME)
+                "screen", "keyboard",
+                // 相机能力查询与录像（拍照 take_photo 已在此）
+                "get_camera_capabilities", "capture_video",
                 "read_screen", "tap_screen", "swipe_screen", "long_press_screen",
                 "scroll_screen", "input_text", "get_foreground_app", "get_screen_state",
                 "screenshot", "global_action", "enable_screen_capture",
@@ -200,11 +215,13 @@ object ToolTaxonomy {
         // ════════ 知识 / 记忆 / 技能 ════════
         Rule(
             ToolCategory.KNOWLEDGE_MEMORY,
-            exact = setOf("rag_search"),
+            exact = setOf("rag_search",
+                // 2026-11-11 合体入口：memory(长期记忆/经验/知识库/RAG/私有库)
+                "memory"),
             prefixes = listOf("memory_", "experience_", "knowledge_"),
         ),
         Rule(ToolCategory.AI_CAPABILITIES, prefixes = listOf("skill_", "cluster_", "codecanvas_")),
-        Rule(ToolCategory.AI_CAPABILITIES, exact = setOf("assistant_skill")),
+        Rule(ToolCategory.AI_CAPABILITIES, exact = setOf("assistant_skill", "ask_persona")),
 
         // ════════ 文档（AIP 长文档 / Office）════════
         Rule(
@@ -220,6 +237,8 @@ object ToolTaxonomy {
         Rule(
             ToolCategory.APP_MANAGEMENT,
             exact = setOf(
+                // 2026-11-11 合体入口：aci(跨应用 AIDL 能力 list/call/server_*)
+                "aci",
                 "install_app", "freeze_app", "get_package_name", "execute_intent",
                 "send_broadcast", "list_app_functions", "invoke_app_function",
             ),
@@ -233,6 +252,9 @@ object ToolTaxonomy {
             ToolCategory.SECURITY,
             exact = setOf(
                 "lock_screen", "private_db", "sandbox", "packet_capture", "fluid_cloud_notify",
+                // 2026-11-11 合体入口：auth_service(授权保险库)、root(ROOT 通道)、
+                // shizuku(特权通道；旧 shizuku 前缀规则接住不了合体短名)
+                "auth_service", "root", "shizuku",
             ),
             prefixes = listOf(
                 "shizuku", "root_", "device_admin", "set_camera", "priv_", "auth_service_",
@@ -243,6 +265,8 @@ object ToolTaxonomy {
         Rule(
             ToolCategory.SYSTEM_CONTROL,
             exact = setOf(
+                // 2026-11-11 合体入口：permissions(权限模式/设备管理员/系统开关/特权执行)
+                "permissions",
                 "device_control", "show_alarms", "set_wheel",
                 "wake_device", "dismiss_keyguard",
             ),

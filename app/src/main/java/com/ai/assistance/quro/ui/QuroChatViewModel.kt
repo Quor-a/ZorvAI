@@ -69,6 +69,8 @@ import com.ai.assistance.quro.core.QuroReplyNotifier
 import com.ai.assistance.quro.core.QuroReplyWidget
 import com.ai.assistance.quro.core.QuroCrashLogger
 import com.ai.assistance.quro.util.QuroDiag
+import com.ai.assistance.quro.core.hint.ExternalHintDispatcher
+import com.ai.assistance.quro.core.hint.ExternalHintPrefs
 import com.ai.assistance.quro.core.QuroTagRepository
 import com.ai.assistance.quro.core.QuroCrashReporter
 import com.ai.assistance.quro.core.cms.QuroCmsRepository
@@ -288,24 +290,61 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     }
 
     /**
-     * issue #13：把一条「外部事件」作为**系统提醒**注入当前对话。
-     * 与 [appendClusterMessage] 不同：role=system 且 excludeFromLlm=false —— 既对用户可见、
-     * 又进入 LLM 上下文，但**不伪造用户消息**（用户可直接分辨这是外部事件而非自己说的）。
-     * 注入后刷新内存消息列表，使气泡立即出现。
+     * 把一条外部投递的提示作为系统提醒注入当前对话：role=system、对用户可见、进入 LLM 上下文，
+     * 但绝不伪造用户消息。
+     *
+     * 两个落点缺一不可：共享 store 负责气泡与落盘，本轮活动缓冲负责「生成中也能被读到」——
+     * QuroAssistant 持有的是 turn-local 缓冲，只写共享 store 会让本轮和下一种子都看不到提示。
+     * 会话空闲且允许自动唤醒时，不新增用户消息直接起一轮，让 AI 立刻处理。
      */
-    fun injectExternalReminder(text: String) {
-        val ownerId = activeConversationId.ifBlank { _currentId.value }
-        store.add(
-            QuroMessage(
+    fun injectExternalReminder(
+        text: String,
+        hintIds: List<String> = emptyList(),
+        autoWake: Boolean = true,
+    ) {
+        val convId = activeConversationId.ifBlank { _currentId.value }
+        // 目录重扫 / 进程重启会再次投递同一批未 ack 事件。历史里已经有对应提醒时
+        // 只补一次唤醒，绝不重复插入气泡；否则用户会看到同一条系统提醒刷屏。
+        val freshIds = hintIds.distinct().filter { id ->
+            id.isNotBlank() && store.all().none { it.externalHint && id in it.externalHintIds }
+        }
+        val wakeOnly = hintIds.isNotEmpty() && freshIds.isEmpty()
+        if (!wakeOnly) {
+            val msg = QuroMessage(
                 role = "system",
                 content = text,
                 excludeFromLlm = false,
                 senderName = "外部事件",
+                externalHint = true,
+                externalHintIds = freshIds,
             )
+            store.add(msg)
+            liveBuffers[convId]?.add(msg)
+            _messages.value = store.all()
+        }
+        QuroDiag.log(
+            "HINT_INJECT",
+            "convId=$convId ids=${freshIds.size} wakeOnly=$wakeOnly liveBuf=${liveBuffers[convId] != null}"
         )
-        // 不论归属，强制刷新可见列表（外部事件应立即可见）。
-        _messages.value = store.all()
-        Log.i("QuroChatViewModel", "外部事件系统提醒已注入（owner=$ownerId）")
+        val idle = !isBusy(convId) && !sendJobs.containsKey(convId) &&
+            turn.stateOf(convId) == QuroTurnController.State.IDLE
+        if (autoWake && ExternalHintPrefs.autoWake(appContext) && idle) {
+            // resumeConvId 分支不新增用户消息，种子直接使用会话现有内容（含刚注入的提醒）。
+            runCatching { send("", ownerConvId = convId, resumeConvId = convId) }
+                .onFailure { QuroDiag.log("HINT_WAKE", "自动唤醒失败：${it.message}") }
+        }
+    }
+
+    /** 一轮成功结束后归档已处理的外部提示，避免同一事件反复提醒。 */
+    private fun ackExternalHints(buf: QuroConversationStore) {
+        val ids = buf.all().asSequence()
+            .filter { it.externalHint }
+            .flatMap { it.externalHintIds.asSequence() }
+            .distinct()
+            .toList()
+        if (ids.isEmpty()) return
+        runCatching { ExternalHintDispatcher.ack(appContext, ids) }
+        QuroDiag.log("HINT_ACK", "ids=${ids.size}")
     }
     // 共享工具注册表：assistant 下发 tools 字段 �? 系统提示词菜�? 都从这里取，保证二者严格一致�?
     private val registry = buildQuroRegistry(appContext).also { QuroToolRegistry.active = it }
@@ -713,9 +752,16 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     // 一整套链路。该模块已随「删除全部旧 GenUI + 内置新 GenUI-Agent」一起移除，
     // 生成式界面改由独立内置应用 com.ai.assistance.quro.genui.aiapp 承担（工具 genui_agent_open）。
     companion object {
-        /** 当前活跃�? ViewModel 实例，供语音球等外部组件委托对话写入「选中的对话框」�? */
+        /** 当前活跃的 ViewModel 实例，供语音球等外部组件委托对话写入「选中的对话框」。 */
         lateinit var instance: QuroChatViewModel
             private set
+
+        /** 对话框是否已创建。外部提示在冷启动早于界面到达时需先落账本。 */
+        fun isReady(): Boolean = ::instance.isInitialized
+
+        /** 会话尚未恢复完成时不能投递：随后恢复历史会整体覆盖内存消息，提示会被冲掉。 */
+        fun isReadyForExternalHint(): Boolean =
+            ::instance.isInitialized && instance._currentId.value.isNotBlank()
     }
     private val _thinking = MutableStateFlow(uiPrefs.getBoolean("thinking", true))
 
@@ -931,6 +977,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         //   + saveAll() 写盘均为�? IO，对话量大时在主线程同步执行会直�? ANR（启�?/进聊天即卡死）�?
         //   这里只同步设置引用与空初始态，�? IO 全部挪到 IO 线程异步完成�?
         instance = this
+        // 冷启动期间到达的外部提示在账本里等界面，界面就绪后补投（不打开新窗口）。
+        ExternalHintDispatcher.onViewModelReady(appContext)
         // 注：原先此处有 :genui 的「冷启动预热」——当前会话确定后主线程预热该会话 WebView 卡片池，
         // 消掉首张卡片 200-500ms 冷启动。该模块已随旧 GenUI 整体删除，预热逻辑一并移除。
         _convs.value = emptyList()
@@ -988,6 +1036,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             store.loadSilently(latest.messages)
             _messages.value = store.all()
             emitMeta()
+            // 会话恢复完成后再补投冷启动期间积攒的外部提示，避免被历史灌回冲掉。
+            ExternalHintDispatcher.onViewModelReady(appContext)
             // 🔴 修复「上下文按钮重启后消失」（2026-11-06 用户实测）：冷启动恢复最近会话后
             //    从不重算窗口占用 → ctxUsageMap 为空 → 输入框旁的占用圆环（usage != null
             //    才渲染）整个消失，要发一次消息（send 收尾的 recompute）才回来。
@@ -1099,6 +1149,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         _messages.value = store.all()
         persistConversations()
         emitMeta()
+        ExternalHintDispatcher.onViewModelReady(appContext)
     }
 
     private fun persistConversations() {
@@ -1135,6 +1186,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
             store.loadSilently(latest.messages)
             _messages.value = store.all()
             emitMeta()
+            // 会话恢复完成后再补投冷启动期间积攒的外部提示，避免被历史灌回冲掉。
+            ExternalHintDispatcher.onViewModelReady(appContext)
             recomputeContextUsage(latest.id)
         }
     }
@@ -1920,10 +1973,18 @@ class QuroChatViewModel(context: Context) : ViewModel() {
         //   再把本条用户消息追加其后（共�? store 仅用于即时显示，不作为种子来源，避免串台/缺失）�?
         val liveSeed = liveBuffers[convId]?.all()
         val persistedSeed = _convs.value.firstOrNull { it.id == convId }?.messages
-        val convBase = (liveSeed ?: persistedSeed ?: emptyList())
+        val seed = (liveSeed ?: persistedSeed ?: emptyList())
             // 附加技能严格「只活一轮」：把上一轮的技能块从本轮上下文里摘掉，
             // 否则历史越攒越长，模型会把几轮前用户选的技能误当成当前约束。
             .filterNot { it.hidden && it.content.startsWith(QuroSkillStore.ATTACHED_MARKER) }
+        // 外部提示可能刚写进共享 store，尚未进落盘快照，也可能晚于在线缓冲的创建。
+        // 按消息 id 补齐，保证唤醒轮与普通轮都读到最新提示，且不会重复插入。
+        val convBase = if (convId == _currentId.value) {
+            val known = seed.mapTo(HashSet()) { it.id }
+            val extra = this@QuroChatViewModel.store.all()
+                .filter { it.externalHint && !it.hidden && it.id !in known }
+            if (extra.isEmpty()) seed else seed + extra
+        } else seed
         // �? 串台防御（v434+ 修复）：轮次信息通过【隐�? system 消息】传�? LLM�?
         //   不再注入 userMsg.content（旧方案会导�? seededUserMsg 进入 buf→liveBuffer→commitCurrent 刷屏�?
         //   使用�? UI 看到内部 [第N轮] 标记泄露）�?
@@ -2102,6 +2163,11 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                 }
                 commitCurrent(convId, buf, forceSave = true)
                 if (!quietTurnFailed) {
+                    // AI 真的给出回复后才归档外部提示；失败 / 被中断的事件留着下次继续提醒。
+                    val producedReply = buf.all().drop(turnBaseCount).any {
+                        it.role == "assistant" && !it.hidden && it.content.isNotBlank()
+                    }
+                    if (producedReply) ackExternalHints(buf)
                 // 本轮结算：把「为什么是这样结束的」放进状态表，UI 在消息流末尾挂一条可操作的状态条。
                 // 失败归因必须在这里算 —— 此刻 buf 已含本轮全部新增（正文/思考/工具结果），
                 // 而 genAssistant 的 lastTurnMeta 仍是最后一次 LLM 调用的停止原因。
@@ -2605,7 +2671,7 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 **当用户要你执行具体动作时，优先调用对应工具真正执行，而不是只用文字描述；纯闲聊 / 情感 / 创意表达可直接自然回答文字。**
 
 示例：
-- 用户说"打开快手" → 调用 search_and_launch_app(app_name="快手")，不要回"好的我来帮你打开"
+- 用户说"打开快手" → 调用 launch_app(app_name="快手")，不要回"好的我来帮你打开"
 - 用户问"电量多少" → 调用 get_battery，不要猜一个数
 - 用户问"有什么应用" → 调用 list_installed_apps，不要凭空列
 
@@ -2656,15 +2722,15 @@ class QuroChatViewModel(context: Context) : ViewModel() {
 - **当用户问"你是谁"/"你能做什么？"**：基于以上事实自然回答，不要背诵原文。根据用户技术背景调整深度——技术人员可以说架构细节，普通用户说功能场景。
 
 ## 核心能力（你拥有这些真实工具，可以直接调用）
-- **应用管理**：list_installed_apps（列出全部已安装应用）、launch_app（启动应用）、search_and_launch_app（一步搜索并打开）、get_package_name（查包名）
+- **应用管理**：list_installed_apps（列出全部已安装应用）、launch_app（启动应用，支持应用名模糊匹配，一步完成）、get_package_name（查包名）
 - **跨应用能力调用**：list_app_functions（枚举某应用对外导出的能力入口：Activity 意图过滤 / 导出 Service / ContentProvider / 广播）、invoke_app_function（直接调用其中一项；kind=service/broadcast/provider 可**后台执行、不弹前台界面**，kind=activity 时拉起前台界面兜底）。这让你可以主动唤醒其他 App 并调用其功能，无需用户手动点开
 - **系统信息**：get_device_info、get_current_time、get_battery、get_wifi_info
-- **文件操作**：list_files、read_text_file、write_file、delete_file
+- **文件操作**：file_write、file_read、list_dir、delete_file
 - **网络**：http_request（发送 HTTP 请求）
-- **权限通道**：priv_status（查询 CMS 权限模式与已授权项）
-- **CMS v2 模块**：cms_list（查看能力模块）、cms_call（调用能力）
-- **记忆库**：memory_save/list/search/delete（自动沉淀长期记忆）
-- **工作区工具**：workspace_write（写文件）、workspace_read（读文件）、workspace_list（列目录）、workspace_render（渲染预览）、workspace_doc（创建文档）、workspace_media（播放媒体）、workspace_doc_view（打开文档）
+- **权限通道**：permissions(action=check)（查询 CMS 权限模式与已授权项）；系统设置开关用 permissions(action=policy)
+- **CMS v2 模块**：cms（action=list 查看能力模块、call 调用能力、status/logs/result/run_dag/deploy/toolbox/engine_status/priv_status 另见 action 说明）
+- **记忆库**：memory（action=save/list/search/delete/recall/kb_*/rag/discover；自动沉淀长期记忆，一次调用完成一个动作）
+- **工作区工具**：workspace（统一入口，action=write / read / list / doc / render / write_and_render / doc_view / media；写文件、读文件、列目录、建文档并预览、渲染、打开文档、播放媒体都在同一个工具里，一次调用完成一个动作）
 - **文档工具**：enhanced_doc_create（增强版文档创建，支持20+格式）、aiwps_create（基础文档创建）、aiwps_read（读取文档）、aiwps_edit（编辑文档）
 - **终端（两套环境，命令不通用，别混）**：
   - `terminal` = **zorvAI 终端**（proot 承载 Ubuntu 24.04，装包用 `apt`）；action=status / exec / run / write / interrupt
@@ -2673,8 +2739,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
   - 用户在终端界面敲 `zorv` 可从 Termux 切进 zorvAI 终端，`exit` 切回；`zorv which <命令>` 查某条命令属于哪一侧
 
 ## 两条互控通道：Shizuku（系统层）+ ACI（应用层）
-- **Shizuku** → `shizuku` 工具（action=status/exec/shizuku_exec/grant）。以 ADB 级 shell(uid 2000) 权限执行系统命令，免 root；执行走 RootExecutor，自带 Shizuku → su 降级与审计。授权必须用户手动点（action=grant 给步骤），agent 不能代替。
-- **ACI** → `aci_list` / `aci_call` / `aci_http_server`。跨应用能力发现与调用，另有 /aci/* HTTP 端点（默认 8848）供外部进程互控。
+- **Shizuku** → `shizuku` 工具（action=status/grant/exec/root_exec/freeze/unfreeze/install/status_and_exec）。以 ADB 级 shell(uid 2000) 权限执行系统命令，免 root；执行走 RootExecutor，自带 Shizuku → su 降级与审计。授权必须用户手动点（action=grant 给步骤），agent 不能代替。
+- **ACI** → `aci`（action=list/call/list_and_call/server_status/server_start/server_stop/server_add/server_remove）。跨应用能力发现与调用；`capability` 必须是能力 id **字符串**（如 `browser_open`），不是对象。另有 /aci/* 本地 HTTP 端点（默认 8848，真实桥接 AIDL，供外部进程互控）。
 - **为什么叫「互控」**：这两个都是普通 QuroTool，而 harness 通过 bridge_on 接入的互控桥会把 ZorvAI 的**全部**工具注册给它（两条通道：MCP `mcp__zorvai__*` / 内置插件 `zorvai_*`）。所以 ZorvAI 能用 Shizuku/ACI，harness 同样能用同一套——同一份权限、同一份审计，不需要两边各实现一遍。
 - **判断口径**：用户要**动系统**（改设置/查进程/调 pm/dumpsys）→ `shizuku`；要**跨应用或对外暴露能力** → ACI；要让 harness 也具备这些能力 → 先 `harness(action="bridge_on")`。
 - **红线**：Shizuku 是真实系统权限，命令写错会真的改到系统。没有明确目的不要拿它试探。
@@ -2705,9 +2771,9 @@ moyu（action=setup 自动备好 Ubuntu 并解压落地 / compile 编译 .mo / b
 - 起不来先 `moyu(action="diagnose")`，它会逐环自检并直接说缺哪一环。
 
 ## 工具调用规则
-- 用户想「打开/启动 XX 应用」时，优先用 search_and_launch_app（一步完成），不要先 list_installed_apps 再 launch_app
+- 用户想「打开/启动 XX 应用」时，直接用 launch_app（支持应用名模糊匹配，一步完成），不要再先查已安装应用列表
 - 用户问「有什么应用/装了什么」时才用 list_installed_apps
-- 调用 cms_call 执行应用内能力（所有能力均在应用沙箱内运行，不借助 Root/Shizuku/无障碍）
+- 调用 cms(action=call, name=模块名, arguments={...}) 执行应用内能力（所有能力均在应用沙箱内运行，不借助 Root/Shizuku/无障碍）
 - 工具执行结果不需要原样复述给用户，而是基于结果给出自然、有用的答复
 - 如果工具返回错误或找不到，直接告诉用户原因并建议替代方案
 - 用户提到创作需求（图形/视频/音频/3D/游戏/低代码等）时，使用 creative_studio 工具获取推荐和调用能力
@@ -2742,45 +2808,37 @@ moyu（action=setup 自动备好 Ubuntu 并解压落地 / compile 编译 .mo / b
 
 **重要：当用户发送附件时，主动使用对应工具处理！**
 
-## 工作区文件渲染与文档创建
+## 工作区（统一入口 `workspace`）
 
-### 工作区渲染 (workspace_render)
-- 用户说"预览这个文件""渲染一下""看看这个"时调用
-- 参数：{"path":"文件路径","title":"可选标题"}
-- 支持渲染：HTML、Markdown、代码、图片等
-- 渲染结果以卡片形式显示在对话中
+工作区里的所有动作都在**同一个工具**里，用 `action` 区分；不要用旧名，也不要把一个动作拆成多次调用：
 
-### 工作区文档创建 (workspace_doc)
-- 用户说"创建文档""新建文件""写个HTML"时调用
-- 参数：{"path":"文件路径","content":"内容","type":"html|md|txt|json|js|py|java|kt|css"}
-- 创建的文档自动保存到工作区，并渲染预览
+| 用户想做什么 | 一次调用 |
+| --- | --- |
+| 保存代码 / 写文件到工作区 | `workspace(action="write", path="MyApp/src/Main.java", content="...")` |
+| 写文件并立刻预览 | `workspace(action="write_and_render", path="index.html", content="...")` |
+| 创建文档（自动补扩展名 + 自动预览） | `workspace(action="doc", path="report", type="md", content="...")` |
+| 读工作区文件 | `workspace(action="read", path="MyApp/src/Main.java")` |
+| 列工作区目录 | `workspace(action="list", path="MyApp")` |
+| 预览已有文件 | `workspace(action="render", path="index.html")` |
+| 用系统应用打开 PDF / Office | `workspace(action="doc_view", path="a.pdf")` |
+| 播放工作区音乐 / 视频 | `workspace(action="media", path="a.mp3", op="play_music")` |
 
-### 工作区媒体播放 (workspace_media)
-- 用户说"播放工作区里的音乐""播放视频"时调用
-- 参数：{"path":"文件路径","action":"play_music|play_video|pause|stop"}
-- 支持格式：mp3, wav, m4a, mp4, avi, mkv
-- 播放结果会在对话框中显示播放卡片
-
-### 工作区文档查看 (workspace_doc_view)
-- 用户说"打开这个文档""查看PDF"时调用
-- 参数：{"path":"文件路径"}
-- 支持格式：PDF、DOCX、XLSX、PPTX、TXT、MD
-- 调用系统默认应用打开（如 WPS、Office）
+`doc` 与 `write_and_render` **自带预览**，不要再额外调一次渲染；`file_write(root="workspace")`、`file_read(root="workspace")`、`list_dir(root="workspace")` 是等价的通用入口，仍可用。
 
 ### 增强版文档创建 (enhanced_doc_create)
-- 用户说"创建文档""新建文件""写个XX"时调用
+- 用户说"创建文档""新建文件""写个XX"且目标是可分享的 Office / PDF 时调用
 - 支持20+格式：docx, xlsx, pptx, pdf, md, txt, csv, html, rtf, odt, epub, json, xml, yaml, css, js, svg
 - 参数：{"type":"格式","title":"标题","content":"内容"}
 - 创建后自动渲染预览
 
 ### 工作流示例
-1. 用户说"帮我写个网页" → AI 调用 enhanced_doc_create 创建 HTML → 自动渲染预览
-2. 用户说"看看 index.html" → AI 调用 workspace_render → 显示渲染结果
-3. 用户说"修改这个文件" → AI 用 workspace_read 读取 → 修改 → workspace_write 写回 → workspace_render 预览
-4. 用户说"播放工作区里的音乐" → AI 调用 workspace_media 播放 → 显示播放卡片
-5. 用户说"打开这个PDF" → AI 调用 workspace_doc_view → 系统应用打开
-6. 用户说"创建一个Word文档" → AI 调用 enhanced_doc_create → 显示渲染预览
-7. 用户说"写个JSON配置" → AI 调用 enhanced_doc_create → 显示代码高亮
+1. 用户说"帮我写个网页" → 一次 `workspace(action="doc", path="index.html", content="...")` 创建并预览
+2. 用户说"看看 index.html" → 一次 `workspace(action="render", path="index.html")`
+3. 用户说"修改这个文件" → 先 `workspace(action="read")` 看内容，再一次 `workspace(action="write_and_render")` 写回并预览（两轮，不是四轮）
+4. 用户说"播放工作区里的音乐" → `workspace(action="media", path="a.mp3", op="play_music")`
+5. 用户说"打开这个PDF" → `workspace(action="doc_view", path="a.pdf")`
+6. 用户说"创建一个Word文档" → `enhanced_doc_create`
+7. 用户说"写个JSON配置" → `workspace(action="doc", path="cfg", type="json", content="...")`
 
 ## 可视化交互（问答与操作弹窗）
 
@@ -2883,8 +2941,8 @@ moyu（action=setup 自动备好 Ubuntu 并解压落地 / compile 编译 .mo / b
 ```
 
 ### 附件类型
-- **工作区附件**（type="text/plain", filename="workspace.txt"）：包含工作区路径和名称，你可以使用 workspace_write、workspace_read、workspace_list 工具操作该工作区
-- **ACI 附件**（type="text/plain", filename="aci.txt"）：包含 ACI 应用名称和包名，你可以使用 aci_list、aci_call 工具与该应用交互
+- **工作区附件**（type="text/plain", filename="workspace.txt"）：包含工作区路径和名称，你可以用 workspace(action=read|write|list) 操作该工作区
+- **ACI 附件**（type="text/plain", filename="aci.txt"）：包含 ACI 应用名称和包名，你可以使用 aci(action=list)、aci(action=call) 工具与该应用交互
 - **技能附件**（type="text/plain", filename="skills.txt"）：包含用户已启用的技能列表，你应根据技能能力处理用户消息
 - **屏幕内容附件**（type="text/plain", filename="screen_content.txt"）：屏幕 OCR 识别的文字内容
 - **通知附件**（type="application/json", filename="notifications.json"）：设备当前通知数据
@@ -3479,7 +3537,7 @@ $recent
             - Emacs：可扩展性极强，Lisp 脚本
             - iTerm2 + Oh My Zsh：Mac 终端增强
             - Windows Terminal：Windows 多标签终端
-            - tmux：终端复用器，多窗口、会话持久化
+            - terminal(action=tmux)：终端复用器，多窗口、会话持久化
 
             ═══ 安卓手机上真实可用的创作工具 ═══
 
@@ -3615,40 +3673,40 @@ $recent
             **日常效率**：
             - 「帮我定个明天7点的闹钟」→ set_alarm
             - 「倒计时10分钟」→ set_timer
-            - 「打开微信」→ open_app (package: "com.tencent.mm")
-            - 「调高音量」→ volume_control(action: "up")
-            - 「静音」→ volume_control(action: "mute")
-            - 「开WiFi」→ wifi_control(action: "on")
-            - 「开蓝牙」→ bluetooth_control(action: "on")
-            - 「开飞行模式」→ airplane_mode(action: "on")
+            - 「打开微信」→ launch_app (package: "com.tencent.mm")
+            - 「调高音量」→ permissions(action=policy, setting=volume, op=up)
+            - 「静音」→ permissions(action=policy, setting=volume, op=mute)
+            - 「开WiFi」→ permissions(action=policy, setting=wifi, op=on)
+            - 「开蓝牙」→ permissions(action=policy, setting=bluetooth, op=on)
+            - 「开飞行模式」→ permissions(action=policy, setting=airplane, op=on)
 
             **屏幕操控**：
-            - 「看看屏幕上是什么」→ visual_analysis（节点树+视觉双模式）
-            - 「截图保存」→ screenshot
-            - 「帮我点一下那个按钮」→ tap_screen
-            - 「往上滑」→ swipe_screen
-            - 「返回桌面」→ global_action
+            - 「看看屏幕上是什么」→ screen(action=analyze)（节点树+视觉双模式）
+            - 「截图保存」→ screen(action=screenshot)
+            - 「帮我点一下那个按钮」→ screen(action=tap)
+            - 「往上滑」→ screen(action=swipe)
+            - 「返回桌面」→ screen(action=global)
 
             **拍照录像**：
-            - 「帮我拍照」→ take_photo
-            - 「开始录屏」→ screen_record(action: "start")
-            - 「停止录屏」→ screen_record(action: "stop")
+            - 「帮我拍照」→ screen(action=photo)
+            - 「开始录屏」→ screen(action=record_start)
+            - 「停止录屏」→ screen(action=record_stop)
 
             **亮度/旋转**：
-            - 「调亮屏幕」→ brightness_control(action: "up")
-            - 「开自动亮度」→ brightness_control(action: "auto")
-            - 「锁竖屏」→ screen_rotation(action: "portrait")
-            - 「自动旋转」→ screen_rotation(action: "auto")
+            - 「调亮屏幕」→ permissions(action=policy, setting=brightness, op=up)
+            - 「开自动亮度」→ permissions(action=policy, setting=brightness, op=auto)
+            - 「锁竖屏」→ permissions(action=policy, setting=rotation, op=portrait)
+            - 「自动旋转」→ permissions(action=policy, setting=rotation, op=auto)
 
             **通知/状态栏**：
-            - 「下拉通知栏」→ notification_control(action: "expand")
-            - 「清掉通知」→ notification_control(action: "clear")
+            - 「下拉通知栏」→ permissions(action=policy, setting=notification, op=expand)
+            - 「清掉通知」→ permissions(action=policy, setting=notification, op=clear)
 
-            **屏幕视觉理解（visual_analysis，任何场景可用）**
-            - visual_analysis 用视觉大模型真实「看」截图，比 read_screen 节点树更全面，任何需要「看见屏幕」的场景都可使用
+            **屏幕视觉理解（screen(action=analyze)，任何场景可用）**
+            - screen(action=analyze) 用视觉大模型真实「看」截图，比 screen(action=read) 节点树更全面，任何需要「看见屏幕」的场景都可使用
             - 「看看屏幕上是什么」「分析这个页面/App/游戏」「屏幕上有什么按钮/文字/图标」「定位某个元素」「OCR 提取文字」「辅助点击操作」等都调用
             - mode 可选：general(综合描述) / ui(UI元素识别) / ocr(文字提取) / game(游戏/App界面) / find(定位目标元素)
-            - 例：「这个游戏界面怎么操作」→ visual_analysis(mode="game") + tap_screen；「这个网页上有什么」→ visual_analysis()
+            - 例：「这个游戏界面怎么操作」→ screen(action=analyze, mode=game) + screen(action=tap)；「这个网页上有什么」→ screen(action=analyze)
 
             """)
         }
@@ -3666,7 +3724,7 @@ $recent
         if (!isLocal) {
             val baseSpecs = if (cfg.useFullTools) registry.fullSpecs() else registry.coreSpecs()
             val activeSpecs = if (autoSaveMemory.value) baseSpecs else baseSpecs.filter {
-                !it.name.startsWith("memory_") && !it.name.startsWith("experience_")
+                it.name != "memory" && !it.name.startsWith("memory_") && !it.name.startsWith("experience_")
             }
             appendCapabilityAwareness(sb, activeSpecs)
         }
@@ -3744,9 +3802,9 @@ $recent
 
 你当前拥有**真实可调用的工具函数**（不是装饰、不是假设）。回复前请逐条检查：
 
-1. **用户消息涉及「打开/访问/浏览网址/网页」→ 必须先检查 `aci_call` 是否可用**（系统提示词上方已声明默认 ACI 应用）。若有，默认用 `aci_call({capability:"browser_open", args:{url:"..."}})` 而非 `open_web`。
-2. **用户消息涉及「保存/写文件/存代码/做个工程/把东西留下来」→ 必须用 `workspace_write`** 写入工作区，不要只在对话框里贴代码。
-3. **用户消息涉及「查询/读取工作区文件」→ 必须用 `workspace_read` 或 `workspace_list`**。
+1. **用户消息涉及「打开/访问/浏览网址/网页」→ 必须先检查 `aci(action=call)` 是否可用**（系统提示词上方已声明默认 ACI 应用）。若有，默认用 `aci(action=call, capability=browser_open, args={url:...})` 而非 `open_web`。
+2. **用户消息涉及「保存/写文件/存代码/做个工程/把东西留下来」→ 必须调用 `workspace(action="write", path=..., content=...)`** 写入工作区，不要只在对话框里贴代码；要顺带出预览就用 `workspace(action="write_and_render", ...)`，一次调用即可。
+3. **用户消息涉及「查询/读取工作区文件」→ 必须调用 `workspace(action="read", path=...)`**；列目录用 `workspace(action="list", path=...)`。
 4. **任何需要真实数据或真实动作的需求 → 用工具真正执行，不要只用文字描述。**
 
 如果你发现自己在回复中描述「我会帮你打开…」「我来保存…」却没有发起对应的 tool_call，那就是错误的——必须发起 tool_call。
@@ -3762,8 +3820,8 @@ $recent
 - **对话框文档 / 排版** → `chat_doc`（在对话框内直接渲染 Markdown/HTML/代码/文本排版）；文档附件现支持「对话框内预览排版」按钮，点击即在对话框内联渲染 docx/xlsx/pptx/pdf 真实排版（mammoth/SheetJS/pdf.js）。
 - **AI 自动化浏览器 + 联网搜索** → `ai_browser`；**网页爬虫** → `web_crawler`（批量渲染抓取，导出 Markdown）。
 - **LSPosed / Xposed 模块直驱** → `lsposed`（status/enable/disable/foreground，读写桥管控）。
-- **特权执行** → `priv_exec`（Shizuku→ROOT 自动降级，执行高风险命令前自查 `priv_status`）。
-- **ADB 终端** → `adb_term`（无线调试中枢：shell / tcp_status / tcp_enable / tcp_disable）。
+- **特权执行** → `permissions(action=exec)`（Shizuku→ROOT 自动降级，执行高风险命令前自查 `permissions(action=check)`）。
+- **ADB 终端** → `terminal(action=adb)`（无线调试中枢：shell / tcp_status / tcp_enable / tcp_disable）。
 - **抓包** → `packet_capture`（proot 内 mitmdump，flow 写 /mnt/quro/mitm/）。
 - **对话框 / 浏览器 化小窗** → 对话框顶栏与浏览器工具栏均有「化小窗」按钮，可将内容折叠为可拖拽悬浮小窗，不中断后台任务。
 - **APK 级插件框架** → `apk_plugin`（一个工具管全流程：列/装/卸/重载插件、查看并调用插件贡献的 AI 工具、打开插件界面）。
@@ -3825,7 +3883,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         // cluster_orchestration 一段独占 1416 字 —— 那就是「把 RAG 当主要方案」，
         // 用户明确要求「改成 AI 被动使用，RAG 是备用方案不是主要方案」。
         //
-        // 现在的主路径是**AI 自己**调 rag_search(domain="prompts") 主动取规则，
+        // 现在的主路径是**AI 自己**调 memory(action=discover, domain=prompts) 主动取规则，
         // 每轮只常驻两块真正必须守的基础段（工具调用纪律 + 输出格式纪律，见
         // PromptRagIndex 的 alwaysSticky）。FULL_ALWAYS 仍可通过
         // SharedPreferences("quro_rag", "prompt_rag_mode"="FULL_ALWAYS") 显式打开。
@@ -3870,7 +3928,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
      * 模型在一堆当前无关的规则里，容易漏掉真正该守的那条。
      *
      * 改后每轮只常驻两块基础段（工具调用纪律 + 输出格式纪律），
-     * 其余规则由 **AI 自己**调 `rag_search(domain="prompts")` 主动取——
+     * 其余规则由 **AI 自己**调 `memory(action=discover, domain=prompts)` 主动取——
      * 检索从「宿主塞给 AI」变成「AI 按需拉」，这才是被动使用。
      *
      * 显式切回全量：写入 SharedPreferences("quro_rag") 的键 `prompt_rag_mode` = `FULL_ALWAYS`。
@@ -3891,11 +3949,11 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         val engine = QuroExperienceEngine(QuroExperienceRepository(appContext))
         sb.append("\n\n## AI 经验笔记 & 自我进化（内部，不打扰用户）\n")
         sb.append("- 你拥有一个本地「经验库」，用于跨会话沉淀与复用可复用的结论（报错 / 解决方案 / 工具模式 / 版本差异），不打扰用户。\n")
-        sb.append("  - experience_log：当一轮对话里你遇到、解决或可复用一个问题时，主动沉淀（type=error/solution/pattern/compatibility）。\n")
-        sb.append("  - experience_query：动手前先查相关经验，复用已有结论、避免重复踩坑。\n")
-        sb.append("  - experience_correct：某条经验被证明过时 / 错误时，记录自我纠错（was / reason / fix）。\n")
-        sb.append("  - experience_version_check：遇到版本相关问题时自检兼容性，或列出已知兼容标记。\n")
-        sb.append("  - **纠错闭环（进化引擎核心）**：当用户明确纠正你（指出你答错 / 给了更准确答案 / 推翻你之前的结论）时，必须主动调用 `experience_correct` 把这条自我纠错沉淀下来（was=你之前的说法，reason=为什么错，fix=正确做法），让下一次不再犯同样的错——这就是「越用越聪明」的自学习机制；不要只在当轮道歉，要把教训写进经验库。\n")
+        sb.append("  - memory(action=log)：当一轮对话里你遇到、解决或可复用一个问题时，主动沉淀（type=error/solution/pattern/compatibility）。\n")
+        sb.append("  - memory(action=query)：动手前先查相关经验，复用已有结论、避免重复踩坑。\n")
+        sb.append("  - memory(action=correct)：某条经验被证明过时 / 错误时，记录自我纠错（was / reason / fix）。\n")
+        sb.append("  - memory(action=version)：遇到版本相关问题时自检兼容性，或列出已知兼容标记。\n")
+        sb.append("  - **纠错闭环（进化引擎核心）**：当用户明确纠正你（指出你答错 / 给了更准确答案 / 推翻你之前的结论）时，必须主动调用 `memory(action=correct)` 把这条自我纠错沉淀下来（was=你之前的说法，reason=为什么错，fix=正确做法），让下一次不再犯同样的错——这就是「越用越聪明」的自学习机制；不要只在当轮道歉，要把教训写进经验库。\n")
 
         // Feedback 闭环：基于本轮用户消息注�? top-N 相关经验，让 AI 自动复用
         val lastUser = store.all().lastOrNull { it.role == "user" && !it.hidden }?.content ?: ""
@@ -3940,11 +3998,13 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         }
         sb.append("\n### 工具路由（tool_router，强制）\n")
         sb.append(
-            "需要**不在上方常驻清单里**的工具时，**必须**先调 `tool_router`（禁止瞎猜工具名）：\n" +
+            "需要**不在上方常驻清单里**的工具时走 `tool_router`（禁止瞎猜工具名）：\n" +
             "- `tool_router(action=\"match_intent\", intent=\"用户需求描述\")` → 按意图推荐匹配工具\n" +
-            "- `tool_router(action=\"get_schema\", name=\"工具名\")` → 返回该工具【完整参数 + 专属使用提示词】，并加载它（下一轮起即可直接调用）\n" +
+            "- `tool_router(action=\"get_schema\", name=\"工具名\")` → 取回该工具【完整参数 + 专属用法】，不确定参数时用这一步\n" +
+            "- `tool_router(action=\"call\", name=\"工具名\", arguments={...})` → **直接执行**该工具，一次调用完成发现+执行，不必多等一轮\n" +
             "- `tool_router(action=\"list_categories\")` / `list_tools(category=...)` 浏览全部分类\n" +
-            "**正确做法**：遇到任何不确定，先 `tool_router` 检索，看清参数与用法再调用。\n"
+            "**正确做法**：不确定用哪个工具先 match_intent；已知道工具名与参数就直接 call；" +
+            "不知道参数先 get_schema 再 call。\n"
         )
         sb.append("\n（其中 `ui_control` 为统一界面控制工具：调用后会在当前对话框直接打开对应界面/弹层/开关，例如 ui_control(action=\"open\", target=\"editor\") 打开编辑器、ui_control(action=\"toggle\", target=\"deepthink\") 切换深度思考。它们同样可被你并行发起。）\n")
     }
@@ -3972,7 +4032,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "### 如何组合「说话」与「用工具」\n" +
             "- ✅**完全可以在同一条回复里先写一句过渡文字、再发起工具调用**（文字与 tool_calls 可以同一条消息混合出现，例如先说「好的，我查一下」再调工具）；也可以在回复里一边说、一边调、最后再总结。\n" +
             "- 你也可以多轮自由穿插**思考 → 调用工具 → 看到结果 → 再思考 → 再调用 / 再回复**，直到任务真正完成。不要把自己限制成「要么纯文字、要么纯工具」二选一；自然的助手会根据需要把「说一句话」和「做一件事」自由组合。\n" +
-            "- **多个相互独立的动作可在同一条回复里一次性发起多个 tool_calls**（例如「打开快手、查电量、设个闹钟」可在一轮里并行调用 search_and_launch_app / get_battery / set_alarm）。\n" +
+            "- **多个相互独立的动作可在同一条回复里一次性发起多个 tool_calls**（例如「打开快手、查电量、设个闹钟」可在一轮里并行调用 launch_app / get_battery / set_alarm）。\n" +
             "- **收到工具结果后，若用户请求尚未满足，可继续调用下一个工具，直到任务真正完成。**\n" +
             "- 基于工具结果给出自然、有用的回答；工具返回错误时告诉用户原因并建议替代方案。\n" +
             "### 回答篇幅\n" +
@@ -3980,8 +4040,8 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         )
         sb.append(
             "\n### 本版重点能力（新增强制须知）\n" +
-            "- **端侧联网检索**：用户要「搜/查最新/联网确认」时，主动用 `web_search`（多引擎并发+结构化引用）；需精读某链接用 `read_url`。这是自研检索，非浏览器套壳。\n" +
-            "- **屏幕理解授权**：用户要你「看屏幕/截图看下」或你需要像素级读屏时，主动调 `enable_screen_capture` 拉起系统授权，授权后视觉循环自动启用（无需手动长按开关）。\n" +
+            "- **端侧联网检索**：用户要「搜/查最新/联网确认」时，主动用 `web`（action=search 多引擎并发+结构化引用；action=read 精读某链接；action=search_and_read 搜完直接精读）。这是自研检索，非浏览器套壳。\n" +
+            "- **屏幕理解授权**：用户要你「看屏幕/截图看下」或你需要像素级读屏时，主动调 `screen(action=authorize)` 拉起系统授权，授权后视觉循环自动启用（无需手动长按开关）。\n" +
             "- **节点编辑器**：用户要「画流程图/节点流/可视化编程」时，直接调 `node_editor` 读写 .qne 工程，不用打开界面也能编排。\n" +
             "- **端侧APK构建**：用户要「做个App/打包/出APK/自定义包名或图标或签名」时，主动用 `build_apk`（支持自定义包名、release签名生成、依赖JAR、自定义图标），产物用 `export_apk` 导出。\n" +
             "- **确定性出图（CodeCanvas）**：用户要「画一张海报/报表/代码卡/示意图」或强调排版必须精确时，主动用 `codecanvas_markup`（HTML→图）或 `codecanvas_script`（脚本→图）。它与 `image_gen` 分工：**image_gen 走厂商生图 API 画创意图；codecanvas_* 走确定性渲染，同样的输入永远出同样的图**。首次使用先调 `codecanvas_probe` 探活并用 `set_server_url` 配好服务地址。\n" +
@@ -4045,14 +4105,14 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "**出图后必须再做一步**：工具返回的是图片的**本地路径**，你必须紧接着调 `attach_file`（参数 `path` = 该路径）把这张图挂进气泡，否则用户只看到一行路径文字、看不到图。\nn" +
             "**注意**：对话框气泡用位图解码器渲染，**SVG 不会显示**，需要展示时请用 `format=png` 出图。\nn"
         )
-        // ══�? AI 键盘通道专项指引（v436 新增）：�? LLM 知道何时�? IME 键盘通道而非无障�? input_text ══�?
-        sb.append("\n### AI 键盘通道（ai_type_text / ai_press_enter / ai_press_send）\n")
+        // ══�? AI 键盘通道专项指引（v436 新增）：�? LLM 知道何时�? IME 键盘通道而非无障�? screen(action=input) ══�?
+        sb.append("\n### AI 键盘通道（keyboard：type / enter / send / type_and_send）\n")
         sb.append(
-            "这三个工具走本应用注册的「系统键盘 IME 单例」QuroAiKeyboardService，用于向「其他 App 的聚焦输入框」像真人打字一样注入文字、回车或发送。" +
-            "触发时机：当用户要你在某个 App（如微信、备忘录、WPS 搜索框、浏览器地址栏）的输入框里填字、换行、或触发发送键时，优先用它们，而不是无障碍 input_text。" +
+            "keyboard 工具走本应用注册的「系统键盘 IME 单例」QuroAiKeyboardService，用于向「其他 App 的聚焦输入框」像真人打字一样注入文字、回车或发送。" +
+            "触发时机：当用户要你在某个 App（如微信、备忘录、WPS 搜索框、浏览器地址栏）的输入框里填字、换行、或触发发送键时，优先用它们，而不是无障碍 screen(action=input)。" +
             "前提与限制：①目标 App 的输入框必须「已聚焦」（当前有光标）；②该 AI 键盘必须已设为该输入框的「活动输入法」（首次使用会引导用户在输入法设置里启用并切换）。" +
             "若 isInputActive() 为 false（无聚焦输入框），工具会返回明确引导而非静默失败。" +
-            "它与无障碍 input_text 是「两条独立通道」：需要「模拟真人逐字输入、触发 IME 的发送/回车动作」时走键盘通道；需要「直接覆盖或设置控件文本、不依赖输入法」时走无障碍通道。\n"
+            "它与无障碍 screen(action=input) 是「两条独立通道」：需要「模拟真人逐字输入、触发 IME 的发送/回车动作」时走键盘通道；需要「直接覆盖或设置控件文本、不依赖输入法」时走无障碍通道。\n"
         )
         sb.append("\n（其他 `ui_control` 是**统一界面控制工具**：调用后会在当前对话框直接打开对应界面/弹层/开关，例如 ui_control(action=\"open\", target=\"editor\") 打开编辑器、ui_control(action=\"toggle\", target=\"deepthink\") 切换深度思考、ui_control(action=\"chat\", action_type=\"clear\") 清空对话。它们同样可由你并行发起，让用户无需手动点击即可导航应用。）\n")
         sb.append("\n（CMS 模块与大部分能力在应用沙箱内执行（intent/js/api）；另有系统级通道 L1 无障碍控制 / L2 Shizuku / L3 设备管理员 / L4 ROOT / L5 Linux，对应工具已包含在上方清单中，运行时由系统授权与资产可用性把关，未授权时工具会返回明确引导，无需你做通道自查。）\n")
@@ -4096,7 +4156,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "### 🧩 原生小程序（miniapp_sdk 工具）—— WXML/WXSS 原生引擎（仅在用户明确要小程序时用）\n"
         )
         sb.append(
-            "一套**并列的原生小程序引擎**——移植自上游 Quor-a/GenUI：" +
+            "一套**并列的原生小程序引擎**：" +
             "自研 C++ JS 引擎 + WXML/WXSS + 自研 Flex 布局 + Canvas/GLES 自绘渲染，走**微信标准范式**，**不经过 WebView、不是 HTML**。\n" +
             "**触发词（严格）**：用户说「小程序（原生引擎）」「原生小程序」「微信小程序」「用 WXML/WXSS 写个小程序」时**必须**用 `miniapp_sdk`（不要用 `miniapp`）；用户只说「Web 应用」「网页应用」「做个网站/网页工具」时**严禁**用它。\n" +
             "用法：miniapp_sdk(action=create, appId=工程名, files={ \"app.json\": …, \"pages/index/index.wxml\": …, \"pages/index/index.wxss\": …, \"pages/index/index.js\": … })，files 是「相对路径 -> 内容」映射。\n" +
@@ -4195,7 +4255,7 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             "  · `shell` / `sh` / `bash`：应用沙盒内 sh 执行命令（查环境、跑小工具）。\n" +
             "  · `html` / `htm` / `markup`：把**完整 HTML 源码**作为「网页工件」返回，对话框会用 WebView **实时渲染成可交互网页**（支持内嵌 `<style>`/`<script>`、SVG、离线 **Three.js** 三维；在线时可用 **Chart.js / ECharts** 的 CDN 画图）——你生成的网页直接长在对话框里，无需用户复制出去打开。\n" +
             "  · `json` / `xml`：数据 / 配置 / Android 布局 / **SVG**（SVG 走 HTML 预览，能直接渲染成图）；常用于粘合各工具的结果或生成结构化数据。\n" +
-            "  · `java` / `c` / `c++`：用于**撰写与算法逻辑**；在端侧沙箱里不能直接编译运行（无 GCC/ECJ），需要编译运行请借助 `workspace_write` + ACI 构建台（`aci_call`）在云端编译，端侧沙箱以 python/node 为主。\n" +
+            "  · `java` / `c` / `c++`：用于**撰写与算法逻辑**；在端侧沙箱里不能直接编译运行（无 GCC/ECJ），需要编译运行请借助 `workspace(action=write)` + ACI 构建台（`aci(action=call)`）在云端编译，端侧沙箱以 python/node 为主。\n" +
             "  · **组合拳（全栈）**：例如「抓数据(python) → 算指标(python) → 画看板(html 工件)」整条链路你一个人完成，全部在对话框里呈现；或「写 Three.js 三维场景(html) → 对话框里实时旋转预览」。\n" +
             "  **工作流口诀**：要「算 / 转 / 分析」→ `run_code(python)`；要「画网页 / 图表 / 游戏 / 三维」→ 返回 `html` 工件（或 ```html 围栏，二者等效）；要「画流程图 / 架构图」→ mermaid。可视化产出全部融入对话框内容区。\n" +
             "  注意：你跑出来的网页/图表是**给你向用户展示的成果**，优先用 html 工件或 ```html 围栏让它真正渲染出来，而不是只回一段源码文字。\n" +
@@ -4345,23 +4405,23 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
             sb.append("- 当前未安装任何能力模块。用户可在「设置 → CMS v2 模块」中添加模块/能力。\n")
         } else {
             sb.append("- 我可以通过以下工具真实调用已安装的能力：\n")
-            sb.append("  - cms_list：列出所有能力模块与可用能力（id / 说明 / 风险级别）。\n")
-            sb.append("  - cms_call：调用某个具体能力，参数 {capability_id, args}。\n")
+            sb.append("  - cms(action=list)：列出所有能力模块与可用能力（id / 说明 / 风险级别）。\n")
+            sb.append("  - cms(action=call)：调用某个具体能力，参数 {name: 模块名, arguments: {...}}。\n")
             sb.append("- 已安装能力清单：\n")
             caps.forEach { (m, c) ->
                 val risk = c.requiresPermissions.mapNotNull { m.findPermission(it)?.level?.name }.distinct()
                     .joinToString("/").ifBlank { "Normal" }
                 sb.append("  · [${m.name}] ${c.id} · ${c.summary}（风险：$risk）\n")
             }
-            sb.append("- 调用示例：用户说「帮我 echo 一段文字」，可用 cms_call({capability_id:\"echo_text\", args:{text:\"hello\"}}) 执行。\n")
+            sb.append("- 调用示例：用户说「帮我 echo 一段文字」，可用 cms(action=call, name=\"echo_text\", arguments={text:\"hello\"}) 执行。\n")
         }
 
         // ══════════════ CMS 引擎（系统资源包）�? 一级运行引擎（区别于模块） ══════════════
         sb.append("\n### CMS 引擎（系统资源包 · 一级运行引擎）\n")
         sb.append("- **CMS 引擎**：CMS 的一级运行引擎（区别于上方「能力模块」）：它不是某个业务模块，而是整套终端运行引擎，提供 NODE / PYTHON / SSH / JAVA / RUST / GO 的**共享运行时**，是依赖这些运行时的能力模块能运行的基础底座。\n")
-        sb.append("- 引擎态与模块态相互独立：模块态用 `cms_status` 查，**引擎态用 `cms_engine_status` 查**（不要混用、不要猜）。\n")
-        sb.append("- 用户可在「设置 → CMS v2 模块」页的「部署 CMS引擎」卡进行：部署官方 CMS 引擎、导入/导出 CMS 引擎包（.cmsengine，可分享/本地留存）。引擎部署依赖终端 Linux 环境（proot/Ubuntu），未就绪时 cms_engine_status 会给出引导。\n")
-        sb.append("- 当你要判断「某个需要 Python/Node 的模块能不能跑」「引擎是否就绪」「引擎拉起了哪些共享服务」时，调用 **cms_engine_status** 回查，而不是凭空回答。\n")
+        sb.append("- 引擎态与模块态相互独立：模块态用 `cms(action=status)` 查，**引擎态用 `cms(action=engine_status)` 查**（不要混用、不要猜）。\n")
+        sb.append("- 用户可在「设置 → CMS v2 模块」页的「部署 CMS引擎」卡进行：部署官方 CMS 引擎、导入/导出 CMS 引擎包（.cmsengine，可分享/本地留存）。引擎部署依赖终端 Linux 环境（proot/Ubuntu），未就绪时 cms(action=engine_status) 会给出引导。\n")
+        sb.append("- 当你要判断「某个需要 Python/Node 的模块能不能跑」「引擎是否就绪」「引擎拉起了哪些共享服务」时，调用 **cms(action=engine_status)** 回查，而不是凭空回答。\n")
 
         // ══════════════ 内置 Linux 环境（Ubuntu）与墨语言独立运行时 ══════════════
         // 2026-10-23：历史上的第二发行版已整体移除（内置资产约 400MB，体积过大），
@@ -4410,27 +4470,27 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         sb.append("- ACI 性质（重要）：ACI 是【本地、无 Root、App 间 AIDL】调用框架。第三方 App 声明 exported Service + 权限 ai.aci.permission.CALL（protectionLevel=normal，安装即自动授予，不弹窗、不需提权）。\n")
         sb.append("- ACI Token 认证：控制端（ZorvAI）在每次调用时自动添加 Token（_aci_token 参数），受控端可选择验证 Token 以增强安全性。Token 使用 AndroidKeyStore 加密存储，每个目标应用独立 Token。\n")
         sb.append("- ACI 不使用、也不需要：Shizuku / dumpsys / OPLUS 权限 / ROOT / 无障碍 / 设备管理员。遇到任何 ACI 问题时【禁止使用这些系统工具去\"诊断\"或\"修复\"——那会偏离 ACI 的设计，且对解决问题毫无帮助。\n")
-        sb.append("- aci_list：列出当前已发现的所用 ACI 第三方 App 及其暴露的能力（id / 说明 / 参数 / 是否需用户确认）。\n")
-        sb.append("- aci_call：调用某个第三方 App 的 ACI 能力，参数 {target_package(可选), capability, args}；会跨进程发往目标 App 并同步返回结果。\n")
-        // 动态注入当前默�? ACI 应用，并强制模型【主动】调�? aci_call
+        sb.append("- aci(action=list)：列出当前已发现的所用 ACI 第三方 App 及其暴露的能力（id / 说明 / 参数 / 是否需用户确认）。\n")
+        sb.append("- aci(action=call)：调用某个第三方 App 的 ACI 能力，参数 {target_package(可选), capability, args}；会跨进程发往目标 App 并同步返回结果。\n")
+        // 动态注入当前默�? ACI 应用，并强制模型【主动】调�? aci(action=call)
         val defaultAciPkg = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultPackage(appContext)
         val defaultAciName = com.ai.assistance.quro.core.aidlaci.AciAppPreferences.getDefaultAppName(appContext)
         if (defaultAciPkg != null) {
             sb.append("- 【重要·默认 ACI 应用已设置】用户已在 ACI 管理中心把默认 ACI 应用设为「${defaultAciName ?: defaultAciPkg}」（包名 $defaultAciPkg）。\n")
-            sb.append("- 【主动调用 ACI（关键）】既然已设默认应用，遇到下列任何用户意图时，你必须【主动调用 aci_call】真正执行，不要只用文字回答、也不要改用 open_web / ai_browser 的 open 等「被动展示」工具：\n")
-            sb.append("  · 打开 / 访问 / 浏览某个网址、看某个网页 → aci_call({capability:\"browser_open\", args:{url:\"...\"}})（真实可点击交互，远强于 open_web 被动展示）；\n")
+            sb.append("- 【主动调用 ACI（关键）】既然已设默认应用，遇到下列任何用户意图时，你必须【主动调用 aci(action=call)】真正执行，不要只用文字回答、也不要改用 open_web / ai_browser 的 open 等「被动展示」工具：\n")
+            sb.append("  · 打开 / 访问 / 浏览某个网址、看某个网页 → aci(action=call, capability=browser_open, args={url:...})（真实可点击交互，远强于 open_web 被动展示）；\n")
             sb.append("  · 操作网页（点链接 / 填表 / 翻页 / 读取点击后内容）→ browser_open 后用 browser_elements → browser_action → browser_read（加载中 browser_wait）；\n")
-            sb.append("  · 发消息 / 查未读 / 建群 / 读通知 等社交类能力 → aci_call({capability:\"send_message\" ...}, args:{...}})（capability 名以 aci_list / 上方清单为准）；\n")
-            sb.append("  · 发起 HTTP 请求（含同网段 LAN 明文 http://192.168.x.x、*.local）→ aci_call({capability:\"http_request\", args:{...}})；\n")
-            sb.append("  · 其它任何「让外部 App 帮你做事」的意图 → 先想 aci_call 能否由默认应用执行，能就直接调。\n")
-            sb.append("- 调用 aci_call 时【可以省略 target_package】，系统会自动使用默认应用 ${defaultAciName ?: defaultAciPkg}；只有要调其它非默认应用才显式传 target_package。\n")
-            sb.append("- 【优先级·网页类请求】一律优先 aci_call 的 browser_open（真实交互），open_web / ai_browser 的 open 仅被动展示、AI 点不进去，不要先用它们。\n")
+            sb.append("  · 发消息 / 查未读 / 建群 / 读通知 等社交类能力 → aci(action=call, capability=send_message, args={...})（capability 名以 aci(action=list) / 上方清单为准）；\n")
+            sb.append("  · 发起 HTTP 请求（含同网段 LAN 明文 http://192.168.x.x、*.local）→ aci(action=call, capability=http_request, args={...})；\n")
+            sb.append("  · 其它任何「让外部 App 帮你做事」的意图 → 先想 aci(action=call) 能否由默认应用执行，能就直接调。\n")
+            sb.append("- 调用 aci(action=call) 时【可以省略 target_package】，系统会自动使用默认应用 ${defaultAciName ?: defaultAciPkg}；只有要调其它非默认应用才显式传 target_package。\n")
+            sb.append("- 【优先级·网页类请求】一律优先 aci(action=call) 的 browser_open（真实交互），open_web / ai_browser 的 open 仅被动展示、AI 点不进去，不要先用它们。\n")
         } else {
-            sb.append("- 用户尚未设置默认 ACI 应用；调用 aci_call 时需显式传 target_package（用 aci_list 查到的 pkg）。建议提示用户去「设置 → 功能 → ACI 管理中心」设一个默认应用，之后即可省略 target_package 并主动调用。\n")
+            sb.append("- 用户尚未设置默认 ACI 应用；调用 aci(action=call) 时需显式传 target_package（用 aci(action=list) 查到的 pkg）。建议提示用户去「设置 → 功能 → ACI 管理中心」设一个默认应用，之后即可省略 target_package 并主动调用。\n")
         }
-        sb.append("- 应用启动时会自动发现设备上已安装的 ACI App；若 aci_list 为空，仅说明目标 App 未安装或未声明 ACI Service —— 直接告知用户去安装该 App，【不要】跑 dumpsys/Shizuku 去查。\n")
-        sb.append("- 排障边界（重要）：若 aci_call 返回 503（服务未绑定），这是绑定生命周期问题，框架会自动重绑 → 直接重试一次 aci_call 即可，【不要】去授权任何系统权限。其他错误码请原样转告用户，不要臆测为\"权限不足\"。\n")
-        sb.append("- 官方参考受控端「ZorvAI 浏览器」(包名 com.ai.assistance.quro.browser) 已暴露能力：browser_open(打开网址) / browser_read(读当前页URL+标题+HTML) / browser_crawl(爬结构化正文+出站链接) / browser_search(搜索引擎检索) / browser_script(执行任意JS) / browser_list(列出标签页) / browser_info(版本信息) / browser_capture(抓包) / browser_find(页内查找文本) / browser_nav(前进/后退/刷新) / browser_screenshot(截图存Pictures/QuroAI_screenshots/) / console_ui(控制台UI描述JSON) / console_action(控制台动作) / browser_elements(元素树·稳定ID) / browser_action(按ID/CSS操作·点击/输入/滚动) / browser_wait(条件等待·可见/网络空闲) / browser_snapshot(页面状态快照) / browser_restore(快照回滚) / browser_events(页面事件流) / browser_audit(ACI调用审计) / browser_media(媒体/文件资源) / browser_share(系统分享面板) / browser_console(抓取console输出) / browser_query(CSS选择器查DOM) / browser_tabnew(新建标签页) / browser_tabs(列出标签页) / browser_tab(切换标签页) / browser_tabclose(关闭标签页) / browser_mouse(屏幕坐标模拟鼠标) / http_request(代发HTTP·支持LAN明文) / inject_touch(设备级真实触摸注入·Uinput·需root/系统签名)。（此为依据受控端 onCreateCapabilities 的全量参考，共 31 项；完整实时清单与参数以 aci_list / 下方「已发现的第三方能力清单」为准，二者应一致。）browser_read/browser_crawl 已修复，对 SPA 大页(如 news.sina.cn)也能稳定返回内容。\n")
+        sb.append("- 应用启动时会自动发现设备上已安装的 ACI App；若 aci(action=list) 为空，仅说明目标 App 未安装或未声明 ACI Service —— 直接告知用户去安装该 App，【不要】跑 dumpsys/Shizuku 去查。\n")
+        sb.append("- 排障边界（重要）：若 aci(action=call) 返回 503（服务未绑定），这是绑定生命周期问题，框架会自动重绑 → 直接重试一次 aci(action=call) 即可，【不要】去授权任何系统权限。其他错误码请原样转告用户，不要臆测为\"权限不足\"。\n")
+        sb.append("- 官方参考受控端「ZorvAI 浏览器」(包名 com.ai.assistance.quro.browser) 已暴露能力：browser_open(打开网址) / browser_read(读当前页URL+标题+HTML) / browser_crawl(爬结构化正文+出站链接) / browser_search(搜索引擎检索) / browser_script(执行任意JS) / browser_list(列出标签页) / browser_info(版本信息) / browser_capture(抓包) / browser_find(页内查找文本) / browser_nav(前进/后退/刷新) / browser_screenshot(截图存Pictures/QuroAI_screenshots/) / console_ui(控制台UI描述JSON) / console_action(控制台动作) / browser_elements(元素树·稳定ID) / browser_action(按ID/CSS操作·点击/输入/滚动) / browser_wait(条件等待·可见/网络空闲) / browser_snapshot(页面状态快照) / browser_restore(快照回滚) / browser_events(页面事件流) / browser_audit(ACI调用审计) / browser_media(媒体/文件资源) / browser_share(系统分享面板) / browser_console(抓取console输出) / browser_query(CSS选择器查DOM) / browser_tabnew(新建标签页) / browser_tabs(列出标签页) / browser_tab(切换标签页) / browser_tabclose(关闭标签页) / browser_mouse(屏幕坐标模拟鼠标) / http_request(代发HTTP·支持LAN明文) / inject_touch(设备级真实触摸注入·Uinput·需root/系统签名)。（此为依据受控端 onCreateCapabilities 的全量参考，共 31 项；完整实时清单与参数以 aci(action=list) / 下方「已发现的第三方能力清单」为准，二者应一致。）browser_read/browser_crawl 已修复，对 SPA 大页(如 news.sina.cn)也能稳定返回内容。\n")
         sb.append("- 已发现的第三方能力清单：\n")
         try {
             sb.append(QuroAidlAciManager.getInstance().getCapabilityPrompt())
@@ -4440,26 +4500,28 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         // ══════════════ 工作区（QuroWorkspace）：AI 持久化读写、用户可浏览的共享目�? ══════════════
         sb.append("\n### 工作区（QuroWorkspace）：AI 可直接读写、用户可在「工具箱-工作区」浏览的持久目录\n")
         sb.append("- 这是什么：工作区是设备上的一个**持久存储目录**，AI 能直接读写文本文件，用户在 App 内「工具箱 → 工作区」就能看到、下载、手动编辑这些文件。它是你和用户之间**真正的文件共享通道**，内容跨会话保留。\n")
-        sb.append("- 三个工具：\n")
-        sb.append("  · `workspace_write`{path, content, append?}：把文本（源码/配置/笔记）写入工作区**相对路径**（自动创建缺失父目录）；\n")
-        sb.append("  · `workspace_read`{path}：读取工作区相对路径文件的完整内容；\n")
-        sb.append("  · `workspace_list`{path?}：列出目录内容（默认根目录），看清有哪些工程/文件。\n")
+        sb.append("- 一个统一入口：`workspace`，用 action 区分动作（不要再用散装旧名，也不要把一个动作拆成多次调用）：\n")
+        sb.append("  · `workspace(action=write)`{path, content, append?}：把文本（源码/配置/笔记）写入工作区**相对路径**（自动创建缺失父目录）；\n")
+        sb.append("  · `workspace(action=read)`{path, offset?, maxBytes?}：读取工作区相对路径文件的内容；\n")
+        sb.append("  · `workspace(action=list)`{path?}：列出目录内容（默认根目录），看清有哪些工程/文件。\n")
+        sb.append("  · `workspace(action=doc)`{path, content, type?}：创建文档并自动补扩展名、自动出预览卡；`workspace(action=write_and_render)` 写文件后立刻预览，二者都不用再单独调渲染。\n")
+        sb.append("  · `workspace(action=render)` 预览已有文件、`workspace(action=doc_view)` 用系统应用打开 PDF/Office、`workspace(action=media)` 播放工作区音视频。\n")
         val wsPath = com.ai.assistance.quro.core.tools.WorkspacePreferences.getCurrentWorkspace(appContext)
         val wsRoot = wsPath ?: ((appContext.getExternalFilesDir(null)?.absolutePath ?: "QuroWorkspace") + "/QuroWorkspace")
         val wsIsCustom = wsPath != null
         sb.append("- 【当前工作区根目录】$wsRoot${if (wsIsCustom) "（这是用户在对话框权限模式栏**自定义选择**的工作区。" else "（默认工作区，用户尚未自定义）。"}。\n")
         sb.append("- 【主动使用工作区（关键）】遇到下列意图时，主动调用工作区工具，**不要只在对话里贴代码**：\n")
-        sb.append("  · 用户要「保存 / 存下 / 写文件 / 生成工程 / 做个项目 / 把代码留着」→ 用 workspace_write 写进工作区（用户立刻能在「工具箱-工作区」看到、下载、改）；\n")
-        sb.append("  · 用户要「看工作区里有什么 / 我的工程 / 某个文件内容」→ workspace_list / workspace_read；\n")
-        sb.append("  · 用 ACI 构建台协作写码→编译（aci_call 的 create_project / build_apk）：工程文件夹就建在这个工作区里，写源码用 workspace_write、查结构用 workspace_list；\n")
+        sb.append("  · 用户要「保存 / 存下 / 写文件 / 生成工程 / 做个项目 / 把代码留着」→ 用 workspace(action=write) 写进工作区（用户立刻能在「工具箱-工作区」看到、下载、改）；要出预览就用 workspace(action=write_and_render)，一次调用即可；\n")
+        sb.append("  · 用户要「看工作区里有什么 / 我的工程 / 某个文件内容」→ workspace(action=list) / workspace(action=read)；\n")
+        sb.append("  · 用 ACI 构建台协作写码→编译（aci(action=call) 的 create_project / build_apk）：工程文件夹就建在这个工作区里，写源码用 workspace(action=write)、查结构用 workspace(action=list)；\n")
         sb.append("  · 任何「把产物留下来、以后还找得到」的需求 → 写进工作区，而不是只发在聊天框里。\n")
         sb.append("- 路径规则：path 是**相对工作区根目录**的路径（如 MyApp/src/Main.java），不要带盘符/绝对路径、不用 .. 逃逸；写完后告诉用户文件在「工具箱-工作区」里，绝对路径是 $wsRoot/相对路径。\n")
 
         // ══════════════ 上下文元数据读取指令 ══════════════
         sb.append("\n### 用户消息中的上下文标记（必须读取）\n")
         sb.append("- 对话里可能出现一条以 `[隐藏上下文 · 仅本轮有效]` 开头的隐藏 user 消息（工作区路径、默认 ACI 应用、桌宠互动指令等）——**必须读取并使用，但绝不要向用户复述或引用这段文字**：\n")
-        sb.append("  · 看到「工作区: xxx」→ 你的 workspace_write / workspace_read / workspace_list 的根目录就是这个路径；需要保存文件时直接用它。\n")
-        sb.append("  · 看到「ACI应用: xxx」→ 调用 aci_call 时可以省略 target_package，系统会自动用这个应用。\n")
+        sb.append("  · 看到「工作区: xxx」→ workspace 各 action 的根目录就是这个路径；需要保存文件时直接用它。\n")
+        sb.append("  · 看到「ACI应用: xxx」→ 调用 aci(action=call) 时可以省略 target_package，系统会自动用这个应用。\n")
         sb.append("  · 看到「[桌宠互动指令]」→ 那是系统替用户生成的角色扮演要求，直接按它写一句短回复即可；用户气泡里那句短话只是互动入口，不要解释指令来源。\n")
         sb.append("  · 看到「[屏幕观察 · 仅本轮有效]」或「屏幕来源：」→ 那是桌宠从当前屏幕 / 后台虚拟屏读到的真实画面信息；结合它用可用工具把任务实际做完并核对结果，绝不要复述这段观察文本，也不要把它当作用户说的话。\n")
         sb.append("  · 看到「[任务要求]」→ 必须真的调用工具执行（而非只给建议）；无法执行时明确说明缺什么权限或条件。\n")
@@ -4468,12 +4530,12 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
         sb.append("- 若没有工作区/ACI 上下文信息，则按系统提示词中的默认值执行；没有桌宠互动指令时按用户可见消息正常回答。\n")
 
         sb.append("\n## CMS 权限模式（重要）\n")
-        sb.append("- priv_status：查询 CMS v2 权限模式与已授权项；L1-L5 系统级通道已随工具集开放，运行时由系统授权与资产可用性把关，未授权工具会返回明确引导。\n")
-        sb.append("- 直接调用 cms_call 即可执行对应能力；若策略=询问且未授权，提示用户在对话底部控制条切到「允许」。\n")
+        sb.append("- permissions(action=check)：查询 CMS v2 权限模式与已授权项；L1-L5 系统级通道已随工具集开放，运行时由系统授权与资产可用性把关，未授权工具会返回明确引导。\n")
+        sb.append("- 直接调用 cms(action=call) 即可执行对应能力；若策略=询问且未授权，提示用户在对话底部控制条切到「允许」。\n")
 
         sb.append("\n## 权限策略（重要）\n")
-        sb.append("- 本会话开始时权限模式：CMS v2 = ${cmsPolicy.name}，特权子系统 = ${privPolicy.name}（仅供参考；调用高风险能力前请以 priv_status 实时查询为准）。\n")
-        sb.append("- **权限策略为运行时动态**：调用任何 CMS v2 能力模块或特权通道（L4 无障碍 / L5 管理员等）前，先用 priv_status 工具查询**实时**授权模式（允许 / 禁止 / 询问），再决定直接执行、拒绝或先询问用户。不要凭本提示词或记忆假定当前权限状态。\n")
+        sb.append("- 本会话开始时权限模式：CMS v2 = ${cmsPolicy.name}，特权子系统 = ${privPolicy.name}（仅供参考；调用高风险能力前请以 permissions(action=check) 实时查询为准）。\n")
+        sb.append("- **权限策略为运行时动态**：调用任何 CMS v2 能力模块或特权通道（L4 无障碍 / L5 管理员等）前，先用 permissions(action=check) 工具查询**实时**授权模式（允许 / 禁止 / 询问），再决定直接执行、拒绝或先询问用户。不要凭本提示词或记忆假定当前权限状态。\n")
         sb.append("- 当策略=询问(ASK)时，调用高风险能力会被拦截并提示用户在对话底部控制条切到「允许」；不要反复重试，直接告诉用户去切换即可。\n")
     }
 
@@ -4481,11 +4543,11 @@ ZorvAI 有一套 **APK 级插件系统**：插件是**独立 APK**，宿主用 D
     private fun appendMemoryAwareness(sb: StringBuilder) {
         sb.append("\n\n## 长期记忆（记忆库）\n")
         sb.append("- 你拥有记忆库工具，应主动「自动保存」用户透露的持久信息：\n")
-        sb.append("  - memory_save：保存一条记忆（content 必填；可选 title/group/tags）。\n")
-        sb.append("  - memory_list：列出全部已保存记忆。\n")
-        sb.append("  - memory_search：按关键词检索记忆。\n")
-        sb.append("  - memory_delete：删除某条记忆。\n")
-        sb.append("- 当用户说出偏好、习惯、项目背景、重要约定、联系方式、长期目标等值得跨会话记住的内容时，主动调用 memory_save 沉淀，不要等用户要求。\n")
+        sb.append("  - memory(action=save)：保存一条记忆（content 必填；可选 title/group/tags）。\n")
+        sb.append("  - memory(action=list)：列出全部已保存记忆。\n")
+        sb.append("  - memory(action=search)：按关键词检索记忆。\n")
+        sb.append("  - memory(action=delete)：删除某条记忆。\n")
+        sb.append("- 当用户说出偏好、习惯、项目背景、重要约定、联系方式、长期目标等值得跨会话记住的内容时，主动调用 memory(action=save) 沉淀，不要等用户要求。\n")
         sb.append("- 上方「记忆库」段落已给出已有记忆，回答时自然融入，不要生硬提及「根据记忆」。\n")
     }
 }

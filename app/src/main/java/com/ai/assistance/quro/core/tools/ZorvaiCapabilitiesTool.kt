@@ -38,22 +38,13 @@ class ZorvaiCapabilitiesTool : QuroTool {
 
     /** 分组 → 该组的 ZorvAI 工具名。工具名与宿主注册表里的完全一致，调用时加 mcp__zorvai__ 前缀。 */
     private val groups: Map<String, List<String>> = linkedMapOf(
-        "screen" to listOf(
-            "read_screen", "get_screen_state", "screenshot", "screenshot_base64",
-            "enable_screen_capture", "screen_record", "screen_rotation",
-        ),
-        "touch" to listOf(
-            "tap_screen", "long_press_screen", "swipe_screen", "scroll_screen",
-            "touch", "input_text",
-        ),
-        "app" to listOf(
-            "launch_app", "search_and_launch_app", "lock_screen",
-            "get_active_notifications", "notification_control",
-        ),
-        "system" to listOf(
-            "shizuku_exec", "shizuku_root_exec", "shizuku_status",
-            "root_exec", "root_status", "get_device_info", "device_admin_status",
-        ),
+        // 2026-11-11：8 族合体后只列统一入口，旧名走 legacy 兼容但不再对外宣告。
+        "screen" to listOf("screen", "keyboard"),
+        "app" to listOf("launch_app", "permissions", "get_active_notifications"),
+        "system" to listOf("shizuku", "root", "permissions", "get_device_info"),
+        "aci" to listOf("aci"),
+        "terminal" to listOf("terminal"),
+        "memory" to listOf("memory"),
         "file" to listOf(
             "file_read", "file_write", "file_list", "file_delete", "file_search",
             "browser_open", "browser_snapshot", "browser_click",
@@ -97,6 +88,8 @@ class ZorvaiCapabilitiesTool : QuroTool {
 
     /** 依赖无障碍权限的工具。 */
     private val ACCESSIBILITY_TOOLS = setOf(
+        // 合体入口：模型调 screen(action=tap) 时也要判定无障碍是否已开
+        "screen", "keyboard",
         "read_screen", "get_screen_state", "tap_screen", "long_press_screen",
         "swipe_screen", "scroll_screen", "touch", "input_text",
         "get_active_notifications", "notification_control",

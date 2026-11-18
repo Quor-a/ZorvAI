@@ -21,7 +21,7 @@ import org.json.JSONObject
  * 设计：本类持有 10 个子工具实例，run() 按 action 构造对应的内部参数 JSON 后委托执行，
  * 因此每个 action 的返回结构/语义与原工具完全一致。AI 只需记住一个工具名 `terminal`。
  */
-class QuroTerminalTool : QuroTool {
+class QuroTerminalTool : QuroTool, QuroToolDelegation {
     override val name: String = "terminal"
 
     override val description: String = """
@@ -43,6 +43,14 @@ class QuroTerminalTool : QuroTool {
 - write / interrupt / kill：向会话写一行输入 / 中断当前命令 / 结束会话
 - status / sessions / session_new / session_switch / session_kill：会话状态与多会话管理
 
+命令执行类 action（2026-11-11 合体并入，原来各自是独立工具）：
+- quroterm：QuroTerm 沙盒终端直接跑一条命令（command）
+- adb：本机 ADB shell / 无线调试（op=shell/tcp_status/tcp_enable/tcp_disable，command/port/timeout_ms）
+- tmux：tmux 会话管理（op=new_session/list_sessions/send_keys/capture/kill_session，name/keys/command）
+- keys：自定义按键绑定（op=save/list/get/delete/reset，name/key/command）
+- monitor：读 /proc 看负载、内存、进程（top_n）
+这些 action 的旧工具名已降级为内部实现，按原名仍可执行；本工具通过 QuroToolDelegation 声明真实子调用，审批/权限/超时不被合体绕过。
+
 示例（降级时）：
 - terminal(action="exec", command="ls -la")
 - terminal(action="sessions")
@@ -50,11 +58,17 @@ class QuroTerminalTool : QuroTool {
 
     override val parametersJson: String = """
     {"type":"object","properties":{
-      "action":{"type":"string","description":"run/exec/write/kill/status/interrupt/sessions/session_new/session_switch/session_kill"},
-      "command":{"type":"string","description":"run / exec 用的 shell 命令"},
+      "action":{"type":"string","description":"run/exec/write/kill/status/interrupt/sessions/session_new/session_switch/session_kill/quroterm/adb/tmux/keys/monitor"},
+      "command":{"type":"string","description":"run / exec / quroterm / adb 用的 shell 命令"},
       "text":{"type":"string","description":"write 用的输入内容（一行命令）"},
       "id":{"type":"string","description":"session_switch / session_kill 用的会话 id（session_kill 缺省 default）"},
-      "name":{"type":"string","description":"session_new 用的会话名（可选）"}
+      "name":{"type":"string","description":"session_new / tmux / keys 用的名称"},
+      "op":{"type":"string","description":"adb/tmux/keys 的内部动作，见工具说明"},
+      "keys":{"type":"string","description":"tmux send_keys 要发送的按键"},
+      "key":{"type":"string","description":"keys 的按键组合，如 Ctrl+K"},
+      "port":{"type":"integer","description":"adb tcp_enable 端口"},
+      "timeout_ms":{"type":"integer","description":"adb / tmux 超时毫秒"},
+      "top_n":{"type":"integer","description":"monitor 显示的进程数"}
     },"required":["action"]}
     """.trimIndent()
 
@@ -69,6 +83,43 @@ class QuroTerminalTool : QuroTool {
     private val sessionNewTool = TerminalSessionNewTool()
     private val sessionSwitchTool = TerminalSessionSwitchTool()
     private val sessionKillTool = TerminalSessionKillTool()
+
+    // 2026-11-11 合体：命令执行类入口原来各自是独立工具，现在作为本工具的 action。
+    private val quroTermTool = QuroTermTool()
+    private val adbTermTool = QuroAdbTermTool()
+    private val tmuxTool = QuroTmuxTool()
+    private val keybindingTool = QuroKeybindingTool()
+    private val monitorTool = TermMonitorTool()
+
+    /** 转发外层参数给旧实现：剥掉外层 action，需要内层动作时用 op 还原。 */
+    private fun forwarded(obj: JSONObject, withAction: Boolean): String {
+        val o = JSONObject(obj.toString())
+        o.remove("action")
+        o.remove("op")
+        if (withAction) {
+            val op = obj.optString("op", "")
+            if (op.isNotBlank()) o.put("action", op)
+        }
+        return o.toString()
+    }
+
+    /**
+     * 新增的 5 个 action 实际执行的是已降级为内部实现的旧工具，
+     * 必须向引擎声明真实目标，否则审批 / 通道 / 权限 / 超时会被合体绕过。
+     * 原有 10 个会话动作由本工具自身驱动，返回空即按自身名字治理。
+     */
+    override fun governedCalls(arguments: String): List<Pair<String, String>> {
+        val a = runCatching { JSONObject(arguments) }.getOrElse { JSONObject() }
+        val target = when (a.optString("action", "")) {
+            "quroterm" -> "quroterm_exec"
+            "adb" -> "adb_term"
+            "tmux" -> "tmux"
+            "keys" -> "terminal_keys"
+            "monitor" -> "term_monitor"
+            else -> null
+        }
+        return if (target == null) emptyList() else listOf(target to arguments)
+    }
 
     override fun run(context: Context, arguments: String): String {
         val obj = JSONObject(arguments)
@@ -104,7 +155,12 @@ class QuroTerminalTool : QuroTool {
                 inner.put("id", id)
                 sessionKillTool.run(context, inner.toString())
             }
-            else -> "不支持的 action: $action\n可用: run/exec/write/kill/status/interrupt/sessions/session_new/session_switch/session_kill"
+            "quroterm" -> quroTermTool.run(context, forwarded(obj, withAction = false))
+            "adb" -> adbTermTool.run(context, forwarded(obj, withAction = true))
+            "tmux" -> tmuxTool.run(context, forwarded(obj, withAction = true))
+            "keys" -> keybindingTool.run(context, forwarded(obj, withAction = true))
+            "monitor" -> monitorTool.run(context, forwarded(obj, withAction = false))
+            else -> "不支持的 action: $action\n可用: run/exec/write/kill/status/interrupt/sessions/session_new/session_switch/session_kill/quroterm/adb/tmux/keys/monitor"
         }
     }
 }

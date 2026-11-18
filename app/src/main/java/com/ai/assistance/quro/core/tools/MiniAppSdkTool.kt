@@ -30,7 +30,7 @@ class MiniAppSdkTool : QuroTool {
 
 🔴 **触发边界（先读这个，用错=白干）**：仅当用户明确说「小程序（原生引擎）」「原生小程序」「微信小程序」「用 WXML/WXSS 写个小程序」时才用本工具。用户说「Web 应用」「网页应用」「做个网站」「HTML 应用」时**严禁用本工具**——Web 应用就是 Web 应用（HTML + WebView），不是小程序，那要用 `miniapp` 工具。
 
-这是移植自上游 Quor-a/GenUI 的**自研原生引擎**（C++ JS 引擎 + Flex 布局 + Canvas/GLES 自绘渲染），
+**自研原生引擎**（C++ JS 引擎 + Flex 布局 + Canvas/GLES 自绘渲染），
 与「Web 应用」工具（WebView + HTML 运行时）是两套并列的小程序引擎。本工具负责**生成与治理工程文件**，
 渲染由对话框气泡里的 MiniAppView 完成（miniapp_sdk 创建后会自动在对话框渲染出来，也能去工具中心「小程序（原生引擎）」面板打开）。
 

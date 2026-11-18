@@ -2,13 +2,11 @@ package com.ai.assistance.quro.core
 
 import android.content.Context
 import android.os.FileObserver
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
-import com.ai.assistance.quro.activity.QuroApplication
-import com.ai.assistance.quro.core.agent.QuroAgentTrace
-import com.ai.assistance.quro.ui.QuroChatViewModel
-import com.ai.assistance.quro.workflow.platform.Device
+import com.ai.assistance.quro.core.hint.ExternalHint
+import com.ai.assistance.quro.core.hint.ExternalHintDispatcher
+import com.ai.assistance.quro.core.hint.ExternalHintPrefs
+import org.json.JSONObject
 import java.io.File
 import java.util.LinkedHashSet
 import java.util.concurrent.TimeUnit
@@ -17,140 +15,160 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 /**
- * 外部事件唤醒 / 前置钩子（issue #13）。
+ * 目录投递通道：监听 `quro_inbox/`，把外部写入的文件交给统一分发器。
  *
- * 监听约定目录 `quro_inbox/`（默认 `<filesDir>/quro_inbox`，可在 `quro_ui`
- * 偏好里改成 `getExternalFilesDir(null)/quro_inbox` 让 PC/脚本易写）。
- * 其他 App / 脚本 / 定时任务往里扔一个文本文件，即被当作「外部事件」——
- * 注入当前对话为一条**系统提醒**（非伪造用户消息），并弹出通知唤醒用户。
+ * 文件既可以是 `{"id","ts","source","text","priority"}` 的 JSON，也可以直接是纯文本。
+ * 只在文件写完并稳定后读取；解析出的 id 用于去重，AI 处理完一轮后由分发器把文件
+ * 归档到 `processed/`，避免重复提醒与目录堆积。
  *
- * 防护：
- *  - **去重**：按「路径+大小+修改时间」指纹记录已处理文件，不重复注入；
- *  - **静音**：`quro_inbox_muted=true` 时只记指纹、不注入（不打扰用户）；
- *  - **限流**：每分钟最多 [RATE_LIMIT] 个事件，超出丢弃（防目录被刷爆）。
- *
- * 由 [com.ai.assistance.quro.activity.QuroApplication.onCreate] 在**主进程**启动；
- * 进程被杀后停止（外部事件本就只在 App 存活时有意义）。
+ * 与 1.5 秒轮询并用是为了兼容部分 ROM 上 FileObserver 丢失 CLOSE_WRITE 的情况。
  */
 object QuroInboxWatcher {
-
     private const val TAG = "QuroInboxWatcher"
-    private const val PREFS = "quro_ui"
-    private const val RATE_LIMIT = 60          // 每分钟最多处理事件数
-    private const val STABLE_MS = 1000         // 文件需「修改时间 ≥1s 前」才读，避免读到写到一半的内容
-    private const val POLL_MS = 1500           // 轮询间隔（FileObserver 唤醒后也会立即扫）
+    private const val STABLE_MS = 800L
+    private const val POLL_MS = 1500L
+    private const val MAX_BYTES = 64 * 1024
 
     private val running = AtomicBoolean(false)
     private var observer: FileObserver? = null
     private var dir: File? = null
+    private var poller: Thread? = null
     private val lock = ReentrantLock()
     private val cond = lock.newCondition()
-    private var poller: Thread? = null
-    private val processed = LinkedHashSet<String>()   // 已处理指纹（路径:大小:mtime）
-    private var rateWindowStart = 0L
-    private var rateCount = 0
+    private val fingerprints = LinkedHashSet<String>()
 
-    /** 启动监听。enabled=false 时不启动。 */
     fun start(context: Context) {
+        val app = context.applicationContext
         if (!running.compareAndSet(false, true)) return
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean("quro_inbox_enabled", true)) {
+        if (!ExternalHintPrefs.enabled(app)) {
             running.set(false)
-            Log.i(TAG, "quro_inbox 未启用，跳过启动")
+            Log.i(TAG, "外部提示未启用，目录监听跳过")
             return
         }
-        val custom = prefs.getString("quro_inbox_path", null)
-        dir = if (custom.isNullOrBlank()) File(context.filesDir, "quro_inbox")
-        else File(custom)
-        runCatching { dir!!.mkdirs() }
-        lock.withLock { processed.clear() }
-        rateWindowStart = System.currentTimeMillis()
-        rateCount = 0
+        val d = ExternalHintPrefs.inboxDir(app)
+        dir = d
+        runCatching { d.mkdirs() }
+        lock.withLock { fingerprints.clear() }
         startObserver()
-        startPoller()
-        Log.i(TAG, "quro_inbox 监听已启动：${dir!!.absolutePath}")
+        startPoller(app)
+        Log.i(TAG, "目录监听已启动：${d.absolutePath}")
     }
 
-    /** 停止监听（进程退出 / 测试用）。 */
     fun stop() {
         if (!running.compareAndSet(true, false)) return
         runCatching { observer?.stopWatching() }
         observer = null
         lock.withLock { cond.signalAll() }
         poller = null
-        Log.i(TAG, "quro_inbox 监听已停止")
+        Log.i(TAG, "目录监听已停止")
+    }
+
+    fun inboxPath(context: Context): String = ExternalHintPrefs.inboxDir(context).absolutePath
+
+    /** 归档一个已处理 / 已丢弃的文件。 */
+    fun archive(file: File) {
+        if (!file.exists()) return
+        val processed = File(file.parentFile, "processed")
+        runCatching { processed.mkdirs() }
+        val target = File(processed, file.name)
+        runCatching {
+            if (target.exists()) target.delete()
+            if (!file.renameTo(target)) file.delete()
+        }
     }
 
     private fun startObserver() {
+        val path = dir?.absolutePath ?: return
         runCatching {
-            observer = object : FileObserver(dir!!.absolutePath, FileObserver.ALL_EVENTS) {
+            observer = object : FileObserver(path, FileObserver.ALL_EVENTS) {
                 override fun onEvent(event: Int, child: String?) {
                     if (child == null) return
-                    // 仅唤醒轮询线程；真正的稳定读取由 scan() 负责，避免读到半截内容。
                     lock.withLock { cond.signalAll() }
                 }
             }
             observer?.startWatching()
-        }.onFailure { Log.e(TAG, "FileObserver 启动失败（降级为纯轮询）：${it.message}") }
+        }.onFailure { Log.e(TAG, "FileObserver 启动失败，降级为纯轮询：${it.message}") }
     }
 
-    private fun startPoller() {
+    private fun startPoller(app: Context) {
         poller = Thread {
             while (running.get()) {
-                // 没有新事件时安静等待一个轮询周期，有事件则被唤醒立即扫。
                 lock.withLock {
-                    try { cond.await(POLL_MS.toLong(), TimeUnit.MILLISECONDS) } catch (_: InterruptedException) { }
+                    try {
+                        cond.await(POLL_MS, TimeUnit.MILLISECONDS)
+                    } catch (_: InterruptedException) {
+                    }
                 }
                 if (!running.get()) break
-                runCatching { scan() }
+                runCatching { scan(app) }
             }
-        }.also { it.isDaemon = true; it.name = "quro-inbox-poller"; it.start() }
-    }
-
-    /** 扫描目录，挑出「已写完且未处理」的文件并注入。 */
-    private fun scan() {
-        val d = dir ?: return
-        val now = System.currentTimeMillis()
-        val files = runCatching { d.listFiles()?.filter { it.isFile } }.getOrNull() ?: return
-        for (f in files) {
-            if (now - f.lastModified() < STABLE_MS) continue   // 还在写，下轮再扫
-            val size = f.length()
-            val fp = "${f.absolutePath}:$size:${f.lastModified()}"
-            val already = lock.withLock { fp in processed }
-            if (already) continue
-            val text = runCatching { f.readText() }.getOrNull() ?: continue
-            if (text.isBlank()) { lock.withLock { processed.add(fp) }; continue }
-            if (!allowEvent()) { lock.withLock { processed.add(fp) }; continue }  // 限流：记指纹后丢弃
-            val ctx = QuroApplication.appCtx ?: continue
-            val muted = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getBoolean("quro_inbox_muted", false)
-            if (muted) {
-                lock.withLock { processed.add(fp) }
-                Log.i(TAG, "quro_inbox 静音中，跳过事件：${f.name}")
-                continue
-            }
-            injectReminder(ctx, f.name, text)
-            lock.withLock { processed.add(fp) }
+        }.also {
+            it.isDaemon = true
+            it.name = "quro-hint-inbox"
+            it.start()
         }
     }
 
-    /** 每分钟滑动窗口限流。 */
-    private fun allowEvent(): Boolean {
+    private fun scan(app: Context) {
+        val d = dir ?: return
         val now = System.currentTimeMillis()
-        if (now - rateWindowStart > 60_000) { rateWindowStart = now; rateCount = 0 }
-        if (rateCount >= RATE_LIMIT) return false
-        rateCount++
-        return true
+        val files = runCatching {
+            d.listFiles()?.filter { it.isFile && !it.name.endsWith(".ack") }
+        }.getOrNull() ?: return
+        for (f in files) {
+            if (now - f.lastModified() < STABLE_MS) continue
+            val size = f.length()
+            val fp = "${f.absolutePath}:$size:${f.lastModified()}"
+            if (lock.withLock { fp in fingerprints }) continue
+            mark(fp)
+            if (size > MAX_BYTES) {
+                archive(f)
+                continue
+            }
+            val text = runCatching { f.readText() }.getOrNull() ?: continue
+            if (text.isBlank()) {
+                archive(f)
+                continue
+            }
+            ExternalHintDispatcher.submit(app, parse(f, text))
+        }
     }
 
-    /** 注入系统提醒到当前对话 + 发通知唤醒。 */
-    private fun injectReminder(context: Context, name: String, text: String) {
-        val reminder = "📥 外部事件提醒（来源文件：$name）\n$text"
-        runCatching {
-            val vm = QuroChatViewModel.instance
-            Handler(Looper.getMainLooper()).post { vm.injectExternalReminder(reminder) }
-        }.onFailure { Log.w(TAG, "注入系统提醒失败（ViewModel 未就绪）：${it.message}") }
-        QuroAgentTrace.status("inbox", "📥 外部事件", "已从 quro_inbox/$name 注入系统提醒到对话")
-        runCatching { Device.notify(context, "收到外部事件：$name", text.take(120)) }
+    private fun parse(file: File, raw: String): ExternalHint {
+        val trimmed = raw.trim()
+        val json = runCatching { JSONObject(trimmed) }.getOrNull()
+        if (json != null) {
+            val text = json.optString("text", "").ifBlank { json.optString("hint", "") }
+            return ExternalHint(
+                id = json.optString("id", "").ifBlank { stableId(file) },
+                text = text,
+                source = json.optString("source", "").ifBlank { "file" },
+                priority = json.optInt("priority", 0),
+                ts = json.optLong("ts", file.lastModified()),
+                originFile = file,
+            )
+        }
+        return ExternalHint(
+            id = stableId(file),
+            text = trimmed,
+            source = "file",
+            ts = file.lastModified(),
+            originFile = file,
+        )
+    }
+
+    private fun stableId(file: File): String =
+        "file-${file.name}-${file.length()}-${file.lastModified()}"
+
+    private fun mark(fp: String) {
+        lock.withLock {
+            fingerprints.add(fp)
+            while (fingerprints.size > 2000) {
+                val it = fingerprints.iterator()
+                if (!it.hasNext()) break
+                it.next()
+                it.remove()
+            }
+        }
     }
 }

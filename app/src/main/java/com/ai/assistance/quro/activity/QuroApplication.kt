@@ -15,7 +15,7 @@ import com.ai.assistance.quro.core.shizuku.QuroShizuku
 import com.ai.assistance.quro.core.privilege.QuroTerminalPrivilegeBridge
 import com.ai.assistance.quro.terminal.privilege.TerminalPrivilegeBridgeHolder
 import com.ai.assistance.quro.core.terminal.QuroTerminalSessionManager
-import com.ai.assistance.quro.core.QuroInboxWatcher
+import com.ai.assistance.quro.core.hint.ExternalHintDispatcher
 import com.ai.assistance.quro.service.QuroTerminalKeepAliveService
 import com.ai.assistance.quro.service.QuroTerminalAciService
 import com.ai.assistance.quro.ui.QuroPersonaViewModel
@@ -25,6 +25,8 @@ import com.ai.assistance.quro.workflow.data.RunStore
 import com.ai.assistance.quro.workflow.executor.WorkflowEngine
 import com.ai.assistance.quro.workflow.trigger.TriggerEngine
 import com.ai.assistance.quro.kaleidobox.android.KaleidoBoxHost
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * 应用入口（原创）。
@@ -80,15 +82,9 @@ class QuroApplication : Application(), Configuration.Provider {
         // 为 false，整条通道自动降级，不影响墨语言主链路。
         com.ai.assistance.quro.core.moyu.QuroShizukuShell.install()
         QuroCrashLogger.install(this)
-        // LSPosed 作用域标记自愈：每次启动先清除旧标记；若本应用被 LSPosed 纳入作用域，
-        // QuroXposedModule 会在 attachBaseContext 的 Xposed 钩子（afterHookedMethod）重新写入，
-        // 使 QuroLSPosed.isAppInScope() 真实反映「当前是否处于作用域」，取消作用域后随下次启动自愈。
-        // 文件名 ".lsposed_scope" 必须与 QuroXposedModule.SCOPE_MARKER 保持一致；此处不得引用该类，
-        // 否则会把 xposed 桩类拉进常规运行路径触发 NoClassDefFoundError。
-        try {
-            java.io.File(filesDir, ".lsposed_scope").delete()
-        } catch (_: Throwable) {
-        }
+        // LSPosed 作用域不再靠 ".lsposed_scope" 标记文件推断（旧版 API 82 的做法）。
+        // 现代模块通过 XposedService 的 getScope() / getRunningTargets() 由框架直接给出真实状态，
+        // 见 QuroModuleServiceState；这里不再做任何标记文件读写。
     }
 
     /**
@@ -152,6 +148,13 @@ class QuroApplication : Application(), Configuration.Provider {
                 "副进程启动（${currentProcessName()}），仅保留 appCtx + 崩溃收集器，跳过宿主级初始化"
             )
             return
+        }
+
+        // LSPosed 现代模块（API 102）：注册框架服务监听。XposedProvider 可能先于 onCreate 收到
+        // binder，XposedServiceHelper 内部会缓存并在此处回放，因此这里注册不会漏掉连接。
+        // 只注册一次；拿到 service 后才能写 RemotePreferences 与读取真实作用域。
+        runCatching {
+            com.ai.assistance.quro.core.xposed.QuroModuleServiceState.install(this)
         }
 
         // 集群（tool-first 重写）：工具注册在 buildQuroRegistry 内完成；此处初始化运行时 + 事件桥。
@@ -228,10 +231,10 @@ class QuroApplication : Application(), Configuration.Provider {
             com.ai.assistance.quro.core.mcp.QuroMcpClient.tokenProvider = { alias, cfg ->
                 com.ai.assistance.quro.core.mcp.QuroMcpOAuth.bearerFor(applicationContext, alias, cfg)
             }
-            // 🔴 审批「总是允许」持久化回填（2026-11-04 对接缺口修复）：启动时把
-            //    上次「总是允许」的工具集灌回 ApprovalMemory，重启后不再重复弹卡。
+            // 审批「总是允许」持久化回填：启动时把上次「总是允许」的工具集灌回
+            //    ApprovalMemory，重启后不再重复弹卡。
             com.ai.assistance.quro.core.chat.ApprovalPersist.load(applicationContext)
-            // 🔴 互控桥自愈（2026-10-26 真机事故）：桥原先**只在「引擎每次 spawn 前」**建一次，
+            // 互控桥自愈：桥原先**只在「引擎每次 spawn 前」**建一次，
             // 而引擎一次都没成功起来过时，它就一次都没建过 —— 实测后果：`<dshHome>/zorvai-tools.json`
             // 不存在、127.0.0.1 上没有任何 /tool 监听，harness 侧只剩元工具 zorvai_bridge，
             // `zorvai_*` / `mcp__zorvai__*` 两条通道全空。这里应用启动就建一遍，与引擎生命周期解耦。
@@ -351,13 +354,21 @@ class QuroApplication : Application(), Configuration.Provider {
         } catch (e: Throwable) {
             android.util.Log.e("QuroApplication", "KaleidoBox 初始化失败（不影响主流程）", e)
         }
-        // issue #13：外部事件唤醒 / 前置钩子。监听 quro_inbox/ 目录，把外部写入的文件
-        // 作为「系统提醒」注入当前对话（去重/静音/限流内置）。失败绝不影响主流程。
+        // 外部事件唤醒：目录监听、广播、ACI 三条投递通道汇到统一分发器，
+        // 由它完成去重、合并、静音与自动唤醒。失败绝不影响主流程。
         try {
-            QuroInboxWatcher.start(applicationContext)
+            ExternalHintDispatcher.start(applicationContext)
         } catch (e: Throwable) {
-            android.util.Log.e("QuroApplication", "InboxWatcher 启动失败（不影响主流程）", e)
+            android.util.Log.e("QuroApplication", "外部提示运行时启动失败（不影响主流程）", e)
         }
+        // 宠物形象素材预热：内置包落盘（23MB 分片）与目录扫描放到后台线程，
+        // 桌宠服务挂窗时直接命中内存缓存，冷启动不再把这些 IO 压到主线程。
+        kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+            .launch {
+                runCatching {
+                    com.ai.assistance.quro.core.pet.PetAppearanceResolver.load(applicationContext)
+                }
+            }
         // 桌面宠物冷启动自愈：开关持久化在 QuroVoiceFeaturePrefs，但进程被回收（划掉任务、
         // 厂商省电策略、系统重启）后从没有入口重新拉起服务 —— 开机广播只管 BOOT_COMPLETED，
         // 「退出软件再打开」这条最常见的路径完全漏了，设置里显示已开启、桌面却没有宠物。

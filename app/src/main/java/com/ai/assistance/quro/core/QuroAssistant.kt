@@ -399,6 +399,13 @@ class QuroAssistant(
         deepThink: Boolean = false,
         subAgentEnabled: Boolean = true,
         enabledToolCategories: List<String> = emptyList(),
+        /**
+         * 回合内实时过程事件出口（厂商助手入口用，默认 null）。
+         * 与 [QuroConversationStore] 的占位气泡、[QuroAgentTrace] 轨迹总线同源，
+         * 但可跨进程送给 Eta hook 渲染器；主聊 / IM / 桌宠等既有调用方不传，行为零变化。
+         * 注意：只有 `stream = true` 时才会产生逐字 [QuroAssistantStreamEvent.TextAccumulated]。
+         */
+        onStreamEvent: ((QuroAssistantStreamEvent) -> Unit)? = null,
         onUpdate: (() -> Unit)? = null,
     ): String =
         withContext(Dispatchers.IO) {
@@ -465,6 +472,13 @@ class QuroAssistant(
             }
             val cpClear: () -> Unit = { runCatching { checkpoint.clear(runId) } }
             val emit = { onUpdate?.invoke() }
+            // 厂商助手入口的实时事件出口。与 emit()/QuroAgentTrace 同源，但独立成结构化事件，
+            // 便于 QuroAgentTurnRunner 经 ContentProvider 增量送给 Eta hook 渲染器。
+            // 任何回调异常都被吞掉：插桩点绝不拖慢或打断主聊 / Agent 回合。
+            val fire: (QuroAssistantStreamEvent) -> Unit = { event ->
+                onStreamEvent?.let { sink -> runCatching { sink(event) } }
+                Unit
+            }
             QuroAgentTrace.status("assistant", "AI 开始响应")
             // 自动触发流体云通知：AI 开始处理时创建胶囊
             showFluidCloudSafe(context, "ZorvAI", "处理中...", 0)
@@ -527,7 +541,13 @@ class QuroAssistant(
             } else null
             Log.i("QuroAssistant", "tool mode=${if (!effEnableTools) "off" else if (QuroToolRouter.PROGRESSIVE && !isLocal) "rag(${activeToolRouter?.activeSpecs()?.size})" else if (cfg.useFullTools) "full(${categoryAwareSpecs.size})" else "core(${categoryAwareSpecs.size})"}")
             // 诊断日志：确认 aci/workspace 工具是否在下发列表中
-            val aciWsTools = categoryAwareSpecs.filter { it.name.startsWith("aci_") || it.name.startsWith("workspace_") }
+            val unifiedNames = setOf(
+                "web", "mcp", "linux_env", "wf", "cms", "auth_service", "workspace",
+                "shizuku", "terminal", "keyboard", "aci", "root", "screen", "permissions", "memory",
+            )
+            val aciWsTools = categoryAwareSpecs.filter {
+                it.name in unifiedNames || it.name.startsWith("aci_") || it.name.startsWith("workspace_")
+            }
             if (aciWsTools.isNotEmpty()) {
                 Log.i("QuroAssistant", "aci/workspace tools included: ${aciWsTools.map { it.name }}")
             } else {
@@ -571,6 +591,7 @@ class QuroAssistant(
                 // 避免生成协程在「思考中」卡死无法中断（配合下方 client.chat 的取消透传）。
                 coroutineContext[Job]?.ensureActive()
                 round++
+                fire(QuroAssistantStreamEvent.RoundStarted(round))
                 // 🔧 #loop-guard：连续多轮纯工具调用保护。终端/排查类任务下，模型易反复发起
                 // 全新探测命令（签名各不相同）而永不归结结论，跑到 roundLimit（云端 2000）仍不停、
                 // 对话框持续重复「测试终端」式文本。round 达阈值后注入一次隐藏系统提示要求收尾；
@@ -625,6 +646,7 @@ class QuroAssistant(
                 //   数分钟，UI 在跑完之前一个字都拿不到，用户观感就是「不闪退但也不回复」。
                 //   现在两条路一致，本地也每 token 即时上屏。
                 val emitStreamToken: (String) -> Unit = { acc ->
+                    fire(QuroAssistantStreamEvent.TextAccumulated(acc))
                     // 首个 token：创建可见占位气泡；其后增量更新内容。
                     // 节流 emit 到 ~100ms（≈10 帧/秒）：既让 AI 回复「一点一点」顺滑冒字，
                     // 又不至于每个 token 都触发一次重组把低端机拖卡。
@@ -663,6 +685,7 @@ class QuroAssistant(
                 // 思考流可能先于可见文本到达，此时先建一条空 content 占位气泡；
                 // 后续可见文本流到达时 emitStreamToken 会接着填 content（copy 只改 content，不丢 reasoning）。
                 val emitThinkingToken: (String) -> Unit = { acc ->
+                    fire(QuroAssistantStreamEvent.ThinkingAccumulated(acc))
                     runCatching {
                         // 思考计时起点：首个思考 token 到达（仅记一次）。
                         if (thinkStartMs == 0L) thinkStartMs = System.currentTimeMillis()
@@ -715,22 +738,31 @@ class QuroAssistant(
                                 // （用户已确认手机有闪光灯且应用已获 CAMERA 权限）。
                                 // 仍排除 skill__* 技能工具与重型云端专属工具，避免 1.2B 模型工具过多卡死/乱码。
                                 val deviceToolNames = setOf(
-                                    "toggle_flashlight", "vibrate",
+                                    // 🔴 2026-11-12：toggle_flashlight 已并入 permissions（action=flashlight）。
+                                    // 白名单里写旧名会被 coreSpecs 过滤掉 → 离线模型「打开手电筒」直接失明。
+                                    "permissions",
+                                    "vibrate",
                                     "get_battery", "get_wifi_info", "get_network_info", "get_sensors",
                                     "clipboard",
-                                    "list_installed_apps", "launch_app", "search_and_launch_app",
+                                    "list_installed_apps", "launch_app",
                                     "get_active_notifications", "get_bluetooth_status",
                                     "get_current_time", "get_device_info", "calculate",
                                     "speak", "alarm_clock",
                                     // ACI（本地 AIDL，非云端专属）与 工作区（本地文件，非云端专属）
                                     // 必须进本地工具集，否则离线模型完全看不到这些工具 → 表现为「AI 根本不用」。
-                                    "aci_list", "aci_call",
+                                    // 🔴 2026-11-12：合体后唯一入口是 aci（aci_list/aci_call 已降级为
+                                    // 内部实现，不在 coreSpecs 里）；继续写旧名会被 filter 掉 → 离线模型
+                                    // 直接失明。这里必须用合体名。
+                                    "aci",
                                     "file_write", "file_read", "list_dir"
                                 )
                                 val offlineSpecs = buildList {
                                     addAll(registry.coreSpecs().filter { it.name in deviceToolNames })
                                     if (autoSaveMemory) {
-                                        addAll(registry.fullSpecs().filter { it.name.startsWith("memory_") })
+                                        // 🔴 记忆入口合体后只剩 `memory` 一个名字。
+                                        // 原来按前缀 `memory_` 过滤，合体后一条都匹配不到，
+                                        // 于是「离线 + 自动存记忆」组合下离线模型根本没有记忆工具。
+                                        addAll(registry.fullSpecs().filter { it.name == "memory" })
                                     }
                                 }
                                 if (offlineSpecs.isNotEmpty()) QuroLocalToolsCodec.encodeTools(offlineSpecs) else null
@@ -964,6 +996,13 @@ class QuroAssistant(
                         // 轨迹：把工具调用作为「行动」写入 AI 执行轨迹总线（终端改造后的可视化数据源）
                         callsWithId.forEach { c ->
                             QuroAgentTrace.action("tool", "调用 ${c.name}", c.arguments)
+                            fire(
+                                QuroAssistantStreamEvent.ToolStarted(
+                                    callId = c.id,
+                                    name = c.name,
+                                    argsPreview = c.arguments.take(240),
+                                )
+                            )
                         }
                         if (roundReasoning != null) {
                             // ⚠️ 清洗思考文本里的 HTML 标签，避免原始 ``/`` 等泄漏到「执行轨迹」面板
@@ -977,6 +1016,9 @@ class QuroAssistant(
                         // 工具执行异常不得上抛：降级为每个 call 各一条错误结果，保持 id 配对正确，
                         // 让 LLM 能看到错误并自行兜底答复。
                         val t0 = System.currentTimeMillis()
+                        // tool_router(action=call) 转发后的真实目标名，按外层 call id 索引：
+                        // 结果信封要显示真实执行的工具，加载标记也只能在成功后写。
+                        val forwardedTargets = HashMap<String, String>()
                         // 🔧 渐进式工具披露：tool_router 调用由 router 处理（返回目录/加载工具），
                         // 不进 engine.execute（它不是真实可执行工具）。其余正常执行。
                         val hasSubAgent = callsWithId.any { it.name == SUBAGENT_TOOL_NAME }
@@ -985,7 +1027,44 @@ class QuroAssistant(
                             val normalCalls = ArrayList<QuroToolCall>()
                             callsWithId.forEach { c ->
                                 when (c.name) {
-                                    "tool_router" -> byId[c.id] = QuroToolResult(c.name, activeToolRouter!!.handle(c.name, c.arguments))
+                                    "tool_router" -> {
+                                        // 发现与调用合并：action=call 直接转成一次真实工具执行，
+                                        // 仍走 engine.execute（审批 / 超时 / 并发调度全部沿用），
+                                        // 不再让模型「查一轮、加载一轮、第三轮才能动手」。
+                                        val args = runCatching { org.json.JSONObject(c.arguments) }
+                                            .getOrElse { org.json.JSONObject() }
+                                        if (args.optString("action").equals("call", ignoreCase = true)) {
+                                            val forwarded = QuroToolRouter.parseForwardCall(args)
+                                            if (forwarded == null) {
+                                                byId[c.id] = QuroToolResult.Failed(
+                                                    "bad_arguments", "call 需要 name（工具名）与 arguments（参数对象）"
+                                                )
+                                            } else {
+                                                val (target, targetArgs) = forwarded
+                                                // 只放行本轮目录里可见、且注册表里确有实现的目标：
+                                                // 否则被人格分类屏蔽/刻意隐藏的工具能借路由通道绕过裁剪。
+                                                val allowed = activeToolRouter?.isCallableTarget(target) == true &&
+                                                    QuroToolRegistry.active?.get(target) != null
+                                                if (!allowed) {
+                                                    byId[c.id] = QuroToolResult.Failed(
+                                                        "tool_not_available",
+                                                        "工具「$target」不在当前可用清单中。先用 " +
+                                                            "match_intent(intent=...) 或 list_tools(category=...) 查真实工具名。",
+                                                    )
+                                                } else {
+                                                    // 保留原 call id，结果才能回填到这条调用上。
+                                                    normalCalls.add(c.copy(name = target, arguments = targetArgs))
+                                                    forwardedTargets[c.id] = target
+                                                }
+                                            }
+                                        } else {
+                                            byId[c.id] = QuroToolResult(
+                                                c.name,
+                                                activeToolRouter?.handle(c.name, c.arguments)
+                                                    ?: "工具路由未就绪",
+                                            )
+                                        }
+                                    }
                                     SUBAGENT_TOOL_NAME -> byId[c.id] = QuroToolResult(c.name, runSubAgent(c.arguments, cfg, context, effTemperature, effMaxTokens))
                                     else -> normalCalls.add(c)
                                 }
@@ -1003,7 +1082,14 @@ class QuroAssistant(
                                         )
                                         }
                                     }
-                                    .forEachIndexed { i, r -> byId[normalCalls[i].id] = r }
+                                    .forEachIndexed { i, r ->
+                                        val id = normalCalls[i].id
+                                        byId[id] = r
+                                        // 只有真正执行成功才标记「已加载」：审批被拒、超时、
+                                        // 目标不存在时不能把名字写进下一轮的 tools 字段。
+                                        val target = forwardedTargets[id]
+                                        if (target != null && r.ok) activeToolRouter?.markLoaded(target)
+                                    }
                             }
                             // N4：「无结果」是闭环内部的配平兜底，同样按失败回喂，避免模型收到一句
                             // 无从下手的「无结果」后开始盲目重试。
@@ -1104,7 +1190,7 @@ class QuroAssistant(
                                     role = "tool",
                                     // 工具与环境层出口：模型看到的统一信封；
                                     // 头部工具名取 call.name（Error 工厂把 r.name 写成了 "error"）
-                                    content = QuroToolEnvelope.of(call.name, r),
+                                    content = QuroToolEnvelope.of(forwardedTargets[call.id] ?: call.name, r),
                                     toolCallId = call.id,
                                     toolLabel = r.name,
                                     hidden = true,
@@ -1154,6 +1240,14 @@ class QuroAssistant(
                         // 轨迹：把工具执行结果写入总线
                         callsWithId.zip(results).forEach { (c, r) ->
                             QuroAgentTrace.result("tool", c.name, r.result)
+                            fire(
+                                QuroAssistantStreamEvent.ToolFinished(
+                                    callId = c.id,
+                                    name = c.name,
+                                    resultSummary = r.result.take(240),
+                                    success = r.ok,
+                                )
+                            )
                         }
                         // 🔁 工具调用重复 → 区分「成功重复」与「失败重试」（非代码强制中断）：
                         // 模型「连续请求完全相同的同一组工具调用」（name+arguments 一致）本身不等于出错——
@@ -1366,10 +1460,10 @@ class QuroAssistant(
                                     )
                                 )
                                 emit()
-                                OrchestrationTrace.execute("web_search", "自由编排·联网查证", q.take(80))
+                                OrchestrationTrace.execute("web", "自由编排·联网查证", q.take(80))
                                 ToolOutcome.Success(bundle.context)
                             } else {
-                                OrchestrationTrace.execute("web_search", "自由编排·联网查证为空", q.take(80))
+                                OrchestrationTrace.execute("web", "自由编排·联网查证为空", q.take(80))
                                 ToolOutcome.Success("（联网查询未获得可用结果，请基于已有知识作答）")
                             }
                         }
@@ -1604,10 +1698,11 @@ class QuroAssistant(
     private val SUBAGENT_SAFE_TOOLS = setOf(
         "get_current_time", "calculate", "get_device_info", "get_battery",
         "get_network_info", "get_wifi_info",
-        "web_search", "read_url", "http_request",
-        // 🔴 2026-11-07：knowledge_search 已并入 knowledge_manage，补上合体名，
-        //    否则子智能体「查本地知识库」能力被静默丢弃。
-        "knowledge_search", "knowledge_rag_search", "memory_search", "knowledge_manage",
+        // 🔴 2026-11-12：web_search / read_url 已并入 web，memory_search / knowledge_rag_search /
+        // knowledge_manage 已并入 memory。白名单里留着旧名 = 子智能体这两大类能力被静默丢弃
+        // （specs 里根本没有这些名字，filter 后为空），表现为「子智能体不会上网、不会查记忆」。
+        "web", "http_request",
+        "memory", "knowledge_search",
         "file_read", "list_dir", "file_info",
         "github_search", "github_read", "crossref_search",
     )
@@ -1726,17 +1821,26 @@ class QuroAssistant(
                     // 工具调用也要逐条进对话框：用户要看到子智能体「干了什么」，
                     // 而不只是它调用后的结论。
                     publish(res.content ?: "", res.reasoning, toolCalls = calls)
+                    // 同一响应里的多个调用整批交给引擎，与主循环一致：只读并发、写串行、
+                    // 共用整轮时间预算。旧实现逐个 execute，把一次批量拆成 N 次独立调度。
+                    val safeCalls = calls.filter { it.name in SUBAGENT_SAFE_TOOLS }
+                    val safeResults: List<QuroToolResult> = if (safeCalls.isEmpty()) {
+                        emptyList()
+                    } else {
+                        runCatching { engine.execute(context, safeCalls) }
+                            // 用户停止原样上抛，不吞成错误结果。
+                            .getOrElse { e ->
+                                if (e is CancellationException) throw e
+                                safeCalls.map { QuroToolResult.Error("子智能体工具执行异常：${e.message}") }
+                            }
+                    }
+                    var safeIdx = 0
                     val results = calls.map { c ->
-                        if (c.name in SUBAGENT_SAFE_TOOLS) {
-                            runCatching { engine.execute(context, listOf(c)) }
-                                // 🔴 issue #11 问题 8：用户停止原样上抛，不吞成错误结果。
-                                .getOrElse { e ->
-                                    if (e is CancellationException) throw e
-                                    listOf(QuroToolResult.Error("子智能体工具执行异常：${e.message}"))
-                                }
-                                .firstOrNull() ?: QuroToolResult.Error("子智能体工具无结果")
-                        } else {
+                        if (c.name !in SUBAGENT_SAFE_TOOLS) {
                             QuroToolResult.Error("子智能体无权使用该工具：${c.name}")
+                        } else {
+                            val i = safeIdx++
+                            safeResults.getOrElse(i) { QuroToolResult.Error("子智能体工具无结果") }
                         }
                     }
                     // 🔴 回灌前短路：用户已停止生成时，子智能体的工具结果同样不回灌，

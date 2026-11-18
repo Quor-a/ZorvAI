@@ -665,18 +665,48 @@ function thinkStepsHtml(r,showAll){
 }
 function countThinkSteps(r){ return thinkCleanSteps(r).length; }
 
-/** 工具展开内容：每个工具一张卡（原生 ToolCallGroup 的网页对等实现）。 */
+/** 工具展开内容：按一次调用归组，占位与结果合成一张卡，重复执行显示 ×N。 */
 function toolsHtml(calls){
-  var h="";
+  var grouped={},order=[];
   (calls||[]).forEach(function(tc){
+    var k=(tc.name||"tool")+"|"+String(tc.arguments||"");
+    var now=!(tc.result===null||tc.result===undefined||tc.result==="");
+    var g=grouped[k];
+    if(!g){
+      var hist=(tc.resultHistory||[]).slice();
+      if(now&&hist.length===0) hist.push(String(tc.result));
+      grouped[k]={name:tc.name||"tool",arguments:tc.arguments,result:tc.result,
+                  durationMs:tc.durationMs||0,count:tc.repeatCount||1,resultHistory:hist};
+      order.push(k);
+      return;
+    }
+    if(g.resultHistory.length===0&&now){
+      g.result=tc.result; g.durationMs=tc.durationMs||0; g.resultHistory=[String(tc.result)];
+    } else if(now){
+      g.count++; g.resultHistory.push(String(tc.result)); g.result=tc.result;
+      g.durationMs=Math.max(g.durationMs||0,tc.durationMs||0);
+    }
+  });
+  var h="";
+  order.forEach(function(k){
+    var tc=grouped[k];
     var done=!(tc.result===null||tc.result===undefined||tc.result==="");
+    var hist=tc.resultHistory,rh="";
+    if(hist.length>1){
+      hist.forEach(function(r,i){
+        rh+='<div class="lb">结果（第 '+(i+1)+' 次，共 '+hist.length+' 次）</div><pre>'+esc(r)+'</pre>';
+      });
+    } else if(done&&String(tc.result)!==""){
+      rh='<div class="lb">结果</div><pre>'+esc(String(tc.result))+'</pre>';
+    }
     h+='<div class="tool'+(done?" ok":"")+'">'+
-      '<div class="tool-h"><span class="tool-n">'+esc(tc.name||"tool")+'</span>'+
+      '<div class="tool-h"><span class="tool-n">'+esc(tc.name)+'</span>'+
+      (tc.count>1?'<span class="tool-x">×'+tc.count+'</span>':'')+
       '<span class="tool-s">'+(done?"完成":"运行中")+'</span>'+
       '<span class="tool-d">'+(tc.durationMs?(tc.durationMs/1000).toFixed(1)+"s":"")+'</span></div>'+
       '<div class="tool-b">'+
       (tc.arguments?'<div class="lb">参数</div><pre>'+esc(String(tc.arguments))+'</pre>':'')+
-      ((done&&String(tc.result)!=="")?'<div class="lb">结果</div><pre>'+esc(String(tc.result))+'</pre>':'')+
+      rh+
       '</div></div>';
   });
   return h;
@@ -904,7 +934,8 @@ function renderTools(nd,m){
   var sig=calls.map(function(t){
     return (t.name||"")+"|"+(t.result===null||t.result===undefined?"r":"d")+
            "|"+String(t.result===null||t.result===undefined?"":t.result).length+
-           "|"+(t.durationMs||0);
+           "|"+(t.durationMs||0)+"|"+String(t.arguments||"").length+
+           "|"+(t.repeatCount||1)+"|"+((t.resultHistory||[]).length);
   }).join("~");
   if(!nd.toolsChip){
     var chip=el("button","nchip tools");

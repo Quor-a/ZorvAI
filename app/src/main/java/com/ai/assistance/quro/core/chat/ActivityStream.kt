@@ -79,6 +79,13 @@ enum class ActivityCategory(
             "exec_command" to "command",
             "command" to "command",
             "terminal" to "command",
+            "shizuku" to "command",
+            "root" to "command",
+            "permissions" to "settings",
+            "screen" to "screen",
+            "keyboard" to "screen",
+            "aci" to "aci",
+            "memory" to "memory",
             "termux" to "command",
             "quroterm_exec" to "command",
             "run_code" to "command",
@@ -113,7 +120,20 @@ enum class ActivityCategory(
         }
 
         /** 工具名 → 活动类别。未知工具一律归 [TOOL]（「调用了 N 个工具」）。 */
-        fun ofTool(toolName: String?): ActivityCategory {
+        fun ofTool(toolName: String?, arguments: String? = null): ActivityCategory {
+            val raw = toolName?.trim()?.lowercase(Locale.ROOT).orEmpty()
+            // 合体工具一个名字覆盖多种动作，按 action 细分：否则「写入 1 个文件」
+            // 会退化成「调用了 1 个工具」，活动流汇总与详情页的「在工作区打开」都会丢。
+            if (raw == "workspace") {
+                val action = runCatching {
+                    org.json.JSONObject(arguments.orEmpty()).optString("action", "")
+                }.getOrDefault("").trim().lowercase(Locale.ROOT)
+                return when (action) {
+                    "write", "doc", "write_and_render" -> WRITE_FILE
+                    "read", "list", "render", "doc_view" -> READ_FILE
+                    else -> TOOL
+                }
+            }
             val n = normalizeToolName(toolName)
             return when {
                 n.isEmpty() -> TOOL
@@ -162,6 +182,12 @@ data class ActivityEntry(
     val failed: Boolean = false,
     /** 思考条目专用：这一段思考的耗时（毫秒）。 */
     val thinkDurationMs: Long = 0L,
+    /** 稳定分组键（与 ToolCallUi.id 同源），用于按一次调用归组去重。 */
+    val toolCallId: String = "",
+    /** 同一动作重复执行次数；>1 时活动行显示 ×N，而不是平铺成多行。 */
+    val repeatCount: Int = 1,
+    /** 折叠后仍保留每次执行的结果，详情里逐次列出。 */
+    val resultHistory: List<String> = emptyList(),
 ) {
     /** 是否是「思考」条目（渲染成大脑图标 + 「思考了 N秒」）。 */
     val isThink: Boolean get() = category == ActivityCategory.THINK

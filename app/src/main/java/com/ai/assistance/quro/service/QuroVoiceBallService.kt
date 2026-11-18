@@ -9,7 +9,11 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import android.os.Build
 import android.net.Uri
 import android.provider.Settings
@@ -85,6 +89,11 @@ import com.ai.assistance.quro.genui.aiapp.ui.PetPrefs
 import com.ai.assistance.quro.genui.sdk.components.PetPhase
 import com.ai.assistance.quro.genui.sdk.components.PetSpec
 import com.ai.assistance.quro.genui.sdk.components.PetSprite
+import com.ai.assistance.quro.genui.sdk.components.PetPackAnimDef
+import com.ai.assistance.quro.genui.sdk.components.PetSpriteFrames
+import com.ai.assistance.quro.core.pet.PetAppearance
+import com.ai.assistance.quro.core.pet.PetAppearanceResolver
+import com.ai.assistance.quro.core.pet.QuroPetStateBus
 import com.ai.assistance.quro.activity.QuroMainActivity
 import com.ai.assistance.quro.core.tools.QuroVoiceStyle
 import com.ai.assistance.quro.core.tools.QuroCloudTtsCatalog
@@ -93,6 +102,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.withContext
 import kotlin.math.hypot
 import kotlinx.coroutines.launch
 
@@ -123,15 +133,15 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
     private var listening by mutableStateOf(false)
     private var status by mutableStateOf("点我说话")
 
-    // ── 桌面宠物状态：与语音球状态机映射，驱动 PetSprite 的 PetPhase / 气泡 ──
-    /** 当前宠物形象（每次 addBall 时从 PetPrefs 重读，设置页切换后即时生效）。 */
-    private var petSpec by mutableStateOf<PetSpec?>(null)
-    /** 宠物当前阶段（THINKING/TOOL_CALLING/GENERATING/IDLE）。 */
-    private var petPhase by mutableStateOf(PetPhase.IDLE)
+    // ── 宠物模式：形象与状态都取自桌宠共用的单真源 ──
+    /** 与桌宠悬浮窗完全相同的形象（宠物包雪碧图优先，矢量兜底）。 */
+    private var petAppearance by mutableStateOf<PetAppearance?>(null)
+    /** 宠物包 stand 动作所在的分片位图；IO 解码后回填，null 时走矢量兜底。 */
+    private var petSheet by mutableStateOf<ImageBitmap?>(null)
     /** 宠物模式是否启用（voice_ball_pet && pet_visible）。 */
     private var petMode by mutableStateOf(false)
-    /** 当前正在调用的工具名（供 PetSprite TOOL_CALLING 气泡显示）。 */
-    private var currentToolName by mutableStateOf<String?>(null)
+    /** 形象 IO 解析任务；重挂球 / 服务销毁时取消。 */
+    private var appearanceJob: kotlinx.coroutines.Job? = null
 
     // 实时对话主开关 / 播报中 / 连续空或错计数
     private var conversationActive by mutableStateOf(false)
@@ -180,36 +190,44 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         // 悬浮球由通知栏「语音球」按钮或设置开关显隐，不在此自动挂载——这避免了
         // 「没授权悬浮窗→挂球异常→stopSelf 把整服务和通知一起杀掉→通知栏永不显示」的旧 bug。
         observeAgentTrace()
+        androidx.core.content.ContextCompat.registerReceiver(
+            this, petSettingsReceiver,
+            android.content.IntentFilter().apply {
+                addAction(ACTION_REFRESH_PET_APPEARANCE)
+                addAction(QuroDesktopPetService.ACTION_APPLY_SETTINGS)
+            },
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
     }
 
     /**
-     * 订阅 AI 行动轨迹总线：把工具调用事件映射到宠物阶段（TOOL_CALLING），
-     * 并把工具名透传给 PetSprite 气泡。仅在宠物模式开启时驱动 UI。
+     * 订阅 AI 行动轨迹：语音球对话期间由它主导写共享宠物状态总线。
+     * 桌宠悬浮窗读到的是同一份阶段与工具名，不会再出现「两只宠物各演各的」。
+     * 桌宠服务的轨迹订阅在 voiceBallOwnsState 期间让位，避免两个生产者互相覆盖。
      */
     private fun observeAgentTrace() {
         launch {
             com.ai.assistance.quro.core.agent.QuroAgentTrace.flow.collect { ev ->
-                if (!petMode) return@collect
+                if (!petMode || !QuroPetStateBus.voiceBallOwnsState) return@collect
                 when (ev.kind) {
                     com.ai.assistance.quro.core.agent.QuroAgentTrace.TraceKind.ACTION -> {
-                        // 工具执行（"执行工具：a,b"）→ TOOL_CALLING；解析首个工具名
                         val names = ev.summary
                             .substringAfter("执行工具：", "")
                             .substringBefore("（")
                             .split(',', '，')
                             .map { it.trim() }
                             .filter { it.isNotBlank() }
-                        currentToolName = names.firstOrNull()
-                        petPhase = PetPhase.TOOL_CALLING
-                        // 工具执行完毕，短暂展示后回到思考态（若无新事件则保持，由 process 结束时复位）
+                        QuroPetStateBus.onBusy(names.firstOrNull())
                         mainHandler.postDelayed({
-                            if (petPhase == PetPhase.TOOL_CALLING) petPhase = PetPhase.THINKING
+                            if (QuroPetStateBus.phase == PetPhase.TOOL_CALLING) {
+                                QuroPetStateBus.onBusy(null)
+                            }
                         }, 2600)
                     }
                     com.ai.assistance.quro.core.agent.QuroAgentTrace.TraceKind.STATUS -> {
                         if (ev.summary.contains("响应完成", ignoreCase = true) ||
                             ev.summary.contains("完成", ignoreCase = true) && ev.tag == "assistant") {
-                            currentToolName = null
+                            QuroPetStateBus.toolName = null
                         }
                     }
                     else -> Unit
@@ -265,36 +283,107 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
             .build()
     }
 
+    /**
+     * 设置页切换宠物形象 / 宠物包后即时刷新，不必重挂语音球。
+     * 形象与桌宠共用同一个解析器：装了宠物包就画包里的雪碧图，没装才回退矢量；
+     * 落盘 / 扫描 / 位图解码全在 IO 线程，主线程只负责挂窗。
+     */
+    private fun refreshPetAppearance() {
+        val settings = PetPrefs.load(this)
+        petMode = QuroVoiceFeaturePrefs.getVoiceBallPet(this) && settings.petVisible
+        appearanceJob?.cancel()
+        if (!petMode) {
+            petAppearance = null
+            petSheet = null
+            return
+        }
+        appearanceJob = launch {
+            val appearance = PetAppearanceResolver.load(this@QuroVoiceBallService)
+            val sheet = withContext(Dispatchers.IO) {
+                val m = appearance.pack?.manifest ?: return@withContext null
+                runCatching {
+                    BitmapFactory.decodeFile(
+                        m.sheetFileFor(this@QuroVoiceBallService, "stand").absolutePath,
+                    )?.asImageBitmap()
+                }.getOrNull()
+            }
+            petAppearance = appearance
+            petSheet = sheet
+        }
+    }
+
+    /** 宠物模式开关或宠物包变化时，运行中的语音球直接换形象。 */
+    private val petSettingsReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                ACTION_REFRESH_PET_APPEARANCE,
+                QuroDesktopPetService.ACTION_APPLY_SETTINGS -> {
+                    PetAppearanceResolver.invalidate()
+                    refreshPetAppearance()
+                }
+            }
+        }
+    }
+
     private fun addBall() {
         val lifecycleOwner = QuroServiceLifecycleOwner().apply { create(); resume() }
         composeLifecycleOwner = lifecycleOwner
         val context = ContextThemeWrapper(this, getAppThemeRes())
-        // 挂球时读取宠物设置（设置页切换宠物后需重挂球才生效，与语音球总开关一致）
         val petSettings = PetPrefs.load(this)
-        petMode = QuroVoiceFeaturePrefs.getVoiceBallPet(this) && petSettings.petVisible
-        petSpec = petSettings.current
+        refreshPetAppearance()
         val ball = ComposeView(context).apply {
-            // 官方公开静态 API 直接绑定 owner，无需反射。
-            // 此前误以为 ViewTreeLifecycleOwner 在 Compose BOM + lifecycle 2.9.4 下
-            // 是 internal 不可引用，故走了脆弱的反射桥 → 运行期经常失败 →
-            // owner 缺失 → "ViewTreeLifecycleOwner not found" 闪退。
-            // 实际 androidx.lifecycle.ViewTreeLifecycleOwner.set / .get 是自 lifecycle 2.x
-            // 起就一直 public 的静态方法，直接调用即可。
             setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeViewModelStoreOwner(lifecycleOwner)
             setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             setContent {
-                if (petMode && petSpec != null) {
+                // 桌宠已经挂在桌面时不再画第二只：语音球仍把状态写进共享总线，
+                // 桌宠同步显示思考 / 工具 / 回复姿态与气泡。
+                val desktopShown = QuroPetStateBus.desktopPetShown
+                val appearance = petAppearance
+                val pack = appearance?.pack
+                val sheet = petSheet
+                val busPhase = QuroPetStateBus.phase
+                val busTool = QuroPetStateBus.toolName
+                if (petMode && !desktopShown) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        PetSprite(
-                            spec = petSpec!!,
-                            phase = petPhase,
-                            toolName = currentToolName,
-                            showBubble = petSettings.bubbleEnabled,
-                        )
+                        if (pack != null && sheet != null) {
+                            val animations = remember(pack) {
+                                pack.manifest.animations.mapValues {
+                                    PetPackAnimDef(
+                                        it.value.row, it.value.frames,
+                                        it.value.frameDurationMs, it.value.playback,
+                                    )
+                                }
+                            }
+                            val pose = when (busPhase) {
+                                PetPhase.THINKING, PetPhase.PLANNING -> "think"
+                                PetPhase.TOOL_CALLING -> "usetool"
+                                PetPhase.GENERATING -> "reply"
+                                PetPhase.PERFORMING, PetPhase.DONE -> "celebrate"
+                                else -> "stand"
+                            }
+                            PetSpriteFrames(
+                                bitmap = sheet,
+                                cellWidth = pack.manifest.cellWidth,
+                                cellHeight = pack.manifest.cellHeight,
+                                displayWidth = pack.manifest.displayWidth,
+                                displayHeight = pack.manifest.displayHeight,
+                                animations = animations,
+                                pose = pose,
+                                bubbleText = if (
+                                    appearance?.bubbleEnabled == true &&
+                                    busPhase == PetPhase.TOOL_CALLING && !busTool.isNullOrBlank()
+                                ) "正在调用 $busTool" else "",
+                            )
+                        } else {
+                            PetSprite(
+                                spec = appearance?.spec ?: PetSpec(),
+                                phase = busPhase,
+                                toolName = busTool,
+                                showBubble = appearance?.bubbleEnabled ?: petSettings.bubbleEnabled,
+                            )
+                        }
                         Spacer(Modifier.height(5.dp))
-                        // 与桌宠悬浮层统一的状态胶囊（深墨蓝纯色 + 细描边），
-                        // 替代原来的半透明灰底 + 白字贴片。
                         com.ai.assistance.quro.ui.pet.PetStatusPill(status)
                     }
                 } else {
@@ -436,7 +525,9 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
 
     private fun startConversation() {
         conversationActive = true; emptyCount = 0
-        petPhase = PetPhase.THINKING; currentToolName = null
+        // 仅宠物模式才接管共享状态；普通球模式下桌宠的轨迹订阅照常工作。
+        QuroPetStateBus.voiceBallOwnsState = petMode
+        if (petMode) QuroPetStateBus.onBusy(null)
         updateStatus(qstr(R.string.qk_01757)); startListening()
     }
 
@@ -444,7 +535,8 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         conversationActive = false; listening = false; speaking = false
         onDeviceRecording = false
         ttsBusy = false
-        petPhase = PetPhase.IDLE; currentToolName = null
+        QuroPetStateBus.onIdle()
+        QuroPetStateBus.voiceBallOwnsState = false
         QuroTtsHolder.voiceBallOwnsSpeech = false
         QuroSttHolder.stopListening(); stopCloudRecording(); updateStatus(reason ?: qstr(R.string.qk_00158))
     }
@@ -461,7 +553,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
 
     private fun startListening() {
         try {
-            petPhase = PetPhase.THINKING; currentToolName = null
+            if (QuroPetStateBus.voiceBallOwnsState) QuroPetStateBus.onBusy(null)
             // 读取 STT 引擎选择
             val source = QuroSttPrefs.getSource(this)
             val provider = QuroSttPrefs.getModelProvider(this)
@@ -783,7 +875,8 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
         // 语音球问答属于 CHAT 调用：接入「功能模型配置」的 CHAT 独立模型绑定，让开关真正生效
         val cfg = QuroFunctionModelConfigRepository(applicationContext).resolveConfig(QuroFunctionType.CHAT, baseCfg)
         updateStatus("思考中…")
-        petPhase = PetPhase.THINKING; currentToolName = null
+        QuroPetStateBus.voiceBallOwnsState = petMode
+        if (petMode) QuroPetStateBus.onBusy(null)
         // 绑定到「选中的对话框」：若 ViewModel 已就绪，把语音球对话写入用户当前正在看的那个对话框，
         // 并实时落盘；否则回退到服务自有 store（不与任何对话框绑定，仅保底）。
         val vm = runCatching { QuroChatViewModel.instance }.getOrNull()
@@ -813,7 +906,7 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
                     com.ai.assistance.quro.core.pet.QuroQuietTurn.FAILURE_HINT
                 } else reply
                 mainHandler.post { speaking = true; status = "回复中：${spoken.take(40)}" }
-                petPhase = PetPhase.GENERATING; currentToolName = null
+                QuroPetStateBus.onGenerating()
                 // 朗读协调：若本轮 AI 已通过 speak 工具主动控制播报（多音色/分段/唱歌等），
                 // 语音球自动朗读让位，避免与 speak 工具重复播报同一段回复。
                 if (QuroTtsHolder.consumeSpeakToolFired()) {
@@ -979,6 +1072,12 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
     override fun onDestroy() {
         try {
             conversationActive = false
+            appearanceJob?.cancel()
+            appearanceJob = null
+            // 归还共享状态主导权，避免服务退出后桌宠永远停在上一个阶段。
+            QuroPetStateBus.voiceBallOwnsState = false
+            QuroPetStateBus.onIdle()
+            runCatching { unregisterReceiver(petSettingsReceiver) }
             coroutineContext.cancel()   // 取消所有未完成的协程（含续听/播放）
             composeView?.let { windowManager.removeView(it) }
             composeView = null
@@ -996,6 +1095,8 @@ class QuroVoiceBallService : Service(), CoroutineScope by CoroutineScope(Dispatc
 
     companion object {
         private const val TAG = "QuroVoiceBall"
+        /** 语音球宠物模式开关变化后刷新形象。 */
+        const val ACTION_REFRESH_PET_APPEARANCE = "com.ai.assistance.quro.action.VOICE_BALL_PET_REFRESH"
         private const val NOTIF_ID = 8801
         private const val CHANNEL_ID = "quro_voice_ball"
         /** 通知栏「语音球」动作：切换聆听。 */

@@ -249,18 +249,18 @@
             android:exported="false"
             android:theme="@style/Theme.Quro" />
 
-        <!-- LSPosed / Xposed 模块声明：本应用同时作为可选模块。LSPosed 据此识别并在「模块」列表呈现，
-             经 assets/xposed_init 加载 QuroXposedModule 入口。xposedminversion=82 对应 LSPosed（API 82+）。
-             不定义任何 ai.aci.permission.*（定义权属控制端）。 -->
+        <!-- LSPosed 现代模块声明（API 102）。真正的入口与作用域由
+             META-INF/xposed/{module.prop,java_init.list,scope.list} 声明；
+             下面三项只供旧版管理器识别，xposedminversion 同步抬到 102 避免旧框架误加载。 -->
         <meta-data
             android:name="xposedmodule"
             android:value="true" />
         <meta-data
             android:name="xposedminversion"
-            android:value="82" />
+            android:value="102" />
         <meta-data
             android:name="xposeddescription"
-            android:value="Zorv AI 可选 LSPosed 模块：作用域标记 + 可选跨应用注入/系统重定向桥（opt-in，配置驱动）" />
+            android:value="Zorv AI 系统增强模块：系统助手接管、Gemini 与一圈即搜、无障碍保护（需 LSPosed API 102）" />
 
         <!-- Health Connect：声明本应用支持读写的数据类型（Android 14+ 系统内置；旧版需集成 health-connect-client 库）。
              与 res/values/health_permissions.xml 对应，系统据此在授权页展示可授权项。 -->
@@ -632,6 +632,34 @@
             </intent-filter>
         </service>
 
+        <!-- ①-b 系统级语音交互服务 —— **默认数字助理的真正载体**。
+             🔴 Settings.Secure.voice_interaction_service 只接受 VoiceInteractionService 组件；
+                没有它，把本应用设为默认助理后长按电源键会「按了没反应」。
+             🔴 BIND_VOICE_INTERACTION 是系统签名级权限，只有系统能绑；不要改成 exported 放开。 -->
+        <service
+            android:name=".service.QuroVoiceInteractionService"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/quro_voice_interaction" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".service.QuroVoiceInteractionSessionService"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionSessionService" />
+            </intent-filter>
+        </service>
+
         <!-- ② 外部文本指令 —— Messenger 双向回执 + 广播指令并存 -->
         <service
             android:name=".service.AssistantDirectiveService"
@@ -847,9 +875,11 @@
              系统「无障碍」列表出现 `Zorv AI` 与 `ZorvAI 设备控制` 两项，用户开两个开关才
              一半能力可用——这就是「权限重复没有融合」。现在本服务继承 DeviceControlService，
              一套生命周期同时承担 ZorvAI 工具与 harness 控制面；label 明确写清它管两件事。 -->
+        <!-- 无障碍服务由 system_server（UID 1000）跨进程 bind，exported 必须为 true；
+             访问控制由 BIND_ACCESSIBILITY_SERVICE 系统权限保证，第三方 App 无法绑定。 -->
         <service
             android:name=".service.QuroAccessibilityService"
-            android:exported="false"
+            android:exported="true"
             android:label="@string/qk_04410"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
@@ -1099,16 +1129,9 @@
             </intent-filter>
         </activity>
 
-        <!-- LSPosed 跨应用注入桥接收器：接收 QuroXposedModule 在被钩中目标包 Activity.onCreate 时
-             发出的前台 App 通知广播（导出以便跨 UID 接收；仅处理固定 action，不定义任何 ai.aci.permission.*）。 -->
-        <receiver
-            android:name=".core.privilege.QuroLsposeBridgeReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.ai.assistance.quro.LSPOSED_APP_OPENED" />
-            </intent-filter>
-        </receiver>
+        <!-- 旧版 LSPosed 跨应用注入桥接收器已随 API 82 模块整体退役：
+             模块状态改由 XposedService 的 getScope()/getRunningTargets() 直接读取，
+             不再需要从被 Hook 进程回传广播。 -->
 
         <!-- APK 插件界面承载：插件没有自己的 Activity（独立 APK 不是系统安装的应用，
              系统 PackageManager 里查不到它，Activity 起不来），
@@ -1142,6 +1165,19 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <!-- 厂商助手入口 → Zorv AI 完整运行时的跨进程桥。
+             由 API 102 模块 / system_server / SystemUI / 厂商助手进程经 ContentResolver.call 调用，
+             让小布、超级小爱、Gemini、一圈即搜等入口能跑完整工具循环、Skills、MCP 与记忆。
+             刻意不声明 android:permission：system_server 与厂商 App 不可能持有本应用签名权限，
+             鉴权在 Provider.call 内按 Binder.getCallingUid() 白名单完成（见 QuroAgentBridgeProtocol）。 -->
+        <provider
+            android:name=".core.assistant.QuroAgentBridgeProvider"
+            android:authorities="com.ai.assistance.quro.agent"
+            android:enabled="true"
+            android:exported="true"
+            android:grantUriPermissions="false"
+            android:multiprocess="false" />
 
     </application>
 

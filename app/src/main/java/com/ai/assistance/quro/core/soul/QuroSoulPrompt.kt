@@ -88,7 +88,7 @@ object QuroSoulPromptEngine {
                 }
             }
             sb.append(
-                "\n## 记忆能力\n你可以主动保存用户的偏好/习惯/重要约定等值得长期记住的信息（memory_save），不需要用户明确要求。\n"
+                "\n## 记忆能力\n你可以主动保存用户的偏好/习惯/重要约定等值得长期记住的信息（memory(action=save)），不需要用户明确要求。\n"
             )
         }
 

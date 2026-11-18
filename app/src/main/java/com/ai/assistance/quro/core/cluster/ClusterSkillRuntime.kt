@@ -273,6 +273,8 @@ object ClusterSkillRuntime {
         "move_file", "copy_file", "shell", "run_shell", "exec_shell", "install",
         "uninstall", "screen_tap", "screen_swipe", "screen_input", "input_text",
         "press_key", "open_app", "set_volume", "set_brightness",
+        // 2026-11-11：8 族合体入口（按 action 细分由调用方再判，这里保守算变更型）
+        "shizuku", "root", "permissions", "screen", "keyboard", "aci", "terminal", "memory",
     )
 
     /**

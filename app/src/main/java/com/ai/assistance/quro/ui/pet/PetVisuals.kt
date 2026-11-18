@@ -293,7 +293,7 @@ fun PetBubble(
                         .background(accent, CircleShape)
                 )
                 Spacer(Modifier.width(7.dp))
-                Text(text, color = PetVisuals.On, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 3)
+                Text(text, color = PetVisuals.On, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 4)
             }
         }
         if (tail) {
@@ -487,7 +487,7 @@ fun PetInputPanel(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             PetChip(PetGlyph.EYE, "看屏幕", onScreen, Modifier.weight(1f))
             PetChip(PetGlyph.TASK, "做任务", onTask, Modifier.weight(1f))
-            PetChip(PetGlyph.OPEN, "对话", onOpenChat, Modifier.weight(1f))
+            PetChip(PetGlyph.OPEN, "主界面", onOpenChat, Modifier.weight(1f))
         }
     }
 }

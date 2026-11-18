@@ -65,8 +65,8 @@ object ToolCapabilityDirectory {
          *
          * 与 [VIRTUAL_SCREEN] 的边界：`bg_screen`（后台虚拟屏）**仍单列** [VIRTUAL_SCREEN]，
          * 因为它操作的是用户看不见的独立屏、不抢焦点（见 [ToolTaxonomyTest] 的硬断言）；
-         * 本类收的是「看/操作**用户正在看的那块屏**」以及「理解屏幕画面」的能力（read_screen /
-         * screenshot / tap_screen / ui_tree / visual_analysis / image_recognition …），
+         * 本类收的是「看/操作**用户正在看的那块屏**」以及「理解屏幕画面」的能力（screen 的
+         * read/tap/input/screenshot 等动作、ui_tree、image_recognition …），
          * 这些是会抢焦点、打断用户的主屏操作。`bg_screen` 通过 [getScreenTools] 全家桶与它们互链，
          * 既保证 AI 操控虚拟屏时能发现全部看屏工具，又不破坏「别去抢用户主屏」的语义边界。
          */
@@ -125,7 +125,7 @@ object ToolCapabilityDirectory {
          *  - 与 `schedule_task` 的区别在于：AGENT 定时是**给 AI 自己排期**，WORKFLOW 是**编排用户的任务流**。
          * 混进 BASIC 后 tool_router 按分类列不出来，模型会以为没有自动化能力。
          */
-        WORKFLOW("工作流/自动化", "工作流编排与定时自动化：wf_create/wf_trigger/wf_run_status、schedule_task、tasker"),
+        WORKFLOW("工作流/自动化", "工作流编排与定时自动化：wf、schedule_task、tasker"),
         /**
          * 应用界面导航（打开设置页 / 面板 / 开关）。
          *
@@ -163,26 +163,457 @@ object ToolCapabilityDirectory {
      *
      * 🔴 为什么要有这份清单：用户实测反馈「AI 操控虚拟屏时不知道已有的全部看屏工具」。
      * 这些工具原本散在 ACCESSIBILITY / VISUAL_INTERACT / AI_CAPABILITIES / ADB_DEBUG / VIRTUAL_SCREEN
-     * 多个分类，靠分类检索列不全。这里把**用户主屏的屏感知/屏操作**（read_screen / screenshot /
-     * ui_tree / tap_screen …）、**屏幕画面理解**（visual_analysis / image_recognition）、
+     * 多个分类，靠分类检索列不全。这里把**用户主屏的屏感知/屏操作**（screen /
+     * ui_tree / screen …）、**屏幕画面理解**（screen / image_recognition）、
      * **后台虚拟屏**（bg_screen，本身单列 VIRTUAL_SCREEN）、**ADB 截屏/投屏**（adb_dev / adb_term）
      * 一次性聚齐，供 [getScreenTools] 与 tool_router 的「看屏」别名统一暴露。
      */
     val SCREEN_TOOL_FAMILY: List<String> = listOf(
+        // 🔴 2026-11-12 全局对齐：这里只放**真实存在、且真的会下发**的工具名。
+        // 旧名单里 read_screen / screenshot / tap_screen / input_text / visual_analysis /
+        // get_screen_state / screen_record / take_photo … 已被 screen 吸收降级，
+        // 再列它们的名字只会让 getScreenTools 返回一堆目录里根本查不到的条目
+        // （模型照着调 ⇒ 落到「未知工具」或旧实现，与工具分类构架自相矛盾）。
+        // 屏相关动作现在统一由 screen 的 action 承接。
+        "screen", "keyboard",
         // 后台虚拟屏（非 intrusive，单列 VIRTUAL_SCREEN，是这套能力的入口/锚点）
         "bg_screen",
-        // 读取 / 理解屏幕（用户主屏）
-        "read_screen", "screenshot", "ui_tree", "visual_analysis", "image_recognition",
-        // 操控屏幕（用户主屏）
-        "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen", "input_text",
-        "global_action", "ai_type_text", "ai_press_enter", "ai_press_send",
-        // 屏幕状态 / 录制 / 拍照
-        "get_foreground_app", "get_screen_state", "enable_screen_capture", "screen_record", "take_photo",
-        // ADB 截屏 / 投屏 / 输入（屏幕操作的可选通道）
-        "adb_dev", "adb_term",
+        // 控件树 / 图像识别仍各自独立（没有被合体吸收）
+        "ui_tree", "image_recognition",
+        // ADB 截屏 / 投屏（屏幕操作的可选通道）。
+        // adb_term 已被 terminal 吸收（action=adb），这里只能写 terminal。
+        "adb_dev", "terminal",
     )
 
+    /**
+     * handbook 里出现过的全部工具名。
+     *
+     * 暴露给 `UnifiedToolingContractTest` 用：handbook 的键必须是**真实注册的工具名**。
+     * 键一旦指向已合体/已退役的旧名，这条手写元数据在 [install] 时会被静默丢弃，
+     * 谁也不会发现 —— 之前 33 条条目（占 1/3）就是这么变成死数据的。
+     */
+    internal val handbookToolNames: Set<String> get() = handbook.keys
+
     private val handbook = mapOf(
+        // ═════════════ 2026-11-12 第一批合体承接者补条目（此前靠 autoInfo 兜底，口语召回弱）═══════════════
+        "web" to ToolInfo(
+            name = "web",
+            category = ToolCategory.NETWORK_WEB,
+            description = "联网检索统一入口：action=search 多引擎并发搜索+查询改写+五信号重排（返回带编号引用的事实片段）、read 精读网页正文、search_and_read 搜完直接精读前 N 条",
+            useCases = listOf(
+                "搜一下最新消息", "查实时资料", "这个事现在怎么样了", "联网确认一下",
+                "最新XX是什么", "搜最近的新闻", "查一下价格", "现在多少钱",
+                "读一下这个链接", "打开这个网址看内容", "搜完把前几篇读了"
+            ),
+            examples = listOf(
+                "web(action=\"search\", query=\"2026年最新安卓发布\")",
+                "web(action=\"read\", url=\"https://example.com/article\")",
+                "web(action=\"search_and_read\", query=\"XX评测\", top=3)"
+            ),
+            parameters = mapOf(
+                "action" to "search/read/search_and_read（缺省 search）",
+                "query" to "搜索关键词/问题", "url" to "read 的完整网址", "top" to "search_and_read 精读条数"
+            ),
+            tips = listOf(
+                "全程结构化文本流动，不渲染页面（非浏览器套壳）",
+                "返回带 [n] 编号可溯源引用；时效性问题必搜",
+                "搜完要精读用 search_and_read 一次完成，别拆两次调用"
+            ),
+            relatedTools = listOf("ai_browser", "http_request", "web_crawler"),
+            priority = 5
+        ),
+
+        "alarm_clock" to ToolInfo(
+            name = "alarm_clock",
+            category = ToolCategory.COMMUNICATION,
+            description = "应用内真实响铃闹钟统一入口：action=set 设闹钟（支持重复规则）、cancel 取消、list 列出、timer 倒计时提醒（到点真响，不是静默通知）",
+            useCases = listOf(
+                "设个闹钟", "定个闹钟", "明天七点叫我", "设提醒",
+                "取消闹钟", "列出闹钟", "倒计时10分钟提醒我", "到点提醒我"
+            ),
+            examples = listOf(
+                "alarm_clock(action=\"set\", time=\"07:00\", label=\"起床\")",
+                "alarm_clock(action=\"timer\", seconds=600, label=\"泡面\")",
+                "alarm_clock(action=\"list\")"
+            ),
+            parameters = mapOf(
+                "action" to "set/cancel/list/timer",
+                "time" to "HH:mm", "label" to "标签", "seconds" to "timer 的倒计时秒数"
+            ),
+            tips = listOf(
+                "到点真实响铃，区别于 task_schedule（后台任务触发）",
+                "重复闹钟带 repeat 参数（daily/weekdays/自定义）"
+            ),
+            relatedTools = listOf("task_schedule", "write_calendar"),
+            priority = 4
+        ),
+
+        // ═════════════ 2026-11-12 补：五族合体入口此前**没有书面条目** ═══════════════
+        // 这五族（mcp / linux_env / wf / cms / auth_service）第二批合体时就只落到了 autoInfo 兜底：
+        // description 直接被当成 useCases，没有口语场景、没有示例、没有 tips，
+        // 于是「mcp 接个服务」「跑个流程」「能力模块怎么调」这类最普通的说法全都召不回它们
+        // （同一批还缺 RagConcept 概念映射，两处一起补才算真的接上 RAG）。
+        "mcp" to ToolInfo(
+            name = "mcp",
+            category = ToolCategory.NETWORK_WEB,
+            description = "MCP 外部工具协议统一入口：servers 列服务器、list_tools 列某服务器的工具、call 调外部工具、capabilities 汇总能力、deploy/undeploy 部署端点、list_local 列本机端点、aci_* 走 ACI 桥",
+            useCases = listOf(
+                "接个 MCP 服务", "挂个外部工具", "调一下 MCP 的工具",
+                "看看有哪些服务器", "这个服务器有哪些工具", "部署一个端点",
+                "接上 github 的工具", "接个数据库查一下"
+            ),
+            examples = listOf(
+                "mcp(action=\"servers\")",
+                "mcp(action=\"list_tools\", server=\"github\")",
+                "mcp(action=\"call\", server=\"github\", tool=\"search_repositories\", arguments={q:\"android\"})"
+            ),
+            parameters = mapOf(
+                "action" to "servers/list_tools/call/capabilities/deploy/undeploy/list_local/aci_list/aci_call/aci_bridge",
+                "server" to "服务器别名或地址", "tool" to "要调的外部工具名",
+                "arguments" to "传给外部工具的参数对象", "name" to "部署/卸载的端点名"
+            ),
+            tips = listOf(
+                "调外部工具前先 list_tools 拿准确工具名与参数，别凭印象猜",
+                "带 tool 或 arguments 时默认按 call 处理，其余默认 list_tools",
+                "MCP 与 ACI 分工：MCP 是外部进程/协议，ACI 是同机第三方 App 的 AIDL 能力"
+            ),
+            relatedTools = listOf("aci", "http_request"),
+            priority = 4
+        ),
+
+        "linux_env" to ToolInfo(
+            name = "linux_env",
+            category = ToolCategory.TERMINAL_LINUX,
+            description = "应用内 Linux 环境（proot + Ubuntu 24.04）统一入口：start 初始化、status 就绪状态、stop 终止会话、run 执行 shell 命令、install 安装环境、pkg apt 包管理、process 查残留进程",
+            useCases = listOf(
+                "在 Linux 里跑个命令", "跑个 Linux 命令", "装个 Ubuntu 环境",
+                "apt 装个包", "Linux 环境好了吗", "跑个 python 脚本",
+                "清理一下后台残留进程"
+            ),
+            examples = listOf(
+                "linux_env(action=\"status\")",
+                "linux_env(action=\"run\", command=\"apt update\")",
+                "linux_env(action=\"pkg\", package=\"python3-pip\")",
+                "linux_env(action=\"run\", command=\"python3 script.py\")"
+            ),
+            parameters = mapOf(
+                "action" to "start/status/stop/run/install/pkg/process（缺省 status）",
+                "command" to "run 的 shell 命令", "package" to "install/pkg 的包名"
+            ),
+            tips = listOf(
+                "这是 proot Ubuntu，与 Termux 官方 bootstrap（termux 工具）不是同一套环境",
+                "首次使用先 action=install 装环境，再 run；环境没装好时命令会「找不到」",
+                "标准 Ubuntu 布局（/root、/etc/apt）才用它；只要 pkg/PREFIX 语义用 termux"
+            ),
+            relatedTools = listOf("terminal", "termux", "shizuku"),
+            priority = 4
+        ),
+
+        "wf" to ToolInfo(
+            name = "wf",
+            category = ToolCategory.WORKFLOW,
+            description = "工作流引擎统一入口：create 创建工作流（给 spec）、trigger 点燃运行（给 id）、status 查询运行状态（给 id）",
+            useCases = listOf(
+                "做个工作流", "编排一套流程", "按步骤自动跑",
+                "把这几步串起来执行", "刚才那个流程跑完了吗", "再跑一遍那个流程"
+            ),
+            examples = listOf(
+                "wf(action=\"create\", spec={...})",
+                "wf(action=\"trigger\", id=\"wf_123\")",
+                "wf(action=\"status\", id=\"wf_123\")"
+            ),
+            parameters = mapOf(
+                "action" to "create/trigger/status（缺省 status）",
+                "id" to "工作流 id（trigger/status 必填）", "spec" to "create 的工作流定义对象"
+            ),
+            tips = listOf(
+                "create 返回 id 后要留住，trigger / status 都靠它",
+                "与 alarm_clock / task_schedule 区别：这是「一串动作的编排」，不是单点提醒"
+            ),
+            relatedTools = listOf("cms", "terminal"),
+            priority = 3
+        ),
+
+        "cms" to ToolInfo(
+            name = "cms",
+            category = ToolCategory.CMS_DEVELOPMENT,
+            description = "能力模块（CMS）统一入口：list 列模块、call 调用模块、status 状态、logs 日志、result 结果、run_dag 按依赖跑一组命令、deploy/undeploy 部署卸载终端模块、toolbox 工具箱、engine_status 引擎状态、priv_status 特权通道自查",
+            useCases = listOf(
+                "有哪些能力模块", "跑一下那个模块", "调个模块看看结果",
+                "看模块日志", "按依赖跑一组命令", "部署终端模块",
+                "引擎状态怎么样", "特权通道通不通"
+            ),
+            examples = listOf(
+                "cms(action=\"list\")",
+                "cms(action=\"call\", name=\"module_x\", arguments={...})",
+                "cms(action=\"run_dag\", dag=[{...},{...}])",
+                "cms(action=\"logs\", name=\"module_x\")"
+            ),
+            parameters = mapOf(
+                "action" to "list/call/status/logs/result/run_dag/deploy/undeploy/toolbox/engine_status/priv_status",
+                "name" to "模块名", "arguments" to "call 传给模块的参数对象",
+                "dag" to "run_dag 的依赖节点数组"
+            ),
+            tips = listOf(
+                "先 list 拿模块名，再 call；盲猜模块名必失败",
+                "跑完看结果用 result（结构化产物）而不是 logs（文本日志）",
+                "需要「先自查权限再跑」用 priv_status，别直接撞权限错误"
+            ),
+            relatedTools = listOf("wf", "terminal", "permissions"),
+            priority = 3
+        ),
+
+        "auth_service" to ToolInfo(
+            name = "auth_service",
+            category = ToolCategory.SECURITY,
+            description = "第三方服务授权保险库统一入口：add 新增凭证、list 列举、remove 移除；给需要 token / api key 的外部服务提供统一存放，不在会话里明文裸奔",
+            useCases = listOf(
+                "存个 api key", "把这个 token 存起来", "看看存了哪些授权",
+                "删掉那个凭证", "接第三方服务要授权"
+            ),
+            examples = listOf(
+                "auth_service(action=\"list\")",
+                "auth_service(action=\"add\", name=\"github\", credential=\"ghp_...\")",
+                "auth_service(action=\"remove\", name=\"github\")"
+            ),
+            parameters = mapOf(
+                "action" to "add/list/remove（缺省 list）",
+                "name" to "服务名", "credential" to "add 的凭证内容（token / api key）"
+            ),
+            tips = listOf(
+                "用户说「接个需要登录的服务」时先 list 看有没有存过，别重复问用户要 token",
+                "凭证只在调用时取用，不要在回复里回显明文"
+            ),
+            relatedTools = listOf("mcp", "http_request", "permissions"),
+            priority = 3
+        ),
+
+        // ═════════════ 2026-11-11 第二批 8 族合体入口（web/mcp/wf/cms/auth_service/linux_env 另见对应段）═══════════════
+        "screen" to ToolInfo(
+            name = "screen",
+            category = ToolCategory.SCREEN_PERCEPTION,
+            description = "屏幕感知与操控统一入口：读控件树、截图、视觉分析、前台应用、点/长按/滑/输入/滚/全局动作、录屏、拍照，以及 read_and_tap / tap_and_read / capture_and_analyze 组合动作",
+            useCases = listOf(
+                "看看屏幕", "读屏", "当前界面是什么", "屏幕内容",
+                "点击", "点一下", "戳一下", "点屏幕上XX",
+                "输入文字", "打字", "填进去", "滑动", "往上翻", "返回", "回桌面",
+                "截个图", "截屏", "屏幕截图", "录屏", "拍照",
+                "这屏幕上是什么", "用视觉看看这个界面", "读一下再点", "点完再看"
+            ),
+            examples = listOf(
+                "screen(action=\"read\")",
+                "screen(action=\"tap\", text=\"确定\")",
+                "screen(action=\"read_and_tap\", text=\"登录\")",
+                "screen(action=\"capture_and_analyze\", question=\"这个页面哪里能下单？\")"
+            ),
+            parameters = mapOf(
+                "action" to "read/foreground/state/screenshot/analyze/photo/authorize/tap/long_press/swipe/input/scroll/global/record_start/record_stop/read_and_tap/tap_and_read/capture_and_analyze",
+                "text" to "tap 按文字找控件 / input 要输入的文本", "x" to "tap 坐标", "y" to "tap 坐标",
+                "question" to "analyze 的视觉提问", "direction" to "swipe/scroll 方向", "op" to "global 动作: back/home/recents/..."
+            ),
+            tips = listOf(
+                "需无障碍服务已授权；操作的是用户正在看的这块屏（后台屏用 bg_screen）",
+                "组合动作一次调用完成「读再点/点再读/截并析」，别拆成多次",
+                "打字进输入框用 screen(action=input)；发消息场景用 keyboard(action=type_and_send)",
+                "动手前先 screen(action=state) 确认亮屏未锁屏 —— 灭屏/锁屏时点击与读屏都会失败，先 wake_device",
+                "操屏前可用 screen(action=foreground) 确认目标 App 已在前台",
+                "截图走 screen(action=screenshot)，需要 base64 直喂视觉模型时用 screenshot_base64",
+                "录屏 screen(action=record_start) 需用户先授权录制屏幕；录完用 record_stop 取回文件",
+                "screen(action=photo) 拍的是真实世界，不是屏幕；要截屏幕用 screenshot",
+                "回桌面/最近任务/通知栏这类系统级动作走 screen(action=global)，比在单个 App 里点更稳",
+                "读到的 ref 优先于坐标；界面一变旧 ref 立即失效，每次操作前重新 read"
+            ),
+            relatedTools = listOf("keyboard", "bg_screen", "permissions"),
+            priority = 4
+        ),
+
+        "keyboard" to ToolInfo(
+            name = "keyboard",
+            category = ToolCategory.SCREEN_PERCEPTION,
+            description = "ZorvAI 智能体键盘（Agent IME）统一入口：把文本打进当前聚焦输入框、按回车、按发送；type_and_send / type_and_enter 一次调用完成",
+            useCases = listOf(
+                "发消息", "把这段话发出去", "帮我回复", "打字发给他",
+                "在输入框里填", "按回车", "发送"
+            ),
+            examples = listOf(
+                "keyboard(action=\"type_and_send\", text=\"好的，稍等\")",
+                "keyboard(action=\"type\", text=\"你好\")"
+            ),
+            parameters = mapOf(
+                "action" to "type/enter/send/type_and_send/type_and_enter",
+                "text" to "type 系列动作要输入的文本"
+            ),
+            tips = listOf(
+                "需启用并切换到『Zorv AI 键盘』输入法",
+                "日常发消息用 type_and_send，不要拆成 type + send 两次"
+            ),
+            relatedTools = listOf("screen"),
+            priority = 3
+        ),
+
+        "permissions" to ToolInfo(
+            name = "permissions",
+            category = ToolCategory.SYSTEM_CONTROL,
+            description = "手机权限与系统策略统一入口：CMS 权限模式自查、设备管理员状态、锁屏、摄像头禁用/恢复、手电开关、系统设置（音量/亮度/WiFi/蓝牙/通知/飞行/旋转）、特权执行（Shizuku→ROOT 自动降级）与 check_and_exec 组合",
+            useCases = listOf(
+                "查一下权限", "权限模式是什么", "这个操作需要什么权限",
+                "锁屏", "把屏幕锁了", "关摄像头", "开手电", "关手电",
+                "调音量", "亮度调高", "开WiFi", "开蓝牙", "开飞行模式", "自动旋转",
+                "特权执行这条命令", "以系统权限跑"
+            ),
+            examples = listOf(
+                "permissions(action=\"check\")",
+                "permissions(action=\"check_and_exec\", command=\"settings put global airplane_mode_on 1\")",
+                "permissions(action=\"policy\", setting=\"volume\", op=\"up\")"
+            ),
+            parameters = mapOf(
+                "action" to "check/status/lock/camera/flashlight/policy/exec/run_status/check_and_exec",
+                "setting" to "volume/brightness/wifi/bluetooth/notification/airplane/rotation/flashlight",
+                "op" to "up/down/on/off/toggle/set/...", "command" to "exec/check_and_exec 的 shell 命令"
+            ),
+            tips = listOf(
+                "高风险动作前先 check（CMS 权限模式自查）再动手——check_and_exec 一次完成",
+                "exec 自动走 Shizuku→ROOT 降级链，不用自己挑通道"
+            ),
+            relatedTools = listOf("shizuku", "root", "screen"),
+            priority = 3
+        ),
+
+        "lsposed" to ToolInfo(
+            name = "lsposed",
+            category = ToolCategory.SYSTEM_CONTROL,
+            description = "系统增强模块（LSPosed / Vector，API 102）统一入口：框架通信与真实作用域、哪些进程确实加载了 Hook、系统助手接管 / 一圈即搜 / 无障碍保护三个主开关、长按电源键目标，以及接管入口可用的 Zorv AI 全能力清单与接管记录",
+            useCases = listOf(
+                "小布 / 超级小爱接管", "一圈即搜开不起来", "无障碍服务老是被系统关掉",
+                "长按电源键唤醒谁", "框架连上了吗", "模块作用域配了吗",
+                "接管到底有没有生效", "现在跑的是哪个模型和工具",
+            ),
+            examples = listOf(
+                "lsposed(action=\"status\")",
+                "lsposed(action=\"enable\", capability=\"hook_vendor_assistant_takeover\")",
+                "lsposed(action=\"set_power_target\", target=\"quro\")",
+                "lsposed(action=\"capabilities\")",
+                "lsposed(action=\"inbox\", limit=5)",
+            ),
+            parameters = mapOf(
+                "action" to "status/scope/enable/disable/set_power_target/request_scope/capabilities/inbox",
+                "capability" to "enable|disable 必填，键名取自 status 的 capabilities",
+                "target" to "set_power_target 必填：vendor/gemini/quro",
+                "limit" to "inbox 可选，默认 10，上限 30",
+            ),
+            tips = listOf(
+                "服务连接 ≠ 模块已启用：要看 scope 里目标进程是否真的加载了 Hook",
+                "接管开关写在 RemotePreferences 里，切换后下一次触发即生效，不用重启目标进程",
+                "接管执行的是完整运行时（工具 / Skills / MCP / 记忆 / Soul），不是裸模型转发",
+                "开关改了没反应，先用 inbox 看最近一次接管是成功还是回落到了厂商原生",
+            ),
+            relatedTools = listOf("permissions", "screen", "root", "shizuku"),
+            priority = 3
+        ),
+
+        "memory" to ToolInfo(
+            name = "memory",
+            category = ToolCategory.KNOWLEDGE_MEMORY,
+            description = "记忆与知识库统一入口：长期记忆（save/list/search/delete）、经验笔记（log/query/correct/version）、本地知识库（kb_*）、本地语义检索（rag*/discover）、私有库只读（db_*）、recall 组合查询",
+            useCases = listOf(
+                "记住这个", "记一下", "别忘了", "存记忆",
+                "之前说的什么", "想不起来", "查记忆", "回忆一下",
+                "记个经验", "这条经验不对，改一下",
+                "知识库里查一下", "语义检索", "按这句话找该用的工具"
+            ),
+            examples = listOf(
+                "memory(action=\"save\", content=\"用户的时区是 UTC+8\")",
+                "memory(action=\"recall\", query=\"上次说的部署步骤\")",
+                "memory(action=\"discover\", query=\"怎么生成海报\")"
+            ),
+            parameters = mapOf(
+                "action" to "save/list/search/delete/log/query/correct/version/kb_add/kb_search/kb_list/kb_delete/rag/rag_index/rag_count/discover/db_list/db_tables/db_schema/db_query/recall",
+                "content" to "save 的内容", "query" to "search/recall/rag 的查询词"
+            ),
+            tips = listOf(
+                "回答前需要回忆时用 recall 一次查长期记忆+经验，不必分两次",
+                "「记住XX」直接 save；带 content 自动按 save、带 query 自动按 recall",
+                "search 只查记忆库、kb_search 才查知识库文档 —— 「之前说过」类问题必须先查 search，不许凭空编",
+                "list 只返回元信息与摘要，要正文用 search；不确定有哪些分组就不带参数直接 list",
+                "delete 不可撤销，先 list 看清要删什么、并向用户确认",
+                "「按一句话找该用哪个工具」用 discover，别用 search"
+            ),
+            relatedTools = listOf("skill", "memory"),
+            priority = 3
+        ),
+
+        "aci" to ToolInfo(
+            name = "aci",
+            category = ToolCategory.APP_MANAGEMENT,
+            description = "ACI 跨应用能力统一入口（本地 AIDL，免 root/免 Shizuku/免无障碍）：list 列第三方 App 能力、call 调用、list_and_call 一次完成、server_* 管理本地 HTTP 端点",
+            useCases = listOf(
+                "让别的App帮忙", "用XX应用的功能", "跨应用调用", "看看其他App能干什么",
+                "打开真实网页", "第三方能力", "发消息给那个应用"
+            ),
+            examples = listOf(
+                "aci(action=\"list\")",
+                "aci(action=\"call\", capability=\"browser_open\", args={url:\"https://example.com\"})",
+                "aci(action=\"list_and_call\", capability=\"browser_open\", args={url:\"https://example.com\"})"
+            ),
+            parameters = mapOf(
+                "action" to "list/call/list_and_call/server_status/server_start/server_stop/server_add/server_remove",
+                "capability" to "call 的能力 id（**纯字符串**，如 \"browser_open\"；不要传对象）",
+                "args" to "call 的能力参数对象", "target_package" to "目标 App 包名（可省略用默认应用）"
+            ),
+            tips = listOf(
+                "call 返回 503 是服务未绑，框架自动重绑后直接重试一次即可，不要改用系统权限工具诊断",
+                "免 root 免 Shizuku 免无障碍，优先于特权通道考虑",
+                "/aci/* 本地 HTTP 端点（默认 8848）已真实桥接 AIDL，外部进程可用"
+            ),
+            relatedTools = listOf("mcp", "launch_app"),
+            priority = 3
+        ),
+
+        "shizuku" to ToolInfo(
+            name = "shizuku",
+            category = ToolCategory.SECURITY,
+            description = "Shizuku 特权通道统一入口（ADB 级 shell，免 root，需用户手动授权）：status 探活、exec 执行命令、root_exec 动作以 root 执行、freeze/unfreeze 冻结解冻应用、install 静默安装、status_and_exec 一次完成",
+            useCases = listOf(
+                "用 Shizuku 执行", "ADB 级权限跑这条命令", "冻结这个应用", "解冻应用", "静默安装",
+                "查 Shizuku 状态", "先探活再执行"
+            ),
+            examples = listOf(
+                "shizuku(action=\"status\")",
+                "shizuku(action=\"exec\", command=\"pm list packages -d\")",
+                "shizuku(action=\"freeze\", package_name=\"com.example\")"
+            ),
+            parameters = mapOf(
+                "action" to "status/grant/exec/root_exec/freeze/unfreeze/install/status_and_exec",
+                "command" to "exec / root_exec 的 shell 命令", "package_name" to "freeze/unfreeze 的包名",
+                "apk_path" to "install 的 APK 路径"
+            ),
+            tips = listOf(
+                "真实系统权限，没有明确目的不要试探；授权必须用户手动点",
+                "先探活再执行用 status_and_exec，不要拆两次"
+            ),
+            relatedTools = listOf("root", "permissions", "terminal"),
+            priority = 3
+        ),
+
+        "root" to ToolInfo(
+            name = "root",
+            category = ToolCategory.SECURITY,
+            description = "ROOT 特权通道统一入口（最高风险，需设备已 Root）：status 检测 ROOT 类型、exec 执行命令、status_and_exec 一次完成",
+            useCases = listOf(
+                "用 root 执行", "以 root 跑命令", "检测 root", "ROOT 通道执行"
+            ),
+            examples = listOf(
+                "root(action=\"status\")",
+                "root(action=\"exec\", command=\"id\")"
+            ),
+            parameters = mapOf(
+                "action" to "status/exec/status_and_exec", "command" to "exec 的 shell 命令"
+            ),
+            tips = listOf("最高风险通道，能用 shizuku/aci 解决就不要动 root"),
+            relatedTools = listOf("shizuku", "permissions"),
+            priority = 4
+        ),
+
         // ═══════════════ Web 应用工程（HTML + Page() + native.* 桥）═══════════════
         "miniapp" to ToolInfo(
             name = "miniapp",
@@ -222,7 +653,7 @@ object ToolCapabilityDirectory {
                     + "要**原生控件**的可交互界面 → genui_agent_open。",
                 "本轮只交付一件：本工具 run 完就收尾，不要再补 HTML 或再调别的画型工具。"
             ),
-            relatedTools = listOf("genui_agent_open", "workspace_write", "ui_dsl_spec"),
+            relatedTools = listOf("genui_agent_open", "workspace", "ui_widget"),
             priority = 4
         ),
 
@@ -282,7 +713,7 @@ object ToolCapabilityDirectory {
                 "prompt 要写清「做什么 + 要哪些功能 + 有哪些数据」，写成「做那个」等于没写。",
                 "调用后本轮立即收尾，不要再补 HTML 或调别的画型工具。"
             ),
-            relatedTools = listOf("miniapp", "ui_dsl_spec"),
+            relatedTools = listOf("miniapp", "ui_widget"),
             priority = 4
         ),
 
@@ -360,29 +791,7 @@ object ToolCapabilityDirectory {
         ),
         
         // ═══════════════ 系统控制 ═══════════════
-        "device_control" to ToolInfo(
-            name = "device_control",
-            category = ToolCategory.SYSTEM_CONTROL,
-            description = qstr(R.string.qk_03697),
-            useCases = listOf("调高音量", "静音", "音量调到最大", "把声音关小"),
-            examples = listOf("volume_control(action=\"set\", level=80)", "volume_control(action=\"mute\")"),
-            parameters = mapOf("action" to "set/mute/unmute", "level" to "音量级别0-100"),
-            tips = listOf("action=set时需要level参数", "action=mute是静音"),
-            relatedTools = listOf("brightness_control"),
-            priority = 3
-        ),
         
-        "wifi_control" to ToolInfo(
-            name = "wifi_control",
-            category = ToolCategory.SYSTEM_CONTROL,
-            description = qstr(R.string.qk_03529),
-            useCases = listOf("开WiFi", "关掉WiFi", "WiFi开一下"),
-            examples = listOf("wifi_control(action=\"enable\")", "wifi_control(action=\"disable\")"),
-            parameters = mapOf("action" to "enable/disable"),
-            tips = listOf("action=enable开启WiFi", "action=disable关闭WiFi"),
-            relatedTools = listOf("bluetooth_control"),
-            priority = 3
-        ),
         
         // ═══════════════ 文件操作 ═══════════════
         "file_write" to ToolInfo(
@@ -393,7 +802,7 @@ object ToolCapabilityDirectory {
             examples = listOf("write_file(path=\"/sdcard/test.txt\", content=\"Hello World\")"),
             parameters = mapOf("path" to qstr(R.string.qk_01054), "content" to "文件内容"),
             tips = listOf("会自动创建缺失的父目录", "路径用绝对路径"),
-            relatedTools = listOf("read_text_file", "workspace_write"),
+            relatedTools = listOf("file_read", "workspace"),
             priority = 4
         ),
         
@@ -417,23 +826,15 @@ object ToolCapabilityDirectory {
             examples = listOf("list_files(path=\"/sdcard/Download\")"),
             parameters = mapOf("path" to "目录路径"),
             tips = listOf("默认列出当前目录", "支持通配符"),
-            relatedTools = listOf("find_files", "browse_files"),
+            relatedTools = listOf("file_info", "file_read"),
             priority = 4
         ),
         
         // ═══════════════ 终端/Linux ═══════════════
-        "terminal_run" to ToolInfo(
-            name = "terminal_run",
-            category = ToolCategory.TERMINAL_LINUX,
-            description = qstr(R.string.qk_03709),
-            useCases = listOf("在终端跑条命令", "执行shell", "df -h看一下"),
-            examples = listOf("terminal_run(command=\"ls -la\")", "terminal_run(command=\"df -h\")"),
-            parameters = mapOf("command" to "要执行的shell命令"),
-            tips = listOf("应用内沙盒执行", "不需要权限", "支持常见Linux命令"),
-            relatedTools = listOf("quroterm_exec", "linux_run"),
-            priority = 4
-        ),
-        
+        // 🔴 2026-11-12：这里原来有一条 `terminal_run` 条目。terminal_run / terminal_exec /
+        // terminal_write / terminal_status 等 10 个终端子工具**从未单独注册**（只注册了
+        // QuroTerminalTool，它们作为它的 action 存在），所以那些名字在注册表里根本查不到。
+        // 目录里给幽灵名留条目，等于把模型往「未知工具」上引。
         "terminal" to ToolInfo(
             name = "terminal",
             category = ToolCategory.TERMINAL_LINUX,
@@ -447,13 +848,20 @@ object ToolCapabilityDirectory {
                 "terminal(action=\"status\")",
                 "terminal(action=\"exec\", command=\"python3 -c 'print(1+1)'\")"
             ),
-            parameters = mapOf("action" to "status/exec/run/write/kill/interrupt/sessions/session_new/session_switch/session_kill", "command" to "exec/run 用的 shell 命令"),
+            parameters = mapOf(
+                "action" to "run/exec/write/kill/status/interrupt/sessions/session_new/session_switch/session_kill/quroterm/adb/tmux/keys/monitor",
+                "command" to "exec/run 用的 shell 命令", "text" to "write 要写入的一行",
+                "id" to "session_switch/session_kill 的会话 id", "name" to "session_new/tmux/keys 的名称",
+                "op" to "adb/tmux/keys 的内部动作"
+            ),
             tips = listOf(
                 "Ubuntu 用 apt 包管理",
-                "exec 的返回带 distro 字段，确认命令实际跑在哪（ubuntu / device）"
+                "exec 的返回带 distro 字段，确认命令实际跑在哪（ubuntu / device）",
+                "用户说「终端 / Termux / 跑个命令」→ 优先 termux；本工具是它的内部驱动，一般不要直接调",
+                "adb / tmux / keys / monitor 已并入本工具，对应旧入口按原名仍可执行"
             ),
-            relatedTools = listOf("quroterm_exec", "linux_run"),
-            priority = 4
+            relatedTools = listOf("termux", "linux_env", "shizuku"),
+            priority = 3
         ),
 
         // Termux = 完整移植的 Termux 官方宿主。与 terminal（自研 PTY 会话）分工：
@@ -498,7 +906,7 @@ object ToolCapabilityDirectory {
                 "只有 bootstrap 半套/缺库（CANNOT LINK 之类）才用 repair。",
                 "环境未解压时会自动后台安装并返回提示，稍后重试即可，**不要反复触发**。"
             ),
-            relatedTools = listOf("terminal", "linux_run", "linux_pkg", "bg_screen"),
+            relatedTools = listOf("terminal", "linux_env", "bg_screen"),
             priority = 5
         ),
 
@@ -508,7 +916,7 @@ object ToolCapabilityDirectory {
             category = ToolCategory.VIRTUAL_SCREEN,
             description = "后台虚拟屏：在一块**用户看不见**的独立虚拟屏上打开 App、读控件树、精确点按、滑动、截图。不抢主屏焦点、不弹输入法、不打断用户正在做的事。开屏需要 Shizuku；点击优先走无障碍手势（不需要 Shizuku）。",
             useCases = listOf(
-                // 触发语：用户这么说话时，必须用本工具，而不是 tap_screen
+                // 触发语：用户这么说话时，必须用本工具，而不是 screen
                 "别打扰我 / 后台帮我操作 / 悄悄做 / 不占我屏幕",
                 "我在忙，你帮我弄一下（用户此刻在别的 App 里）",
                 "后台打开某某 App，做某某步骤",
@@ -538,27 +946,25 @@ object ToolCapabilityDirectory {
                 "duration_ms" to "swipe 时长，默认 300",
             ),
             tips = listOf(
-                // 🔴 触发条件写死，避免模型「看到 tap_screen 就选它」
-                "🔴 **只要用户表达「不要占用我的屏幕 / 我在忙 / 后台做 / 悄悄做」，就必须用本工具**，不要用 `tap_screen`（那会抢焦点、把 App 顶到用户眼前）。",
-                "边界：要操作**用户正看着的那块屏**（「点我屏幕上这个按钮」）→ 用无障碍 `tap_screen`；要**另开一块屏干活** → 用本工具。",
+                // 🔴 触发条件写死，避免模型「看到 screen 就选它」
+                "🔴 **只要用户表达「不要占用我的屏幕 / 我在忙 / 后台做 / 悄悄做」，就必须用本工具**，不要用 `screen`（那会抢焦点、把 App 顶到用户眼前）。",
+                "边界：要操作**用户正看着的那块屏**（「点我屏幕上这个按钮」）→ 用无障碍 `screen`；要**另开一块屏干活** → 用本工具。",
                 "标准流程：`status`（确认屏与 Shizuku）→ `open`（启动目标 App）→ `read`（读控件树，拿 ref 与真实坐标）→ `tap_element(ref)` 或 `tap(x,y)` → **再 `read` 确认界面变了** → 用完 `release`。",
-                "**优先 `read` + `tap_element`**：它给的是控件真实坐标 + 可点/可输/是否勾选，比截图猜坐标准得多、也省 token。只有 `read` 返回「没有可读控件」（界面禁止无障碍读取、或还没渲染完）时才退回 `screenshot` 看画面。",
+                "**优先 `read` + `tap_element`**：它给的是控件真实坐标 + 可点/可输/是否勾选，比截图猜坐标准得多、也省 token。只有 `read` 返回「没有可读控件」（界面禁止无障碍读取、或还没渲染完）时才退回 `screen` 看画面。",
                 "`read` 之后界面若变了，旧 ref 会失效 —— **点之前重新 `read`**，不要复用上一步的 ref 硬点。",
-                "输入文字：`input_text` 走无障碍在焦点控件里输入（不经过系统输入法，主屏不会弹键盘）。目标控件没焦点时先 `tap_element` 点一下它。",
+                "输入文字：`screen` 走无障碍在焦点控件里输入（不经过系统输入法，主屏不会弹键盘）。目标控件没焦点时先 `tap_element` 点一下它。",
                 "`open` 自带兜底：动作前后盯主屏 3 秒，若该 App 被系统丢到了用户主屏，会自动挪回后台屏并在返回里写「已自动挪回」——看到这句说明发生过，**不要重试 open**。",
-                "常见失败与对策：① 返回「特权服务未就绪」→ 让用户开 Shizuku（**不要反复重试**）；② `read` 空 → 换 `screenshot`；③ 返回「已接管 / 已另开一个实例 / 已挪到后台屏」→ **都算成功**，直接 read 继续，不要再 open；④ 返回 code=1 才是真的接管不了（主屏前台在跑且挪不动），此时停手说明；⑤ 需要输入密码/支付/验证码 → 停手，交给用户。",
+                "常见失败与对策：① 返回「特权服务未就绪」→ 让用户开 Shizuku（**不要反复重试**）；② `read` 空 → 换 `screen`；③ 返回「已接管 / 已另开一个实例 / 已挪到后台屏」→ **都算成功**，直接 read 继续，不要再 open；④ 返回 code=1 才是真的接管不了（主屏前台在跑且挪不动），此时停手说明；⑤ 需要输入密码/支付/验证码 → 停手，交给用户。",
                 "任务结束调 `release` 释放屏，别长期占着（占着会一直消耗内存与电量）。",
                 "谁在干活：开屏靠 Shizuku（uid 2000），点击/滑动优先走无障碍手势、失败才回退 Shizuku 注入 —— 所以「Shizuku 在线但点不动」时先查无障碍是否被系统停用。",
             ),
             // 🔴 全家桶互链：AI 操控虚拟屏时，必须能发现「全部看屏工具」，而不只是一两个。
             // 这里把整套屏感知/屏操作能力列全（详见 [SCREEN_TOOL_FAMILY] / [getScreenTools]）。
             relatedTools = listOf(
-                "read_screen", "screenshot", "ui_tree",
-                "tap_screen", "swipe_screen", "long_press_screen", "scroll_screen", "input_text",
-                "global_action", "get_foreground_app", "get_screen_state",
-                "enable_screen_capture", "screen_record", "take_photo",
-                "ai_type_text", "ai_press_enter", "ai_press_send",
-                "visual_analysis", "image_recognition", "adb_dev", "adb_term", "shizuku_status",
+                "screen", "ui_tree",
+                "screen",
+                "keyboard",
+                "screen", "image_recognition", "adb_dev", "terminal", "shizuku",
             ),
             priority = 5
         ),
@@ -592,7 +998,7 @@ object ToolCapabilityDirectory {
                 "local/remote" to "push/pull/install 的路径"
             ),
             tips = listOf(
-                "**方向别搞混**：本工具是「我去调试别人」；`adb_term` 是「本机被调试 / 开本机 tcpip」。",
+                "**方向别搞混**：本工具是「我去调试别人」；本机被调试 / 开本机 tcpip 用 `terminal(action=adb, op=tcp_enable)`。",
                 "不确定怎么做时先 `adb_dev(action=\"guide\")`，里面有完整技术说明。",
                 "USB 直连要求**本机支持 USB Host/OTG**，且对端开着「USB 调试」；只充电的线不行。",
                 "首次连接**对端会弹「允许 USB 调试」**，没人点就会认证失败——要明确告诉用户去点。",
@@ -600,19 +1006,7 @@ object ToolCapabilityDirectory {
                 "网络调试要先在对端执行 `adb tcpip 5555`；无线调试（Android 11+）端口随机，需用户现场抄 IP:端口。",
                 "拔插后 USB deviceName 会变，用 serial 定位设备，不要缓存 deviceId。"
             ),
-            relatedTools = listOf("adb_term", "shizuku_status", "install_app"),
-            priority = 4
-        ),
-
-        "linux_run" to ToolInfo(
-            name = "linux_run",
-            category = ToolCategory.TERMINAL_LINUX,
-            description = qstr(R.string.qk_03602),
-            useCases = listOf("在Linux环境跑XX", "执行个Linux命令", "apt装个包"),
-            examples = listOf("linux_run(command=\"apt update\")", "linux_run(command=\"python3 script.py\")"),
-            parameters = mapOf("command" to "要执行的Linux命令"),
-            tips = listOf("需要Linux环境已安装", "支持apt包管理", "可运行Python/Node等"),
-            relatedTools = listOf("terminal_run", "linux_install"),
+            relatedTools = listOf("terminal", "shizuku"),
             priority = 4
         ),
 
@@ -641,7 +1035,7 @@ object ToolCapabilityDirectory {
                 "标「需要 Shizuku 已授权 / 需要无障碍权限」时，先让用户去设置里授权",
                 "工具名带 mcp__zorvai__ 前缀的是给 harness 用的，同名工具在 ZorvAI 内直接可用"
             ),
-            relatedTools = listOf("harness", "read_screen", "shizuku_exec"),
+            relatedTools = listOf("harness", "screen", "shizuku"),
             priority = 6
         ),
 
@@ -767,17 +1161,6 @@ object ToolCapabilityDirectory {
             priority = 5
         ),
         
-        "linux_install" to ToolInfo(
-            name = "linux_install",
-            category = ToolCategory.TERMINAL_LINUX,
-            description = qstr(R.string.qk_03479),
-            useCases = listOf("装一下Linux环境", "初始化Ubuntu", "安装proot"),
-            examples = listOf("linux_install()"),
-            parameters = emptyMap(),
-            tips = listOf("首次使用需要安装", "安装后可运行Linux命令", "需要网络连接"),
-            relatedTools = listOf("linux_run", "linux_status"),
-            priority = 3
-        ),
 
         "dev_env" to ToolInfo(
             name = "dev_env",
@@ -809,13 +1192,13 @@ object ToolCapabilityDirectory {
                 "source" to "镜像源ID"
             ),
             tips = listOf(
-                "⚠️ 这是终端开发环境管理的唯一工具，CMS相关操作请用 cms_toolbox",
+                "⚠️ 这是终端开发环境管理的唯一工具，CMS 相关操作请用 cms(action=toolbox)",
                 "execute=true 时命令直接在终端执行，输出在终端界面可见",
                 "execute=false 时只返回命令文本",
                 "install 自动配置镜像源后再安装",
                 "source_list/source_select 管理镜像源"
             ),
-            relatedTools = listOf("linux_run", "terminal_run", "cms_toolbox"),
+            relatedTools = listOf("linux_env", "terminal", "cms"),
             priority = 5
         ),
 
@@ -851,33 +1234,9 @@ object ToolCapabilityDirectory {
             useCases = listOf("打开百度", "访问XX网址", "看这个网页"),
             examples = listOf("open_web(url=\"https://www.baidu.com\")"),
             parameters = mapOf("url" to "要打开的网址"),
-            tips = listOf("只能被动展示，不能点击交互", "真正操作网页用aci_call的browser_open"),
-            relatedTools = listOf("ai_browser", "aci_call"),
+            tips = listOf("只能被动展示，不能点击交互", "真正操作网页用 aci(action=call) 调 browser_open"),
+            relatedTools = listOf("ai_browser", "aci"),
             priority = 2
-        ),
-
-        "web_search" to ToolInfo(
-            name = "web_search",
-            category = ToolCategory.NETWORK_WEB,
-            description = "端侧联网检索：多引擎并发搜索 + 查询改写 + 正文密度抽取 + 五信号重排 + 上下文打包，返回带编号引用的事实片段",
-            useCases = listOf("搜一下最新消息", "查实时资料", "这个事现在怎么样了", "联网确认一下", "最新XX是什么"),
-            examples = listOf("web_search(query=\"2026年最新安卓发布\")"),
-            parameters = mapOf("query" to "搜索关键词/问题"),
-            tips = listOf("全程结构化文本流动，不渲染页面（非浏览器套壳）", "AI自主决定是否联网、读哪几条", "返回带 [n] 编号可溯源引用，精读用 read_url"),
-            relatedTools = listOf("read_url", "ai_browser", "http_request"),
-            priority = 5
-        ),
-
-        "read_url" to ToolInfo(
-            name = "read_url",
-            category = ToolCategory.NETWORK_WEB,
-            description = qstr(R.string.qk_03557),
-            useCases = listOf("读一下这个链接", "把这个网页内容提炼给我", "打开XX网址看具体内容"),
-            examples = listOf("read_url(url=\"https://example.com/article\")"),
-            parameters = mapOf("url" to "要精读的网页地址"),
-            tips = listOf("配合 web_search 使用：先搜→挑有价值的→read_url精读", "返回正文要点与可溯源片段"),
-            relatedTools = listOf("web_search", "ai_browser"),
-            priority = 4
         ),
 
         // ═══════════════ 媒体 ═══════════════
@@ -901,14 +1260,17 @@ object ToolCapabilityDirectory {
             examples = listOf("image_recognition(image_path=\"/sdcard/photo.jpg\")"),
             parameters = mapOf("image_path" to qstr(R.string.qk_01046)),
             tips = listOf("支持多种图片格式", "可识别物体、文字、场景"),
-            relatedTools = listOf("image_gen", "visual_analysis"),
+            relatedTools = listOf("image_gen", "screen"),
             priority = 4
         ),
         
         // ═══════════════ UI/卡片 ═══════════════
         "ui_control" to ToolInfo(
             name = "ui_control",
-            category = ToolCategory.UI_CARDS,
+            // 🔴 2026-11-12：UI_CARDS → APP_NAVIGATION。ui_control 的动作全是「打开界面/弹层/
+            // 界面开关/新建清空对话」（界面导航语义），与气泡内富卡片（ui_widget）不是一类；
+            // handbook 优先级高于规则表，旧值会把 APP_NAVIGATION 分类架空成空壳。
+            category = ToolCategory.APP_NAVIGATION,
             description = qstr(R.string.qk_03533),
             useCases = listOf(
                 "打开编辑器/终端/工具箱/知识库",
@@ -967,17 +1329,6 @@ object ToolCapabilityDirectory {
         ),
 
         // ═══════════════ 动态 UI（必备输出）══════════════
-        "ui_dsl_spec" to ToolInfo(
-            name = "ui_dsl_spec",
-            category = ToolCategory.DYNAMIC_UI,
-            description = qstr(R.string.qk_03463),
-            useCases = listOf("要写 quro-ui 界面但不确定节点名/属性", "写动态UI前查规范", "确认某个节点的可配字段"),
-            examples = listOf("ui_dsl_spec()"),
-            parameters = emptyMap(),
-            tips = listOf("写 ```quro-ui 前先调一次，按规范产出", "与 ui_validate 配合：写完自检再发", "这是主动输出动态UI的规范来源"),
-            relatedTools = listOf("ui_validate", "chat_doc"),
-            priority = 5
-        ),
 
         "game_ui" to ToolInfo(
             name = "game_ui",
@@ -987,19 +1338,7 @@ object ToolCapabilityDirectory {
             examples = listOf("game_ui()", "game_ui(section='games')"),
             parameters = mapOf("section" to "overview/board/rules/games/all，默认 overview"),
             tips = listOf("先 game_ui() 拿规范，再用 quro-ui 渲染棋盘/控件", "用 callback 回收用户操作，AI 在对话里维持状态", "棋盘用 game_board 组件，点格自动回发 row/col/index/value", "游戏在 GenUI Agent 中也通用，可 tool_call 调 Agent 能力"),
-            relatedTools = listOf("ui_dsl_spec", "ui_validate", "genui_agent_open"),
-            priority = 5
-        ),
-
-        "ui_validate" to ToolInfo(
-            name = "ui_validate",
-            category = ToolCategory.DYNAMIC_UI,
-            description = qstr(R.string.qk_03580),
-            useCases = listOf("写完 quro-ui JSON 想先验证", "界面渲染报错要定位", "确认节点树是否合法"),
-            examples = listOf("ui_validate(code=\"\"\"{...quro-ui json...}\"\"\")"),
-            parameters = mapOf("code" to "quro-ui JSON 节点树字符串"),
-            tips = listOf("写完动态UI后用它自检，再回给用户", "返回错误会指出具体节点/字段", "与 ui_dsl_spec 配合效果最佳"),
-            relatedTools = listOf("ui_dsl_spec"),
+            relatedTools = listOf("ui_widget", "genui_agent_open"),
             priority = 5
         ),
 
@@ -1034,7 +1373,7 @@ object ToolCapabilityDirectory {
             examples = listOf("node_editor(action=\"create\", name=\"flow1\", nodes=[])"),
             parameters = mapOf("action" to "create/read/write/list", "name" to qstr(R.string.qk_02815), "nodes" to "节点列表"),
             tips = listOf("AI可直接产出/修改节点工程，面板打开自动恢复", "适合可视化编程与流程编排", "导出可转 Mermaid/可视化"),
-            relatedTools = listOf("ui_control", "visual_studio", "ui_widget"),
+            relatedTools = listOf("ui_control", "ui_widget", "node_editor"),
             priority = 4
         ),
 
@@ -1067,271 +1406,37 @@ object ToolCapabilityDirectory {
         ),
         
         // ═══════════════ 知识/记忆 ═══════════════
-        "memory_save" to ToolInfo(
-            name = "memory_save",
-            category = ToolCategory.KNOWLEDGE_MEMORY,
-            description = qstr(R.string.qk_03648),
-            useCases = listOf("记住我喜欢喝咖啡", "把这件事存进记忆", "记下XX偏好"),
-            examples = listOf("memory_save(content=\"用户喜欢喝咖啡\", title=\"用户偏好\")"),
-            parameters = mapOf("content" to "记忆内容", "title" to qstr(R.string.qk_02496), "group" to "分组（可选）"),
-            tips = listOf("自动保存跨会话", "支持标签和分组", "主动保存用户透露的持久信息"),
-            relatedTools = listOf("memory_list", "memory_search"),
-            priority = 5
-        ),
 
         // ── 以下三条是 RAG 全量排查补上的真实缺口 ──
         // 排查方式：对每条工具跑一遍「用户会怎么说」，看它能不能被召回。
-        // `memory_list` / `memory_search` / `memory_delete` 原先**没有** handbook 条目，
+        // `memory` / `memory` / `memory` 原先**没有** handbook 条目，
         // 走 [autoInfo] 兜底 —— 于是 useCases 就是工具自己的 description，
-        // 「在我存过的东西里找一下」这种最普通的话召不回 memory_search，
-        // 而它的姊妹工具 memory_save 反而能召回（因为那条写了 useCases）。
+        // 「在我存过的东西里找一下」这种最普通的话召不回 memory，
+        // 而它的姊妹工具 memory 反而能召回（因为那条写了 useCases）。
         // 这类不一致在旧检索层同样存在，只是没人系统性验证过。
-        "memory_search" to ToolInfo(
-            name = "memory_search",
-            category = ToolCategory.KNOWLEDGE_MEMORY,
-            description = "在已保存的记忆里检索：按关键词/分组/标签找出以前存过的内容",
-            useCases = listOf(
-                "在我存过的东西里找一下",
-                "查一下我之前存的偏好",
-                "搜索记忆里关于XX的记录",
-                "我跟你说过什么关于XX的事"
-            ),
-            examples = listOf("memory_search(query=\"咖啡\")", "memory_search(query=\"地址\", group=\"用户资料\")"),
-            parameters = mapOf("query" to "检索关键词", "group" to "限定分组（可选）", "limit" to "返回条数上限（可选）"),
-            tips = listOf("只查记忆库，不查知识库文档——查文档用 knowledge_search", "「之前说过」类问题必须先查这里，不要凭空编"),
-            relatedTools = listOf("memory_save", "memory_list", "knowledge_search"),
-            priority = 5
-        ),
 
-        "memory_list" to ToolInfo(
-            name = "memory_list",
-            category = ToolCategory.KNOWLEDGE_MEMORY,
-            description = "列出已保存的记忆（可按分组过滤），用于查看当前存了什么",
-            useCases = listOf(
-                "我都存了些什么",
-                "看看我的记忆列表",
-                "有哪些分组",
-                "把之前存的都列出来"
-            ),
-            examples = listOf("memory_list()", "memory_list(group=\"用户资料\")"),
-            parameters = mapOf("group" to "限定分组（可选）", "limit" to "返回条数上限（可选）"),
-            tips = listOf("只列元信息与摘要，要正文用 memory_search", "不确定有哪些分组时直接不带参数调用"),
-            relatedTools = listOf("memory_search", "memory_delete"),
-            priority = 4
-        ),
-
-        "memory_delete" to ToolInfo(
-            name = "memory_delete",
-            category = ToolCategory.KNOWLEDGE_MEMORY,
-            description = "删除指定的记忆条目（按 id 或关键词定位后删除）",
-            useCases = listOf(
-                "把这条记忆删掉",
-                "忘掉我刚才说的那个",
-                "删掉关于XX的记忆",
-                "清理旧记忆"
-            ),
-            examples = listOf("memory_delete(id=\"...\")"),
-            parameters = mapOf("id" to "记忆条目 id", "query" to "按关键词定位（可选）"),
-            tips = listOf("删除不可撤销，执行前应向用户确认", "先用 memory_list 看清楚要删什么"),
-            relatedTools = listOf("memory_list", "memory_search"),
-            priority = 3
-        ),
-
-        "knowledge_manage" to ToolInfo(
-            name = "knowledge_manage",
-            category = ToolCategory.KNOWLEDGE_MEMORY,
-            description = qstr(R.string.qk_03712),
-            useCases = listOf("在我的知识库里搜XX", "查资料（本地文档）", "找下我存过的关于YY的"),
-            examples = listOf("knowledge_search(query=\"Python教程\")"),
-            parameters = mapOf("query" to "搜索关键词"),
-            tips = listOf("搜索本地知识库", "支持语义搜索", "需要先添加知识"),
-            relatedTools = listOf("knowledge_add", "knowledge_rag_search"),
-            priority = 4
-        ),
         
-        "knowledge_add" to ToolInfo(
-            name = "knowledge_add",
-            category = ToolCategory.KNOWLEDGE_MEMORY,
-            description = qstr(R.string.qk_03526),
-            useCases = listOf("把这篇文档加进知识库", "导入这个文件当知识", "存成知识条目"),
-            examples = listOf("knowledge_add(path=\"/sdcard/doc.pdf\", title=\"文档标题\")"),
-            parameters = mapOf("path" to "文档路径", "title" to qstr(R.string.qk_01066)),
-            tips = listOf("支持多种文档格式", "自动建立索引", "支持PDF、Word、TXT等"),
-            relatedTools = listOf("knowledge_search", "knowledge_manage"),
-            priority = 4
-        ),
         
         // ═══════════════ 工作区 ═══════════════
-        "workspace_write" to ToolInfo(
-            name = "workspace_write",
+        "workspace" to ToolInfo(
+            name = "workspace",
             category = ToolCategory.WORKSPACE,
-            description = qstr(R.string.qk_03451),
-            useCases = listOf("把这段代码保存到工作区", "写到我的工程里", "存成文件", "生成个项目放工作区"),
-            examples = listOf("workspace_write(path=\"MyApp/src/Main.java\", content=\"代码内容\")"),
-            parameters = mapOf("path" to "相对路径", "content" to "文件内容", "append" to "是否追加"),
-            tips = listOf("路径是相对工作区根目录", "自动创建缺失目录", "用户可在工具箱-工作区查看"),
-            relatedTools = listOf("workspace_read", "workspace_list"),
+            description = "工作区统一入口：读写列目录、建文档并预览、渲染预览、打开文档、播放媒体，一次调用完成一个动作。",
+            useCases = listOf("把这段代码保存到工作区", "读一下工作区里的文件", "工作区里有什么", "创建文档并预览", "播放工作区里的音乐"),
+            examples = listOf(
+                "workspace(action=write, path=MyApp/src/Main.java, content=...)",
+                "workspace(action=doc, path=index.html, content=...)",
+                "workspace(action=write_and_render, path=index.html, content=...)"
+            ),
+            parameters = mapOf("action" to "工作区动作", "path" to "相对工作区根的路径", "content" to "文件内容"),
+            tips = listOf("doc / write_and_render 一次调用就出预览卡，不用再单独渲染", "路径相对工作区根，用户可在工具箱-工作区查看"),
+            relatedTools = listOf("file_write", "file_read", "list_dir", "build_apk"),
             priority = 5
-        ),
-        
-        "workspace_read" to ToolInfo(
-            name = "workspace_read",
-            category = ToolCategory.WORKSPACE,
-            description = qstr(R.string.qk_03496),
-            useCases = listOf("读一下工作区里的XX文件", "看看MyApp/src/Main.java现在内容", "工作区那个配置长啥样"),
-            examples = listOf("workspace_read(path=\"MyApp/src/Main.java\")"),
-            parameters = mapOf("path" to "相对路径"),
-            tips = listOf("路径是相对工作区根目录", "读取完整内容"),
-            relatedTools = listOf("workspace_write", "workspace_list"),
-            priority = 4
-        ),
-        
-        "workspace_list" to ToolInfo(
-            name = "workspace_list",
-            category = ToolCategory.WORKSPACE,
-            description = qstr(R.string.qk_03727),
-            useCases = listOf("工作区里有什么", "列出我的工程", "看下MyApp目录结构", "工作区根目录有哪些文件"),
-            examples = listOf("workspace_list()", "workspace_list(path=\"MyApp/src\")"),
-            parameters = mapOf("path" to "相对路径（可选）"),
-            tips = listOf("默认列根目录", "可指定子目录"),
-            relatedTools = listOf("workspace_write", "workspace_read"),
-            priority = 4
         ),
 
         // ═══════════════ 看屏 / 屏幕操作（SCREEN_PERCEPTION 全家桶的补充条目）═══════════════
         // 这些工具原本没有手写条目，靠命名规则兜底归类；现补齐高质量元数据并统一归到 SCREEN_PERCEPTION，
         // 让 tool_router 的 list_tools(category="看屏/屏幕操作") 一次列全，AI 操控虚拟屏时不再漏掉它们。
-        "screenshot_base64" to ToolInfo(
-            name = "screenshot_base64",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = "截图并返回 base64 编码（适合直接塞进多模态模型的上下文，无需落盘文件）。",
-            useCases = listOf("截个图给模型看", "把当前界面转成 base64 投喂视觉模型", "需要图片而非文件路径时"),
-            examples = listOf("screenshot_base64()"),
-            parameters = emptyMap(),
-            tips = listOf("与 screenshot 的区别：本工具返回 base64 字符串而非文件路径", "适合紧接着 visual_analysis / image_recognition 使用"),
-            relatedTools = listOf("screenshot", "visual_analysis", "image_recognition"),
-            priority = 4
-        ),
-
-        "get_foreground_app" to ToolInfo(
-            name = "get_foreground_app",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = "获取当前前台应用（包名 + Activity），判断用户此刻正在用哪个 App。",
-            useCases = listOf("现在前台是哪个 App", "用户在看什么", "确认目标 App 是否已打开"),
-            examples = listOf("get_foreground_app()"),
-            parameters = emptyMap(),
-            tips = listOf("常在操控屏幕前确认目标 App 已在前台", "配合 screenshot / read_screen 定位界面"),
-            relatedTools = listOf("get_screen_state", "screenshot", "read_screen", "bg_screen"),
-            priority = 3
-        ),
-
-        "get_screen_state" to ToolInfo(
-            name = "get_screen_state",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = "获取屏幕状态（亮灭屏、锁屏、方向、分辨率等），判断当前屏幕是否可操作。",
-            useCases = listOf("屏幕是亮还是灭", "现在锁屏了吗", "屏幕朝向/分辨率多少"),
-            examples = listOf("get_screen_state()"),
-            parameters = emptyMap(),
-            tips = listOf("操作屏幕前先确认屏幕亮着、未锁屏，否则点击/读屏会失败", "灭屏/锁屏时先唤醒（wake_device）再操作"),
-            relatedTools = listOf("get_foreground_app", "wake_device", "read_screen", "bg_screen"),
-            priority = 3
-        ),
-
-        "global_action" to ToolInfo(
-            name = "global_action",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = "执行系统级全局动作（返回桌面、最近任务、下拉通知栏、截屏、锁屏等），等价于无障碍全局手势。",
-            useCases = listOf("回桌面", "打开最近任务", "下拉通知栏", "锁屏", "系统级截屏"),
-            examples = listOf("global_action(action=\"home\")", "global_action(action=\"recents\")", "global_action(action=\"notifications\")"),
-            parameters = mapOf("action" to "home / back / recents / notifications / quick_settings / screenshot / lock / split_screen"),
-            tips = listOf("这是「系统级」动作，比在单个 App 里点更稳", "action=screenshot 走系统截屏通道"),
-            relatedTools = listOf("screenshot", "get_screen_state", "tap_screen"),
-            priority = 3
-        ),
-
-        "screen_record" to ToolInfo(
-            name = "screen_record",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = "录屏：把屏幕操作过程录成视频，用于演示、复现问题或留存证据。",
-            useCases = listOf("帮我录屏", "录一下这个操作流程", "把报错过程录下来"),
-            examples = listOf("screen_record(action=\"start\")", "screen_record(action=\"stop\")"),
-            parameters = mapOf("action" to "start / stop / status", "duration_sec" to "自动停止时长（可选）"),
-            tips = listOf("录屏需要用户授权「录制屏幕」", "录完用 stop 取回文件；与 screenshot 互补（动态 vs 静态）"),
-            relatedTools = listOf("screenshot", "enable_screen_capture", "take_photo"),
-            priority = 3
-        ),
-
-        "take_photo" to ToolInfo(
-            name = "take_photo",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = "调用相机拍照（后置/前置），把现实世界拍下来给 AI 看，区别于截屏（截的是屏幕内容）。",
-            useCases = listOf("拍张照给我看", "识别一下这个实物", "拍个文档/白板", "扫一下二维码"),
-            examples = listOf("take_photo(camera=\"back\")", "take_photo(camera=\"front\")"),
-            parameters = mapOf("camera" to "back / front（默认 back）"),
-            tips = listOf("拍的是真实世界，不是屏幕；要截屏幕请用 screenshot", "拍完常接 image_recognition / visual_analysis 理解内容"),
-            relatedTools = listOf("screenshot", "image_recognition", "visual_analysis"),
-            priority = 3
-        ),
-
-        "long_press_screen" to ToolInfo(
-            name = "long_press_screen",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = "长按屏幕坐标/控件（无障碍），用于触发长按菜单、拖拽起点等。",
-            useCases = listOf("长按这个图标", "长按弹出菜单", "长按选中", "拖拽前先长按"),
-            examples = listOf("long_press_screen(x=500, y=800)", "long_press_screen(resource_id=\"item\")"),
-            parameters = mapOf("x" to "X坐标", "y" to "Y坐标", "resource_id" to "控件ID", "duration_ms" to "时长，默认 600"),
-            tips = listOf("优先用 resource_id 比坐标稳", "是 tap_screen 的长按版"),
-            relatedTools = listOf("tap_screen", "swipe_screen", "scroll_screen"),
-            priority = 3
-        ),
-
-        "scroll_screen" to ToolInfo(
-            name = "scroll_screen",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = "在控件/区域内滚动（无障碍），用于翻看长列表、加载更多内容后再读屏。",
-            useCases = listOf("往下滚一下", "翻看这个列表", "滚到顶部/底部", "加载更多"),
-            examples = listOf("scroll_screen(direction=\"down\")", "scroll_screen(resource_id=\"list\", direction=\"up\")"),
-            parameters = mapOf("direction" to "up / down / left / right", "resource_id" to "滚动容器ID（可选）", "distance" to "滚动距离（可选）"),
-            tips = listOf("滚完再 read_screen 才能读到新内容", "是 swipe_screen 的精准滚动版（认控件而非坐标）"),
-            relatedTools = listOf("swipe_screen", "tap_screen", "read_screen"),
-            priority = 3
-        ),
-
-        "ai_type_text" to ToolInfo(
-            name = "ai_type_text",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = "AI 主动在屏幕焦点输入框里打字（无障碍输入，不弹系统输入法、不打断用户当前输入法状态）。",
-            useCases = listOf("在搜索框里输入XX", "帮我把这段文字填进去", "AI 替我打字"),
-            examples = listOf("ai_type_text(text=\"你好世界\")"),
-            parameters = mapOf("text" to "要输入的文字"),
-            tips = listOf("依赖当前有焦点输入框；无焦点时先 tap_screen 点一下输入框", "与 bg_screen 的 input_text 同理，但作用于用户主屏"),
-            relatedTools = listOf("tap_screen", "input_text", "ai_press_enter", "ai_press_send"),
-            priority = 3
-        ),
-
-        "ai_press_enter" to ToolInfo(
-            name = "ai_press_enter",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = "AI 主动触发「回车/确认」（无障碍），用于提交输入、发送前确认、确认对话框。",
-            useCases = listOf("输完按回车", "确认提交", "触发搜索"),
-            examples = listOf("ai_press_enter()"),
-            parameters = emptyMap(),
-            tips = listOf("常在 ai_type_text 之后调用", "等价于按键盘回车键"),
-            relatedTools = listOf("ai_type_text", "ai_press_send", "tap_screen"),
-            priority = 3
-        ),
-
-        "ai_press_send" to ToolInfo(
-            name = "ai_press_send",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = "AI 主动触发「发送」（无障碍点击发送按钮 / 模拟发送），用于聊天、评论等场景提交。",
-            useCases = listOf("帮我发消息", "把这段发出去", "点发送"),
-            examples = listOf("ai_press_send()"),
-            parameters = emptyMap(),
-            tips = listOf("优先认发送按钮；找不到时回退 ai_press_enter", "发送前确认内容无误"),
-            relatedTools = listOf("ai_type_text", "ai_press_enter", "tap_screen"),
-            priority = 3
-        ),
 
         "ui_tree" to ToolInfo(
             name = "ui_tree",
@@ -1344,62 +1449,17 @@ object ToolCapabilityDirectory {
                 "display" to "显示器 id（默认主屏；后台虚拟屏用对应 display，如 2）",
             ),
             tips = listOf(
-                "比 screenshot 更省 token、坐标更准：拿到 ref 后配合 tap_screen(ref) / input_text 定点操作",
-                "界面自绘（游戏/WebView/Flutter）可能读不到控件 → 退回 screenshot + visual_analysis",
+                "比 screen(action=screenshot) 更省 token、坐标更准：拿到 ref 后配合 screen(action=tap, ref=...) / screen(action=input, text=...) 定点操作",
+                "界面自绘（游戏/WebView/Flutter）可能读不到控件 → 退回 screen",
                 "支持 display 参数：bg_screen 的 read 底层就是它，跨屏 dump 不用切来切去",
             ),
-            relatedTools = listOf("read_screen", "screenshot", "visual_analysis", "tap_screen", "bg_screen"),
+            relatedTools = listOf("screen", "bg_screen"),
             priority = 5
         ),
 
         // ═══════════════ 无障碍控屏 ═══════════════
-        "read_screen" to ToolInfo(
-            name = "read_screen",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = qstr(R.string.qk_03536),
-            useCases = listOf("看看现在屏幕上是啥", "读一下当前界面", "这个App现在显示啥"),
-            examples = listOf("read_screen()"),
-            parameters = emptyMap(),
-            tips = listOf("读取屏幕文本和控件", "返回结构化数据", "支持无障碍节点树"),
-            relatedTools = listOf("screenshot", "visual_analysis"),
-            priority = 5
-        ),
         
-        "tap_screen" to ToolInfo(
-            name = "tap_screen",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = qstr(R.string.qk_03591),
-            useCases = listOf("点一下屏幕上的XX按钮", "帮我戳那个位置", "点击确认"),
-            examples = listOf("tap_screen(x=500, y=800)", "tap_screen(resource_id=\"btn_confirm\")"),
-            parameters = mapOf("x" to "X坐标", "y" to "Y坐标", "resource_id" to "控件ID"),
-            tips = listOf("支持坐标点击", "支持控件ID点击", "优先用控件ID"),
-            relatedTools = listOf("long_press_screen", "swipe_screen"),
-            priority = 4
-        ),
         
-        "swipe_screen" to ToolInfo(
-            name = "swipe_screen",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = qstr(R.string.qk_03556),
-            useCases = listOf("往上滑", "左滑翻页", "划一下", "在(x1,y1)→(x2,y2)划"),
-            examples = listOf("swipe_screen(x1=500, y1=1000, x2=500, y2=500)", "swipe_screen(direction=\"up\")"),
-            parameters = mapOf("x1" to "起点X", "y1" to "起点Y", "x2" to "终点X", "y2" to "终点Y", "direction" to "方向up/down/left/right"),
-            tips = listOf("支持坐标滑动", "支持方向滑动", "可设置持续时间"),
-            relatedTools = listOf("scroll_screen", "tap_screen"),
-            priority = 4
-        ),
-
-        "enable_screen_capture" to ToolInfo(
-            name = "enable_screen_capture",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = qstr(R.string.qk_03711),
-            useCases = listOf("看懂现在屏幕", "截图看下当前界面", "看看屏幕在干嘛", "需要读屏/视觉理解时"),
-            examples = listOf("enable_screen_capture()"),
-            parameters = emptyMap(),
-            tips = listOf("用户要你「看屏幕/截图」或需要像素级屏幕理解时主动调用", "会拉起系统「立即开始」对话框，用户点确认后自动授权", "授权后视觉循环自动启用，无需再手动开"),
-            relatedTools = listOf("read_screen", "screenshot", "visual_analysis"),
-            priority = 5
-        ),
 
         // ═══════════════ 应用管理 ═══════════════
         "launch_app" to ToolInfo(
@@ -1410,21 +1470,10 @@ object ToolCapabilityDirectory {
             examples = listOf("launch_app(package_name=\"com.tencent.mm\")"),
             parameters = mapOf("package_name" to "应用包名"),
             tips = listOf("需要知道包名", "可用get_package_name查询", "支持系统应用和第三方应用"),
-            relatedTools = listOf("open_app", "list_installed_apps"),
+            relatedTools = listOf("list_installed_apps", "execute_intent"),
             priority = 4
         ),
         
-        "open_app" to ToolInfo(
-            name = "open_app",
-            category = ToolCategory.APP_MANAGEMENT,
-            description = qstr(R.string.qk_03484),
-            useCases = listOf("打开XX应用", "启动XX"),
-            examples = listOf("open_app(package_name=\"com.tencent.mm\")"),
-            parameters = mapOf("package_name" to "应用包名"),
-            tips = listOf("与launch_app类似", "支持包名和应用名"),
-            relatedTools = listOf("launch_app", "search_and_launch_app"),
-            priority = 3
-        ),
         
         // ═══════════════ 通信 ═══════════════
         "send_sms" to ToolInfo(
@@ -1463,21 +1512,10 @@ object ToolCapabilityDirectory {
             examples = listOf("run_code(code=\"print('Hello')\", lang=\"python\")"),
             parameters = mapOf("code" to "代码内容", "lang" to "语言python/node/shell/html"),
             tips = listOf("python内置Brython引擎", "node内置QuickJS", "html会渲染成网页"),
-            relatedTools = listOf("terminal_run", "workbench"),
+            relatedTools = listOf("terminal", "miniapp"),
             priority = 5
         ),
         
-        "workbench" to ToolInfo(
-            name = "workbench",
-            category = ToolCategory.AI_CAPABILITIES,
-            description = qstr(R.string.qk_03588),
-            useCases = listOf("做个计算器", "写个多文件项目", "创建前后端分离项目", "做个完整的XX功能"),
-            examples = listOf("workbench(action=\"create\", name=\"calculator\", files=[{path:\"index.html\", content:\"...\"}])"),
-            parameters = mapOf("action" to "create/run/edit/save/wrap", "name" to "项目名", "files" to "文件列表", "entry" to "入口文件"),
-            tips = listOf("已合入统一的「Web 应用」，工程统一存放在 filesDir/miniapp/", "自动合并CSS/JS到HTML", "运行后渲染在对话框", "优先用 miniapp 工具，多出路由与 native.* 原生桥"),
-            relatedTools = listOf("miniapp", "run_code", "workspace_write"),
-            priority = 5
-        ),
         
         "creative_studio" to ToolInfo(
             name = "creative_studio",
@@ -1511,88 +1549,15 @@ object ToolCapabilityDirectory {
                 "全文只在本轮生效，下一轮需要再调一次",
                 "若用户已为当前消息选了技能，全文会随消息直接下发，无需再调本工具",
             ),
-            relatedTools = listOf("skill_list", "rag_search"),
+            relatedTools = listOf("skill_list", "memory"),
             priority = 5,
         ),
 
         // ═══════════════ MCP ═══════════════
-        "mcp_servers" to ToolInfo(
-            name = "mcp_servers",
-            category = ToolCategory.NETWORK_WEB,
-            description = qstr(R.string.qk_03626),
-            useCases = listOf("看看连了哪些MCP服务器", "MCP服务列表", "外部工具有哪些"),
-            examples = listOf("mcp_servers()"),
-            parameters = emptyMap(),
-            tips = listOf("列出所有MCP服务器", "包括本地和远程", "显示连接状态"),
-            relatedTools = listOf("mcp_list_tools", "mcp_call"),
-            priority = 3
-        ),
         
-        "mcp_call" to ToolInfo(
-            name = "mcp_call",
-            category = ToolCategory.NETWORK_WEB,
-            description = qstr(R.string.qk_03608),
-            useCases = listOf("调用外部MCP的XX工具", "让连着的服务器干YY", "用外部工具"),
-            examples = listOf("mcp_call(server=\"github\", tool=\"create_issue\", params={...})"),
-            parameters = mapOf("server" to "服务器名", "tool" to "工具名", "params" to qstr(R.string.qk_00142)),
-            tips = listOf("先用mcp_list_tools查看可用工具", "支持参数验证", "返回结构化结果"),
-            relatedTools = listOf("mcp_servers", "mcp_list_tools"),
-            priority = 4
-        ),
         
         // ═══════════════ CMS ═══════════════
-        "cms_toolbox" to ToolInfo(
-            name = "cms_toolbox",
-            category = ToolCategory.CMS_DEVELOPMENT,
-            description = qstr(R.string.qk_03495),
-            useCases = listOf(
-                "查看CMS模块列表",
-                "调用CMS能力模块",
-                qstr(R.string.qk_01556),
-                "检查CMS引擎状态",
-                "修复CMS部署失败",
-                "AI自写CMS模块并部署"
-            ),
-            examples = listOf(
-                "cms_toolbox(action=\"list_modules\")",
-                "cms_toolbox(action=\"call_module\", capability_id=\"echo_text\", args={\"text\":\"hello\"})",
-                "cms_toolbox(action=\"deploy_engine\")",
-                "cms_toolbox(action=\"status_engine\")",
-                "cms_toolbox(action=\"repair_deployment\", component=\"engine\")",
-                "cms_toolbox(action=\"create_module\", module_id=\"my.httpd\", entry_script=\"#!/bin/sh\\npython3 -m http.server 8123\")"
-            ),
-            parameters = mapOf(
-                "action" to "动作类型",
-                "capability_id" to "能力ID（call_module时需要）",
-                "args" to "参数对象（call_module时可选）",
-                "engine_id" to "引擎ID（deploy_engine时可选）",
-                "component" to "组件名称（repair_deployment时需要）",
-                "module_id" to "模块ID（repair_deployment component=module时需要）",
-                "entry_script" to "entry.sh脚本内容（create_module时需要）"
-            ),
-            tips = listOf(
-                "⚠️ 此工具只管理CMS模块和引擎，不管理终端开发环境",
-                "终端开发环境请用 dev_env 工具",
-                "list_modules 查看已安装的CMS模块",
-                "deploy_engine 部署CMS引擎到终端",
-                "status_engine 检查CMS引擎运行状态",
-                "create_module AI自写CMS模块脚本并部署"
-            ),
-            relatedTools = listOf("dev_env", "cms_call", "cms_list"),
-            priority = 5
-        ),
         
-        "cms_call" to ToolInfo(
-            name = "cms_call",
-            category = ToolCategory.CMS_DEVELOPMENT,
-            description = qstr(R.string.qk_03668),
-            useCases = listOf("调用XX能力模块做YY", "让模块执行", "用CMS功能"),
-            examples = listOf("cms_call(capability_id=\"echo_text\", args={text:\"hello\"})"),
-            parameters = mapOf("capability_id" to "能力ID", "args" to qstr(R.string.qk_00142)),
-            tips = listOf("先用cms_list查看可用能力", "支持同步/异步", "可传参数", "建议使用cms_toolbox替代"),
-            relatedTools = listOf("cms_list", "cms_status", "cms_toolbox"),
-            priority = 3
-        ),
 
         "build_apk" to ToolInfo(
             name = "build_apk",
@@ -1612,7 +1577,7 @@ object ToolCapabilityDirectory {
                 "icon_path" to "自定义图标PNG路径"
             ),
             tips = listOf("支持自定义包名、release签名生成与使用、引用依赖JAR、自定义图标", "入口类支持任意包名/类名（动态探测 zorv_entry.txt）", "与 ui_control(action=「ui_open_build」，打开构建台UI) 互补"),
-            relatedTools = listOf("export_apk", "ui_control", "workspace_write"),
+            relatedTools = listOf("export_apk", "ui_control", "workspace"),
             priority = 5
         ),
 
@@ -1628,67 +1593,12 @@ object ToolCapabilityDirectory {
             priority = 3
         ),
 
-        "cms_list" to ToolInfo(
-            name = "cms_list",
-            category = ToolCategory.CMS_DEVELOPMENT,
-            description = qstr(R.string.qk_03719),
-            useCases = listOf("我装了哪些能力模块", "CMS模块列表", "有什么能力"),
-            examples = listOf("cms_list()"),
-            parameters = emptyMap(),
-            tips = listOf("列出所有已安装模块", "显示能力ID和说明", "显示风险级别", "建议使用cms_toolbox替代"),
-            relatedTools = listOf("cms_call", "cms_status", "cms_toolbox"),
-            priority = 2
-        ),
         
         // ═══════════════ ACI ═══════════════
-        "aci_call" to ToolInfo(
-            name = "aci_call",
-            category = ToolCategory.APP_MANAGEMENT,
-            description = qstr(R.string.qk_03502),
-            useCases = listOf("让XX App帮我做YY", "调起外部App的能力", "用浏览器打开网页"),
-            examples = listOf("aci_call(capability=\"browser_open\", args={url:\"https://example.com\"})"),
-            parameters = mapOf("target_package" to "目标包名（可选）", "capability" to "能力名", "args" to qstr(R.string.qk_00142)),
-            tips = listOf("可省略target_package用默认应用", "先用aci_list查看可用能力", "支持多种能力组合"),
-            relatedTools = listOf("aci_list", "browser_open"),
-            priority = 5
-        ),
         
-        "aci_list" to ToolInfo(
-            name = "aci_list",
-            category = ToolCategory.APP_MANAGEMENT,
-            description = qstr(R.string.qk_03718),
-            useCases = listOf("有哪些第三方App能让我调用", "可控制的外部能力", "ACI能力列表"),
-            examples = listOf("aci_list()"),
-            parameters = emptyMap(),
-            tips = listOf("列出所有已发现的ACI App", "显示每个App的能力", "显示绑定状态"),
-            relatedTools = listOf("aci_call", "launch_app"),
-            priority = 4
-        ),
         
         // ═══════════════ 视觉分析 ═══════════════
-        "screenshot" to ToolInfo(
-            name = "screenshot",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = qstr(R.string.qk_03542),
-            useCases = listOf("截个图", "截图保存", "把屏幕截下来"),
-            examples = listOf("screenshot()"),
-            parameters = emptyMap(),
-            tips = listOf("返回截图文件路径", "可保存到指定位置", "支持全屏和区域截图"),
-            relatedTools = listOf("screenshot_base64", "visual_analysis"),
-            priority = 4
-        ),
         
-        "visual_analysis" to ToolInfo(
-            name = "visual_analysis",
-            category = ToolCategory.SCREEN_PERCEPTION,
-            description = qstr(R.string.qk_03497),
-            useCases = listOf("看看屏幕上是什么", "分析这个页面/App/游戏界面", "屏幕上有什么按钮/文字/图标", "定位某个元素并操作", "OCR 提取截图文字", "辅助点击/操作"),
-            examples = listOf("visual_analysis()", "visual_analysis(question=\"这个按钮是做什么的\", mode=\"ui\")"),
-            parameters = emptyMap(),
-            tips = listOf("任何场景都能用：只要看见屏幕有助于回答就用", "比 read_screen 更全面（游戏/WebView/Flutter/自绘UI）", "mode=general/ui/ocr/game/find", "需配置支持图像的模型"),
-            relatedTools = listOf("screenshot", "read_screen"),
-            priority = 4
-        ),
         
         // ═══════════════ 语音 ═══════════════
         "speak" to ToolInfo(
@@ -1699,7 +1609,7 @@ object ToolCapabilityDirectory {
             examples = listOf("speak(text=\"你好世界\", voice=\"xiaoxiao\")"),
             parameters = mapOf("text" to "要朗读的文本", "voice" to "音色（可选）"),
             tips = listOf("支持多种音色", "可设置语速", "与自动朗读独立"),
-            relatedTools = listOf("stop_speak"),
+            relatedTools = listOf("speak"),
             priority = 4
         ),
         
@@ -1712,7 +1622,7 @@ object ToolCapabilityDirectory {
             examples = listOf("schedule_task(action=\"create\", schedule=\"0 9 * * *\", task=\"提醒喝水\")"),
             parameters = mapOf("action" to "create/list/delete", "schedule" to "cron表达式", "task" to "任务内容"),
             tips = listOf("支持cron表达式", "可一次创建多个", "支持循环和单次"),
-            relatedTools = listOf("list_scheduled_tasks", "delete_scheduled_task"),
+            relatedTools = listOf("task_schedule", "alarm_clock"),
             priority = 4
         ),
         
@@ -1725,7 +1635,7 @@ object ToolCapabilityDirectory {
             examples = listOf("aiwps_create(type=\"docx\", title=\"周报\", content=\"内容\")"),
             parameters = mapOf("type" to "docx/xlsx/pptx/pdf", "title" to qstr(R.string.qk_01066), "content" to qstr(R.string.qk_01059)),
             tips = listOf("生成真正的Office二进制文件", "可用WPS/Office打开", "文件保存到Downloads目录"),
-            relatedTools = listOf("enhanced_doc_create", "chat_doc", "workspace_doc"),
+            relatedTools = listOf("enhanced_doc_create", "chat_doc", "workspace"),
             priority = 5
         ),
         
@@ -1749,7 +1659,7 @@ object ToolCapabilityDirectory {
             examples = listOf("enhanced_doc_create(type=\"md\", title=\"笔记\", content=\"内容\")"),
             parameters = mapOf("type" to qstr(R.string.qk_01065), "title" to qstr(R.string.qk_01066), "content" to qstr(R.string.qk_01059)),
             tips = listOf("支持17种格式", "文本类文档优先用此工具", "创建后自动渲染预览"),
-            relatedTools = listOf("aiwps_create", "chat_doc", "workspace_doc"),
+            relatedTools = listOf("aiwps_create", "chat_doc", "workspace"),
             priority = 4
         ),
 
@@ -1757,33 +1667,6 @@ object ToolCapabilityDirectory {
         // 这两个工具此前没有任何分类规则命中，落到 BASIC，导致 tool_router 的
         // match_intent / list_tools 与 tool_discovery **都查不到 zxwidget**
         // → 模型根本不知道有这个能力 → 用户报「AI 不会用 zxwidget / 渲染不出来」。
-        "zx_catalog" to ToolInfo(
-            name = "zx_catalog",
-            category = ToolCategory.ZXWIDGET,
-            description = "查 zxwidget 组件名册与字段契约（477 个 zx_ 组件）。做动态交互界面前**先查这里**，不要凭印象编组件名/字段名",
-            useCases = listOf(
-                "有哪些 zx 组件", "zx 组件怎么用", "这个组件的字段是什么", "zxwidget 名册",
-                "方案对比用什么组件", "数据表格用什么组件", "表单用什么组件", "看板/时间线/仪表盘用什么组件",
-                "查一下 zx_table 的字段", "查一下 zx_compare 的示例"
-            ),
-            examples = listOf(
-                "zx_catalog()",
-                "zx_catalog(component=\"zx_table\")",
-                "zx_catalog(keyword=\"对比\")",
-                "zx_catalog(keyword=\"时间线\")"
-            ),
-            parameters = mapOf(
-                "component" to "组件名（传了就返回该组件的字段契约 + 示例 DSL）",
-                "keyword" to "按用途检索组件（中文即可，如「对比」「看板」「进度」）"
-            ),
-            tips = listOf(
-                "**先查名册再下组件**：477 个组件 + 195 KB 契约塞不进提示词，只能按需查。",
-                "名册外的名字会落到通用渲染（generic），效果差——所以别猜组件名。",
-                "拿到字段契约后按契约填 dsl，字段用了别名（n/v/d/t/k…）也有兜底，但按契约填最稳。"
-            ),
-            relatedTools = listOf("zx_web_card", "ui_dsl_spec", "ui_widget"),
-            priority = 4
-        ),
 
         "zx_web_card" to ToolInfo(
             name = "zx_web_card",
@@ -1813,7 +1696,7 @@ object ToolCapabilityDirectory {
                 "用户点完之后交互会作为**本工具的结果**回来，你据此继续推理——不要重复再画一遍同一块界面。",
                 "一块界面只画一次；需要多块就多次调用，它们会依次内联在消息流里。"
             ),
-            relatedTools = listOf("zx_catalog", "ui_widget", "ui_card", "visual_popup"),
+            relatedTools = listOf("ui_widget", "visual_popup", "genui_agent_open"),
             priority = 5
         )
     )
@@ -1833,8 +1716,8 @@ object ToolCapabilityDirectory {
      *
      * 🔴 为什么需要：`AgentRag.refresh()` 无参调用时不会安装工具域
      * （`if (toolSpecs.isNotEmpty())`），于是若 RAG 的第一次初始化
-     * 是由 `rag_search` 触发的，tools 域会**永远为空** ——
-     * `rag_search(domain="tools")` 必然零命中，模型据此判定「没有这个工具」。
+     * 是由旧的 `rag_search`（现已并入 memory(action=discover)）触发的，tools 域会**永远为空** ——
+     * 该路查询必然零命中，模型据此判定「没有这个工具」。
      * 留这份快照，让任何地方都能补齐工具域索引。
      */
     private var lastInstalledSpecs: List<QuroToolSpec> = emptyList()
@@ -1882,7 +1765,7 @@ object ToolCapabilityDirectory {
      * 旧实现只有一处整句包含判断：`intent.contains(useCase) || useCase.contains(intent)`。
      * 而 `autoInfo` 给无手写条目的工具填的 useCases 就是 **工具自己的 description**，
      * 于是「设个闹钟」永远匹配不上「设置/添加闹钟（支持重复）」这种整句——
-     * 实测 14 条最普通的中文口语里只召回 2 条，且排第一的恒定是 `cms_toolbox`（噪声条目）。
+     * 实测 14 条最普通的中文口语里只召回 2 条，且排第一的恒定是 `cms`（噪声条目）。
      * 那不是检索，是字符串全等。
      *
      * ## 现在的做法：分词 + 多字段加权评分
@@ -2071,27 +1954,26 @@ object ToolCapabilityDirectory {
     }
     
     /**
-     * 根据意图生成工具推荐（注入系统提示）
+     * 意图 → 工具推荐表（系统提示词「常见意图 → 工具推荐」的唯一来源）。
+     *
+     * 🔴 用 List<Pair> 而不是 Map：`mapOf` 遇到重复键会**静默丢弃**前一条，
+     * 这张表此前就有一对重复的「终端命令」键，前一条（terminal/termux/linux_env）
+     * 一直被后一条覆盖，谁都发现不了。List 保留全部条目，重复由
+     * `UnifiedToolingContractTest` 直接断言，改坏会红。
      */
-    fun buildIntentRecommendations(): String {
-        val sb = StringBuilder()
-        sb.appendLine("# 常见意图 → 工具推荐")
-        sb.appendLine("当用户说以下意图时，直接调用对应工具：")
-        sb.appendLine()
-        
-        val intentMappings = mapOf(
+    internal val INTENT_MAPPINGS: List<Pair<String, List<String>>> = listOf(
             "时间/日期" to listOf("get_current_time"),
             "设备信息" to listOf("get_device_info", "get_battery", "get_wifi_info"),
             "计算/算数" to listOf("calculate", "run_code"),
-            "文件操作" to listOf("read_text_file", "write_file", "list_files", "find_files"),
-            "终端命令" to listOf("terminal_run", "quroterm_exec", "linux_run"),
-            "联网搜索" to listOf("ai_browser", "http_request"),
-            "打开网页" to listOf("aci_call(browser_open)", "ai_browser", "open_web"),
+            "文件操作" to listOf("file_read", "file_write", "list_dir", "file_info"),
+            "终端命令" to listOf("termux", "terminal(action=exec)", "terminal(action=run)", "linux_env(action=run)"),
+            "联网搜索" to listOf("web(action=search_and_read)", "http_request", "web(action=read)"),
+            "打开网页" to listOf("aci(action=call, capability=browser_open)", "ai_browser", "open_web"),
             "图片生成" to listOf("image_gen"),
-            "图片识别" to listOf("image_recognition", "visual_analysis"),
+            "图片识别" to listOf("image_recognition", "screen"),
             "UI展示" to listOf("ui_control"),
-            "原生交互界面/动态UI" to listOf("ui_dsl_spec", "ui_validate"),
-            "富组件/数据卡片（ui_widget / ui_card，禁止裸 JSON）" to listOf("ui_widget", "ui_card"),
+            "原生交互界面/动态UI" to listOf("ui_widget(with_spec=true)", "ui_widget(with_validate=true)"),
+            "富组件/数据卡片（ui_widget，禁止裸 JSON）" to listOf("ui_widget", "visual_card"),
             // 🔴 术语铁律（2026-11-05 重写）：「可视化小卡片」= **独立分类 WIDGET_CARD**，
             // 唯一出口 `visual_card` 工具（html 自由写任意场景；13 份样板仅供参考，2026-11-06）。
             // 旧 ```quro-card Canvas 围栏是 legacy，不再作为小卡片；ui_widget/ui_card 是富组件另一分类，
@@ -2100,13 +1982,19 @@ object ToolCapabilityDirectory {
             "可视化弹窗（visual_popup，独立功能，≠小卡片）" to listOf("visual_popup"),
             "待办/进度/统计/评分/告警卡片" to listOf("ui_widget(type=\"list\")", "ui_widget(type=\"progress\")", "ui_widget(type=\"stat\")", "ui_widget(type=\"rating\")", "ui_widget(type=\"alert\")"),
             "列表/表格/饼图卡片" to listOf("ui_widget(type=\"list\")", "ui_widget(type=\"table\")", "ui_widget(type=\"pie\")"),
-            "播放器/浏览器完整界面" to listOf("ui_dsl_spec"),
+            "播放器/浏览器完整界面" to listOf("ui_widget(with_spec=true)", "genui_agent_open", "miniapp"),
             "流程图/架构图" to listOf("ui_control(action=\"widget\", type=\"mermaid\")"),
-            "记忆保存" to listOf("memory_save"),
-            "知识搜索" to listOf("knowledge_search", "knowledge_rag_search"),
-            "工作区文件" to listOf("workspace_write", "workspace_read", "workspace_list"),
-            "屏幕操作" to listOf("read_screen", "tap_screen", "swipe_screen"),
-            "应用启动" to listOf("launch_app", "open_app"),
+            "记忆保存" to listOf("memory(action=save)"),
+            "知识搜索" to listOf("memory(action=kb_search)", "memory(action=rag)"),
+            "记忆检索 / 经验 / 规则发现" to listOf("memory(action=recall)", "memory(action=discover)"),
+            "Shizuku 特权" to listOf("shizuku(action=status)", "shizuku(action=exec)"),
+            "ROOT 执行" to listOf("root(action=status)", "root(action=exec)"),
+            "智能体键盘打字 / 发送" to listOf("keyboard(action=type_and_send)"),
+            "权限自查 / 系统设置" to listOf("permissions(action=check)", "permissions(action=policy)"),
+            "工作区文件" to listOf("workspace", "file_write(root=workspace)", "file_read(root=workspace)"),
+            "屏幕操作" to listOf("screen(action=read)", "screen(action=tap)", "screen(action=swipe)"),
+            "屏幕感知 / 截图 / 视觉理解" to listOf("screen(action=read)", "screen(action=screenshot)", "screen(action=analyze)"),
+            "应用启动" to listOf("launch_app"),
             "发短信" to listOf("send_sms"),
             "读联系人" to listOf("read_contacts"),
             "代码执行" to listOf("run_code", "miniapp"),
@@ -2117,28 +2005,38 @@ object ToolCapabilityDirectory {
             "文档生成（可下载）" to listOf("aiwps_create", "enhanced_doc_create"),
             "对话框写文档" to listOf("aip_compose", "chat_doc"),
             "对话框显示文档" to listOf("aip_compose", "chat_doc"),
-            "定时任务" to listOf("schedule_task"),
+            "定时任务" to listOf("task_schedule"),
             "语音朗读" to listOf("speak"),
-            "MCP工具" to listOf("mcp_call", "mcp_list_tools"),
+            "MCP工具" to listOf("mcp(action=servers)", "mcp(action=list_tools)", "mcp(action=call)"),
             "技能 / 加载技能全文 / 按技能方法做" to listOf("skill", "skill_list"),
             "查看技能 / 有哪些技能" to listOf("skill_list"),
-            "CMS模块" to listOf("cms_toolbox", "cms_call", "cms_list"),
+            "CMS模块" to listOf("cms(action=list)", "cms(action=call)", "cms(action=toolbox)"),
             "开发环境安装" to listOf("dev_env(action=install)", "dev_env(action=install, execute=true)"),
             "开发环境检查" to listOf("dev_env(action=check)"),
             "开发环境卸载" to listOf("dev_env(action=uninstall)"),
             "开发环境管理" to listOf("dev_env(action=install)", "dev_env(action=check)", "dev_env(action=list)"),
             "镜像源管理" to listOf("dev_env(action=source_list)", "dev_env(action=source_select)"),
-            "第三方App" to listOf("aci_call", "aci_list"),
+            "第三方App" to listOf("aci(action=call)", "aci(action=list)"),
             "流体云/状态栏" to listOf("fluid_cloud_notify"),
-            "AI思考中/任务进度" to listOf("fluid_cloud(action=create)", "fluid_cloud(action=update)"),
-            "CMS模块管理" to listOf("cms_toolbox(action=list_modules)", "cms_toolbox(action=call_module)"),
-            "CMS引擎部署" to listOf("cms_toolbox(action=deploy_engine)", "cms_toolbox(action=status_engine)"),
-            "CMS部署修复" to listOf("cms_toolbox(action=repair_deployment)"),
-            "AI自写CMS模块" to listOf("cms_toolbox(action=create_module)")
-        )
-        
-        for ((intent, tools) in intentMappings) {
-            sb.appendLine("- **$intent** → ${tools.joinToString("、") { "`$it`" }}")
+            "AI思考中/任务进度" to listOf("fluid_cloud_notify(action=create)", "fluid_cloud_notify(action=update)"),
+            "CMS模块管理" to listOf("cms(action=toolbox)"),
+            "CMS引擎部署" to listOf("cms(action=deploy)", "cms(action=engine_status)"),
+            "CMS部署修复" to listOf("cms(action=undeploy)", "cms(action=deploy)"),
+            "AI自写CMS模块" to listOf("cms(action=toolbox)")
+    )
+
+    fun buildIntentRecommendations(): String {
+        val sb = StringBuilder()
+        sb.appendLine("# 常见意图 → 工具推荐")
+        sb.appendLine("当用户说以下意图时，直接调用对应工具：")
+        sb.appendLine()
+
+        for ((intent, tools) in INTENT_MAPPINGS) {
+            // 手写表里难免残留已退役/已合体的旧名。输出前按当前真实注册表过滤，
+            // 过滤键取 "(" 前的工具名，保留后面的 action 提示，模型才不会照着调出「未知工具」。
+            val live = tools.filter { t -> directory.containsKey(t.substringBefore("(").trim()) }
+            if (live.isEmpty()) continue
+            sb.appendLine("- **$intent** → ${live.joinToString("、") { "`$it`" }}")
         }
         
         return sb.toString()
@@ -2163,7 +2061,7 @@ object ToolCapabilityDirectory {
 规矩只有三条：
 1. **不确定用哪个工具 → 先 `tool_router(action="match_intent", intent="用户原话")`**。
    直接把用户那句话丢进去，比你自己想关键词准。
-2. 拿到工具名 → `get_schema(name=...)` 取参数用法，**下一轮就能直接调**。
+2. 拿到工具名 → `get_schema(name=...)` 取参数用法；**已知参数时直接 `call(name=..., arguments={...})` 执行**，一次调用完成，不必多等一轮。
 3. `match_intent` 没结果 → `list_categories()` 看有哪几类，再 `list_tools(category=...)`。
 
 ⚠️ **只要你心里冒出「我没有这个能力」的念头，必须先查一遍再说。**
@@ -2262,8 +2160,8 @@ Termux 里是 `pkg` + Termux 的包源；Ubuntu 里是 `apt` + Ubuntu 的包源�
 
 | 你要干的事 | 用哪个 | 说明 |
 |---|---|---|
-| 跑 **Android 系统命令**（`am` / `pm` / `settings` / `dumpsys` / `getprop`） | `shizuku_exec` | 那是**宿主机** shell，不是 Ubuntu。丢给 termux 会找不到命令 |
-| 需要 **root** 才行的命令 | `root_exec` | 没有 root 就用 `shizuku_exec`（shell 身份） |
+| 跑 **Android 系统命令**（`am` / `pm` / `settings` / `dumpsys` / `getprop`） | `shizuku(action=exec)` | 那是**宿主机** shell，不是 Ubuntu。丢给 termux 会找不到命令 |
+| 需要 **root** 才行的命令 | `root(action=exec)` | 没有 root 就用 `shizuku(action=exec)`（shell 身份）；Shizuku 通道内也可用 `shizuku(action=root_exec)` |
 | 只想跑**一小段代码**（Python/JS/一次性脚本）拿结果 | `run_code` / `python_run` | 不用进 shell，比 `termux run` 轻 |
 | 操作**界面上已经打开的那个**交互式终端 | `terminal` 家族 | 见第三层 |
 
@@ -2274,27 +2172,37 @@ Termux 里是 `pkg` + Termux 的包源；Ubuntu 里是 `apt` + Ubuntu 的包源�
 | 环境 | 里面有什么 | 什么时候用 | 代表工具 |
 |---|---|---|---|
 | **Termux 官方 bootstrap** | `pkg` / apt / python / node / git，`PREFIX=/data/data/com.termux/files/usr` | 用户说「终端 / 装包 / 跑个命令」，要 Termux 语义 | `termux` |
-| **proot Ubuntu 24.04** | apt / python3 / gcc / pip，标准 Ubuntu 布局 | 需要标准 Ubuntu（路径 `/root`、`/etc/apt` 是 Ubuntu 的） | `linux_*` |
-| **应用沙盒 shell** | 只有系统自带命令（ls / pwd / cat / getprop） | 只想看一眼文件/属性，**不需要**装包 | `terminal_run` / `terminal_exec` / `terminal_*` |
-| **自研极轻沙盒** | 独立虚拟文件系统，不碰真实系统 | 要快、要隔离、命令简单 | `quroterm_exec` |
+| **proot Ubuntu 24.04** | apt / python3 / gcc / pip，标准 Ubuntu 布局 | 需要标准 Ubuntu（路径 `/root`、`/etc/apt` 是 Ubuntu 的） | `linux_env` |
+| **应用沙盒 shell** | 只有系统自带命令（ls / pwd / cat / getprop） | 只想看一眼文件/属性，**不需要**装包 | `terminal(action=run)` |
+| **自研极轻沙盒** | 独立虚拟文件系统，不碰真实系统 | 要快、要隔离、命令简单 | `terminal(action=quroterm)` |
 
-判定口令一句话：**要装包/跑 Python/编译 → 有 `pkg` 就用 `termux`，需要标准 Ubuntu 布局就用 `linux_*`；
+判定口令一句话：**要装包/跑 Python/编译 → 有 `pkg` 就用 `termux`，需要标准 Ubuntu 布局就用 `linux_env`；
 什么都不需要、只看一眼 → 沙盒（terminal 家族）最快。**
 
-### 同环境别名（能不选就不选）
+### proot Ubuntu 的唯一入口：`linux_env`
 
-`linux_run` / `linux_install` / `linux_pkg` / `linux_start` / `linux_stop` / `linux_status` / `linux_process`
-—— 这些是 **proot Ubuntu 的入口**，不是 Termux。要 Termux 语义（pkg / PREFIX）就用 `termux`；
-要标准 Ubuntu 环境才用它们。
+`linux_env` 一个工具管全部 Ubuntu 动作：
+
+| action | 干什么 |
+|---|---|
+| `run` | 跑一条命令，返回 stdout/stderr + 退出码 |
+| `status` / `start` / `stop` | 环境是否就绪 / 初始化 / 终止会话 |
+| `install` | 安装 Ubuntu 环境本体 |
+| `pkg` | apt 装包、卸包、搜索 |
+| `process` | 查看/清理残留后台进程 |
+
+—— 它是 **proot Ubuntu 的入口**，不是 Termux。要 Termux 语义（pkg / PREFIX）就用 `termux`；
+要标准 Ubuntu 环境才用 `linux_env`。
 
 ### 别踩的坑
 
-- ❌ 用户说「跑个命令」，你去调 `linux_run` / `quroterm_exec` —— **先想 `termux(run)`**；
-  除非你**明确知道**这命令不需要 apt/python（那用 `terminal_run` 更快）。
-- ❌ 要装包却用 `linux_install` 而不是 `termux(pkg)` —— 前者是旧入口。
-- ❌ Android 命令（`am`/`pm`/`settings`/`getprop`）丢给 `termux` —— 那些在**宿主机**，Ubuntu 里没有 → 用 `shizuku_exec`。
+- ❌ 用户说「跑个命令」，你去调 `linux_env(action=run)` / `terminal(action=quroterm)` —— **先想 `termux(run)`**；
+  除非你**明确知道**这命令不需要 apt/python（那用 `terminal(action=run)` 更快）。
+- ❌ 要装包却用 `linux_env(action=install)`（那是装 Ubuntu 环境本体，不是装 apt 包）——
+  装 apt 包用 `linux_env(action=pkg)`，装 Termux 包用 `termux(pkg)`。
+- ❌ Android 命令（`am`/`pm`/`settings`/`getprop`）丢给 `termux` —— 那些在**宿主机**，Ubuntu 里没有 → 用 `shizuku`。
 - ❌ 需要交互（python REPL、vim）却用 `termux run` 一条命令硬跑 —— 该用 `session_new` + `write`。
-- ❌ 往用户界面上那个终端敲字时去调 `termux run`（那是新开一次性执行）—— 该用 `termux(write)` 或 `terminal_write`。
+- ❌ 往用户界面上那个终端敲字时去调 `termux run`（那是新开一次性执行）—— 该用 `termux(write)` 或 `terminal(action=write)`。
 - ✅ 环境没装好时 `termux(run)` 会自动触发安装并告诉你等，**照它说的等，别换工具反复试**。
 
 ## 4.2 操作手机：**默认走后台虚拟屏**
@@ -2313,10 +2221,10 @@ Termux 里是 `pkg` + Termux 的包源；Ubuntu 里是 `apt` + Ubuntu 的包源�
 
 | 情况 | 退回哪 | 怎么处理 |
 |---|---|---|
-| `bg_screen` 报「特权服务未就绪 / Shizuku 未授权」 | 无障碍 `read_screen`+`tap_screen` | **会抢屏幕**，先告知用户；并提示他开 Shizuku 才能用后台屏 |
+| `bg_screen` 报「特权服务未就绪 / Shizuku 未授权」 | 无障碍 `screen`+`screen` | **会抢屏幕**，先告知用户；并提示他开 Shizuku 才能用后台屏 |
 | 用户**指着自己屏幕上某个东西**说「点这个 / 关掉这个弹窗」 | 无障碍 | 那块屏是他正在看的，后台屏上看不见他在指什么 |
 | 用户明确要求「在我屏幕上操作 / 我看着你做」 | 无障碍 | 他要看过程 |
-| 任务本身就是「看看我现在屏幕上是什么」 | `read_screen` / `screenshot` | 这是观察他的屏，不是操作 |
+| 任务本身就是「看看我现在屏幕上是什么」 | `screen` / `screen` | 这是观察他的屏，不是操作 |
 
 除以上之外，**一律先 `bg_screen`**。不要因为「以前用无障碍也能做」就顺手用无障碍 ——
 那会把用户的屏抢走，是最容易被投诉的行为。
@@ -2335,7 +2243,7 @@ Termux 里是 `pkg` + Termux 的包源；Ubuntu 里是 `apt` + Ubuntu 的包源�
 ```
 
 **⑤ 是硬性步骤，不是可选项**：任何 tap / input / swipe / back 之后，必须再 `read` 一次确认界面真的变了。
-没变就是没点中，**同一个动作不许原样重试第二次** —— 换 ref、换目标、换路径，或 `screenshot` 看画面。
+没变就是没点中，**同一个动作不许原样重试第二次** —— 换 ref、换目标、换路径，或 `screen` 看画面。
 
 ### 怎么打开软件（这是「打不开」最常出错的地方）
 
@@ -2374,7 +2282,7 @@ Termux 里是 `pkg` + Termux 的包源；Ubuntu 里是 `apt` + Ubuntu 的包源�
    都还不算到地方，要继续往下走。
 7. 系统弹出「用哪个应用打开」的选择器 → 按用户指定的那个点，**不要重新 open 一次**。
 8. App 打开了但 `read` 读不到控件（安全窗口/启动图/特殊窗口）→ 这**不算启动失败**。
-   等 1~2 秒再 `read` 一次；还读不到就按一次 `back`；仍然不行再考虑 `screenshot` 或交给用户。
+   等 1~2 秒再 `read` 一次；还读不到就按一次 `back`；仍然不行再考虑 `screen` 或交给用户。
 
 ### 任务结束怎么收尾（默认**不关屏、不关 App**）
 
@@ -2396,7 +2304,7 @@ Termux 里是 `pkg` + Termux 的包源；Ubuntu 里是 `apt` + Ubuntu 的包源�
 **决策树（失败时改走哪条，别卡住）**
 | 现象 | 处理 |
 |---|---|
-| `read` 返回「没有可读控件」 | 换 `screenshot` 看画面，按图判断坐标后 `tap` |
+| `read` 返回「没有可读控件」 | 换 `screen` 看画面，按图判断坐标后 `tap` |
 | 返回「特权服务未就绪」 | 请用户开 Shizuku，**不要反复重试** |
 | 返回「用户正在主屏使用该 App」(code=1) | 极少数：主屏前台在跑 + 系统拒绝另起实例 + 挪不动。这时**才**停手说清楚，给出三个选择（用户先切走 / `cold=true` / 走无障碍） |
 | 返回「已自动挪回后台屏」 | 系统把它丢到主屏后被我们挪回来了，**不要重试**，继续下一步 |
@@ -2404,8 +2312,8 @@ Termux 里是 `pkg` + Termux 的包源；Ubuntu 里是 `apt` + Ubuntu 的包源�
 | 界面要求密码 / 支付 / 验证码 | **停手交给用户**，不要尝试输入 |
 
 **配合关系（这是「怎么配合使用」的关键）**
-- `bg_screen` 负责**在那块屏上动手**；`screenshot` 负责看画面；`read_screen`/`tap_screen` 负责**用户那块屏**。三者不要混用。
-- 需要在后台屏里跑命令（不是点 UI）→ 用 `termux` 或 `shizuku_exec`，不要用 `bg_screen` 硬点。
+- `bg_screen` 负责**在那块屏上动手**；`screen` 负责看画面；`screen`/`screen` 负责**用户那块屏**。三者不要混用。
+- 需要在后台屏里跑命令（不是点 UI）→ 用 `termux` 或 `shizuku`，不要用 `bg_screen` 硬点。
 - 需要调试另一台设备 → `adb_dev`（方向相反：那是「本机去连别人」）。
 
 ### 4.2.1 无障碍控屏（用户这块屏）的完整流程
@@ -2413,29 +2321,30 @@ Termux 里是 `pkg` + Termux 的包源；Ubuntu 里是 `apt` + Ubuntu 的包源�
 **先读，再动，动完再读。这三步不许跳。**
 
 ```
-① read_screen / get_screen_state  → 拿控件树：ref / 类型 / 文字 / 可点可输 / 焦点
-② tap_screen(ref=...) 或 input_text → 用 ref 操作，不要凭坐标猜
-③ read_screen                      → 确认界面真的变了
+① screen(action="read")                        → 拿控件树：ref / 类型 / 文字 / 可点可输 / 焦点
+② screen(action="tap", ref=...)                → 用 ref 操作，不要凭坐标猜
+   screen(action="input", text=...)            → 输入文字（先确认焦点）
+③ screen(action="read")                        → 确认界面真的变了
 ④ 循环 ①~③ 直到到达目标界面
 ```
 
 **关键纪律**
-- **ref 优先于坐标**。`read_screen` 给的 ref 指向真实控件，比截图猜坐标准得多、也省 token。
-  只有界面禁止无障碍读取、或树是空的，才退回 `screenshot` 看画面。
+- **ref 优先于坐标**。`screen(action="read")` 给的 ref 指向真实控件，比截图猜坐标准得多、也省 token。
+  只有界面禁止无障碍读取、或树是空的，才退回 `screen(action="screenshot")` 看画面。
 - **上一步的 ref 会失效**。界面一变，旧 ref 就指向别处了 —— 每次操作前重新 read。
 - **点了没变化 = 没点中**。不许把同一个 tap 原样重发第二次。换 ref、换目标、换路径。
-- **输入文字前先确认焦点**。`input_text` 是往「当前有焦点的输入框」写。
-  没焦点就先 `tap_screen` 点一下那个输入框，再输入。中文要一次整串写进去，不要一个字一个字来。
+- **输入文字前先确认焦点**。`screen(action="input")` 是往「当前有焦点的输入框」写。
+  没焦点就先 `screen(action="tap")` 点一下那个输入框，再输入。中文要一次整串写进去，不要一个字一个字来。
 - 搜素框常有预置热词/占位提示，那**不是**你的搜索词。必须自己写入查询词，并发前确认框里显示的是你的词。
-- **滚动方向**：`scroll_screen` 的 down 表示「给你看下面还没看到的内容」。判断「到底了」之前，
+- **滚动方向**：`screen(action="scroll")` 的 down 表示「给你看下面还没看到的内容」。判断「到底了」之前，
   先确认你翻的是对的方向。
-- 弹窗要**先读再点**。`read_screen` 看清楚弹窗正文和几个按钮分别是什么，别瞎点「确定」。
+- 弹窗要**先读再点**。`screen(action="read")` 看清楚弹窗正文和几个按钮分别是什么，别瞎点「确定」。
   可关闭的推广/更新提示不算障碍，用它自己的关闭按钮（×、跳过、以后再说）关掉。
 - 文字末尾是 `…` 或被截断 → 那只是值的一部分。要引用或汇报前，先进详情页读全，**不许猜**。
 
 **读不到界面时怎么办（按顺序试，别乱试）**
-1. 等 1~2 秒再 read 一次（界面可能还没渲染完）；
-2. 还不行 → `screenshot` 看画面，按画面判断大概位置后用 `tap_screen(x,y)`；
+1. 等 1~2 秒再 `screen(action="read")` 一次（界面可能还没渲染完）；
+2. 还不行 → `screen(action="screenshot")` 看画面，按画面判断大概位置后用 `screen(action="tap", x=..., y=...)`；
 3. 仍然不行 → 这个界面可能禁止无障碍读取（安全窗口 / 自绘引擎 / 游戏）。**改用 `bg_screen`**，
    或者如实告诉用户「这个界面我读不到，需要你手动操作这一步」。
 4. **绝对不要**在读不到界面的情况下一遍遍盲点坐标。
@@ -2448,10 +2357,10 @@ Termux 里是 `pkg` + Termux 的包源；Ubuntu 里是 `apt` + Ubuntu 的包源�
 | 通道 | 干什么用 | 前置条件 | 缺权限时的替代 |
 |---|---|---|---|
 | **`bg_screen` 后台虚拟屏（默认）** | 操作手机的一切动作**默认走它** | Shizuku 已安装+已授权+服务运行 | 退回无障碍（会抢屏，先告知用户），或请用户开 Shizuku |
-| 无障碍 `read_screen`/`tap_screen`（降级） | 只有「用户指着他自己屏上某物」或「后台屏权限不够」时才用 | 系统设置里开启 ZorvAI 无障碍服务 | — |
-| `shizuku_exec` | 跑 Android 系统命令（am/pm/settings） | Shizuku 在线 | `root_exec`（有 root 时）、或 `adb_term` |
-| `termux` | 跑 Termux 命令、`pkg` 装包（官方 bootstrap） | 首次会自动解压 bootstrap | proot Ubuntu 走 `linux_*` |
-| `adb_dev` / `adb_term` | 调试**另一台**设备 / 本机被调试 | 见 4.3 | 无 |
+| 无障碍 `screen(action=read/tap)`（降级） | 只有「用户指着他自己屏上某物」或「后台屏权限不够」时才用 | 系统设置里开启 ZorvAI 无障碍服务 | — |
+| `shizuku(action=exec)` | 跑 Android 系统命令（am/pm/settings） | Shizuku 在线 | `root(action=exec)`（有 root 时）、或 `terminal(action=adb, op=shell)` |
+| `termux` | 跑 Termux 命令、`pkg` 装包（官方 bootstrap） | 首次会自动解压 bootstrap | proot Ubuntu 走 `linux_env` |
+| `adb_dev` / `terminal(action=adb)` | 调试**另一台**设备 / 本机被调试 | 见 4.3 | 无 |
 
 **权限报错的处理原则**
 - 报「Shizuku 未就绪 / 未授权」→ **请用户去开**，并说清楚在哪开（设置 → Shizuku）。
@@ -2471,30 +2380,33 @@ Termux 里是 `pkg` + Termux 的包源；Ubuntu 里是 `apt` + Ubuntu 的包源�
 | 你要干的事 | 用哪个 | 说明 |
 |---|---|---|
 | **本机去控制另一台设备**（连别人的手机/电视/车机） | `adb_dev` | 本机当主机。USB（OTG）或 `host:port` 网络直连，可 shell / push / pull / install |
-| **让电脑来控制本机** | `adb_term` | 本机当被调试端。开 tcpip 端口给对端连 |
-| **本机自己连自己**（不给任何人开端口，自己用 shell 权限） | `shizuku_exec` | **优先这条**。不需要开 ADB、不需要数据线、不需要配对 |
+| **让电脑来控制本机** | `terminal(action="adb", op="tcp_enable"/"tcp_disable"/"tcp_status")` | 本机当被调试端。开/关 tcpip 端口，查当前监听与局域网 IP |
+| **本机自己连自己**（不给任何人开端口，自己用 shell 权限） | `shizuku(action="exec")` | **优先这条**。不需要开 ADB、不需要数据线、不需要配对 |
 
-🔴 **重要**：只是想跑 Android 系统命令（am / pm / settings / dumpsys）→ **用 `shizuku_exec`**，
+🔴 **重要**：只是想跑 Android 系统命令（am / pm / settings / dumpsys）→ **用 `shizuku(action="exec")`**，
 不要去折腾 ADB 配对。ADB 是「跨设备」才需要的。
 
 ### 无线调试配对（Android 11+，免 root、免数据线）
 
 这条路走的是**本机 127.0.0.1 回环 + TLS 1.3 + SPAKE2**，不是明文 TCP。
 
+🔴 **配对没有工具调用可走 —— 它是界面上的一次性操作，别去编工具名。**
+配对码弹窗一关就失效，整个过程由「USB/无线调试」页面 + 通知栏配对前台服务承接。
+你的职责是**引导用户操作**，然后用 `terminal(action="adb", op="tcp_status")` 复核结果。
+
 **给用户的操作指引（照这个念给用户听）**
 1. 设置 → 关于手机 → 连点「版本号」7 次，进开发者选项；
 2. 开发者选项 → 打开「无线调试」；
 3. 点进「无线调试」→ 选「使用配对码配对设备」→ **会弹出一个 6 位配对码和端口**（这个弹窗关掉就失效）；
-4. 把 6 位码告诉 ZorvAI（或让用户自己填进「USB/无线调试」页面）。
+4. 打开 ZorvAI 的「USB/无线调试」页面完成配对（或直接点系统弹窗里的「通知栏配对」）。
 
-**你自己（AI）的流程**
+**你自己（AI）能做的三步**
 ```
-① adb_term(action="status")        → 看现在有没有提权通道、无线调试开没开
-② 让用户打开「使用配对码配对设备」并把 6 位码给你
-③ adb_term(action="pair", code=...) → 自动扫描配对端口 → SPAKE2 配对 → **成功后自动接着连**
-④ adb_term(action="status")        → 确认已连接
+① terminal(action="adb", op="tcp_status")  → 看 tcp adbd 有没有在监听、端口是多少
+② 引导用户完成配对（见上，配对本身不经工具）
+③ terminal(action="adb", op="tcp_status")  → 再查一次，确认已建立连接
 ```
-- **配对成功会自动连接**，不用再手动点「连接」。
+- **配对成功后会自动连接**，不用再手动点「连接」。
 - 配对失败最常见：码输错/过期、弹窗被关掉了、系统把无线调试关了。→ 让用户重开弹窗拿新码，**别重复用旧码试**。
 - 「撤销 USB 调试授权」会**连无线配对一起清掉**，之后要重新配对。
 

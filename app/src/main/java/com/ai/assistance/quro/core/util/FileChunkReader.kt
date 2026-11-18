@@ -8,7 +8,7 @@ import java.io.RandomAccessFile
  * 分页/分块文件读取（issue #11 问题5）。
  *
  * 背景（用户 v1.1.4 实测）：全部会话存于单个 JSON（本机约 13MB），而读取类工具
- * （file_read / read_text_file / workspace_read）均为**整读语义**——
+ * （file_read / read_text_file / workspace(action=read)）均为**整读语义**——
  * `file_read` 甚至对 >512KB 文件直接回「建议分段读取」却**不提供分段能力**，
  * 读取/审计/导出历史对话只能把大内容整体读进上下文，逼近模型上限。
  *

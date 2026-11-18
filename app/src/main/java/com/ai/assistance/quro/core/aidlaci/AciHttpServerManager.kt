@@ -33,11 +33,12 @@ class AciHttpServerManager(private val context: Context) {
         }
 
         return try {
-            val actualPort = server.start()
+            // 🔴 2026-11-12：此前这里没把 port 传下去，QuroAciHttpServer 内部又写死
+            // ServerSocket(0) → 调用方要 8848，实际永远拿到随机端口（实测 38457）。
+            val actualPort = server.start(port)
             isRunning.set(true)
             Log.i(TAG, "ACI HTTP Server started on port $actualPort")
             Log.i(TAG, "Endpoint: ${server.endpoint}")
-            Log.i(TAG, "Mock capabilities: ${server.getStatus().optJSONObject("data")?.optInt("capabilities_count", 0)}")
             actualPort
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start ACI HTTP Server: ${e.message}")

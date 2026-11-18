@@ -101,7 +101,7 @@ object QuroToolSummary {
      * @param result 工具返回值；`null` 或空白 = **仍在执行中**（结果尚未回填）。
      */
     fun of(name: String, args: String, result: String?, durationMs: Long): Summary {
-        val fam = familyOf(name)
+        val fam = familyOf(name, args)
         val jo = parseArgs(args)
         val running = result.isNullOrBlank()
         val status = if (running) Status.RUNNING else statusOf(result!!, fam)
@@ -232,7 +232,32 @@ object QuroToolSummary {
     // ---------------- 族归类 ----------------
 
     /** 归族。顺序敏感：先匹配具体族，兜底 OTHER。 */
-    fun familyOf(name: String): Family {
+    fun familyOf(name: String, args: String = ""): Family {
+        val n0 = name.trim().lowercase()
+        // 工作区合体工具按 action 分族：写类用写文件图标，其余按读文件处理。
+        if (name.trim().lowercase() == "workspace") {
+            val action = runCatching {
+                org.json.JSONObject(args).optString("action", "")
+            }.getOrDefault("").trim().lowercase()
+            return if (action in setOf("write", "doc", "write_and_render"))
+                Family.FILE_WRITE else Family.FILE_READ
+        }
+        // 8 族合体：按 action 落到最贴近的族，避免全部掉进兜底 BASIC
+        if (n0 in setOf("shizuku", "root", "permissions", "aci", "keyboard", "screen", "memory")) {
+            val action = runCatching {
+                org.json.JSONObject(args).optString("action", "")
+            }.getOrDefault("").trim().lowercase()
+            return when (n0) {
+                "shizuku", "root" -> Family.TERMINAL
+                "permissions" -> if (action in setOf("check", "status", "run_status")) Family.SYSTEM else Family.DEVICE
+                "screen" -> if (action in setOf("read", "foreground", "state")) Family.FILE_READ else Family.DEVICE
+                "keyboard" -> Family.DEVICE
+                "aci" -> Family.WEB
+                "memory" -> if (action in setOf("save", "delete", "log", "correct", "kb_add", "kb_delete", "rag_index"))
+                    Family.FILE_WRITE else Family.FILE_READ
+                else -> Family.SYSTEM
+            }
+        }
         val n = name.lowercase()
         return when {
             n.contains("web_search") || n.contains("webfetch") || n.contains("read_url") ||

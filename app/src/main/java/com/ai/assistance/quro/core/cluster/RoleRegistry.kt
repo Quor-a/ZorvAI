@@ -43,7 +43,17 @@ object RoleRegistry {
 
     // ——————————————— 主持 ———————————————
 
+    // 🔴 并发安全（2026-11-12）：S6 把五专家播种挪到后台线程后，后台 upsert 与
+    // 主线程 enroll/upsert 并发执行「loadRaw → 改 → saveRaw」同一个 JSON 文件 ——
+    // 后写者拿旧快照整文件覆写，把刚登记的角色**静默抹掉**。这不是理论风险：
+    // 测试全量跑时稳定复现（enroll 成功后角色消失），真机同样存在
+    // （ClusterRuntime.init 主线程 + 播种后台线程 + 用户/对话框 AI 并发操作）。
+    // 修法：所有「读-改-写」复合操作在对象监视器上串行化 —— 后到的写必须先读到
+    // 先到写的结果，丢失更新在结构上不可能。@Synchronized 锁 object 单例自身，
+    // 同线程重入安全（ensureHost → bindHostSkills → loadRaw 链不会自锁）。
+
     /** 保证主持人格与角色配置一定存在（应用启动 / 集群初始化时调用） */
+    @Synchronized
     fun ensureHost(context: Context) {
         // 🔴 灵魂解耦（2026-11-06）：集群身份不再写进 ZorvAI 人格库 —— 主持档案
         // 完全自持在 quro_cluster_roles.json（见 hostProfile），人格库零写入。
@@ -86,8 +96,12 @@ object RoleRegistry {
         prefs.edit().putBoolean(KEY_EXPERTS_SEEDED, true).apply()
         Thread {
             try {
-                val existing = loadRaw(context).map { it.personaId }.toSet()
-                seedBuiltinExpertsLocked(context, existing)
+                // 🔴 后台播种必须走 @Synchronized 入口，与主线程的 enroll/upsert 串行，
+                // 否则「读旧快照 → 整文件覆写」会把并发登记的角色抹掉（丢失更新）。
+                synchronized(this@RoleRegistry) {
+                    val existing = loadRaw(context).map { it.personaId }.toSet()
+                    seedBuiltinExpertsLocked(context, existing)
+                }
             } catch (t: Throwable) {
                 android.util.Log.w("RoleRegistry", "内置专家人格播种失败（下次启动重试）", t)
                 prefs.edit().putBoolean(KEY_EXPERTS_SEEDED, false).apply()
@@ -188,11 +202,13 @@ object RoleRegistry {
         loadRaw(context).firstOrNull { it.personaId == personaId }
 
     /** 删除角色。主持不可删 —— 任何调用都会抛异常。 */
+    @Synchronized
     fun delete(context: Context, personaId: String) {
         require(!isHost(personaId)) { "主持不可删除" }
         saveRaw(context, loadRaw(context).filter { it.personaId != personaId })
     }
 
+    @Synchronized
     fun upsert(context: Context, role: RoleProfile) {
         val list = loadRaw(context).toMutableList()
         val idx = list.indexOfFirst { it.personaId == role.personaId }
@@ -207,6 +223,7 @@ object RoleRegistry {
     }
 
     /** 把已有的人格卡纳为集群角色 */
+    @Synchronized
     fun enroll(
         context: Context, personaId: String,
         modelProfileId: String, role: RoleKind = RoleKind.EXPERT,
@@ -224,6 +241,9 @@ object RoleRegistry {
 
     private fun file(context: Context) = File(context.filesDir, FILE)
 
+    // loadRaw 内含「迁移/自愈 → 落盘」的写路径，只读入口（get/roles/host）也会触发，
+    // 所以锁必须加在这里，而不能只锁复合操作。
+    @Synchronized
     private fun loadRaw(context: Context): List<RoleProfile> {
         val f = file(context)
         if (!f.exists()) return emptyList()
@@ -301,6 +321,7 @@ object RoleRegistry {
         )
     )
 
+    @Synchronized
     private fun saveRaw(context: Context, list: List<RoleProfile>) {
         val arr = JSONArray()
         list.forEach { arr.put(it.toJson()) }

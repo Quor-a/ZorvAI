@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver
 import android.content.Intent
 import android.content.IntentFilter
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import android.graphics.PixelFormat
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -49,6 +50,12 @@ import com.ai.assistance.quro.activity.QuroMainActivity
 import com.ai.assistance.quro.core.pet.QuroPetStateBus
 import com.ai.assistance.quro.core.pet.PetPack
 import com.ai.assistance.quro.core.pet.PetPackAssets
+import com.ai.assistance.quro.core.pet.PetAppearanceResolver
+import com.ai.assistance.quro.core.pet.PetSource
+import com.ai.assistance.quro.core.pet.PetTurn
+import com.ai.assistance.quro.core.pet.PetTurnRunner
+import com.ai.assistance.quro.core.pet.QuroPetTurn
+import com.ai.assistance.quro.core.pet.QuroQuietTurn
 import com.ai.assistance.quro.core.util.QuroServiceLifecycleOwner
 import com.ai.assistance.quro.core.tools.QuroVoiceFeaturePrefs
 import com.ai.assistance.quro.genui.aiapp.ui.PetPrefs
@@ -78,11 +85,18 @@ class QuroDesktopPetService : Service() {
      * null 时走 Canvas 矢量兜底，加载完自动重组切到雪碧图。
      */
     private val packImageState = androidx.compose.runtime.mutableStateOf<ImageBitmap?>(null)
+    /** 当前宠物包（形象单真源）。IO 解析完成后回填，Compose 自动从矢量兜底切到雪碧图。 */
+    private val packState = androidx.compose.runtime.mutableStateOf<PetPack.LoadedPack?>(null)
+    /** 环境动作池与间隔：随宠物包异步解析结果一起更新，避免先挂窗时永远没有环境动画。 */
+    private val ambientActionsState = androidx.compose.runtime.mutableStateOf<List<String>>(emptyList())
+    private val ambientIntervalState = androidx.compose.runtime.mutableStateOf(33)
     @Volatile private var currentManifest: PetPack.Manifest? = null
     /** 记录当前包名：只有真正换了包才清空 LRU，避免每次设置热更新都重解码。 */
     private var lastPackDir: String? = null
     /** 首帧异步解码任务；服务销毁 / 窗口重建时取消。 */
     private var sheetLoadJob: kotlinx.coroutines.Job? = null
+    /** 形象 IO 解析任务（内置包落盘 + 目录扫描）；窗口重建时取消避免重复回填。 */
+    private var appearanceJob: kotlinx.coroutines.Job? = null
     /** 轻点互动的屏幕线索采集任务（IO 线程，主线程零阻塞）。 */
     private var tapCueJob: kotlinx.coroutines.Job? = null
 
@@ -126,11 +140,15 @@ class QuroDesktopPetService : Service() {
     private val petReplyText = androidx.compose.runtime.mutableStateOf<String?>(null)
     private val petScreenMode = androidx.compose.runtime.mutableStateOf<com.ai.assistance.quro.core.pet.PetScreenBrain.Mode?>(null)
     private val petMenuItems = androidx.compose.runtime.mutableStateOf<List<com.ai.assistance.quro.ui.pet.PetMenuItem>>(emptyList())
+    /** 手动互动动作的真实动画名：非 null 时优先于阶段 / 环境动作，播完自动清空。 */
+    private val petActionPose = androidx.compose.runtime.mutableStateOf<String?>(null)
+    private var actionEndRunnable: Runnable? = null
     private val petScopeJob = kotlinx.coroutines.SupervisorJob()
     private val petScope = kotlinx.coroutines.CoroutineScope(
         petScopeJob + kotlinx.coroutines.Dispatchers.Main.immediate,
     )
     private var screenJob: kotlinx.coroutines.Job? = null
+    private var turnJob: kotlinx.coroutines.Job? = null
     private var replyJob: kotlinx.coroutines.Job? = null
     private var statusJob: kotlinx.coroutines.Job? = null
 
@@ -180,43 +198,98 @@ class QuroDesktopPetService : Service() {
         }
     }
 
-    /** 所有桌宠回合的唯一出口：结构化接线 + 按需拉起主对话框。 */
-    private fun emitPetTurn(turn: com.ai.assistance.quro.core.pet.PetTurn) {
-        com.ai.assistance.quro.ui.QuroShareBridge.emitPetTurn(turn)
-        if (turn.openChat) openChat()
+    /**
+     * 所有桌宠回合的唯一出口：服务侧无界面执行，回复只回流悬浮窗气泡。
+     *
+     * 旧链路是 `QuroShareBridge → ChatScreen → ViewModel`，只有主界面被组合时
+     * 才有人消费回合，所以每次都必须 `startActivity` 把对话框拉到前台。
+     * 现在改由 [PetTurnRunner] 直接跑完整对话内核，全程不启动任何 Activity。
+     */
+    private fun canStartTurn(): Boolean {
+        if (petBusy.value) {
+            petStatus.value = "还在处理上一句…"
+            scheduleStatusClear()
+            return false
+        }
+        if (!QuroQuietTurn.allowAutoTurn()) {
+            petStatus.value = QuroQuietTurn.FAILURE_HINT
+            scheduleStatusClear()
+            return false
+        }
+        return true
     }
 
-    /** 屏幕分析 / 后台虚拟屏任务：全程 IO，主线程零阻塞。 */
+    /** 发起一个无界面回合；失败只在桌宠上给一句轻提示，绝不写进对话框。 */
+    private fun startPetTurn(turn: PetTurn) {
+        petBusy.value = true
+        petReplyText.value = null
+        petStatus.value = when (turn.source) {
+            PetSource.PET_TASK -> "正在后台完成任务…"
+            PetSource.PET_SCREEN -> "正在说明屏幕…"
+            else -> "正在想…"
+        }
+        turnJob?.cancel()
+        turnJob = petScope.launch {
+            val text = PetTurnRunner.run(this@QuroDesktopPetService, turn)
+            petBusy.value = false
+            petStatus.value = if (text == null) QuroQuietTurn.FAILURE_HINT else null
+            scheduleStatusClear()
+        }
+    }
+
+    private fun emitPetTurn(turn: PetTurn) {
+        if (!canStartTurn()) return
+        startPetTurn(turn)
+    }
+
+    /**
+     * 「看当前屏幕 / 后台虚拟屏任务」：读屏与 AI 说明都在悬浮窗里闭环，不跳对话框。
+     * 读屏与请求全程 IO，主线程零阻塞。
+     */
     private fun launchScreenTurn(task: Boolean, text: String) {
+        if (!canStartTurn()) return
         val sp = getSharedPreferences(SETTINGS_PREFS, MODE_PRIVATE)
         val preferVirtual = sp.getBoolean("pet_virtual_screen", true)
         petBusy.value = true
         petStatus.value = if (preferVirtual) "正在准备后台虚拟屏…" else "正在看屏幕…"
+        petReplyText.value = null
+        showPetPanel(PetPanel.None)
         screenJob?.cancel()
         screenJob = petScope.launch {
-            val insight = com.ai.assistance.quro.core.pet.PetScreenBrain.observe(
-                this@QuroDesktopPetService,
-                preferVirtual = preferVirtual,
-                withScreenshot = true,
-            )
-            petBusy.value = false
-            petStatus.value = insight.status
-            petScreenMode.value = insight.mode
-            val turn = if (task) {
-                com.ai.assistance.quro.core.pet.QuroPetTurn.task(text, insight.toHiddenContext())
-            } else {
-                com.ai.assistance.quro.core.pet.QuroPetTurn.screen(text, insight.toHiddenContext())
+            // 读屏可能被设置热更新 / 窗口重建取消：CancellationException 会直接跳过
+            // 后续语句，必须用 finally 交还忙状态，否则桌宠永远卡在「正在准备…」。
+            var handedOff = false
+            try {
+                val insight = com.ai.assistance.quro.core.pet.PetScreenBrain.observe(
+                    this@QuroDesktopPetService,
+                    preferVirtual = preferVirtual,
+                    withScreenshot = true,
+                )
+                if (!isActive) return@launch
+                petStatus.value = insight.status
+                petScreenMode.value = insight.mode
+                val turn = if (task) {
+                    QuroPetTurn.task(text, insight.toHiddenContext())
+                } else {
+                    QuroPetTurn.screen(text, insight.toHiddenContext())
+                }
+                // 读屏阶段已占用忙状态，这里直接接续执行，不再过一次闸门。
+                handedOff = true
+                startPetTurn(turn)
+            } finally {
+                if (!handedOff && petBusy.value) {
+                    petBusy.value = false
+                    petStatus.value = null
+                }
             }
-            emitPetTurn(turn)
-            showPetPanel(PetPanel.None)
-            scheduleStatusClear()
         }
     }
 
     private fun scheduleStatusClear() {
         statusJob?.cancel()
         statusJob = petScope.launch {
-            kotlinx.coroutines.delay(3_600L)
+            // 有回复时留够阅读时间；纯状态提示很快消失，不遮挡桌面。
+            kotlinx.coroutines.delay(if (petReplyText.value.isNullOrBlank()) 3_600L else 12_000L)
             petStatus.value = null
             petScreenMode.value = null
             petReplyText.value = null
@@ -226,8 +299,49 @@ class QuroDesktopPetService : Service() {
     private fun submitPetInput() {
         val text = petInputText.value.trim()
         if (text.isBlank()) return
-        emitPetTurn(com.ai.assistance.quro.core.pet.QuroPetTurn.input(text))
         showPetPanel(PetPanel.None)
+        emitPetTurn(QuroPetTurn.input(text))
+    }
+
+    /**
+     * 播放一段手动互动动画。
+     *
+     * 旧实现只把 `statusText` / `PERFORMING` 写进总线：有宠物包时姿态被映射成
+     * `celebrate`，包里没有这个动画就回退 `stand`，看上去「什么都没发生」。
+     * 这里把宠物包 interactions 里声明的真实动画名作为姿态传给帧动画组件，
+     * 并按帧数 × 帧时长给足播放时间；期间环境动作不会覆盖它。
+     */
+    private fun startManualAction(pose: String) {
+        actionEndRunnable?.let { mainHandler.removeCallbacks(it) }
+        val def = currentManifest?.animations?.get(pose)
+        val duration = def?.let { d ->
+            (d.frames.toLong() * d.frameDurationMs.coerceAtLeast(16L) * 3L)
+                .coerceIn(1_800L, 5_000L)
+        } ?: 2_600L
+        petActionPose.value = pose
+        actionEndRunnable = Runnable {
+            petActionPose.value = null
+            actionEndRunnable = null
+            if (QuroPetStateBus.phase == PetPhase.PERFORMING) {
+                QuroPetStateBus.phase = PetPhase.IDLE
+            }
+        }.also { mainHandler.postDelayed(it, duration) }
+    }
+
+    /** 「播互动动作」：只播动画 + 显示动作名，不发起任何 AI 回合、不写对话框。 */
+    private fun playInteractionAction() {
+        showPetPanel(PetPanel.None)
+        val packInter = currentManifest?.interactions
+            ?.filter { it.enabled && it.animation != null }
+            ?.randomOrNull()
+        val legacy = PetPrefs.load(this).interactions.randomOrNull()
+        val label = packInter?.label ?: legacy?.label ?: "在这里"
+        val pose = packInter?.animation ?: legacy?.action ?: "celebrate"
+        startManualAction(pose)
+        if (!QuroPetStateBus.isActive) QuroPetStateBus.phase = PetPhase.PERFORMING
+        petReplyText.value = label
+        petStatus.value = null
+        scheduleStatusClear()
     }
 
     /** 快捷菜单动作分发；图标与文案都在 PetVisuals 里统一定义。 */
@@ -236,19 +350,7 @@ class QuroDesktopPetService : Service() {
             "input" -> showPetPanel(PetPanel.Input)
             "screen" -> launchScreenTurn(false, "看看我现在在做什么")
             "task" -> launchScreenTurn(true, "帮我把当前屏幕上的这件事做完")
-            "action" -> {
-                // 只播状态动画，不发对话回合；动画由环境动作池在下一 tick 自然接管。
-                val label = currentManifest?.interactions?.filter { it.enabled }?.randomOrNull()?.label
-                    ?: PetPrefs.load(this).interactions.randomOrNull()?.label
-                    ?: "在这里"
-                QuroPetStateBus.statusText = label
-                QuroPetStateBus.phase = PetPhase.PERFORMING
-                mainHandler.postDelayed({
-                    QuroPetStateBus.statusText = null
-                    if (QuroPetStateBus.phase == PetPhase.PERFORMING) QuroPetStateBus.phase = PetPhase.IDLE
-                }, 2600L)
-                showPetPanel(PetPanel.None)
-            }
+            "action" -> playInteractionAction()
             "mode" -> {
                 val spMode = getSharedPreferences(SETTINGS_PREFS, MODE_PRIVATE)
                 val next = when (spMode.getString("placement_mode", "physics")) {
@@ -292,14 +394,19 @@ class QuroDesktopPetService : Service() {
     override fun onCreate() {
         super.onCreate()
         running = true
+        // 前台服务必须在启动后 5 秒内挂上通知。冷启动时主线程往往正被应用初始化与
+        // 首屏组合占满，通知若排在 onStartCommand / addPet 之后，会直接触发
+        // ForegroundServiceDidNotStartInTimeException —— 表现为「宠物迟迟不来或不来」。
+        runCatching { startForeground(NOTIFY_ID, buildNotification()) }
         // 服务级接线（事件源在回合管理层而非 UI）：
         // 订阅 QuroAgentTrace —— 此前唯一生产者在 ChatScreen 组合里，GenUI 应用内聊天、
         // 语音对话、后台代理、App 被杀重启（START_STICKY 拉回）四种场景桌宠全部失联。
-        // 仅在 IDLE 时写入，避免与 ChatScreen 的即时微调互相打架。
-        // 🔴 2026-11-07：存 Job 引用，避免服务反复启停累积永久订阅者（onDestroy 里 cancel）。
+        // 仅在 IDLE 时写入，避免与即时微调互相打架；语音球主导状态期间让位，
+        // 保证两个宿主读到的始终是同一个生产者写出来的阶段。
         traceJob = kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
             com.ai.assistance.quro.core.agent.QuroAgentTrace.flow.collect { ev ->
                 val bus = com.ai.assistance.quro.core.pet.QuroPetStateBus
+                if (bus.voiceBallOwnsState) return@collect
                 if (bus.phase != com.ai.assistance.quro.genui.sdk.components.PetPhase.IDLE) return@collect
                 when (ev.kind) {
                     com.ai.assistance.quro.core.agent.QuroAgentTrace.TraceKind.ACTION -> {
@@ -335,10 +442,36 @@ class QuroDesktopPetService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        startForeground(NOTIFY_ID, buildNotification())
-        if (intent?.action == ACTION_APPLY_SETTINGS) rebuildPet()
-        else if (composeView == null) addPet()
+        when (intent?.action) {
+            ACTION_APPLY_SETTINGS -> {
+                // 换包 / 改形象后旧缓存必须失效，否则重建窗口仍画着上一个包。
+                PetAppearanceResolver.invalidate()
+                rebuildPet()
+            }
+            ACTION_ENSURE_PET -> ensurePetWindow()
+            else -> if (composeView == null) addPet()
+        }
         return START_STICKY
+    }
+
+    /**
+     * 服务还活着、但悬浮窗没挂上（首次挂窗异常、被系统回收、设置里关过可见性）时，
+     * 由冷启动恢复入口显式补挂。以前只有 composeView==null 才会 addPet，
+     * 一旦挂窗失败，服务常驻而窗口永远不再出现。
+     */
+    private fun ensurePetWindow() {
+        val v = composeView
+        if (v == null) {
+            addPet()
+            return
+        }
+        if (v.visibility != View.VISIBLE && QuroVoiceFeaturePrefs.getDesktopPet(this)) {
+            v.visibility = View.VISIBLE
+        }
+        if (v.visibility == View.VISIBLE) {
+            windowAttached = true
+            QuroPetStateBus.desktopPetShown = true
+        }
     }
 
     /** 订阅 QuroAgentTrace 的协程句柄；onDestroy 必须取消，否则服务重启会累积订阅者。 */
@@ -346,16 +479,26 @@ class QuroDesktopPetService : Service() {
 
     override fun onDestroy() {
         running = false
+        windowAttached = false
+        QuroPetStateBus.desktopPetShown = false
         mainHandler.removeCallbacksAndMessages(null)
         traceJob?.cancel()
         traceJob = null
+        appearanceJob?.cancel()
+        appearanceJob = null
         sheetLoadJob?.cancel()
         sheetLoadJob = null
         tapCueJob?.cancel()
         tapCueJob = null
         screenJob?.cancel()
+        turnJob?.cancel()
+        turnJob = null
         statusJob?.cancel()
         replyJob?.cancel()
+        actionEndRunnable?.let { mainHandler.removeCallbacks(it) }
+        actionEndRunnable = null
+        petActionPose.value = null
+        petBusy.value = false
         petScopeJob.cancel()
         runCatching { unregisterReceiver(eventsReceiver) }
         petPanel.value = PetPanel.None
@@ -369,11 +512,19 @@ class QuroDesktopPetService : Service() {
     /** 设置保存后立刻重建悬浮窗（旧实现只在服务首次拉起时读一次 PetPrefs）。 */
     private fun rebuildPet() {
         mainHandler.removeCallbacksAndMessages(null)
+        appearanceJob?.cancel()
+        appearanceJob = null
+        windowAttached = false
+        QuroPetStateBus.desktopPetShown = false
         sheetLoadJob?.cancel()
         sheetLoadJob = null
         tapCueJob?.cancel()
         tapCueJob = null
         screenJob?.cancel()
+        // 窗口重建会清掉全部主线程回调，手动动作的姿态状态必须一起归位，
+        // 否则宠物会永远卡在上一个互动动画上。
+        actionEndRunnable = null
+        petActionPose.value = null
         showPetPanel(PetPanel.None)
         composeView?.let { runCatching { windowManager.removeView(it) } }
         composeView = null
@@ -425,14 +576,17 @@ class QuroDesktopPetService : Service() {
     }
 
     private fun addPet() {
-        // 双向接线：订阅本轮 AI 回复，回流到桌宠气泡；失败回合不会 emit，因此不会显示诊断文本。
+        // 双向接线：只订阅「服务侧无界面回合」的独立回复通道。
+        // 旧实现订阅 QuroPetTurnBus.reply，那是一条与主对话 ViewModel 共用的全局
+        // activeTurnId 通道 —— 桌宠回合执行期间用户若在对话框发消息，主对话回复会
+        // 被误回流到桌宠气泡（还会清掉桌宠回合 id）。现在彻底隔离，失败回合不 emit。
         replyJob?.cancel()
         replyJob = petScope.launch {
-            com.ai.assistance.quro.core.pet.QuroPetTurnBus.reply.collect { r ->
+            com.ai.assistance.quro.core.pet.QuroPetTurnBus.headlessReply.collect { r ->
                 if (r != null) {
                     petReplyText.value = r.text
                     petStatus.value = null
-                    com.ai.assistance.quro.core.pet.QuroPetTurnBus.consumeReply()
+                    com.ai.assistance.quro.core.pet.QuroPetTurnBus.consumeHeadlessReply()
                     scheduleStatusClear()
                 }
             }
@@ -447,7 +601,9 @@ class QuroDesktopPetService : Service() {
         val tapInteract = petSettings.tapInteract
         // 🔴 旧版这两个开关在桌宠服务里完全没读：设置页能看到、改了却不影响桌宠。
         val tapOpensPanel = petSettings.tapOpensPanel
-        val petVisible = petSettings.petVisible
+        // 桌宠总开关开着就以它为准：petVisible 与 desktop_pet 两套开关并存时，
+        // 任一处关掉都会造成「设置显示已开启、桌面却空着」。
+        val petVisible = petSettings.petVisible || QuroVoiceFeaturePrefs.getDesktopPet(this)
         val freePosition = petSettings.freePosition
         val interactions = petSettings.interactions
         val petScale = petSettings.petScale.coerceIn(0.5f, 2.0f)
@@ -457,46 +613,57 @@ class QuroDesktopPetService : Service() {
         val sp2 = getSharedPreferences(SETTINGS_PREFS, MODE_PRIVATE)
         val placementMode = sp2.getString("placement_mode", "physics") ?: "physics"   // physics|freeroam|pinned
         val screenContext = sp2.getBoolean("screen_context", false)
-        val builtinDir = PetPackAssets.ensure(this)
-        val packDirName = if (sp2.contains("pet_pack_dir")) {
-            sp2.getString("pet_pack_dir", null)
-        } else {
-            // 首次启动且用户未显式选过：默认启用随包内置的宠物
-            builtinDir?.also { sp2.edit().putString("pet_pack_dir", it).apply() }
-        }
-        val packLoaded = packDirName?.let { dir ->
-            runCatching {
-                val (avails, _) = PetPack.scan(this)
-                avails.firstOrNull { it.dirName == dir }
-            }.getOrNull()
-        }
-        currentManifest = packLoaded?.manifest
-        // 只有换包才清 LRU；设置里点一次开关就广播一次，全清会导致反复解码 14MB 分片。
-        if (lastPackDir != packDirName) {
-            sheetCache.clear()
-            lastPackDir = packDirName
-        }
-        sheetLoadJob?.cancel()
-        // 缓存命中时首帧立即可用；未命中先走矢量兜底，IO 解码完自动重组切雪碧图。
-        packImageState.value = if (packLoaded != null) peekSheetBitmap("stand") else null
-        val manifestSnapshot = currentManifest
-        sheetLoadJob = kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val initial = manifestSnapshot?.let { m ->
-                petPoseAnimationCandidates("stand", true, placementMode)
-                    .firstOrNull { name -> m.animations.containsKey(name) } ?: "stand"
+        // 形象解析走单一真源：预热缓存命中时纯内存同步取包；未命中先把窗口挂成
+        // 矢量兜底，IO 线程再落盘 / 扫描 / 解析 pet.json，完成后回填 Snapshot State
+        // 自动重组切到雪碧图。冷启动绝不把 23MB 素材落盘压到主线程——前台服务
+        // 只有 5 秒窗口，主线程被拖住就会「很久才出现」甚至被系统直接判超时。
+        fun applyAppearance(a: com.ai.assistance.quro.core.pet.PetAppearance) {
+            val loaded = a.pack
+            packState.value = loaded
+            currentManifest = loaded?.manifest
+            val dirName = loaded?.dirName
+            // 只有换包才清 LRU，避免每次设置热更新都重解码巨型分片。
+            if (lastPackDir != dirName) {
+                sheetCache.clear()
+                lastPackDir = dirName
             }
-            val bmp = initial?.let { loadSheetBitmap(it) }
-            if (bmp != null) {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    packImageState.value = bmp
+            val mode = when (placementMode) { "freeroam" -> "freeRoam"; else -> placementMode }
+            val ambient = currentManifest?.ambientFor(mode)
+            ambientActionsState.value = ambient?.actions
+                ?.filter { currentManifest?.animations?.containsKey(it) == true }
+                ?: emptyList()
+            ambientIntervalState.value = ambient?.intervalSeconds ?: petSettings.actionIntervalSec
+            sheetLoadJob?.cancel()
+            packImageState.value = if (loaded != null) peekSheetBitmap("stand") else null
+            val snapshot = currentManifest
+            sheetLoadJob = kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val initial = snapshot?.let { m ->
+                    petPoseAnimationCandidates("stand", true, placementMode)
+                        .firstOrNull { name -> m.animations.containsKey(name) } ?: "stand"
+                }
+                val bmp = initial?.let { loadSheetBitmap(it) }
+                if (bmp != null) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        packImageState.value = bmp
+                    }
                 }
             }
         }
-        // 环境动作池：优先宠物包声明的真实动作名，包未配置时回退旧版 4 种矢量互动。
-        val profileMode = when (placementMode) { "freeroam" -> "freeRoam"; else -> placementMode }
-        val ambientPool = currentManifest?.ambientFor(profileMode)?.actions
-            ?.filter { currentManifest?.animations?.containsKey(it) == true }
-            ?: emptyList()
+        val cachedAppearance = PetAppearanceResolver.peek(this)
+        if (cachedAppearance != null) {
+            applyAppearance(cachedAppearance)
+        } else {
+            packState.value = null
+            currentManifest = null
+            ambientActionsState.value = emptyList()
+            ambientIntervalState.value = petSettings.actionIntervalSec
+            packImageState.value = null
+            appearanceJob?.cancel()
+            appearanceJob = petScope.launch {
+                val a = PetAppearanceResolver.load(this@QuroDesktopPetService)
+                if (composeView != null) applyAppearance(a)
+            }
+        }
         // 物理状态（40ms tick 驱动）
         val physicsPose = androidx.compose.runtime.mutableStateOf<String?>(null) // fall/thrown/walk/stand/dragged
         val velX = androidx.compose.runtime.mutableStateOf(0)
@@ -511,13 +678,15 @@ class QuroDesktopPetService : Service() {
         val ambientFlag = androidx.compose.runtime.mutableStateOf(false)
         var ambientAction = "actionBounce"
         val ambientEndRunnable = Runnable { ambientFlag.value = false }
-        val ambientIntervalSec = currentManifest?.ambientFor(profileMode)?.intervalSeconds
-            ?: petSettings.actionIntervalSec
         mainHandler.postDelayed(object : Runnable {
             override fun run() {
-                if (screenInteractive && !QuroPetStateBus.isActive) {
-                    if (ambientPool.isNotEmpty()) {
-                        ambientAction = ambientPool.random()
+                // 手动互动动作 / 无界面回合进行中不插播环境动作，避免把用户点的动画盖掉。
+                if (screenInteractive && !QuroPetStateBus.isActive &&
+                    petActionPose.value == null && !petBusy.value
+                ) {
+                    val pool = ambientActionsState.value
+                    if (pool.isNotEmpty()) {
+                        ambientAction = pool.random()
                         ambientFlag.value = true
                         mainHandler.postDelayed(ambientEndRunnable, 2600L)
                     } else if (interactions.isNotEmpty()) {
@@ -526,9 +695,9 @@ class QuroDesktopPetService : Service() {
                         mainHandler.postDelayed(ambientEndRunnable, 2600L)
                     }
                 }
-                mainHandler.postDelayed(this, ambientIntervalSec.coerceIn(10, 120) * 1000L)
+                mainHandler.postDelayed(this, ambientIntervalState.value.coerceIn(10, 120) * 1000L)
             }
-        }, ambientIntervalSec.coerceIn(10, 120) * 1000L)
+        }, ambientIntervalState.value.coerceIn(10, 120) * 1000L)
 
 
         val view = ComposeView(context).apply {
@@ -537,6 +706,9 @@ class QuroDesktopPetService : Service() {
             setViewTreeSavedStateRegistryOwner(owner)
             setContent {
                 if (spec != null) {
+                    // 读 Snapshot State：形象 IO 解析完成后自动从矢量兜底切到宠物包雪碧图，
+                    // 不需要重建整个悬浮窗（重建会闪一下并打断物理 tick）。
+                    val packLoaded = packState.value
                     // 阶段仲裁：真实对话状态优先（QuroPetStateBus）；空闲时环境动画接管；
                     // 「显示思考匹配」关闭时不把 THINKING 投影到宠物。
                     val busPhase = QuroPetStateBus.phase
@@ -544,6 +716,8 @@ class QuroDesktopPetService : Service() {
                     val celebrate = QuroPetStateBus.celebrateText
                     val effectivePhase = when {
                         celebrate != null -> PetPhase.DONE
+                        // 手动动作在矢量兜底形象上也要有反应（不吃 AI 生成态）。
+                        petActionPose.value != null && busPhase == PetPhase.IDLE -> PetPhase.PERFORMING
                         ambientFlag.value -> if (ambientAction == "think") PetPhase.THINKING else PetPhase.PERFORMING
                         busPhase == PetPhase.THINKING && !thinkMatch -> PetPhase.IDLE
                         else -> busPhase
@@ -627,7 +801,10 @@ class QuroDesktopPetService : Service() {
                             // 姿态候选的兜底分支会把任意动画名解析到对应行。
                             val poseName = when {
                                 physicsPoseV != null -> physicsPoseV
-                                ambientFlag.value && ambientPool.isNotEmpty() -> ambientAction
+                                // 手动互动动作直接用宠物包声明的真实动画名，帧动画组件会
+                                // 找到对应行并按需解码它所在的分片。
+                                petActionPose.value != null -> petActionPose.value!!
+                                ambientFlag.value && ambientActionsState.value.isNotEmpty() -> ambientAction
                                 effectivePhase == PetPhase.PERFORMING -> "celebrate"
                                 effectivePhase == PetPhase.THINKING || effectivePhase == PetPhase.PLANNING -> "think"
                                 effectivePhase == PetPhase.TOOL_CALLING -> "usetool"
@@ -717,8 +894,23 @@ class QuroDesktopPetService : Service() {
             x = sp.getInt(K_X, -1)
             y = sp.getInt(K_Y, -1)
         }
-        runCatching { windowManager.addView(view, params) }
+        // 挂窗失败必须显式记账：以前用 runCatching 吞掉异常后服务仍常驻，
+        // running=true 让所有冷启动恢复入口直接跳过，桌面就永远空着。
+        val attached = runCatching {
+            windowManager.addView(view, params)
+            true
+        }.getOrDefault(false)
+        if (!attached) {
+            composeView = null
+            lifecycleOwner?.destroy()
+            lifecycleOwner = null
+            windowAttached = false
+            QuroPetStateBus.desktopPetShown = false
+            return
+        }
         petParams = params
+        windowAttached = true
+        QuroPetStateBus.desktopPetShown = true
         // 物理引擎 tick（40ms 循环；physics=重力/投掷/走动，freeroam=5点游走，pinned=静止）
         val dm0 = resources.displayMetrics
         val screenH = dm0.heightPixels
@@ -791,8 +983,12 @@ class QuroDesktopPetService : Service() {
         }
         mainHandler.postDelayed(physicsRunnable, 40L)
 
-        // petVisible=false 时不显示桌宠，但仍保留服务与状态总线（开关可随时热更新回来）。
-        view.visibility = if (petVisible) View.VISIBLE else View.GONE
+        // 桌宠总开关开着就一定显示。petVisible 是形象可见开关，两套开关并存时
+        // 曾出现「设置里显示已开启、桌面却空着」；这里以总开关为最终真源。
+        val petShown = petVisible
+        view.visibility = if (petShown) View.VISIBLE else View.GONE
+        windowAttached = petShown
+        QuroPetStateBus.desktopPetShown = petShown
 
         // 首次（无持久化坐标）落到右下角
         if (params.x < 0 || params.y < 0) {
@@ -818,15 +1014,15 @@ class QuroDesktopPetService : Service() {
                 }
                 val screenAnalysis = prefs.getBoolean("pet_screen_analysis", true)
                 val items = mutableListOf(
-                    PetMenuItem(PetGlyph.KEYBOARD, "对它说", "直接和桌宠聊天", PetVisuals.Accent, "input"),
+                    PetMenuItem(PetGlyph.KEYBOARD, "对它说", "悬浮窗里聊，不跳对话框", PetVisuals.Accent, "input"),
                 )
                 if (screenAnalysis) {
-                    items.add(PetMenuItem(PetGlyph.EYE, "看当前屏幕", "读屏并让 AI 说明", PetVisuals.Accent, "screen"))
-                    items.add(PetMenuItem(PetGlyph.TASK, "后台虚拟屏任务", "独立屏上完成操作", PetVisuals.Violet, "task"))
+                    items.add(PetMenuItem(PetGlyph.EYE, "看当前屏幕", "读屏并让 AI 说明（留在桌面）", PetVisuals.Accent, "screen"))
+                    items.add(PetMenuItem(PetGlyph.TASK, "后台虚拟屏任务", "独立屏上完成操作（留在桌面）", PetVisuals.Violet, "task"))
                 }
-                items.add(PetMenuItem(PetGlyph.SPARK, "播互动动作", "只播动画，不发消息", PetVisuals.Accent, "action"))
+                items.add(PetMenuItem(PetGlyph.SPARK, "播互动动作", "播放宠物包动作，不发消息", PetVisuals.Accent, "action"))
                 items.add(PetMenuItem(PetGlyph.MODE, "模式：$modeLabel", "物理 / 自由 / 固定", PetVisuals.Muted, "mode"))
-                items.add(PetMenuItem(PetGlyph.OPEN, "打开对话", "回到主界面", PetVisuals.Muted, "open"))
+                items.add(PetMenuItem(PetGlyph.OPEN, "打开对话", "显式回到主界面", PetVisuals.Muted, "open"))
                 items.add(PetMenuItem(PetGlyph.CLOSE, "关闭桌宠", "", PetVisuals.Danger, "close"))
                 petMenuItems.value = items
                 showPetPanel(PetPanel.Menu)
@@ -872,8 +1068,8 @@ class QuroDesktopPetService : Service() {
                 MotionEvent.ACTION_UP -> {
                     if (longPressPosted) { mainHandler.removeCallbacks(longPressRunnable); longPressPosted = false }
                     if (!moved) {
-                        // tapOpensPanel=true 且未开轻点互动 → 轻点打开主界面并预填「戳了戳桌宠」；
-                        // 关掉它（或开了轻点互动）→ 轻点只播互动动作，不抢占前台。
+                        // 轻点一律在悬浮窗里闭环：播动作 + 无界面 AI 回合，不抢占前台。
+                        // 开了轻点互动时用宠物包互动条目，否则发一句「戳了戳桌宠」。
                         if (tapInteract || !tapOpensPanel) {
                             // 桌宠轻点互动 = 一个「安静回合」：
                             //  · 用户气泡只放一句干净短话（互动 label），绝不把提示词模板、
@@ -882,7 +1078,7 @@ class QuroDesktopPetService : Service() {
                             //  · 读屏移到 IO 线程（旧实现在主线程同步跑完整节点树 + 截图 + OCR，
                             //    内含 5 秒等待，是无屏 ANR 的直接元凶）；
                             //  · 请求失败整轮撤下，不往对话里写「⚠️ 请求失败（HTTP 429）…」。
-                            val packInter = packLoaded?.manifest?.interactions
+                            val packInter = currentManifest?.interactions
                                 ?.filter { it.enabled }?.randomOrNull()
                             if (packInter != null) {
                                 val quiet = com.ai.assistance.quro.core.pet.QuroQuietTurn
@@ -891,16 +1087,15 @@ class QuroDesktopPetService : Service() {
                                 val instruction = packInter.prompt
                                     .replace("{input}", packInter.label)
                                     .replace("{time}", android.text.format.DateFormat.format("HH:mm", System.currentTimeMillis()).toString())
-                                packInter.animation?.let {
-                                    ambientAction = it
-                                    ambientFlag.value = true
-                                    mainHandler.postDelayed(ambientEndRunnable, 2600L)
-                                }
+                                // 真正播放宠物包声明的互动动画；AI 回复随后替换气泡。
+                                startManualAction(packInter.animation ?: "celebrate")
                                 QuroPetStateBus.onInteract(packInter.label, packInter.animation ?: "celebrate")
 
                                 if (!quiet.allowAutoTurn()) {
                                     // 连续失败冷却中：只播动作，不再发请求，也不刷对话框。
                                     quiet.emit(quiet.FAILURE_HINT)
+                                    petStatus.value = quiet.FAILURE_HINT
+                                    scheduleStatusClear()
                                 } else if (screenContext) {
                                     tapCueJob?.cancel()
                                     tapCueJob = petScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -926,31 +1121,25 @@ class QuroDesktopPetService : Service() {
                                     )
                                 }
                             } else {
-                            val act = interactions.randomOrNull()
-                            QuroPetStateBus.statusText = act?.label ?: "在这里"
-                            QuroPetStateBus.phase = if (act?.action == "think") PetPhase.THINKING else PetPhase.PERFORMING
-                            mainHandler.postDelayed({
-                                QuroPetStateBus.statusText = null
-                                // 互动动作结束后只在仍是互动态时归位，别把真实的 AI 生成状态清掉。
-                                if (QuroPetStateBus.phase == PetPhase.THINKING || QuroPetStateBus.phase == PetPhase.PLANNING || QuroPetStateBus.phase == PetPhase.PERFORMING) {
-                                    QuroPetStateBus.phase = PetPhase.IDLE
-                                }
-                            }, 2600L)
+                                // 没装宠物包：矢量形象也要有反应，且不发 AI 回合。
+                                val act = interactions.randomOrNull()
+                                startManualAction(act?.action ?: "celebrate")
+                                petReplyText.value = act?.label ?: "在这里"
+                                scheduleStatusClear()
                             }
                         } else {
                             // 轻点 = 结构化 pet_tap 回合；干净可见短句 + 隐藏指令，
-                            // 回复会回流到桌宠气泡，失败整轮撤下。
-                            if (com.ai.assistance.quro.core.pet.QuroQuietTurn.allowAutoTurn()) {
+                            // 回复只回流到桌宠气泡，失败整轮撤下且绝不拉起对话框。
+                            if (QuroQuietTurn.allowAutoTurn()) {
                                 emitPetTurn(
-                                    com.ai.assistance.quro.core.pet.QuroPetTurn.tap(
+                                    QuroPetTurn.tap(
                                         label = "戳了戳桌宠",
                                         instruction = "用户轻点戳了戳桌宠。用一句温柔俏皮的话回应，20 字以内。",
                                     ),
                                 )
                             } else {
-                                com.ai.assistance.quro.core.pet.QuroQuietTurn.emit(
-                                    com.ai.assistance.quro.core.pet.QuroQuietTurn.FAILURE_HINT)
-                                openChat()
+                                petStatus.value = QuroQuietTurn.FAILURE_HINT
+                                scheduleStatusClear()
                             }
                         }
                     } else {
@@ -1004,13 +1193,24 @@ class QuroDesktopPetService : Service() {
         const val ACTION_STOP = "com.ai.assistance.quro.action.DESKTOP_PET_STOP"
         /** 设置保存后由 PetPrefs.save 广播，运行中的服务据此重建悬浮窗。 */
         const val ACTION_APPLY_SETTINGS = "com.ai.assistance.quro.action.DESKTOP_PET_APPLY_SETTINGS"
+        /** 服务已在跑但悬浮窗没挂上时，由冷启动恢复入口显式补挂。 */
+        const val ACTION_ENSURE_PET = "com.ai.assistance.quro.action.DESKTOP_PET_ENSURE"
 
         /**
-         * 进程内运行标志：服务与 App 同进程。冷启动恢复用它做幂等判断，避免每次 onResume
-         * 都重复发一次 startForegroundService（常驻通知会闪一下）。
+         * 进程内运行标志：服务与 App 同进程。
          * 它只代表「服务实例是否活着」，用户开关仍然只认 QuroVoiceFeaturePrefs。
          */
         @Volatile private var running = false
+
+        /**
+         * 悬浮窗是否真的挂在桌面上。服务活着不等于窗口可见：挂窗异常、可见性被关、
+         * 系统回收窗口都会让桌面空着。恢复入口以它为准，服务活着但没窗时补挂。
+         */
+        @Volatile private var windowAttached = false
+
+        /** 供语音球判断桌面上是否已经有宠物，避免两个宿主各画一只。 */
+        @JvmStatic
+        fun isPetWindowShown(): Boolean = running && windowAttached
 
         private fun hasOverlayPermission(ctx: android.content.Context): Boolean =
             Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
@@ -1019,31 +1219,49 @@ class QuroDesktopPetService : Service() {
         /** 开启桌面宠物（含开关持久化）；悬浮窗权限缺失时返回 false 并不拉起服务。 */
         fun start(ctx: android.content.Context): Boolean {
             QuroVoiceFeaturePrefs.setDesktopPet(ctx, true)
+            // 两套显隐开关统一到桌宠总开关，开启时保证形象可见，不会被另一处关掉。
+            val sp = ctx.getSharedPreferences(SETTINGS_PREFS, android.content.Context.MODE_PRIVATE)
+            if (!sp.getBoolean("pet_visible", true)) {
+                sp.edit().putBoolean("pet_visible", true).apply()
+            }
             if (!hasOverlayPermission(ctx)) return false
+            if (running && windowAttached) return true
             return runCatching {
-                ctx.startForegroundService(Intent(ctx, QuroDesktopPetService::class.java))
+                val i = Intent(ctx, QuroDesktopPetService::class.java)
+                if (running) i.action = ACTION_ENSURE_PET
+                ctx.startForegroundService(i)
             }.isSuccess
         }
 
         /**
          * 冷启动自愈：桌宠开关早就持久化了，但进程被回收（划掉任务、厂商省电策略、
-         * 系统重启）后没有任何入口把服务拉回来 —— 此前只有开机广播会恢复，
-         * 「退出软件再打开」时设置里显示已开启、桌面上却看不到宠物。
-         * 这里只读开关、绝不改写开关（用户显式关过就不会被复活），多处调用均幂等。
+         * 系统重启）后没有任何入口把服务拉回来 —— 此前只有开机广播会恢复。
+         *
+         * 这里只读开关、绝不改写开关（用户显式关过就不会被复活），多处调用均幂等；
+         * 关键差别是判据从「服务实例是否活着」换成「悬浮窗是否真的挂着」：
+         * 服务常驻但首次挂窗失败时，旧实现会一直跳过补挂，桌面永远空着。
          */
         fun ensureStarted(ctx: android.content.Context) {
-            if (running) return
             if (!QuroVoiceFeaturePrefs.getDesktopPet(ctx)) return
             if (!hasOverlayPermission(ctx)) return
-            // Android 12+ 对后台发起前台服务有限制；被拒时安静失败，等界面真正前台时再试。
+            val sp = ctx.getSharedPreferences(SETTINGS_PREFS, android.content.Context.MODE_PRIVATE)
+            if (!sp.getBoolean("pet_visible", true)) {
+                sp.edit().putBoolean("pet_visible", true).apply()
+            }
+            if (running && windowAttached) return
+            // Android 12+ 对后台发起前台服务有限制；被拒时安静失败，等界面真正前台再试。
             runCatching {
-                ctx.startForegroundService(Intent(ctx, QuroDesktopPetService::class.java))
+                val i = Intent(ctx, QuroDesktopPetService::class.java)
+                if (running) i.action = ACTION_ENSURE_PET
+                ctx.startForegroundService(i)
             }
         }
 
         /** 关闭桌面宠物（含开关持久化）。 */
         fun stop(ctx: android.content.Context) {
             QuroVoiceFeaturePrefs.setDesktopPet(ctx, false)
+            windowAttached = false
+            QuroPetStateBus.desktopPetShown = false
             ctx.stopService(Intent(ctx, QuroDesktopPetService::class.java))
         }
     }

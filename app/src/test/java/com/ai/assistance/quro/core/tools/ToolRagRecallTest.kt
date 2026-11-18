@@ -30,15 +30,17 @@ class ToolRagRecallTest {
      * 全部是普通用户会说的话，不是工具名。
      */
     private val probes = listOf(
+        // 2026-11-12 合体新世界：web_search→web(action=search)、set_alarm→alarm_clock、
+        // read_screen→screen(action=read)。断言精神不变：普通口语必须召回承接能力的入口。
         "画一张海报" to "codecanvas_markup",
         "生成图片" to "image_gen",
         "做个APP打包成APK" to "build_apk",
-        "搜一下最近的新闻" to "web_search",
+        "搜一下最近的新闻" to "web",
         "打开微信" to "launch_app",
         "给我念一段文字" to "speak",
-        "设个闹钟" to "set_alarm",
+        "设个闹钟" to "alarm_clock",
         "删掉这个文件" to "delete_file",
-        "看看屏幕" to "read_screen",
+        "看看屏幕" to "screen",
         "导出APK" to "export_apk",
         "做个微信小程序" to "miniapp",
         "查一下设备信息" to "get_device_info",
@@ -52,10 +54,10 @@ class ToolRagRecallTest {
      * 候选排到第 20 位，弱模型往往当没查到。
      */
     private val mustRankTop3 = listOf(
-        Triple("搜一下最近的新闻", "web_search", 1),
+        Triple("搜一下最近的新闻", "web", 1),
         Triple("念一首诗", "speak", 1),
         Triple("画一张海报", "codecanvas_markup", 3),
-        Triple("设个闹钟", "set_alarm", 3),
+        Triple("设个闹钟", "alarm_clock", 3),
     )
 
     @Before
@@ -122,7 +124,8 @@ class ToolRagRecallTest {
     /** 工具全名（英文）必须能直接命中自己，否则模型已知名字时也查不到。 */
     @Test
     fun 工具全名必须能召回自己() {
-        listOf("web_search", "set_alarm", "codecanvas_markup", "export_apk").forEach { name ->
+        // 2026-11-12 合体新世界：按真实可调用名检索（web/alarm_clock 承接 web_search/set_alarm）。
+        listOf("web", "alarm_clock", "codecanvas_markup", "export_apk").forEach { name ->
             val matched = ToolCapabilityDirectory.matchToolsByIntent(name).map { it.name }
             assertTrue("按工具全名 $name 检索未召回自己（${matched.take(3)}）", name in matched)
         }

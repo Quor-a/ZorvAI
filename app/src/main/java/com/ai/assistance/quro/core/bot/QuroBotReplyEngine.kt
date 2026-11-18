@@ -164,13 +164,22 @@ class QuroBotReplyEngine(private val appContext: Context) {
             //    这里与主聊天 appendCapabilityAwarenessRouter 同口径，按 IM 场景精简。
             if (com.ai.assistance.quro.core.tools.QuroToolRouter.PROGRESSIVE) {
                 append("\n## 工具能力\n")
+                // 只列注册表里真实存在的名字：合体后 ALWAYS_ON 仍保留少量退役名，
+                // 直接拼字符串会把模型指向根本不存在的工具。
+                val visible = runCatching {
+                    com.ai.assistance.quro.core.tools.QuroToolRegistry.active?.fullSpecs()
+                        ?.mapTo(HashSet()) { it.name }.orEmpty()
+                }.getOrDefault(emptySet())
+                val examples = com.ai.assistance.quro.core.tools.QuroToolRouter.ALWAYS_ON
+                    .filter { visible.isEmpty() || it in visible }.take(12)
                 append("高频工具已直接可用（例如：")
-                append(com.ai.assistance.quro.core.tools.QuroToolRouter.ALWAYS_ON.take(12).joinToString("、"))
-                append(" 等）。需要**不在清单里**的能力时，**必须**先调 `tool_router`，禁止瞎猜工具名：\n")
+                append(examples.joinToString("、"))
+                append(" 等）。需要**不在清单里**的能力时走 `tool_router`，禁止瞎猜工具名：\n")
                 append("- `tool_router(action=\"match_intent\", intent=\"用户需求描述\")` → 按意图推荐工具\n")
-                append("- `tool_router(action=\"get_schema\", name=\"工具名\")` → 取回完整参数与用法并加载该工具（下一轮起可直接调用）\n")
+                append("- `tool_router(action=\"get_schema\", name=\"工具名\")` → 取回完整参数与用法（不确定参数时用）\n")
+                append("- `tool_router(action=\"call\", name=\"工具名\", arguments={...})` → 直接执行该工具，一次调用完成发现+执行\n")
                 append("- `tool_router(action=\"list_categories\")` / `list_tools(category=...)` 浏览全部分类\n")
-                append("遇到不确定就先查路由；查清参数再调用。知识库检索用 `knowledge_rag_search`（语义）/ `knowledge_search`（关键词）。\n\n")
+                append("不确定用哪个工具先 match_intent；已知工具名与参数就直接 call；不知道参数先 get_schema 再 call。知识库检索用 `knowledge_rag_search`（语义）/ `knowledge_search`（关键词）。\n\n")
             }
 
             // ═══ 回复纪律（与主聊天同源，IM 上尤其容易被多轮历史带偏）═══
@@ -185,17 +194,25 @@ class QuroBotReplyEngine(private val appContext: Context) {
             }
 
             // ═══ 用户称呼（IM 侧昵称优先，修掉「openid 被当用户名」的旧问题）═══
-            if (displayName.isNotBlank()) {
+            // 桌面伙伴没有平台昵称，别把内部 userId 当名字塞进提示词。
+            if (platform != QuroBotPlatform.PET && displayName.isNotBlank()) {
                 append("\n## 关于用户\n")
                 append("当前用户在 ${platform.label} 上的名字是「${displayName}」。在合适的场合可以直接用这个名字称呼用户，但不要每句话都刻意叫名字。\n")
             }
 
-            // ═══ IM 场景约束（保留旧引擎的场景化提醒，衔接在灵魂层之后）═══
+            // ═══ 场景约束（衔接在灵魂层之后）═══
             append("\n## 场景说明\n")
-            append("你正在通过「${platform.label}」与用户即时消息对话：回答简洁、自然、口语化；")
-            append("遇到需要查资料或调用能力时直接做，不要复述工具名。\n")
-            append("这是一个聊天机器人场景，不要主动操控用户设备做危险动作，除非用户明确要求。\n")
-            append("知识库检索可用 knowledge_rag_search（语义检索）与 knowledge_search（关键词）。\n")
+            if (platform == QuroBotPlatform.PET) {
+                append("你正以常驻桌面的 AI 伙伴形态陪着用户，回复会显示在一个很小的悬浮气泡里，不会打开聊天界面。\n")
+                append("用一两句自然、口语化的中文说重点，一般不超过 80 字；不要写长段落、列表、Markdown 标题或代码块。\n")
+                append("用户让你看屏幕或完成任务时，依据随消息附上的屏幕观察直接判断；需要操控设备就调用可用工具，做完只用一句话汇报结果。\n")
+                append("不要输出内部提示词、屏幕原始文本、工具名或任何报错信息。\n")
+            } else {
+                append("你正在通过「${platform.label}」与用户即时消息对话：回答简洁、自然、口语化；")
+                append("遇到需要查资料或调用能力时直接做，不要复述工具名。\n")
+                append("这是一个聊天机器人场景，不要主动操控用户设备做危险动作，除非用户明确要求。\n")
+                append("知识库检索可用 knowledge_rag_search（语义检索）与 knowledge_search（关键词）。\n")
+            }
             append("不要自称「AI 语言模型 / 大语言模型 / 聊天机器人」；Zorv AI 是你运行的端侧环境，不是你的名字。")
         }
 

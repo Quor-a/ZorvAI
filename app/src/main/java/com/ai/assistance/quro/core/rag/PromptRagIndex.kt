@@ -40,13 +40,13 @@ package com.ai.assistance.quro.core.rag
  *
  * 4. **AI 主动查时拿不到正文** —— [RagHit.toJson] 只回 `description`，而
  *    `RagSearchTool` 从不读 `doc.payload`（真正的 [PromptBlock]）。
- *    于是 `rag_search(domain="prompts")` 命中了也**只给 200 字碎片**。
+ *    于是 `memory(action=discover)(domain="prompts")` 命中了也**只给 200 字碎片**。
  *    → 修法：[PromptRagIndex.asRuleResult] 把 payload 里的完整正文交给工具侧回传。
  *
  * 5. **RAG 被当成主要方案** —— [Mode.FULL_ALWAYS] 是默认，实测每轮追加 **3182 字符
  *    （≈2100 tokens）**，其中集群段独占 1416。用户要求「改成 AI 被动使用、
  *    RAG 是备用方案不是主要方案」。
- *    → 修法：默认改为 [Mode.SELECTIVE]，主路径改成 AI 主动调 `rag_search`
+ *    → 修法：默认改为 [Mode.SELECTIVE]，主路径改成 AI 主动调 `memory(action=discover)`
  *    （见 [RagSearchTool]）；`FULL_ALWAYS` 保留为显式可选。
  */
 object PromptRagIndex {
@@ -66,7 +66,7 @@ object PromptRagIndex {
      *
      * 用户要求「改成 AI 被动使用，系统提示词 RAG 是**备用方案不是主要方案**」。
      * SELECTIVE 才符合这个语义：每轮只灌真正每轮都要守的基础段（[stickyBlocks]），
-     * 其余规则由 **AI 自己调 `rag_search(domain="prompts")` 主动取**。
+     * 其余规则由 **AI 自己调 `memory(action=discover)(domain="prompts")` 主动取**。
      * 也就是说检索从「宿主塞给 AI」变成「AI 按需拉」，这才是被动使用。
      */
     enum class Mode { SELECTIVE, FULL_ALWAYS }
@@ -95,7 +95,7 @@ object PromptRagIndex {
          * 旧实现 `body.take(200)` 实测害了两处：
          * - 200 字之后的内容对 lexical/shape 通道**完全不可见**，
          *   `cluster_orchestration`（1416 字）有 86% 检索不到；
-         * - `rag_search` 回显的就是 `description`，AI 命中了也只拿到碎片。
+         * - `memory(action=discover)` 回显的就是 `description`，AI 命中了也只拿到碎片。
          *
          * 工具域那边仍是短描述（工具本来就短），所以只有 prompts 域改全文。
          */
@@ -135,7 +135,7 @@ object PromptRagIndex {
                 - 工具返回失败时，先读错误信息再决定重试或换路，不要用同样的参数反复重试。
             """.trimIndent(),
             triggers = listOf("工具", "调用", "能力", "做不到", "不会", "怎么用", "有什么工具", "工具列表"),
-            keywords = listOf("tool_router", "match_intent", "get_schema", "rag_search", "工具检索", "按需加载"),
+            keywords = listOf("tool_router", "match_intent", "get_schema", "memory(action=discover)", "工具检索", "按需加载"),
             // 🔴 基础段：每轮都必须守「不确定就去查，别猜」。这条是整套 RAG 的入口纪律，
             // 若它也变成「按需检索」，AI 根本不会去检索 —— 那才是真的检索不了。
             alwaysSticky = true,
@@ -183,12 +183,12 @@ object PromptRagIndex {
                 - **可视化小卡片（独立分类，不是动态UI/富组件/弹窗）** → 直接调 `visual_card(title, html=...)`，**html 自由写任意场景**（天气/新闻/日程/行情/待办/时钟/收件箱/番茄钟/登机牌/任何长尾场景…）；拿不准结构时才用 `visual_card_skeleton(kind=...)` 取 13 份参考样板改造
                 - **可视化图表 / 现成组件库标准件** → `ui_card` / `ui_widget`（富组件，另一分类）
                 - **动态 UI 组件（可交互）** → `ui_control` / `quro-ui` 原生组件
-                - **整屏界面** → GenUI 画布（`genui_draw`）
+                - **整屏界面** → GenUI Agent（`genui_agent_open`，GenUI JSON DSL → 原生 Compose，独立全屏应用）
                 - **Web 应用（HTML + WebView，不是小程序）** → `miniapp`
                 - **微信小程序形态（WXML/WXSS）** → `miniapp_sdk`（仅用户明确要小程序时）
                 - **可视化弹窗 / 询问** → `visual_popup` / `visual_ask`
                 - **可交互卡片（zxwidget）** → `zx_web_card`（WebView 承载 zx 组件族 477 个）；
-                  写之前**先 `rag_search(domain="zx_components", query="用户想看什么效果")`** 秒级命中最匹配的
+                  写之前**先 `memory(action=discover)(domain="zx_components", query="用户想看什么效果")`** 秒级命中最匹配的
                   组件名 + 字段契约 + 可照抄的示例 DSL，照着改数据即可一次写对；
                   若已知道组件名、要查确切字段，再用 `zx_catalog(component="zx_xxx")` 取契约。
                 - **出图（静态图片）** → `codecanvas_onscreen_*`（端侧渲染，无需服务器）
@@ -197,43 +197,43 @@ object PromptRagIndex {
                 - 🔴 用户说「小卡片」时**严禁**改用动态UI组件 / 富组件 / 弹窗顶替——那是分类错误。
             """.trimIndent(),
             triggers = listOf("界面", "卡片", "组件", "画布", "页面", "弹窗", "小程序", "Web应用", "Web 应用", "网页应用", "可视化", "交互", "zx", "zxwidget", "对比", "占比", "趋势", "表单", "时间线"),
-            keywords = listOf("visual_card", "visual_card_skeleton", "ui_widget", "ui_control", "genui", "miniapp", "codecanvas", "zx_web_card", "zx_catalog", "rag_search", "zx_components"),
+            keywords = listOf("visual_card", "visual_card_skeleton", "ui_widget", "ui_control", "genui", "miniapp", "codecanvas", "zx_web_card", "zx_catalog", "memory(action=discover)", "zx_components"),
         ),
         PromptBlock(
             id = "memory_policy",
             title = "记忆策略",
             body = """
                 ## 记忆策略
-                - 用户的偏好 / 习惯 / 重要约定值得长期记住时，主动调 `memory_save`，
+                - 用户的偏好 / 习惯 / 重要约定值得长期记住时，主动调 `memory(action=save)`，
                   不需要用户明确要求。
-                - 用户提到「之前说过 / 上次告诉过你 / 你还记得吗」时，先 `memory_search` 再回答，
+                - 用户提到「之前说过 / 上次告诉过你 / 你还记得吗」时，先 `memory(action=search)` 再回答，
                   **绝不凭印象编造过往对话内容**。
                 - 记忆是跨会话的，检索无结果时要明确说「我没有相关记忆」，不要虚构。
             """.trimIndent(),
             triggers = listOf("记住", "记忆", "之前", "上次", "还记得", "我说过", "忘了吗"),
-            keywords = listOf("memory_save", "memory_search", "knowledge_rag_search", "长期记忆"),
+            keywords = listOf("memory", "长期记忆"),
         ),
         PromptBlock(
-            id = "device_control",
+            id = "device_screen_control",
             title = "设备控制与无障碍",
             body = """
                 ## 设备控制
-                - 操作手机界面用无障碍工具族：`read_screen` → `tap_screen` / `swipe_screen` /
-                  `input_text`。**先读屏再操作**，不要盲点坐标。
-                - 需要 Shizuku / ROOT 权限才能做的操作，先查 `shizuku_status` / `root_status`，
+                - 操作手机界面用无障碍工具族：`screen(action=read)` → `screen(action=tap)` / `screen(action=swipe)` /
+                  `screen(action=input)`。**先读屏再操作**，不要盲点坐标。
+                - 需要 Shizuku / ROOT 权限才能做的操作，先查 `shizuku(action=status)` / `root(action=status)`，
                   权限不足时明确告知用户如何授权，而不是反复重试。
                 - 涉及破坏性操作（删除文件、卸载应用、清数据）前先向用户确认。
             """.trimIndent(),
             triggers = listOf("点击", "滑动", "控制手机", "屏幕", "权限", "root", "shizuku", "删除", "卸载"),
-            keywords = listOf("read_screen", "tap_screen", "swipe_screen", "input_text", "无障碍", "shizuku"),
+            keywords = listOf("screen", "keyboard", "shizuku", "无障碍"),
         ),
         PromptBlock(
             id = "code_execution",
             title = "代码执行与构建",
             body = """
                 ## 代码执行与构建
-                - 跑代码用 `run_code` / `terminal_exec`；终端与 Linux 环境是两套，
-                  先查 `terminal_status` / `linux_status` 再决定用哪个。
+                - 跑代码用 `run_code`；终端与 Linux 环境是两套，
+                  先查 `terminal(action=status)` / `linux_env(action=status)` 再决定用哪个。
                 - 构建 APK 用 `build_apk`，产出后用 `export_apk` 导出；
                   **不要自己拼 zip 冒充 APK**。
                 - 脚本报错时读完整的 `Caused by` 链（常在中间段，不要只看第一行）再改。
@@ -340,7 +340,7 @@ object PromptRagIndex {
     /**
      * 从检索结果里取出**完整规则正文**（[PromptBlock.body]），不是 200 字碎片。
      *
-     * 🔴 这是「AI 被动使用」成立的关键：AI 主动 `rag_search` 时若只拿到摘要，
+     * 🔴 这是「AI 被动使用」成立的关键：AI 主动 `memory(action=discover)` 时若只拿到摘要，
      * 它拿到的还是「半条规则」，照样会用错。必须把 payload 里的全文交出去。
      */
     fun ruleBodyOf(hit: RagHit): String? =

@@ -1,6 +1,7 @@
 package com.ai.assistance.quro.core.tools
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -108,13 +109,21 @@ object QuroVoiceFeaturePrefs {
         prefs(ctx).edit().putBoolean(K_VOICE_COLOR_ROUTING, v).apply()
 
     /**
-     * 语音球「桌面宠物」模式：开启后悬浮球以所选宠物形象（PetSprite）渲染，
-     * 随语音/思考/工具调用状态切换表情与气泡，而非默认的粒子球。
-     * 依赖 [PetPrefs.petVisible]（宠物总开关）同时开启才生效。
+     * 语音球「桌面宠物」模式：开启后悬浮球与桌宠共用同一形象与状态，
+     * 桌宠已显示时只把语音状态同步过去，不再画第二只宠物。
      */
     fun getVoiceBallPet(ctx: Context) = prefs(ctx).getBoolean(K_VOICE_BALL_PET, false)
-    fun setVoiceBallPet(ctx: Context, v: Boolean) =
+
+    /** 切换后广播给运行中的语音球，避免必须重挂球才生效。 */
+    fun setVoiceBallPet(ctx: Context, v: Boolean) {
         prefs(ctx).edit().putBoolean(K_VOICE_BALL_PET, v).apply()
+        runCatching {
+            ctx.sendBroadcast(
+                Intent("com.ai.assistance.quro.action.VOICE_BALL_PET_REFRESH")
+                    .setPackage(ctx.packageName),
+            )
+        }
+    }
 
     /**
      * 桌面宠物总开关：独立于语音球的常驻宠物悬浮窗（[com.ai.assistance.quro.service.QuroDesktopPetService]），

@@ -108,6 +108,14 @@ data class ToolCategory(val icon: String, val color: Color, val label: String)
  * 🔴 图标名必须命中本仓 `LucideIcon` 的真实分支，否则 fallback 成 `ic_x`（显示成 ×）。
  */
 fun toolCategory(name: String): ToolCategory = when {
+    name == "shizuku" || name == "root" || name == "permissions" ->
+        ToolCategory("qic_system", Color(0xFFEF4444), "系统权限")
+    name == "screen" || name == "keyboard" ->
+        ToolCategory("qic_device", Color(0xFF6366F1), "屏幕与输入")
+    name == "aci" ->
+        ToolCategory("qic_web", Color(0xFF10B981), "跨应用能力")
+    name == "memory" ->
+        ToolCategory("folder", Color(0xFF8B5CF6), "记忆与知识库")
     name == "aip_compose" || name == "aiwps_create" || name == "enhanced_doc_create" || name.contains("doc") ->
         ToolCategory("file_text", Color(0xFF0EA5E9), "文档排版")
 
@@ -129,7 +137,7 @@ fun toolCategory(name: String): ToolCategory = when {
         name == "open_repo" || name == "open_calendar" || name == "set_alarm" ->
         ToolCategory("settings", Color(0xFF06B6D4), "系统能力")
 
-    name.contains("list_dir") || name.contains("read_file") || name.contains("write_file") ||
+    name == "workspace" || name.contains("list_dir") || name.contains("read_file") || name.contains("write_file") ||
         name.contains("file_") || name.contains("download") ->
         ToolCategory("folder", Color(0xFF8B5CF6), "文件工具")
 

@@ -7,15 +7,15 @@ import kotlinx.coroutines.launch
 import com.ai.assistance.quro.genui.sdk.components.PetPhase
 
 /**
- * 桌面宠物全局状态总线（进程内单例）。
+ * 宠物全局状态总线（进程内单例）。
  *
- * 作用：把「对话框里的 AI 活动」投影到**桌面常驻宠物悬浮窗**——
- * 对话层（ChatScreen）在生成/工具调用状态变化时写入本总线，
- * 桌面宠物服务（QuroDesktopPetService）的 ComposeView 直接读取，
- * 同进程共享 Compose Snapshot 状态，写入即触发悬浮窗重组，无需轮询。
+ * 桌宠悬浮窗与语音球宠物模式共用同一份「AI 在忙什么」的状态：
+ * 任何一方写入，两个宿主读到的是同一个阶段 / 工具名 / 气泡文本，
+ * 同进程共享 Compose Snapshot 状态，写入即触发重组，无需轮询。
  *
- * 与语音球互不干扰：语音球自带会话状态（conversationActive / listening / speaking），
- * 本总线只承载「AI 在忙什么」的语义，供非交互的桌面宠物展示。
+ * [voiceBallOwnsState] 用于仲裁：语音球正在对话时由它主导写状态，
+ * 桌宠服务的行动轨迹订阅暂停写入，避免两个生产者互相覆盖。
+ * [desktopPetShown] 让语音球知道桌宠已经在桌面显示，从而不再画第二个宠物。
  */
 object QuroPetStateBus {
     /** 宠物当前阶段：IDLE 空闲 / THINKING 思考 / TOOL_CALLING 执行工具 / GENERATING 生成回复。 */
@@ -29,6 +29,12 @@ object QuroPetStateBus {
 
     /** AI 是否在忙（busy 期间环境动画暂停，避免覆盖真实状态）。 */
     val isActive: Boolean get() = phase != PetPhase.IDLE
+
+    /** 语音球是否正在主导状态（桌宠的轨迹订阅此时让位）。 */
+    var voiceBallOwnsState by mutableStateOf(false)
+
+    /** 桌宠悬浮窗当前是否真的挂在桌面上（服务活着但不等于窗口可见）。 */
+    var desktopPetShown by mutableStateOf(false)
 
     /** 事件反应：回复完成时短暂庆祝气泡。 */
     var celebrateText by mutableStateOf<String?>(null)
@@ -64,11 +70,7 @@ object QuroPetStateBus {
         phase = PetPhase.GENERATING
     }
 
-    /**
-     * 🔴 互动动作（2026-11-06 修复「act 显示回复完成+动画码」）：
-     * AI 的 pet(action=act) / 服务内互动统一入口 —— PERFORMING 弹跳 + label 气泡，
-     * 2.6s 后回 IDLE。不再借用 onReplyComplete（那会显示错误的「回复完成 ✓」）。
-     */
+    /** 互动动作统一入口：PERFORMING 弹跳 + label 气泡，2.6s 后回 IDLE。 */
     fun onInteract(label: String, action: String) {
         celebrateJob?.cancel()
         celebrateText = null

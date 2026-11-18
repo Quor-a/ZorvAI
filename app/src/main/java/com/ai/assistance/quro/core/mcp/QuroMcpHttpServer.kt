@@ -40,9 +40,12 @@ import com.ai.assistance.quro.core.tools.toMcpTool
  */
 class QuroMcpHttpServer(private val appContext: Context) {
 
-    private val engine = QuroToolEngine(buildQuroRegistry(appContext))
+    // 只构建一次注册表：两份实例会让能力目录与 active 指向不同的表，
+    // 且派发表必须包含降级为内部实现的旧名。
+    private val registry = buildQuroRegistry(appContext)
+    private val engine = QuroToolEngine(registry)
     private val droidMcp: DroidMcp = DroidMcp.builder()
-        .addTools(buildQuroRegistry(appContext).all().map { it.toMcpTool(engine) })
+        .addTools(registry.executableTools().map { it.toMcpTool(engine) })
         .build()
 
     private var serverSocket: ServerSocket? = null

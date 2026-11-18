@@ -19,7 +19,9 @@ plugins {
 
 android {
     namespace = "com.ai.assistance.quro"
-    compileSdk = 36
+    // libxposed API 102 的 AAR 元数据要求 minCompileSdk=37；本地已装 android-37.0 平台。
+    // 只抬 :app 的编译 SDK（targetSdk / minSdk 不变，不会引入 Android 17 运行时行为变更）。
+    compileSdk = 37
     ndkVersion = "27.0.12077973" // 与独立编译 libquroplugin.so 的 NDK 一致（r27）
 
     signingConfigs {
@@ -41,8 +43,8 @@ android {
         applicationId = "com.ai.assistance.quro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1002004
-        versionName = "1.2.4"
+        versionCode = 1002005
+        versionName = "1.2.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -117,6 +119,8 @@ android {
             excludes += "META-INF/NOTICE"
             excludes += "META-INF/LICENSE.txt"
             excludes += "META-INF/NOTICE.txt"
+            // LSPosed 现代模块声明（META-INF/xposed/*）必须随包保留，release 裁剪后模块入口才不会失效。
+            merges += "META-INF/xposed/*"
         }
         jniLibs {
             useLegacyPackaging = true
@@ -353,9 +357,15 @@ dependencies {
     // 显式保活 concurrent-futures，确保 androidx.concurrent.futures.AbstractResolvableFuture 必然进 dex。
     implementation("androidx.concurrent:concurrent-futures:1.2.0")
 
-    // LSPosed / Xposed 模块 API 桩：compileOnly 引用，绝不进 APK。
-    // 运行时由 LSPosed 把真实 de.robv.android.xposed.* 类注入进程；app 仅借此编译 QuroXposedModule。
-    compileOnly(project(":xposed-stub"))
+    // LSPosed 现代模块 API 102（io.github.libxposed，Apache-2.0）。
+    // · api：Hook 进程侧接口，运行时由框架注入，compileOnly 不进 APK；
+    // · service：UI 进程侧 XposedServiceHelper / RemotePreferences，需随 APK 打包（内含 XposedProvider）。
+    // 旧版 de.robv.android.xposed（xposed-stub / assets/xposed_init / API 82）已整体退役。
+    compileOnly("io.github.libxposed:api:102.0.0")
+    implementation("io.github.libxposed:service:102.0.0")
+
+    // Eta 移植层使用的混淆类查找（DexKit 2.3.0，AAR 自带 native so）。
+    implementation("org.luckypray:dexkit:2.3.0")
 
     // 自包含终端（v127 起）：交互式 shell 用 QuroShellSession（常驻进程 + 流式读入，无 Termux/PTY 依赖），
     // 应用内 Linux 环境走 QuroLinuxEnv（proot + Alpine aarch64）。不再依赖 Termux terminal-view。

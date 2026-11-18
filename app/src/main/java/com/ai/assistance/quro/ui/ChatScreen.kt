@@ -605,7 +605,42 @@ fun ChatScreen(
         val aggThinkLines = mutableListOf<String>()
         // 本聚合段思考耗时（毫秒）：段内各 assistant 消息取最大；0 = 未知（回退「N 步」口径）。
         var aggThinkDur = 0L
-        val aggTools = mutableListOf<ToolCallUi>()
+        // 一次动作 = 一行。归组键用「工具名|参数」而不是 toolCallId：
+        // callId 每轮都重新生成（call_${时间戳}_${轮次}_${序号}），按它分组的话，
+        // 跨轮重复执行同一个动作仍会平铺成多行 —— 正是要消除的现象。
+        //  · 执行中占位（无结果）与随后的结果回填：签名相同，原地替换；
+        //  · 同一动作确实连做几次（重试 / 用户要求重复）：折叠成一行 + ×N 次数；
+        //  · 参数不同 = 不同动作，各自保留一行。
+        val aggTools = LinkedHashMap<String, ToolCallUi>()
+        fun addTool(ui: ToolCallUi) {
+            val key = "${ui.name}|${ui.args}"
+            val prev = aggTools[key]
+            val extra = ui.result?.takeIf { it.isNotBlank() }
+            if (prev == null) {
+                aggTools[key] = ui.copy(
+                    id = key,
+                    repeatCount = 1,
+                    resultHistory = listOfNotNull(extra),
+                )
+            } else if (prev.resultHistory.isEmpty() && extra != null) {
+                // 占位 → 结果：原地替换，同一次调用只留一行
+                aggTools[key] = ui.copy(
+                    id = key,
+                    repeatCount = prev.repeatCount,
+                    resultHistory = listOf(extra),
+                )
+            } else if (extra != null) {
+                // 确实又执行了一遍：折叠计数，但把这份结果完整留下，不覆盖前几次。
+                aggTools[key] = prev.copy(
+                    repeatCount = prev.repeatCount + 1,
+                    result = extra,
+                    resultHistory = prev.resultHistory + extra,
+                    // 内核把整批墙钟时长写进批内每条调用，取最大才不会显示 3 倍耗时。
+                    durationMs = maxOf(prev.durationMs, ui.durationMs),
+                )
+            }
+            // ui 无结果 = 仍在执行的重复占位：不计数也不覆盖，避免流式期瞬时过计数。
+        }
         val aggText = StringBuilder()
         val aggCards = mutableListOf<QuroChatCard>()
         /**
@@ -650,9 +685,11 @@ fun ChatScreen(
                         text = text,
                         attachments = aggAttach.toList(),
                         think = think,
-                        tools = if (aggTools.isEmpty()) null else aggTools.toList(),
-                        cards = aggCards.toList(),
-                        zxWidgets = aggZx.toList(),
+                        tools = if (aggTools.isEmpty()) null else aggTools.values.toList(),
+                        // 工具行已折叠，产物卡片/内联界面也要按同一口径去重，
+                        // 否则重复执行时一行 ×N 旁边仍挂着 N 张一模一样的卡。
+                        cards = aggCards.distinctBy { it.id }.toList(),
+                        zxWidgets = aggZx.distinct().toList(),
                         voiceNote = aggVoiceNote,
                         citations = aggCitations.distinctBy { it.url }.sortedBy { it.index },
                     )
@@ -698,10 +735,12 @@ fun ChatScreen(
                     if (sp != null) aggSpeaker = sp
                     // 集群工具调用：投影器把工具名放在 toolLabel（它不是 toolCalls），
                     // 这里补成一条 ToolCallUi，让对话框的「N 工具」胶囊能展开看到。
-                    if (sp != null) {
+                    if (sp != null && m.toolCalls.isNullOrEmpty()) {
+                        // toolLabel 只是 toolCalls 的投影：消息本身已带 toolCalls 时再补一行，
+                        // 同一次调用就会在活动流里出现两遍。
                         m.toolLabel?.takeIf { it.isNotBlank() }?.let { lbl ->
                             val args = m.content.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
-                            aggTools.add(ToolCallUi(lbl, args, "（集群角色 $sp 调用）", 0L))
+                            addTool(ToolCallUi(lbl, args, "（集群角色 $sp 调用）", 0L))
                         }
                     }
                     // 🔴 相邻重复行去重：多轮工具循环里模型会反复吐同一句思考
@@ -714,6 +753,10 @@ fun ChatScreen(
                     // 思考耗时：段内取最大（可能多轮 assistant 各带自己的 reasoning 段）。
                     if (m.thinkDurationMs > aggThinkDur) aggThinkDur = m.thinkDurationMs
                     m.toolCalls?.forEach { c ->
+                        // 旧数据的 call id 可能是空串，多张产物卡会撞同一个 Compose key。
+                        // 用动作签名兜底，保证每条调用都有稳定且唯一的标识。
+                        val stableCid = c.id.takeIf { it.isNotBlank() }
+                            ?: "${c.name}|${c.arguments}".hashCode().toString()
                         // zxwidget：这不是「一次工具调用」，而是用户要看到的一块**动态交互界面**。
                         // 抽成内联规格后就地渲染（撑满宽度、长在消息流里），
                         // 并且**不再**往工具列表里塞一行原始 JSON —— 那正是「卡片方式」的残留观感。
@@ -738,7 +781,7 @@ fun ChatScreen(
                                 if (html.isNotEmpty()) {
                                     aggCards.add(
                                         QuroChatCard.VisualMiniCard(
-                                            id = "vc_" + (c.id ?: o.optString("title", "card").hashCode().toString()),
+                                            id = "vc_" + stableCid,
                                             title = o.optString("title", "可视化小卡"),
                                             subtitle = o.optString("subtitle", ""),
                                             emoji = o.optString("emoji", ""),
@@ -764,38 +807,41 @@ fun ChatScreen(
                             }
                         }
                         val r = (c.result ?: fallbackMap[c.id])?.takeIf { !isGarbageToolResult(it) }
-                        aggTools.add(ToolCallUi(c.name, c.arguments, r, c.durationMs))
-                        // 引用溯源：web_search / read_url 的结果里带「[n] 标题 — url」清单，解析成可点击来源胶囊。
-                        if ((c.name == "web_search" || c.name == "read_url") && r != null) {
+                        // 引用溯源：联网工具的结果里带「[n] 标题 — url」清单，解析成可点击来源胶囊。
+                        if ((c.name == "web_search" || c.name == "read_url" || c.name == "web") && r != null) {
                             aggCitations.addAll(parseCitationsFromToolResults(listOf(r)))
                         }
-                        // v1057：run_code 的 html 产物 → 对话框内联实时网页预览卡片
-                        //（AI 写网页 → AI 运行 → 网页直接长在气泡里，把手机 AI IDE 的产出物真正融入对话内容区）
-                        if (c.name == "run_code" && r != null) {
+                        // 一次调用只留一种主表示：产物已渲染成内联卡片时不再平铺一行工具调用，
+                        // 活动流里就不会「同一次执行出现两遍」；卡片解析不出来才降级成工具行。
+                        val renderedAsCard = if (c.name == "run_code" && r != null) {
                             when {
-                                // HTML/SVG 内容 → 网页预览卡片
                                 looksLikeHtml(r) || r.contains("<svg") -> {
                                     aggCards.add(
                                         QuroChatCard.HtmlPreviewCard(
-                                            id = "rh_" + (c.id ?: r.hashCode().toString()),
+                                            id = "rh_" + stableCid,
                                             title = qstr(R.string.qk_00018),
                                             html = r,
                                         )
                                     )
+                                    true
                                 }
-                                // 图片路径 → 媒体卡片
                                 r.startsWith("🖼️ IMAGE_PATH:") -> {
                                     val imagePath = r.removePrefix("🖼️ IMAGE_PATH:")
                                     aggCards.add(
                                         QuroChatCard.MediaCard(
-                                            id = "ri_" + (c.id ?: r.hashCode().toString()),
+                                            id = "ri_" + stableCid,
                                             title = qstr(R.string.qk_00019),
                                             mediaUrl = imagePath,
                                             mediaType = "image",
                                         )
                                     )
+                                    true
                                 }
+                                else -> false
                             }
+                        } else false
+                        if (!renderedAsCard) {
+                            addTool(ToolCallUi(c.name, c.arguments, r, c.durationMs))
                         }
                     }
                     if (m.content.isNotBlank()) {
@@ -2370,7 +2416,7 @@ fun ChatScreen(
         if (showLspose) {
             BackHandler { showLspose = false }
             Box(Modifier.fillMaxSize().zIndex(100f).background(MaterialTheme.colorScheme.background)) {
-                QuroLsposeScreen(onClose = { showLspose = false })
+                QuroSystemEnhanceScreen(onClose = { showLspose = false })
             }
         }
 
@@ -4515,7 +4561,9 @@ private fun MessageRow(
         //   声明在 if-else 分支里作用域够不着 → "Unresolved reference"。
         //   旧实现默认收起、只留一枚「· N 工具」小胶囊 —— 工具明细一层都看不见，
         //   违背「工具调用的可读性决定信任」的基线（docs/chat-experience-baseline.md §C）。
-        var showActivity by remember { mutableStateOf(true) }
+        // 默认收起：一次回答里无论有多少次工具调用，名字行只留「· N 工具」胶囊，
+        // 点开才展开按组去重后的活动流，不再把整轮过程全量铺在正文里。
+        var showActivity by remember { mutableStateOf(false) }
         // 当前打开的活动详情弹层对象（null = 未打开）。
         var activityDetail by remember { mutableStateOf<ActivityEntry?>(null) }
         Box(Modifier.fillMaxWidth()) {
@@ -4596,7 +4644,7 @@ private fun MessageRow(
                     // 🔴 可视化弹窗已在气泡下方单独渲染成一张可点击小卡，这里再列一行
                     //    就是同一次工具调用出现两遍（点开活动流还以为执行了两次）。
                     if (isInlineRenderedTool(t.name)) return@forEach
-                    val cat = com.ai.assistance.quro.core.chat.ActivityCategory.ofTool(t.name)
+                    val cat = com.ai.assistance.quro.core.chat.ActivityCategory.ofTool(t.name, t.args)
                     out += com.ai.assistance.quro.core.chat.ActivityEntry(
                         category = cat,
                         title = com.ai.assistance.quro.core.chat.ActivityTitleResolver.resolve(cat, t.name, t.args),
@@ -4605,9 +4653,13 @@ private fun MessageRow(
                         result = t.result,
                         durationMs = t.durationMs,
                         failed = isFailedToolResult(t),
+                        toolCallId = t.id,
+                        repeatCount = t.repeatCount,
+                        resultHistory = t.resultHistory,
                     )
                 }
-                out
+                // 双保险：聚合层已按 id 归组，这里再挡一次旧数据里 id 缺失导致的重复行。
+                out.distinctBy { it.toolCallId.ifBlank { "${it.toolName}|${it.args}" } }
             }
 
             Row(
@@ -7355,6 +7407,10 @@ private fun SettingsSheetContent(
     scaled: (Int) -> androidx.compose.ui.unit.TextUnit
 ) {
     val cs = MaterialTheme.colorScheme
+    var showExternalHints by remember { mutableStateOf(false) }
+    if (showExternalHints) {
+        QuroExternalHintSettingsScreen(onClose = { showExternalHints = false }, scaled = scaled)
+    }
     Column(
         Modifier.fillMaxWidth().heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState()).padding(bottom = 20.dp)
@@ -7397,7 +7453,7 @@ private fun SettingsSheetContent(
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Security, stringResource(R.string.qk_03833), stringResource(R.string.qk_03867), "", onOpenPermission, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
-            SetRowClickable(Icons.Filled.Extension, stringResource(R.string.qk_02024), stringResource(R.string.qk_03848), "", onOpenLspose, scaled)
+            SetRowClickable(Icons.Filled.Security, "Root 与系统增强", "框架通信、模块作用域、系统助手与增强（不含需要 Root 的能力）", "", onOpenLspose, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Usb, stringResource(R.string.qk_03845), stringResource(R.string.qk_03860), "", onOpenUsbDebug, scaled)
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
@@ -7432,6 +7488,8 @@ private fun SettingsSheetContent(
             HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
             SetRowClickable(Icons.Filled.Public, stringResource(R.string.qk_03843), stringResource(R.string.qk_03866), "", onOpenAci, scaled)
         }
+        // 系统助手接管 / Gemini 与一圈即搜 / 厂商助手兼容入口（框架能力开关组，见 QuroSystemEnhanceScreen）。
+        QuroModuleSettingsGroups(onOpenEnhance = onOpenLspose, scaled = scaled)
         GroupCaption(stringResource(R.string.qk_01945))
         SetGroup {
             // 🔴 #473 合并：这里**不再有两行**（「AI 回复通知」开关 + 「Harness 通知」子页）。
@@ -7445,6 +7503,15 @@ private fun SettingsSheetContent(
                     stringResource(if (settingsAiReplyNotify) R.string.qk_04161 else R.string.qk_04162),
                 "",
                 onOpenHarnessNotify,
+                scaled,
+            )
+            HorizontalDivider(color = Line, thickness = 1.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            SetRowClickable(
+                Icons.Filled.Notifications,
+                "外部事件",
+                "目录 / 广播 / ACI 三种投递方式，让第三方应用主动唤醒 AI 处理待办提示",
+                "",
+                { showExternalHints = true },
                 scaled,
             )
         }

@@ -227,7 +227,8 @@ class ClusterSkillRagTest {
         val router = QuroToolRouter(buildQuroRegistry(null).specs())
         val active = router.activeSpecs()
         assertTrue("渐进式披露必须包含路由目录 tool_router", active.any { it.name == "tool_router" })
-        assertTrue("渐进式披露必须包含常驻核心集（如 web_search）", active.any { it.name == "web_search" })
+        // 2026-11-12 合体新世界：web(action=search) 承接 web_search
+        assertTrue("渐进式披露必须包含常驻核心集（如 web）", active.any { it.name == "web" })
         // 不相关的长尾工具不应被全量下发
         assertTrue(
             "渐进式披露不应包含全部工具（否则等于没省上下文），实际=${active.size}",
@@ -239,12 +240,12 @@ class ClusterSkillRagTest {
     fun `tool_router handle returns catalog and loads schema`() {
         val router = QuroToolRouter(buildQuroRegistry(null).specs())
 
-        // match_intent 走主通道检索
+        // match_intent 走主通道检索（2026-11-12 合体新世界：web 承接 web_search）
         val match = router.handle("tool_router", """{"action":"match_intent","intent":"搜索资料"}""")
-        assertTrue("match_intent 应返回候选工具，实际=$match", match.contains("web_search") || match.contains("搜索"))
+        assertTrue("match_intent 应返回候选工具，实际=$match", match.contains("\"web\"") || match.contains("搜索"))
 
         // get_schema 加载工具并返回完整 schema
-        val schema = router.handle("tool_router", """{"action":"get_schema","name":"web_search"}""")
+        val schema = router.handle("tool_router", """{"action":"get_schema","name":"web"}""")
         assertTrue("get_schema 应返回已加载确认", schema.contains("已加载工具"))
         assertTrue("get_schema 应带完整参数 Schema", schema.contains("parametersJson") || schema.contains("schema") || schema.contains("properties"))
     }
@@ -260,7 +261,7 @@ class ClusterSkillRagTest {
         router.setSpecs(all)
         val active = router.activeSpecs()
         assertTrue(active.any { it.name == "tool_router" })
-        // 与主对话一致：activeSpecs 应包含常驻核心工具
-        assertTrue(active.any { it.name == "web_search" })
+        // 与主对话一致：activeSpecs 应包含常驻核心工具（2026-11-12 合体新世界：web 承接 web_search）
+        assertTrue(active.any { it.name == "web" })
     }
 }

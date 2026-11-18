@@ -110,7 +110,7 @@ class FileWriteMergedTool : QuroTool {
     override val name = "file_write"
     override val description =
         "写文本文件（可 append）。root=app 应用外部目录 / workspace 工作区（越界防护）。" +
-            "参数：path、content、append。旧名 write_file=app 域、workspace_write=workspace 域。"
+            "参数：path、content、append。工作区动作也可走 workspace 统一入口的 write。"
     override val parametersJson =
         """{"type":"object","properties":{"path":{"type":"string","description":"文件路径（按 root 解析）"},"content":{"type":"string","description":"写入内容"},"append":{"type":"boolean","description":"true=追加，默认覆盖"},"root":{"type":"string","enum":["app","workspace"],"description":"路径基准，默认 app"}},"required":["path","content"]}"""
     override fun run(context: Context, arguments: String): String {
@@ -260,7 +260,7 @@ val removedToolNotes: Map<String, String> = mapOf(
     "ui_card" to "ui_widget",
     "visual_question" to "visual_popup",
     "visual_action" to "visual_popup",
-    "screenshot_base64" to "screenshot",
+    "screenshot_base64" to "screen",
     "open_app" to "launch_app",
     "search_and_launch_app" to "launch_app",
     "set_alarm" to "alarm_clock",
@@ -270,14 +270,14 @@ val removedToolNotes: Map<String, String> = mapOf(
     "schedule_task" to "task_schedule",
     "list_scheduled_tasks" to "task_schedule",
     "delete_scheduled_task" to "task_schedule",
-    "volume_control" to "device_control",
-    "brightness_control" to "device_control",
-    "wifi_control" to "device_control",
-    "bluetooth_control" to "device_control",
-    "notification_control" to "device_control",
-    "airplane_mode" to "device_control",
-    "screen_rotation" to "device_control",
-    "toggle_flashlight" to "device_control",
+    "volume_control" to "permissions",
+    "brightness_control" to "permissions",
+    "wifi_control" to "permissions",
+    "bluetooth_control" to "permissions",
+    "notification_control" to "permissions",
+    "airplane_mode" to "permissions",
+    "screen_rotation" to "permissions",
+    "toggle_flashlight" to "permissions",
     "read_text_file" to "file_read",
     "workspace_read" to "file_read",
     "list_files" to "list_dir",
@@ -286,12 +286,16 @@ val removedToolNotes: Map<String, String> = mapOf(
     "find_files" to "list_dir",
     "write_file" to "file_write",
     "workspace_write" to "file_write",
-    "search_provider" to "web_search",
+    "search_provider" to "web",
     "local_music_player" to "music_play",
-    "knowledge_search" to "knowledge_manage",
-    "knowledge_add" to "knowledge_manage",
+    "knowledge_search" to "memory",
+    "knowledge_add" to "memory",
     "get_clipboard" to "clipboard",
     "set_clipboard" to "clipboard",
     "stop_speak" to "speak",
     "workbench" to "miniapp",
+    "workspace_render" to "workspace",
+    "workspace_doc" to "workspace",
+    "workspace_media" to "workspace",
+    "workspace_doc_view" to "workspace",
 )

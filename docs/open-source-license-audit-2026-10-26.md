@@ -17,7 +17,7 @@
 
 | # | 功能 | 模块 | 第三方代码 / 上游 | GPL 是否进 APK | 结论 |
 |---|------|------|-------------------|---------------|------|
-| 1 | LSPosed 模块 | `app`（opt-in 模块）+ `xposed-stub` | 自有 `QuroXposedModule`（Apache-2.0）；Xposed API 仅 `compileOnly` stub，框架由运行时 LSPosed 注入 | **否** | 无 GPL 再分发义务 |
+| 1 | LSPosed 模块（2026-11-12 起为 API 102） | `app`（自身即模块） | 自有 `QuroModuleMain` 等（Apache-2.0）；`io.github.libxposed:api:102.0.0` 仅 `compileOnly`，`io.github.libxposed:service:102.0.0` 随包分发（均为 Apache-2.0） | **否** | 框架类由运行时 LSPosed 注入；随包的两个 SDK 构件均为 Apache-2.0，无 GPL 再分发义务。旧 `xposed-stub` / `assets/xposed_init` 已删除 |
 | 2 | USB / 无线调试 | `app/core/adb`、`terminal-core` | Shizuku（MIT）+ 自研 ADB-over-TCP | 否 | 未 fork LADB 等 GPL 项目 |
 | 3 | DeepSeek Harness | `dshmobile` | fork `kelai141/dsh-mobile-apk`；Termux 快照（GPL-3.0）+ npm 引擎（LibreOfficeKit MPL-2.0、libvips LGPL-3.0） | **是** | **强 copyleft 复核项** |
 | 4 | 墨语言 / Molang | `terminal-core` | 自研语言；运行时捆绑 proot(BusyBox GPL-2.0)/Bash(GPL-3.0)/QEMU(GPL-2.0)/Ubuntu rootfs(GPL-3.0) | 是 | 语言本身无 GPL，运行时见 runtime 分类 |

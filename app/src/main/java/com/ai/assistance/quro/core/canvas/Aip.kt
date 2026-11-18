@@ -382,7 +382,7 @@ object Aip {
 
     /**
      * 由文档工具内容（title/content/format）构造 AIP 信封（kind=doc），
-     * 使工具箱-文档类工具（chat_doc / workspace_doc / enhanced_doc_create）输出与 AIP Canvas 引擎
+     * 使工具箱-文档类工具（chat_doc / workspace(action=doc) / enhanced_doc_create）输出与 AIP Canvas 引擎
      * （B 通道）兼容的「完整结构化文档」，替代旧的 [渲染卡片] 极简卡（那张卡不是 AIP 文档）。
      *
      * - 标题由 AipCanvas 头部统一渲染（env.title），故不再额外塞 heading 块，避免重复。
