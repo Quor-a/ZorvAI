@@ -245,7 +245,7 @@ jobs:
           NODE
           corepack pnpm run build
           cp "$root_manifest_backup" "$root_manifest"
-          corepack pnpm --recursive --if-present run bundle
+          corepack pnpm --config.ignore-workspace-cycles=true --recursive --if-present run bundle
           corepack pnpm run build:web
           # Audit all overlay-pinned vendor source bytes at the official target.
           # No source replacement or second compilation of older packages occurs.
