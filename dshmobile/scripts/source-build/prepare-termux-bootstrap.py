@@ -12,8 +12,8 @@ import subprocess
 import sys
 import zipfile
 
-HARNESS_COMMIT = "639ed015397290b3745d163aafe02ffee4aa3f84"
-HARNESS_VERSION = "0.2.0-rc.2"
+HARNESS_COMMIT = "9c2670d3bce5275e0d1610272958121af87787bb"
+HARNESS_VERSION = "0.2.2-rc.5"
 
 BOOTSTRAP_VERSION = "bootstrap-2026.09.20-r1+apt.android-7"
 BOOTSTRAP_SHA256 = "65ba578133ea2f4e5cc07234568815397cf9e1236b5da8c06ce6753cf036cc69"
@@ -134,13 +134,13 @@ def main() -> None:
     source_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source_root, text=True).strip()
     source_manifest = json.loads((source_root / "package.json").read_text(encoding="utf-8"))
     if source_commit != HARNESS_COMMIT or source_manifest.get("version") != HARNESS_VERSION:
-        raise ValueError("bootstrap assembly requires the official 0.2.0-rc.2 source")
+        raise ValueError("bootstrap assembly requires the official 0.2.2-rc.5 source")
     actual = hashlib.sha256(zip_path.read_bytes()).hexdigest()
     if actual != BOOTSTRAP_SHA256:
         raise ValueError(f"official Termux bootstrap SHA-256 mismatch: {actual}")
     dsh_manifest = json.loads((dsh_deploy / "package.json").read_text(encoding="utf-8"))
-    if dsh_manifest.get("name") != "@deepseek-ai/dsh" or dsh_manifest.get("version") != "0.2.0-rc.2":
-        raise ValueError("deployed DSH runtime must be @deepseek-ai/dsh@0.2.0-rc.2")
+    if dsh_manifest.get("name") != "@deepseek-ai/dsh" or dsh_manifest.get("version") != "0.2.2-rc.5":
+        raise ValueError("deployed DSH runtime must be @deepseek-ai/dsh@0.2.2-rc.5")
     if not (dsh_deploy / "lib" / "bin.js").is_file() or not (dsh_deploy / "node_modules").is_dir():
         raise ValueError("deployed DSH runtime is missing its built CLI or isolated dependency tree")
     dsh_files = tree_manifest(dsh_deploy)
@@ -190,7 +190,7 @@ def main() -> None:
             "profiles": ["web", "headless"],
         },
         "deepSeekHarnessRuntime": {
-            "package": "@deepseek-ai/dsh@0.2.0-rc.2",
+            "package": "@deepseek-ai/dsh@0.2.2-rc.5",
             "sourceCommit": subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], cwd=source_root, text=True
             ).strip(),

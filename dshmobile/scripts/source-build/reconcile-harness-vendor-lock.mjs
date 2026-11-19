@@ -64,7 +64,7 @@ function main() {
   const originalPath = join(dirname(reportPath), 'harness-pnpm-lock.original.yaml')
   const overrideReport = JSON.parse(readFileSync(resolve(overrideReportArg), 'utf8'))
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: sourceRoot, encoding: 'utf8' }).trim()
-  if (commit !== '639ed015397290b3745d163aafe02ffee4aa3f84'
+  if (commit !== '9c2670d3bce5275e0d1610272958121af87787bb'
     || overrideReport.harnessSourceCommit !== commit
     || overrideReport.mode !== 'pinned-target-source-evidence'
     || overrideReport.rewoundSourceCount !== 0

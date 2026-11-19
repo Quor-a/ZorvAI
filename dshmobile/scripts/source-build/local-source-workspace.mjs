@@ -45,8 +45,18 @@ export function sourceCommit(source) {
   return git(source, 'rev-parse', 'HEAD')
 }
 
+/** Path of `source` relative to its git worktree root ('' when it IS the root). */
+function sourceGitPrefix(source) {
+  const prefix = git(source, 'rev-parse', '--show-prefix')  // e.g. 'dshmobile/' or ''
+  return prefix ? prefix.replace(/\\/g, '/') : ''
+}
+
 export function committedWorkflow(source, commit) {
-  return git(source, 'show', `${commit}:.github/workflows/build-apk-source.yml`)
+  // dshmobile is vendored as a subdirectory of the QuroAI git root, while the source
+  // chain expects dshmobile to be the repository root. Prefix the in-tree path so
+  // `git show <commit>:<path>` resolves correctly in both layouts.
+  const prefix = sourceGitPrefix(source)
+  return git(source, 'show', `${commit}:${prefix}.github/workflows/build-apk-source.yml`)
 }
 
 /** A private shallow checkout keeps workflow cleanup away from developer files. */

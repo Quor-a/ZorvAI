@@ -35,7 +35,7 @@ const sourceBuildRoot = resolve('.deploy-tmp/source-build')
 const sourceManifestPath = resolve('.deploy-tmp/engine-overlay/source-build-manifest.json')
 const reportPath = join(sourceBuildRoot, 'source-engine-snapshot-check.json')
 const packageCache = resolve('.deploy-tmp/engine-overlay')
-const expectedCommit = '639ed015397290b3745d163aafe02ffee4aa3f84'
+const expectedCommit = '9c2670d3bce5275e0d1610272958121af87787bb'
 const packagePrefix = 'usr/lib/node_modules/@deepseek-ai/dsh'
 const overlayPath = join(sourceBuildRoot, 'engine-overlay.original.json')
 const overridePath = join(sourceBuildRoot, 'harness-vendor-overrides.json')
@@ -52,8 +52,8 @@ const within = (root, candidate) => {
 const sourceManifest = JSON.parse(readFileSync(sourceManifestPath, 'utf8'))
 if (sourceManifest.commit !== expectedCommit) throw new Error(`unexpected Harness source commit: ${sourceManifest.commit}`)
 const sourceOverlay = JSON.parse(readFileSync(overlayPath, 'utf8'))
-if (sourceOverlay.engineVersion !== '0.2.0-rc.2' || sourceOverlay.rootPackage?.version !== '0.2.0-rc.2') {
-  throw new Error('source snapshot overlay must target official 0.2.0-rc.2')
+if (sourceOverlay.engineVersion !== '0.2.2-rc.5' || sourceOverlay.rootPackage?.version !== '0.2.2-rc.5') {
+  throw new Error('source snapshot overlay must target official 0.2.2-rc.5')
 }
 const expectedPackages = new Map(Object.entries(sourceOverlay.packages ?? {}).filter(([name]) => name.startsWith('@deepseek-ai/')))
 expectedPackages.set(sourceOverlay.rootPackage.name, sourceOverlay.rootPackage.version)
