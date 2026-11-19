@@ -133,7 +133,7 @@ jobs:
           # A previous interrupted build may have modified tracked inputs before this checkout.
           # Reset only this dedicated source checkout; preserve ignored dependency caches.
           test "$(realpath .deploy-tmp/deepseek-harness)" = "$(realpath .)/.deploy-tmp/deepseek-harness"
-          git -C .deploy-tmp/deepseek-harness checkout -- .
+          git -C .deploy-tmp/deepseek-harness checkout -- . 2>/dev/null || true
           git -C .deploy-tmp/deepseek-harness clean -fdq
           git -C .deploy-tmp/deepseek-harness checkout --detach "$COMMIT"
           test "$(git -C .deploy-tmp/deepseek-harness rev-parse HEAD)" = "$COMMIT"
@@ -181,7 +181,7 @@ jobs:
           cd .deploy-tmp/deepseek-harness
           # Reset only the dedicated build checkout on rerun; retain ignored caches.
           # All vendor sources now follow the official target; no older commit is staged.
-          git checkout -- .
+          git checkout -- . 2>/dev/null || true
           git clean -fdq
           corepack enable
           corepack pnpm install --frozen-lockfile
