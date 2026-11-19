@@ -46,13 +46,13 @@
             "section": "peerDependencies",
             "name": "@deepseek-ai/dsh-native-command",
             "from": "^0.1.0-rc.6",
-            "to": "0.2.1-rc.2"
+            "to": "0.2.2-rc.5"
           },
           {
             "section": "peerDependencies",
             "name": "@deepseek-ai/dsh-tools",
             "from": "^0.1.0-rc.6",
-            "to": "0.2.1-rc.2"
+            "to": "0.2.2-rc.5"
           }
         ],
         "reason": "The published 0.1.7 caret peers reject the 0.2 prerelease. This explicitly recorded Android declaration delta prevents silent row disabling; no vendor runtime payload is changed and runtime compatibility is not claimed."
