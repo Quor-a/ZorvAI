@@ -57,7 +57,7 @@
   <b>☕ 如果这个项目对你有帮助，欢迎到 <a href="https://afdian.com/a/zorvAI">爱发电 (afdian)</a> 支持我们，助力持续开发 ❤️</b>
 </p>
 
-> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.2.6`（`versionCode 1002006`）
+> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.2.7`（`versionCode 1002007`）
 >
 > Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **235 个内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
 >
@@ -503,7 +503,14 @@ dsh 是 Node.js 应用（`dsh web` 起 HTTP 服务 + 自带前端）。要让它
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[v1.2.6 Release](https://github.com/Quor-a/ZorvAI/releases/tag/v1.2.6)**（Release 签名，**最新**）
+- 🟢 **[v1.2.7 Release](https://github.com/Quor-a/ZorvAI/releases/tag/v1.2.7)**（Release 签名，**最新**）
+
+  **稳定版本迭代 · 承接 v1.2.6 的全部修复（issue #24–#27）**
+
+  - 在 v1.2.6 基础上升级版本号，功能与修复内容保持一致。
+  - **安装包**：V1（JAR）/ V2 / V3 三套签名齐全。
+
+- 🟢 **[v1.2.6 Release](https://github.com/Quor-a/ZorvAI/releases/tag/v1.2.6)**（Release 签名）
 
   **修复 GitHub issue #24–#27 · AIHOT 新版 / 会话防丢失 / proot 风暴 / DSH 诊断**
 
