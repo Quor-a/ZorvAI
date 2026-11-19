@@ -98,6 +98,8 @@ outputs/
 
 # Dev test / scratch files
 test_*.py
+# dshmobile 来源链的输入校验测试必须随源码入库
+!dshmobile/scripts/source-build/test_*.py
 test_*.html
 repro_roundtrip.py
 audit_tools.py
