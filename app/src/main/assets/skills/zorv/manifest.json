@@ -22,11 +22,11 @@
     {
       "id": "zorv_6e17fffaeec4",
       "name": "aihot",
-      "description": "查询 AI HOT 的中文 AI 资讯、精选、当前热点和日报。用户询问今天或最近的 AI 新闻、AI 圈动态、大模型或产品发布、OpenAI／Anthropic／Google 最新消息、AI 论文、AI 日报、AI HOT 精选、当前最热事件，或需要同步当前全部精选时使用。必须通过 aihot.virxact.com 的匿名只读 API 获取当前数据，不凭训练记忆回答新闻；不需要 API Key 或 MCP server。",
+      "description": "查询 AIHOT（aihot.news）的中文 AI 资讯。用户问今天或最近 AI 圈发生了什么、AI 新闻和 AI 日报、大模型与 AI 产品发布、OpenAI／Anthropic／Google 等公司或某个 AI 话题的最新消息、当前最热的 AI 事件及来龙去脉、AI 模型排行、Codex 额度重置，或其它 AI 行业动态时使用。必须实时查询 AIHOT，不凭训练记忆回答新闻；匿名只读，无需 API Key。",
       "file": "aihot.md",
-      "size": 8988,
+      "size": 3385,
       "suite": "ai-news",
-      "signature": "bc95bf0d3f2f5794e96c7ef21df115d8ee4bb121fd34623bf1f21efc5d7d6d88"
+      "signature": "e64bee18c8318949c4e7c50606d028ea7bbee3229d19d6bfd1a71677e995b479"
     },
     {
       "id": "zorv_b0fe9b2fa074",

@@ -618,12 +618,77 @@ object QuroSkillStore {
         save(context, list.map { if (it.enabled) it else it.copy(enabled = true) })
     }
 
+    /**
+     * 内置技能正文随包升级（issue #24：AIHOT 从 1.x 旧域名 /api/v1/items 升级到官方 2.0.0 /api/v1/agent）。
+     *
+     * [seedBuiltinZorvSkills] 有 `builtin_zorv_v1` 一次性守卫，老设备早已置 true 而直接 return，
+     * 只改 assets 里的 SKILL.md 与 manifest.json 对**已安装设备完全无效**，技能库里仍是旧正文。
+     * 这里按「随包清单签名」做一次性守卫，仅同步内容字段（name/description/prompt/trigger/signState），
+     * **保留** enabled / callable / alwaysOn / suite / id 等用户设置，避免把用户关掉的技能重新打开。
+     *
+     * 升级判定刻意不依赖 [SkillSigner.verify] 的结果：manifest 的 size/signature 按 LF 内容计算，
+     * 而部分工作区检出为 CRLF，运行时校验可能为 false（既有内置技能同理），那不是内容被篡改，
+     * 不能因此阻止官方版本升级。signState 仍按实际校验结果标注，供「验证签名」页排查。
+     */
+    fun syncBuiltinSkillUpdates(context: Context) {
+        runCatching {
+            val am = context.assets
+            val manifest = JSONObject(am.open("skills/zorv/manifest.json").bufferedReader().readText())
+            val arr = manifest.optJSONArray("skills") ?: return@runCatching
+            var target: JSONObject? = null
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                if (o.optString("name", "") == "aihot") { target = o; break }
+            }
+            val o = target ?: return@runCatching
+            val id = o.optString("id", "")
+            val file = o.optString("file", "")
+            val signature = o.optString("signature", "").trim()
+            if (id.isEmpty() || file.isEmpty() || signature.isBlank()) return@runCatching
+            val md = am.open("skills/zorv/$file").bufferedReader().readText()
+            // 只认官方 2.0.0（/api/v1/agent 统一入口）这一版，避免把旧正文写回。
+            if (!md.contains("/api/v1/agent")) return@runCatching
+            val parsed = parseSkillMd(md).firstOrNull() ?: return@runCatching
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            // 以随包签名为版本指纹：以后再升级内置技能，换签名即自动重跑一次。
+            val guardKey = "builtin_skill_content_sync_$signature"
+            if (prefs.getBoolean(guardKey, false)) return@runCatching
+            val current = loadRaw(context)
+            val idx = current.indexOfFirst { it.id == id }
+            if (idx < 0) {
+                // 用户主动删掉了这个技能：不强行加回，尊重用户选择。
+                prefs.edit().putBoolean(guardKey, true).apply()
+                return@runCatching
+            }
+            val old = current[idx]
+            if (old.prompt == parsed.prompt && old.description == parsed.description) {
+                prefs.edit().putBoolean(guardKey, true).apply()
+                return@runCatching
+            }
+            val verified = SkillSigner.verify(id, parsed.name, md, signature)
+            val updated = current.toMutableList()
+            updated[idx] = old.copy(
+                name = parsed.name,
+                description = parsed.description,
+                descriptionZh = parsed.descriptionZh,
+                trigger = parsed.trigger,
+                prompt = parsed.prompt,
+                signState = if (verified) "verified" else "unsigned",
+                updatedAt = System.currentTimeMillis(),
+            )
+            save(context, updated)
+            prefs.edit().putBoolean(guardKey, true).apply()
+            android.util.Log.i("QuroSkillStore", "内置技能正文已升级: ${parsed.name} / $file")
+        }
+    }
+
     fun load(context: Context): List<QuroSkill> {
         clearBuiltinSkillsOnce(context)
         seedBuiltinZorvSkills(context)
         migrateBuiltinSkillsOff(context)
         migrateDesignSkillsOn(context)
         seedClusterV2Skills(context)
+        syncBuiltinSkillUpdates(context)
         // 必须放在上面几个「把内置技能关掉」的迁移之后，否则老设备会立刻又被翻回 false。
         migrateEnabledToLibraryVisibility(context)
         val out = mutableListOf<QuroSkill>()

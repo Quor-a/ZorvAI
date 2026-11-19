@@ -769,7 +769,10 @@ internal class EngineStartFlow(private val activity: MainActivity) {
             LogCollector.writeBootFail(
               activity, refreshCode,
               "内嵌运行时快照解压/写入失败（refreshSnapshot 返回 false，code=" + refreshCode + "）"
-                + (refreshCause?.let { " cause=" + it.javaClass.name + ": " + (it.message ?: "无消息") } ?: ""),
+                + (refreshCause?.let { " cause=" + it.javaClass.name + ": " + (it.message ?: "无消息") } ?: "")
+                // issue #25：自愈已达上限时给明确文案，不再让用户看到无指向的通用失败。
+                + (if (activity.engineManager.lastResidueSelfHealExhausted)
+                  "；" + SnapshotRecoveryNotice.forResidueSelfHealExhausted(refreshCode).hint else ""),
               refreshCause,
             )
             activity.runOnUiThread {
@@ -942,12 +945,14 @@ internal class EngineStartFlow(private val activity: MainActivity) {
         //   ② 进程瞬间退出且一句都没来得及写（native 崩溃 / 缺 so / 动态链接失败）；
         //   ③ 旋转把本次输出滚进了 engine.log.1..5（rotateEngineLog 保留 5 代）。
         // 故这里把 engine.log 各世代大小一并落盘——「日志到底在不在」本身就是判据。
-        // （退出码由既有 mirrorDiagnosticsToShared 的诊断包承载；EngineManager 不在本任务写面内，
-        //   故不在壳侧另取一份。）
+        // issue #25：把子进程取证串透传进 boot-fail.log 的 processInfo= 字段。
+        // 即使 engine.log 0 字节、engineProcess 句柄已被观测点置空，engineProcessDiagnostic()
+        // 仍从进程级 spawn 记录 + lastObservedExit 还原出 exit=/signal=/argv=/engineLogTail=。
         LogCollector.writeBootFail(
           activity, "process-died-during-boot",
           "引擎进程在 " + ENGINE_BOOT_BUDGET_MS / 1000 + "s 预算内死亡且 Web 端口未就绪（t_listen=-1 形态）；" +
             LogCollector.describeEngineLogState(activity.filesDir),
+          processInfo = activity.engineManager.engineProcessDiagnostic(),
         )
         // ── task-79（Bug A）：动态链接失败 ⇒ 判定运行时树损坏并触发一次重抽取 ──────────
         // 必须在**当拍**读 engine.log：`rotateEngineLog` 每次 spawn 都把 engine.log 截断重写，
@@ -989,6 +994,7 @@ internal class EngineStartFlow(private val activity: MainActivity) {
         LogCollector.writeBootFail(
           activity, "boot-budget-exceeded",
           "引擎进程存活或启动请求仍在准备，但 " + ENGINE_BOOT_BUDGET_MS / 1000 + "s 预算内 Web 端口未就绪（t_listen=-1 形态）",
+          processInfo = activity.engineManager.engineProcessDiagnostic(),
         )
         LogCollector.log("dsh-shell", "engine boot window exceeded 90s; scheduling retry (half-dead ladder will take over if HTTP stays failing)")
         scheduleEngineRetry(generation)

@@ -165,6 +165,53 @@ object QuroLinuxEnv {
      */
     @Volatile private var lastSetupFailAt: Long = 0L
     private val setupCooldownMs: Long = 60_000L
+
+    // ---- issue #27：运行期探针单飞 + 指数退避 ----
+    // 现象：rootfs 损坏后，每次聊天都并发拉起几十个 proot 探针（bootstrapHosts /
+    // bootstrapHostsByDoH / ensureDnsProxy），每个 9~10s 超时且被 SIG:9 强杀，
+    // 占满 Dispatchers.IO，把 buildSystemPrompt 从 281ms 饿死到 33520ms，聊天永久转圈。
+    // 修复：每类探针全局单飞（同一时刻只允许一个在跑），失败后指数退避（30s→60s→120s→…封顶 10min），
+    // 退避期内直接跳过，不再反复 spawn。
+    private val probeMutex = Mutex()
+    private val probeInFlight = java.util.HashSet<String>()
+    private val probeNextAllowedAt = java.util.HashMap<String, Long>()
+    private val probeFailStreak = java.util.HashMap<String, Int>()
+    /** 提交一个运行期探针：单飞 + 失败退避。name 相同者串行化。 */
+    private fun scheduleProbe(name: String, block: suspend () -> Unit) {
+        val now = System.currentTimeMillis()
+        scope.launch(Dispatchers.IO) {
+            val shouldRun = probeMutex.withLock {
+                val next = probeNextAllowedAt[name] ?: 0L
+                when {
+                    probeInFlight.contains(name) -> false
+                    now < next -> false
+                    else -> { probeInFlight.add(name); true }
+                }
+            }
+            if (!shouldRun) return@launch
+            var failed = false
+            try {
+                block()
+            } catch (e: Throwable) {
+                failed = true
+                Log.w(TAG, "运行期探针 $name 失败（非致命）: ${e.message}")
+            } finally {
+                probeMutex.withLock {
+                    probeInFlight.remove(name)
+                    if (failed) {
+                        val streak = (probeFailStreak[name] ?: 0) + 1
+                        probeFailStreak[name] = streak
+                        val backoff = minOf(30_000L * (1L shl (streak - 1).coerceAtMost(5)), 600_000L)
+                        probeNextAllowedAt[name] = System.currentTimeMillis() + backoff
+                        Log.w(TAG, "运行期探针 $name 第 $streak 次失败，退避 ${backoff}ms 内不再重试")
+                    } else {
+                        probeFailStreak[name] = 0
+                        probeNextAllowedAt.remove(name)
+                    }
+                }
+            }
+        }
+    }
     /** 失败时给用户的详细诊断（含 apt-get 完整输出前 60 行），写到公共 Download 目录供手机直接读取。 */
     private fun writeLastErrorToDownloads(context: Context, detail: String) {
         runCatching {
@@ -3450,14 +3497,12 @@ fi
             ensureNsswitch(rootfs)
             setupMiscFiles(context, rootfs)
             // 每次启动刷新 /etc/hosts（宿主侧解析，绕过被阻断的 53 端口 DNS）。
-            // 该解析是阻塞网络调用，放进 IO scope 异步执行，避免在主线程调用 prepareRuntimeExtras 时 ANR；
-            // setup 路径（setupInternal）则是同步调用，保证 apt-get update 前 hosts 已就绪。
-            scope.launch(Dispatchers.IO) { bootstrapHosts(context, rootfs) }
+            // issue #27：改用单飞+退避调度，避免 rootfs 损坏时每轮聊天并发 spawn 探针饿死提示词构建。
+            scheduleProbe("bootstrapHosts") { bootstrapHosts(context, rootfs) }
             // 应用层 DoH（443）解析镜像 IP → /etc/hosts，与 bootstrapHosts 合并，更彻底的 53 绕行
-            scope.launch(Dispatchers.IO) { bootstrapHostsByDoH(context, rootfs) }
+            scheduleProbe("bootstrapHostsByDoH") { bootstrapHostsByDoH(context, rootfs) }
             // 通用 DNS：若已装 dnscrypt-proxy，确保 DoH 代理在跑并接管 resolv.conf（覆盖任意域名）。
-            // 含阻塞网络探测，放进 IO scope 异步执行避免主线程 ANR；setup 路径为同步（保证部署即生效）。
-            scope.launch(Dispatchers.IO) { ensureDnsProxy(context, rootfs) }
+            scheduleProbe("ensureDnsProxy") { ensureDnsProxy(context, rootfs) }
             // 创建共享存储挂载点（/sdcard），否则 proot --bind 因目标不存在而整体启动失败。
             File(rootfs, SHARED_STORAGE_MOUNT.trimStart('/')).mkdirs()
             // 创建应用私有目录挂载点（/quro，issue #11 ③），理由同上：
@@ -3507,16 +3552,34 @@ fi
             val usrBin = File(rootfs, "usr/bin")
             if (usrBin.isDirectory) {
                 val alias = File(usrBin, "proot")
-                if (!alias.exists()) {
-                    try {
+                // issue #27 修复：旧实现用绝对链接 /usr/local/bin/proot，宿主侧解析悬空，
+                // alias.exists() 恒为 false → createSymbolicLink 抛 FileAlreadyExists →
+                // 回退 copyTo 跟随悬空链接写到宿主 /usr/local/bin/proot → ENOENT，每轮反复失败。
+                // 改用「相对链接 + 显式处理悬空链接」：
+                //   1) 只要 alias 是符号链接（哪怕悬空）就先删掉，不看 exists()；
+                //   2) 目标用相对路径 ../local/bin/proot，rootfs 内外都能正确解析。
+                val isSymlink = runCatching {
+                    java.nio.file.Files.isSymbolicLink(alias.toPath())
+                }.getOrDefault(false)
+                if (isSymlink || (!alias.exists() && target.exists())) {
+                    runCatching {
+                        if (isSymlink || alias.exists()) alias.delete()
+                    }
+                    val linked = runCatching {
                         java.nio.file.Files.createSymbolicLink(
                             alias.toPath(),
-                            java.nio.file.Paths.get("/usr/local/bin/proot")
+                            java.nio.file.Paths.get("../local/bin/proot")
                         )
-                    } catch (_: Exception) {
-                        // rootfs 所在分区可能不支持符号链接（sdcard/FAT），退化成硬拷贝
-                        target.copyTo(alias, overwrite = true)
-                        alias.setExecutable(true, false)
+                        true
+                    }.getOrDefault(false)
+                    if (!linked) {
+                        // rootfs 分区不支持符号链接（sdcard/FAT）：退化成硬拷贝，
+                        // 这里必须写 alias 自身的路径，绝不能跟随任何悬空链接写到宿主目录。
+                        runCatching {
+                            if (java.nio.file.Files.isSymbolicLink(alias.toPath()) || alias.exists()) alias.delete()
+                            target.copyTo(alias, overwrite = false)
+                            alias.setExecutable(true, false)
+                        }.onFailure { Log.w(TAG, "installProotIntoRootfs 建 alias 失败: ${it.message}") }
                     }
                 }
             }

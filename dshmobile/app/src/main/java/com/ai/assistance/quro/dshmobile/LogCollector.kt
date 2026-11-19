@@ -534,6 +534,15 @@ object LogCollector {
   private const val BOOT_FAIL_MAX_BYTES = 128L * 1024
   private const val BOOT_FAIL_STACK_MAX_CHARS = 8 * 1024
 
+  /**
+   * issue #25：失败当拍落盘的系统级 logcat 快照（**覆盖写**，只保留最后一次失败窗口）。
+   * 为什么独立成文件而不是只靠 LogShare 打包时现取：用户分享诊断包往往在失败数分钟后，
+   * logd 环形缓冲早已把失败时刻的 `libproot.so SIGTRAP` 等系统行冲掉。
+   */
+  internal const val BOOT_FAIL_LOGCAT_FILE = "logcat-bootfail.txt"
+  private const val BOOT_FAIL_LOGCAT_MAX_BYTES = 512 * 1024
+  private const val BOOT_FAIL_LOGCAT_TIMEOUT_S = 5L
+
   /** 启动失败诊断标记（设备侧单条 grep）。 */
   const val BOOT_FAIL_MARK = "dsh-boot-fail"
 
@@ -544,14 +553,59 @@ object LogCollector {
    *   `boot-budget-exceeded` / `start-flow-exception` / `snapshot-refresh-failed`）
    * @param detail 人类可读的一句话补充（不含凭据）
    * @param error 导致失败的异常（可为 null —— 多数失败分支是布尔判定而非异常）
+   * @param processInfo issue #25：引擎子进程取证串（argv/exit/signal/engineLogTail），可为 null。
+   *   由 EngineManager.engineProcessDiagnostic() 产出；透传到 bootFailLine 的 `processInfo=` 字段，
+   *   保证「引擎一句日志都没写」时 boot-fail.log 仍有可判据的退出码/信号/argv。
    */
-  fun writeBootFail(context: Context, stage: String, detail: String, error: Throwable? = null) {
+  fun writeBootFail(
+    context: Context, stage: String, detail: String, error: Throwable? = null,
+    processInfo: String? = null,
+  ) {
+    val filesDir = context.applicationContext.filesDir
     writeBootFailTo(
-      context.applicationContext.filesDir, stage, detail, error, System.currentTimeMillis(),
-      embeddedAssetFingerprint(context),
+      filesDir, stage, detail, error, System.currentTimeMillis(),
+      embeddedAssetFingerprint(context), processInfo,
     )
+    // issue #25：**当拍**同步落一份系统级 logcat 尾部快照（失败后立刻取，不等用户点分享）。
+    // 必须在 boot-fail 写入的同一拍完成，否则 logd 环形缓冲会把失败时刻冲掉。
+    runCatching { captureBootFailLogcat(filesDir) }
     // 失败路径必须有 Log.e（用户反馈第 5 项：logcat 里连一行都没有）。
     Log.e(TAG, "boot failed: stage=" + stage + " detail=" + detail, error)
+  }
+
+  /**
+   * issue #25：失败当拍的系统级 logcat 尾部快照（覆盖写，保留最后一次失败窗口）。
+   *
+   * 与 [LogShare.logcatText] 共用同一口径：取尾部 3000 行、不限 --pid（要的是含
+   * `libproot.so SIGTRAP` 等系统级行），用 [ProcIo.readBoundedTail] 只留最后
+   * [BOOT_FAIL_LOGCAT_MAX_BYTES] 字节，再经 [LogSanitizer] 脱敏。任何失败都在内部消化。
+   */
+  internal fun captureBootFailLogcat(filesDir: File) {
+    // 在失败当拍**立即启动** dump（不等用户点分享），但只给调用线程最多 1s 的 join：
+    // writeBootFail 有主线程调用点，5s 的 ProcIo 超时直接同步等会 ANR。dump 线程是 daemon，
+    // 即使超过 1s 仍在后台完成并覆盖写文件——失败窗口仍被锁住。
+    val worker = Thread({
+      try {
+        val proc = ProcessBuilder(
+          "/system/bin/logcat", "-d", "-v", "threadtime", "-t", "3000",
+        ).redirectErrorStream(true).start()
+        val out = ProcIo.readBoundedTail(proc, BOOT_FAIL_LOGCAT_TIMEOUT_S, BOOT_FAIL_LOGCAT_MAX_BYTES)
+        val body = out.text
+        // fail-closed：脱敏失败时只写一行标记，绝不把原文落盘。
+        val safe = if (body.isEmpty()) "# logcat empty or unavailable\n"
+          else (LogSanitizer.sanitizeOrNull(body)
+            ?: "# logcat omitted: sanitize failed\n")
+        File(filesDir, BOOT_FAIL_LOGCAT_FILE).writeText(safe)
+      } catch (_: Throwable) {
+        // 取证失败不得改变失败结论；下一拍失败会覆盖重试。
+      }
+    }, "dsh-bootfail-logcat").apply { isDaemon = true }
+    worker.start()
+    try {
+      worker.join(1_000L)
+    } catch (_: InterruptedException) {
+      Thread.currentThread().interrupt()
+    }
   }
 
   /**
@@ -573,10 +627,11 @@ object LogCollector {
     error: Throwable?,
     nowMs: Long,
     embeddedSnapshot: String? = null,
+    processInfo: String? = null,
   ) {
     appendBounded(
       filesDir, BOOT_FAIL_FILE,
-      bootFailLine(filesDir, stage, detail, error, nowMs, embeddedSnapshot),
+      bootFailLine(filesDir, stage, detail, error, nowMs, embeddedSnapshot, processInfo),
       BOOT_FAIL_MAX_BYTES,
     )
   }
@@ -605,6 +660,7 @@ object LogCollector {
     error: Throwable?,
     nowMs: Long,
     embeddedSnapshot: String? = null,
+    processInfo: String? = null,
   ): String {
     val sb = StringBuilder()
     sb.append(BOOT_FAIL_MARK)
@@ -626,6 +682,12 @@ object LogCollector {
       sb.append(" error=none(boolean-failure-path) stack=none")
     }
     sb.append(" detail=").append(detail.replace('\n', ' ').replace('\r', ' '))
+    if (!processInfo.isNullOrEmpty()) {
+      // issue #25：子进程取证单行透传（argv/exit/signal/engineLogTail）。同样折叠换行，保持一行一失败。
+      sb.append(" processInfo=").append(
+        EngineAuth.redact(processInfo.replace('\n', ' ').replace('\r', ' ')).take(4 * 1024)
+      )
+    }
     return sb.toString()
   }
 

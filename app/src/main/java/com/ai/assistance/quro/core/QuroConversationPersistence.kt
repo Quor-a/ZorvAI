@@ -40,6 +40,16 @@ data class QuroConversationHealth(
     val corruptFile: String? = null,
     val reason: String? = null,
     val backupCount: Int = 0,
+    /** 本次加载中无法解析而被跳过的会话数（issue #26：不再静默丢弃）。 */
+    val droppedConversations: Int = 0,
+    /** 本次加载中无法解析而被跳过的消息 / 卡片数。 */
+    val droppedMessages: Int = 0,
+    /** 无法解析的原始条目另存文件，供用户或支持人员取回。 */
+    val droppedEntriesFile: String? = null,
+    /** 防缩水保护拒绝了本次覆盖。 */
+    val shrinkBlocked: Boolean = false,
+    /** 历史最大会话数（防缩水基准）。 */
+    val highWaterMark: Int = 0,
 )
 
 /** 历史列表中展示用的轻量元数据。 */
@@ -96,6 +106,23 @@ class QuroConversationRepository(context: Context) {
 
     fun isReadOnly(): Boolean = readOnly
 
+    /**
+     * 历史会话数高水位（issue #26）：记录本库「见过的最大会话数」，只增不减。
+     * 用途是识别「数据凭空消失」——老设备历史有 N 个会话，某次加载却只剩 0/1 个，
+     * 且主文件 nonexistent / 骤降，这是异常，绝不能当成新用户直接覆盖写回。
+     */
+    private fun highWater(): Int = healthPrefs.getInt(KEY_HIGH_WATER, 0)
+
+    private fun bumpHighWater(count: Int) {
+        val cur = highWater()
+        if (count > cur) healthPrefs.edit().putInt(KEY_HIGH_WATER, count).apply()
+    }
+
+    /** 防缩水已另存现场后，把基准下调到新值，避免后续每次 saveAll 都重复报警。 */
+    private fun resetHighWater(count: Int) {
+        healthPrefs.edit().putInt(KEY_HIGH_WATER, count).apply()
+    }
+
     fun loadAll(): List<QuroPersistedConversation> {
         if (!file.exists()) {
             // 隔离状态跨进程重启保留：文件已被改名移走，不能因为「主文件不存在」就当新用户处理。
@@ -107,7 +134,44 @@ class QuroConversationRepository(context: Context) {
                     corruptFile = pending,
                     reason = healthPrefs.getString("reason", null),
                     backupCount = listBackups().size,
+                    highWaterMark = highWater(),
                 )
+                return emptyList()
+            }
+            // issue #26 关键防御：老用户的会话库在 App 未运行期间消失（被外部清理/快照事务误伤），
+            // 这里若直接返回 emptyList，ViewModel 会立刻新建一条「新对话」并 saveAll 覆盖，
+            // 把 9 会话的现场彻底抹掉。改为：先用最完整的备份自动恢复，恢复不了才进只读降级。
+            val hwm = highWater()
+            if (hwm >= SHRINK_GUARD_MIN) {
+                val best = bestBackup()
+                if (best != null) {
+                    val restored = runCatching { best.readText() }.getOrNull()
+                    if (!restored.isNullOrBlank() && runCatching {
+                            JSONObject(restored).optJSONArray("conversations")?.length() ?: 0
+                        }.getOrDefault(0) > 0
+                    ) {
+                        runCatching { atomicWrite(file, restored) }
+                        readOnly = false
+                        bumpHighWater(hwm)
+                        _health.value = QuroConversationHealth(
+                            backupCount = listBackups().size,
+                            highWaterMark = hwm,
+                            reason = "会话库文件丢失，已从最近备份自动恢复",
+                        )
+                        Log.w("QuroPersist", "会话库主文件缺失，已从备份自动恢复: ${best.name}")
+                        return parseAll(JSONObject(restored).optJSONArray("conversations") ?: JSONArray()).conversations
+                    }
+                }
+                // 没有任何可用备份：进入只读降级，杜绝「新对话」覆盖现场。
+                readOnly = true
+                _health.value = QuroConversationHealth(
+                    quarantined = true,
+                    corruptFile = file.absolutePath,
+                    reason = "会话库文件丢失且无可用备份（历史 $hwm 个会话），已暂停写入以保护现场",
+                    backupCount = listBackups().size,
+                    highWaterMark = hwm,
+                )
+                Log.e("QuroPersist", "会话库主文件缺失且无备份，进入只读降级（历史 $hwm 会话）")
                 return emptyList()
             }
             readOnly = false
@@ -127,23 +191,78 @@ class QuroConversationRepository(context: Context) {
         }
         val arr = root.optJSONArray("conversations")
             ?: return quarantine("缺少 conversations 字段")
-        val raw = mutableListOf<QuroPersistedConversation>()
-        for (i in 0 until arr.length()) {
-            runCatching { parseConv(arr.getJSONObject(i)) }.getOrNull()?.let { raw.add(it) }
-        }
+
+        // issue #26：逐会话解析不再静默丢弃——计数 + 原始条目另存 quarantine + 暴露 health。
+        val parsed = parseAll(arr)
+        val raw = parsed.conversations
+        val droppedConv = parsed.droppedConversations
+        val droppedMsg = parsed.droppedMessages
+        val droppedFile = parsed.droppedFile
+        bumpHighWater(arr.length())
         readOnly = false
-        _health.value = QuroConversationHealth()
-        if (healthPrefs.contains("corrupt_file")) healthPrefs.edit().clear().apply()
+        _health.value = QuroConversationHealth(
+            droppedConversations = droppedConv,
+            droppedMessages = droppedMsg,
+            droppedEntriesFile = droppedFile,
+            backupCount = listBackups().size,
+            highWaterMark = highWater(),
+        )
+        if (healthPrefs.contains("corrupt_file")) healthPrefs.edit().remove("corrupt_file").remove("reason").apply()
         scheduleBackup(text)
 
         // 迁移：自愈旧版本遗留的脏数据（hidden 字段不存在、管道消息泄漏、垃圾工具结果）。
         // 每次加载时检查是否需要清理；仅当发现脏数据时才回写，避免每次启动都写磁盘。
         val healed = migrateAndClean(raw)
-        Log.i("QuroPersist", "LOAD rawConvs=${raw.size} rawMsgs=${raw.sumOf { it.messages.size }} healedMsgs=${healed.sumOf { it.messages.size }}")
+        Log.i("QuroPersist", "LOAD rawConvs=${raw.size} rawMsgs=${raw.sumOf { it.messages.size }} healedMsgs=${healed.sumOf { it.messages.size }} droppedConv=$droppedConv droppedMsg=$droppedMsg")
         if (healed !== raw) {
             saveAll(healed)  // 回写修复后的数据，下次不再重复迁移
         }
         return healed
+    }
+
+    /**
+     * 解析全部会话条目：无法解析的原始 JSONObject 不丢弃，另存到 quarantine 文件并计数。
+     * 返回 Quadruple(可解析会话, 丢弃会话数, 丢弃消息数, 另存文件路径)。
+     */
+    private data class ParsedConversations(
+        val conversations: List<QuroPersistedConversation>,
+        val droppedConversations: Int,
+        val droppedMessages: Int,
+        val droppedFile: String?,
+    )
+
+    private fun parseAll(arr: JSONArray): ParsedConversations {
+        val raw = mutableListOf<QuroPersistedConversation>()
+        var droppedConv = 0
+        var droppedMsg = 0
+        val droppedRaw = JSONArray()
+        for (i in 0 until arr.length()) {
+            val obj = runCatching { arr.getJSONObject(i) }.getOrNull()
+            if (obj == null) {
+                droppedConv++
+                continue
+            }
+            val parsed = runCatching { parseConv(obj) }.getOrNull()
+            if (parsed == null) {
+                droppedConv++
+                droppedMsg += runCatching { obj.optJSONArray("messages")?.length() ?: 0 }.getOrDefault(0)
+                droppedRaw.put(obj)
+            } else {
+                raw.add(parsed)
+            }
+        }
+        val file2 = if (droppedRaw.length() > 0) {
+            runCatching {
+                val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+                val target = File(dir, "quro_conversations.dropped-$stamp.json")
+                atomicWrite(target, JSONObject().put("conversations", droppedRaw).toString())
+                target.absolutePath
+            }.getOrElse {
+                Log.w("QuroPersist", "无法另存解析失败的会话条目", it)
+                null
+            }
+        } else null
+        return ParsedConversations(raw, droppedConv, droppedMsg, file2)
     }
 
     /**
@@ -260,16 +379,65 @@ class QuroConversationRepository(context: Context) {
             return
         }
         runCatching {
+            // issue #26 防缩水：历史高水位很多、本次却要写回极少会话，是「数据被抹掉后
+            // 用空库覆盖」的典型形态。先把当前磁盘现场另存 orphan，再放行写入，
+            // 这样即便判定失误（用户真删了很多），旧数据也仍在 orphan + 备份里可取回。
+            val hwm = highWater()
+            val shrunk = hwm >= SHRINK_GUARD_MIN &&
+                list.size <= (hwm * SHRINK_RATIO).toInt().coerceAtMost(hwm - 1)
+            if (shrunk) {
+                shieldShrink(hwm, list.size)
+                // 现场已另存，基准下调到新值，避免后续每次保存都重复报警。
+                resetHighWater(list.size)
+            }
             val arr = JSONArray()
             list.forEach { arr.put(serializeConv(it)) }
             val root = JSONObject().put("conversations", arr)
             val text = root.toString()
             atomicWrite(file, text)
+            if (!shrunk) bumpHighWater(list.size)
             scheduleBackup(text)
         }.onFailure {
             Log.e("QuroPersist", "会话库保存失败", it)
         }
     }
+
+    /**
+     * 防缩水：把当前主文件原样另存为 orphan，并把 health 标记为 shrinkBlocked，
+     * 让界面明确提示「会话数异常减少，已从备份/现场保留，可恢复」。
+     */
+    private fun shieldShrink(hwm: Int, incoming: Int) {
+        var orphanPath: String? = null
+        if (file.exists()) {
+            runCatching {
+                val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+                val target = File(dir, "quro_conversations.orphan-$stamp.json")
+                file.copyTo(target, overwrite = false)
+                orphanPath = target.absolutePath
+            }.onFailure { Log.w("QuroPersist", "另存缩水前现场失败", it) }
+        }
+        val reason = "会话数从历史 $hwm 骤降到 $incoming，已保留写入前现场" +
+            (orphanPath?.let { "：$it" } ?: "")
+        Log.w("QuroPersist", reason)
+        val cur = _health.value
+        _health.value = cur.copy(
+            shrinkBlocked = true,
+            highWaterMark = hwm,
+            droppedEntriesFile = cur.droppedEntriesFile ?: orphanPath,
+            reason = reason,
+        )
+    }
+
+    /**
+     * 会话数最多的备份（不是时间最新——最新的可能只是丢数据后的空库）。
+     * 用于主文件缺失时自动恢复，以及 UI「从备份恢复」优先项（issue #26）。
+     */
+    fun bestBackup(): File? = listBackups().mapNotNull { f ->
+        val n = runCatching {
+            JSONObject(f.readText()).optJSONArray("conversations")?.length() ?: 0
+        }.getOrDefault(0)
+        if (n > 0) f to n else null
+    }.maxByOrNull { it.second }?.first
 
     /**
      * 原子写：临时文件 → flush + fsync → 原子替换。
@@ -337,9 +505,18 @@ class QuroConversationRepository(context: Context) {
             corruptFile = kept.absolutePath,
             reason = reason,
             backupCount = listBackups().size,
+            highWaterMark = highWater(),
         )
         Log.w("QuroPersist", "会话库损坏已隔离，暂停保存：$reason")
         return emptyList()
+    }
+
+    /** 清除「隔离」相关标记，但保留 high_water 保护基准（不能被普通 clear 抹掉）。 */
+    private fun clearQuarantineFlags() {
+        healthPrefs.edit()
+            .remove("corrupt_file")
+            .remove("reason")
+            .apply()
     }
 
     /** 轮转备份：节流到每 10 分钟一次，后台原子写入，保留最近 8 份。 */
@@ -365,7 +542,15 @@ class QuroConversationRepository(context: Context) {
     }.getOrDefault(emptyList())
 
     private fun pruneBackups() {
-        listBackups().drop(BACKUP_KEEP).forEach { runCatching { it.delete() } }
+        val now = System.currentTimeMillis()
+        // issue #26：原策略只留 8 份（按 10 分钟节流 ≈ 80 分钟），远不足覆盖 7 天。
+        // 新策略：7 天内的备份一律保留（数量上限提高到 7 天可容纳的量级），
+        //         超龄或超上限才裁剪；这样 11-16 这类「中间某天没开 App」也不会被冲掉关键节点。
+        val keep = listBackups().filter { f ->
+            now - f.lastModified() <= BACKUP_TTL_MS
+        }.take(BACKUP_KEEP)
+        val keepNames = keep.map { it.name }.toSet()
+        listBackups().filterNot { it.name in keepNames }.forEach { runCatching { it.delete() } }
     }
 
     /** 按时间倒序的可用备份，供界面展示与恢复。 */
@@ -374,27 +559,44 @@ class QuroConversationRepository(context: Context) {
     /** 从备份恢复主文件；成功后解除只读降级。 */
     fun restoreBackup(backup: File): Boolean = runCatching {
         val text = backup.readText()
-        require(JSONObject(text).has("conversations")) { "备份结构不完整" }
+        val restoredCount = JSONObject(text).optJSONArray("conversations")?.length()
+            ?: throw IllegalArgumentException("备份结构不完整")
         atomicWrite(file, text)
-        healthPrefs.edit().clear().apply()
+        clearQuarantineFlags()
+        bumpHighWater(restoredCount)
         readOnly = false
-        _health.value = QuroConversationHealth()
+        _health.value = QuroConversationHealth(highWaterMark = highWater())
         true
     }.getOrElse {
         Log.e("QuroPersist", "从备份恢复失败", it)
         false
     }
 
-    /** 放弃隔离数据并重新开始；损坏文件仍保留在磁盘上，不会被新写入覆盖。 */
+    /**
+     * 放弃隔离数据并重新开始；损坏文件仍保留在磁盘上，不会被新写入覆盖。
+     * issue #26：这里有「用户明确放弃旧库」的语义，允许把高水位重置，
+     * 否则残留的高水位会让新库第一次 saveAll 就被误判为异常骤降。
+     */
     fun discardQuarantine() {
-        healthPrefs.edit().clear().apply()
+        healthPrefs.edit()
+            .remove("corrupt_file")
+            .remove("reason")
+            .remove(KEY_HIGH_WATER)
+            .apply()
         readOnly = false
         _health.value = QuroConversationHealth()
     }
 
     companion object {
         private const val BACKUP_INTERVAL_MS = 10 * 60 * 1000L
-        private const val BACKUP_KEEP = 8
+        /** issue #26：保留至少 7 天，数量上限提高到 128 份（每天约 10 分钟一次节流也够覆盖）。 */
+        private const val BACKUP_TTL_MS = 8 * 24 * 60 * 60 * 1000L
+        private const val BACKUP_KEEP = 128
+        private const val KEY_HIGH_WATER = "conversation_high_water"
+        /** 触发防缩水/丢失保护的最小历史会话数。 */
+        private const val SHRINK_GUARD_MIN = 5
+        /** 本次写入会话数 <= 高水位 * 该比例时视为异常骤降（0.4 = 降到四成以下）。 */
+        private const val SHRINK_RATIO = 0.4
     }
 
     /**

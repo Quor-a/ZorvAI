@@ -133,6 +133,16 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     private val memoryRepo = QuroMemoryRepository(appContext)
     private val tagRepo = QuroTagRepository(appContext)
 
+    /**
+     * issue #27：系统提示词构建专用调度器，独立于 Dispatchers.IO。
+     * rootfs 损坏时 QuroLinuxEnv 的 proot 探针会占满 IO 线程池，导致
+     * buildSystemPrompt 被饿死到 30~50s、聊天永久停在加载中。
+     * Dispatchers.Default 与 IO 是两套独立线程池，limitedParallelism(2) 给出受限并行度，
+     * 坏环境的 IO 探针再也无法拖垮默认池上的提示词构建。
+     */
+    private val promptBuildDispatcher: kotlinx.coroutines.CoroutineDispatcher =
+        Dispatchers.Default.limitedParallelism(2)
+
     // 当前会话的内存存储（单一实例，QuroAssistant 始终写入它）
     //
     // 🔴 #182「集群有消息了但是没有保存记录，退出对话框就没有集群记录了」的真凶。
@@ -1162,9 +1172,13 @@ class QuroChatViewModel(context: Context) : ViewModel() {
     val conversationHealth: StateFlow<com.ai.assistance.quro.core.QuroConversationHealth>
         get() = convRepo.health
 
-    /** 从最近一份可用备份恢复；成功后把磁盘数据重新灌回内存。 */
+    /**
+     * 从可用备份恢复；成功后把磁盘数据重新灌回内存。
+     * issue #26：优先选「会话数最多」的备份，而不是时间最新的——
+     * 丢数据后产生的新空库备份时间最新，若按时间恢复等于二次覆盖现场。
+     */
     fun recoverConversationsFromBackup(): Boolean {
-        val backup = convRepo.backups().firstOrNull() ?: return false
+        val backup = convRepo.bestBackup() ?: convRepo.backups().firstOrNull() ?: return false
         if (!convRepo.restoreBackup(backup)) return false
         reloadConversationsFromDisk()
         return true
@@ -2097,7 +2111,8 @@ class QuroChatViewModel(context: Context) : ViewModel() {
                         // 原为 ask 的实参在 viewModelScope(主线�?) 上求�? �? 主线程重 I/O/计算 �? 触发系统 ANR 对话框�?
                         // 改为�? IO 线程先把提示词算好，再交�? ask（ask 自身仍切 IO 执行 ReAct 循环）�?
                         val spStart = System.currentTimeMillis()
-                        val sysPrompt = withContext(Dispatchers.IO) { buildSystemPrompt(effectiveCfg, t, chatPersonaId()) + (screenCtx ?: "") }
+                        // issue #27：用专用调度器，避免与 QuroLinuxEnv 的 proot 探针抢 Dispatchers.IO
+                        val sysPrompt = withContext(promptBuildDispatcher) { buildSystemPrompt(effectiveCfg, t, chatPersonaId()) + (screenCtx ?: "") }
                         QuroDiag.log("GEN_SYSPROMPT_MS", "convId=$convId ms=${System.currentTimeMillis() - spStart}")
                         // 上下文占用快照：此刻才知道本轮真实的 sysPrompt 与完整历史，
                         // 早一步算不准、晚一步又用不上。失败绝不影响发送。

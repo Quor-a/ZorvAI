@@ -98,6 +98,32 @@ internal object ProcIo {
       wait.cleanupIncomplete, drain.readError ?: wait.waitError)
   }
 
+  /**
+   * issue #25：只保留**最后** [limitBytes] 字节的有界读取（logcat 时间正序，头部保留会把
+   * 失败时刻附近的最新行截掉——诊断包 logcat.txt 最后一行比失败早 6 分钟的直接成因）。
+   *
+   * 与 [readBounded] 完全并行：不改 [DrainState] 的「头部保留」语义（其它调用方依赖它），
+   * 仅新增一条独立的尾部环形缓冲排水链。调用方拿到的是同一套 [ProcResult] 三态。
+   */
+  fun readBoundedTail(proc: Process, timeoutS: Long, limitBytes: Int = MAX_OUTPUT_BYTES): ProcResult =
+    readBoundedTailMillis(proc, timeoutS.coerceIn(0, Long.MAX_VALUE / 1000) * 1000, limitBytes)
+
+  fun readBoundedTailMillis(proc: Process, timeoutMs: Long, limitBytes: Int = MAX_OUTPUT_BYTES): ProcResult {
+    val limit = limitBytes.coerceIn(1, MAX_OUTPUT_BYTES)
+    val state = TailDrainState(limit)
+    val drainer = Thread({
+      try { drainIntoTail(proc.inputStream, state) }
+      catch (failure: Throwable) { state.fail(failure) }
+    }, "dsh-proc-drain-tail").apply { isDaemon = true }
+    drainer.start()
+    val wait = awaitCompletion(proc, drainer, timeoutMs)
+    val drain = state.snapshot()
+    val text = if (drain.truncated) drain.text + "\n[" + TRUNCATED_FLAG +
+      ": kept last " + limit + " bytes of a longer stream]\n" else drain.text
+    return ProcResult(text, wait.exitTimedOut, wait.drainTimedOut, drain.truncated,
+      wait.cleanupIncomplete, drain.readError ?: wait.waitError)
+  }
+
   internal class WaitResult(
     val exitTimedOut: Boolean,
     val drainTimedOut: Boolean,
@@ -174,6 +200,51 @@ internal object ProcIo {
   }
 
   private fun drainInto(input: InputStream, state: DrainState) {
+    val buf = ByteArray(8 * 1024)
+    while (true) {
+      val n = input.read(buf)
+      if (n < 0) return
+      if (n > 0) state.accept(buf, n)
+    }
+  }
+
+  /** issue #25：尾部有界缓冲（环形数组，只存最近 limit 字节；超限置 truncated 但继续排水防死锁）。 */
+  private class TailDrainState(private val limit: Int) {
+    private val ring = ByteArray(limit)
+    /** 最老字节在 [ring] 中的下标。 */
+    private var head = 0
+    private var count = 0
+    private var truncated = false
+    private var readError: String? = null
+
+    @Synchronized fun accept(src: ByteArray, n: Int) {
+      var off = 0
+      var left = n
+      while (left > 0) {
+        if (count == limit) {
+          // 已满：覆盖最老字节并推进 head。
+          ring[head] = src[off]
+          head = (head + 1) % limit
+          truncated = true
+        } else {
+          ring[(head + count) % limit] = src[off]
+          count++
+        }
+        off++
+        left--
+      }
+    }
+
+    @Synchronized fun fail(failure: Throwable) { readError = errorText(failure) }
+
+    @Synchronized fun snapshot(): BoundedDrain {
+      val out = ByteArray(count)
+      for (i in 0 until count) out[i] = ring[(head + i) % limit]
+      return BoundedDrain(String(out, Charsets.UTF_8), truncated, readError)
+    }
+  }
+
+  private fun drainIntoTail(input: InputStream, state: TailDrainState) {
     val buf = ByteArray(8 * 1024)
     while (true) {
       val n = input.read(buf)

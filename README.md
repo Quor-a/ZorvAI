@@ -57,7 +57,7 @@
   <b>☕ 如果这个项目对你有帮助，欢迎到 <a href="https://afdian.com/a/zorvAI">爱发电 (afdian)</a> 支持我们，助力持续开发 ❤️</b>
 </p>
 
-> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.2.5`（`versionCode 1002005`）
+> **包名**：`com.ai.assistance.quro` ｜ **技术栈**：Kotlin 2.3 + Jetpack Compose 1.10.2（Material3 1.4.0）｜ **AGP 8.13 / compileSdk 36 / minSdk 26 / targetSdk 34** ｜ **当前版本**：`1.2.6`（`versionCode 1002006`）
 >
 > Zorv AI 把「对话助手」做成一个真正能操作手机的 Agent：它在设备上运行，能用无障碍 / Shizuku / ROOT 等通道操控系统，调用 **235 个内置工具**，运行 **MNN / llama.cpp 离线大模型**，内置终端与 Linux 沙箱、MCP、知识库、语音合成/识别，并通过飞书、QQ、微信与你保持在线。
 >
@@ -503,7 +503,17 @@ dsh 是 Node.js 应用（`dsh web` 起 HTTP 服务 + 自带前端）。要让它
 
 [![Release](https://img.shields.io/github/v/release/Quor-a/ZorvAI)](https://github.com/Quor-a/ZorvAI/releases)
 
-- 🟢 **[v1.2.5 Release](https://github.com/Quor-a/ZorvAI/releases/tag/v1.2.5)**（Release 签名，**最新**）
+- 🟢 **[v1.2.6 Release](https://github.com/Quor-a/ZorvAI/releases/tag/v1.2.6)**（Release 签名，**最新**）
+
+  **修复 GitHub issue #24–#27 · AIHOT 新版 / 会话防丢失 / proot 风暴 / DSH 诊断**
+
+  - **#24 AIHOT**：内置技能升级到官方 2.0.0（`aihot.news` + `/api/v1/agent` 统一入口），老设备随包自动同步正文。
+  - **#26 会话防丢失**：逐会话解析失败不再静默丢弃（另存可取回）；主文件在 App 未运行期间消失时自动从最完整备份恢复；写入前防缩水保护，旧现场另存 orphan；备份保留延长到 ≥7 天。详见 [会话库存储说明](docs/CONVERSATION_STORAGE.md)。
+  - **#27 proot 风暴**：rootfs 探针改为单飞 + 指数退避，杜绝每次聊天并发拉起几十个 proot；`usr/bin/proot` 改相对链接修复悬空 ENOENT；提示词构建用独立调度器，坏环境无法再饿死对话。
+  - **#25 DSH 诊断**：子进程无输出也记录 argv / exit / signal / engineLogTail；失败当拍落盘系统级 logcat（含失败窗口）；快照残留可自愈隔离后继续启动（带次数上限）；stderr 取法见文档。
+  - **安装包**：V1（JAR）/ V2 / V3 三套签名齐全。
+
+- 🟢 **[v1.2.5 Release](https://github.com/Quor-a/ZorvAI/releases/tag/v1.2.5)**（Release 签名）
 
   **手机助手入口补齐主对话框对等能力 · 逐字流式 / 思考过程 / 工具调用轨迹**
 

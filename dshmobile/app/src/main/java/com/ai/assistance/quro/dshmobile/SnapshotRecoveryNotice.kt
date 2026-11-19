@@ -58,6 +58,49 @@ internal object SnapshotRecoveryNotice {
   internal fun blocksRuntimeStart(detail: String?, transactionMarkerPresent: Boolean): Boolean =
     !detail.isNullOrBlank() && transactionMarkerPresent
 
+  // ── issue #25：快照残留「隔离 + 跳过」的可审计上报 ─────────────────────────────
+
+  /** 稳定码：与 `snapshot-refresh-failed` 同族，但表示「已自愈、本次跳过继续启动」。 */
+  internal const val RESIDUE_SELF_HEAL_CODE = "snapshot-residue-selfhealed"
+
+  /** 自愈次数耗尽、回落失败终态的稳定码。 */
+  internal const val RESIDUE_SELF_HEAL_EXHAUSTED_CODE = "snapshot-residue-selfheal-exhausted"
+
+  /**
+   * 残留被隔离后的上报内容（结构化：code/标题/文案同源，boot-fail.log 与 WebUI 共用）。
+   *
+   * 文案必须如实说三件事：① 上轮快照残留已隔离；② 本次跳过刷新、用的是现有运行时与用户数据；
+   * ③ 隔离位置可查。不承诺「下次一定能刷新成功」——那取决于属主是否被真正修正。
+   */
+  internal fun forResidueQuarantine(originalCode: String, quarantined: String): Notice = Notice(
+    code = RESIDUE_SELF_HEAL_CODE,
+    title = "已隔离上轮快照残留",
+    hint = "上轮运行时快照残留（" + originalCode + "）已改名隔离为 " + quarantined +
+      "；本次启动已跳过该快照刷新，继续使用现有运行时与你的数据（未删除任何用户数据）。" +
+      "可在诊断包与 boot-fail.log 中查到该记录。",
+  )
+
+  /** 自愈达上限时的明确文案（回落原有失败终态）。 */
+  internal fun forResidueSelfHealExhausted(originalCode: String): Notice = Notice(
+    code = RESIDUE_SELF_HEAL_EXHAUSTED_CODE,
+    title = "快照残留无法自动隔离",
+    hint = "上轮运行时快照残留（" + originalCode + "）重复阻塞刷新，自动隔离已达上限" +
+      "（24 小时内最多 1 次、累计最多 3 次），本次不再自动处理。" +
+      "请修正残留条目属主（多为 root:root 的 __pycache__）或清理应用数据后重试；你的用户数据未被改动。",
+  )
+
+  /** 隔离上报的独立标记文件（不复用 [PENDING_FILE]，避免被 recovery-rejected 的语义吞掉）。 */
+  internal const val RESIDUE_SELF_HEAL_FILE = ".snapshot-residue-selfheal-notice"
+
+  /** 把隔离上报落盘（best-effort，供 WebUI/诊断后续读取；返回是否写入成功）。 */
+  internal fun markResidueSelfHeal(dir: java.io.File, originalCode: String, quarantined: String): Boolean = try {
+    val n = forResidueQuarantine(originalCode, quarantined)
+    java.io.File(dir, RESIDUE_SELF_HEAL_FILE).writeText(n.code + "\n" + n.title + "\n" + n.hint)
+    true
+  } catch (_: Throwable) {
+    false
+  }
+
   // ── 一次性标记：让提示能跨到 WebUI 可见面 ──────────────────────────────────
 
   /**

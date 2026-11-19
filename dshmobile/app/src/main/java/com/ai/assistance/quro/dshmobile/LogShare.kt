@@ -276,12 +276,16 @@ internal object LogShare {
     null
   }
 
-  /** logcat 抽取（本进程自己的日志；有界 + 超时，走既有 [ProcIo.readBounded]）。 */
+  /**
+   * logcat 抽取（issue #25）：取**尾部** 3000 行、不限 --pid（系统级 `libproot.so SIGTRAP`
+   * 等行不在本进程名下），用 [ProcIo.readBoundedTail] 只留最后 [LOGCAT_MAX_BYTES] 字节，
+   * 保证失败时刻附近的最新行不被头部保留口径截掉。有界 + 超时，绝不裸读管道。
+   */
   internal fun logcatText(): String = try {
     val proc = ProcessBuilder(
-      "/system/bin/logcat", "-d", "-v", "threadtime", "--pid=" + android.os.Process.myPid(),
+      "/system/bin/logcat", "-d", "-v", "threadtime", "-t", "3000",
     ).start()
-    ProcIo.readBounded(proc, LOGCAT_TIMEOUT_S, LOGCAT_MAX_BYTES).text
+    ProcIo.readBoundedTail(proc, LOGCAT_TIMEOUT_S, LOGCAT_MAX_BYTES).text
   } catch (t: Throwable) {
     Log.w(TAG, "logcat read failed: " + (t.message ?: t.javaClass.simpleName))
     ""
@@ -307,6 +311,11 @@ internal object LogShare {
       val inputs = ArrayList<InputEntry>()
       inputs.add(InputEntry(DEVICE_NAME) { deviceInfo(filesDir) })
       inputs.addAll(fileEntries(filesDir, logDir))
+      // issue #25：失败当拍落盘的系统级 logcat 快照优先于现场现取——它锁住的是失败窗口，
+      // 而 logcat.txt 是分享时刻的尾部，中间可能已被新日志冲掉。独立 ZIP 条目，不进白名单
+      // candidateFiles（那一份是「恰好等于白名单」的单测断言，见 IndependentLogShareTest）。
+      val bootFailLogcat = File(filesDir, LogCollector.BOOT_FAIL_LOGCAT_FILE)
+      inputs.add(InputEntry("logcat-bootfail.txt") { readTextBounded(bootFailLogcat, LOGCAT_MAX_BYTES) })
       inputs.add(InputEntry("logcat.txt") { logcatText() })
       sweepOldPacks(dir, keep = 3)
       val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)

@@ -204,6 +204,118 @@ class EngineManager(private val context: Context, private val pickToken: String?
     return ok
   }
 
+  // ── issue #25：快照残留「隔离 + 跳过继续启动」的一次性自愈 ──────────────────────
+
+  /** 只有这三类「删不动/搬不动」才值得隔离；其余异常一律走原失败终态。 */
+  private fun selfHealableResidueCode(t: Throwable): String? {
+    var cur: Throwable? = t
+    repeat(16) {
+      val c = cur ?: return@repeat
+      if (c is SnapshotFsException && (
+          c.code == CODE_DELETE_RESIDUE || c.code == CODE_FOREIGN_OWNER || c.code == CODE_MOVE_BLOCKED
+        )) return c.code
+      cur = c.cause
+    }
+    return null
+  }
+
+  /**
+   * 只在**交换尚未开始**时自愈：标记缺位或 STAGED ⇒ live 尚未被搬走，隔离 previous 安全；
+   * 若已进入 SWAPPING/SWAPPED，则可能有条目已被搬进 previous，隔离会丢用户数据——那种情形
+   * 必须留给事务自己的 [SnapshotTransaction.rollback]。
+   */
+  private fun residueSelfHealSafePhase(filesDir: File): Boolean {
+    val marker = try { SnapshotTransaction.readMarker(filesDir) } catch (_: Throwable) { null }
+    return marker == null || marker.phase == SnapshotTransaction.Phase.STAGED ||
+      marker.phase == SnapshotTransaction.Phase.UNKNOWN
+  }
+
+  /** 冷却/上限：24 小时内最多 1 次，且累计最多 3 次。 */
+  private fun residueSelfHealPermitted(): Boolean {
+    val prefs = try {
+      context.getSharedPreferences("dsh_snapshot_residue_selfheal", Context.MODE_PRIVATE)
+    } catch (_: Throwable) {
+      return false
+    }
+    val now = System.currentTimeMillis()
+    val last = prefs.getLong("last_at", 0L)
+    val total = prefs.getInt("total", 0)
+    return now - last >= 24L * 60L * 60L * 1000L && total < 3
+  }
+
+  private fun recordResidueSelfHeal(code: String, quarantined: String) {
+    try {
+      val prefs = context.getSharedPreferences("dsh_snapshot_residue_selfheal", Context.MODE_PRIVATE)
+      val now = System.currentTimeMillis()
+      prefs.edit()
+        .putLong("last_at", now)
+        .putInt("total", prefs.getInt("total", 0) + 1)
+        .putString("last_code", code)
+        .putString("last_quarantined", quarantined)
+        .apply()
+    } catch (_: Throwable) {
+    }
+  }
+
+  /**
+   * 把 `.snapshot-previous` 改名隔离为 `.snapshot-previous.quarantine-<ts>`（父目录属本应用，
+   * rename 不需要删子项，因此对 root:root 残留也通常可行）。改名彻底失败时退化为容错删除；
+   * 两者都失败则返回 null ⇒ 调用方回落原失败终态。只碰事务自己的 previous 目录，不动 files/
+   * 下的会话库/配置等用户数据。
+   */
+  private fun quarantinePreviousSnapshot(filesDir: File): String? {
+    val previous = SnapshotTransaction.previousRoot(filesDir)
+    if (!SnapshotFs.exists(previous)) return null
+    val target = File(
+      filesDir,
+      SnapshotTransaction.PREVIOUS_NAME + ".quarantine-" + System.currentTimeMillis() +
+        "-" + java.util.UUID.randomUUID().toString().take(8),
+    )
+    val renamed = try {
+      java.nio.file.Files.move(previous.toPath(), target.toPath())
+      true
+    } catch (_: Throwable) {
+      try { previous.renameTo(target) } catch (_: Throwable) { false }
+    }
+    if (renamed) return target.name
+    val failures = ArrayList<String>()
+    SnapshotFs.deletePath(previous) { f, ex -> failures += f.name + "(" + ex.javaClass.simpleName + ")" }
+    return if (!SnapshotFs.exists(previous)) {
+      "deleted:" + previous.name + (if (failures.isEmpty()) "" else " partial=" + failures.take(3).joinToString(","))
+    } else null
+  }
+
+  /**
+   * 尝试隔离残留并重置事务标记；成功返回 true（调用方会**只重试一次** swap 后继续本次启动）。
+   * 失败时如实写 boot-fail.log/SnapshotRecoveryNotice，返回 false 让原失败终态接手。
+   */
+  private fun trySelfHealSnapshotResidue(t: Throwable, filesDir: File): Boolean {
+    val code = selfHealableResidueCode(t) ?: return false
+    if (!residueSelfHealSafePhase(filesDir)) return false
+    if (!residueSelfHealPermitted()) {
+      lastResidueSelfHealExhausted = true
+      val notice = SnapshotRecoveryNotice.forResidueSelfHealExhausted(code)
+      lastResidueSelfHealNotice = notice.code + " " + notice.hint
+      runCatching { LogCollector.writeBootFail(context, notice.code, notice.hint, t) }
+      return false
+    }
+    val quarantined = quarantinePreviousSnapshot(filesDir) ?: return false
+    val notice = SnapshotRecoveryNotice.forResidueQuarantine(code, quarantined)
+    lastResidueSelfHealNotice = notice.code + " " + notice.hint
+    recordResidueSelfHeal(code, quarantined)
+    runCatching { SnapshotTransaction.clearMarker(filesDir) }
+    runCatching { SnapshotRecoveryNotice.markResidueSelfHeal(filesDir, code, quarantined) }
+    runCatching {
+      LogCollector.writeBootFail(
+        context, notice.code,
+        "原失败码=" + code + "；" + notice.hint + "；" +
+          ((t as? SnapshotFsException)?.diagnosticLine() ?: ""),
+      )
+    }
+    LogCollector.log(TAG, "snapshot residue self-healed: code=" + code + " quarantined=" + quarantined)
+    return true
+  }
+
   /**
    * 刷新主体。抽出来只为在**单点**包一层成败记账（上面那个包装），
    * 否则六处 `return false` 各写一次记账必然漏。
@@ -213,6 +325,9 @@ class EngineManager(private val context: Context, private val pickToken: String?
     onStage: (String) -> Unit = {},
   ): Boolean {
     val filesDir = context.filesDir
+    // issue #25：每次刷新重新计账，避免上一次自愈状态被下一次普通失败误读。
+    lastResidueSelfHealNotice = null
+    lastResidueSelfHealExhausted = false
     if (!beginSnapshotTransaction()) {
       // P1（定位报告 §2.5）：**口径纠正**。旧实现把「别人正在做」记成自己的失败
       // （挂 IllegalStateException 到 lastRefreshFailure），而同一堵墙上的另两处早已是对的：
@@ -335,7 +450,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
         filesDir,
         SnapshotTransaction.Marker(SnapshotTransaction.Phase.STAGED, fingerprint, startedAt),
       )
-      val swapNotes = SnapshotTransaction.swap(
+      fun swapOnce(): List<String> = SnapshotTransaction.swap(
         filesDir = filesDir,
         stagedRoot = stage,
         usrDir = usrDir,
@@ -347,6 +462,15 @@ class EngineManager(private val context: Context, private val pickToken: String?
         english = UiText.isEnglish(context),
         spaceCheck = { required -> insufficientSpaceReason(filesDir, required) },
       )
+      // issue #25：`.snapshot-previous` 残留非应用属主条目曾让每次启动都撞在同一堵墙上。
+      // 这里做**单次、可审计**的自愈：隔离该目录后只重试一次交换；二次失败仍走原 catch 回滚。
+      val swapNotes = try {
+        swapOnce()
+      } catch (t: Throwable) {
+        if (!trySelfHealSnapshotResidue(t, filesDir)) throw t
+        Log.w(TAG, "snapshot swap retried once after residue self-heal")
+        swapOnce()
+      }
       // #214：profiles 合并期间的工厂语义纠正逐条留档（升级现场可追溯，不只依赖 UI 文案）。
       for (note in swapNotes) LogCollector.log(TAG, "profile patch reconciled during swap: " + note)
       // Commit point: the fingerprint is durable only after the swap completed.
@@ -419,6 +543,22 @@ class EngineManager(private val context: Context, private val pickToken: String?
    */
   @Volatile
   var lastRefreshFailureCode: String? = null
+
+  /**
+   * issue #25：最近一次「快照残留已隔离并跳过」的可审计上报串（null = 本次没发生自愈）。
+   * 供 boot-fail.log 与诊断面消费；写盘动作在自愈当拍完成，不依赖调用方。
+   */
+  @Volatile
+  var lastResidueSelfHealNotice: String? = null
+    private set
+
+  /**
+   * issue #25：本次刷新失败是否因为「残留自愈次数/冷却已耗尽」而回落原失败终态。
+   * EngineStartFlow 据此给明确文案（超限 ≠ 普通刷新失败）。
+   */
+  @Volatile
+  var lastResidueSelfHealExhausted: Boolean = false
+    private set
 
   /**
    * 上一次 [refreshSnapshot] 的 false 是不是**被让行**（另一条快照事务在飞）而不是失败（0.14.8 P1）。
@@ -1936,6 +2076,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
       // Nothing sends requests until its current-generation token URL publishes the bound port.
       try { Thread.sleep(200) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
       if (!started.isAlive) {
+        observeExit(started)
         engineProcess = null
         EngineEndpoint.invalidate()
         lastStartRefusal = "引擎进程在监听前退出，请查看本轮 engine.log"
@@ -2045,19 +2186,67 @@ class EngineManager(private val context: Context, private val pickToken: String?
         b.redirectErrorStream(true)
         b.redirectOutput(log)
       }
+    var spawnMode = "exec"
     val process = try {
       build(args.toList()).start()
     } catch (e: java.io.IOException) {
-      if (e.message?.contains("Permission denied") != true) throw e
+      if (e.message?.contains("Permission denied") != true) {
+        recordSpawnDiagnostic(args, env, -1L, "exec-failed", e)
+        throw e
+      }
       Log.w(TAG, "direct exec denied, falling back to linker64: " + e.message)
-      build(listOf("/system/bin/linker64") + args.toList()).start()
+      spawnMode = "linker64"
+      try {
+        build(listOf("/system/bin/linker64") + args.toList()).start()
+      } catch (e2: Throwable) {
+        recordSpawnDiagnostic(args, env, -1L, "linker64-failed", e2)
+        throw e2
+      }
     }
+    recordSpawnDiagnostic(args, env, enginePidOf(process), spawnMode, null)
     if (!log.isFile) {
+      recordSpawnDiagnostic(args, env, enginePidOf(process), spawnMode + "-no-log", null)
       runCatching { process.destroyForcibly() }
       throw java.io.IOException("engine spawn did not create a fresh engine.log")
     }
     startEngineRssSampler(process)
     return process
+  }
+
+  /**
+   * issue #25：把一次 spawn 的**完整现场**写进进程级 [EngineManager.lastSpawnDiagnostic]。
+   *
+   * 为什么必须是进程级而非 engineProcess 实例字段：句柄在死亡观测点被置空（见
+   * [engineProcessAlive] / [probeAvailability]），而 boot-fail.log 是在那之后才写的；
+   * 若取证挂在句柄上，失败时恰好读不到。argv 全量拼接（含 `--expose-internals` / port /
+   * `--no-open`），只过 [EngineAuth.redact] 去掉令牌，API Key 等敏感 env 一律不写值。
+   */
+  private fun recordSpawnDiagnostic(
+    args: Array<String>,
+    env: Map<String, String>,
+    pid: Long,
+    mode: String,
+    failure: Throwable?,
+  ) {
+    try {
+      val argv = args.joinToString(" ") { if (it.any { c -> c.isWhitespace() }) "\"$it\"" else it }
+      val sb = StringBuilder()
+        .append("argv=").append(argv)
+        .append(" cwd=").append(workspaceRootDir()?.absolutePath ?: "unavailable")
+        .append(" pid=").append(pid)
+        .append(" spawn=").append(mode)
+        .append(" NODE_OPTIONS=").append(env["NODE_OPTIONS"] ?: "-")
+        .append(" UV_THREADPOOL_SIZE=").append(env["UV_THREADPOOL_SIZE"] ?: "-")
+      if (failure != null) {
+        sb.append(" spawnError=").append(failure.javaClass.simpleName)
+          .append(':').append((failure.message ?: "-").take(200))
+      }
+      EngineManager.lastSpawnDiagnostic = EngineAuth.redact(
+        sb.toString().replace('\n', ' ').replace('\r', ' '),
+      )
+    } catch (_: Throwable) {
+      // 取证本身绝不能影响 spawn。
+    }
   }
 
   /**
@@ -2214,6 +2403,78 @@ class EngineManager(private val context: Context, private val pickToken: String?
   }
 
   /**
+   * 观测并记住一个已死句柄的退出码（issue #25）。句柄在 [probeAvailability] /
+   * [engineProcessAlive] / [killExistingEngine] 里被置空，必须在那**之前**取一次
+   * `exitValue()`，否则 boot-fail.log 再也拿不到 exit/signal。失败静默。
+   */
+  private fun observeExit(held: Process?) {
+    if (held == null || held.isAlive) return
+    val code = try { held.exitValue() } catch (_: Throwable) { return }
+    if (code >= 0) EngineManager.lastObservedExit = code
+  }
+
+  /**
+   * issue #25：**无条件**可读的引擎子进程取证串，供 boot-fail.log / info.txt 使用。
+   *
+   * 即使 `engineProcess` 已被置空、engine.log 为 0 字节，也保证返回
+   * `argv=` / `exit=` / `signal=` / `engineLogTail=` 四个字段：
+   *  - argv/spawn/cwd/pid/NODE_OPTIONS/UV_THREADPOOL_SIZE 来自进程级 [EngineManager.lastSpawnDiagnostic]；
+   *  - exit 优先取当前句柄，句柄已空则取 [EngineManager.lastObservedExit]；
+   *  - `exit > 128` 时按 shell 约定追加 `signal=<exit-128>`（SIGKILL=9 ⇒ exit=137 ⇒ signal=9）；
+   *  - engine.log 的字节数与**尾部摘要**（stderr 已由 redirectErrorStream(true) 合并进来）。
+   */
+  fun engineProcessDiagnostic(): String {
+    val sb = StringBuilder(EngineManager.lastSpawnDiagnostic)
+    var exit: Int? = null
+    val held = engineProcess
+    if (held != null && !held.isAlive) {
+      exit = try { held.exitValue() } catch (_: Throwable) { null }
+    }
+    if (exit == null) {
+      val observed = EngineManager.lastObservedExit
+      if (observed >= 0) exit = observed
+    }
+    if (exit != null) {
+      sb.append(" exit=").append(exit)
+      if (exit > 128) sb.append(" signal=").append(exit - 128)
+      else sb.append(" signal=none")
+    } else {
+      sb.append(" exit=unknown signal=none")
+    }
+    val log = File(context.filesDir, "engine.log")
+    sb.append(" engineLogBytes=").append(if (log.isFile) log.length() else -1L)
+    sb.append(" engineLogTail=").append(engineLogTail(log))
+    return EngineAuth.redact(sb.toString().replace('\n', ' ').replace('\r', ' '))
+  }
+
+  /** engine.log 尾部有界摘要（最多 4KB / 6 行非空），供 boot-fail.log 的单行字段使用。 */
+  private fun engineLogTail(log: File): String {
+    if (!log.isFile) return "none"
+    return try {
+      val len = log.length()
+      if (len <= 0L) return "empty"
+      val take = minOf(len, 4096L).toInt()
+      val raf = java.io.RandomAccessFile(log, "r")
+      val tail = try {
+        raf.seek(len - take)
+        val bytes = ByteArray(take)
+        val read = raf.read(bytes)
+        String(bytes, 0, maxOf(read, 0), Charsets.UTF_8)
+      } finally {
+        runCatching { raf.close() }
+      }
+      val lines = tail.lineSequence()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .toList()
+        .takeLast(6)
+      if (lines.isEmpty()) "none" else EngineAuth.redact(lines.joinToString(" | ")).take(1024)
+    } catch (_: Throwable) {
+      "unreadable"
+    }
+  }
+
+  /**
    * 0.13.1 W3：失败诊断镜像（best-effort，绝不抛出）。把 engine.log 全世代 + 退出码 +
    * 环境/设备信息 + 最近 logcat 写入共享目录 Documents/dshdata/diagnostics/<时间戳>-<原因>/，
    * 用户用文件管理器即可直接复制去反馈（此前全在私有目录，失败时外界拿不到任何现场）。
@@ -2259,10 +2520,12 @@ class EngineManager(private val context: Context, private val pickToken: String?
       } catch (_: Throwable) {
       }
       try {
-        val p = ProcessBuilder("logcat", "-d", "-v", "threadtime", "-t", "400").redirectErrorStream(true).start()
+        // issue #25：-t 3000 取尾部窗口（原 -t 400 常早于失败时刻），不限 --pid 以带上
+        // 系统级 SIGTRAP 行；用 tail 版有界读，避免头部保留把最新行截掉。
+        val p = ProcessBuilder("logcat", "-d", "-v", "threadtime", "-t", "3000").redirectErrorStream(true).start()
         // 0.13.8 #173：有界读（原 readBytes 无 waitFor，会冻结看门狗调度线程）
         // #211.1：三态结果——超时态写形态标记（不再把已读部分/超时混成同一形态）。
-        val out = ProcIo.readBounded(p, 10)
+        val out = ProcIo.readBoundedTail(p, 10)
         val body = out.textWithMarkers()
         if (body.isNotEmpty()) File(dir, "logcat-recent.txt").writeText(EngineAuth.redact(body))
       } catch (_: Throwable) {
@@ -2298,6 +2561,9 @@ class EngineManager(private val context: Context, private val pickToken: String?
     sb.append("snapshot_bundled_sha: ").append(bundledSnapshotFingerprint.failureCode ?: "valid").append('\n')
     sb.append("snapshot_committed_sha: ").append(liveFingerprint()).append('\n')
     engineExitInfo()?.let { sb.append("engine_exit: ").append(it).append('\n') }
+    // issue #25：info.txt 与 boot-fail.log 用**同一份**取证串（argv/exit/signal/engineLogTail），
+    // 即使 engine.log 0 字节、engineProcess 句柄已置空也能在这里读到。
+    sb.append("engine_process_diagnostic: ").append(engineProcessDiagnostic()).append('\n')
     // task-79（Bug A）：运行时树损坏标记的**读取方**。
     // 为什么必须有人读它：`engine.log` 每次 spawn 被 redirectOutput 截断，所以「我们曾判定树损坏并触发
     // 重抽取」这件事只能落在壳侧标记里；没有读取方的话它就是死账本——事后既无法证明它被写过，
@@ -2596,6 +2862,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
   fun probeAvailability(timeoutMs: Int = 1_000): EngineProbe.EngineAvailability {
     val held = engineProcess
     if (held != null && !held.isAlive) {
+      observeExit(held)
       engineProcess = null
       EngineEndpoint.invalidate()
     }
@@ -2632,6 +2899,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
     val held = engineProcess
     if (held != null && held.isAlive) return true
     if (held != null && !held.isAlive) {
+      observeExit(held)
       engineProcess = null
       EngineEndpoint.invalidate()
     }
@@ -2674,6 +2942,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
       }
     }
     if (held != null && !held.isAlive) {
+      observeExit(held)
       engineProcess = null
       EngineEndpoint.invalidate()
     }
@@ -3099,6 +3368,21 @@ description: 手机操控纪律：无障碍语义树优先、ref 语义点击/�
     /** Last real start time (epoch ms); the watchdog cooldown-window baseline. */
     @Volatile
     var lastStartAttemptAt: Long = 0
+
+    /**
+     * issue #25：进程级 spawn 取证串（跨 manager 实例、跨 engineProcess 句柄置空仍可读）。
+     * 在 [startWithArgs] 的每条成功/失败分支写入；内容含完整 argv、cwd、pid、启动方式、
+     * NODE_OPTIONS/UV_THREADPOOL_SIZE。只进诊断出口，不回写 engine.log 本体。
+     */
+    @Volatile
+    var lastSpawnDiagnostic: String = "spawn=none argv=none"
+
+    /**
+     * issue #25：最近一次观测到的子进程退出码（-1 = 未观测到）。进程句柄被置空后仍可读，
+     * 供 [engineProcessDiagnostic] 在 `exit > 128 ⇒ signal=exit-128` 判据中使用。
+     */
+    @Volatile
+    var lastObservedExit: Int = -1
 
     /**
      * Process-level shared directory-picker auth token (C1 fix, 2026-08-16):
