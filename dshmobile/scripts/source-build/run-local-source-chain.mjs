@@ -193,13 +193,17 @@ if (flag('--dry-run')) {
 preflight()
 
 let buildRoot
+let buildCommit
 try {
-  buildRoot = prepareSourceWorkspace(ROOT, repoCommit, value('--build-workspace'))
+  const prepared = prepareSourceWorkspace(ROOT, repoCommit, value('--build-workspace'))
+  buildRoot = prepared.workspace
+  buildCommit = prepared.commit
 } catch (error) {
   console.error(`无法准备隔离来源构建目录：${error.message}`)
   process.exit(2)
 }
 console.log(`来源输入：HEAD ${repoCommit}（不包含原工作树的未提交内容）`)
+if (buildCommit !== repoCommit) console.log(`工作区子树提交：${buildCommit}`)
 console.log(`隔离构建目录：${buildRoot}（保留用于续跑与取件）`)
 // Node 优先用用户级 v24（`~/.local/node24`）：CI 跑的就是 v24，而 Ubuntu apt 装的是 v22，
 // 且系统 corepack 的 `enable` 要往 /usr/bin 写符号链接（非 root 必失败）。
@@ -221,7 +225,7 @@ const baseEnv = {
   ANDROID_SDK_ROOT: ANDROID_HOME,
   DSH_APK_DIR: buildRoot,
   GITHUB_WORKSPACE: buildRoot,
-  GITHUB_SHA: repoCommit,
+  GITHUB_SHA: buildCommit,
   PATH: `${nodePathPrefix}${join(homedir(), '.local', 'bin')}:${join(ANDROID_HOME, 'build-tools', '36.0.0')}:${join(ANDROID_HOME, 'platform-tools')}:${process.env.PATH}`,
   // pnpm 11 只认自己的前缀：实测 `npm_config_registry` 被忽略、`pnpm_config_registry` 生效
   // （npm 侧仍用 npm_config_registry，两条链各自生效）。
