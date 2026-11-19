@@ -12,7 +12,7 @@ import { canonicalizePackedManifest } from './normalize-snapshot.mjs'
 
 const repo = resolve(process.argv[2] ?? '')
 const cache = resolve(process.argv[3] ?? '')
-const expectedCommit = '639ed015397290b3745d163aafe02ffee4aa3f84'
+const expectedCommit = '9c2670d3bce5275e0d1610272958121af87787bb'
 const overlayPath = resolve('scripts/snapshot-config/engine-overlay.json')
 if (!process.argv[2] || !process.argv[3]) {
   console.error('usage: node scripts/source-build/export-dsh-engine.mjs <dsh-source-root> <overlay-cache>')

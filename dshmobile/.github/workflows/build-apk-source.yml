@@ -185,7 +185,7 @@ jobs:
           git clean -fdq
           corepack enable
           corepack pnpm install --frozen-lockfile
-          test "$(corepack pnpm --version)" = "11.7.0"
+          test "$(corepack pnpm --version)" = "11.28.5"
           corepack pnpm --version > "$GITHUB_WORKSPACE/.deploy-tmp/source-build/package-manager-versions.txt"
           printf 'deployment pnpm: ' >> "$GITHUB_WORKSPACE/.deploy-tmp/source-build/package-manager-versions.txt"
           # corepack's fetcher has no download deadline: a stalled connection leaves the
@@ -730,7 +730,7 @@ jobs:
             temporaryAdapterSha256: digest('scripts/source-build/check-dsh-source-snapshot-gate.mjs'),
             checker: 'scripts/source-build/check-dsh-source-snapshot.mjs',
             checkerSha256: digest('scripts/source-build/check-dsh-source-snapshot.mjs'),
-            reason: 'The standard gate models the older flattened npm overlay; this source audit uses the pinned 0.2.0-rc.2 pnpm deploy tree. The replacement validates the final snapshot against the pinned source package manifest, pnpm dependency links, and registered engine patch markers.'
+            reason: 'The standard gate models the older flattened npm overlay; this source audit uses the pinned 0.2.2-rc.5 pnpm deploy tree. The replacement validates the final snapshot against the pinned source package manifest, pnpm dependency links, and registered engine patch markers.'
           }
           fs.writeFileSync(policyPath, JSON.stringify(policy, null, 2) + '\n')
           NODE

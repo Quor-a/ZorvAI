@@ -34,9 +34,9 @@ const originalLock = readFileSync(lockFile)
 const originalWorkspace = readFileSync(workspaceFile)
 const manifest = JSON.parse(originalPackage.toString('utf8'))
 const overlay = JSON.parse(readFileSync(resolve(overlayArg), 'utf8'))
-if (manifest.name !== '@deepseek-ai/dsh' || manifest.version !== '0.2.0-rc.2'
-  || overlay.engineVersion !== '0.2.0-rc.2' || overlay.rootPackage?.version !== '0.2.0-rc.2') {
-  throw new Error('production deployment manifest/overlay must target 0.2.0-rc.2')
+if (manifest.name !== '@deepseek-ai/dsh' || manifest.version !== '0.2.2-rc.5'
+  || overlay.engineVersion !== '0.2.2-rc.5' || overlay.rootPackage?.version !== '0.2.2-rc.5') {
+  throw new Error('production deployment manifest/overlay must target 0.2.2-rc.5')
 }
 const packages = Object.entries(overlay.packages ?? {})
   .filter(([name]) => name.startsWith('@deepseek-ai/'))

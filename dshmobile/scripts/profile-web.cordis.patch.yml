@@ -253,7 +253,7 @@
 #
 # 修法：把执行器钉成快照内 node 的绝对路径（与上方 shell-termux 的 bashPath 同口径、
 # 同一份快照），从此这条链路**完全不读 process.execPath**。
-# 0.14.8（0.2.1-rc.2）：上游把该配置键从 nodeExecutable 改成 launch:{kind,executable}，语义不变。
+# 0.14.8（0.2.2-rc.5）：上游把该配置键从 nodeExecutable 改成 launch:{kind,executable}，语义不变。
 #
 # 【0.14.2 追加】上面这条「钉成 bin/node 绝对路径」只解决了 execPath 被污染，**没有解决 env**：
 # PTC 给子进程传的是显式过滤后的 env（ptc-runtime-node 的 STARTUP_ENVIRONMENT_NAMES 只放
@@ -274,7 +274,7 @@
 # 逆转条件：上游 NodePtcRuntime 自己解析执行世界里的 node（不再缺省取 process.execPath）后，本行可撤。
 - id: ptc-runtime
   config:
-    # 0.14.8 追版（0.2.1-rc.2）：上游删除 nodeExecutable，改为必填 launch 联合类型
+    # 0.14.8 追版（0.2.2-rc.5）：上游删除 nodeExecutable，改为必填 launch 联合类型
     # （ptc-runtime-node/src/config.ts：{kind:'node-script'|'embedded', executable, bootstrapPath?}）。
     # 不带 .default() ⇒ 缺省不再回落到 process.execPath，必须显式钉住；kind=node-script 时
     # heapFlag 仍排在 argv[1]（index.ts 的 ...packaged ? [] : [heapFlag]），故 wrapper 与 ptc-argv-L1 都保留。
@@ -282,22 +282,9 @@
       kind: node-script
       executable: /data/data/com.ai.assistance.quro/files/usr/libexec/dsh-node
 
-# Office→PDF（0.14.2 追版决策，2026-09-25 实测）——**显式禁用上游 web-app bundle 的 office-to-pdf 行**。
-# rc.1 新增该行（0.1.5 的 web-app bundle 里 office 零命中），它运行时依赖
-# @deepseek-ai/libreoffice-kit，而该依赖在本平台**无条件不可用**：
-#   libreoffice-kit 的 platformTarget() 只认 darwin/win32/linux-glibc ⇒ Android 下
-#   process.platform === 'android' 返回 undefined ⇒ resolveEngine() 落到
-#   `if (platform !== 'linux') throw new Error('Unsupported LibreOfficeKit host: android-x64')`
-#   —— **无条件抛**。152 MB 的 -wasm 引擎也救不了（同样被 platform !== 'linux' 挡掉），
-#   所以「补依赖」在本平台买不到任何能力，只会：① 快照 +10 MB JS 闭包；② 引入 MPL-2.0 依赖
-#   （本清单原本全为非 copyleft）。不禁该行的后果不是缺能力，而是 **boot 阶段崩**
-#   （Cannot find package '@deepseek-ai/libreoffice-kit'，设备实测），也就是该行本身挡路。
-# 上游对「没有转换器」的既定降级路径就是 UI 的 unavailable 提示（ui-sidebar-documentpreview
-# README：移除 remote.officeToPdf 注入即恢复不可用指引）⇒ 禁行 = 用上游自己的降级面。
-# 凭据：check-engine-overlay 正向闭包的 RUNTIME_MISSING_OK 登记了同一条（两处必须同进同出）。
-# 逆转条件：出现 Android 上真能跑的引擎实现 ⇒ 同时删掉本行与那条豁免。
-- id: office-to-pdf
-  disabled: true
+# 0.2.2-rc.5 追版：上游把 office-to-pdf 重组为 office-kit（@deepseek-ai/dsh-office-kit），
+# 该 desktop-only 包不在 Android deploy 闭包/overlay 内，行自然不挂载，无需再显式禁用。
+# 旧的 office-to-pdf 禁用块在上游已无对应行（禁用即空指向），故随追版删除。
 # Official 0.2.0-rc.2 desktop product telemetry/analytics are not Android services.
 # Retain the shared otel service and official ui-settings-session-log upload control.
 - id: desktop-product-telemetry
