@@ -13,7 +13,7 @@ HARNESS_COMMIT = "9c2670d3bce5275e0d1610272958121af87787bb"
 
 PACKAGE_NAME = "@deepseek-ai/dsh-web-frontend"
 PACKAGE_VERSION = "0.2.2-rc.5"
-EXPECTED_FILES = ["dist", "!dist/**/*.map", "!dist/preview.html", "!dist/preview"]
+EXPECTED_FILES = ["dist", "!dist/preview.html", "!dist/preview", "src"]
 
 
 def digest(path: pathlib.Path) -> str:

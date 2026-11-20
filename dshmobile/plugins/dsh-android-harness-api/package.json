@@ -18,12 +18,12 @@
     "test": "node --test test/*.test.mjs"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/dsh-tools": "0.2.2-rc.5",
     "@deepseek-ai/dsh-skill": "0.2.2-rc.5"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/dsh-tools": "0.2.2-rc.5",
     "@deepseek-ai/dsh-skill": "0.2.2-rc.5",
     "@types/node": "^24.0.0",

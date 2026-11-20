@@ -8,7 +8,9 @@
     ".": "./lib/index.js",
     "./package.json": "./package.json"
   },
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "license": "MIT",
   "private": true,
   "scripts": {
@@ -20,11 +22,11 @@
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-tools": "0.2.2-rc.5",
-    "@deepseek-ai/cordis": "4.0.5"
+    "@deepseek-ai/cordis": "4.1.0"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-tools": "0.2.2-rc.5",
-    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/cordis": "4.1.0",
     "@types/node": "^24.0.0",
     "typescript": "^5.5.0"
   },

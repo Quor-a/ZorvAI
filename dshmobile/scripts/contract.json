@@ -1,7 +1,7 @@
 {
   "baseline": "0.2.2-rc.5",
-  "cordis": "4.0.5",
-  "schemastery": "3.18.5",
+  "cordis": "4.1.0",
+  "schemastery": "3.19.0",
   "upstreamRepo": ".deploy-tmp/deepseek-harness",
   "upstream": {
     "$comment": "0.14.8 source-only target identity. Inventories were read from the official SHA; upstreamRepo and adaptationSourceRepo both select the disposable pinned build checkout. dsh/ and .deploy-tmp/upstream-020rc2 remain readonly historical inputs. No build, patch validation or runtime acceptance is implied.",
