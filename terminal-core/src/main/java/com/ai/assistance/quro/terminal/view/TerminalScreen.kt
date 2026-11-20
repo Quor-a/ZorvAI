@@ -16,6 +16,7 @@ import com.ai.assistance.quro.terminal.TerminalEnv
 import com.ai.assistance.quro.terminal.TerminalManager
 import com.ai.assistance.quro.terminal.navigation.TerminalRoutes
 import com.ai.assistance.quro.terminal.ui.SetupScreen
+import com.ai.assistance.quro.terminal.ui.TerminalBootScreen
 import com.ai.assistance.quro.terminal.ui.TerminalHome
 import com.ai.assistance.quro.terminal.ui.MoyuScreen
 import com.ai.assistance.quro.terminal.ui.EnhancedTerminalScreen
@@ -37,13 +38,11 @@ fun TerminalScreen(
     // 更新检查器
     val updateChecker = remember { UpdateChecker(context) }
 
-    // 直接决定起始页，不再等待会话初始化完成（隐藏加载界面，先进终端界面）。
-    // 终端会话在后台异步初始化，TerminalHome 内会在未就绪时给出轻量提示。
+    // 统一从启动引导页进入（对齐 DeepSeek Harness「打开即自动启动」）。
+    // 引导页自动检测 Ubuntu rootfs：已就绪秒进终端；首次/解压中自动完成初始化并显示进度；
+    // 只有 ASSET_MISSING（没有内置包）才落到环境配置页。forceShowSetup 仍保留为强制入口。
     val startDestination = remember {
-        val sharedPreferences = context.getSharedPreferences("terminal_prefs", Context.MODE_PRIVATE)
-        val isFirstLaunch = sharedPreferences.getBoolean("is_first_launch", true)
-        if (env.forceShowSetup || isFirstLaunch) TerminalRoutes.SETUP_ROUTE
-        else TerminalRoutes.TERMINAL_HOME_ROUTE
+        if (env.forceShowSetup) TerminalRoutes.SETUP_ROUTE else TerminalRoutes.BOOT_ROUTE
     }
 
     // 后台静默检查更新，不显示 Toast
@@ -58,6 +57,25 @@ fun TerminalScreen(
         navController = navController,
         startDestination = startDestination
     ) {
+        // 启动引导页：首次进入自动检测/初始化环境，就绪后自动进终端主界面。
+        composable(TerminalRoutes.BOOT_ROUTE) {
+            TerminalBootScreen(
+                manager = manager,
+                onReady = {
+                    val sharedPreferences = context.getSharedPreferences("terminal_prefs", Context.MODE_PRIVATE)
+                    sharedPreferences.edit().putBoolean("is_first_launch", false).apply()
+                    navController.navigate(TerminalRoutes.TERMINAL_HOME_ROUTE) {
+                        popUpTo(TerminalRoutes.BOOT_ROUTE) { inclusive = true }
+                    }
+                },
+                onOpenSetup = {
+                    navController.navigate(TerminalRoutes.SETUP_ROUTE) {
+                        popUpTo(TerminalRoutes.BOOT_ROUTE) { inclusive = true }
+                    }
+                },
+            )
+        }
+
         composable(TerminalRoutes.TERMINAL_HOME_ROUTE) {
             TerminalHome(
                 env = env,
