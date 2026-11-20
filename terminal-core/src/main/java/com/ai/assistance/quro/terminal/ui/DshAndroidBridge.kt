@@ -287,19 +287,19 @@ internal class DshAndroidBridge(
     fun browserHostIdentity(payload: String): String = """{"ok":false,"reason":"browser-host-not-wired"}"""
 
     @JavascriptInterface
-    fun vdisplayStatus(): String = """{"ok":false,"code":"vdisplay-not-wired"}"""
+    fun vdisplayStatus(): String = ZorvaiVdisplayBridge.status()
 
     @JavascriptInterface
-    fun vdisplayCreate(): String = """{"ok":false,"code":"vdisplay-not-wired"}"""
+    fun vdisplayCreate(): String = ZorvaiVdisplayBridge.create(context)
 
     @JavascriptInterface
-    fun vdisplayDestroy(): String = """{"ok":false,"code":"vdisplay-not-wired"}"""
+    fun vdisplayDestroy(): String = ZorvaiVdisplayBridge.destroy()
 
     @JavascriptInterface
-    fun vdisplayBounds(bounds: String): String = """{"ok":false,"code":"vdisplay-not-wired"}"""
+    fun vdisplayBounds(bounds: String): String = ZorvaiVdisplayBridge.bounds(bounds)
 
     @JavascriptInterface
-    fun vdisplaySelect(alias: String): String = """{"ok":false,"code":"vdisplay-not-wired"}"""
+    fun vdisplaySelect(alias: String): String = ZorvaiVdisplayBridge.select(alias)
 
     @JavascriptInterface
     fun getVdisplayScale(): Double = 0.75
@@ -314,7 +314,7 @@ internal class DshAndroidBridge(
     fun setVdisplayFloatEnabled(enable: Boolean): Boolean = enable
 
     @JavascriptInterface
-    fun forceDestroyVdisplay(): String = """{"ok":false,"code":"vdisplay-not-wired"}"""
+    fun forceDestroyVdisplay(): String = ZorvaiVdisplayBridge.destroy()
 
     @JavascriptInterface
     fun a11yStatus(): String = """{"enabled":false}"""

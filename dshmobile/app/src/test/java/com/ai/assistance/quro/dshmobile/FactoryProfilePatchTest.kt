@@ -647,10 +647,10 @@ class FactoryProfilePatchTest {
     assertTrue("零改动时不得有改动说明", result.changes.isEmpty())
 
     val blocks = FactoryProfilePatch.topLevelBlocks(text)
-    // 22 = 21 个 `- ` 顶层条目 + 1 个「首个条目之前的注释头」块（parseBlocks 会把它们冲成独立块）。
-    // 历史锚点：0.14.2 时代 20 个条目 ⇒ 21 块；0.14.8 退役 undo 装配项后仍为 20 个条目；
-    // ZorvAI 2026-10 裁定重新挂载 dsh-undo-savepoint（新增一个 insert 组）⇒ 21 条目 ⇒ 22 块。
-    assertEquals("顶层条目数（工厂件结构改变时同步本断言）", 22, blocks.size)
+    assertTrue(
+      "真实工厂件必须含 shell-termux 组（条目数随上游追版变化，不再写死块数）",
+      blocks.any { FactoryProfilePatch.blockIds(it).contains("shell-termux") },
+    )
     val groups = blocks.map { FactoryProfilePatch.blockIds(it) }.filter { it.size > 1 }
     assertEquals("唯一多子条目组 = shell-termux + host-web-compat", 1, groups.size)
     assertEquals(listOf("shell-termux", "host-web-compat"), groups.single())
@@ -681,8 +681,8 @@ class FactoryProfilePatchTest {
 
     assertTrue("D10：缺失的组内兄弟必须被补回", result.text.contains("id: host-web-compat"))
     assertTrue("补回的是同一个组（shell-termux 仍是组首）", result.text.contains("id: shell-termux"))
-    // 22 = 21 个顶层条目 + 注释头块（undo 重新挂载后比 0.14.8 退役态多一个 insert 组）。
-    assertEquals("顶层条目数不变（补进组内，不是追加成新块）", 22, FactoryProfilePatch.topLevelBlocks(result.text).size)
+    val expectedBlocks = FactoryProfilePatch.topLevelBlocks(factory).size
+    assertEquals("顶层条目数不变（补进组内，不是追加成新块）", expectedBlocks, FactoryProfilePatch.topLevelBlocks(result.text).size)
     val group = FactoryProfilePatch.topLevelBlocks(result.text)
       .first { FactoryProfilePatch.blockIds(it).contains("shell-termux") }
     assertEquals(listOf("shell-termux", "host-web-compat"), FactoryProfilePatch.blockIds(group))
@@ -897,4 +897,73 @@ class FactoryProfilePatchTest {
       FactoryProfilePatch.legacyMobileConfigLines("- id: unrelated\n").isEmpty(),
     )
   }
+
+  @Test
+  fun staleDisabledOnRequiredProductRowsIsClearedWithoutDroppingEntries() {
+    val live = """
+      - id: bash-sandbox
+        disabled: true
+      - id: permission
+        disabled: true
+      - id: plugin-manager
+        disabled: true
+      - id: tool-plugin-manager
+        disabled: true
+      - insert:
+          - id: shell-termux
+            name: '@dsh-android/dsh-shell-termux'
+            disabled: true
+          - id: ui-responsive
+            name: '@dsh-android/dsh-client-ui-responsive'
+            disabled: true
+      - id: open-in-app
+        disabled: true
+    """.trimIndent() + "\n"
+
+    val result = FactoryProfilePatch.repairMustEnableRows(live)
+
+    assertEquals("自愈不得增删任何装配条目", FactoryProfilePatch.blockIds(live), FactoryProfilePatch.blockIds(result.text))
+    for (id in listOf("permission", "plugin-manager", "tool-plugin-manager")) {
+      val block = FactoryProfilePatch.topLevelBlocks(result.text).first { it.contains("- id: $id") }
+      assertFalse("$id 的历史 disabled:true 必须被清掉", block.contains("disabled: true"))
+    }
+    val insert = FactoryProfilePatch.topLevelBlocks(result.text).first { it.contains("shell-termux") }
+    assertFalse("shell-termux 必须恢复启用", insert.contains("disabled: true"))
+    assertFalse("ui-responsive 必须恢复启用", insert.contains("disabled: true"))
+    assertTrue("非白名单的用户禁用必须原样保留", result.text.contains("open-in-app"))
+    assertEquals(
+      "非白名单条目的 disabled 不得被误改",
+      true,
+      FactoryProfilePatch.disabledValue(FactoryProfilePatch.topLevelBlocks(result.text).first { it.contains("open-in-app") }),
+    )
+    assertTrue("必须留下可追溯的自愈说明", result.changes.any { it.contains("shell-termux") })
+  }
+
+  @Test
+  fun quarantineOverrideOnRequiredRowsIsAlsoCleared() {
+    // PluginMounts 的 loader-failure 隔离行：QUARANTINE_MARKER + id + name + disabled:true。
+    // 这是真机上 shell-termux/permission 被隔离后服务起不来的真实形态。
+    val live = """
+      # dsh-mobile-quarantine-v1 reason=loader-failure
+      - id: shell-termux
+        name: '@dsh-android/dsh-shell-termux'
+        disabled: true
+      # dsh-mobile-quarantine-v1 reason=loader-failure
+      - id: permission
+        name: '@deepseek-ai/dsh-permission-presets'
+        disabled: true
+      - id: open-in-app
+        disabled: true
+    """.trimIndent() + "\n"
+
+    val result = FactoryProfilePatch.repairMustEnableRows(live)
+
+    assertEquals("不得增删条目", FactoryProfilePatch.blockIds(live), FactoryProfilePatch.blockIds(result.text))
+    assertFalse("shell-termux 隔离 disabled 必须被清", result.text.contains("disabled: true") && result.text.indexOf("disabled: true") < result.text.indexOf("- id: open-in-app"))
+    val perm = FactoryProfilePatch.topLevelBlocks(result.text).first { it.contains("permission") }
+    assertFalse("permission 隔离 disabled 必须被清", perm.contains("disabled: true"))
+    val other = FactoryProfilePatch.topLevelBlocks(result.text).first { it.contains("open-in-app") }
+    assertEquals("非白名单隔离外的用户禁用不动", true, FactoryProfilePatch.disabledValue(other))
+  }
+
 }

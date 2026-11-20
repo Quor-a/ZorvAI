@@ -62,6 +62,20 @@ fun TerminalBootScreen(
 
     // 首次进入即自动启动，无需点击。相位切换间留一点可视化停顿，避免相位闪过看不到。
     LaunchedEffect(Unit) {
+        // 🔴 铁律（QuroLinuxEnv.ensureTerminalRootfs 注释早已写明，本页此前违反）：
+        // prepareGuestRootfs → common.sh install_ubuntu 依赖 common.sh 与 filesDir 内的
+        // Ubuntu tarball，两者都由 initializeEnvironment() 生成/补拷；它还做半截 rootfs
+        // 自愈（ensureRootfsComplete）。首次装包或清数据后本页直接 guestEnvStatus() +
+        // ensureGuestRootfs() 会绕过它 → tar 未就位 / common.sh 是旧的 / 空目录被
+        // install_ubuntu 误判「已安装」→ 用户看到「解压了却找不到系统、要很久」。
+        // 因此任何状态判定之前必须先初始化（后台线程，幂等）。
+        val initOk = withContext(Dispatchers.IO) { manager.initializeEnvironment() }
+        if (!initOk) {
+            fatal = true
+            message = "运行环境初始化失败，请进入环境配置重试或重装应用。"
+            status = GuestEnvStatus.ASSET_MISSING
+            return@LaunchedEffect
+        }
         val st = withContext(Dispatchers.IO) { manager.guestEnvStatus() }
         status = st
         delay(180)

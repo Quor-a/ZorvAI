@@ -6,6 +6,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.ComponentName
 import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
@@ -1437,7 +1438,18 @@ private fun HarnessWebView(
                                 onShutdownToGuide = { onClose() },
                                 onReloadWebUI = { reload() },
                                 onOpenConsole = {
-                                    android.util.Log.i("HarnessScreen", "页面请求打开控制台（宿主未提供该入口）")
+                                    // DSH 启动/失败页有「打开控制台」入口；引擎成功启动后前端仍保留该请求，
+                                    // 旧实现只打日志、用户点了没反应。按显式 ComponentName 启动同 APK 内的
+                                    // dshmobile ConsoleActivity（exported=false，同 UID 可启动）。
+                                    runCatching {
+                                        val intent = Intent().setComponent(
+                                            ComponentName(ctx, "com.ai.assistance.quro.dshmobile.ConsoleActivity"),
+                                        )
+                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        ctx.startActivity(intent)
+                                    }.onFailure { t ->
+                                        android.util.Log.w("HarnessScreen", "打开控制台失败：${t.message}")
+                                    }
                                 },
                                 onOpenNativePath = { path -> DshAndroidBridge.openPathExternally(ctx, path) },
                                 onIncomingWorkspacePath = { DeepSeekHarness.get(ctx).workspace.absolutePath },
