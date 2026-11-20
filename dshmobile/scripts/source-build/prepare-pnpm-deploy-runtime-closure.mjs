@@ -6,6 +6,7 @@ import { createRequire } from 'node:module'
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { dirname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const [sourceArg, overlayArg, backupArg, reportArg] = process.argv.slice(2)
 if (!sourceArg || !overlayArg || !backupArg || !reportArg) {
@@ -17,7 +18,12 @@ const sourceRoot = resolve(sourceArg)
 const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: sourceRoot, encoding: 'utf8' }).trim()
 const sourceManifest = JSON.parse(readFileSync(join(sourceRoot, 'package.json'), 'utf8'))
 // 身份一律从合同读（0.14.8）：写死的提交/版本号会随每次引擎追版漂移。
-const contract = JSON.parse(readFileSync(join(process.cwd(), 'scripts', 'contract.json'), 'utf8'))
+// 本脚本在 deepseek-harness checkout 内执行，process.cwd() 不是项目根；
+// 合同始终属于 APK 项目工作区，不能用上游 checkout 的 cwd 解析。
+const workspaceRoot = process.env.GITHUB_WORKSPACE
+  ? resolve(process.env.GITHUB_WORKSPACE)
+  : resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
+const contract = JSON.parse(readFileSync(join(workspaceRoot, 'scripts', 'contract.json'), 'utf8'))
 if (sourceCommit !== contract.upstream.commit || sourceManifest.version !== contract.baseline
   || sourceManifest.packageManager !== contract.upstream.packageManager) {
   throw new Error('production deployment requires official ' + contract.baseline + ' source and ' + contract.upstream.packageManager)

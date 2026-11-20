@@ -25,8 +25,8 @@
     "@deepseek-ai/dsh-shell": "0.2.2-rc.5",
     "@deepseek-ai/dsh-subprocess": "0.2.2-rc.5",
     "@deepseek-ai/dsh-sandbox": "0.2.2-rc.5",
-    "@deepseek-ai/cordis": "4.0.5",
-    "@deepseek-ai/schemastery": "3.18.5"
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/schemastery": "3.19.0"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-bash-local": "0.2.2-rc.5",
@@ -35,8 +35,8 @@
     "@deepseek-ai/dsh-sandbox": "0.2.2-rc.5",
     "@deepseek-ai/dsh-settings": "0.2.2-rc.5",
     "@deepseek-ai/dsh-timeout": "0.2.2-rc.5",
-    "@deepseek-ai/cordis": "4.0.5",
-    "@deepseek-ai/schemastery": "3.18.5",
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/schemastery": "3.19.0",
     "@types/node": "^24.0.0",
     "typescript": "^5.5.0"
   },

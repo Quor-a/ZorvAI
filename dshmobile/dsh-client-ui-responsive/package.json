@@ -48,7 +48,7 @@
     "@deepseek-ai/dsh-scope": "0.2.2-rc.5"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/cordis": "^4.1.0",
     "@deepseek-ai/dsh-client-ui-settings": "0.2.2-rc.5",
     "@deepseek-ai/dsh-api-workspace-controller": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-ui-workspace": "0.2.2-rc.5",
@@ -57,7 +57,7 @@
     "react": "^18.2.0"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/dsh-client-store": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-ui-conversation": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-ui-layout": "0.2.2-rc.5",
@@ -104,7 +104,8 @@
     "micromark-util-classify-character": "^2.0.1",
     "micromark-util-sanitize-uri": "^2.0.1",
     "micromark-util-symbol": "^2.0.1",
-    "shiki": "^4.4.3"
+    "shiki": "^4.4.3",
+    "@deepseek-ai/dsh-client-ui-sidebar-documentpreview": "0.2.2-rc.5"
   },
   "repository": {
     "type": "git",
