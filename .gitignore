@@ -198,3 +198,8 @@ build_tmp/
 termux-host-backup-*/
 .wb-tmp/
 _novaterm_banner.png
+
+# 防止把本机 npm 缓存误提交进仓库（rc.5 曾误提交 721 个此类文件）
+.npm-cache/
+**/.npm-cache/
+**/_cacache/
