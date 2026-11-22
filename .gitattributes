@@ -19,3 +19,9 @@ app/src/main/jniLibs/arm64-v8a/libkws.so -text
 app/src/main/jniLibs/arm64-v8a/libwakeup.so -text
 app/src/main/jniLibs/arm64-v8a/libc++_shared.so -text
 app/src/main/assets/wakeup/** -text
+
+# DSH rc.5 引擎补丁资产（第三方原件字节级引用，禁行尾转换）
+app/src/main/assets/patched/** -text
+app/src/main/assets/licenses/** -text
+app/src/main/assets/console.html -text
+app/src/main/assets/undo-emergency.mjs -text

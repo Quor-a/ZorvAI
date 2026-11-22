@@ -2039,6 +2039,9 @@ class EngineManager(private val context: Context, private val pickToken: String?
       }
       // 0.14.0 #214：退役行 disabled 残留自愈（前置于引擎读 profile；幂等一次性，见函数注释）。
       preludeProbe.step("repair-profile-patch") { repairProfilePatch() }
+      // rc.5 启动链自愈：老设备残留的 shell/permission/pluginManager disabled:true
+      // 必须先于引擎读 profile 清掉，否则 gateway 永远拿不到 permissionPresets/catalog。
+      preludeProbe.step("repair-must-enable-plugins") { repairMustEnablePluginRows() }
       // #DSH-BASH：快照 PIE bash 自愈。终端侧原生库链接会把 usr/bin/bash 覆盖成
       // ET_EXEC 符号链接（libbash.so），引擎 TERMUX_EXEC force 下 linker64 拒收
       // ⇒ bash 工具恒报 "unexpected e_type: 2"。幂等，每次启动前跑；异常内部消化。
@@ -2714,6 +2717,90 @@ class EngineManager(private val context: Context, private val pickToken: String?
       }
     } catch (t: Throwable) {
       Log.w(TAG, "profile patch repair failed (non-fatal)", t)
+    }
+  }
+
+  /**
+   * rc.5 启动链自愈：清产品必须插件条目上的 `disabled: true` 残留。
+   *
+   * 现场：老设备 live patch 里 shell-termux / ui-responsive / permission /
+   * plugin-manager 等行带历史 `disabled: true`；工厂行没有字面 disabled 可供
+   * [FactoryProfilePatch.merge] 纠正，指纹不变时 merge 又不会跑。结果表现为
+   * tool-bash 等待 shell、permissionPresets 服务缺席、tool-plugin-manager 等待
+   * pluginManager、Agent 预设三个模式加载失败。
+   *
+   * 独立幂等标记（不复用退役行标记，否则已经装过本版的设备补不上这次修复）；
+   * 只改 [FactoryProfilePatch.MUST_ENABLE_ENTRY_IDS] 条目自身的停用位，
+   * 写前备份 + 解析校验 id 序列不变；失败不写标记，下次启动重试，不阻塞引擎。
+   */
+  private fun repairMustEnablePluginRows() {
+    val marker = File(
+      context.filesDir,
+      ".profile-patch-must-enable-" + DshBuildStamp.STAMP + "-" + bundledFingerprint(),
+    )
+    if (marker.exists()) return
+    var failed = false
+    var repaired = 0
+    try {
+      val dshDir = File(homeDir, ".dsh")
+      val profilesRoot = File(dshDir, "profiles")
+      // 白名单服务的隔离行（QUARANTINE_MARKER + disabled: true）由 PluginMounts 写在
+      // HOME 层 `home/.dsh/cordis.patch.yml`，不在任何 factory profile 内；只扫 profile
+      // 会漏掉它 ⇒ shell-termux/permission 等被隔离后永远起不来。故把 HOME patch 一并纳入。
+      val homePatch = File(dshDir, "cordis.patch.yml")
+      val targets = ((profilesRoot.listFiles() ?: emptyArray())
+        .sortedBy { it.name }
+        .filter { isFactoryOwnedProfile(it) }
+        .map { File(it, "cordis.patch.yml") }
+        .filter { it.isFile } + listOf(homePatch)
+        ).distinctBy { it.absolutePath }.filter { it.isFile }
+      for (target in targets) {
+        val live = try { target.readText() } catch (_: Throwable) { failed = true; continue }
+        val result = FactoryProfilePatch.repairMustEnableRows(live)
+        if (result.text == live) continue
+        val before = FactoryProfilePatch.blockIds(live)
+        if (FactoryProfilePatch.blockIds(result.text) != before) {
+          Log.w(TAG, "must-enable repair skipped (entry set changed): " + target.absolutePath)
+          failed = true
+          continue
+        }
+        val backup = File(
+          target.parentFile,
+          target.name + ".pre-must-enable-" + HostVersion.name(context) + "-" + java.util.UUID.randomUUID() + ".bak",
+        )
+        try {
+          java.io.FileOutputStream(backup).use { output ->
+            output.write(live.toByteArray(Charsets.UTF_8))
+            output.flush()
+            output.fd.sync()
+          }
+          SnapshotTransaction.writeTextAtomic(target, result.text, "启用产品必须插件") { candidate ->
+            require(FactoryProfilePatch.blockIds(candidate) == before) {
+              "must-enable repair would change unrelated profile entries"
+            }
+          }
+        } catch (t: Throwable) {
+          failed = true
+          Log.w(TAG, "must-enable repair write failed (old profile retained; retried next start): " + target.absolutePath, t)
+          continue
+        }
+        repaired++
+        LogCollector.log(
+          TAG,
+          "profile patch must-enable repaired (" + (target.parentFile?.name ?: "?") + "): " +
+            result.changes.joinToString(" | ") + " ; backup=" + backup.name,
+        )
+      }
+      if (failed) {
+        LogCollector.log(TAG, "profile patch must-enable deferred (partial failure; retried next start)")
+      } else {
+        marker.writeText("repaired=" + repaired + " targets=" + targets.size + " at " + System.currentTimeMillis() + "\n")
+        if (repaired > 0) {
+          LogCollector.log(TAG, "profile patch must-enable: " + repaired + " profile(s) repaired; marker=" + marker.name)
+        }
+      }
+    } catch (t: Throwable) {
+      Log.w(TAG, "profile patch must-enable failed (non-fatal)", t)
     }
   }
 

@@ -263,8 +263,23 @@ internal object SnapshotFs {
     return TreeStats(entries, links, bytes)
   }
 
+  /**
+   * 确保 [dir] 是**真实目录**（而不是指向目录的符号链接）。
+   *
+   * 真机现场（rc.5 升级）：live 的 `node_modules/@napi-rs/canvas-android-arm64` 是 pnpm 目录链接，
+   * 指向 `.pnpm/@napi-rs+canvas-android-arm64@1.0.8/...`，目标有效；而新内嵌快照里同一路径是
+   * **实体目录**。`Files.createDirectories()` 在这类路径上抛 `FileAlreadyExistsException`
+   * （NOFOLLOW 看是链接、不是目录），导致 `mergeTree -> SnapshotTransaction` 整条刷新失败、
+   * 引擎永远起不来（`.snapshot-refresh-failures` 反复记录）。
+   *
+   * 修法：先 `Files.delete`（NOFOLLOW，只删链接本体，**绝不进目标树**），再建真实目录。
+   * `.pnpm/...` 里的真实包体不会被误删；随后 staged 会把实体内容合并进来。
+   * 悬空链接同样按此处理——删掉换成快照实体目录，比留着更正确。
+   */
   fun createDirectories(dir: File) {
-    Files.createDirectories(dir.toPath())
+    val path = dir.toPath()
+    if (Files.isSymbolicLink(path)) Files.delete(path)
+    Files.createDirectories(path)
   }
 
   /**

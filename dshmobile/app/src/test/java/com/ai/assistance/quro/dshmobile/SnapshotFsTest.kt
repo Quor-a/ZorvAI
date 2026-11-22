@@ -129,6 +129,34 @@ class SnapshotFsTest {
   // ── 生产默认路径不得回归（真实文件系统上的正常删除）─────────────────────
 
   @Test
+  fun createDirectoriesReplacesDirectorySymlinkWithoutTouchingTarget() {
+    // rc.5 真机现场：live 里 pnpm 的目录链接（@napi-rs/canvas-android-arm64），
+    // 快照里同一路径是实体目录。修复前 Files.createDirectories(link) 抛 FileAlreadyExistsException，
+    // 整条 mergeProfiles 失败 ⇒ 引擎永远起不来。
+    val root = tempDir()
+    try {
+      val target = File(root, "pnpm-target")
+      assertTrue(target.mkdirs())
+      val marker = File(target, "package.json")
+      val content = "{\"name\":\"kept\"}"
+      marker.writeText(content)
+      val link = File(root, "canvas-android-arm64")
+      try {
+        Files.createSymbolicLink(link.toPath(), target.toPath())
+      } catch (t: Throwable) {
+        org.junit.Assume.assumeNoException("本机无建链权限，跳过（Android 真机覆盖该路径）", t)
+      }
+      assertTrue(Files.isSymbolicLink(link.toPath()))
+      SnapshotFs.createDirectories(link)
+      assertFalse("目录链接必须被换成实体目录", Files.isSymbolicLink(link.toPath()))
+      assertTrue("必须是真实目录", link.isDirectory)
+      assertEquals("链接目标里的包体不得被误删", content, marker.readText())
+    } finally {
+      root.deleteRecursively()
+    }
+  }
+
+  @Test
   fun theDefaultListingStillDeletesAWholeTreeSilently() {
     val root = tempDir()
     try {

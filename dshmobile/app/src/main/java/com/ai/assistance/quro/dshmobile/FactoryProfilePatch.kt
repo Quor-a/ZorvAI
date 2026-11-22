@@ -80,6 +80,44 @@ internal object FactoryProfilePatch {
   internal val RETIRED_FACTORY_ENTRIES: Map<String, String> = emptyMap()
 
   /**
+   * 产品必须启用的装配行。老设备 live patch 里曾被旧版本写入 `disabled: true`，
+   * 而工厂行自身（或上游 bundle 行）没有显式 `disabled: false` 可供 [merge] 纠正，
+   * 于是升级到 rc.5 后这些行仍被静默停用：shell 面缺席 ⇒ tool-bash 永远 waiting for shell，
+   * permissionPresets 服务不激活 ⇒ gateway 报 active Service unavailable，
+   * pluginManager 缺席 ⇒ tool-plugin-manager 永远 waiting for pluginManager。
+   *
+   * 这里只在**启动前置自愈**里清这些 id 自身的字面 `disabled: true`：
+   * - 不新增/删除任何条目（parse 后 id 集合必须逐项相等）；
+   * - 不动其他条目（包括用户显式禁用的第三方插件）；
+   * - 不动 `!!js` 条件表达式（plugin-manager 的条件启用语义保持原样）。
+   */
+  internal val MUST_ENABLE_ENTRY_IDS = setOf(
+    // shell 服务面（permissionPresets / tool-bash / 三个 preset 的共同依赖）
+    "shell-termux",
+    "ui-responsive",
+    "permission",
+    "plugin-manager",
+    "tool-plugin-manager",
+    "tool-office",
+    // Android 宿主能力插桩：工厂件里全部为启用行，真机因历史 loader-failure 被
+    // PluginMounts 逐个隔离（截图中「已停用」一大片）。这些都是产品自身插件，
+    // 必须随自愈恢复，否则互控/终端/文件打开/浏览器/显示面全缺。
+    "android-bridge",
+    "android-manage",
+    "android-zorvai-tools",
+    "android-harness-api",
+    "android-linux-env",
+    "android-file-open",
+    "android-browser",
+    "android-vdisplay",
+    "session-delete",
+    "dshmarketplace",
+    "dsh-undo",
+    "host-web-compat",
+    "picker-native-surface",
+  )
+
+  /**
    * 旧「单点」写法的两个 id（0.14.2-fx-2 归一迁移，见 [normalizeLegacyAgentDefaultModel]）。
    *
    * 旧写法：`- id: agent-default-model / disabled: true` **加上** `- insert: - id: agent-default-model-mobile`
@@ -438,6 +476,40 @@ internal object FactoryProfilePatch {
         }
       }
       sb.append(out ?: block.text)
+    }
+    return Result(sb.toString(), changes)
+  }
+
+  /**
+   * 启动前置自愈：清 [MUST_ENABLE_ENTRY_IDS] 条目自身的字面 `disabled: true`。
+   *
+   * 与 [repairRetiredDisabledRows] 的关键差别是**不删条目、不删除只剩 id 的行**：
+   * 这些 id 是产品运行链的一部分（shell / permission / pluginManager），条目必须在场；
+   * 只清停用标记即可。其他 id（含用户显式禁用的第三方插件）逐字节保留。
+   */
+  internal fun repairMustEnableRows(liveText: String): Result {
+    if (liveText.isBlank()) return Result(liveText, emptyList())
+    val changes = ArrayList<String>()
+    val sb = StringBuilder(liveText.length)
+    for (block in parseBlocks(liveText)) {
+      val hits = block.entries.filter { it.id in MUST_ENABLE_ENTRY_IDS }
+      if (hits.isEmpty()) {
+        sb.append(block.text)
+        continue
+      }
+      val replacements = HashMap<Int, String>()
+      for ((index, entry) in block.entries.withIndex()) {
+        if (entry.id !in MUST_ENABLE_ENTRY_IDS) continue
+        val fragment = lineRange(block.lines, entry.startLine, entry.endLine)
+        val cleaned = removeDisabledTrue(fragment, entry.indent.length + 2)
+        if (cleaned != fragment) replacements[index] = cleaned
+      }
+      if (replacements.isEmpty()) {
+        sb.append(block.text)
+      } else {
+        changes += "启用产品必须项: " + hits.joinToString(",") { it.id }
+        sb.append(rewriteBlock(block, replacements, emptySet()))
+      }
     }
     return Result(sb.toString(), changes)
   }
